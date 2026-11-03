@@ -14,3 +14,9 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - Tests: 12 Vitest (cn, .env.example keys, server-only/secret boundaries) + 4 Playwright at 375px — all pass. Reviewer approved, no blockers. Run report: .agentos/runs/m0.md.
 - LEFT: user pushes to GitHub, imports into Vercel (Node 22.x/24.x), checks landing on phone → then tick the deploy checkbox in PLAN.md.
 - NEXT: Milestone 1 (DB + login). Needs Supabase project + .env.local keys. Carry over reviewer's M1 notes (middleware getUser + two-arg setAll, Database types).
+
+## 2026-11-03 — Milestone 0 — done
+- Pushed to github.com/prvnrocks/photobook-app (main). Vercel auto-deploys main; production URL https://photobook-app-alpha.vercel.app/ (public).
+- User confirmed on phone: no sideways scroll, Arabic caption RTL in Cairo, button disabled.
+- Vercel deployment-hash URLs (*-prvnrocks-projects.vercel.app) are behind Vercel Authentication — share only the production domain.
+- NEXT: Milestone 1 (DB + login). User must create Supabase project (eu-central-1 or ap-south-1) and fill .env.local + Vercel env vars.

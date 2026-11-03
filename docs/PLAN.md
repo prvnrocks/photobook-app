@@ -72,7 +72,7 @@ that's a product decision for you; the code makes the model a single config valu
 - [x] Supabase client helpers (browser, server, service-role) in `src/lib/supabase/`
 - [x] Folder structure (below), `.env.example`, `npm run typecheck`
 - [x] Landing placeholder, mobile-first base layout, Inter + Cairo fonts
-- [ ] Push to GitHub, connect Vercel, first deploy
+- [x] Push to GitHub, connect Vercel, first deploy
 **Done when:** the Vercel URL shows the landing page on your phone.
 
 ## Milestone 1 — Database + login (½ day)

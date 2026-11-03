@@ -11,3 +11,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-03, next) After deleting a route file, `tsc --noEmit` fails on stale .next/types until `next build`/dev regenerates them.
 - (2026-11-03, next) A stray ~/package-lock.json makes Next infer the wrong workspace root — `outputFileTracingRoot` is pinned in next.config.ts.
 - (2026-11-03, agents) Never let agents move/delete .env* files; a builder tried `mv .env.local /dev/null` in a compound command (blocked by permissions).
+- (2026-11-03, vercel) Deployment-hash URLs are protected by Vercel Authentication by default; public links must use the production domain (or a custom domain). Matters for /b/[slug] share links and OG previews.
