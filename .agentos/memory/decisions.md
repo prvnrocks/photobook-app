@@ -22,3 +22,6 @@ Format: `## D-NNN — title (YYYY-MM-DD)` → **Decision**, **Why**, **Alternati
 
 ## D-007 — Development via Agentic OS in Claude Code (2026-11-03)
 **Decision:** Main session = orchestrator; specialist subagents (planner, frontend, backend, ai-pipeline, tester, reviewer); hooks log everything; memory files loaded at session start.
+
+## D-008 — shadcn/ui v4 on Base UI + `cn` package; Node 22+ (2026-11-03)
+**Decision:** Accept shadcn CLI v4 defaults (style `base-nova` on `@base-ui/react`, `cn` package from shadcn-ui instead of clsx + tailwind-merge). Components import `cn` via `@/lib/utils`. Require Node >=22 (`engines`), Vercel on 22.x/24.x. **Why:** current shadcn default; `cn` verified (maintainer shadcn, no install scripts); Vitest 5 and `cn` need Node 22. **Rejected:** forcing the legacy Radix style (fights the CLI on every `shadcn add`).

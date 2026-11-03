@@ -68,10 +68,10 @@ that's a product decision for you; the code makes the model a single config valu
 ---
 
 ## Milestone 0 — Project skeleton (½ day)
-- [ ] Next.js 15 + TypeScript + Tailwind + shadcn/ui + ESLint + Vitest + Playwright
-- [ ] Supabase client helpers (browser, server, service-role) in `src/lib/supabase/`
-- [ ] Folder structure (below), `.env.example`, `npm run typecheck`
-- [ ] Landing placeholder, mobile-first base layout, Inter + Cairo fonts
+- [x] Next.js 15 + TypeScript + Tailwind + shadcn/ui + ESLint + Vitest + Playwright
+- [x] Supabase client helpers (browser, server, service-role) in `src/lib/supabase/`
+- [x] Folder structure (below), `.env.example`, `npm run typecheck`
+- [x] Landing placeholder, mobile-first base layout, Inter + Cairo fonts
 - [ ] Push to GitHub, connect Vercel, first deploy
 **Done when:** the Vercel URL shows the landing page on your phone.
 
