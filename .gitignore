@@ -1,0 +1,7 @@
+node_modules/
+.next/
+.env*.local
+.vercel/
+# Agentic OS raw logs stay on this machine (they contain prompts and commands); memory + run reports are committed
+.agentos/logs/
+.claude/settings.local.json
