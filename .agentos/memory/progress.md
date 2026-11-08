@@ -20,3 +20,11 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - User confirmed on phone: no sideways scroll, Arabic caption RTL in Cairo, button disabled.
 - Vercel deployment-hash URLs (*-prvnrocks-projects.vercel.app) are behind Vercel Authentication — share only the production domain.
 - NEXT: Milestone 1 (DB + login). User must create Supabase project (eu-central-1 or ap-south-1) and fill .env.local + Vercel env vars.
+
+## 2026-11-08 — Milestone 1 — done
+- DB live on hosted Supabase (3 migrations): profiles/books/photos/orders, owner-only RLS, protected book columns (D-011), get_published_book, private photos/exports buckets with `{user_id}/{book_id}/...` paths, hardening (explicit grants, anon none). Live rls_check.sql: 31/31 OK.
+- Auth: email link via /auth/confirm (token_hash) + 6-digit code + Google (D-010); middleware session refresh; /login, /dashboard (My books + empty state), /books/new placeholder, sign out. Keys = publishable/secret (D-009).
+- Tests: 144 Vitest + 14 Playwright @375px; no secret in client bundle. Reviewer approved; should-fixes applied.
+- User confirmed on phone: email link → dashboard, Google → dashboard; 1 user + 1 profile (name null — email signup has no name; header shows email).
+- LEFT/CARRY: 6-digit code path not yet tried on phone; custom SMTP (Resend) before real users (built-in ~2 emails/h, team members only); storage cleanup on user delete; Google consent screen "Publish app" before launch; HEIC originals vs PDF (M2).
+- NEXT: Milestone 2 (upload + metadata). Needs MAPBOX_TOKEN.

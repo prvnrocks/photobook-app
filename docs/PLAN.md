@@ -76,9 +76,9 @@ that's a product decision for you; the code makes the model a single config valu
 **Done when:** the Vercel URL shows the landing page on your phone.
 
 ## Milestone 1 — Database + login (½ day)
-- [ ] Migration with all tables below + RLS (owner-only; public read of published books via a security-definer function)
-- [ ] Storage buckets: `photos` (private), `exports` (private)
-- [ ] Auth: email magic link + Google; `/login`, `/dashboard` (protected), "My books" list + "New book"
+- [x] Migration with all tables below + RLS (owner-only; public read of published books via a security-definer function)
+- [x] Storage buckets: `photos` (private), `exports` (private)
+- [x] Auth: email magic link + Google; `/login`, `/dashboard` (protected), "My books" list + "New book"
 **Done when:** you can log in on your phone and see an empty dashboard.
 
 ## Milestone 2 — Upload + metadata extraction (1–2 days) ⭐
