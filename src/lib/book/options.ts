@@ -39,3 +39,10 @@ export const CAPTION_LANG_LABELS: Record<CaptionLang, string> = {
   en: "English",
   ar: "العربية",
 };
+
+/**
+ * Max book title length in Unicode code points (Postgres char_length). Must equal
+ * TITLE_MAX_CHARS in src/app/books/form-state.ts so the cover never shortens the user's title
+ * (asserted in tests/book-schema.test.ts). In UTF-16 units this is at most 2× (astral chars).
+ */
+export const BOOK_TITLE_MAX_CODE_POINTS = 120;

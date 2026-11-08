@@ -8,6 +8,9 @@
 //           already ready → skipped('already_uploaded')
 //           pending row   → retried with its existing id
 //           seen earlier in this queue → skipped('duplicate_in_selection')
+//             (a photo that FAILED earlier — read/process/insert/upload — is
+//             forgotten again, so re-selecting it retries it; an upload_failed
+//             photo keeps its pending row id. Rejected photos stay skipped.)
 //           over the per-book cap → skipped('limit')
 //           else → queued as new
 //   run     process (strictly one at a time) → insert pending row (new photos
@@ -110,13 +113,16 @@ export type FailReason = "read_failed" | "process_failed" | "insert_failed" | "u
 
 export interface QueueProgress {
   type: "progress";
-  /** Files that reached a final state (uploaded + failed + skipped). Never decreases. */
+  /** Files that reached a final state (uploaded + failed + skipped + retried). Never decreases. */
   done: number;
   /** Files handed to add() so far. Grows when more files are added. */
   total: number;
   uploaded: number;
+  /** Failures not (yet) superseded by a re-selection of the same photo. May decrease. */
   failed: number;
   skipped: number;
+  /** Earlier failures whose photo was selected again (counted again under its new key). */
+  retried: number;
 }
 
 /** `key` = 0-based position of the file across all add() calls, in selection order. */
@@ -128,8 +134,11 @@ export type QueuePhotoEvent =
 export interface QueueSummary {
   total: number;
   uploaded: number;
+  /** Photos that failed and were not selected again afterwards. */
   failed: number;
   skipped: number;
+  /** Failed attempts superseded by a re-selection (that attempt is counted under its own key). */
+  retried: number;
   skippedBy: Partial<Record<SkipReason, number>>;
   failedBy: Partial<Record<FailReason, number>>;
   /** Files never attempted because of cancel() or a fatal error (total − done). */
@@ -257,6 +266,9 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
   let uploaded = 0;
   let failed = 0;
   let skipped = 0;
+  let retried = 0;
+  /** Fingerprint → reason of its latest failure, until it is selected again. */
+  const failedFps = new Map<string, FailReason>();
   const skippedBy: Partial<Record<SkipReason, number>> = {};
   const failedBy: Partial<Record<FailReason, number>> = {};
   let limit: number | null = null;
@@ -284,14 +296,23 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     }
   };
   const progress = () =>
-    emit({ type: "progress", done: uploaded + failed + skipped, total, uploaded, failed, skipped });
+    emit({ type: "progress", done: uploaded + failed + skipped + retried, total, uploaded, failed, skipped, retried });
   const skip = (key: number, reason: SkipReason) => {
     skipped += 1;
     skippedBy[reason] = (skippedBy[reason] ?? 0) + 1;
     emit({ type: "photo", key, status: "skipped", reason });
     progress();
   };
-  const fail = (key: number, reason: FailReason) => {
+  /**
+   * `fp` = the photo's fingerprint when known. Failed photos are forgotten by the
+   * in-session duplicate check so a later add() of the same file retries it
+   * (S1). not_allowed is fatal, so nothing is retried after it anyway.
+   */
+  const fail = (key: number, reason: FailReason, fp?: string) => {
+    if (fp !== undefined && reason !== "not_allowed") {
+      seenFps.delete(fp);
+      failedFps.set(fp, reason);
+    }
     failed += 1;
     failedBy[reason] = (failedBy[reason] ?? 0) + 1;
     emit({ type: "photo", key, status: "failed", reason });
@@ -317,6 +338,9 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
   // --- classification (add) ---
   async function classify(batch: { key: number; file: File }[]) {
     let limitSkips = 0;
+    // Within one selection, identical files stay skipped even if the first copy
+    // already failed (and was forgotten by seenFps) before we got here.
+    const batchFps = new Set<string>();
     for (const { key, file } of batch) {
       if (stopped()) break; // remaining stay "not started"
       let fp: string;
@@ -326,11 +350,21 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         fail(key, "read_failed");
         continue;
       }
-      if (seenFps.has(fp)) {
+      if (seenFps.has(fp) || batchFps.has(fp)) {
         skip(key, "duplicate_in_selection");
         continue;
       }
       seenFps.add(fp);
+      batchFps.add(fp);
+      const earlier = failedFps.get(fp);
+      if (earlier !== undefined) {
+        // Selected again after failing: that failure is superseded by this attempt.
+        failedFps.delete(fp);
+        failed -= 1;
+        failedBy[earlier] = (failedBy[earlier] ?? 1) - 1;
+        if (failedBy[earlier] === 0) delete failedBy[earlier];
+        retried += 1;
+      }
       if (readyFps.has(fp)) {
         skip(key, "already_uploaded");
         continue;
@@ -435,7 +469,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
           return;
         case "failed":
           rowsCounted -= 1;
-          fail(item.key, "insert_failed");
+          fail(item.key, "insert_failed", item.fp);
           return;
         case "id":
           id = ins.id;
@@ -452,16 +486,22 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       uploadOne(paths.thumb, p.thumb.blob, "image/jpeg"),
     ]);
     if (results.includes(false)) {
-      fail(item.key, "upload_failed"); // row stays pending; resume retries it
+      // Row stays pending (pendingByFp keeps its id): a re-add in this session or a
+      // later resume retries it under the same id.
+      fail(item.key, "upload_failed", item.fp);
       return;
     }
 
     const patch = readyPatch(paths, p);
     let notAllowed = false;
+    let rowMissing = false;
     const marked = await retry<true, never>(async () => {
       const { error } = await db.markReady(photoId, patch);
       if (!error) return { ok: true, value: true };
-      if (error.code === ROW_MISSING_CODE) return { ok: false, retryable: false };
+      if (error.code === ROW_MISSING_CODE) {
+        rowMissing = true;
+        return { ok: false, retryable: false };
+      }
       if (mapUploadDbError(error).kind === "not_allowed") {
         notAllowed = true;
         return { ok: false, retryable: false };
@@ -474,7 +514,13 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         fail(item.key, "not_allowed");
         wake();
       } else {
-        fail(item.key, "upload_failed");
+        if (rowMissing) {
+          // Deleted meanwhile ("remove unfinished" elsewhere): a re-add inserts a fresh row.
+          pendingIds.delete(photoId);
+          pendingByFp.delete(item.fp);
+          rowsCounted -= 1;
+        }
+        fail(item.key, "upload_failed", item.fp);
       }
       return;
     }
@@ -488,12 +534,13 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
   }
 
   function summary(): QueueSummary {
-    const done = uploaded + failed + skipped;
+    const done = uploaded + failed + skipped + retried;
     return {
       total,
       uploaded,
       failed,
       skipped,
+      retried,
       skippedBy: { ...skippedBy },
       failedBy: { ...failedBy },
       notStarted: Math.max(0, total - done),
@@ -529,7 +576,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
       } catch (e) {
         if (item.id === undefined) rowsCounted -= 1; // never inserted → frees its slot
         if (e instanceof PhotoRejectError) skip(item.key, e.reason);
-        else fail(item.key, "process_failed");
+        else fail(item.key, "process_failed", item.fp);
         continue;
       }
 
@@ -544,7 +591,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
         skip(item.key, "limit");
         continue;
       }
-      prevJob = uploadPhoto(item, processed).catch(() => fail(item.key, "upload_failed"));
+      prevJob = uploadPhoto(item, processed).catch(() => fail(item.key, "upload_failed", item.fp));
     }
     await prevJob;
     const s = summary();

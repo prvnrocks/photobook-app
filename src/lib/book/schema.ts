@@ -5,13 +5,23 @@
 import { z } from "zod";
 import { LIMITS } from "@/lib/ai/limits";
 import { getLayout } from "@/lib/layouts";
-import { CAPTION_LANGS, OCCASIONS, TONES } from "./options";
+import { codePointLength, hasLoneSurrogate } from "@/lib/text/clip";
+import { BOOK_TITLE_MAX_CODE_POINTS, CAPTION_LANGS, OCCASIONS, TONES } from "./options";
 
 export const OccasionSchema = z.enum(OCCASIONS);
 export const ToneSchema = z.enum(TONES);
 export const CaptionLangSchema = z.enum(CAPTION_LANGS);
 
-const IdSchema = z.string().min(1).max(64);
+/**
+ * Text that Postgres jsonb accepts: no unpaired UTF-16 surrogates (e.g. half an emoji from a bad
+ * `slice`). Without this a doc passes validation and then fails on write, every time.
+ */
+const NO_LONE_SURROGATE = { message: "contains an unpaired UTF-16 surrogate" };
+const wellFormed = (s: string) => !hasLoneSurrogate(s);
+/** String of at most `maxUnits` UTF-16 units (zod .max counts `.length`), well-formed. */
+const text = (maxUnits: number) => z.string().max(maxUnits).refine(wellFormed, NO_LONE_SURROGATE);
+
+const IdSchema = z.string().min(1).max(64).refine(wellFormed, NO_LONE_SURROGATE);
 const FontSchema = z.string().regex(/^[A-Za-z0-9 ]{1,40}$/);
 
 /** Focal point (x, y as 0..1 of the photo) + zoom (1 = cover the slot exactly). */
@@ -31,7 +41,7 @@ export const SlotSchema = z.object({
  * must never be overwritten by AI), "auto" (rule-based fallback, e.g. date/place label).
  */
 export const CaptionSchema = z.object({
-  text: z.string().max(200),
+  text: text(200),
   font: FontSchema,
   align: z.enum(["left", "center", "right"]),
   source: z.enum(["ai", "user", "auto"]),
@@ -39,16 +49,24 @@ export const CaptionSchema = z.object({
 
 export const ChapterSchema = z.object({
   id: IdSchema,
-  title: z.string().max(80),
-  dateLabel: z.string().max(40),
-  place: z.string().max(80).nullable(),
+  title: text(80),
+  dateLabel: text(40),
+  place: text(80).nullable(),
 });
 
 export const CoverSchema = z.object({
   layout: IdSchema,
   photoId: IdSchema.nullable(),
-  title: z.string().max(80),
-  subtitle: z.string().max(120),
+  /**
+   * The user's book title, never shortened: limit is BOOK_TITLE_MAX_CODE_POINTS (120) code points,
+   * same unit as TITLE_MAX_CHARS / Postgres char_length. The zod .max(240) is the matching UTF-16
+   * bound (each code point is ≤ 2 units); the refine enforces the real code-point limit.
+   */
+  title: text(BOOK_TITLE_MAX_CODE_POINTS * 2).refine(
+    (s) => codePointLength(s) <= BOOK_TITLE_MAX_CODE_POINTS,
+    { message: `more than ${BOOK_TITLE_MAX_CODE_POINTS} code points` },
+  ),
+  subtitle: text(120),
 });
 
 export const PageSchema = z.object({

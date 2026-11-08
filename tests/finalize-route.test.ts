@@ -108,6 +108,22 @@ describe("POST /api/books/[id]/finalize", () => {
     expect(mocks.finalizeBook).toHaveBeenCalledWith(ID);
   });
 
+  it("429 with Retry-After when finalize is rate limited", async () => {
+    mocks.finalizeBook.mockResolvedValue({ rateLimited: true, retryAfterSeconds: 6 });
+    const res = await route.POST(req(), ctx());
+    expect(res.status).toBe(429);
+    expect(res.headers.get("retry-after")).toBe("6");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(await res.json()).toMatchObject({ error: "rate_limited" });
+  });
+
+  it("429 Retry-After is clamped to 1..60 s", async () => {
+    mocks.finalizeBook.mockResolvedValue({ rateLimited: true, retryAfterSeconds: 0 });
+    expect((await route.POST(req(), ctx())).headers.get("retry-after")).toBe("1");
+    mocks.finalizeBook.mockResolvedValue({ rateLimited: true, retryAfterSeconds: 9999 });
+    expect((await route.POST(req(), ctx())).headers.get("retry-after")).toBe("60");
+  });
+
   it("500 with a generic message; logs the error code only", async () => {
     mocks.finalizeBook.mockRejectedValue(
       Object.assign(new Error(`boom at 24.45,54.37 ${ID}`), { code: "PGRST116" }),

@@ -8,8 +8,11 @@ import { ROW_MISSING_CODE } from "./queue";
 
 type BrowserClient = ReturnType<typeof createClient>;
 
-/** Long cache: object paths contain the photo id and are overwritten only by retries. */
-const CACHE_CONTROL = "31536000";
+/**
+ * 1 h. Paths contain the photo id and are overwritten only while the row is still
+ * pending (retries / resume), but keep caches short so an overwrite never lingers.
+ */
+const CACHE_CONTROL = "3600";
 const FIND_CHUNK = 100;
 
 export function createSupabaseUploadDeps(

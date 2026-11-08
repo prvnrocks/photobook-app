@@ -1,7 +1,8 @@
 import "server-only";
 // Photo queries for the signed-in user's books. Uses the RLS-enforced server
 // client (photos_*_own policies on public.photos, photos_*_own policies on
-// storage.objects in bucket "photos"), never the secret-key client.
+// storage.objects in bucket "photos") — except the finalize writes of
+// server-only columns at the bottom, which need the admin client (see there).
 //
 // Delete order (deletePhoto / deleteUnfinished): storage objects FIRST, row
 // SECOND. If storage removal fails we throw and keep the row, so the paths stay
@@ -12,7 +13,9 @@ import "server-only";
 //
 // Errors carry only the operation and a Postgres/Storage code — never ids,
 // paths or other user data.
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { clipText } from "@/lib/text/clip";
 import { isUuid } from "@/lib/uuid";
 
 export const PHOTOS_BUCKET = "photos";
@@ -171,6 +174,7 @@ export type FinalizePhotoRow = {
   blur_score: number | null;
   status: string;
   dup_group: number | null;
+  place_checked_at: string | null;
 };
 
 /** Every `ready` photo of the book with the columns finalize needs. [] for a malformed id. */
@@ -180,7 +184,7 @@ export async function listReadyPhotosForFinalize(bookId: string): Promise<Finali
   const { data, error } = await supabase
     .from("photos")
     .select(
-      "id, width, height, taken_at, date_source, lat, lng, place, phash, blur_score, status, dup_group",
+      "id, width, height, taken_at, date_source, lat, lng, place, phash, blur_score, status, dup_group, place_checked_at",
     )
     .eq("book_id", bookId)
     .eq("upload_state", "ready")
@@ -190,16 +194,26 @@ export async function listReadyPhotosForFinalize(bookId: string): Promise<Finali
   return data;
 }
 
-/** Sets dup_group (or null) on the given photos of the book, ≤100 ids per request. */
+// Server-only columns (dup_group, place, place_checked_at) are guarded by the
+// photos_protect_columns trigger (0500): a user-role update keeps their old
+// values. So these writes use the secret-key admin client. Callers MUST have
+// checked ownership first (finalizeBook → getMyBook under RLS) and pass ids
+// read through RLS (listReadyPhotosForFinalize); every update is also filtered
+// by book_id so ids from another book can never match.
+
+/** Max place label length stored (UTF-16 units; ≤ the DB's 200 code points). */
+export const PLACE_MAX = 120;
+
+/** Sets dup_group (or null) on the given photos of the book, ≤100 ids per request. Admin client. */
 export async function setPhotosDupGroup(
   bookId: string,
   ids: string[],
   dupGroup: number | null,
 ): Promise<void> {
   if (!isUuid(bookId) || ids.length === 0) return;
-  const supabase = await createClient();
+  const admin = createAdminClient();
   for (const batch of chunks(ids)) {
-    const { error } = await supabase
+    const { error } = await admin
       .from("photos")
       .update({ dup_group: dupGroup })
       .eq("book_id", bookId)
@@ -210,18 +224,39 @@ export async function setPhotosDupGroup(
 
 /**
  * Sets place on the given photos of the book, only where place IS NULL (never
- * overwrites a place set meanwhile, e.g. by the user). ≤100 ids per request.
+ * overwrites a place set meanwhile). The label is clipped Unicode-safely to
+ * PLACE_MAX (no lone surrogates). ≤100 ids per request. Admin client.
  */
 export async function setPhotosPlace(bookId: string, ids: string[], place: string): Promise<void> {
   if (!isUuid(bookId) || ids.length === 0) return;
-  const supabase = await createClient();
+  const label = clipText(place.trim(), PLACE_MAX);
+  if (label === "") return;
+  const admin = createAdminClient();
   for (const batch of chunks(ids)) {
-    const { error } = await supabase
+    const { error } = await admin
       .from("photos")
-      .update({ place })
+      .update({ place: label })
       .eq("book_id", bookId)
       .is("place", null)
       .in("id", batch);
     if (error) throw new PhotosQueryError("update places", error.code);
+  }
+}
+
+/** Records a geocode attempt (any result) on the given photos of the book. Admin client. */
+export async function setPhotosPlaceChecked(
+  bookId: string,
+  ids: string[],
+  checkedAt: string,
+): Promise<void> {
+  if (!isUuid(bookId) || ids.length === 0) return;
+  const admin = createAdminClient();
+  for (const batch of chunks(ids)) {
+    const { error } = await admin
+      .from("photos")
+      .update({ place_checked_at: checkedAt })
+      .eq("book_id", bookId)
+      .in("id", batch);
+    if (error) throw new PhotosQueryError("update place checks", error.code);
   }
 }

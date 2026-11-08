@@ -108,7 +108,6 @@ export function NewBookForm() {
       ) : null}
 
       <fieldset
-        role="radiogroup"
         className="flex min-w-0 flex-col gap-3"
         aria-describedby={fe.occasion ? ids.occasionErr : undefined}
       >
@@ -135,7 +134,6 @@ export function NewBookForm() {
       </fieldset>
 
       <fieldset
-        role="radiogroup"
         className="flex min-w-0 flex-col gap-3"
         aria-describedby={fe.tone ? ids.toneErr : undefined}
       >
@@ -160,7 +158,6 @@ export function NewBookForm() {
       </fieldset>
 
       <fieldset
-        role="radiogroup"
         className="flex min-w-0 flex-col gap-3"
         aria-describedby={fe.captionLang ? ids.langErr : undefined}
       >

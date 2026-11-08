@@ -132,6 +132,19 @@ describe("labelFromResponse", () => {
     expect(labelFromResponse({ features: [{}] })).toBeNull();
     expect(labelFromResponse("nope")).toBeNull();
   });
+
+  it("truncation never splits a surrogate pair (emoji at the cut)", () => {
+    // 118 ASCII + emoji: a UTF-16 slice(0, 119) would cut the emoji in half.
+    for (const pad of [117, 118, 119]) {
+      const name = "x".repeat(pad) + "😀".repeat(5);
+      const r = { features: [{ properties: { feature_type: "country", name } }] };
+      const label = labelFromResponse(r)!;
+      expect(label.length).toBeLessThanOrEqual(120);
+      expect(label.endsWith("…")).toBe(true);
+      expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(label)).toBe(false);
+      expect(() => JSON.parse(JSON.stringify(label))).not.toThrow();
+    }
+  });
 });
 
 describe("reverseGeocode", () => {
@@ -253,5 +266,25 @@ describe("reverseGeocodeMany", () => {
     expect(out).toEqual(["L0", "L1", "L2", null, "L4", null, "L6", "L7", "L8", "L9"]);
     expect(peak).toBeLessThanOrEqual(4);
     expect(await reverseGeocodeMany([], { geocoder })).toEqual([]);
+  });
+
+  it("shouldStart=false skips remaining centroids; onAttempt reports started ones", async () => {
+    let started = 0;
+    const geocoder: ReverseGeocoder = async (lat) => `L${lat}`;
+    const attempted: number[] = [];
+    const out = await reverseGeocodeMany(
+      Array.from({ length: 6 }, (_, i) => ({ lat: i, lng: 0 })),
+      {
+        concurrency: 1,
+        geocoder,
+        shouldStart: () => started < 3,
+        onAttempt: (i) => {
+          started++;
+          attempted.push(i);
+        },
+      },
+    );
+    expect(attempted).toEqual([0, 1, 2]);
+    expect(out).toEqual(["L0", "L1", "L2", null, null, null]);
   });
 });

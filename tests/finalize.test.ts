@@ -7,9 +7,18 @@ vi.mock("@/lib/supabase/server", () => ({
   },
 }));
 
-const { finalizeBook, isEmptyDoc, MAX_CLUSTERS_PER_RUN } = await import("@/lib/photos/finalize");
+const {
+  finalizeBook,
+  isEmptyDoc,
+  MAX_CLUSTERS_PER_RUN,
+  FINALIZE_MIN_INTERVAL_S,
+  GEOCODE_DAILY_CAP,
+  PLACE_RECHECK_MS,
+} = await import("@/lib/photos/finalize");
 const { parseBookDoc, validateBookDoc } = await import("@/lib/book/schema");
 type FinalizeDb = import("@/lib/photos/finalize").FinalizeDb;
+type FinalizeResult = import("@/lib/photos/finalize").FinalizeResult;
+type FinalizeDeps = import("@/lib/photos/finalize").FinalizeDeps;
 type FinalizePhotoRow = import("@/lib/db/photos").FinalizePhotoRow;
 type MyBook = import("@/lib/db/books").MyBook;
 
@@ -35,12 +44,20 @@ function photo(n: number, o: Partial<FakePhoto> = {}): FakePhoto {
     blur_score: 100,
     status: "kept",
     dup_group: null,
+    place_checked_at: null,
     upload_state: "ready",
     ...o,
   };
 }
 
-function makeDb(initial: { photos: FakePhoto[]; doc?: unknown; isPaid?: boolean }) {
+function makeDb(initial: {
+  photos: FakePhoto[];
+  doc?: unknown;
+  isPaid?: boolean;
+  /** Fake clock for the rate limit (ms); without it every claim succeeds. */
+  clock?: () => number;
+  geocodeUsedToday?: number;
+}) {
   const book: MyBook = {
     id: BOOK,
     title: null,
@@ -54,11 +71,40 @@ function makeDb(initial: { photos: FakePhoto[]; doc?: unknown; isPaid?: boolean 
     updated_at: "2026-11-08T10:00:00.000001+00:00",
   };
   const photos = initial.photos.map((p) => ({ ...p }));
-  const calls = { setDupGroup: [] as [string[], number | null][], setPlace: 0, writeDoc: 0 };
+  const calls = {
+    setDupGroup: [] as [string[], number | null][],
+    setPlace: 0,
+    writeDoc: 0,
+    claims: 0,
+    reserved: [] as { want: number; cap: number; granted: number }[],
+    setPlaceChecked: [] as [string, string[], string][],
+  };
   let tick = 1;
+  let lastRun: number | null = null;
+  let geocodeUsed = initial.geocodeUsedToday ?? 0;
   const db: FinalizeDb = {
     async getBook(id) {
       return id === BOOK ? { ...book } : null;
+    },
+    async claimRun(_id, minIntervalSeconds) {
+      calls.claims++;
+      if (!initial.clock) return { ok: true };
+      const t = initial.clock();
+      if (lastRun !== null && t - lastRun < minIntervalSeconds * 1000) {
+        return { ok: false, retryAfterSeconds: Math.ceil((lastRun + minIntervalSeconds * 1000 - t) / 1000) };
+      }
+      lastRun = t;
+      return { ok: true };
+    },
+    async reserveGeocodeCalls(_id, want, cap) {
+      const granted = Math.max(0, Math.min(want, cap - geocodeUsed));
+      geocodeUsed += granted;
+      calls.reserved.push({ want, cap, granted });
+      return granted;
+    },
+    async setPlaceChecked(id, ids, at) {
+      calls.setPlaceChecked.push([id, [...ids], at]);
+      for (const p of photos) if (ids.includes(p.id)) p.place_checked_at = at;
     },
     async listReadyPhotos(id) {
       return photos
@@ -89,6 +135,13 @@ function makeDb(initial: { photos: FakePhoto[]; doc?: unknown; isPaid?: boolean 
   return { db, book, photos, calls };
 }
 
+/** finalizeBook, asserting the run was not rate limited. */
+async function fin(id: string, deps: FinalizeDeps): Promise<FinalizeResult | null> {
+  const r = await finalizeBook(id, deps);
+  if (r && "rateLimited" in r) throw new Error("unexpected rate limit");
+  return r;
+}
+
 function makeGeocoder(label: string | null = PLACE) {
   return vi.fn<(lat: number, lng: number) => Promise<string | null>>(async () => label);
 }
@@ -107,7 +160,7 @@ afterEach(() => vi.restoreAllMocks());
 describe("finalizeBook", () => {
   it("returns null when the book is missing / not the caller's", async () => {
     const { db } = makeDb({ photos: [photo(1)] });
-    expect(await finalizeBook(OTHER, { db, geocoder: makeGeocoder() })).toBeNull();
+    expect(await fin(OTHER, { db, geocoder: makeGeocoder() })).toBeNull();
   });
 
   it("writes dup groups for duplicates, batched per value, and clears stale groups", async () => {
@@ -121,7 +174,7 @@ describe("finalizeBook", () => {
         photo(5),
       ],
     });
-    const r = await finalizeBook(BOOK, { db, geocoder: makeGeocoder() });
+    const r = await fin(BOOK, { db, geocoder: makeGeocoder() });
     expect(r).toMatchObject({ dupGroups: 1, dupPhotos: 3 });
     expect(photos.map((p) => p.dup_group)).toEqual([1, 1, 1, null, null]);
     // One update for group 1 (3 ids) + one for null (1 id).
@@ -131,7 +184,7 @@ describe("finalizeBook", () => {
 
     // Unchanged on a re-run → no writes.
     calls.setDupGroup.length = 0;
-    await finalizeBook(BOOK, { db, geocoder: makeGeocoder() });
+    await fin(BOOK, { db, geocoder: makeGeocoder() });
     expect(calls.setDupGroup).toHaveLength(0);
   });
 
@@ -146,13 +199,13 @@ describe("finalizeBook", () => {
       ],
     });
     const geocoder = makeGeocoder();
-    const r = await finalizeBook(BOOK, { db, geocoder });
+    const r = await fin(BOOK, { db, geocoder });
     expect(geocoder).toHaveBeenCalledTimes(2);
     expect(photos.map((p) => p.place)).toEqual([PLACE, PLACE, PLACE, null, "Already set"]);
     expect(r).toMatchObject({ withGps: 4, withPlace: 4, placesPending: 0 });
 
     const again = makeGeocoder();
-    await finalizeBook(BOOK, { db, geocoder: again });
+    await fin(BOOK, { db, geocoder: again });
     expect(again).not.toHaveBeenCalled();
   });
 
@@ -162,13 +215,13 @@ describe("finalizeBook", () => {
     );
     const { db } = makeDb({ photos: pts });
     const geocoder = makeGeocoder();
-    const r = await finalizeBook(BOOK, { db, geocoder });
+    const r = await fin(BOOK, { db, geocoder });
     expect(MAX_CLUSTERS_PER_RUN).toBe(50);
     expect(geocoder).toHaveBeenCalledTimes(50);
     expect(r).toMatchObject({ withGps: 60, withPlace: 50, placesPending: 10 });
 
     const second = makeGeocoder();
-    const r2 = await finalizeBook(BOOK, { db, geocoder: second });
+    const r2 = await fin(BOOK, { db, geocoder: second });
     expect(second).toHaveBeenCalledTimes(10);
     expect(r2?.placesPending).toBe(0);
   });
@@ -182,24 +235,122 @@ describe("finalizeBook", () => {
       t += 1000;
       return PLACE;
     });
-    const r = await finalizeBook(BOOK, { db, geocoder, geocodeBudgetMs: 2500, now: () => t });
+    const r = await fin(BOOK, { db, geocoder, geocodeBudgetMs: 2500, now: () => t });
     expect(geocoder.mock.calls.length).toBeLessThan(10);
     expect(r?.placesPending).toBeGreaterThan(0);
   });
 
-  it("geocode failures (null) leave places null and pending", async () => {
+  it("geocode failures (null) leave places null, mark the attempt and are not retried for 24 h", async () => {
+    let t = Date.parse("2026-11-08T10:00:00Z");
     const { db, photos, calls } = makeDb({ photos: [photo(1, { lat: 24.45, lng: 54.37 })] });
-    const r = await finalizeBook(BOOK, { db, geocoder: makeGeocoder(null) });
+    const r = await fin(BOOK, { db, geocoder: makeGeocoder(null), now: () => t });
     expect(photos[0].place).toBeNull();
     expect(calls.setPlace).toBe(0);
-    expect(r?.placesPending).toBe(1);
+    expect(photos[0].place_checked_at).toBe(new Date(t).toISOString());
+    expect(r?.placesPending).toBe(0); // a re-run would not try again yet
+
+    t += PLACE_RECHECK_MS - 60_000;
+    const soon = makeGeocoder();
+    await fin(BOOK, { db, geocoder: soon, now: () => t });
+    expect(soon).not.toHaveBeenCalled();
+
+    t += 120_000; // > 24 h after the attempt
+    const later = makeGeocoder();
+    await fin(BOOK, { db, geocoder: later, now: () => t });
+    expect(later).toHaveBeenCalledTimes(1);
+    expect(photos[0].place).toBe(PLACE);
+  });
+
+  it("marks place_checked_at for every photo of every attempted cluster, success or not", async () => {
+    const { db, calls } = makeDb({
+      photos: [
+        photo(1, { lat: 24.45, lng: 54.37 }),
+        photo(2, { lat: 24.4501, lng: 54.3701 }),
+        photo(3, { lat: 25.2, lng: 55.27 }),
+      ],
+    });
+    const geocoder = vi.fn(async (lat: number) => (lat > 25 ? null : PLACE));
+    await fin(BOOK, { db, geocoder });
+    expect(calls.setPlaceChecked).toHaveLength(1);
+    const [bookId, ids] = calls.setPlaceChecked[0];
+    expect(bookId).toBe(BOOK);
+    expect([...ids].sort()).toEqual([pid(1), pid(2), pid(3)]);
+  });
+
+  it("clusters skipped by the time budget are not marked as checked", async () => {
+    let t = 0;
+    const { db, calls } = makeDb({
+      photos: Array.from({ length: 10 }, (_, i) => photo(i + 1, { lat: 20 + i, lng: 54 })),
+    });
+    const geocoder = vi.fn(async () => {
+      t += 1000;
+      return null;
+    });
+    const r = await fin(BOOK, { db, geocoder, geocodeBudgetMs: 2500, now: () => t });
+    const checked = calls.setPlaceChecked.flatMap(([, ids]) => ids);
+    expect(checked).toHaveLength(geocoder.mock.calls.length);
+    expect(r?.placesPending).toBe(10 - geocoder.mock.calls.length);
+  });
+
+  it("caps geocoding at GEOCODE_DAILY_CAP per book per day (reserved before calling)", async () => {
+    expect(GEOCODE_DAILY_CAP).toBe(200);
+    const pts = Array.from({ length: 30 }, (_, i) => photo(i + 1, { lat: 20 + i * 0.1, lng: 54 }));
+    const { db, calls } = makeDb({ photos: pts, geocodeUsedToday: 190 });
+    const geocoder = makeGeocoder();
+    const r = await fin(BOOK, { db, geocoder });
+    expect(calls.reserved).toEqual([{ want: 30, cap: 200, granted: 10 }]);
+    expect(geocoder).toHaveBeenCalledTimes(10);
+    expect(r).toMatchObject({ withPlace: 10, placesPending: 20 });
+
+    const none = makeGeocoder();
+    const r2 = await fin(BOOK, { db, geocoder: none });
+    expect(none).not.toHaveBeenCalled();
+    expect(r2?.placesPending).toBe(20);
+  });
+
+  it("no geocodable photos → no reservation", async () => {
+    const { db, calls } = makeDb({ photos: [photo(1), photo(2, { lat: 1, lng: 1, place: "X" })] });
+    await fin(BOOK, { db, geocoder: makeGeocoder() });
+    expect(calls.reserved).toEqual([]);
+  });
+
+  it("rate limit: a second run within 10 s returns rateLimited before any read or write", async () => {
+    expect(FINALIZE_MIN_INTERVAL_S).toBe(10);
+    let t = 1_000_000;
+    const { db, calls } = makeDb({
+      photos: [photo(1, { lat: 24.45, lng: 54.37 })],
+      clock: () => t,
+    });
+    const listSpy = vi.spyOn(db, "listReadyPhotos");
+    expect(await finalizeBook(BOOK, { db, geocoder: makeGeocoder(), now: () => t })).not.toHaveProperty(
+      "rateLimited",
+    );
+    expect(listSpy).toHaveBeenCalledTimes(1);
+
+    t += 4_000;
+    const geocoder = makeGeocoder();
+    const r = await finalizeBook(BOOK, { db, geocoder, now: () => t });
+    expect(r).toEqual({ rateLimited: true, retryAfterSeconds: 6 });
+    expect(listSpy).toHaveBeenCalledTimes(1);
+    expect(geocoder).not.toHaveBeenCalled();
+    expect(calls.writeDoc).toBe(1);
+
+    t += 6_000;
+    expect(await finalizeBook(BOOK, { db, geocoder, now: () => t })).not.toHaveProperty("rateLimited");
+    expect(calls.claims).toBe(3);
+  });
+
+  it("the owner check runs before the rate-limit claim", async () => {
+    const { db, calls } = makeDb({ photos: [photo(1)] });
+    expect(await finalizeBook(OTHER, { db, geocoder: makeGeocoder() })).toBeNull();
+    expect(calls.claims).toBe(0);
   });
 
   it("empty doc → writes a valid fallback album + page_count", async () => {
     const { db, book } = makeDb({
       photos: Array.from({ length: 12 }, (_, i) => photo(i + 1)),
     });
-    const r = await finalizeBook(BOOK, { db, geocoder: makeGeocoder() });
+    const r = await fin(BOOK, { db, geocoder: makeGeocoder() });
     expect(r?.wroteDoc).toBe(true);
     const parsed = parseBookDoc(book.doc);
     expect(parsed.ok).toBe(true);
@@ -214,7 +365,7 @@ describe("finalizeBook", () => {
   it("never overwrites a non-empty doc (and doesn't even try)", async () => {
     const existing = { version: 1, mine: true };
     const { db, book, calls } = makeDb({ photos: [photo(1)], doc: existing });
-    const r = await finalizeBook(BOOK, { db, geocoder: makeGeocoder() });
+    const r = await fin(BOOK, { db, geocoder: makeGeocoder() });
     expect(r?.wroteDoc).toBe(false);
     expect(calls.writeDoc).toBe(0);
     expect(book.doc).toEqual(existing);
@@ -222,9 +373,9 @@ describe("finalizeBook", () => {
 
   it("second run after writing the doc leaves it untouched", async () => {
     const { db, book, calls } = makeDb({ photos: [photo(1), photo(2), photo(3)] });
-    await finalizeBook(BOOK, { db, geocoder: makeGeocoder() });
+    await fin(BOOK, { db, geocoder: makeGeocoder() });
     const written = JSON.stringify(book.doc);
-    const r2 = await finalizeBook(BOOK, { db, geocoder: makeGeocoder() });
+    const r2 = await fin(BOOK, { db, geocoder: makeGeocoder() });
     expect(r2?.wroteDoc).toBe(false);
     expect(calls.writeDoc).toBe(1);
     expect(JSON.stringify(book.doc)).toBe(written);
@@ -234,20 +385,20 @@ describe("finalizeBook", () => {
   it("lost race (doc written meanwhile) → wroteDoc false", async () => {
     const { db } = makeDb({ photos: [photo(1)] });
     const raced: FinalizeDb = { ...db, writeDocIfEmpty: async () => false };
-    const r = await finalizeBook(BOOK, { db: raced, geocoder: makeGeocoder() });
+    const r = await fin(BOOK, { db: raced, geocoder: makeGeocoder() });
     expect(r?.wroteDoc).toBe(false);
   });
 
   it("reports docStale when the doc references a photo that is gone", async () => {
     const { db: db1, book } = makeDb({ photos: [photo(1), photo(2), photo(3)] });
-    await finalizeBook(BOOK, { db: db1, geocoder: makeGeocoder() });
+    await fin(BOOK, { db: db1, geocoder: makeGeocoder() });
     const doc = book.doc;
 
     const { db: fresh } = makeDb({ photos: [photo(1), photo(2), photo(3)], doc });
-    expect((await finalizeBook(BOOK, { db: fresh, geocoder: makeGeocoder() }))?.docStale).toBe(false);
+    expect((await fin(BOOK, { db: fresh, geocoder: makeGeocoder() }))?.docStale).toBe(false);
 
     const { db: missing } = makeDb({ photos: [photo(1), photo(2)], doc });
-    expect((await finalizeBook(BOOK, { db: missing, geocoder: makeGeocoder() }))?.docStale).toBe(true);
+    expect((await fin(BOOK, { db: missing, geocoder: makeGeocoder() }))?.docStale).toBe(true);
   });
 
   it("ignores pending photos", async () => {
@@ -259,7 +410,7 @@ describe("finalizeBook", () => {
       ],
     });
     const geocoder = makeGeocoder();
-    const r = await finalizeBook(BOOK, { db, geocoder });
+    const r = await fin(BOOK, { db, geocoder });
     expect(r?.photos).toBe(2);
     expect(geocoder).toHaveBeenCalledTimes(1);
     expect(photos[1].place).toBeNull();
@@ -275,7 +426,7 @@ describe("finalizeBook", () => {
         photo(3),
       ],
     });
-    const r = await finalizeBook(BOOK, { db, geocoder: makeGeocoder() });
+    const r = await fin(BOOK, { db, geocoder: makeGeocoder() });
     expect(r).not.toBeNull();
     expect(Object.keys(r!).sort()).toEqual(
       [

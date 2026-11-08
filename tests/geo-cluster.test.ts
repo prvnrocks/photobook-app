@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clusterPoints, haversineKm } from "@/lib/photos/geo-cluster";
+import { clusterPoints, haversineKm, MAX_CLUSTER_SPAN_KM } from "@/lib/photos/geo-cluster";
 
 describe("haversineKm", () => {
   it("computes known distances", () => {
@@ -58,5 +58,60 @@ describe("clusterPoints", () => {
     const c2 = clusterPoints([...pts].reverse());
     expect(c1).toEqual(c2);
     expect(c1.map((k) => k.ids)).toEqual([["a"], ["b", "c"]]);
+  });
+
+  const spanKm = (pts: { lat: number; lng: number }[]) => {
+    let m = 0;
+    for (const a of pts) for (const b of pts) m = Math.max(m, haversineKm(a, b));
+    return m;
+  };
+
+  it("splits a chain wider than MAX_CLUSTER_SPAN_KM (road trip) into ≤2 km pieces", () => {
+    expect(MAX_CLUSTER_SPAN_KM).toBe(5);
+    // 60 points every ~0.8 km (each linked to the next) → ~47 km single-linkage chain.
+    const pts = Array.from({ length: 60 }, (_, i) => ({
+      id: `p${String(i).padStart(2, "0")}`,
+      lat: base.lat + i * 0.0072,
+      lng: base.lng,
+    }));
+    const c = clusterPoints(pts);
+    expect(c.length).toBeGreaterThan(9);
+    const byId = new Map(pts.map((p) => [p.id, p]));
+    for (const k of c) {
+      expect(spanKm(k.ids.map((id) => byId.get(id)!))).toBeLessThanOrEqual(2);
+    }
+    // every point exactly once
+    expect(c.flatMap((k) => k.ids).sort()).toEqual(pts.map((p) => p.id).sort());
+    // ordered by smallest id, ids sorted inside
+    const firsts = c.map((k) => k.ids[0]);
+    expect([...firsts].sort()).toEqual(firsts);
+    for (const k of c) expect([...k.ids].sort()).toEqual(k.ids);
+  });
+
+  it("span split is deterministic regardless of input order", () => {
+    const pts = Array.from({ length: 40 }, (_, i) => ({
+      id: `q${String((i * 7) % 40).padStart(2, "0")}`,
+      lat: base.lat + i * 0.006,
+      lng: base.lng + (i % 3) * 0.002,
+    }));
+    expect(clusterPoints(pts)).toEqual(clusterPoints([...pts].reverse()));
+  });
+
+  it("keeps a dense 4 km-wide area as one cluster (under the span cap)", () => {
+    const pts = Array.from({ length: 20 }, (_, i) => ({ id: `d${i}`, lat: base.lat + i * 0.0018, lng: base.lng }));
+    expect(spanKm(pts)).toBeLessThan(MAX_CLUSTER_SPAN_KM);
+    expect(clusterPoints(pts)).toHaveLength(1);
+  });
+
+  it("500 points finish quickly", () => {
+    const pts = Array.from({ length: 500 }, (_, i) => ({
+      id: `z${String(i).padStart(3, "0")}`,
+      lat: base.lat + (i % 50) * 0.003,
+      lng: base.lng + Math.floor(i / 50) * 0.003,
+    }));
+    const t0 = performance.now();
+    const c = clusterPoints(pts);
+    expect(performance.now() - t0).toBeLessThan(2000);
+    expect(c.flatMap((k) => k.ids)).toHaveLength(500);
   });
 });

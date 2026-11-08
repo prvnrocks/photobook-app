@@ -374,6 +374,112 @@ describe("createUploadQueue", () => {
     expect(h2.markCalls).toHaveLength(1);
   });
 
+  describe("failed photos can be re-selected in the same session (S1)", () => {
+    it("upload_failed → re-add → retried with the same row id", async () => {
+      const h = harness();
+      let broken = true;
+      h.faults.upload = (path) => (broken && path.endsWith("-web.jpg") ? { message: "network", statusCode: "500" } : null);
+      const q = createUploadQueue(h.deps);
+      q.add([file("a")]);
+      expect(await q.start()).toMatchObject({ failedBy: { upload_failed: 1 }, pendingLeft: 1 });
+      const [rowId] = [...h.rows.keys()];
+      expect(h.rows.get(rowId)!.upload_state).toBe("pending");
+
+      broken = false;
+      q.add([file("a")]);
+      const s = await q.start();
+      // The first attempt is superseded: no "couldn't be uploaded" left in the summary.
+      expect(s).toMatchObject({ total: 2, uploaded: 1, failed: 0, retried: 1, notStarted: 0, pendingLeft: 0 });
+      expect(s.failedBy).toEqual({});
+      expect(s.skippedBy).toEqual({});
+      expect(h.inserts).toHaveLength(1); // no second row
+      expect(h.rows.size).toBe(1);
+      expect(h.rows.get(rowId)!.upload_state).toBe("ready");
+      expect(photoEvents(h).at(-1)).toEqual({ type: "photo", key: 1, status: "uploaded", photoId: rowId });
+    });
+
+    it("insert_failed and process_failed → re-add → retried (new row)", async () => {
+      const h = harness();
+      h.faults.insert = (n) => (n <= MAX_ATTEMPTS ? { code: "08006" } : null);
+      let oom = true;
+      const base = h.deps.process;
+      const q = createUploadQueue({
+        ...h.deps,
+        process: (f) => (oom && f.name === "b" ? Promise.reject(new Error("oom")) : base(f)),
+      });
+      q.add([file("a"), file("b")]);
+      expect(await q.start()).toMatchObject({ failedBy: { insert_failed: 1, process_failed: 1 } });
+      oom = false;
+      q.add([file("a"), file("b")]);
+      const s = await q.start();
+      expect(s).toMatchObject({ total: 4, uploaded: 2, skipped: 0, failed: 0, retried: 2, notStarted: 0 });
+      expect([...h.rows.values()].map((r) => r.upload_state)).toEqual(["ready", "ready"]);
+    });
+
+    it("read_failed → re-add → retried", async () => {
+      const h = harness();
+      let unreadable = true;
+      const q = createUploadQueue({
+        ...h.deps,
+        fingerprintOnly: async (f) => {
+          if (unreadable) throw new Error("NotReadableError");
+          return fpOf(f.name);
+        },
+      });
+      q.add([file("a")]);
+      expect(await q.start()).toMatchObject({ failedBy: { read_failed: 1 } });
+      unreadable = false;
+      q.add([file("a")]);
+      expect(await q.start()).toMatchObject({ uploaded: 1 });
+    });
+
+    it("missing row on markReady → re-add inserts a fresh row", async () => {
+      const h = harness();
+      let gone = true;
+      h.faults.markReady = (id) => {
+        if (!gone) return null;
+        gone = false;
+        h.rows.delete(id); // "remove unfinished" in another tab
+        return { code: ROW_MISSING_CODE };
+      };
+      const q = createUploadQueue(h.deps);
+      q.add([file("a")]);
+      expect(await q.start()).toMatchObject({ failed: 1, pendingLeft: 0 });
+      q.add([file("a")]);
+      expect(await q.start()).toMatchObject({ uploaded: 1, pendingLeft: 0 });
+      expect(h.inserts).toHaveLength(2);
+      expect(h.rows.size).toBe(1);
+    });
+
+    it("rejected photos stay skipped on re-add", async () => {
+      const h = harness();
+      h.faults.reject = (t) => (t === "tiny" ? "too_small" : null);
+      const q = createUploadQueue(h.deps);
+      q.add([file("tiny")]);
+      await q.start();
+      q.add([file("tiny")]);
+      const s = await q.start();
+      expect(s.skippedBy).toEqual({ too_small: 1, duplicate_in_selection: 1 });
+      expect(h.processCalls).toEqual(["tiny"]);
+    });
+
+    it("still no duplicate within one selection, even when the first copy failed", async () => {
+      const h = harness();
+      const same = new Uint8Array(64).fill(9);
+      const base = h.deps.process;
+      const q = createUploadQueue({
+        ...h.deps,
+        fingerprintOnly: undefined, // content-based: both copies share a fingerprint
+        process: (f) => (f.name === "a.jpg" ? Promise.reject(new Error("oom")) : base(f)),
+      });
+      // Many files between the copies so the first copy fails before the second is classified.
+      q.add([new File([same], "a.jpg"), ...Array.from({ length: 5 }, (_, i) => new File([new Uint8Array(64).fill(i)], `x${i}.jpg`)), new File([same], "copy.jpg")]);
+      const s = await q.start();
+      expect(s.skippedBy).toEqual({ duplicate_in_selection: 1 });
+      expect(h.processCalls).not.toContain("copy.jpg");
+    });
+  });
+
   it("160 photos on a free empty book → 150 queued, 10 skipped('limit')", async () => {
     const h = harness();
     const s = await run(h, files(160));

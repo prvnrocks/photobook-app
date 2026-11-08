@@ -126,11 +126,28 @@ async function createBookViaUi(): Promise<string> {
   return id;
 }
 
-async function finalizeFromPage(bookId: string): Promise<{ status: number; body: Record<string, unknown> }> {
+async function finalizeFromPage(
+  bookId: string,
+): Promise<{ status: number; retryAfter: string | null; body: Record<string, unknown> }> {
   return page.evaluate(async (id) => {
     const res = await fetch(`/api/books/${id}/finalize`, { method: "POST", credentials: "same-origin" });
-    return { status: res.status, body: (await res.json()) as Record<string, unknown> };
+    return {
+      status: res.status,
+      retryAfter: res.headers.get("retry-after"),
+      body: (await res.json()) as Record<string, unknown>,
+    };
   }, bookId);
+}
+
+/** Finalize, honouring one 429 + Retry-After (rate limit: one run per book per 10 s). */
+async function finalizeWhenAllowed(bookId: string) {
+  let res = await finalizeFromPage(bookId);
+  if (res.status === 429) {
+    const wait = Number(res.retryAfter ?? "11");
+    await page.waitForTimeout((Number.isFinite(wait) ? wait : 11) * 1000 + 500);
+    res = await finalizeFromPage(bookId);
+  }
+  return res;
 }
 
 /** Two 800x600 JPEGs (no EXIF) that differ by one small dot → near-duplicates. */
@@ -177,12 +194,13 @@ async function makeNearDupPair(p: Page): Promise<[FileSpec, FileSpec]> {
 }
 
 async function waitForSummary() {
-  await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 120_000 });
+  // Finalize can take ~21 s when places are pending (follow-ups spaced by the rate limit).
+  await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 180_000 });
   await expect(page.getByTestId("finalize-error")).toHaveCount(0);
 }
 
 test.describe.configure({ mode: "serial" });
-test.setTimeout(240_000);
+test.setTimeout(300_000);
 
 test.beforeAll(async ({ browser }) => {
   const url = env("NEXT_PUBLIC_SUPABASE_URL");
@@ -337,10 +355,16 @@ test("upload at 375px: rows, storage objects, places, fallback album", async () 
 
 test("finalize again: idempotent, wroteDoc false, doc unchanged (jsonb eq.{} guard)", async () => {
   const before = await bookDoc(book1);
-  const res = await finalizeFromPage(book1);
+  const res = await finalizeWhenAllowed(book1);
+  // Immediately again → rate limited (10 s per book) with a Retry-After header.
+  const limited = await finalizeFromPage(book1);
   console.log(
-    `[finalize#2] status=${res.status} wroteDoc=${String(res.body.wroteDoc)} placesPending=${String(res.body.placesPending)}`,
+    `[finalize#2] status=${res.status} wroteDoc=${String(res.body.wroteDoc)} placesPending=${String(res.body.placesPending)}; immediate status=${limited.status} retryAfter=${limited.retryAfter}`,
   );
+  expect(limited.status).toBe(429);
+  expect(limited.body).toMatchObject({ error: "rate_limited" });
+  const ra = Number(limited.retryAfter);
+  expect(Number.isInteger(ra) && ra >= 1 && ra <= 60).toBe(true);
   expect(res.status).toBe(200);
   expect(res.body).toMatchObject({ photos: ACCEPTED, withGps: 2, withPlace: 2, placesPending: 0, wroteDoc: false });
   const after = await bookDoc(book1);
@@ -446,13 +470,28 @@ test("resume after reload mid-run: skips ready, retries pending (storage upsert)
 
 test("cap: 150 ready rows in a free book → UI limit notice, 0 rows added; DB trigger + error shapes live", async () => {
   book3 = await createBookViaUi();
-  const seed = Array.from({ length: 150 }, (_, i) => ({
-    user_id: uid,
-    book_id: book3,
-    fingerprint: `e2e-cap-${String(i).padStart(4, "0")}-${randomBytes(4).toString("hex")}`,
-    upload_state: "ready",
-  }));
+  // Ready rows must be complete (photos_ready_complete CHECK, applies to the service role
+  // too); the service role skips the files-exist check, so no objects are needed.
+  const seed = Array.from({ length: 150 }, (_, i) => {
+    const id = randomUUID();
+    const base = `${uid}/${book3}/${id}`;
+    return {
+      id,
+      user_id: uid,
+      book_id: book3,
+      fingerprint: `e2e-cap-${String(i).padStart(4, "0")}-${randomBytes(4).toString("hex")}`,
+      upload_state: "ready",
+      original_path: `${base}-original.jpg`,
+      web_path: `${base}-web.jpg`,
+      thumb_path: `${base}-thumb.jpg`,
+      width: 100,
+      height: 100,
+      original_mime: "image/jpeg",
+      original_bytes: 1,
+    };
+  });
   const ins = await admin.from("photos").insert(seed);
+  if (ins.error) console.log(`[cap] seed error code=${ins.error.code}`);
   expect(ins.error).toBeNull();
 
   await page.reload();
@@ -495,21 +534,128 @@ test("cap: 150 ready rows in a free book → UI limit notice, 0 rows added; DB t
   console.log(`[errors] other-book code=${other.error?.code} mapped=${mapUploadDbError(other.error).kind}`);
   expect(other.error).not.toBeNull();
 
-  // Storage error shapes as the user.
+  // Storage error shapes as the user (0500: objects need the user's own PENDING row + exact name).
   const blob = new Blob([new Uint8Array(files[1].buffer)], { type: "image/jpeg" });
-  const foreign = await userClient.storage.from(BUCKET).upload(`${randomUUID()}/${book1}/x-web.jpg`, blob, { upsert: true });
-  const own = `${uid}/${book1}/e2e-probe-web.jpg`;
-  const first = await userClient.storage.from(BUCKET).upload(own, blob, { upsert: false });
-  const again = await userClient.storage.from(BUCKET).upload(own, blob, { upsert: false });
-  const upsert = await userClient.storage.from(BUCKET).upload(own, blob, { upsert: true });
   const shape = (e: unknown) => {
     if (!e) return "ok";
     const o = e as { statusCode?: unknown; status?: unknown };
     return `statusCode=${typeof o.statusCode}:${String(o.statusCode)} status=${typeof o.status}:${String(o.status)}`;
   };
-  console.log(`[storage] foreign ${shape(foreign.error)}; first ${shape(first.error)}; again ${shape(again.error)}; upsert ${shape(upsert.error)}`);
-  expect(foreign.error).not.toBeNull();
+  const probeId = randomUUID();
+  const probeRow = await userClient
+    .from("photos")
+    .insert({ id: probeId, user_id: uid, book_id: book1, fingerprint: `e2e-probe-${randomBytes(6).toString("hex")}` });
+  expect(probeRow.error).toBeNull();
+  const own = `${uid}/${book1}/${probeId}-web.jpg`;
+  const foreign = await userClient.storage.from(BUCKET).upload(`${randomUUID()}/${book1}/${probeId}-web.jpg`, blob, { upsert: true });
+  const arbitrary = await userClient.storage.from(BUCKET).upload(`${uid}/${book1}/e2e-probe-web.jpg`, blob, { upsert: true });
+  const noRow = await userClient.storage.from(BUCKET).upload(`${uid}/${book1}/${randomUUID()}-web.jpg`, blob, { upsert: true });
+  const first = await userClient.storage.from(BUCKET).upload(own, blob, { upsert: false });
+  const again = await userClient.storage.from(BUCKET).upload(own, blob, { upsert: false });
+  const upsert = await userClient.storage.from(BUCKET).upload(own, blob, { upsert: true });
+  const heic = await userClient.storage
+    .from(BUCKET)
+    .upload(`${uid}/${book1}/${probeId}-thumb.jpg`, new Blob([new Uint8Array(files[2].buffer)], { type: "image/heic" }), {
+      upsert: true,
+      contentType: "image/heic",
+    });
+  const readyRow = (await photoRows(book1)).find((r) => r.upload_state === "ready")!;
+  const overReady = await userClient.storage.from(BUCKET).upload(readyRow.web_path!, blob, { upsert: true });
+  console.log(
+    `[storage] foreign ${shape(foreign.error)}; arbitrary ${shape(arbitrary.error)}; noRow ${shape(noRow.error)}; first ${shape(first.error)}; again ${shape(again.error)}; upsert ${shape(upsert.error)}; heic ${shape(heic.error)}; overReady ${shape(overReady.error)}`,
+  );
+  const code = (e: unknown) => (e as { statusCode?: string } | null)?.statusCode;
+  expect(code(foreign.error)).toBe("403");
+  expect(code(arbitrary.error)).toBe("403");
+  expect(code(noRow.error)).toBe("403");
   expect(first.error).toBeNull();
-  expect(again.error).not.toBeNull();
+  expect(code(again.error)).toBe("409");
   expect(upsert.error).toBeNull();
+  expect(heic.error).not.toBeNull(); // bucket allows only jpeg/png/webp
+  expect(code(overReady.error)).toBe("403"); // ready photos are frozen
+
+  // Clean up the probe (object first, then row).
+  await admin.storage.from(BUCKET).remove([own]);
+  const delProbe = await userClient.from("photos").delete().eq("id", probeId);
+  expect(delProbe.error).toBeNull();
+});
+
+test("0500 column guards live: server-only columns reset, ready insert refused", async () => {
+  // Client update of server-only columns on a ready row is silently undone.
+  const target = (await photoRows(book1)).find((r) => r.place !== null)!;
+  const beforeRow = await admin.from("photos").select("place, ai, dup_group, width").eq("id", target.id).single();
+  const upd = await userClient
+    .from("photos")
+    .update({ place: "e2e-tampered", ai: { tampered: true }, dup_group: 999999, width: 1 })
+    .eq("id", target.id);
+  const afterRow = await admin.from("photos").select("place, ai, dup_group, width").eq("id", target.id).single();
+  const unchanged = JSON.stringify(afterRow.data) === JSON.stringify(beforeRow.data);
+  console.log(`[guard] update err=${upd.error?.code ?? "none"} unchanged=${unchanged}`);
+  expect(afterRow.data).toEqual(beforeRow.data);
+
+  // Client insert of server-only columns on a pending row → nulled.
+  const pid = randomUUID();
+  const insPending = await userClient.from("photos").insert({
+    id: pid,
+    user_id: uid,
+    book_id: book1,
+    fingerprint: `e2e-guard-${randomBytes(6).toString("hex")}`,
+    place: "e2e-tampered",
+    ai: { tampered: true },
+    dup_group: 7,
+  });
+  expect(insPending.error).toBeNull();
+  const pRow = await admin.from("photos").select("place, ai, dup_group, upload_state").eq("id", pid).single();
+  console.log(
+    `[guard] insert pending: placeNull=${pRow.data?.place === null} aiNull=${pRow.data?.ai === null} dupNull=${pRow.data?.dup_group === null}`,
+  );
+  expect(pRow.data).toMatchObject({ place: null, ai: null, dup_group: null, upload_state: "pending" });
+
+  // Marking it ready without files → 23514 photo_files_missing.
+  const base = `${uid}/${book1}/${pid}`;
+  const markReady = await userClient
+    .from("photos")
+    .update({
+      upload_state: "ready",
+      original_path: `${base}-original.jpg`,
+      web_path: `${base}-web.jpg`,
+      thumb_path: `${base}-thumb.jpg`,
+      width: 100,
+      height: 100,
+      original_mime: "image/jpeg",
+      original_bytes: 10,
+    })
+    .eq("id", pid);
+  console.log(`[guard] mark ready without files code=${markReady.error?.code} msg=${markReady.error?.message}`);
+  expect(markReady.error?.code).toBe("23514");
+  await userClient.from("photos").delete().eq("id", pid);
+
+  // Direct insert of a ready row (complete fields, no files) → 23514.
+  const rid = randomUUID();
+  const rbase = `${uid}/${book1}/${rid}`;
+  const insReady = await userClient.from("photos").insert({
+    id: rid,
+    user_id: uid,
+    book_id: book1,
+    fingerprint: `e2e-ready-${randomBytes(6).toString("hex")}`,
+    upload_state: "ready",
+    original_path: `${rbase}-original.jpg`,
+    web_path: `${rbase}-web.jpg`,
+    thumb_path: `${rbase}-thumb.jpg`,
+    width: 100,
+    height: 100,
+    original_mime: "image/jpeg",
+    original_bytes: 10,
+  });
+  // … and an incomplete ready row → 23514 (photos_ready_complete).
+  const insBare = await userClient
+    .from("photos")
+    .insert({ user_id: uid, book_id: book1, fingerprint: `e2e-bare-${randomBytes(6).toString("hex")}`, upload_state: "ready" });
+  console.log(
+    `[guard] insert ready code=${insReady.error?.code} msg=${insReady.error?.message}; bare code=${insBare.error?.code}`,
+  );
+  expect(insReady.error?.code).toBe("23514");
+  expect(insBare.error?.code).toBe("23514");
+  const n = await admin.from("photos").select("id", { count: "exact", head: true }).eq("book_id", book1);
+  expect(n.count).toBe(ACCEPTED);
 });

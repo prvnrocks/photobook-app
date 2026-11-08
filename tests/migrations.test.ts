@@ -446,3 +446,208 @@ describe("migrations: Milestone 2 photo upload (0400)", () => {
     expect(Number(m![2])).toBe(LIMITS.free.maxUploadPhotos);
   });
 });
+
+describe("migrations: Milestone 2 review fixes — photo integrity (0500)", () => {
+  const m = migrations.find((x) => x.name.endsWith("_photo_integrity.sql"));
+  const sql = m?.sql ?? "";
+  const ws = (s: string) => s.replace(/\s+/g, " ");
+  const flat = ws(sql);
+
+  it("the photo integrity migration exists and is the 0500 file", () => {
+    expect(m, "20261108000500_photo_integrity.sql missing").toBeDefined();
+    expect(m!.name).toBe("20261108000500_photo_integrity.sql");
+  });
+
+  it("ready rows must have paths, dimensions, mime and bytes (NOT VALID, then VALIDATE)", () => {
+    const re =
+      /add constraint photos_ready_complete check \( upload_state <> 'ready' or \( original_path is not null and web_path is not null and thumb_path is not null and width > 0 and height > 0 and original_mime is not null and original_bytes > 0 \) \) not valid/;
+    expect(flat).toMatch(re);
+    expect(flat).toMatch(/alter table public\.photos validate constraint photos_ready_complete/);
+    expect(flat.search(/validate constraint photos_ready_complete/)).toBeGreaterThan(
+      flat.search(/add constraint photos_ready_complete/),
+    );
+  });
+
+  it.each([
+    ["ai ≤ 16 KiB", /check \( ?pg_column_size\(ai\) <= 16384 ?\)/],
+    ["phash 16 lowercase hex", /check \( ?phash is null or phash ~ '\^\[0-9a-f\]\{16\}\$' ?\)/],
+    ["width 1..20000", /check \( ?width between 1 and 20000 ?\)/],
+    ["height 1..20000", /check \( ?height between 1 and 20000 ?\)/],
+    ["blur_score ≥ 0", /check \( ?blur_score >= 0 ?\)/],
+    ["place_checked_at column", /add column place_checked_at timestamptz/],
+  ])("%s", (_n, re) => {
+    expect(flat).toMatch(re);
+  });
+
+  it.each([
+    ["original_path", String.raw`'-original\.(jpg|png|webp)$'`],
+    ["web_path", String.raw`'-web\.jpg$'`],
+    ["thumb_path", String.raw`'-thumb\.jpg$'`],
+  ])("%s must match {user_id}/{book_id}/{id}-… exactly", (col, suffix) => {
+    expect(flat).toContain(
+      `add constraint photos_${col}_format check ( ${col} is null or ${col} ~ ('^' || user_id::text || '/' || book_id::text || '/' || id::text || ${suffix}) )`,
+    );
+  });
+
+  describe("private.protect_photo_columns guard", () => {
+    const f = latestFunction("private.protect_photo_columns");
+
+    it("is SECURITY INVOKER with search_path '' and checks current_user like protect_book_columns", () => {
+      expect(f).toBeDefined();
+      expect(f!.header).not.toMatch(/security\s+definer/);
+      expect(f!.header).toMatch(/security\s+invoker/);
+      expect(f!.header).toMatch(/set\s+search_path\s*=\s*''/);
+      expect(ws(f!.body)).toMatch(
+        /if current_user in \('postgres', 'service_role', 'supabase_admin'\) then return new; end if;/,
+      );
+    });
+
+    const insertPart = () => ws(f!.body).split("elsif tg_op = 'update'")[0];
+    const updatePart = () => ws(f!.body).split("elsif tg_op = 'update'")[1] ?? "";
+
+    it.each([
+      ["ai", "null"],
+      ["dup_group", "null"],
+      ["place", "null"],
+      ["place_checked_at", "null"],
+      ["status", "'kept'"],
+      ["drop_reason", "null"],
+      ["user_override", "false"],
+    ])("INSERT forces new.%s := %s", (col, value) => {
+      expect(insertPart()).toContain(`new.${col} := ${value};`);
+    });
+
+    it.each(["id", "created_at", "user_id", "book_id", "fingerprint", "ai", "dup_group", "place", "place_checked_at"])(
+      "UPDATE keeps old.%s",
+      (col) => {
+        expect(updatePart()).toContain(`new.${col} := old.${col};`);
+      },
+    );
+
+    it("UPDATE of a ready row keeps it ready and freezes the file columns", () => {
+      const ready = updatePart().match(/if old\.upload_state = 'ready' then([\s\S]*?)end if;/);
+      expect(ready).not.toBeNull();
+      expect(ready![1]).toContain("new.upload_state := 'ready';");
+      for (const col of ["original_path", "web_path", "thumb_path", "original_mime", "original_bytes", "width", "height"]) {
+        expect(ready![1], col).toContain(`new.${col} := old.${col};`);
+      }
+    });
+
+    it("leaves status / drop_reason / user_override client-updatable (user decides, M3 review)", () => {
+      for (const col of ["status", "drop_reason", "user_override"]) {
+        expect(updatePart()).not.toContain(`new.${col} :=`);
+      }
+    });
+
+    it("requires the three storage objects before a row becomes ready", () => {
+      const body = ws(f!.body);
+      expect(body).toMatch(/from storage\.objects as o where o\.bucket_id = 'photos'/);
+      expect(body).toMatch(/raise exception 'photo_files_missing' using errcode = '23514'/);
+    });
+
+    it("runs as a BEFORE INSERT OR UPDATE row trigger and is not executable by clients", () => {
+      expect(flat).toMatch(
+        /create trigger photos_protect_columns before insert or update on public\.photos for each row execute function private\.protect_photo_columns\(\)/,
+      );
+      expect(flat).toMatch(
+        /revoke all on function private\.protect_photo_columns\(\) from public, anon, authenticated/,
+      );
+      // fires after photos_enforce_cap (alphabetical BEFORE-trigger order), so moves into a full book still fail
+      expect("photos_enforce_cap" < "photos_protect_columns").toBe(true);
+    });
+  });
+
+  it("photos bucket allows only jpeg/png/webp", () => {
+    expect(flat).toMatch(
+      /update storage\.buckets set allowed_mime_types = array\['image\/jpeg', 'image\/png', 'image\/webp'\] where id = 'photos'/,
+    );
+  });
+
+  describe("storage.objects write policies for bucket photos", () => {
+    it("drops and recreates photos_insert_own / photos_update_own on storage.objects", () => {
+      expect(flat).toContain('drop policy "photos_insert_own" on storage.objects;');
+      expect(flat).toContain('drop policy "photos_update_own" on storage.objects;');
+    });
+
+    const created = matchesAll(/create\s+policy\s+"(photos_(?:insert|update)_own)"\s+on\s+storage\.objects([\s\S]*?);/, sql);
+
+    it("both are recreated", () => {
+      expect(created.map((c) => c[1]).sort()).toEqual(["photos_insert_own", "photos_update_own"]);
+    });
+
+    it.each(["photos_insert_own", "photos_update_own"])(
+      "%s requires the exact object name and an own pending photo row in every clause",
+      (name) => {
+        const p = ws(created.find((c) => c[1] === name)![2]);
+        const clauses = matchesAll(/\b(?:using|with check) \(/, p).length;
+        expect(clauses).toBe(name === "photos_insert_own" ? 1 : 2);
+        const uuid = "\\[0-9a-f\\]\\{8\\}-\\[0-9a-f\\]\\{4\\}-\\[0-9a-f\\]\\{4\\}-\\[0-9a-f\\]\\{4\\}-\\[0-9a-f\\]\\{12\\}";
+        const nameRe = new RegExp(
+          `objects\\.name ~ '\\^${uuid}/${uuid}/${uuid}-\\(original\\\\\\.\\(jpg\\|png\\|webp\\)\\|web\\\\\\.jpg\\|thumb\\\\\\.jpg\\)\\$'`,
+        );
+        expect(matchesAll(nameRe, p).length).toBe(clauses);
+        expect(matchesAll(/exists \( select 1 from public\.photos as p/, p).length).toBe(clauses);
+        expect(matchesAll(/p\.id = left\(split_part\(objects\.name, '\/', 3\), 36\)::uuid/, p).length).toBe(clauses);
+        expect(matchesAll(/p\.book_id = split_part\(objects\.name, '\/', 2\)::uuid/, p).length).toBe(clauses);
+        expect(matchesAll(/p\.user_id = \(select auth\.uid\(\)\)/, p).length).toBe(clauses);
+        expect(matchesAll(/p\.upload_state = 'pending'/, p).length).toBe(clauses);
+        expect(p).toContain("to authenticated");
+      },
+    );
+
+    it("select/delete own-folder policies for photos are kept (not dropped)", () => {
+      expect(flat).not.toMatch(/drop policy "photos_(select|delete)_own" on storage\.objects/);
+    });
+  });
+
+  describe("finalize rate limit (private.finalize_runs + RPCs)", () => {
+    it("table lives in schema private with RLS on, cascades with the book", () => {
+      expect(flat).toMatch(
+        /create table private\.finalize_runs \( book_id uuid primary key references public\.books \(id\) on delete cascade, last_run_at timestamptz not null, day date not null/,
+      );
+      expect(flat).toMatch(/alter table private\.finalize_runs enable row level security/);
+    });
+
+    it("has no client grants — service role only", () => {
+      expect(flat).toMatch(/revoke all on table private\.finalize_runs from public, anon, authenticated/);
+      const grants = matchesAll(/grant ([a-z_, ]+?) on (?:table )?private\.finalize_runs to ([a-z_, ]+?);/, flat);
+      expect(grants.length).toBeGreaterThan(0);
+      for (const g of grants) expect(g[2].trim()).toBe("service_role");
+      expect(flat).not.toMatch(/grant [^;]* on schema private to [^;]*(anon|authenticated|public)/);
+    });
+
+    it.each([
+      ["public.claim_finalize_run", "uuid, integer"],
+      ["public.reserve_geocode_calls", "uuid, integer, integer"],
+    ])("%s is SECURITY INVOKER, revoked from clients, executable by service_role only", (name, sig) => {
+      const f = latestFunction(name);
+      expect(f).toBeDefined();
+      expect(f!.header).toMatch(/security\s+invoker/);
+      expect(f!.header).not.toMatch(/security\s+definer/);
+      expect(f!.body).toMatch(/private\.finalize_runs/);
+      const esc2 = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      expect(flat).toMatch(
+        new RegExp(`revoke all on function ${esc2(name)}\\(${esc2(sig)}\\) from public, anon, authenticated`),
+      );
+      const grants = matchesAll(new RegExp(`grant execute on function ${esc2(name)}\\([^)]*\\) to ([a-z_, ]+?);`), all);
+      expect(grants.map((g) => g[1].trim())).toEqual(["service_role"]);
+    });
+
+    it("claim is a single atomic upsert guarded by the interval", () => {
+      const body = ws(latestFunction("public.claim_finalize_run")!.body);
+      expect(body).toMatch(
+        /insert into private\.finalize_runs as r \(book_id, last_run_at\) values \(p_book_id, v_now\) on conflict \(book_id\) do update set last_run_at = excluded\.last_run_at where r\.last_run_at <= excluded\.last_run_at - make_interval\(secs => p_min_interval_seconds\) returning true into v_claimed/,
+      );
+    });
+
+    it("geocode reservation locks the row and never exceeds the daily cap", () => {
+      const body = ws(latestFunction("public.reserve_geocode_calls")!.body);
+      expect(body).toMatch(/for update;/);
+      expect(body).toMatch(/v_granted := least\(p_want, greatest\(0, p_daily_cap - v_used\)\)/);
+    });
+  });
+
+  it("does not change table grants on public tables", () => {
+    expect(sql).not.toMatch(/\b(grant|revoke)\s+[a-z_\s,]+\s+on\s+(?:table\s+)?public\./);
+  });
+});

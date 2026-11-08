@@ -4,14 +4,18 @@
 -- HOW TO RUN
 --   1. Apply the migrations first (`npm run db:push`) — including
 --      20261108000300_hardening.sql (path checks, grants, id/created_at freeze)
---      and 20261108000400_photo_upload.sql (fingerprint/upload_state, photo cap).
+--      and 20261108000400_photo_upload.sql (fingerprint/upload_state, photo cap)
+--      and 20261108000500_photo_integrity.sql (ready CHECK, path formats,
+--      photo column guard, pending-only storage writes, finalize rate limit).
+--   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
+--   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
 --      (The SQL Editor runs as `postgres`, which this script needs.)
 --   Also works with psql: `psql "$DB_URL" -f supabase/tests/rls_check.sql`.
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 43 checks passed
+--       RLS OK — all 61 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -26,7 +30,7 @@
 --   The whole script is ONE `do` statement, i.e. one transaction. It always ends
 --   in an exception (pass or fail), so Postgres rolls back everything it did:
 --   the 2 fake auth.users (A, B), their profiles, books, photo rows (incl. the
---   500 photo-cap test rows) and storage object row. Nothing is committed, so nothing needs cleaning up.
+--   500 photo-cap test rows) and storage object rows. Nothing is committed, so nothing needs cleaning up.
 --   (We deliberately do NOT use `begin; … rollback;`: when a statement errors,
 --   Postgres skips the rest of the batch, so a trailing `rollback;` would never
 --   run and the editor's connection would be left in an aborted transaction.)
@@ -43,6 +47,10 @@ declare
   book_a2    uuid;
   photo_a    uuid;
   photo_m    uuid;
+  photo_r    uuid;
+  photo_x    uuid;
+  base_r     text;
+  v_wait     integer;
   book_cap   uuid;
   v_hint     text;
   slug_pub   text := 'rls-check-pub-'   || substr(md5(random()::text), 1, 12);
@@ -133,10 +141,10 @@ begin
   end if;
   checks := checks + 1;
 
-  insert into public.photos (user_id, book_id, web_path, fingerprint, upload_state)
-  values (uid_a, book_a, uid_a || '/' || book_a || '/p-web.jpg', 'rls-check-fp-photo-a', 'ready')
+  insert into public.photos (user_id, book_id, fingerprint)
+  values (uid_a, book_a, 'rls-check-fp-photo-a')
   returning id into photo_a;
-  checks := checks + 1; -- owner can add a photo to own book
+  checks := checks + 1; -- owner can add a (pending) photo to own book
 
   -- photo paths must sit under {own uid}/{book}/ (0300 check constraints)
   begin
@@ -181,10 +189,6 @@ begin
   end;
   checks := checks + 1;
 
-  select upload_state into r from public.photos where id = photo_a;
-  if r.upload_state <> 'ready' then
-    raise exception 'RLS FAIL [photo upload_state]: expected ready, got %', r.upload_state;
-  end if;
   insert into public.photos (user_id, book_id, fingerprint)
   values (uid_a, book_a, 'rls-check-fp-photo-m')
   returning id, upload_state into r;
@@ -319,8 +323,8 @@ begin
 
   begin
     -- path is well-formed for B so only RLS (book owned by A) can reject it
-    insert into public.photos (user_id, book_id, web_path, fingerprint)
-    values (uid_b, book_a, uid_b || '/' || book_a || '/hack.jpg', 'rls-check-fp-hack-b');
+    insert into public.photos (user_id, book_id, fingerprint)
+    values (uid_b, book_a, 'rls-check-fp-hack-b');
     raise exception 'RLS FAIL [B insert photo]: B added a photo to A''s book';
   exception when insufficient_privilege then null;
   end;
@@ -445,14 +449,231 @@ begin
   set local role authenticated;
   perform set_config('request.jwt.claims',
     json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+
+  -- ---------------------------------------------------------------------------
+  -- As A: storage writes need an own PENDING photo row + exact name (0500)
+  -- ---------------------------------------------------------------------------
+  begin
+    insert into storage.objects (bucket_id, name, owner)
+    values ('photos', uid_a || '/' || book_a || '/' || gen_random_uuid() || '-web.jpg', uid_a);
+    raise exception 'RLS FAIL [storage no row]: A uploaded for a photo id that does not exist';
+  exception when insufficient_privilege then null;
+  end;
+  checks := checks + 1;
+
   begin
     insert into storage.objects (bucket_id, name, owner)
     values ('photos', uid_a || '/' || book_a || '/rls-check-web.jpg', uid_a);
+    raise exception 'RLS FAIL [storage name]: A uploaded a loosely named object into own folder';
+  exception when insufficient_privilege then null;
+  end;
+  checks := checks + 1;
+
+  base_r := uid_a || '/' || book_a || '/' || photo_a;
+  begin
+    insert into storage.objects (bucket_id, name, owner)
+    values ('photos', base_r || '-original.jpg', uid_a),
+           ('photos', base_r || '-web.jpg', uid_a),
+           ('photos', base_r || '-thumb.jpg', uid_a);
   exception when others then
-    raise exception 'RLS FAIL [storage A own]: A could not write own folder: % (SQLSTATE %)', sqlerrm, sqlstate;
+    raise exception 'RLS FAIL [storage A own]: A could not upload own pending photo: % (SQLSTATE %)', sqlerrm, sqlstate;
   end;
   select count(*) into n from storage.objects where bucket_id = 'photos' and name like uid_a || '/%';
-  if n <> 1 then raise exception 'RLS FAIL [storage A own]: A sees % own objects, expected 1', n; end if;
+  if n <> 3 then raise exception 'RLS FAIL [storage A own]: A sees % own objects, expected 3', n; end if;
+  checks := checks + 1;
+
+  update storage.objects set owner = uid_a where bucket_id = 'photos' and name = base_r || '-web.jpg';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'RLS FAIL [storage upsert pending]: A could not overwrite own pending object'; end if;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- As A: photo integrity + server-only column guard (0500)
+  -- ---------------------------------------------------------------------------
+  -- becoming ready requires the three files to exist
+  begin
+    update public.photos
+       set upload_state = 'ready',
+           original_path = uid_a || '/' || book_a || '/' || photo_m || '-original.jpg',
+           web_path = uid_a || '/' || book_a || '/' || photo_m || '-web.jpg',
+           thumb_path = uid_a || '/' || book_a || '/' || photo_m || '-thumb.jpg',
+           width = 10, height = 10, original_mime = 'image/jpeg', original_bytes = 1
+     where id = photo_m;
+    raise exception 'RLS FAIL [photo ready files]: A marked a photo ready without uploaded files';
+  exception when check_violation then
+    if sqlerrm <> 'photo_files_missing' then raise; end if;
+  end;
+  checks := checks + 1;
+
+  begin
+    insert into public.photos (user_id, book_id, fingerprint, upload_state)
+    values (uid_a, book_a, 'rls-check-fp-ready-nopath', 'ready');
+    raise exception 'RLS FAIL [photo ready insert]: client inserted a ready row without files';
+  exception when check_violation then null;
+  end;
+  checks := checks + 1;
+
+  begin
+    update public.photos
+       set web_path = uid_a || '/' || book_a || '/' || gen_random_uuid() || '-web.jpg'
+     where id = photo_a;
+    raise exception 'RLS FAIL [photo path format]: web_path with another photo id accepted';
+  exception when check_violation then null;
+  end;
+  checks := checks + 1;
+
+  insert into public.photos
+    (user_id, book_id, fingerprint, ai, dup_group, place, place_checked_at, status, drop_reason, user_override)
+  values
+    (uid_a, book_a, 'rls-check-fp-forced', '{"x":1}', 5, 'Somewhere', now(), 'dropped', 'blurry', true)
+  returning id, ai, dup_group, place, place_checked_at, status, drop_reason, user_override into r;
+  photo_x := r.id;
+  if r.ai is not null or r.dup_group is not null or r.place is not null or r.place_checked_at is not null
+     or r.status <> 'kept' or r.drop_reason is not null or r.user_override then
+    raise exception 'RLS FAIL [photo insert guard]: client set server-only columns: %', row_to_json(r);
+  end if;
+  checks := checks + 1;
+
+  update public.photos
+     set upload_state = 'ready',
+         original_path = base_r || '-original.jpg',
+         web_path = base_r || '-web.jpg',
+         thumb_path = base_r || '-thumb.jpg',
+         width = 3000, height = 4000, original_mime = 'image/jpeg', original_bytes = 1234,
+         phash = '0123456789abcdef', blur_score = 12.5
+   where id = photo_a;
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'RLS FAIL [photo ready]: A could not mark own uploaded photo ready'; end if;
+  checks := checks + 1;
+
+  update public.photos
+     set ai = '{"x":1}', dup_group = 9, place = 'Elsewhere', place_checked_at = now(),
+         status = 'dropped', drop_reason = 'mine', user_override = true,
+         fingerprint = 'rls-check-fp-changed', book_id = book_a2, upload_state = 'pending',
+         original_path = base_r || '-original.png', web_path = null, width = 1
+   where id = photo_a;
+  select * into r from public.photos where id = photo_a;
+  if r.ai is not null or r.dup_group is not null or r.place is not null or r.place_checked_at is not null
+     or r.fingerprint <> 'rls-check-fp-photo-a' or r.book_id <> book_a or r.upload_state <> 'ready'
+     or r.original_path <> base_r || '-original.jpg' or r.web_path is null or r.width <> 3000 then
+    raise exception 'RLS FAIL [photo update guard]: client changed server-only / frozen columns: %',
+      json_build_object('ai', r.ai, 'dup_group', r.dup_group, 'place', r.place,
+                        'fingerprint', r.fingerprint, 'upload_state', r.upload_state,
+                        'same_book', r.book_id = book_a, 'width', r.width);
+  end if;
+  if r.status <> 'dropped' or r.drop_reason <> 'mine' or not r.user_override then
+    raise exception 'RLS FAIL [photo user decision]: status/drop_reason/user_override not saved';
+  end if;
+  checks := checks + 1;
+
+  begin
+    insert into storage.objects (bucket_id, name, owner)
+    values ('photos', base_r || '-original.png', uid_a);
+    raise exception 'RLS FAIL [storage after ready]: A uploaded a new object for a ready photo';
+  exception when insufficient_privilege then null;
+  end;
+  update storage.objects set owner = uid_a where bucket_id = 'photos' and name = base_r || '-web.jpg';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'RLS FAIL [storage after ready]: A overwrote an object of a ready photo'; end if;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- As service_role: CHECKs apply to everyone; server-only columns writable
+  -- ---------------------------------------------------------------------------
+  reset role;
+  set local role service_role;
+  begin
+    insert into public.photos (user_id, book_id, fingerprint, upload_state)
+    values (uid_a, book_a, 'rls-check-fp-svc-ready', 'ready');
+    raise exception 'RLS FAIL [photo ready CHECK]: service role inserted a ready row without paths';
+  exception when check_violation then null;
+  end;
+  checks := checks + 1;
+
+  begin
+    update public.photos
+       set ai = (select jsonb_agg(md5(g::text)) from generate_series(1, 1000) as g)
+     where id = photo_x;
+    raise exception 'RLS FAIL [photo ai size]: ai > 16 KiB accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.photos set phash = 'NOT-A-HASH' where id = photo_x;
+    raise exception 'RLS FAIL [photo phash]: malformed phash accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.photos set width = 0 where id = photo_x;
+    raise exception 'RLS FAIL [photo width]: width 0 accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.photos set blur_score = -1 where id = photo_x;
+    raise exception 'RLS FAIL [photo blur_score]: negative blur_score accepted';
+  exception when check_violation then null;
+  end;
+  checks := checks + 1;
+
+  update public.photos set place = 'Svc place', dup_group = 1, place_checked_at = now() where id = photo_x;
+  select count(*) into n from public.photos
+   where id = photo_x and place = 'Svc place' and dup_group = 1 and place_checked_at is not null;
+  if n <> 1 then raise exception 'RLS FAIL [photo server write]: service role could not set place/dup_group'; end if;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- Finalize rate limit (0500): private.finalize_runs + service-role-only RPCs
+  -- ---------------------------------------------------------------------------
+  v_wait := public.claim_finalize_run(book_a, 10);
+  if v_wait <> 0 then raise exception 'RLS FAIL [finalize claim]: first claim returned %', v_wait; end if;
+  v_wait := public.claim_finalize_run(book_a, 10);
+  if v_wait not between 1 and 10 then
+    raise exception 'RLS FAIL [finalize claim]: second claim within 10 s returned %', v_wait;
+  end if;
+  checks := checks + 1;
+
+  n := public.reserve_geocode_calls(book_a, 150, 200);
+  if n <> 150 then raise exception 'RLS FAIL [geocode cap]: reserved % of 150', n; end if;
+  n := public.reserve_geocode_calls(book_a, 100, 200);
+  if n <> 50 then raise exception 'RLS FAIL [geocode cap]: reserved % (expected 50 left today)', n; end if;
+  n := public.reserve_geocode_calls(book_a, 5, 200);
+  if n <> 0 then raise exception 'RLS FAIL [geocode cap]: reserved % beyond the daily cap', n; end if;
+  n := public.reserve_geocode_calls(book_a2, 5, 200);
+  if n <> 0 then raise exception 'RLS FAIL [geocode cap]: reserved % without a claimed run', n; end if;
+  checks := checks + 1;
+
+  reset role;
+  if has_table_privilege('authenticated', 'private.finalize_runs', 'select')
+     or has_table_privilege('authenticated', 'private.finalize_runs', 'insert')
+     or has_table_privilege('authenticated', 'private.finalize_runs', 'update')
+     or has_table_privilege('anon', 'private.finalize_runs', 'select')
+     or has_function_privilege('authenticated', 'public.claim_finalize_run(uuid, integer)', 'execute')
+     or has_function_privilege('anon', 'public.claim_finalize_run(uuid, integer)', 'execute')
+     or has_function_privilege('authenticated', 'public.reserve_geocode_calls(uuid, integer, integer)', 'execute')
+     or has_function_privilege('anon', 'public.reserve_geocode_calls(uuid, integer, integer)', 'execute') then
+    raise exception 'RLS FAIL [finalize_runs grants]: a client role can use finalize_runs or its RPCs';
+  end if;
+  checks := checks + 1;
+
+  select count(*) into n from storage.buckets
+   where id = 'photos'
+     and allowed_mime_types @> array['image/jpeg', 'image/png', 'image/webp']
+     and array['image/jpeg', 'image/png', 'image/webp'] @> allowed_mime_types;
+  if n <> 1 then raise exception 'RLS FAIL [bucket mimes]: photos bucket must allow only jpeg/png/webp'; end if;
+  checks := checks + 1;
+
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  begin
+    select count(*) into n from private.finalize_runs;
+    raise exception 'RLS FAIL [finalize_runs read]: authenticated can read finalize_runs (% rows)', n;
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.claim_finalize_run(book_a, 0);
+    raise exception 'RLS FAIL [finalize claim]: authenticated could call claim_finalize_run';
+  exception when insufficient_privilege then null;
+  end;
   checks := checks + 1;
 
   begin

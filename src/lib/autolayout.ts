@@ -36,10 +36,11 @@
 // safe album is returned instead (the user must always get an album).
 
 import { limitsFor } from "@/lib/ai/limits";
-import type { CaptionLang, Occasion } from "@/lib/book/options";
+import { BOOK_TITLE_MAX_CODE_POINTS, type CaptionLang, type Occasion } from "@/lib/book/options";
 import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import type { BookDoc, BookPage, Chapter, Crop } from "@/lib/book/types";
 import { COVER_LAYOUT_ID } from "@/lib/layouts";
+import { clipCodePoints, clipText } from "@/lib/text/clip";
 
 export interface AutoPhoto {
   id: string;
@@ -134,7 +135,7 @@ export function autolayout(photos: AutoPhoto[], opts: AutolayoutOptions): BookDo
     cover: {
       layout: COVER_LAYOUT_ID,
       photoId: coverPhoto?.id ?? null,
-      title: clip(opts.title?.trim() || DEFAULT_TITLES[opts.occasion], 80),
+      title: coverTitle(opts.title?.trim() || DEFAULT_TITLES[opts.occasion]),
       subtitle: clip(subtitleFor(kept), 120),
     },
     chapters,
@@ -495,7 +496,7 @@ function ensureValid(doc: BookDoc, kept: P[], opts: AutolayoutOptions, maxPages:
   // Should never happen (tests cover it) — a minimal album the renderer can always show.
   const minimal: BookDoc = {
     ...doc,
-    cover: { ...doc.cover, photoId: kept[0]?.id ?? null, title: clip(DEFAULT_TITLES[opts.occasion], 80), subtitle: "" },
+    cover: { ...doc.cover, photoId: kept[0]?.id ?? null, title: coverTitle(DEFAULT_TITLES[opts.occasion]), subtitle: "" },
     chapters: [],
     pages: sampleEvenly(kept, Math.min(kept.length, maxPages)).map((p, i) => ({
       id: `p${i + 1}`,
@@ -508,6 +509,16 @@ function ensureValid(doc: BookDoc, kept: P[], opts: AutolayoutOptions, maxPages:
   return minimal;
 }
 
+/** Unicode-safe clip to `max` UTF-16 units (never leaves a lone surrogate — jsonb rejects it). */
 function clip(s: string, max: number): string {
-  return s.length <= max ? s : s.slice(0, max - 1).trimEnd() + "…";
+  return clipText(s, max);
+}
+
+/**
+ * Cover title = the user's title, kept whole: titles are capped at BOOK_TITLE_MAX_CODE_POINTS
+ * code points on input, which always fits CoverSchema. Only a longer (legacy/bad) title is clipped,
+ * by code points then UTF-16 units, matching the schema's two checks.
+ */
+function coverTitle(s: string): string {
+  return clipText(clipCodePoints(s, BOOK_TITLE_MAX_CODE_POINTS), BOOK_TITLE_MAX_CODE_POINTS * 2);
 }

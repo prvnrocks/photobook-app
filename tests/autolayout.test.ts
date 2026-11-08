@@ -361,7 +361,8 @@ describe("autolayout — cover & style", () => {
 
   it("caps long titles to the schema limit", () => {
     const doc = autolayout([photo("a", { place: "X".repeat(200) })], { ...OPTS, title: "T".repeat(200) });
-    expect(doc.cover.title.length).toBeLessThanOrEqual(80);
+    expect(doc.cover.title).toBe("T".repeat(119) + "…"); // 120 code points = BOOK_TITLE_MAX_CODE_POINTS
+    expect(doc.chapters[0].title.length).toBeLessThanOrEqual(80);
     expectValid(doc, [photo("a")], 20);
   });
 });
@@ -375,5 +376,22 @@ describe("autolayout — determinism", () => {
     const big = makeSet(500, 12, 15);
     const b = autolayout(big, { ...OPTS, isPaid: true });
     expect(autolayout(shuffle(big, 5), { ...OPTS, isPaid: true })).toEqual(b);
+  });
+
+  it("keeps a 120-code-point emoji title whole and never emits lone surrogates", () => {
+    const title = ("Sara & Omar 💍👨‍👩‍👧 🇦🇪 ".repeat(10)).slice(0, 400);
+    const t = Array.from(title).slice(0, 120).join("").trim();
+    expect(Array.from(t).length).toBeLessThanOrEqual(120);
+    expect(t.length).toBeGreaterThan(120); // longer than 120 UTF-16 units
+    const longPlace = "Abu Dhabi 💍".repeat(12); // forces chapter title / place clipping
+    const ps = [photo("a", { place: longPlace }), photo("b", { place: longPlace })];
+    const doc = autolayout(ps, { ...OPTS, title: t });
+    expect(doc.cover.title).toBe(t);
+    expect(doc.pages.length).toBeGreaterThan(0); // real doc, not the fallback
+    expect(doc.chapters[0].place?.endsWith("…")).toBe(true);
+    const json = JSON.stringify(doc);
+    expect(json).not.toMatch(/\\ud[89ab][0-9a-f]{2}(?!\\ud[c-f])/i);
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(json)).toBe(false);
+    expect(parseBookDoc(doc).ok).toBe(true);
   });
 });

@@ -44,6 +44,7 @@ const FINALIZE_MESSAGES: Record<FinalizeError, string> = {
   signed_out: "You've been signed out. Please sign in again to finish your album.",
   not_found: "We couldn't find this book. It may have been deleted.",
   failed: "We couldn't finish setting up your album. Your photos are safe — please try again.",
+  rate_limited: "We're still finishing your album. Your photos are safe — please try again in a moment.",
 };
 
 const noticeClass = "rounded-xl border p-4 text-base break-words";
@@ -56,6 +57,10 @@ export function Uploader(props: UploaderProps) {
   const queueRef = useRef<UploadQueue | null>(null);
   const queueLoadRef = useRef<Promise<UploadQueue> | null>(null);
   const runningRef = useRef(false);
+  /** Set on unmount: no finalize POST / state updates for a screen that's gone. */
+  const unmountedRef = useRef(false);
+  /** Aborted on unmount: stops finalize retries / follow-ups that are waiting. */
+  const finalizeAbortRef = useRef<AbortController | null>(null);
   const addedRef = useRef(0);
   /** queue.uploaded at the last successful finalize. */
   const finalizedAtRef = useRef(0);
@@ -72,6 +77,9 @@ export function Uploader(props: UploaderProps) {
   const [summary, setSummary] = useState<QueueSummary | null>(null);
   const [finalize, setFinalize] = useState<FinalizeResult | null>(null);
   const [finalizeError, setFinalizeError] = useState<FinalizeError | null>(null);
+  /** Epoch ms before which "Try again" stays disabled (server Retry-After). */
+  const [retryAt, setRetryAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const [pending, setPending] = useState(props.pendingCount);
   const [loadFailed, setLoadFailed] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
@@ -80,15 +88,33 @@ export function Uploader(props: UploaderProps) {
   const uploading = phase === "running";
   const busy = uploading || phase === "finalizing";
   useWakeLock((uploading && !paused) || phase === "finalizing");
-  useWarnOnLeave(uploading);
+  // Also while finalizing: leaving then would skip places/duplicates until the next visit.
+  useWarnOnLeave(busy);
 
   // Leaving the screen in-app (header link) stops the queue after the current photo;
-  // unfinished rows stay pending and resume on the next visit.
+  // unfinished rows stay pending and resume on the next visit. No finalize afterwards.
   useEffect(() => {
+    unmountedRef.current = false; // StrictMode re-mounts
     return () => {
+      unmountedRef.current = true;
+      finalizeAbortRef.current?.abort();
       queueRef.current?.cancel();
     };
   }, []);
+
+  // Countdown for a pending Retry-After on the "Try again" button.
+  useEffect(() => {
+    if (retryAt === null) return;
+    const tick = () => {
+      const t = Date.now();
+      setNow(t);
+      if (t >= retryAt) setRetryAt(null);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [retryAt]);
+  const retryWaitSec = retryAt === null ? 0 : Math.max(0, Math.ceil((retryAt - now) / 1000));
 
   const readyCount = baseReady === null ? props.readyCount : baseReady + (progress?.uploaded ?? 0);
   const fatal = summary?.fatal === "not_allowed";
@@ -128,7 +154,13 @@ export function Uploader(props: UploaderProps) {
   async function runFinalize(uploadedMark: number) {
     setPhase("finalizing");
     setFinalizeError(null);
-    const outcome = await finalizeWithPlaces(bookId);
+    setRetryAt(null);
+    finalizeAbortRef.current?.abort();
+    const controller = new AbortController();
+    finalizeAbortRef.current = controller;
+    // Waits on 429 (Retry-After) and spaces follow-ups inside; phase stays "finalizing".
+    const outcome = await finalizeWithPlaces(bookId, undefined, { signal: controller.signal });
+    if (unmountedRef.current || controller.signal.aborted) return;
     if (outcome.ok) {
       setFinalize(outcome.result);
       finalizedAtRef.current = uploadedMark;
@@ -136,15 +168,18 @@ export function Uploader(props: UploaderProps) {
       setPhase("done");
     } else {
       setFinalizeError(outcome.error);
+      if (outcome.error === "rate_limited") setRetryAt(Date.now() + outcome.retryAfterMs);
       setPhase("finalize_error");
     }
   }
 
   async function afterRun(s: QueueSummary, base: number) {
+    // Cancelled = screen left (unmount) or queue replaced: never POST finalize then.
+    if (unmountedRef.current) return;
     setSummary(s);
     setPending(s.pendingLeft);
     setPaused(false);
-    if (s.fatal) {
+    if (s.fatal || s.cancelled) {
       setPhase("done");
       return;
     }
@@ -358,10 +393,11 @@ export function Uploader(props: UploaderProps) {
               type="button"
               variant="outline"
               onClick={() => void runFinalize(summary?.uploaded ?? 0)}
+              disabled={retryWaitSec > 0}
               className="mt-3 h-11 w-full text-base"
               data-testid="finalize-retry"
             >
-              Try again
+              {retryWaitSec > 0 ? `Try again in ${retryWaitSec}s` : "Try again"}
             </Button>
           )}
         </div>

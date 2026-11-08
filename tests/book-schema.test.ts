@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { LIMITS, limitsFor } from "@/lib/ai/limits";
 import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import type { BookDoc } from "@/lib/book/types";
-import { DEFAULT_TONE, OCCASIONS, TONES } from "@/lib/book/options";
+import { BOOK_TITLE_MAX_CODE_POINTS, DEFAULT_TONE, OCCASIONS, TONES } from "@/lib/book/options";
+import { TITLE_MAX_CHARS } from "@/app/books/form-state";
 
 // PLAN "Book document format" example.
 const example = () => ({
@@ -170,3 +171,41 @@ describe("options + limits", () => {
     expect(limitsFor(false).maxAnalyzedPhotos).toBe(150);
   });
 });
+
+describe("text fields: lone surrogates and title length", () => {
+  it("rejects lone surrogates in every text field", () => {
+    const mutate: ((d: ReturnType<typeof example>) => void)[] = [
+      (d) => (d.cover.title = "Sara & Omar \ud83d"),
+      (d) => (d.cover.subtitle = "\udc8d"),
+      (d) => (d.chapters[0].title = "x\ud83d"),
+      (d) => (d.chapters[0].dateLabel = "x\ud83d"),
+      (d) => (d.chapters[0].place = "x\ud83d"),
+      (d) => (d.pages[0].caption!.text = "x\ud83d"),
+      (d) => (d.pages[0].id = "pg\ud83d"),
+    ];
+    for (const m of mutate) {
+      const d = example();
+      m(d);
+      const r = parseBookDoc(d);
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.issues.join(" ")).not.toContain("\ud83d");
+    }
+  });
+
+  it("cover title limit = form limit, counted in code points", () => {
+    expect(BOOK_TITLE_MAX_CODE_POINTS).toBe(TITLE_MAX_CHARS);
+    const emoji = "💍".repeat(120); // 120 code points, 240 UTF-16 units
+    expect(parseBookDoc({ ...example(), cover: { ...example().cover, title: emoji } }).ok).toBe(true);
+    expect(parseBookDoc({ ...example(), cover: { ...example().cover, title: "a".repeat(120) } }).ok).toBe(true);
+    expect(parseBookDoc({ ...example(), cover: { ...example().cover, title: "a".repeat(121) } }).ok).toBe(false);
+    expect(parseBookDoc({ ...example(), cover: { ...example().cover, title: emoji + "💍" } }).ok).toBe(false);
+  });
+
+  it("accepts well-formed emoji and Arabic text", () => {
+    const d = example();
+    d.cover.title = "Sara & Omar 💍👨‍👩‍👧 🇦🇪";
+    d.pages[0].caption!.text = "مُحَمَّد وَسَارَة 💍";
+    expect(parseBookDoc(d).ok).toBe(true);
+  });
+});
+

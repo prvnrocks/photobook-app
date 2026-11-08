@@ -139,6 +139,7 @@ export type Database = {
           original_path: string | null
           phash: string | null
           place: string | null
+          place_checked_at: string | null
           status: string
           taken_at: string | null
           thumb_path: string | null
@@ -167,6 +168,7 @@ export type Database = {
           original_path?: string | null
           phash?: string | null
           place?: string | null
+          place_checked_at?: string | null
           status?: string
           taken_at?: string | null
           thumb_path?: string | null
@@ -195,6 +197,7 @@ export type Database = {
           original_path?: string | null
           phash?: string | null
           place?: string | null
+          place_checked_at?: string | null
           status?: string
           taken_at?: string | null
           thumb_path?: string | null
@@ -237,6 +240,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_finalize_run: {
+        Args: { p_book_id: string; p_min_interval_seconds: number }
+        Returns: number
+      }
       get_published_book: {
         Args: { p_slug: string }
         Returns: {
@@ -252,6 +259,10 @@ export type Database = {
           slug: string
           title: string
         }[]
+      }
+      reserve_geocode_calls: {
+        Args: { p_book_id: string; p_daily_cap: number; p_want: number }
+        Returns: number
       }
     }
     Enums: {

@@ -1,4 +1,5 @@
 import "server-only";
+import { clipText } from "@/lib/text/clip";
 
 // Milestone 2 (T7, D-015): Mapbox Geocoding v6 reverse lookup with permanent=true
 // (results may be stored in photos.place). Swappable via the ReverseGeocoder type.
@@ -87,7 +88,8 @@ export function labelFromResponse(json: unknown): string | null {
   for (const p of parts) if (p && !uniq.includes(p)) uniq.push(p);
   if (uniq.length === 0) return null;
   const label = uniq.join(", ");
-  return label.length > MAX_LABEL ? label.slice(0, MAX_LABEL - 1).trimEnd() + "…" : label;
+  // Unicode-safe: never leaves half a surrogate pair (Postgres rejects those).
+  return clipText(label, MAX_LABEL);
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -160,13 +162,23 @@ export async function reverseGeocode(
 /** Default provider, matching the swappable ReverseGeocoder interface. */
 export const mapboxReverseGeocoder: ReverseGeocoder = (lat, lng) => reverseGeocode(lat, lng);
 
+export type ReverseGeocodeManyOptions = {
+  concurrency?: number;
+  geocoder?: ReverseGeocoder;
+  /** Checked before each request; false → that centroid (and later ones) are skipped (null). */
+  shouldStart?: () => boolean;
+  /** Called with the input index right before a request is started. */
+  onAttempt?: (index: number) => void;
+};
+
 /**
  * Geocodes many centroids with bounded concurrency. Output order matches input order;
- * failures are null. Pass `geocoder` to swap the provider (e.g. a mock in tests).
+ * failures and skipped centroids are null. Pass `geocoder` to swap the provider (e.g. a
+ * mock in tests); use `onAttempt` to learn which centroids were actually requested.
  */
 export async function reverseGeocodeMany(
   centroids: { lat: number; lng: number }[],
-  opts: { concurrency?: number; geocoder?: ReverseGeocoder } = {},
+  opts: ReverseGeocodeManyOptions = {},
 ): Promise<(string | null)[]> {
   const geocoder = opts.geocoder ?? mapboxReverseGeocoder;
   const concurrency = Math.max(1, Math.floor(opts.concurrency ?? 4));
@@ -175,6 +187,8 @@ export async function reverseGeocodeMany(
   const worker = async () => {
     while (next < centroids.length) {
       const i = next++;
+      if (opts.shouldStart && !opts.shouldStart()) continue;
+      opts.onAttempt?.(i);
       try {
         out[i] = await geocoder(centroids[i].lat, centroids[i].lng);
       } catch {

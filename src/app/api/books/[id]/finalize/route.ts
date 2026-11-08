@@ -1,6 +1,7 @@
 // POST /api/books/[id]/finalize (T9, D-017): duplicate groups, places, fallback album.
 // Called by the upload screen (same origin, fetch) after all uploads are ready.
-// Responses are JSON: 200 FinalizeResult counts | 401 | 403 | 404 | 500 { error }.
+// Responses are JSON: 200 FinalizeResult counts | 401 | 403 | 404 | 429 (+ Retry-After,
+// one run per book per 10 s) | 500 { error }.
 // Logs carry error codes only — never ids, coordinates, places or dates.
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/current-user";
@@ -12,19 +13,20 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
-type ErrorCode = "forbidden" | "unauthenticated" | "not_found" | "server_error";
+type ErrorCode = "forbidden" | "unauthenticated" | "not_found" | "rate_limited" | "server_error";
 
 const MESSAGES: Record<ErrorCode, string> = {
   forbidden: "Cross-site request rejected.",
   unauthenticated: "Please sign in.",
   not_found: "Book not found.",
+  rate_limited: "Please wait a few seconds and try again.",
   server_error: "Something went wrong. Please try again.",
 };
 
-function fail(status: number, code: ErrorCode) {
+function fail(status: number, code: ErrorCode, headers: Record<string, string> = {}) {
   return NextResponse.json(
     { error: code, message: MESSAGES[code] },
-    { status, headers: { "cache-control": "no-store" } },
+    { status, headers: { "cache-control": "no-store", ...headers } },
   );
 }
 
@@ -50,6 +52,10 @@ export async function POST(
 
     const result = await finalizeBook(id);
     if (!result) return fail(404, "not_found");
+    if ("rateLimited" in result) {
+      const wait = Math.min(60, Math.max(1, Math.ceil(result.retryAfterSeconds)));
+      return fail(429, "rate_limited", { "retry-after": String(wait) });
+    }
 
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (err) {
