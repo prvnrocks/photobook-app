@@ -82,15 +82,15 @@ that's a product decision for you; the code makes the model a single config valu
 **Done when:** you can log in on your phone and see an empty dashboard.
 
 ## Milestone 2 — Upload + metadata extraction (1–2 days) ⭐
-- [ ] `/books/new`: choose occasion (Wedding, Travel, Baby, Graduation, Family, Other) + tone + caption language (EN/AR) + title (optional — AI can suggest)
-- [ ] Multi-photo upload from phone gallery, batches of 10, progress bar, resumable
-- [ ] **Read EXIF with `exifr` BEFORE converting HEIC → JPEG** (conversion strips EXIF): date taken, GPS, camera, orientation
-- [ ] If no EXIF (common for photos received on WhatsApp): fall back to `file.lastModified`, mark `date_source = 'file'`
-- [ ] Generate 3 sizes client-side: `original`, `web` (≤1600px), `thumb` (512px, for AI) → Storage
-- [ ] In-browser quality signals: perceptual hash (dHash 64-bit) for duplicates, blur score (Laplacian variance on canvas), resolution
-- [ ] Server: cluster GPS points (~1 km) and reverse-geocode **once per cluster** via Mapbox → `place` ("Louvre, Paris")
-- [ ] Simple rule-based auto-layout (`src/lib/autolayout.ts`, Vitest-tested) as the **fallback** if AI fails
-**Done when:** 100 phone photos upload and each row has date, place, size, hash and blur score.
+- [x] `/books/new`: choose occasion (Wedding, Travel, Baby, Graduation, Family, Other) + tone + caption language (EN/AR) + title (optional — AI can suggest)
+- [x] Multi-photo upload from phone gallery, batches of 10, progress bar, resumable (built as one photo at a time — see runs/m2.md)
+- [x] **Read EXIF with `exifr` BEFORE converting HEIC → JPEG** (conversion strips EXIF): date taken, GPS, camera, orientation
+- [x] If no EXIF (common for photos received on WhatsApp): fall back to `file.lastModified`, mark `date_source = 'file'`
+- [x] Generate 3 sizes client-side: `original`, `web` (≤1600px), `thumb` (512px, for AI) → Storage
+- [x] In-browser quality signals: perceptual hash (dHash 64-bit) for duplicates, blur score (Laplacian variance on canvas), resolution
+- [x] Server: cluster GPS points (~1 km) and reverse-geocode **once per cluster** via Mapbox → `place` ("Louvre, Paris")
+- [x] Simple rule-based auto-layout (`src/lib/autolayout.ts`, Vitest-tested) as the **fallback** if AI fails
+**Done when:** 100 phone photos upload and each row has date, place, size, hash and blur score. ✅ 110 photos on iPhone (2026-11-08) — place verified only in e2e: the phone upload arrived with no GPS (see progress.md).
 
 ## Milestone 3 — AI agent pipeline: curation + album generation (3–4 days) ⭐⭐ the magic
 Design: **docs/AI-AGENTS.md** (Curator → Storyteller → Caption Writer → Critic, code orchestrator, logging, memory).

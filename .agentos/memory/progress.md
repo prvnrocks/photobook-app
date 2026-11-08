@@ -28,3 +28,11 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - User confirmed on phone: email link → dashboard, Google → dashboard; 1 user + 1 profile (name null — email signup has no name; header shows email).
 - LEFT/CARRY: 6-digit code path not yet tried on phone; custom SMTP (Resend) before real users (built-in ~2 emails/h, team members only); storage cleanup on user delete; Google consent screen "Publish app" before launch; HEIC originals vs PDF (M2).
 - NEXT: Milestone 2 (upload + metadata). Needs MAPBOX_TOKEN.
+
+## 2026-11-08 — Milestone 2 — done (place names: open question)
+- Upload pipeline live: /books/new (occasion/tone/EN-AR/title) → /books/[id]/upload (one photo at a time, resumable by fingerprint, wake lock, 150/500 cap) → finalize (dup groups, 1 km GPS clusters → Mapbox v6 permanent, fallback album only when doc = {}). 5 migrations applied; live rls_check 61/61.
+- Client: EXIF before HEIC, filename/lastModified date fallback, original/web/thumb (HEIC → JPEG), dHash + blur, header size pre-check (>100 MP rejected, >16 MP reduced decode).
+- Tests: 587 Vitest + 20 signed-out e2e + 5 live signed-in e2e (upload, resume, cap, guards, finalize 429). Reviewer approved; S1–S8 fixed.
+- Phone acceptance (user, iPhone): 110 photos all ready with date (exif), size, hash, blur, 330 files; 17 dup groups (48 photos); album 20 pages. **0 photos had GPS** → place names not exercised on a real phone (pipeline verified with fixtures in e2e). Likely iOS photo picker strips location (or photos had none) — user didn't confirm.
+- CARRY to M3: confirm iOS location behaviour; if stripped, add an upload hint ("Options → Location") and make Storyteller work without places; 44% of photos in dup groups looks high — tune thresholds with real photos (Curator decides anyway); decide doc origin marker (rule vs AI) before M3 (reviewer N2, changes D-016 — ask user); add `ai_status 'partial'` if AI-AGENTS.md needs it; AI usage counters server-side only.
+- NEXT: Milestone 3 (AI agent pipeline). Needs ANTHROPIC_API_KEY in .env.local + Vercel (Sensitive).
