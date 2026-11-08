@@ -1,18 +1,30 @@
-// What happened after an upload run (+ finalize counts when available). Presentational only.
+"use client";
+// What happened after an upload run (+ finalize counts when available). Presentational, plus
+// the D-020 iOS location hint (device check runs client-side only, after hydration).
 import Link from "next/link";
+import { useSyncExternalStore } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import type { FinalizeResult } from "@/lib/upload/finalize-client";
 import type { QueueSummary } from "@/lib/upload/queue";
 import { plural, skippedLines } from "@/lib/upload/summary-text";
+import { isIosDevice } from "@/lib/device";
 import { cn } from "@/lib/utils";
 
 type UploadSummaryProps = {
+  bookId: string;
   summary: QueueSummary;
   finalize: FinalizeResult | null;
   onAddMore: () => void;
 };
 
-export function UploadSummary({ summary, finalize, onAddMore }: UploadSummaryProps) {
+const noSubscribe = () => () => undefined;
+const readIsIos = () =>
+  isIosDevice(navigator.userAgent, navigator.platform ?? "", navigator.maxTouchPoints ?? 0);
+const serverIsIos = () => false;
+
+export function UploadSummary({ bookId, summary, finalize, onAddMore }: UploadSummaryProps) {
+  const isIos = useSyncExternalStore(noSubscribe, readIsIos, serverIsIos);
+  const showGpsHint = isIos && finalize !== null && finalize.photos > 0 && finalize.withGps === 0;
   const skipped = skippedLines(summary.skippedBy);
   const notStarted = summary.fatal ? 0 : summary.notStarted;
 
@@ -49,6 +61,12 @@ export function UploadSummary({ summary, finalize, onAddMore }: UploadSummaryPro
         </ul>
       ) : null}
 
+      {showGpsHint ? (
+        <p className="text-sm text-muted-foreground" data-testid="gps-hint">
+          Want place names? In the photo picker, tap Options and turn on Location.
+        </p>
+      ) : null}
+
       {skipped.length > 0 ? (
         <div className="text-base" data-testid="summary-skipped">
           <p className="font-medium">
@@ -81,11 +99,11 @@ export function UploadSummary({ summary, finalize, onAddMore }: UploadSummaryPro
 
       <div className="flex flex-col gap-2">
         <Link
-          href="/dashboard"
+          href={`/books/${bookId}/build`}
           className={cn(buttonVariants(), "h-11 w-full px-4 text-base")}
-          data-testid="upload-continue"
+          data-testid="build-album"
         >
-          Continue
+          Build my album
         </Link>
         <Button
           type="button"

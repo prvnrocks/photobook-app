@@ -404,7 +404,7 @@ export function Uploader(props: UploaderProps) {
       ) : null}
 
       {summary && !fatal && (phase === "done" || phase === "finalize_error") ? (
-        <UploadSummary summary={summary} finalize={finalize} onAddMore={openPicker} />
+        <UploadSummary bookId={bookId} summary={summary} finalize={finalize} onAddMore={openPicker} />
       ) : null}
 
       {summary && phase === "done" && !fatal ? (
