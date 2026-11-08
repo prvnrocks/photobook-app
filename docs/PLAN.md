@@ -181,7 +181,7 @@ src/
     b/[slug]/                         public flipbook (+ opengraph-image.tsx)
     print/[bookId]/
     api/ai/analyze/  api/ai/plan/  api/ai/captions/  api/ai/rewrite/
-    api/geocode/  api/stripe/checkout/  api/stripe/webhook/  api/books/[id]/pdf/  api/cron/cleanup/
+    api/books/[id]/finalize/  api/stripe/checkout/  api/stripe/webhook/  api/books/[id]/pdf/  api/cron/cleanup/
   components/book/BookPage.tsx
   components/editor/  components/viewer/  components/review/
   lib/ai/  (client.ts, prompts.ts, schemas.ts, analyze.ts, plan.ts, captions.ts, limits.ts)

@@ -32,6 +32,7 @@ describe("server/client boundaries", () => {
     "src/lib/supabase/server.ts",
     "src/lib/ai/client.ts",
     "src/lib/stripe.ts",
+    "src/lib/photos/finalize.ts",
   ])(
     '%s starts with import "server-only"',
     (file) => {
@@ -135,6 +136,35 @@ describe("client component boundaries (T11)", () => {
       const text = readFileSync(f, "utf8");
       return legacy.filter((k) => text.includes(k)).map((k) => `${rel(f)}: ${k}`);
     });
+    expect(offenders).toEqual([]);
+  });
+});
+
+// --- T7 additions -----------------------------------------------------------
+
+describe("geocoding boundaries (T7)", () => {
+  it("MAPBOX_TOKEN is only referenced in src/lib/geo/reverse-geocode.ts", () => {
+    const matches = walk(SRC)
+      .filter((f) => readFileSync(f, "utf8").includes("MAPBOX_TOKEN"))
+      .map(rel);
+    expect(matches).toEqual(["src/lib/geo/reverse-geocode.ts"]);
+  });
+
+  it('src/lib/geo/reverse-geocode.ts starts with import "server-only"', () => {
+    const first = readFileSync(join(SRC, "lib", "geo", "reverse-geocode.ts"), "utf8")
+      .split(/\r?\n/)
+      .find((l) => l.trim() !== "");
+    expect(first?.trim()).toMatch(/^import ["']server-only["'];?$/);
+  });
+
+  it('no "use client" file imports src/lib/geo/*', () => {
+    const offenders = walk(SRC)
+      .filter((f) => hasUseClientDirective(readFileSync(f, "utf8")))
+      .flatMap((f) =>
+        importSpecifiers(readFileSync(f, "utf8"))
+          .filter((s) => /^@\/lib\/geo(\/|$)|(^|\/)lib\/geo(\/|$)/.test(s))
+          .map((s) => `${rel(f)} -> ${s}`),
+      );
     expect(offenders).toEqual([]);
   });
 });

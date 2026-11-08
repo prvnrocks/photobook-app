@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -368,5 +368,81 @@ describe("migrations: storage", () => {
       (p) => p.table === "storage.objects" && /'exports'/.test(p.text) && !/\bfor\s+select\b/.test(p.text),
     );
     expect(exportWrites).toEqual([]);
+  });
+});
+
+describe("migrations: Milestone 2 photo upload (0400)", () => {
+  const upload = migrations.find((m) => m.name.endsWith("_photo_upload.sql"));
+
+  it("the photo upload migration exists", () => {
+    expect(upload, "20261108000400_photo_upload.sql missing").toBeDefined();
+  });
+
+  it.each([
+    ["fingerprint", /add\s+column\s+fingerprint\s+text\s+not\s+null\b/],
+    ["upload_state", /add\s+column\s+upload_state\s+text\s+not\s+null\s+default\s+'pending'/],
+    ["original_bytes", /add\s+column\s+original_bytes\s+integer\b/],
+    ["original_mime", /add\s+column\s+original_mime\s+text\b/],
+  ])("photos.%s is added", (_col, re) => {
+    expect(upload!.sql).toMatch(re);
+  });
+
+  it("fingerprint length is checked (16..128)", () => {
+    expect(upload!.sql).toMatch(/check\s*\(\s*char_length\s*\(\s*fingerprint\s*\)\s+between\s+16\s+and\s+128\s*\)/);
+  });
+
+  it("(book_id, fingerprint) is unique as photos_book_fingerprint_key", () => {
+    expect(upload!.sql).toMatch(
+      /add\s+constraint\s+photos_book_fingerprint_key\s+unique\s*\(\s*book_id\s*,\s*fingerprint\s*\)/,
+    );
+  });
+
+  it("upload_state, original_bytes, original_mime are checked", () => {
+    expect(upload!.sql).toMatch(/check\s*\(\s*upload_state\s+in\s*\(\s*'pending'\s*,\s*'ready'\s*\)\s*\)/);
+    expect(upload!.sql).toMatch(/check\s*\(\s*original_bytes\s*>\s*0\s*\)/);
+    expect(upload!.sql).toMatch(
+      /check\s*\(\s*original_mime\s+in\s*\(\s*'image\/jpeg'\s*,\s*'image\/png'\s*,\s*'image\/webp'\s*\)\s*\)/,
+    );
+  });
+
+  it("does not add column-level grants or change table grants", () => {
+    expect(upload!.sql).not.toMatch(/\b(grant|revoke)\s+[a-z_\s,]+\s+on\s+(?:table\s+)?public\./);
+  });
+
+  it("private.enforce_photo_cap is SECURITY INVOKER with search_path ''", () => {
+    const f = latestFunction("private.enforce_photo_cap");
+    expect(f).toBeDefined();
+    expect(f!.header).not.toMatch(/security\s+definer/);
+    expect(f!.header).toMatch(/security\s+invoker/);
+    expect(f!.header).toMatch(/set\s+search_path\s*=\s*''/);
+    expect(f!.body).toMatch(/pg_advisory_xact_lock\s*\(\s*hashtextextended\s*\(\s*new\.book_id::text\s*,\s*0\s*\)\s*\)/);
+    expect(f!.body).toMatch(/raise\s+exception\s+'photo_limit_reached'[\s\S]*?errcode\s*=\s*'p0001'/);
+    // Cap applies to everyone: no role-based exemption.
+    expect(f!.body).not.toMatch(/current_user|service_role|auth\.role/);
+  });
+
+  it("enforce_photo_cap is revoked from public, anon, authenticated", () => {
+    expect(upload!.sql).toMatch(
+      /revoke\s+all\s+on\s+function\s+private\.enforce_photo_cap\s*\(\s*\)\s+from\s+public\s*,\s*anon\s*,\s*authenticated/,
+    );
+  });
+
+  it("a BEFORE INSERT row trigger on public.photos runs enforce_photo_cap", () => {
+    expect(all).toMatch(
+      /create\s+trigger\s+\w+\s+before\s+insert\b[^;]*?\bon\s+public\.photos\s+for\s+each\s+row\s+execute\s+function\s+private\.enforce_photo_cap\(\)/,
+    );
+  });
+
+  const limitsPath = join(process.cwd(), "src", "lib", "ai", "limits.ts");
+  const capTest = existsSync(limitsPath) ? it : it.todo;
+  capTest("cap numbers in the SQL equal LIMITS.free/paid.maxUploadPhotos (src/lib/ai/limits.ts)", async () => {
+    const { LIMITS } = (await import("@/lib/ai/limits")) as {
+      LIMITS: { free: { maxUploadPhotos: number }; paid: { maxUploadPhotos: number } };
+    };
+    const f = latestFunction("private.enforce_photo_cap")!;
+    const m = f.body.match(/case\s+when\s+v_is_paid\s+then\s+(\d+)\s+else\s+(\d+)\s+end/);
+    expect(m, "cap CASE expression not found").not.toBeNull();
+    expect(Number(m![1])).toBe(LIMITS.paid.maxUploadPhotos);
+    expect(Number(m![2])).toBe(LIMITS.free.maxUploadPhotos);
   });
 });

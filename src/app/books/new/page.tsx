@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { NewBookForm } from "@/components/books/NewBookForm";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth/current-user";
@@ -26,11 +27,14 @@ export default async function NewBookPage() {
           New book
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Photo upload is coming in the next update.
+          Tell us a little about it — you can change everything later.
         </p>
+        <div className="mt-6">
+          <NewBookForm />
+        </div>
         <Link
           href="/dashboard"
-          className={cn(buttonVariants({ variant: "outline" }), "mt-6 h-11 px-4")}
+          className={cn(buttonVariants({ variant: "ghost" }), "mt-4 h-11 w-full px-4 text-base")}
           data-testid="back-to-dashboard"
         >
           Back to my books

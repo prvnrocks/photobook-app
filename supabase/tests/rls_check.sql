@@ -1,16 +1,17 @@
 -- =============================================================================
--- supabase/tests/rls_check.sql — live RLS / trigger / storage check (Milestone 1)
+-- supabase/tests/rls_check.sql — live RLS / trigger / storage check (Milestones 1–2)
 --
 -- HOW TO RUN
 --   1. Apply the migrations first (`npm run db:push`) — including
---      20261108000300_hardening.sql (path checks, grants, id/created_at freeze).
+--      20261108000300_hardening.sql (path checks, grants, id/created_at freeze)
+--      and 20261108000400_photo_upload.sql (fingerprint/upload_state, photo cap).
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
 --      (The SQL Editor runs as `postgres`, which this script needs.)
 --   Also works with psql: `psql "$DB_URL" -f supabase/tests/rls_check.sql`.
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all NN checks passed
+--       RLS OK — all 43 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -24,8 +25,8 @@
 -- IT LEAVES NO DATA
 --   The whole script is ONE `do` statement, i.e. one transaction. It always ends
 --   in an exception (pass or fail), so Postgres rolls back everything it did:
---   the 2 fake auth.users (A, B), their profiles, books, photo row and storage
---   object row. Nothing is committed, so nothing needs cleaning up.
+--   the 2 fake auth.users (A, B), their profiles, books, photo rows (incl. the
+--   500 photo-cap test rows) and storage object row. Nothing is committed, so nothing needs cleaning up.
 --   (We deliberately do NOT use `begin; … rollback;`: when a statement errors,
 --   Postgres skips the rest of the batch, so a trailing `rollback;` would never
 --   run and the editor's connection would be left in an aborted transaction.)
@@ -41,6 +42,9 @@ declare
   book_a     uuid;
   book_a2    uuid;
   photo_a    uuid;
+  photo_m    uuid;
+  book_cap   uuid;
+  v_hint     text;
   slug_pub   text := 'rls-check-pub-'   || substr(md5(random()::text), 1, 12);
   slug_unpub text := 'rls-check-unpub-' || substr(md5(random()::text), 1, 12);
   r          record;
@@ -129,18 +133,148 @@ begin
   end if;
   checks := checks + 1;
 
-  insert into public.photos (user_id, book_id, web_path)
-  values (uid_a, book_a, uid_a || '/' || book_a || '/p-web.jpg')
+  insert into public.photos (user_id, book_id, web_path, fingerprint, upload_state)
+  values (uid_a, book_a, uid_a || '/' || book_a || '/p-web.jpg', 'rls-check-fp-photo-a', 'ready')
   returning id into photo_a;
   checks := checks + 1; -- owner can add a photo to own book
 
   -- photo paths must sit under {own uid}/{book}/ (0300 check constraints)
   begin
-    insert into public.photos (user_id, book_id, original_path)
-    values (uid_a, book_a, uid_b || '/' || book_a || '/p-original.jpg');
+    insert into public.photos (user_id, book_id, original_path, fingerprint)
+    values (uid_a, book_a, uid_b || '/' || book_a || '/p-original.jpg', 'rls-check-fp-path-b');
     raise exception 'RLS FAIL [photo path]: A stored a photo path in B''s folder';
   exception when check_violation then null;
   end;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- As A: upload columns (0400)
+  -- ---------------------------------------------------------------------------
+  begin
+    insert into public.photos (user_id, book_id, fingerprint)
+    values (uid_a, book_a, 'rls-check-fp-photo-a');
+    raise exception 'RLS FAIL [photo fingerprint]: duplicate (book_id, fingerprint) accepted';
+  exception when unique_violation then null;
+  end;
+  checks := checks + 1;
+
+  begin
+    insert into public.photos (user_id, book_id, fingerprint, upload_state)
+    values (uid_a, book_a, 'rls-check-fp-bogus-state', 'bogus');
+    raise exception 'RLS FAIL [photo upload_state]: upload_state ''bogus'' accepted';
+  exception when check_violation then null;
+  end;
+  checks := checks + 1;
+
+  begin
+    insert into public.photos (user_id, book_id, fingerprint) values (uid_a, book_a, 'too-short');
+    raise exception 'RLS FAIL [photo fingerprint]: fingerprint shorter than 16 chars accepted';
+  exception when check_violation then null;
+  end;
+  checks := checks + 1;
+
+  begin
+    insert into public.photos (user_id, book_id, fingerprint, original_mime)
+    values (uid_a, book_a, 'rls-check-fp-heic-mime', 'image/heic');
+    raise exception 'RLS FAIL [photo original_mime]: image/heic original accepted';
+  exception when check_violation then null;
+  end;
+  checks := checks + 1;
+
+  select upload_state into r from public.photos where id = photo_a;
+  if r.upload_state <> 'ready' then
+    raise exception 'RLS FAIL [photo upload_state]: expected ready, got %', r.upload_state;
+  end if;
+  insert into public.photos (user_id, book_id, fingerprint)
+  values (uid_a, book_a, 'rls-check-fp-photo-m')
+  returning id, upload_state into r;
+  photo_m := r.id;
+  if r.upload_state <> 'pending' then
+    raise exception 'RLS FAIL [photo upload_state]: default should be pending, got %', r.upload_state;
+  end if;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- As A: photo cap per book (0400 trigger) — free 150, paid 500
+  -- ---------------------------------------------------------------------------
+  insert into public.books (user_id, title) values (uid_a, 'RLS check cap') returning id into book_cap;
+
+  -- (a) one multi-row insert of 151 into an empty free book: the trigger fires per
+  --     row and counts the rows already inserted, so the 151st row aborts it all.
+  begin
+    insert into public.photos (user_id, book_id, fingerprint)
+    select uid_a, book_cap, md5('rls-cap-' || g) from generate_series(1, 151) as g;
+    raise exception 'RLS FAIL [photo cap]: 151 photos inserted into a free book in one statement';
+  exception when sqlstate 'P0001' then
+    if sqlerrm <> 'photo_limit_reached' then raise; end if;
+  end;
+  select count(*) into n from public.photos where book_id = book_cap;
+  if n <> 0 then raise exception 'RLS FAIL [photo cap]: failed insert left % rows', n; end if;
+  checks := checks + 1;
+
+  -- (b) 150 succeed, the 151st raises photo_limit_reached with hint '150'
+  insert into public.photos (user_id, book_id, fingerprint)
+  select uid_a, book_cap, md5('rls-cap-' || g) from generate_series(1, 150) as g;
+  get diagnostics n = row_count;
+  if n <> 150 then raise exception 'RLS FAIL [photo cap]: only % of 150 photos inserted', n; end if;
+  checks := checks + 1;
+
+  v_hint := null;
+  begin
+    insert into public.photos (user_id, book_id, fingerprint) values (uid_a, book_cap, md5('rls-cap-151'));
+    raise exception 'RLS FAIL [photo cap]: 151st photo accepted in a free book';
+  exception when sqlstate 'P0001' then
+    if sqlerrm <> 'photo_limit_reached' then raise; end if;
+    get stacked diagnostics v_hint = pg_exception_hint;
+  end;
+  if v_hint is distinct from '150' then
+    raise exception 'RLS FAIL [photo cap]: expected hint 150, got %', v_hint;
+  end if;
+  checks := checks + 1;
+
+  -- (c) moving a photo into a full book is capped too (update of book_id)
+  begin
+    update public.photos set book_id = book_cap where id = photo_m;
+    raise exception 'RLS FAIL [photo cap]: photo moved into a full free book';
+  exception when sqlstate 'P0001' then
+    if sqlerrm <> 'photo_limit_reached' then raise; end if;
+  end;
+  checks := checks + 1;
+
+  -- (d) the service role is not exempt
+  reset role;
+  set local role service_role;
+  begin
+    insert into public.photos (user_id, book_id, fingerprint) values (uid_a, book_cap, md5('rls-cap-svc'));
+    raise exception 'RLS FAIL [photo cap]: service role bypassed the free cap';
+  exception when sqlstate 'P0001' then
+    if sqlerrm <> 'photo_limit_reached' then raise; end if;
+  end;
+  checks := checks + 1;
+
+  -- (e) paid book (is_paid set by a privileged caller): > 150 allowed, 501st rejected
+  reset role;
+  update public.books set is_paid = true where id = book_cap;
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  insert into public.photos (user_id, book_id, fingerprint)
+  select uid_a, book_cap, md5('rls-cap-' || g) from generate_series(151, 500) as g;
+  select count(*) into n from public.photos where book_id = book_cap;
+  if n <> 500 then raise exception 'RLS FAIL [photo cap paid]: paid book has % photos, expected 500', n; end if;
+  checks := checks + 1;
+
+  v_hint := null;
+  begin
+    insert into public.photos (user_id, book_id, fingerprint) values (uid_a, book_cap, md5('rls-cap-501'));
+    raise exception 'RLS FAIL [photo cap paid]: 501st photo accepted in a paid book';
+  exception when sqlstate 'P0001' then
+    if sqlerrm <> 'photo_limit_reached' then raise; end if;
+    get stacked diagnostics v_hint = pg_exception_hint;
+  end;
+  if v_hint is distinct from '500' then
+    raise exception 'RLS FAIL [photo cap paid]: expected hint 500, got %', v_hint;
+  end if;
   checks := checks + 1;
 
   -- ---------------------------------------------------------------------------
@@ -185,8 +319,8 @@ begin
 
   begin
     -- path is well-formed for B so only RLS (book owned by A) can reject it
-    insert into public.photos (user_id, book_id, web_path)
-    values (uid_b, book_a, uid_b || '/' || book_a || '/hack.jpg');
+    insert into public.photos (user_id, book_id, web_path, fingerprint)
+    values (uid_b, book_a, uid_b || '/' || book_a || '/hack.jpg', 'rls-check-fp-hack-b');
     raise exception 'RLS FAIL [B insert photo]: B added a photo to A''s book';
   exception when insufficient_privilege then null;
   end;

@@ -129,16 +129,20 @@ export type Database = {
           date_source: string | null
           drop_reason: string | null
           dup_group: number | null
+          fingerprint: string
           height: number | null
           id: string
           lat: number | null
           lng: number | null
+          original_bytes: number | null
+          original_mime: string | null
           original_path: string | null
           phash: string | null
           place: string | null
           status: string
           taken_at: string | null
           thumb_path: string | null
+          upload_state: string
           user_id: string
           user_override: boolean
           web_path: string | null
@@ -153,16 +157,20 @@ export type Database = {
           date_source?: string | null
           drop_reason?: string | null
           dup_group?: number | null
+          fingerprint: string
           height?: number | null
           id?: string
           lat?: number | null
           lng?: number | null
+          original_bytes?: number | null
+          original_mime?: string | null
           original_path?: string | null
           phash?: string | null
           place?: string | null
           status?: string
           taken_at?: string | null
           thumb_path?: string | null
+          upload_state?: string
           user_id: string
           user_override?: boolean
           web_path?: string | null
@@ -177,16 +185,20 @@ export type Database = {
           date_source?: string | null
           drop_reason?: string | null
           dup_group?: number | null
+          fingerprint?: string
           height?: number | null
           id?: string
           lat?: number | null
           lng?: number | null
+          original_bytes?: number | null
+          original_mime?: string | null
           original_path?: string | null
           phash?: string | null
           place?: string | null
           status?: string
           taken_at?: string | null
           thumb_path?: string | null
+          upload_state?: string
           user_id?: string
           user_override?: boolean
           web_path?: string | null

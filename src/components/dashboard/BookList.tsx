@@ -1,4 +1,4 @@
-// The signed-in user's books as tappable cards linking to the editor.
+// The signed-in user's books as tappable cards linking to the upload step (D-017).
 import Link from "next/link";
 import type { BookListItem } from "@/lib/db/books";
 
@@ -27,7 +27,7 @@ export function BookList({ books }: { books: BookListItem[] }) {
       {books.map((book) => (
         <li key={book.id}>
           <Link
-            href={`/books/${book.id}/edit`}
+            href={`/books/${book.id}/upload`}
             className="block min-h-11 rounded-xl border p-4 transition-colors hover:bg-muted/50"
             data-testid="book-card"
           >
