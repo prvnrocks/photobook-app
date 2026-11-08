@@ -1,4 +1,6 @@
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export default function LandingPage() {
   return (
@@ -15,12 +17,13 @@ export default function LandingPage() {
             Upload your photos, our AI builds the album, and you share it as a
             flipbook link anyone can open.
           </p>
-          <div className="flex flex-col items-start gap-2">
-            <Button size="lg" disabled className="w-full sm:w-auto">
-              Create your book
-            </Button>
-            <span className="text-xs text-muted-foreground">Coming soon</span>
-          </div>
+          <Link
+            href="/login"
+            data-testid="cta-create"
+            className={cn(buttonVariants({ size: "lg" }), "h-11 w-full px-4 text-base sm:w-auto sm:self-start")}
+          >
+            Create your book
+          </Link>
         </section>
 
         <section

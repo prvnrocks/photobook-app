@@ -1,15 +1,15 @@
 import "server-only";
-// Server Supabase client (anon key + user session cookies, RLS enforced).
+// Server Supabase client (publishable key + user session cookies, RLS enforced).
 // Use in Server Components, Server Actions and Route Handlers.
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { getSupabaseAnonKey, getSupabaseUrl } from "./env";
+import type { Database } from "./database.types";
+import { getSupabasePublishableKey, getSupabaseUrl } from "./env";
 
-// TODO(M1): add generated `Database` type generic: createServerClient<Database>(...)
 export async function createClient() {
   const cookieStore = await cookies();
 
-  return createServerClient(getSupabaseUrl(), getSupabaseAnonKey(), {
+  return createServerClient<Database>(getSupabaseUrl(), getSupabasePublishableKey(), {
     cookies: {
       getAll() {
         return cookieStore.getAll();

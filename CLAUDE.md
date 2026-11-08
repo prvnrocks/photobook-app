@@ -67,7 +67,7 @@ Read `docs/PLAN.md` for milestones. Work on ONE milestone at a time, tick its ch
 - Layouts are pure data in `src/lib/layouts/*.ts` (slots as % of page). No layout logic in components.
 - Store two files per photo: `original` (for PDF/print) and `web` (≤1600px, for editor/viewer).
 - Never trust the client for paid status — only the Stripe webhook sets `books.is_paid`.
-- Server-only secrets (`SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`) never imported in client code.
+- Server-only secrets (`SUPABASE_SECRET_KEY`, `STRIPE_SECRET_KEY`) never imported in client code.
 - Keep components small; put Supabase queries in `src/lib/db/*`.
 
 ## Commands

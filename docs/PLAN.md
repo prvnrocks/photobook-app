@@ -61,7 +61,7 @@ that's a product decision for you; the code makes the model a single config valu
 - [ ] Mapbox account (free tier) for turning GPS into place names
 - [ ] Stripe: test mode now. Live mode in the UAE needs a trade licence (free-zone is fine) + UAE bank —
       start that paperwork now.
-- [ ] `.env.local` keys: `NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY,
+- [ ] `.env.local` keys: `NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, SUPABASE_SECRET_KEY,
       ANTHROPIC_API_KEY, MAPBOX_TOKEN, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, NEXT_PUBLIC_APP_URL, CRON_SECRET`
 - [ ] Privacy policy must say photos are processed by an AI provider (Anthropic) to build the album.
 

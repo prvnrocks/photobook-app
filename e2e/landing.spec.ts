@@ -7,13 +7,16 @@ test.describe("landing page at 375px", () => {
     await page.goto("/");
   });
 
-  test("renders hero, title, disabled CTA and footer", async ({ page }) => {
+  test("renders hero, title, CTA link to /login and footer", async ({ page }) => {
     await expect(page).toHaveTitle("Photobook");
     await expect(page.getByTestId("hero-heading")).toBeVisible();
     await expect(page.getByTestId("hero-heading")).toHaveText(
       "Turn your photos into a beautiful book",
     );
-    await expect(page.getByRole("button", { name: "Create your book" })).toBeDisabled();
+    const cta = page.getByRole("link", { name: "Create your book" });
+    await expect(cta).toBeVisible();
+    await expect(cta).toHaveAttribute("href", "/login");
+    await expect(page.getByText("Coming soon")).toHaveCount(0);
     await expect(page.getByText("Made in Abu Dhabi")).toBeVisible();
   });
 
