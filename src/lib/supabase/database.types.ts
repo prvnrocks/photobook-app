@@ -15,6 +15,151 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_runs: {
+        Row: {
+          ai_status: string | null
+          attempts: number
+          book_id: string | null
+          critic_score: number | null
+          cursor: Json
+          error_code: string | null
+          finished_at: string | null
+          id: string
+          lease_until: string | null
+          mode: string
+          progress: Json
+          started_at: string
+          state: string
+          total_cost_usd: number
+          total_input_tokens: number
+          total_output_tokens: number
+          trigger: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          ai_status?: string | null
+          attempts?: number
+          book_id?: string | null
+          critic_score?: number | null
+          cursor?: Json
+          error_code?: string | null
+          finished_at?: string | null
+          id?: string
+          lease_until?: string | null
+          mode: string
+          progress?: Json
+          started_at?: string
+          state?: string
+          total_cost_usd?: number
+          total_input_tokens?: number
+          total_output_tokens?: number
+          trigger: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          ai_status?: string | null
+          attempts?: number
+          book_id?: string | null
+          critic_score?: number | null
+          cursor?: Json
+          error_code?: string | null
+          finished_at?: string | null
+          id?: string
+          lease_until?: string | null
+          mode?: string
+          progress?: Json
+          started_at?: string
+          state?: string
+          total_cost_usd?: number
+          total_input_tokens?: number
+          total_output_tokens?: number
+          trigger?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_runs_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_steps: {
+        Row: {
+          agent: string
+          attempt: number
+          cache_read_tokens: number
+          cache_write_tokens: number
+          cost_usd: number
+          created_at: string
+          error: string | null
+          id: string
+          input_summary: Json | null
+          input_tokens: number
+          latency_ms: number | null
+          model: string | null
+          output: Json | null
+          output_tokens: number
+          run_id: string
+          status: string
+          step_key: string
+          stop_reason: string | null
+        }
+        Insert: {
+          agent: string
+          attempt?: number
+          cache_read_tokens?: number
+          cache_write_tokens?: number
+          cost_usd?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          input_summary?: Json | null
+          input_tokens?: number
+          latency_ms?: number | null
+          model?: string | null
+          output?: Json | null
+          output_tokens?: number
+          run_id: string
+          status: string
+          step_key: string
+          stop_reason?: string | null
+        }
+        Update: {
+          agent?: string
+          attempt?: number
+          cache_read_tokens?: number
+          cache_write_tokens?: number
+          cost_usd?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          input_summary?: Json | null
+          input_tokens?: number
+          latency_ms?: number | null
+          model?: string | null
+          output?: Json | null
+          output_tokens?: number
+          run_id?: string
+          status?: string
+          step_key?: string
+          stop_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_steps_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       books: {
         Row: {
           ai_status: string
@@ -235,11 +380,33 @@ export type Database = {
         }
         Relationships: []
       }
+      user_memory: {
+        Row: {
+          prefs: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          prefs?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          prefs?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      claim_agent_run: {
+        Args: { p_lease_seconds: number; p_run_id: string }
+        Returns: boolean
+      }
       claim_finalize_run: {
         Args: { p_book_id: string; p_min_interval_seconds: number }
         Returns: number
@@ -260,6 +427,7 @@ export type Database = {
           title: string
         }[]
       }
+      release_agent_run: { Args: { p_run_id: string }; Returns: undefined }
       reserve_geocode_calls: {
         Args: { p_book_id: string; p_daily_cap: number; p_want: number }
         Returns: number

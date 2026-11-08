@@ -2,7 +2,8 @@ import "server-only";
 // Photo queries for the signed-in user's books. Uses the RLS-enforced server
 // client (photos_*_own policies on public.photos, photos_*_own policies on
 // storage.objects in bucket "photos") — except the finalize writes of
-// server-only columns at the bottom, which need the admin client (see there).
+// server-only columns and the AI pipeline queries at the bottom, which need
+// the admin client (see there).
 //
 // Delete order (deletePhoto / deleteUnfinished): storage objects FIRST, row
 // SECOND. If storage removal fails we throw and keep the row, so the paths stay
@@ -14,6 +15,7 @@ import "server-only";
 // Errors carry only the operation and a Postgres/Storage code — never ids,
 // paths or other user data.
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 import { clipText } from "@/lib/text/clip";
 import { isUuid } from "@/lib/uuid";
@@ -259,4 +261,253 @@ export async function setPhotosPlaceChecked(
       .in("id", batch);
     if (error) throw new PhotosQueryError("update place checks", error.code);
   }
+}
+
+// ---------------------------------------------------------------------------
+// AI pipeline (M3, D-018 / D-027).
+//
+// Curator reads/writes use the admin client (photos.ai is server-only — 0500
+// guard); the orchestrator MUST have checked book ownership first (getMyBook
+// under RLS). Every query is filtered by book_id. The user's keep/drop review
+// (setUserOverride / listReviewPhotos) uses the RLS client.
+// Photo descriptions (photos.ai.description) are never returned to the review
+// screen and never logged.
+
+export type CurationPhotoRow = {
+  id: string;
+  thumb_path: string | null;
+  width: number | null;
+  height: number | null;
+  taken_at: string | null;
+  date_source: string | null;
+  place: string | null;
+  dup_group: number | null;
+  blur_score: number | null;
+  ai: Json | null;
+  status: string;
+  drop_reason: string | null;
+  user_override: boolean;
+  original_mime: string | null;
+  camera: string | null;
+};
+
+/** Ready photos of the book for the Curator, by taken_at then id. Admin client. */
+export async function listPhotosForCuration(bookId: string): Promise<CurationPhotoRow[]> {
+  if (!isUuid(bookId)) return [];
+  const { data, error } = await createAdminClient()
+    .from("photos")
+    .select(
+      "id, thumb_path, width, height, taken_at, date_source, place, dup_group, blur_score, ai, status, drop_reason, user_override, original_mime, camera",
+    )
+    .eq("book_id", bookId)
+    .eq("upload_state", "ready")
+    .order("taken_at", { ascending: true, nullsFirst: false })
+    .order("id", { ascending: true });
+  if (error) throw new PhotosQueryError("list photos for curation", error.code);
+  return data;
+}
+
+/** Parallel downloads in loadThumbBase64. */
+export const THUMB_DOWNLOAD_CONCURRENCY = 5;
+
+/**
+ * Downloads thumbs (admin storage) → Map path → base64 (JPEG bytes).
+ * Paths that fail to download are simply absent from the map (the caller
+ * treats them as "not analysed"); duplicates are fetched once. Never throws
+ * for a single missing object.
+ */
+export async function loadThumbBase64(paths: string[]): Promise<Map<string, string>> {
+  const unique = [...new Set(paths.filter((p) => typeof p === "string" && p !== ""))];
+  const out = new Map<string, string>();
+  if (unique.length === 0) return out;
+  const bucket = createAdminClient().storage.from(PHOTOS_BUCKET);
+
+  let next = 0;
+  const worker = async () => {
+    while (next < unique.length) {
+      const path = unique[next++];
+      try {
+        const { data, error } = await bucket.download(path);
+        if (error || !data) continue;
+        out.set(path, Buffer.from(await data.arrayBuffer()).toString("base64"));
+      } catch {
+        // network / decode failure → absent from the map
+      }
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(THUMB_DOWNLOAD_CONCURRENCY, unique.length) }, worker),
+  );
+  return out;
+}
+
+export type CurationWrite = {
+  id: string;
+  /** Omitted → photos.ai untouched (rule decisions never overwrite AI notes). */
+  ai?: Json;
+  status?: "kept" | "dropped";
+  dropReason?: string | null;
+};
+
+/** DB limit is 200 code points (0300); clipText on UTF-16 units keeps us under it. */
+export const DROP_REASON_MAX = 200;
+
+/** Parallel per-photo `ai` updates in writeCuration. */
+const AI_WRITE_CONCURRENCY = 5;
+
+/**
+ * Writes Curator results. Admin client, every update filtered by book_id.
+ *  1. `ai` on every row that has it (one update per photo — values differ).
+ *  2. status / drop_reason grouped by (status, reason), ≤100 ids per request,
+ *     with `user_override = false` — the user's own keep/drop always wins (D-018).
+ * Rows without `status` only get `ai`. Kept rows get drop_reason = null.
+ */
+export async function writeCuration(bookId: string, rows: CurationWrite[]): Promise<void> {
+  if (!isUuid(bookId) || rows.length === 0) return;
+  const valid = rows.filter((r) => isUuid(r.id));
+  if (valid.length === 0) return;
+  const admin = createAdminClient();
+
+  const withAi = valid.filter((r) => r.ai !== undefined);
+  let next = 0;
+  const worker = async () => {
+    while (next < withAi.length) {
+      const r = withAi[next++];
+      const { error } = await admin
+        .from("photos")
+        .update({ ai: r.ai as Json })
+        .eq("book_id", bookId)
+        .eq("id", r.id);
+      if (error) throw new PhotosQueryError("write photo analysis", error.code);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(AI_WRITE_CONCURRENCY, withAi.length) }, worker));
+
+  const groups = new Map<string, { status: "kept" | "dropped"; reason: string | null; ids: string[] }>();
+  for (const r of valid) {
+    if (!r.status) continue;
+    const reason =
+      r.status === "kept" ? null : r.dropReason ? clipText(r.dropReason.trim(), DROP_REASON_MAX) || null : null;
+    const key = JSON.stringify([r.status, reason]);
+    const g = groups.get(key) ?? { status: r.status, reason, ids: [] };
+    g.ids.push(r.id);
+    groups.set(key, g);
+  }
+  for (const g of groups.values()) {
+    for (const batch of chunks(g.ids)) {
+      const { error } = await admin
+        .from("photos")
+        .update({ status: g.status, drop_reason: g.reason })
+        .eq("book_id", bookId)
+        .eq("user_override", false)
+        .in("id", batch);
+      if (error) throw new PhotosQueryError("write photo curation", error.code);
+    }
+  }
+}
+
+/** drop_reason written when the user removes a photo themselves. */
+export const USER_DROP_REASON = "user_removed";
+
+/**
+ * The user's own keep/drop decision (RLS client; these columns are
+ * client-writable by design, 0500). Sets user_override = true so the AI never
+ * changes it again. Returns false when the photo isn't visible / not in the book.
+ */
+export async function setUserOverride(bookId: string, photoId: string, keep: boolean): Promise<boolean> {
+  if (!isUuid(bookId) || !isUuid(photoId)) return false;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("photos")
+    .update({
+      status: keep ? "kept" : "dropped",
+      drop_reason: keep ? null : USER_DROP_REASON,
+      user_override: true,
+    })
+    .eq("id", photoId)
+    .eq("book_id", bookId)
+    .select("id");
+  if (error) throw new PhotosQueryError("save photo choice", error.code);
+  return data.length === 1;
+}
+
+export type ReviewPhoto = {
+  id: string;
+  status: string;
+  dropReason: string | null;
+  userOverride: boolean;
+  dupGroup: number | null;
+  quality: number | null;
+  scene: string | null;
+  coverWorthy: boolean | null;
+  width: number | null;
+  height: number | null;
+  takenAt: string | null;
+  /** Signed thumb URL (valid REVIEW_URL_TTL_SECONDS), null when unavailable. */
+  thumbUrl: string | null;
+};
+
+export const REVIEW_URL_TTL_SECONDS = 600;
+
+/**
+ * Photos for the keep/drop review screen (RLS client). Only small AI fields
+ * (quality / scene / coverWorthy) are selected — never the description.
+ * Thumb URLs are signed in one createSignedUrls call.
+ */
+export async function listReviewPhotos(bookId: string): Promise<ReviewPhoto[]> {
+  if (!isUuid(bookId)) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("photos")
+    .select(
+      "id, status, drop_reason, user_override, dup_group, width, height, taken_at, thumb_path, quality:ai->quality, scene:ai->>scene, coverWorthy:ai->coverWorthy",
+    )
+    .eq("book_id", bookId)
+    .eq("upload_state", "ready")
+    .order("taken_at", { ascending: true, nullsFirst: false })
+    .order("id", { ascending: true });
+  if (error) throw new PhotosQueryError("list review photos", error.code);
+  const rows = data as unknown as {
+    id: string;
+    status: string;
+    drop_reason: string | null;
+    user_override: boolean;
+    dup_group: number | null;
+    width: number | null;
+    height: number | null;
+    taken_at: string | null;
+    thumb_path: string | null;
+    quality: unknown;
+    scene: unknown;
+    coverWorthy: unknown;
+  }[];
+
+  const paths = [...new Set(rows.map((r) => r.thumb_path).filter((p): p is string => !!p))];
+  const urls = new Map<string, string>();
+  if (paths.length > 0) {
+    const { data: signed, error: signError } = await supabase.storage
+      .from(PHOTOS_BUCKET)
+      .createSignedUrls(paths, REVIEW_URL_TTL_SECONDS);
+    if (signError) {
+      const code =
+        "statusCode" in signError && typeof signError.statusCode === "string" ? signError.statusCode : "storage";
+      throw new PhotosQueryError("sign thumb urls", code);
+    }
+    for (const s of signed) if (s.path && s.signedUrl && !s.error) urls.set(s.path, s.signedUrl);
+  }
+
+  return rows.map((r) => ({
+    id: r.id,
+    status: r.status,
+    dropReason: r.drop_reason,
+    userOverride: r.user_override,
+    dupGroup: r.dup_group,
+    quality: typeof r.quality === "number" && Number.isFinite(r.quality) ? r.quality : null,
+    scene: typeof r.scene === "string" ? r.scene : null,
+    coverWorthy: typeof r.coverWorthy === "boolean" ? r.coverWorthy : null,
+    width: r.width,
+    height: r.height,
+    takenAt: r.taken_at,
+    thumbUrl: r.thumb_path ? (urls.get(r.thumb_path) ?? null) : null,
+  }));
 }

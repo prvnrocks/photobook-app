@@ -2,12 +2,15 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-// Keys from docs/PLAN.md -> "Before you start" -> `.env.local` keys.
+// Keys from docs/PLAN.md -> "Before you start" -> `.env.local` keys, plus AI_MODE (D-024) and
+// ADMIN_USER_IDS (D-027) added in M3.
 const REQUIRED_KEYS = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
   "SUPABASE_SECRET_KEY",
   "ANTHROPIC_API_KEY",
+  "AI_MODE",
+  "ADMIN_USER_IDS",
   "MAPBOX_TOKEN",
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
@@ -32,7 +35,7 @@ function parseEnv(text: string): Map<string, string> {
 describe(".env.example", () => {
   const env = parseEnv(readFileSync(join(process.cwd(), ".env.example"), "utf8"));
 
-  it("contains exactly the 9 keys from PLAN.md", () => {
+  it("contains exactly the 11 expected keys", () => {
     expect([...env.keys()].sort()).toEqual([...REQUIRED_KEYS].sort());
   });
 

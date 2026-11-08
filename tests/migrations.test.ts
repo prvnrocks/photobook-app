@@ -126,6 +126,9 @@ function effectiveTablePrivileges(): Acl {
 
 const sorted = (s: Set<string> | undefined) => [...(s ?? [])].sort();
 
+/** Tables with RLS on and no policies: only the service role (BYPASSRLS) touches them. */
+const SERVICE_ROLE_ONLY_TABLES = ["agent_steps"];
+
 describe("migrations: files", () => {
   it("found the migration files and parsed them", () => {
     expect(files.length).toBeGreaterThanOrEqual(2);
@@ -136,9 +139,14 @@ describe("migrations: files", () => {
 });
 
 describe("migrations: RLS on every table", () => {
-  it.each(tables)("public.%s has RLS enabled and at least one policy", (t) => {
+  it.each(tables)("public.%s has RLS enabled and at least one policy (or is service-role only)", (t) => {
     expect(all).toMatch(new RegExp(`alter\\s+table\\s+public\\.${esc(t)}\\s+enable\\s+row\\s+level\\s+security`));
-    expect(policies.filter((p) => p.table === `public.${t}`).length).toBeGreaterThanOrEqual(1);
+    if (SERVICE_ROLE_ONLY_TABLES.includes(t)) {
+      // No policies on purpose: clients get no grants at all (checked in the 0600 suite).
+      expect(policies.filter((p) => p.table === `public.${t}`)).toEqual([]);
+    } else {
+      expect(policies.filter((p) => p.table === `public.${t}`).length).toBeGreaterThanOrEqual(1);
+    }
   });
 
   it("never disables RLS", () => {
@@ -330,10 +338,13 @@ describe("migrations: orders", () => {
   });
 });
 
-describe("migrations: Milestone 1 scope", () => {
-  // These tables arrive in Milestone 3; relax this test then.
-  it.each(["agent_runs", "agent_steps", "user_memory"])("does not create %s", (t) => {
-    expect(tables).not.toContain(t);
+describe("migrations: Milestone 3 scope", () => {
+  it.each(["agent_runs", "agent_steps", "user_memory"])("creates %s", (t) => {
+    expect(tables).toContain(t);
+  });
+
+  it("never creates the superseded ai_usage table", () => {
+    expect(tables).not.toContain("ai_usage");
   });
 });
 
@@ -649,5 +660,253 @@ describe("migrations: Milestone 2 review fixes — photo integrity (0500)", () =
 
   it("does not change table grants on public tables", () => {
     expect(sql).not.toMatch(/\b(grant|revoke)\s+[a-z_\s,]+\s+on\s+(?:table\s+)?public\./);
+  });
+});
+
+describe("migrations: Milestone 3 agent pipeline (0600)", () => {
+  const m = migrations.find((x) => x.name.endsWith("_agent_pipeline.sql"));
+  const sql = m?.sql ?? "";
+  const ws = (s: string) => s.replace(/\s+/g, " ");
+  const flat = ws(sql);
+  const acl = effectiveTablePrivileges();
+  const agentTables = ["agent_runs", "agent_steps", "user_memory"];
+
+  it("the agent pipeline migration exists and is the 0600 file", () => {
+    expect(m, "20261108000600_agent_pipeline.sql missing").toBeDefined();
+    expect(m!.name).toBe("20261108000600_agent_pipeline.sql");
+  });
+
+  it("the header documents D-021 and D-027", () => {
+    const raw = readFileSync(join(MIGRATIONS_DIR, m!.name), "utf8");
+    expect(raw).toMatch(/D-021/);
+    expect(raw).toMatch(/D-027/);
+  });
+
+  describe("tables", () => {
+    it("agent_runs columns, FKs and enum checks", () => {
+      for (const frag of [
+        "book_id uuid references public.books (id) on delete set null",
+        "user_id uuid references auth.users (id) on delete set null",
+        "trigger text not null",
+        "mode text not null",
+        "state text not null default 'queued'",
+        "progress jsonb not null default '{}'::jsonb",
+        "cursor jsonb not null default '{}'::jsonb",
+        "lease_until timestamptz",
+        "attempts integer not null default 0",
+        "critic_score numeric(3, 1)",
+        "total_cost_usd numeric(10, 4) not null default 0",
+        "total_input_tokens integer not null default 0",
+        "total_output_tokens integer not null default 0",
+        "started_at timestamptz not null default now()",
+        "updated_at timestamptz not null default now()",
+        "check (trigger in ('build', 'rebuild', 'rewrite'))",
+        "check (mode in ('live', 'replay', 'rule'))",
+        "check ( state in ('queued', 'curating', 'storytelling', 'captioning', 'critiquing', 'repairing', 'validating', 'done', 'failed') )",
+        "check (ai_status in ('ok', 'partial', 'failed'))",
+      ]) {
+        expect(flat, frag).toContain(frag);
+      }
+    });
+
+    it("agent_steps columns, FK cascade, unique attempt key and enum checks", () => {
+      for (const frag of [
+        "run_id uuid not null references public.agent_runs (id) on delete cascade",
+        "attempt smallint not null default 1",
+        "unique (run_id, step_key, attempt)",
+        "check ( agent in ('curator', 'storyteller', 'caption_writer', 'critic', 'rewriter', 'memory_keeper') )",
+        "check (status in ('ok', 'error', 'refused', 'skipped'))",
+        "cost_usd numeric(10, 6) not null default 0",
+        "cache_read_tokens integer not null default 0",
+        "cache_write_tokens integer not null default 0",
+      ]) {
+        expect(flat, frag).toContain(frag);
+      }
+    });
+
+    it("user_memory is keyed by user and cascades with the auth user", () => {
+      expect(flat).toContain("user_id uuid primary key references auth.users (id) on delete cascade");
+      expect(flat).toContain("prefs jsonb not null default '{}'::jsonb");
+    });
+
+    it.each([
+      ["progress", 4096],
+      ["cursor", 65536],
+      ["input_summary", 8192],
+      ["output", 262144],
+      ["prefs", 8192],
+    ])("pg_column_size(%s) <= %i", (col, max) => {
+      expect(flat).toContain(`check (pg_column_size(${col}) <= ${max})`);
+    });
+
+    it.each([
+      ["error_code", 64],
+      ["step_key", 64],
+      ["model", 64],
+      ["stop_reason", 32],
+      ["error", 200],
+    ])("char_length(%s) <= %i", (col, max) => {
+      expect(flat).toContain(`check (char_length(${col}) <= ${max})`);
+    });
+
+    it("at most one active run per book (unique partial index) + user/started_at index", () => {
+      expect(flat).toMatch(
+        /create unique index \w+ on public\.agent_runs \(book_id\) where state not in \('done', 'failed'\)/,
+      );
+      expect(flat).toMatch(/create index \w+ on public\.agent_runs \(user_id, started_at desc\)/);
+      expect(flat).toMatch(/create index \w+ on public\.agent_steps \(run_id, created_at\)/);
+    });
+
+    it("agent_runs.updated_at is maintained by private.set_updated_at", () => {
+      expect(flat).toMatch(
+        /create trigger \w+ before update on public\.agent_runs for each row execute function private\.set_updated_at\(\)/,
+      );
+    });
+
+    it("no client-writable counter columns exist (D-021)", () => {
+      expect(all).not.toMatch(/\b(rebuild_count|rewrite_count|rebuilds_used|rewrites_used|ai_photos_analyzed)\b/);
+    });
+  });
+
+  describe("RLS, grants and policies", () => {
+    it.each(agentTables)("public.%s has RLS enabled", (t) => {
+      expect(flat).toContain(`alter table public.${t} enable row level security`);
+    });
+
+    it("revokes all from anon, authenticated, public and grants all to service_role", () => {
+      expect(flat).toContain(
+        "revoke all on table public.agent_runs, public.agent_steps, public.user_memory from anon, authenticated, public",
+      );
+      expect(flat).toContain("grant all on table public.agent_runs, public.agent_steps, public.user_memory to service_role");
+    });
+
+    it.each(agentTables)("anon ends with no privileges on public.%s", (t) => {
+      expect(sorted(acl[`public.${t}`]?.anon)).toEqual([]);
+    });
+
+    it.each([
+      ["agent_runs", ["select"]],
+      ["agent_steps", []],
+      ["user_memory", ["delete", "select"]],
+    ])("authenticated ends with exactly the expected privileges on public.%s", (t, expected) => {
+      expect(sorted(acl[`public.${t}`]?.authenticated)).toEqual(expected);
+    });
+
+    it.each(agentTables)("service_role keeps all privileges on public.%s", (t) => {
+      expect(sorted(acl[`public.${t}`]?.service_role)).toEqual([...ALL_PRIVS].sort());
+    });
+
+    it("policies: agent_runs select own; user_memory select + delete own; agent_steps none", () => {
+      const ops = (t: string) =>
+        policies
+          .filter((p) => p.table === `public.${t}`)
+          .map((p) => ws(p.text))
+          .map((p) => ({ op: p.match(/\bfor (\w+)/)?.[1], text: p }));
+      const runs = ops("agent_runs");
+      expect(runs.map((p) => p.op)).toEqual(["select"]);
+      expect(runs[0].text).toContain("to authenticated using (user_id = (select auth.uid()))");
+      const mem = ops("user_memory");
+      expect(mem.map((p) => p.op).sort()).toEqual(["delete", "select"]);
+      for (const p of mem) expect(p.text).toContain("to authenticated using (user_id = (select auth.uid()))");
+      expect(ops("agent_steps")).toEqual([]);
+    });
+  });
+
+  describe("lease RPCs", () => {
+    it.each([
+      ["public.claim_agent_run", "uuid, integer"],
+      ["public.release_agent_run", "uuid"],
+    ])("%s is SECURITY INVOKER, revoked from clients, executable by service_role only", (name, sig) => {
+      const f = latestFunction(name);
+      expect(f).toBeDefined();
+      expect(f!.header).toMatch(/security\s+invoker/);
+      expect(f!.header).not.toMatch(/security\s+definer/);
+      expect(f!.header).toMatch(/set\s+search_path\s*=\s*''/);
+      expect(flat).toContain(`revoke all on function ${name}(${sig}) from public, anon, authenticated`);
+      const grants = matchesAll(new RegExp(`grant execute on function ${esc(name)}\\([^)]*\\) to ([a-z_, ]+?);`), all);
+      expect(grants.map((g) => g[1].trim())).toEqual(["service_role"]);
+    });
+
+    it("claim is one guarded update with the lease clamped to 5..300 s and returns found", () => {
+      const f = latestFunction("public.claim_agent_run")!;
+      expect(f.header).toMatch(/returns\s+boolean/);
+      const body = ws(f.body);
+      expect(body).toContain("v_secs := least(300, greatest(5, p_lease_seconds));");
+      expect(body).toContain(
+        "update public.agent_runs as r set lease_until = now() + make_interval(secs => v_secs), attempts = r.attempts + 1 where r.id = p_run_id and r.state not in ('done', 'failed') and (r.lease_until is null or r.lease_until < now());",
+      );
+      expect(body).toContain("return found;");
+    });
+
+    it("release clears the lease", () => {
+      expect(ws(latestFunction("public.release_agent_run")!.body)).toContain(
+        "update public.agent_runs as r set lease_until = null where r.id = p_run_id;",
+      );
+    });
+  });
+
+  describe("books.ai_status (D-021)", () => {
+    it("books_ai_status_check is dropped and re-added including 'partial'", () => {
+      expect(flat).toContain("alter table public.books drop constraint books_ai_status_check");
+      expect(flat).toContain(
+        "add constraint books_ai_status_check check ( ai_status in ('idle', 'analyzing', 'planning', 'captioning', 'done', 'partial', 'failed') )",
+      );
+      expect(flat.indexOf("drop constraint books_ai_status_check")).toBeLessThan(
+        flat.indexOf("add constraint books_ai_status_check"),
+      );
+    });
+
+    it("latest protect_book_columns is redefined here, stays INVOKER and forces ai_status", () => {
+      const defs = functions.filter((x) => x.name === "private.protect_book_columns");
+      const f = defs.at(-1)!;
+      expect(sql).toContain(f.body);
+      expect(f.header).not.toMatch(/security\s+definer/);
+      expect(f.header).toMatch(/set\s+search_path\s*=\s*''/);
+      const body = ws(f.body);
+      expect(body).toMatch(/if current_user in \('postgres', 'service_role', 'supabase_admin'\) then return new; end if;/);
+      const [ins, upd = ""] = body.split("elsif tg_op = 'update'");
+      expect(ins).toContain("new.ai_status := 'idle';");
+      expect(upd).toContain("new.ai_status := old.ai_status;");
+      // everything the 0300 version guarded is still guarded
+      for (const col of ["is_paid", "max_pages", "expires_at", "slug", "published_at"]) {
+        expect(ins, col).toMatch(new RegExp(`new\\.${col} :=`));
+      }
+      for (const col of ["id", "created_at", "is_paid", "max_pages", "expires_at", "slug", "published_at", "user_id"]) {
+        expect(upd, col).toContain(`new.${col} := old.${col};`);
+      }
+      expect(flat).toContain("revoke all on function private.protect_book_columns() from public, anon, authenticated");
+    });
+
+    it("keeps the definer-bypass warning comment", () => {
+      const raw = readFileSync(join(MIGRATIONS_DIR, m!.name), "utf8");
+      expect(raw).toMatch(/WARNING: any future SECURITY DEFINER function owned by postgres that writes\s*\n--\s*to public\.books bypasses this guard/);
+    });
+  });
+
+  describe("step scrub on book delete (D-027)", () => {
+    const f = latestFunction("private.scrub_agent_steps");
+
+    it("private.scrub_agent_steps nulls output and input_summary when book_id goes null", () => {
+      expect(f).toBeDefined();
+      expect(f!.header).toMatch(/returns\s+trigger/);
+      expect(f!.header).toMatch(/set\s+search_path\s*=\s*''/);
+      const body = ws(f!.body);
+      expect(body).toContain("if old.book_id is not null and new.book_id is null then");
+      expect(body).toMatch(/update public\.agent_steps as s set output = null, input_summary = null where s\.run_id = new\.id/);
+      // costs / tokens are kept
+      expect(body).not.toMatch(/cost_usd|_tokens/);
+    });
+
+    it("runs as a BEFORE UPDATE OF book_id row trigger on agent_runs and is not executable by clients", () => {
+      expect(flat).toMatch(
+        /create trigger \w+ before update of book_id on public\.agent_runs for each row execute function private\.scrub_agent_steps\(\)/,
+      );
+      expect(flat).toContain("revoke all on function private.scrub_agent_steps() from public, anon, authenticated");
+    });
+  });
+
+  it("does not touch photos/orders/profiles grants or policies", () => {
+    expect(sql).not.toMatch(/\b(grant|revoke)\s+[a-z_\s,]+\s+on\s+(?:table\s+)?public\.(photos|orders|profiles|books)\b/);
+    expect(sql).not.toMatch(/\b(create|drop|alter)\s+policy\b[^;]*\bon\s+public\.(photos|orders|profiles|books)\b/);
   });
 });

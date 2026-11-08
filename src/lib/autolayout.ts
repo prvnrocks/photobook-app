@@ -1,5 +1,5 @@
 // Rule-based auto-layout — the fallback album when the AI pipeline fails or hasn't run yet
-// (M2 finalize writes it only when books.doc = {}, D-016). Pure, deterministic, no I/O, no AI.
+// (written only when books.doc is replaceable, D-018). Pure, deterministic, no I/O, no AI.
 //
 // Rules (keep in sync with the HANDOFF in .agentos/runs/m2.md):
 // 1. Filter: drop status "dropped" and ids that aren't valid doc ids. Per duplicate group keep one
@@ -32,13 +32,16 @@
 // 6. Cover: portrait preferred, then sharpest, largest, smallest id. Title = opts.title ??
 //    occasion default; subtitle = most common place · month range ("Abu Dhabi · Oct 2026").
 // 7. Captions null everywhere (AI writes them in M3); crops centred, zoom 1; ids c1.., p1...
+// 8. meta = { generator: "rule", generatorVersion: AUTOLAYOUT_VERSION, runId: opts.runId ?? null,
+//    userEdited: false } on every doc, including the minimal fallback (D-018). Bump
+//    AUTOLAYOUT_VERSION when these rules change output.
 // The result is checked with parseBookDoc + validateBookDoc; if that ever fails, a minimal
 // safe album is returned instead (the user must always get an album).
 
 import { limitsFor } from "@/lib/ai/limits";
 import { BOOK_TITLE_MAX_CODE_POINTS, type CaptionLang, type Occasion } from "@/lib/book/options";
-import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
-import type { BookDoc, BookPage, Chapter, Crop } from "@/lib/book/types";
+import { DocMetaSchema, parseBookDoc, validateBookDoc } from "@/lib/book/schema";
+import type { BookDoc, BookPage, Chapter, Crop, DocMeta } from "@/lib/book/types";
 import { COVER_LAYOUT_ID } from "@/lib/layouts";
 import { clipCodePoints, clipText } from "@/lib/text/clip";
 
@@ -61,6 +64,15 @@ export interface AutolayoutOptions {
   isPaid: boolean;
   /** photoId → duplicate group; overrides AutoPhoto.dupGroup when present. */
   dupGroups?: Map<string, number>;
+  /** agent_runs.id when this album is the fallback of an AI run; otherwise null. */
+  runId?: string | null;
+}
+
+/** Version of the rules above, stored in doc.meta.generatorVersion. */
+export const AUTOLAYOUT_VERSION = 1;
+
+function ruleMeta(opts: AutolayoutOptions): DocMeta {
+  return { generator: "rule", generatorVersion: AUTOLAYOUT_VERSION, runId: opts.runId ?? null, userEdited: false };
 }
 
 export const DEFAULT_TITLES: Record<Occasion, string> = {
@@ -141,6 +153,7 @@ export function autolayout(photos: AutoPhoto[], opts: AutolayoutOptions): BookDo
     chapters,
     pages,
     style: { background: "#FFFFFF", font: opts.captionLang === "ar" ? "Cairo" : "Playfair" },
+    meta: ruleMeta(opts),
   };
 
   return ensureValid(doc, kept, opts, maxPages);
@@ -505,8 +518,14 @@ function ensureValid(doc: BookDoc, kept: P[], opts: AutolayoutOptions, maxPages:
       slots: [{ photoId: p.id, crop: { ...CENTER } }],
       caption: null,
     })),
+    // A bad runId must not cost the user their album: drop it rather than fail.
+    meta: { ...ruleMeta(opts), runId: validRunId(opts.runId) },
   };
   return minimal;
+}
+
+function validRunId(id: string | null | undefined): string | null {
+  return id != null && DocMetaSchema.shape.runId.safeParse(id).success ? id : null;
 }
 
 /** Unicode-safe clip to `max` UTF-16 units (never leaves a lone surrogate — jsonb rejects it). */

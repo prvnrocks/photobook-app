@@ -1,6 +1,20 @@
-// Milestone 2 (T7): group near-duplicate photos by perceptual hash + capture time.
+// Group near-duplicate photos by perceptual hash (dHash, 64 bit) + capture time.
 // Pure module (no I/O). Complexity: O(n²) pairwise comparisons with union-find;
 // 500 items = ~125k hash comparisons, well under 100 ms.
+//
+// Thresholds (M3 T7, D-019) were tuned on the aggregate pair statistics of a real 110-photo
+// iPhone set (5995 pairs, all EXIF-dated; metadata only, no per-photo data kept):
+//  - Hamming: 16 pairs at ≤6, then a jump to 11 pairs at exactly 7 and ~8 per step up to 12.
+//    The 7–12 band is "same scene, different shot" (pose/framing changed) — those must stay
+//    separate. Old default 10 → 17 groups / 48 photos (5-photo chains with intra-group hamming 15).
+//  - Time: the 16 pairs with hamming ≤6 are either ≤98 s apart (13, real bursts/retakes) or
+//    ≥325 s apart (3). The latter chain two scenes into one 5-photo group spanning 12.5 min,
+//    so the window sits in that gap: 3 min.
+//  - Result with 6 / 3 min: 10 groups / 23 photos, largest group 3, every group spans ≤98 s.
+//  - Hash-only (file-dated or undated, e.g. WhatsApp forwards): no time guard, so only
+//    near-identical hashes (≤3) count; on the real set all ≤3 pairs were true bursts.
+
+import { hamming } from "@/lib/image/phash";
 
 export type DupeItem = {
   id: string;
@@ -9,30 +23,35 @@ export type DupeItem = {
   dateSource: "exif" | "file" | null;
 };
 
+export const DUPE_DEFAULTS = {
+  /** Max Hamming distance when both photos have EXIF capture times. */
+  maxHamming: 6,
+  /** Max minutes between two EXIF capture times. */
+  maxMinutes: 3,
+  /** Max Hamming distance when either date is file-based or missing (hash only). */
+  maxHammingNoTime: 3,
+} as const;
+
 export type GroupDuplicatesOptions = {
-  /** Max Hamming distance for two hashes to count as duplicates (default 10). */
+  /** Max Hamming distance for two EXIF-dated hashes to count as duplicates (default 6). */
   maxHamming?: number;
-  /** Max minutes between two EXIF capture times (default 30). */
+  /** Max minutes between two EXIF capture times (default 3). */
   maxMinutes?: number;
+  /** Max Hamming distance when either date is file-based or missing (default 3). */
+  maxHammingNoTime?: number;
 };
 
-const POPCOUNT_NIBBLE = [0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4];
-
 /**
- * Hamming distance between two equal-length hex hash strings.
- * Returns Infinity when the lengths differ or a string isn't valid hex.
- * (Local implementation: src/lib/image/phash.ts did not export one yet.)
+ * Hamming distance between two equal-length hex hash strings (wraps phash.hamming).
+ * Returns Infinity instead of throwing when the lengths differ or a string isn't valid hex.
  */
 export function hammingHex(a: string, b: string): number {
   if (a.length !== b.length || a.length === 0) return Infinity;
-  let d = 0;
-  for (let i = 0; i < a.length; i++) {
-    const x = parseInt(a[i], 16);
-    const y = parseInt(b[i], 16);
-    if (Number.isNaN(x) || Number.isNaN(y)) return Infinity;
-    d += POPCOUNT_NIBBLE[x ^ y];
+  try {
+    return hamming(a, b);
+  } catch {
+    return Infinity;
   }
-  return d;
 }
 
 function toMs(iso: string | null): number | null {
@@ -44,7 +63,9 @@ function toMs(iso: string | null): number | null {
 /**
  * Union-find duplicate grouping. Two photos are duplicates when:
  *  - both have EXIF dates: hamming ≤ maxHamming AND |Δt| ≤ maxMinutes, or
- *  - either date is file-based / missing: hamming ≤ maxHamming - 4 (hash only, stricter).
+ *  - either date is file-based / missing: hamming ≤ maxHammingNoTime (hash only, stricter).
+ * Note: union-find is single-linkage, so a group can contain pairs further apart than the
+ * thresholds (bursts chain); the tight defaults keep such chains within one burst.
  * Returns photoId → group number (1..n) only for members of groups with ≥ 2 photos.
  * Group numbers are stable: ordered by the group's earliest takenAt (undated last), then smallest id.
  */
@@ -52,9 +73,9 @@ export function groupDuplicates(
   items: DupeItem[],
   opts: GroupDuplicatesOptions = {},
 ): Map<string, number> {
-  const maxHamming = opts.maxHamming ?? 10;
-  const maxMs = (opts.maxMinutes ?? 30) * 60_000;
-  const strict = maxHamming - 4;
+  const maxHamming = opts.maxHamming ?? DUPE_DEFAULTS.maxHamming;
+  const maxMs = (opts.maxMinutes ?? DUPE_DEFAULTS.maxMinutes) * 60_000;
+  const strict = opts.maxHammingNoTime ?? DUPE_DEFAULTS.maxHammingNoTime;
 
   const list = items
     .filter((it): it is DupeItem & { phash: string } => !!it.phash)

@@ -1,0 +1,21 @@
+{
+  "id": "msg_fixture_curator_ok",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-5-5",
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"photos\":[{\"photoId\":\"p1\",\"description\":\"Two people smiling at a table with cake\",\"scene\":\"group\",\"peopleCount\":2,\"mood\":\"joyful\",\"quality\":8,\"coverWorthy\":true,\"keep\":true,\"dropReason\":null},{\"photoId\":\"p2\",\"description\":\"Phone screenshot of a chat\",\"scene\":\"screenshot\",\"peopleCount\":0,\"mood\":\"neutral\",\"quality\":3,\"coverWorthy\":false,\"keep\":false,\"dropReason\":\"screenshot\"}]}"
+    }
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "stop_details": null,
+  "usage": {
+    "input_tokens": 812,
+    "output_tokens": 240,
+    "cache_read_input_tokens": 1450,
+    "cache_creation_input_tokens": 0
+  }
+}

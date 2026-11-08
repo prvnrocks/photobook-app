@@ -7,6 +7,8 @@ import type {
   ChapterSchema,
   CoverSchema,
   CropSchema,
+  DocMetaSchema,
+  GeneratorSchema,
   LayoutSchema,
   LayoutSlotSchema,
   PageSchema,
@@ -23,6 +25,8 @@ export type Caption = z.infer<typeof CaptionSchema>;
 export type CaptionSource = Caption["source"];
 export type Chapter = z.infer<typeof ChapterSchema>;
 export type Cover = z.infer<typeof CoverSchema>;
+export type DocMeta = z.infer<typeof DocMetaSchema>;
+export type Generator = z.infer<typeof GeneratorSchema>;
 export type Style = z.infer<typeof StyleSchema>;
 export type Rect = z.infer<typeof RectSchema>;
 export type LayoutSlot = z.infer<typeof LayoutSlotSchema>;

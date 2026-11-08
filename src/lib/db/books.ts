@@ -1,7 +1,10 @@
 import "server-only";
 // Book queries for the signed-in user. Uses the RLS-enforced server client;
-// the explicit user_id filter is for the index, not for security.
+// the explicit user_id filter is for the index, not for security. The AI
+// pipeline section at the bottom uses the admin client (see there).
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { isReplaceableDoc } from "@/lib/book/replaceable";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Json, Tables } from "@/lib/supabase/database.types";
 import type { CaptionLang, Occasion, Tone } from "@/lib/book/options";
@@ -137,4 +140,94 @@ export async function writeDocIfEmpty(
 
   if (error) throw new BooksQueryError("write book doc", error.code);
   return data.length === 1;
+}
+
+// ---------------------------------------------------------------------------
+// AI pipeline (M3, D-018 / D-021). Admin client: books.ai_status is server-only
+// (protect_book_columns) and the orchestrator may run a tick without relying
+// on RLS. Callers MUST have checked ownership first (getMyBook under RLS).
+
+export type BookAiStatus =
+  | "idle"
+  | "analyzing"
+  | "planning"
+  | "captioning"
+  | "done"
+  | "partial"
+  | "failed";
+
+export type BookForRun = Pick<
+  Tables<"books">,
+  | "id"
+  | "user_id"
+  | "title"
+  | "occasion"
+  | "tone"
+  | "caption_lang"
+  | "is_paid"
+  | "max_pages"
+  | "doc"
+  | "updated_at"
+  | "ai_status"
+>;
+
+/** The book as the pipeline needs it, or null (malformed id / missing). Admin client. */
+export async function getBookForRun(bookId: string): Promise<BookForRun | null> {
+  if (!isUuid(bookId)) return null;
+  const { data, error } = await createAdminClient()
+    .from("books")
+    .select("id, user_id, title, occasion, tone, caption_lang, is_paid, max_pages, doc, updated_at, ai_status")
+    .eq("id", bookId)
+    .maybeSingle();
+  if (error) throw new BooksQueryError("load book for run", error.code);
+  return data;
+}
+
+/** Sets books.ai_status (server-only column, D-021). Admin client. */
+export async function setBookAiStatus(bookId: string, status: BookAiStatus): Promise<void> {
+  if (!isUuid(bookId)) throw new BooksQueryError("set ai status", "invalid_id");
+  const { error } = await createAdminClient().from("books").update({ ai_status: status }).eq("id", bookId);
+  if (error) throw new BooksQueryError("set ai status", error.code);
+}
+
+export type WriteDocResult =
+  | { ok: true }
+  | { ok: false; reason: "user_edited" | "conflict" | "not_found" };
+
+/**
+ * Writes an AI / rebuilt album only when the current doc may be replaced
+ * (D-018): `{}` or a draft with meta.userEdited !== true (isReplaceableDoc).
+ *   1. read doc + updated_at (admin);
+ *   2. not replaceable → user_edited; updated_at ≠ expected → conflict;
+ *   3. UPDATE … WHERE id AND updated_at = expected (optimistic lock — the
+ *      books_set_updated_at trigger bumps it on every write), 0 rows → conflict.
+ * So an edit landing between the read and the write is never clobbered.
+ */
+export async function writeDocIfReplaceable(
+  bookId: string,
+  doc: Json,
+  pageCount: number,
+  expected: { updatedAt: string },
+): Promise<WriteDocResult> {
+  if (!isUuid(bookId)) return { ok: false, reason: "not_found" };
+  const admin = createAdminClient();
+
+  const { data: current, error: readError } = await admin
+    .from("books")
+    .select("doc, updated_at")
+    .eq("id", bookId)
+    .maybeSingle();
+  if (readError) throw new BooksQueryError("load book doc", readError.code);
+  if (!current) return { ok: false, reason: "not_found" };
+  if (!isReplaceableDoc(current.doc)) return { ok: false, reason: "user_edited" };
+  if (current.updated_at !== expected.updatedAt) return { ok: false, reason: "conflict" };
+
+  const { data, error } = await admin
+    .from("books")
+    .update({ doc, page_count: pageCount })
+    .eq("id", bookId)
+    .eq("updated_at", expected.updatedAt)
+    .select("id");
+  if (error) throw new BooksQueryError("write book doc", error.code);
+  return data.length === 1 ? { ok: true } : { ok: false, reason: "conflict" };
 }

@@ -1,0 +1,35 @@
+{
+  "parsed": {
+    "title": "A Night to Remember",
+    "subtitle": "October 2026",
+    "coverPhotoId": "p1",
+    "moments": [
+      {
+        "id": "m1",
+        "title": "Getting Ready",
+        "dateLabel": "12 Oct 2026",
+        "place": null,
+        "pages": [
+          { "layoutId": "one-portrait", "photoIds": ["p1"] },
+          { "layoutId": "three-mixed", "photoIds": ["p3", "p2", "p4"] },
+          { "layoutId": "two-horizontal", "photoIds": ["p6", "p7"] },
+          { "layoutId": "one-portrait", "photoIds": ["p5"] }
+        ]
+      },
+      {
+        "id": "m2",
+        "title": "The Morning After",
+        "dateLabel": "13 Oct 2026",
+        "place": null,
+        "pages": [
+          { "layoutId": "two-vertical", "photoIds": ["p8", "p9"] },
+          { "layoutId": "full-page", "photoIds": ["p10"] },
+          { "layoutId": "one-portrait", "photoIds": ["p12"] }
+        ]
+      }
+    ]
+  },
+  "stopReason": "end_turn",
+  "usage": { "input": 1450, "output": 2310, "cacheRead": 0, "cacheWrite": 1180 },
+  "model": "claude-opus-5-5"
+}

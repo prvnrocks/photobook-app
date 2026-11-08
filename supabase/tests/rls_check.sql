@@ -1,12 +1,15 @@
 -- =============================================================================
--- supabase/tests/rls_check.sql — live RLS / trigger / storage check (Milestones 1–2)
+-- supabase/tests/rls_check.sql — live RLS / trigger / storage check (Milestones 1–3)
 --
 -- HOW TO RUN
 --   1. Apply the migrations first (`npm run db:push`) — including
 --      20261108000300_hardening.sql (path checks, grants, id/created_at freeze)
 --      and 20261108000400_photo_upload.sql (fingerprint/upload_state, photo cap)
 --      and 20261108000500_photo_integrity.sql (ready CHECK, path formats,
---      photo column guard, pending-only storage writes, finalize rate limit).
+--      photo column guard, pending-only storage writes, finalize rate limit)
+--      and 20261108000600_agent_pipeline.sql (agent_runs / agent_steps /
+--      user_memory, run lease RPCs, server-only books.ai_status, step scrub on
+--      book delete).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -15,7 +18,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 61 checks passed
+--       RLS OK — all 74 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -30,7 +33,8 @@
 --   The whole script is ONE `do` statement, i.e. one transaction. It always ends
 --   in an exception (pass or fail), so Postgres rolls back everything it did:
 --   the 2 fake auth.users (A, B), their profiles, books, photo rows (incl. the
---   500 photo-cap test rows) and storage object rows. Nothing is committed, so nothing needs cleaning up.
+--   500 photo-cap test rows), storage object rows, agent runs/steps and
+--   user_memory rows. Nothing is committed, so nothing needs cleaning up.
 --   (We deliberately do NOT use `begin; … rollback;`: when a statement errors,
 --   Postgres skips the rest of the batch, so a trailing `rollback;` would never
 --   run and the editor's connection would be left in an aborted transaction.)
@@ -53,6 +57,10 @@ declare
   v_wait     integer;
   book_cap   uuid;
   v_hint     text;
+  run_a      uuid;
+  run_b      uuid;
+  run_del    uuid;
+  book_del   uuid;
   slug_pub   text := 'rls-check-pub-'   || substr(md5(random()::text), 1, 12);
   slug_unpub text := 'rls-check-unpub-' || substr(md5(random()::text), 1, 12);
   r          record;
@@ -700,6 +708,206 @@ begin
     if n <> 0 then raise exception 'RLS FAIL [storage anon read]: anon sees % of A''s objects', n; end if;
   exception when insufficient_privilege then null;
   end;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- AI pipeline (0600): agent_runs / agent_steps / user_memory, lease RPCs,
+  -- server-only books.ai_status, scrub-on-book-delete
+  -- ---------------------------------------------------------------------------
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+
+  insert into public.agent_runs (book_id, user_id, trigger, mode, state)
+  values (book_a, uid_a, 'build', 'replay', 'curating')
+  returning id into run_a;
+  insert into public.agent_runs (user_id, trigger, mode)
+  values (uid_b, 'build', 'replay')
+  returning id into run_b;
+  insert into public.agent_steps (run_id, agent, step_key, status, output, input_summary, cost_usd)
+  values (run_a, 'curator', 'curator:1', 'ok', '{"keep":["p1"]}', '{"photos":1}', 0.0123);
+  insert into public.user_memory (user_id, prefs) values (uid_a, '{"tone":"warm"}'), (uid_b, '{"tone":"fun"}');
+
+  -- one active run per book (unique partial index); finished runs don't count
+  begin
+    insert into public.agent_runs (book_id, user_id, trigger, mode)
+    values (book_a, uid_a, 'rebuild', 'replay');
+    raise exception 'RLS FAIL [agent_runs active]: a second active run for one book was accepted';
+  exception when unique_violation then null;
+  end;
+  insert into public.agent_runs (book_id, user_id, trigger, mode, state)
+  values (book_a, uid_a, 'rebuild', 'rule', 'done');
+  checks := checks + 1;
+
+  -- 'partial' is a valid books.ai_status for privileged callers; bogus values are not
+  update public.books set ai_status = 'partial' where id = book_a;
+  select count(*) into n from public.books where id = book_a and ai_status = 'partial';
+  if n <> 1 then raise exception 'RLS FAIL [books ai_status]: postgres could not set ai_status = partial'; end if;
+  begin
+    update public.books set ai_status = 'bogus' where id = book_a;
+    raise exception 'RLS FAIL [books ai_status]: ai_status ''bogus'' accepted';
+  exception when check_violation then null;
+  end;
+  checks := checks + 1;
+
+  if has_table_privilege('anon', 'public.agent_runs', 'select')
+     or has_table_privilege('anon', 'public.agent_steps', 'select')
+     or has_table_privilege('anon', 'public.user_memory', 'select')
+     or has_table_privilege('authenticated', 'public.agent_runs', 'insert')
+     or has_table_privilege('authenticated', 'public.agent_runs', 'update')
+     or has_table_privilege('authenticated', 'public.agent_runs', 'delete')
+     or has_table_privilege('authenticated', 'public.agent_steps', 'select')
+     or has_table_privilege('authenticated', 'public.agent_steps', 'insert')
+     or has_table_privilege('authenticated', 'public.user_memory', 'insert')
+     or has_table_privilege('authenticated', 'public.user_memory', 'update')
+     or has_function_privilege('authenticated', 'public.claim_agent_run(uuid, integer)', 'execute')
+     or has_function_privilege('anon', 'public.claim_agent_run(uuid, integer)', 'execute')
+     or has_function_privilege('authenticated', 'public.release_agent_run(uuid)', 'execute')
+     or has_function_privilege('anon', 'public.release_agent_run(uuid)', 'execute') then
+    raise exception 'RLS FAIL [agent grants]: a client role has a write/step/RPC privilege it must not have';
+  end if;
+  checks := checks + 1;
+
+  -- As A ----------------------------------------------------------------------
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+
+  select count(*) into n from public.agent_runs where id in (run_a, run_b);
+  if n <> 1 or not exists (select 1 from public.agent_runs where id = run_a) then
+    raise exception 'RLS FAIL [agent_runs select]: A sees % of (own, B''s) runs, expected only own', n;
+  end if;
+  checks := checks + 1;
+
+  begin
+    insert into public.agent_runs (book_id, user_id, trigger, mode) values (book_a2, uid_a, 'build', 'live');
+    raise exception 'RLS FAIL [agent_runs insert]: a client created a run';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.agent_runs set state = 'done', total_cost_usd = 0 where id = run_a;
+    raise exception 'RLS FAIL [agent_runs update]: a client changed a run (counters must be server-only)';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    delete from public.agent_runs where id = run_a;
+    raise exception 'RLS FAIL [agent_runs delete]: a client deleted a run (would reset usage counts)';
+  exception when insufficient_privilege then null;
+  end;
+  checks := checks + 1;
+
+  begin
+    select count(*) into n from public.agent_steps;
+    raise exception 'RLS FAIL [agent_steps read]: authenticated can read agent_steps (% rows)', n;
+  exception when insufficient_privilege then null;
+  end;
+  checks := checks + 1;
+
+  -- ai_status is server-only (D-021): forced on insert, frozen on update
+  update public.books set ai_status = 'idle', title = 'RLS check A (ai)' where id = book_a;
+  select * into r from public.books where id = book_a;
+  if r.ai_status <> 'partial' or r.title <> 'RLS check A (ai)' then
+    raise exception 'RLS FAIL [books ai_status update]: client reset ai_status to % (or title not saved)', r.ai_status;
+  end if;
+  insert into public.books (user_id, title, ai_status) values (uid_a, 'RLS check ai insert', 'done')
+  returning ai_status into r;
+  if r.ai_status <> 'idle' then
+    raise exception 'RLS FAIL [books ai_status insert]: client inserted ai_status = %', r.ai_status;
+  end if;
+  checks := checks + 1;
+
+  -- user_memory: own select / delete only
+  select count(*) into n from public.user_memory where user_id in (uid_a, uid_b);
+  if n <> 1 or not exists (select 1 from public.user_memory where user_id = uid_a) then
+    raise exception 'RLS FAIL [user_memory select]: A sees % memory rows, expected only own', n;
+  end if;
+  begin
+    insert into public.user_memory (user_id, prefs) values (gen_random_uuid(), '{}');
+    raise exception 'RLS FAIL [user_memory insert]: a client wrote user_memory';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.user_memory set prefs = '{"tone":"hacked"}' where user_id = uid_a;
+    raise exception 'RLS FAIL [user_memory update]: a client updated user_memory';
+  exception when insufficient_privilege then null;
+  end;
+  checks := checks + 1;
+
+  delete from public.user_memory where user_id = uid_b;
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'RLS FAIL [user_memory delete]: A deleted B''s memory'; end if;
+  delete from public.user_memory where user_id = uid_a;
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'RLS FAIL [user_memory delete own]: A could not forget own memory'; end if;
+  checks := checks + 1;
+
+  begin
+    perform public.claim_agent_run(run_a, 30);
+    raise exception 'RLS FAIL [claim_agent_run]: authenticated could call claim_agent_run';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.release_agent_run(run_a);
+    raise exception 'RLS FAIL [release_agent_run]: authenticated could call release_agent_run';
+  exception when insufficient_privilege then null;
+  end;
+  checks := checks + 1;
+
+  -- owner deletes a book that has runs: allowed; steps scrubbed, costs kept (D-027)
+  insert into public.books (user_id, title) values (uid_a, 'RLS check delete') returning id into book_del;
+  reset role;
+  insert into public.agent_runs (book_id, user_id, trigger, mode, state, total_cost_usd)
+  values (book_del, uid_a, 'build', 'replay', 'done', 0.5)
+  returning id into run_del;
+  insert into public.agent_steps (run_id, agent, step_key, status, output, input_summary, cost_usd)
+  values (run_del, 'curator', 'curator:1', 'ok', '{"keep":["p1"]}', '{"photos":1}', 0.25),
+         (run_del, 'storyteller', 'storyteller', 'ok', '{"pages":[]}', '{"groups":1}', 0.25);
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  begin
+    delete from public.books where id = book_del;
+    get diagnostics n = row_count;
+  exception when others then
+    raise exception 'RLS FAIL [book delete with runs]: owner could not delete: % (SQLSTATE %)', sqlerrm, sqlstate;
+  end;
+  if n <> 1 then raise exception 'RLS FAIL [book delete with runs]: % rows deleted', n; end if;
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  select count(*) into n from public.agent_runs
+   where id = run_del and book_id is null and user_id = uid_a and total_cost_usd = 0.5;
+  if n <> 1 then raise exception 'RLS FAIL [book delete with runs]: run not kept with book_id = null'; end if;
+  select count(*) into n from public.agent_steps
+   where run_id = run_del and output is null and input_summary is null and cost_usd = 0.25;
+  if n <> 2 then raise exception 'RLS FAIL [scrub steps]: % of 2 steps scrubbed with costs kept', n; end if;
+  checks := checks + 1;
+
+  -- As service_role: lease claim works once until it expires or is released
+  set local role service_role;
+  if not public.claim_agent_run(run_a, 30) then
+    raise exception 'RLS FAIL [claim_agent_run]: first claim of an unleased run failed';
+  end if;
+  if public.claim_agent_run(run_a, 30) then
+    raise exception 'RLS FAIL [claim_agent_run]: second claim succeeded while the lease is held';
+  end if;
+  update public.agent_runs set lease_until = now() - interval '1 second' where id = run_a;
+  if not public.claim_agent_run(run_a, 100000) then
+    raise exception 'RLS FAIL [claim_agent_run]: claim after lease expiry failed';
+  end if;
+  select * into r from public.agent_runs where id = run_a;
+  if r.attempts <> 2 or r.lease_until > now() + interval '300 seconds' then
+    raise exception 'RLS FAIL [claim_agent_run]: attempts % / lease % (expected 2, clamped to 300 s)',
+      r.attempts, r.lease_until - now();
+  end if;
+  checks := checks + 1;
+
+  perform public.release_agent_run(run_a);
+  if not public.claim_agent_run(run_a, 30) then
+    raise exception 'RLS FAIL [release_agent_run]: claim after release failed';
+  end if;
+  update public.agent_runs set state = 'done', lease_until = null where id = run_a;
+  if public.claim_agent_run(run_a, 30) then
+    raise exception 'RLS FAIL [claim_agent_run]: a finished run was claimed';
+  end if;
   checks := checks + 1;
 
   -- ---------------------------------------------------------------------------

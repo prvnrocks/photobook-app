@@ -168,8 +168,8 @@ describe("finalizeBook", () => {
     const { db, photos, calls } = makeDb({
       photos: [
         photo(1, { phash: hash, taken_at: "2026-10-12T10:00:00Z" }),
-        photo(2, { phash: hash, taken_at: "2026-10-12T10:05:00Z" }),
-        photo(3, { phash: hash, taken_at: "2026-10-12T10:06:00Z" }),
+        photo(2, { phash: hash, taken_at: "2026-10-12T10:01:00Z" }),
+        photo(3, { phash: hash, taken_at: "2026-10-12T10:02:00Z" }),
         photo(4, { dup_group: 7 }), // no longer grouped → null
         photo(5),
       ],

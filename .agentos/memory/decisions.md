@@ -52,3 +52,33 @@ Format: `## D-NNN — title (YYYY-MM-DD)` → **Decision**, **Why**, **Alternati
 
 ## D-017 — One finalize route instead of /api/geocode (2026-11-08)
 **Decision:** `POST /api/books/[id]/finalize` does duplicate grouping, GPS clustering + geocoding and the fallback layout; idempotent (re-run costs no geocode calls). Dashboard cards link to `/books/[id]/upload` until the editor exists (M5).
+
+## D-018 — Album origin marker; AI may replace drafts, never user edits (2026-11-08) — supersedes D-016
+**Decision:** `doc.meta = { generator: 'rule'|'ai', generatorVersion, runId, userEdited }` (optional; missing = rule, not edited). The AI writes `books.doc` only when the doc is `{}` or `meta.userEdited === false`, via one conditional update with the `updated_at` lock. Curator/rule writes to photos skip `user_override = true`; a user-set `books.title` always wins; rebuild on an edited album is refused (409) until the M5 editor can merge per-page edits and `caption.source='user'`. **Why:** D-016 would never let the AI improve a rule-built draft. **Rejected:** keeping D-016.
+
+## D-019 — Duplicate thresholds tuned on real photos; groups stay in one Curator batch (2026-11-08)
+**Decision:** Tighten dHash/time thresholds using a histogram of the user's real 110-photo set (metadata only); batches of ≤10 never split a dup group; the Curator picks the best of each group and code guarantees ≥1 kept per group. **Why:** 48/110 photos grouped looked too aggressive.
+
+## D-020 — AI never depends on place; iOS location hint (2026-11-08)
+**Decision:** Prompts treat place as optional and forbid inventing places; date labels come from dates. Upload summary shows "turn on Location in the picker's Options" on iOS when no photo has GPS (copy verified on a real iPhone first). **Why:** 0/110 iPhone uploads had GPS.
+
+## D-021 — AI status and usage counters are server-side only (2026-11-08)
+**Decision:** `books.ai_status` gains `'partial'` and becomes server-only (protect_book_columns). Real status lives in `agent_runs`. No counter columns: rebuilds, analysed photos, builds/day and rewrites are counted from `agent_runs` / `agent_steps` / `photos.ai` (service-role writes only).
+
+## D-022 — AI runs as client-driven, resumable ticks (2026-11-08)
+**Decision:** `POST /api/ai/runs` creates a run; the progress screen loops `POST /api/ai/runs/[id]/advance`, which takes a DB lease, runs one idempotent chunk (a Curator wave, or the Storyteller, or validate+save) within a ~40 s budget, checkpoints, and returns progress. Closing the tab pauses; reopening resumes. **Rejected:** after()/waitUntil self-chaining, background queues (for now).
+
+## D-023 — Short alias photo ids in prompts (2026-11-08)
+**Decision:** Photo UUIDs map to `p1..pN` in prompts and back in code. **Why:** fewer output tokens/latency, invented ids are trivially detected, fixtures don't depend on real ids.
+
+## D-024 — AI modes off | replay | live (2026-11-08)
+**Decision:** `live` when ANTHROPIC_API_KEY is set; otherwise `replay` (recorded/synthesised answers) for local, tests and preview, and `off` in production (rule album + "AI not available yet"). Replay in production only with explicit `AI_MODE=replay`. **Why:** never show synthetic "AI picks" to real users. **Rejected:** replay everywhere.
+
+## D-025 — AI endpoints are /api/ai/runs, not analyze/plan (2026-11-08)
+**Decision:** `POST /api/ai/runs`, `GET /api/ai/runs/[id]`, `POST /api/ai/runs/[id]/advance`; PLAN Step A/B wording updated at checkpoint.
+
+## D-026 — Daily AI build cap per user: 3 free / 20 paid (2026-11-08)
+**Decision:** `maxLiveBuildsPerUserPerDay` in `src/lib/ai/limits.ts`, counted from `agent_runs`, on top of per-book limits. **Why:** closes the "many free books" gap from D-014.
+
+## D-027 — AI trace privacy (2026-11-08)
+**Decision:** Curator step logs store only ids/keep/reason/quality/scene/coverWorthy; descriptions only in `photos.ai` (deleted with the photo). Deleting a book nulls its runs' step outputs (costs kept). `/admin/runs/[id]` is limited to server-only `ADMIN_USER_IDS`; privacy policy must mention admin trace access.

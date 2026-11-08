@@ -31,6 +31,9 @@ describe("server/client boundaries", () => {
     "src/lib/supabase/admin.ts",
     "src/lib/supabase/server.ts",
     "src/lib/ai/client.ts",
+    "src/lib/ai/transport-live.ts",
+    "src/lib/ai/transport-factory.ts",
+    "src/lib/ai/orchestrator.ts",
     "src/lib/stripe.ts",
     "src/lib/photos/finalize.ts",
   ])(
@@ -165,6 +168,48 @@ describe("geocoding boundaries (T7)", () => {
           .filter((s) => /^@\/lib\/geo(\/|$)|(^|\/)lib\/geo(\/|$)/.test(s))
           .map((s) => `${rel(f)} -> ${s}`),
       );
+    expect(offenders).toEqual([]);
+  });
+});
+
+// --- M3 T3/T4 additions ------------------------------------------------------
+
+describe("AI boundaries (M3)", () => {
+  const SERVER_ONLY_AI = /(^|\/)lib\/ai\/(client|transport-live|transport-factory|transport-replay|run-step|cost)$/;
+
+  it('no "use client" file imports @anthropic-ai/sdk or server-side AI modules', () => {
+    const offenders = walk(SRC)
+      .filter((f) => hasUseClientDirective(readFileSync(f, "utf8")))
+      .flatMap((f) =>
+        importSpecifiers(readFileSync(f, "utf8"))
+          .filter((s) => /^@anthropic-ai\/sdk(\/|$)/.test(s) || SERVER_ONLY_AI.test(s))
+          .map((s) => `${rel(f)} -> ${s}`),
+      );
+    expect(offenders).toEqual([]);
+  });
+
+  it("@anthropic-ai/sdk is imported only by src/lib/ai/client.ts and transport-live.ts", () => {
+    const importers = walk(SRC)
+      .filter((f) => importSpecifiers(readFileSync(f, "utf8")).some((s) => /^@anthropic-ai\/sdk(\/|$)/.test(s)))
+      .map(rel)
+      .sort();
+    expect(importers).toEqual(["src/lib/ai/client.ts", "src/lib/ai/transport-live.ts"]);
+  });
+
+  it("ANTHROPIC_API_KEY is only referenced in src/lib/ai/client.ts", () => {
+    const matches = walk(SRC)
+      .filter((f) => readFileSync(f, "utf8").includes("ANTHROPIC_API_KEY"))
+      .map(rel);
+    expect(matches).toEqual(["src/lib/ai/client.ts"]);
+  });
+
+  it("ADMIN_USER_IDS is never referenced by a client file or NEXT_PUBLIC_ var", () => {
+    const offenders = walk(SRC)
+      .filter((f) => {
+        const t = readFileSync(f, "utf8");
+        return (hasUseClientDirective(t) && t.includes("ADMIN_USER_IDS")) || t.includes("NEXT_PUBLIC_ADMIN");
+      })
+      .map(rel);
     expect(offenders).toEqual([]);
   });
 });

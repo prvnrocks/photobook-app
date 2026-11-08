@@ -82,6 +82,29 @@ export const StyleSchema = z.object({
   font: FontSchema,
 });
 
+export const GENERATORS = ["rule", "ai"] as const;
+export const GeneratorSchema = z.enum(GENERATORS);
+
+/**
+ * Album origin marker (D-018). Optional on the doc: a doc without `meta` (written by M2) means
+ * "rule-built, not edited". The AI may replace `books.doc` only when it is `{}` or
+ * `meta.userEdited === false` (see src/lib/book/replaceable.ts).
+ *
+ * Strict: unknown keys inside `meta` are REJECTED (the whole doc fails to parse), not stripped.
+ * `meta` drives an overwrite decision, so an unexpected shape must land on the safe side —
+ * docOrigin() treats an unparsable doc as user-edited and it is never overwritten.
+ */
+export const DocMetaSchema = z
+  .object({
+    generator: GeneratorSchema,
+    generatorVersion: z.number().int().min(1),
+    /** agent_runs.id for AI-built docs; null for rule-built docs. */
+    runId: z.uuid().nullable(),
+    /** Set to true by the editor (M5) on the first user change; AI never overwrites it. */
+    userEdited: z.boolean(),
+  })
+  .strict();
+
 export const BookDocSchema = z.object({
   version: z.literal(1),
   format: z.literal("A5_PORTRAIT"),
@@ -90,6 +113,7 @@ export const BookDocSchema = z.object({
   chapters: z.array(ChapterSchema).max(100),
   pages: z.array(PageSchema).max(LIMITS.paid.maxPages),
   style: StyleSchema,
+  meta: DocMetaSchema.optional(),
 });
 
 /** Rectangle in % of the page (0..100). */
