@@ -54,3 +54,9 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - BLOCKER FOR DEPLOY: user must apply migration 0800 (cursor 256 KB) + rls_check 82 BEFORE merging M4 to main (prod cursor limit is 64 KB; large paid books would fail).
 - M4b (with M3b, live key): caption quality EN/AR (native reader), Critic catching real invented names / Arabic names / famous quotes, pre-check false-positive rate on real Eid/Ramadan albums, real cost per batch/critic/repair vs D-035 caps, cache hits on caption_writer/critic prompts, captioning stage visible, pg_column_size of a large paid cursor.
 - Backlog: stale-run reaper (M9 cron); tonePreference never unlearned (M5); AI cover title not name-checked (user title wins when set); memory-clear race with a tick holding the lease.
+
+## 2026-11-09 — Milestone 4a — deployed
+- Migration 0800 applied to prod (all 8 migrations in sync); main = 73377b4, live on https://photobook-app-alpha.vercel.app.
+- Prod probes OK (/settings protected, AI routes 401/403 signed-out, AI mode `off` without key).
+- LEFT: phone check (Settings, new-book prefill, captions preview); M3b + M4b live validation once ANTHROPIC_API_KEY is set; ADMIN_USER_IDS in Vercel.
+- NEXT: Milestone 5 (editor).
