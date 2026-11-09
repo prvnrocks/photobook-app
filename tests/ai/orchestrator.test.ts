@@ -43,7 +43,7 @@ const CALL_MS = 5_000;
 // ---------------------------------------------------------------------------------------------
 // Fake DB
 
-type FakeRun = RunForTick & { lease_until: number | null; total_cost_usd: number };
+type FakeRun = RunForTick & { lease_until: number | null; lease_token: string | null; total_cost_usd: number };
 
 function photoRow(n: number, over: Partial<CurationPhotoRow> = {}): CurationPhotoRow {
   const day = Math.floor(n / 50); // 3 days for 150 photos
@@ -78,7 +78,11 @@ class FakeDb {
   bookStatusHistory: string[] = [];
   thumbLoads = 0;
   hangNextWriteCuration = false;
+  /** Every write outside agent_steps, in order (for "a stale tick writes nothing" checks). */
+  writes: string[] = [];
+  createCalls: Array<Record<string, unknown>> = [];
   private runSeq = 0;
+  private tokenSeq = 0;
   private bump = 0;
 
   constructor(photos: CurationPhotoRow[], book: Partial<BookForRun> = {}) {
@@ -120,9 +124,19 @@ class FakeDb {
       started_at: new Date(this.now - 3_600_000).toISOString(),
       finished_at: null,
       lease_until: null,
+      lease_token: null,
       total_cost_usd: 0,
       ...over,
     });
+  }
+
+  /** Another tick takes the lease (as claim_agent_run would after expiry). */
+  stealLease(id: string, secs = 240): string {
+    const r = this.run(id);
+    const token = `tok-${++this.tokenSeq}`;
+    r.lease_token = token;
+    r.lease_until = this.now + secs * 1000;
+    return token;
   }
 
   run(id: string): FakeRun {
@@ -133,8 +147,9 @@ class FakeDb {
 
   deps(transport: AgentTransport | null, mode: AiMode = "replay"): OrchestratorDeps {
     const tickRow = (r: FakeRun): RunForTick => {
-      const { lease_until, total_cost_usd, ...rest } = r;
+      const { lease_until, lease_token, total_cost_usd, ...rest } = r;
       void lease_until;
+      void lease_token;
       void total_cost_usd;
       return structuredClone(rest);
     };
@@ -145,6 +160,7 @@ class FakeDb {
         this.book.ai_status = status;
         this.book.updated_at = this.stamp();
         this.bookStatusHistory.push(status);
+        this.writes.push(`ai_status:${status}`);
       },
       writeDocIfReplaceable: async (id, doc, pageCount, expected) => {
         if (id !== this.book.id) return { ok: false, reason: "not_found" };
@@ -152,6 +168,7 @@ class FakeDb {
         if (!isReplaceableDoc(this.book.doc)) return { ok: false, reason: "user_edited" };
         if (expected.updatedAt !== this.book.updated_at) return { ok: false, reason: "conflict" };
         void pageCount;
+        this.writes.push("doc");
         this.book.doc = structuredClone(doc);
         this.book.updated_at = this.stamp();
         return { ok: true };
@@ -163,6 +180,7 @@ class FakeDb {
           return new Promise<void>(() => undefined); // the process "dies" here
         }
         if (id !== this.book.id) return;
+        this.writes.push("curation");
         for (const r of rows) {
           const p = this.photos.find((x) => x.id === r.id);
           if (!p) continue;
@@ -177,9 +195,18 @@ class FakeDb {
         this.thumbLoads += paths.length;
         return new Map(paths.map((p) => [p, Buffer.from(`img:${p}`).toString("base64")]));
       },
-      createRun: async (input) => {
+      createRunCapped: async (input) => {
+        this.createCalls.push({ ...input });
         for (const r of this.runs.values()) {
           if (r.book_id === input.bookId && r.state !== "done" && r.state !== "failed") return { error: "already_running" };
+        }
+        if (input.enforce) {
+          const since = new Date(this.now - 24 * 3_600_000).toISOString();
+          const live = [...this.runs.values()].filter((r) => r.mode === "live");
+          const today = live.filter((r) => r.user_id === input.userId && r.started_at >= since).length;
+          if (today >= input.dailyCap) return { error: "limit", limit: "daily_builds" };
+          const rebuilds = live.filter((r) => r.book_id === input.bookId && r.trigger === "rebuild").length;
+          if (input.trigger === "rebuild" && rebuilds >= input.rebuildCap) return { error: "limit", limit: "rebuilds" };
         }
         const id = `11111111-1111-4111-8111-${String(++this.runSeq).padStart(12, "0")}`;
         this.runs.set(id, {
@@ -197,29 +224,36 @@ class FakeDb {
           started_at: new Date(this.now).toISOString(),
           finished_at: null,
           lease_until: null,
+          lease_token: null,
           total_cost_usd: 0,
         });
         return { id };
       },
       claimRun: async (id, secs) => {
+        expect(secs).toBeLessThanOrEqual(orch.MAX_LEASE_SECONDS);
         const r = this.runs.get(id);
-        if (!r || r.state === "done" || r.state === "failed") return false;
-        if (r.lease_until !== null && r.lease_until >= this.now) return false;
-        r.lease_until = this.now + secs * 1000;
+        if (!r || r.state === "done" || r.state === "failed") return null;
+        if (r.lease_until !== null && r.lease_until >= this.now) return null;
         r.attempts++;
-        return true;
+        return this.stealLease(id, secs);
       },
-      releaseRun: async (id) => {
+      releaseRun: async (id, token) => {
         const r = this.runs.get(id);
-        if (r) r.lease_until = null;
+        if (r && r.lease_token === token) {
+          r.lease_until = null;
+          r.lease_token = null;
+        }
       },
-      checkpointRun: async (id, patch) => {
+      checkpointRun: async (id, token, patch) => {
         const r = this.run(id);
+        // like 0700: token match only (an expired-but-unclaimed lease still checkpoints)
+        if (r.lease_token !== token) return false;
         for (const [k, v] of Object.entries(patch)) {
           if (v !== undefined) (r as Record<string, unknown>)[k] = structuredClone(v);
         }
         expect(JSON.stringify(r.cursor).length).toBeLessThan(65_536);
         expect(JSON.stringify(r.progress).length).toBeLessThan(4_096);
+        return true;
       },
       getRunForTick: async (id) => {
         const r = this.runs.get(id);
@@ -231,16 +265,10 @@ class FakeDb {
         const { id: rid, book_id, state, ai_status, progress, error_code, mode, trigger, started_at, finished_at } = r;
         return { id: rid, book_id, state, ai_status, progress, error_code, mode, trigger, started_at, finished_at };
       },
-      countLiveRuns: async ({ userId, since, triggers }) =>
-        [...this.runs.values()].filter(
-          (r) =>
-            r.user_id === userId &&
-            r.mode === "live" &&
-            (triggers ?? ["build", "rebuild"]).includes(r.trigger as "build") &&
-            r.started_at >= since,
-        ).length,
-      countLiveRebuilds: async (bookId) =>
-        [...this.runs.values()].filter((r) => r.book_id === bookId && r.mode === "live" && r.trigger === "rebuild").length,
+      hasFinishedLiveAiRun: async (bookId) =>
+        [...this.runs.values()].some(
+          (r) => r.book_id === bookId && r.mode === "live" && r.state === "done" && (r.ai_status === "ok" || r.ai_status === "partial"),
+        ),
       stepLogger: (runId) => ({
         insertStep: async (row) => {
           if (row.runId !== runId) throw new Error("run mismatch");
@@ -256,6 +284,9 @@ class FakeDb {
       resolveMode: () => mode,
       transportFor: () => transport,
       now: () => this.now,
+      sleep: async (ms) => {
+        this.now += ms;
+      },
     };
   }
 }
@@ -263,16 +294,26 @@ class FakeDb {
 /** ReplayTransport wrapper: counts calls per agent / batch and advances the fake clock. */
 class CountingTransport implements AgentTransport {
   readonly kind = "replay" as const;
-  calls: Array<{ agent: AgentName; key: string }> = [];
+  calls: Array<{ agent: AgentName; key: string; inFlight: number }> = [];
+  inFlight = 0;
+  /** Runs inside a call, after the fake latency (e.g. to steal the lease mid-call). */
+  onCall: ((agent: AgentName, index: number) => void) | null = null;
   constructor(
     private db: FakeDb,
     private inner: InstanceType<typeof ReplayTransport>,
   ) {}
   async parse<T>(req: Parameters<AgentTransport["parse"]>[0] & { schema: import("zod").ZodType<T> }) {
     const aliases = (req.scenarioMeta?.aliases as string[] | undefined) ?? [];
-    this.calls.push({ agent: req.agent, key: aliases.join(",") });
+    this.inFlight++;
+    this.calls.push({ agent: req.agent, key: aliases.join(","), inFlight: this.inFlight });
     this.db.now += CALL_MS;
-    return this.inner.parse<T>(req);
+    try {
+      const res = await this.inner.parse<T>(req);
+      this.onCall?.(req.agent, this.calls.length - 1);
+      return res;
+    } finally {
+      this.inFlight--;
+    }
   }
   count(agent: AgentName): number {
     return this.calls.filter((c) => c.agent === agent).length;
@@ -396,6 +437,13 @@ describe("orchestrator — full replay run", () => {
 });
 
 describe("orchestrator — resume and leases", () => {
+  it("lease covers the longest request + margin and stays within claim_agent_run's max", async () => {
+    const { AGENT_TIMEOUT_MS } = await import("@/lib/ai/client");
+    const longest = Math.max(...Object.values(AGENT_TIMEOUT_MS));
+    expect(orch.LEASE_SECONDS * 1000).toBeGreaterThanOrEqual(longest + orch.LEASE_MARGIN_MS);
+    expect(orch.LEASE_SECONDS).toBeLessThanOrEqual(orch.MAX_LEASE_SECONDS);
+  });
+
   it("a tick killed mid-wave resumes without re-calling finished batches or duplicating steps", async () => {
     const { db, transport, deps } = setup(photos150());
     const s = await start(deps);
@@ -421,9 +469,105 @@ describe("orchestrator — resume and leases", () => {
     expect([...perBatch.values()].filter((n) => n === 1)).toHaveLength(10);
     expect([...perBatch.values()].filter((n) => n === 2)).toHaveLength(5);
 
+    // Every real call has its own row: the dead wave's calls (attempt 1) AND their re-runs (attempt 2).
     const keys = db.steps.map((x) => `${x.stepKey}#${x.attempt}`);
     expect(new Set(keys).size).toBe(keys.length);
-    expect(db.steps.filter((x) => x.agent === "curator")).toHaveLength(15);
+    const curatorRows = db.steps.filter((x) => x.agent === "curator");
+    expect(curatorRows).toHaveLength(20);
+    expect(curatorRows).toHaveLength(transport.count("curator"));
+    for (const bi of [10, 11, 12, 13, 14]) {
+      expect(curatorRows.filter((x) => x.stepKey === `curator:${bi}`).map((x) => x.attempt).sort()).toEqual([1, 2]);
+    }
+    const sum = db.steps.reduce((n, x) => n + x.costUsd, 0);
+    expect(db.run(s.runId).total_cost_usd).toBeCloseTo(sum, 10);
+  });
+
+  it("lease expiry mid-tick: the second tick takes over; the first stops, releases nothing, writes nothing", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 30));
+    const s = await start(deps);
+    let stolen: string | null = null;
+    transport.onCall = (agent, i) => {
+      if (agent === "curator" && i === 0 && !stolen) {
+        db.now += orch.LEASE_SECONDS * 1000 + 1_000; // tick A's lease expires during its call
+        stolen = db.stealLease(s.runId); // tick B claims
+        db.writes = []; // only what A does AFTER losing the lease matters
+      }
+    };
+    const a = await orch.advance(s.runId, {}, deps);
+    expect(a).toEqual({ leased: true });
+    expect(db.run(s.runId).lease_token).toBe(stolen); // A did not release B's lease
+    expect(db.writes).toEqual([]); // A wrote no curation / doc / ai_status after the call
+    expect(db.run(s.runId).cursor).toMatchObject({ batchesDone: [], batchAttempts: [1, 0, 0] });
+    // A's real call is still logged (no silent calls)
+    expect(db.steps.filter((x) => x.agent === "curator")).toHaveLength(1);
+
+    // B finishes; the batch A called is re-run with a NEW attempt number
+    transport.onCall = null;
+    db.run(s.runId).lease_token = null;
+    db.run(s.runId).lease_until = null;
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok" });
+    const b0 = db.steps.filter((x) => x.stepKey === "curator:0").map((x) => x.attempt);
+    expect(b0).toEqual([1, 2]);
+  });
+
+  it("unique attempts on resume: a Storyteller call lost to a stale tick is logged, the re-run is attempt 2", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 10));
+    const s = await start(deps);
+    await orch.advance(s.runId, {}, deps); // curation → yields at storytelling
+    transport.onCall = (agent) => {
+      if (agent === "storyteller") {
+        db.now += orch.LEASE_SECONDS * 1000 + 1_000;
+        db.stealLease(s.runId);
+      }
+    };
+    expect(await orch.advance(s.runId, {}, deps)).toEqual({ leased: true });
+    transport.onCall = null;
+    db.run(s.runId).lease_until = null;
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok" });
+    const story = db.steps.filter((x) => x.agent === "storyteller").map((x) => [x.stepKey, x.attempt]);
+    expect(story).toEqual([
+      ["storyteller", 1],
+      ["storyteller", 2],
+    ]);
+    expect(transport.count("storyteller")).toBe(2);
+  });
+
+  it("a batch whose attempts were all lost to dead ticks is rule-curated without another call", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 10));
+    const s = await start(deps);
+    for (let i = 0; i < orch.MAX_BATCH_ATTEMPTS; i++) {
+      transport.onCall = () => {
+        db.now += orch.LEASE_SECONDS * 1000 + 1_000;
+        db.stealLease(s.runId);
+      };
+      expect(await orch.advance(s.runId, {}, deps)).toEqual({ leased: true });
+      db.run(s.runId).lease_until = null;
+    }
+    transport.onCall = null;
+    const calls = transport.count("curator");
+    const { last } = await runToEnd(deps, s.runId);
+    expect(transport.count("curator")).toBe(calls);
+    expect(last).toMatchObject({ state: "done", errorCode: "curator_attempts" });
+    expect(docOf(db).pages.length).toBeGreaterThan(0);
+  });
+
+  it("never starts a call that would outlive the lease (lease budget, not just the soft budget)", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 10));
+    const s = await start(deps);
+    await orch.advance(s.runId, {}, deps); // → storytelling
+    // A tick whose clock already used most of the lease before work starts (slow DB).
+    const slow: OrchestratorDeps = {
+      ...deps,
+      getRunForTick: async (id) => {
+        db.now += (orch.LEASE_SECONDS - 100) * 1000;
+        return deps.getRunForTick(id);
+      },
+    };
+    const r = await orch.advance(s.runId, {}, slow);
+    expect(r).toMatchObject({ state: "storytelling", done: false });
+    expect(transport.count("storyteller")).toBe(0);
   });
 
   it("two concurrent advance calls → one gets { leased: true }", async () => {
@@ -548,15 +692,70 @@ describe("orchestrator — user edits", () => {
     expect(db.runs.size).toBe(0);
   });
 
-  it("doc edited mid-run → validating sets error_code user_edited, doc untouched", async () => {
-    const { db, deps } = setup(photos150().slice(0, 40));
+  it("doc edited mid-run → validating sets error_code user_edited, doc untouched, book ai_status kept", async () => {
+    const { db, deps } = setup(photos150().slice(0, 40), { book: { ai_status: "partial" } });
     const s = await start(deps);
     await orch.advance(s.runId, {}, deps);
+    expect(db.book.ai_status).toBe("planning");
     const edited = editedDoc();
     db.book.doc = edited;
     const { last } = await runToEnd(deps, s.runId);
-    expect(last).toMatchObject({ state: "done", done: true, errorCode: "user_edited" });
+    expect(last).toMatchObject({ state: "done", done: true, errorCode: "user_edited", aiStatus: "failed" });
+    expect(db.run(s.runId)).toMatchObject({ ai_status: "failed", error_code: "user_edited" });
     expect(db.book.doc).toEqual(edited);
+    // the previous doc stayed → so does the previous book status (not 'failed')
+    expect(db.book.ai_status).toBe("partial");
+  });
+
+  it("unexpected exception with a previous album kept → book ai_status restored, not 'failed'", async () => {
+    const { db, deps } = setup(photos150().slice(0, 20), { book: { ai_status: "done" } });
+    const first = await start(deps);
+    await runToEnd(deps, first.runId);
+    const before = structuredClone(db.book.doc);
+    const s = await start(deps, "rebuild");
+    const broken: OrchestratorDeps = {
+      ...deps,
+      loadThumbBase64: async () => {
+        throw new Error("storage down");
+      },
+    };
+    db.photos.forEach((p) => (p.ai = null)); // force curator calls
+    const r = await orch.advance(s.runId, {}, broken);
+    expect(r).toMatchObject({ state: "failed", errorCode: "internal_error" });
+    expect(db.book.doc).toEqual(before);
+    expect(db.book.ai_status).toBe("done");
+  });
+
+  it("photos removed by the user during the run leave the AI plan; the rest of the plan is used", async () => {
+    const { db, deps } = setup(photos150().slice(0, 20));
+    const s = await start(deps);
+    await orch.advance(s.runId, {}, deps); // curation
+    await orch.advance(s.runId, {}, deps); // storyteller → validating → done
+    expect(db.run(s.runId).state).toBe("done");
+
+    // Again, with the removal between planning and saving (a write conflict makes the next tick reload).
+    const r = await start(deps, "rebuild");
+    let conflicts = 1;
+    let removed: string | null = null;
+    const flaky: OrchestratorDeps = {
+      ...deps,
+      writeDocIfReplaceable: async (...args) => {
+        if (conflicts-- > 0) {
+          const doc = args[1] as { pages: Array<{ slots: Array<{ photoId: string }> }> };
+          removed = doc.pages[0].slots[0].photoId;
+          const p = db.photos.find((x) => x.id === removed)!;
+          Object.assign(p, { user_override: true, status: "dropped", drop_reason: "user_removed" });
+          return { ok: false, reason: "conflict" };
+        }
+        return deps.writeDocIfReplaceable(...args);
+      },
+    };
+    const { last } = await runToEnd(flaky, r.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok", errorCode: null });
+    const doc = docOf(db);
+    expect(doc.meta).toMatchObject({ generator: "ai", runId: r.runId });
+    expect(removed).not.toBeNull();
+    expect(JSON.stringify(doc)).not.toContain(removed!);
   });
 
   it("write conflict → retried on the next tick", async () => {
@@ -570,6 +769,7 @@ describe("orchestrator — user edits", () => {
         return deps.writeDocIfReplaceable(...args);
       },
     };
+    expect(await orch.advance(s.runId, {}, flaky)).toMatchObject({ state: "storytelling", done: false });
     const first = await orch.advance(s.runId, {}, flaky);
     expect(first).toMatchObject({ state: "validating", done: false });
     const second = await orch.advance(s.runId, {}, flaky);
@@ -602,8 +802,52 @@ describe("orchestrator — limits", () => {
     const r = await orch.startRun({ bookId: BOOK, userId: USER, trigger: "rebuild" }, deps);
     expect(r).toEqual({ ok: false, error: "limit", limit: "rebuilds" });
     expect(transport.calls).toHaveLength(0);
-    // a plain build is still allowed
-    expect(await orch.startRun({ bookId: BOOK, userId: USER, trigger: "build" }, deps)).toMatchObject({ ok: true });
+    // a "build" on a book that already had a finished live AI run is a rebuild (cap bypass closed)
+    expect(await orch.startRun({ bookId: BOOK, userId: USER, trigger: "build" }, deps)).toEqual({
+      ok: false,
+      error: "limit",
+      limit: "rebuilds",
+    });
+    expect(db.createCalls.at(-1)).toMatchObject({ trigger: "rebuild" });
+  });
+
+  it("createRunCapped gets the plan's caps; enforce only for live; limit errors are mapped", async () => {
+    const free = setup(photos150().slice(0, 10), { mode: "live" });
+    await start(free.deps);
+    expect(free.db.createCalls[0]).toEqual({
+      bookId: BOOK,
+      userId: USER,
+      trigger: "build",
+      mode: "live",
+      dailyCap: 3,
+      rebuildCap: 2,
+      enforce: true,
+    });
+    const paid = setup(photos150().slice(0, 10), { mode: "live", book: { is_paid: true, max_pages: 100 } });
+    await start(paid.deps);
+    expect(paid.db.createCalls[0]).toMatchObject({ dailyCap: 20, rebuildCap: 10, enforce: true });
+    const replay = setup(photos150().slice(0, 10));
+    await start(replay.deps);
+    expect(replay.db.createCalls[0]).toMatchObject({ mode: "replay", enforce: false });
+    const off = setup(photos150().slice(0, 10), { mode: "off" });
+    await orch.startRun({ bookId: BOOK, userId: USER, trigger: "build" }, off.deps);
+    expect(off.db.createCalls[0]).toMatchObject({ mode: "rule", enforce: false });
+
+    for (const limit of ["daily_builds", "rebuilds"] as const) {
+      const x = setup(photos150().slice(0, 10), { mode: "live" });
+      const deps: OrchestratorDeps = { ...x.deps, createRunCapped: async () => ({ error: "limit", limit }) };
+      expect(await orch.startRun({ bookId: BOOK, userId: USER, trigger: "build" }, deps)).toEqual({ ok: false, error: "limit", limit });
+      expect(x.transport.calls).toHaveLength(0);
+    }
+  });
+
+  it("a build on a book whose album the AI made is stored as a rebuild (replay too)", async () => {
+    const { db, deps } = setup(photos150().slice(0, 10));
+    const s = await start(deps);
+    await runToEnd(deps, s.runId);
+    expect(docOf(db).meta?.generator).toBe("ai");
+    await start(deps, "build");
+    expect(db.createCalls.at(-1)).toMatchObject({ trigger: "rebuild", mode: "replay" });
   });
 
   it("paid book → 20/day", async () => {
@@ -641,6 +885,33 @@ describe("orchestrator — limits", () => {
     expect(transport.count("storyteller")).toBe(2);
     const used = JSON.stringify(docOf(db));
     expect(used).not.toContain(db.photos[3].id);
+  });
+});
+
+describe("orchestrator — AI mode changed during a run", () => {
+  it("replay run, server now resolves 'off' → finishes with the rule album, error_code mode_changed, no calls", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 30));
+    const s = await start(deps);
+    await orch.advance(s.runId, {}, deps); // some curation in replay
+    const before = transport.calls.length;
+    const off: OrchestratorDeps = { ...deps, resolveMode: () => "off" };
+    const r = await orch.advance(s.runId, {}, off);
+    expect(r).toMatchObject({ state: "done", done: true, errorCode: "mode_changed" });
+    expect(transport.calls.length).toBe(before);
+    expect(docOf(db).meta).toMatchObject({ generator: "rule", runId: s.runId });
+    expect(db.run(s.runId)).toMatchObject({ state: "done", error_code: "mode_changed" });
+    // every photo got a decision; the rest were rule-curated
+    expect(db.photos.filter((p) => p.status === "kept").length).toBeGreaterThan(0);
+  });
+
+  it("live run, key removed (mode now replay) → same, before any call", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 10), { mode: "live" });
+    const s = await start(deps);
+    const nowReplay: OrchestratorDeps = { ...deps, resolveMode: () => "replay" };
+    const r = await orch.advance(s.runId, {}, nowReplay);
+    expect(r).toMatchObject({ state: "done", aiStatus: "failed", errorCode: "mode_changed" });
+    expect(transport.calls).toHaveLength(0);
+    expect(docOf(db).meta?.generator).toBe("rule");
   });
 });
 
@@ -683,6 +954,20 @@ describe("orchestrator — AI off and curation guarantees", () => {
     expect(last).toMatchObject({ state: "done" });
     expect(db.photos.filter((p) => p.status === "kept")).toHaveLength(1);
     expect(docOf(db).pages.length).toBeGreaterThan(0);
+  });
+
+  it("prompt cache warm-up: the first tick sends batch 0 alone, then the rest of the wave in parallel", async () => {
+    const { transport, deps } = setup(photos150());
+    const s = await start(deps);
+    await orch.advance(s.runId, {}, deps);
+    const first = transport.calls.filter((c) => c.agent === "curator");
+    expect(first).toHaveLength(5);
+    expect(first[0].inFlight).toBe(1);
+    expect(first[1].inFlight).toBe(1); // batch 0 had finished before the others started
+    expect(Math.max(...first.slice(1).map((c) => c.inFlight))).toBe(4);
+    await orch.advance(s.runId, {}, deps);
+    const second = transport.calls.filter((c) => c.agent === "curator").slice(5);
+    expect(Math.max(...second.map((c) => c.inFlight))).toBe(5);
   });
 
   it("tick timing: one Curator wave per tick when calls are slow, Storyteller starts on a fresh tick", async () => {

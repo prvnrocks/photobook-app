@@ -83,6 +83,7 @@ describe("limitCopy", () => {
     expect(limitCopy("daily_builds", true, 20)).toBe("You've used today's 20 AI builds — try again tomorrow.");
     expect(limitCopy("rebuilds", false, 3)).toBe("No AI rebuilds left for this book.");
     expect(limitCopy("analysed_photos", false, 3)).toMatch(/more photos/);
+    expect(limitCopy("rate", false, 3)).toMatch(/wait a few seconds/);
   });
 });
 

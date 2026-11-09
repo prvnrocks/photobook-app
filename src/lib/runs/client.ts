@@ -21,7 +21,7 @@ export type RunState =
   | "done"
   | "failed";
 export type RunAiStatus = "ok" | "partial" | "failed";
-export type RunLimit = "daily_builds" | "rebuilds" | "analysed_photos";
+export type RunLimit = "daily_builds" | "rebuilds" | "analysed_photos" | "rate";
 
 export interface RunProgress {
   phase: RunState;
@@ -85,7 +85,7 @@ const RUN_STATES: readonly RunState[] = [
 ];
 const RUN_MODES: readonly RunMode[] = ["live", "replay", "rule"];
 const AI_STATUSES: readonly RunAiStatus[] = ["ok", "partial", "failed"];
-const LIMITS: readonly RunLimit[] = ["daily_builds", "rebuilds", "analysed_photos"];
+const LIMITS: readonly RunLimit[] = ["daily_builds", "rebuilds", "analysed_photos", "rate"];
 
 function isOneOf<T extends string>(list: readonly T[], v: unknown): v is T {
   return typeof v === "string" && (list as readonly string[]).includes(v);

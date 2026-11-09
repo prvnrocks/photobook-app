@@ -8,6 +8,10 @@ import "server-only";
 //
 // Errors carry only the operation and a Postgres code — never ids, step output
 // or photo content. Nothing here logs.
+//
+// Leases (0700): claimRun returns a lease token; releaseRun / checkpointRun
+// only act when the token still matches, so a stale tick (its lease expired
+// and another tick claimed the run) can't free or overwrite the new tick's work.
 import type { AgentStepRecord, RunTotalsDelta, StepLogger } from "@/lib/ai/run-step";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json, Tables } from "@/lib/supabase/database.types";
@@ -53,48 +57,82 @@ export type CreateRunInput = {
   mode: RunMode;
 };
 
+export type RunLimitKind = "daily_builds" | "rebuilds";
+
+export type CreateRunCappedInput = CreateRunInput & {
+  /** D-026 builds per user per rolling 24 h (live only). */
+  dailyCap: number;
+  /** Per-book maxRebuilds (src/lib/ai/limits.ts). */
+  rebuildCap: number;
+  /** true for live runs; replay / rule runs are never capped. */
+  enforce: boolean;
+};
+
+export type CreateRunCappedResult =
+  | { id: string }
+  | { error: "already_running" }
+  | { error: "limit"; limit: RunLimitKind };
+
 /**
- * Inserts a queued run. `{ error: 'already_running' }` when the book already
- * has an active (not done/failed) run — agent_runs_one_active_per_book_idx.
+ * Atomic per-user "check caps + insert" (create_agent_run_capped, 0700): a
+ * per-user advisory lock serialises starts, so two parallel starts on
+ * different books can't both slip under the daily cap (T16 #4).
+ *   daily_builds: live build/rebuild runs of the user in the last 24 h that
+ *     cost something or are still active (cost is only known after calls);
+ *   rebuilds: billed live rebuilds of the book that ended ok/partial;
+ *   already_running: the book already has an active run.
  */
-export async function createRun(
-  input: CreateRunInput,
-): Promise<{ id: string } | { error: "already_running" }> {
+export async function createRunCapped(input: CreateRunCappedInput): Promise<CreateRunCappedResult> {
   if (!isUuid(input.bookId) || !isUuid(input.userId)) {
     throw new AgentRunsQueryError("create run", "invalid_id");
   }
-  const { data, error } = await createAdminClient()
-    .from("agent_runs")
-    .insert({
-      book_id: input.bookId,
-      user_id: input.userId,
-      trigger: input.trigger,
-      mode: input.mode,
-    })
-    .select("id")
-    .single();
-  if (error) {
-    if (error.code === UNIQUE_VIOLATION) return { error: "already_running" };
-    throw new AgentRunsQueryError("create run", error.code);
-  }
-  return { id: data.id };
+  const cap = (n: number) => (Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0);
+  const { data, error } = await createAdminClient().rpc("create_agent_run_capped", {
+    p_book_id: input.bookId,
+    p_user_id: input.userId,
+    p_trigger: input.trigger,
+    p_mode: input.mode,
+    p_daily_cap: cap(input.dailyCap),
+    p_rebuild_cap: cap(input.rebuildCap),
+    p_enforce: input.enforce === true,
+  });
+  if (error) throw new AgentRunsQueryError("create run", error.code);
+  return parseCappedResult(data);
 }
 
-/** Takes the tick lease (claim_agent_run). false = someone holds it, or the run is done/failed/missing. */
-export async function claimRun(runId: string, leaseSeconds: number): Promise<boolean> {
-  if (!isUuid(runId)) return false;
+/** Validates the RPC's jsonb (never trust an untyped Json). Exported for tests. */
+export function parseCappedResult(data: unknown): CreateRunCappedResult {
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    const o = data as Record<string, unknown>;
+    if (typeof o.id === "string" && isUuid(o.id)) return { id: o.id };
+    if (o.error === "already_running") return { error: "already_running" };
+    if (o.error === "limit" && (o.limit === "daily_builds" || o.limit === "rebuilds")) {
+      return { error: "limit", limit: o.limit };
+    }
+  }
+  throw new AgentRunsQueryError("create run", "bad_result");
+}
+
+/**
+ * Takes the tick lease (claim_agent_run). Returns the new lease token, or null
+ * when someone holds the lease or the run is done/failed/missing.
+ */
+export async function claimRun(runId: string, leaseSeconds: number): Promise<string | null> {
+  if (!isUuid(runId)) return null;
   const { data, error } = await createAdminClient().rpc("claim_agent_run", {
     p_run_id: runId,
     p_lease_seconds: Math.floor(leaseSeconds),
   });
   if (error) throw new AgentRunsQueryError("claim run", error.code);
-  return data === true;
+  // gen types says `string`, but the function returns NULL when not claimable.
+  const token = data as string | null;
+  return typeof token === "string" && isUuid(token) ? token : null;
 }
 
-/** Releases the tick lease so the next advance can claim immediately. */
-export async function releaseRun(runId: string): Promise<void> {
-  if (!isUuid(runId)) return;
-  const { error } = await createAdminClient().rpc("release_agent_run", { p_run_id: runId });
+/** Releases the tick lease so the next advance can claim at once. No-op when `token` isn't the current lease. */
+export async function releaseRun(runId: string, token: string): Promise<void> {
+  if (!isUuid(runId) || !isUuid(token)) return;
+  const { error } = await createAdminClient().rpc("release_agent_run", { p_run_id: runId, p_token: token });
   if (error) throw new AgentRunsQueryError("release run", error.code);
 }
 
@@ -111,9 +149,15 @@ export type RunCheckpointPatch = {
 /** Error codes are clipped to the DB's 64 chars. */
 export const RUN_ERROR_CODE_MAX = 64;
 
-/** Persists a tick's progress. Only the given keys are written. No-op for an empty patch. */
-export async function checkpointRun(runId: string, patch: RunCheckpointPatch): Promise<void> {
+/**
+ * Persists a tick's progress — only while `token` is still the run's lease
+ * token (`UPDATE … WHERE id AND lease_token = token`). Returns false and writes
+ * nothing for a stale tick (lease expired and re-claimed, or released). Only
+ * the given keys are written; an empty patch just verifies the token.
+ */
+export async function checkpointRun(runId: string, token: string, patch: RunCheckpointPatch): Promise<boolean> {
   if (!isUuid(runId)) throw new AgentRunsQueryError("checkpoint run", "invalid_id");
+  if (!isUuid(token)) return false;
   const update: Record<string, unknown> = {};
   for (const key of [
     "state",
@@ -129,13 +173,27 @@ export async function checkpointRun(runId: string, patch: RunCheckpointPatch): P
     update.error_code =
       patch.error_code === null ? null : clipText(patch.error_code, RUN_ERROR_CODE_MAX, "");
   }
-  if (Object.keys(update).length === 0) return;
 
-  const { error } = await createAdminClient()
+  const admin = createAdminClient();
+  if (Object.keys(update).length === 0) {
+    const { data, error } = await admin
+      .from("agent_runs")
+      .select("id")
+      .eq("id", runId)
+      .eq("lease_token", token)
+      .maybeSingle();
+    if (error) throw new AgentRunsQueryError("checkpoint run", error.code);
+    return data !== null;
+  }
+
+  const { data, error } = await admin
     .from("agent_runs")
     .update(update as Partial<Tables<"agent_runs">>)
-    .eq("id", runId);
+    .eq("id", runId)
+    .eq("lease_token", token)
+    .select("id");
   if (error) throw new AgentRunsQueryError("checkpoint run", error.code);
+  return data.length === 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -175,19 +233,22 @@ function nonNegInt(n: number): number {
   return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
 }
 
+/** Extra attempts insertStep tries after a (run_id, step_key, attempt) conflict. */
+export const STEP_INSERT_CONFLICT_RETRIES = 3;
+
 /**
  * StepLogger bound to one run (admin client).
  *
- * insertStep: `INSERT … ON CONFLICT (run_id, step_key, attempt) DO NOTHING` —
- *   a resumed tick that re-logs an already logged step is ignored (idempotent).
+ * insertStep: plain INSERT — every real call gets its own row (T16 #2: a
+ *   resumed tick's re-run call is billed, so it must be logged). The
+ *   orchestrator passes unique attempts (nextAttempt); defensively, on a
+ *   (run_id, step_key, attempt) conflict the row is re-inserted with the next
+ *   free attempt, up to STEP_INSERT_CONFLICT_RETRIES times.
  *
  * addRunTotals: recomputes the run totals from agent_steps (sum) and writes
- *   them, instead of incrementing by `delta`. This makes it idempotent (a
- *   duplicate step adds nothing) and self-healing (any later call fixes a
- *   stale total). Calls from one logger are serialised; across processes the
- *   run lease (claimRun) guarantees a single writer. `delta` is ignored.
- *   No extra migration needed (an INSERT trigger on agent_steps would be the
- *   fully atomic alternative — optional follow-up).
+ *   them, instead of incrementing by `delta` — idempotent and self-healing.
+ *   Calls from one logger are serialised; across processes the run lease
+ *   (claimRun) guarantees a single writer. `delta` is ignored.
  */
 export function stepLogger(runId: string): StepLogger {
   let queue: Promise<unknown> = Promise.resolve();
@@ -202,13 +263,17 @@ export function stepLogger(runId: string): StepLogger {
       if (!isUuid(row.runId) || row.runId !== runId) {
         throw new AgentRunsQueryError("insert step", "run_mismatch");
       }
-      const { error } = await createAdminClient()
-        .from("agent_steps")
-        .upsert(stepRow(row), {
-          onConflict: "run_id,step_key,attempt",
-          ignoreDuplicates: true,
-        });
-      if (error) throw new AgentRunsQueryError("insert step", error.code);
+      const admin = createAdminClient();
+      const base = stepRow(row);
+      let attempt = base.attempt;
+      for (let i = 0; ; i++) {
+        const { error } = await admin.from("agent_steps").insert({ ...base, attempt });
+        if (!error) return;
+        if (error.code !== UNIQUE_VIOLATION || i >= STEP_INSERT_CONFLICT_RETRIES) {
+          throw new AgentRunsQueryError("insert step", error.code);
+        }
+        attempt = Math.max(attempt + 1, await nextAttempt(runId, base.step_key));
+      }
     },
 
     async addRunTotals(totalsRunId: string, delta: RunTotalsDelta): Promise<void> {
@@ -217,6 +282,22 @@ export function stepLogger(runId: string): StepLogger {
       await serial(() => syncRunTotals(runId));
     },
   };
+}
+
+/** max(attempt) + 1 of a step of the run (1 when it has none). Admin client. */
+export async function nextAttempt(runId: string, stepKey: string): Promise<number> {
+  if (!isUuid(runId)) throw new AgentRunsQueryError("next attempt", "invalid_id");
+  const { data, error } = await createAdminClient()
+    .from("agent_steps")
+    .select("attempt")
+    .eq("run_id", runId)
+    .eq("step_key", clipText(stepKey, STEP_LIMITS.stepKey, ""))
+    .order("attempt", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new AgentRunsQueryError("next attempt", error.code);
+  const max = Number(data?.attempt);
+  return Number.isFinite(max) && max >= 1 ? Math.floor(max) + 1 : 1;
 }
 
 export type RunTotals = { costUsd: number; inputTokens: number; outputTokens: number };
@@ -239,7 +320,8 @@ export async function syncRunTotals(runId: string): Promise<RunTotals> {
     input += Number(s.input_tokens) || 0;
     output += Number(s.output_tokens) || 0;
   }
-  const totals = { costUsd: Math.round(cost * 10_000) / 10_000, inputTokens: input, outputTokens: output };
+  // numeric(12, 6) since 0700 → round to 6 decimals (total == sum of steps).
+  const totals = { costUsd: Math.round(cost * 1_000_000) / 1_000_000, inputTokens: input, outputTokens: output };
 
   const { error: updateError } = await admin
     .from("agent_runs")
@@ -256,7 +338,11 @@ export async function syncRunTotals(runId: string): Promise<RunTotals> {
 // ---------------------------------------------------------------------------
 // Reads
 
-/** What the owner may see of a run (no cursor, no totals). */
+/**
+ * What the owner may see of a run (no cursor, no totals). Since 0700 these are
+ * also the only columns authenticated has SELECT on — selecting anything else
+ * with the RLS client fails with 42501.
+ */
 export type OwnerRun = Pick<
   Tables<"agent_runs">,
   | "id"
@@ -334,10 +420,15 @@ export async function getRunForTick(runId: string): Promise<RunForTick | null> {
   return data;
 }
 
+/** PostgREST `or` filter: billed, or still active (cost only known after the first call). */
+const BILLED_OR_ACTIVE = `total_cost_usd.gt.0,state.not.in.(${ACTIVE_RUN_EXCLUDED_STATES.join(",")})`;
+
 /**
- * Live runs a user started since `since` (ISO). Default triggers: build +
- * rebuild (the D-026 daily build cap). Counts failed runs too (they cost).
- * Runs of deleted books keep user_id, so they still count. Admin client.
+ * Live runs a user started since `since` (ISO) that count toward the D-026
+ * daily cap: billed (total_cost_usd > 0) or still active — the same rule as
+ * create_agent_run_capped, so a failed run that cost nothing doesn't use up a
+ * build (T16 #5). Default triggers: build + rebuild. Runs of deleted books
+ * keep user_id, so they still count. Admin client.
  */
 export async function countLiveRuns(input: {
   userId: string;
@@ -353,12 +444,19 @@ export async function countLiveRuns(input: {
     .eq("user_id", input.userId)
     .eq("mode", "live")
     .in("trigger", triggers)
-    .gte("started_at", input.since);
+    .gte("started_at", input.since)
+    .or(BILLED_OR_ACTIVE);
   if (error) throw new AgentRunsQueryError("count runs", error.code);
   return count ?? 0;
 }
 
-/** Live rebuild runs of the book, all time (per-book maxRebuilds). Admin client. */
+/** AI results that consume a rebuild / mark a book as AI-built. */
+const SUCCESSFUL_AI_STATUSES = ["ok", "partial"] as const;
+
+/**
+ * Successful billed live rebuilds of the book, all time (per-book maxRebuilds):
+ * total_cost_usd > 0 and ai_status ok/partial (T16 #5). Admin client.
+ */
 export async function countLiveRebuilds(bookId: string): Promise<number> {
   if (!isUuid(bookId)) return 0;
   const { count, error } = await createAdminClient()
@@ -366,9 +464,45 @@ export async function countLiveRebuilds(bookId: string): Promise<number> {
     .select("id", { count: "exact", head: true })
     .eq("book_id", bookId)
     .eq("mode", "live")
-    .eq("trigger", "rebuild");
+    .eq("trigger", "rebuild")
+    .gt("total_cost_usd", 0)
+    .in("ai_status", [...SUCCESSFUL_AI_STATUSES]);
   if (error) throw new AgentRunsQueryError("count rebuilds", error.code);
   return count ?? 0;
+}
+
+/**
+ * True when the book has a finished live run with ai_status ok/partial — any
+ * further run is a rebuild (T16 #3: the trigger is derived server-side). Admin client.
+ */
+export async function hasFinishedLiveAiRun(bookId: string): Promise<boolean> {
+  if (!isUuid(bookId)) return false;
+  const { count, error } = await createAdminClient()
+    .from("agent_runs")
+    .select("id", { count: "exact", head: true })
+    .eq("book_id", bookId)
+    .eq("mode", "live")
+    .eq("state", "done")
+    .in("ai_status", [...SUCCESSFUL_AI_STATUSES]);
+  if (error) throw new AgentRunsQueryError("check finished runs", error.code);
+  return (count ?? 0) > 0;
+}
+
+/** Newest run of the book visible to the signed-in user (RLS, owner columns only), or null. */
+export async function getLatestRunForBook(
+  bookId: string,
+): Promise<Pick<OwnerRun, "id" | "mode" | "state" | "started_at"> | null> {
+  if (!isUuid(bookId)) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("agent_runs")
+    .select("id, mode, state, started_at")
+    .eq("book_id", bookId)
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new AgentRunsQueryError("load latest run", error.code);
+  return data;
 }
 
 export type RunTrace = {

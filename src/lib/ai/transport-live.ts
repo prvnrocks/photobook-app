@@ -2,11 +2,17 @@ import "server-only";
 
 // Live transport: one Claude API call per agent step via messages.parse (structured output).
 // Never sends thinking/budget_tokens/temperature/top_p/top_k/prefill/tool_choice (400 on Opus 5.5).
+//
+// Retries / timeouts: every request is sent with `maxRetries: 0` — runAgentStep owns retries and
+// budgets them against the tick lease. The timeout is a hard wall-clock bound enforced with our
+// own AbortController (the SDK's `timeout` only guards the fetch until headers arrive, not the body
+// read); an abort we triggered is reported as TransportError "timeout".
 
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
 import {
+  AGENT_TIMEOUT_MS,
   AI_MODEL,
   AI_TIMEOUT_MS,
   SERVER_FALLBACK_BETA,
@@ -28,6 +34,7 @@ export interface LiveTransportOptions {
   /** Injected for tests; defaults to the lazy getAnthropic() singleton. */
   client?: ParseClient;
   useServerFallbacks?: boolean;
+  /** Overrides every request's timeout (tests). */
   timeoutMs?: number;
   now?: () => number;
 }
@@ -116,7 +123,15 @@ export class LiveTransport implements AgentTransport {
     assertRequestShape(req);
     const now = this.opts.now ?? Date.now;
     const useFallbacks = this.opts.useServerFallbacks ?? USE_SERVER_FALLBACKS;
-    const requestOptions = { timeout: this.opts.timeoutMs ?? AI_TIMEOUT_MS };
+    const timeoutMs = this.opts.timeoutMs ?? req.timeoutMs ?? AGENT_TIMEOUT_MS[req.agent] ?? AI_TIMEOUT_MS;
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+    // maxRetries 0 per request: retries belong to runAgentStep (lease-budgeted).
+    const requestOptions = { timeout: timeoutMs, maxRetries: 0, signal: controller.signal };
     const body = {
       model: req.model ?? AI_MODEL,
       max_tokens: req.maxTokens,
@@ -143,7 +158,10 @@ export class LiveTransport implements AgentTransport {
         latencyMs: Math.max(0, now() - t0),
       };
     } catch (e) {
+      if (timedOut) throw new TransportError("timeout", "request timed out");
       throw toTransportError(e);
+    } finally {
+      clearTimeout(timer);
     }
   }
 }

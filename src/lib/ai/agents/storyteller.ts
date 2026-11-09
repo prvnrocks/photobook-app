@@ -4,7 +4,7 @@
 // is a separate pure step (src/lib/ai/plan-to-doc.ts) so the orchestrator can do
 // "plan → validate → retry once with the issues → rule-based fallback".
 
-import { EFFORT } from "../client";
+import { AGENT_TIMEOUT_MS, EFFORT } from "../client";
 import { STORYTELLER_PROMPT_VERSION, storytellerSystem } from "../prompts/storyteller";
 import { runAgentStep, type RetryOptions, type StepLogger, type StepResult } from "../run-step";
 import { clipText } from "@/lib/text/clip";
@@ -175,6 +175,7 @@ export function buildStorytellerRequest(
     schema: AlbumPlanAiSchema,
     effort: EFFORT.storyteller,
     maxTokens: storytellerMaxTokens(kept.length),
+    timeoutMs: AGENT_TIMEOUT_MS.storyteller,
     scenarioMeta: { ...storytellerScenarioMeta(args.photos, args.book, args.aliasOf) },
   };
 }

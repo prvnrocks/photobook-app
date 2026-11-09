@@ -1,6 +1,7 @@
 "use client";
 
-// "Rebuild album" / "Try AI again" on the review screen → POST /api/ai/runs.
+// Secondary "Rebuild with AI" / "Try AI again" on the review screen (re-plans the whole story;
+// the free "Update album" bar is the primary way choices reach the album, D-028) → POST /api/ai/runs.
 // AI runs continue on /books/[id]/build; a rule run (AI off) finishes inside the request, so
 // we stay here and refresh.
 import { useState, useTransition } from "react";
@@ -8,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   REBUILD_LABELS,
-  rebuildsLeftLabel,
+  rebuildHint,
   rebuildTrigger,
   requestRebuild,
   type RebuildVariant,
@@ -71,8 +72,8 @@ export function RebuildButton({ bookId, variant, rebuildsLeft }: RebuildButtonPr
           ? "You've used all the AI rebuilds for this book. You can still keep or drop photos."
           : variant === "ai_off"
             ? "Builds the album again from the photos you kept."
-            : usesRebuild && rebuildsLeft !== null
-              ? `${rebuildsLeftLabel(rebuildsLeft)}. Your keep / drop choices stay as they are.`
+            : usesRebuild
+              ? rebuildHint(rebuildsLeft)
               : "Your keep / drop choices stay as they are."}
       </p>
 

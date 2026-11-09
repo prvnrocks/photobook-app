@@ -25,6 +25,7 @@ export type Database = {
           error_code: string | null
           finished_at: string | null
           id: string
+          lease_token: string | null
           lease_until: string | null
           mode: string
           progress: Json
@@ -46,6 +47,7 @@ export type Database = {
           error_code?: string | null
           finished_at?: string | null
           id?: string
+          lease_token?: string | null
           lease_until?: string | null
           mode: string
           progress?: Json
@@ -67,6 +69,7 @@ export type Database = {
           error_code?: string | null
           finished_at?: string | null
           id?: string
+          lease_token?: string | null
           lease_until?: string | null
           mode?: string
           progress?: Json
@@ -405,11 +408,23 @@ export type Database = {
     Functions: {
       claim_agent_run: {
         Args: { p_lease_seconds: number; p_run_id: string }
-        Returns: boolean
+        Returns: string
       }
       claim_finalize_run: {
         Args: { p_book_id: string; p_min_interval_seconds: number }
         Returns: number
+      }
+      create_agent_run_capped: {
+        Args: {
+          p_book_id: string
+          p_daily_cap: number
+          p_enforce: boolean
+          p_mode: string
+          p_rebuild_cap: number
+          p_trigger: string
+          p_user_id: string
+        }
+        Returns: Json
       }
       get_published_book: {
         Args: { p_slug: string }
@@ -427,7 +442,10 @@ export type Database = {
           title: string
         }[]
       }
-      release_agent_run: { Args: { p_run_id: string }; Returns: undefined }
+      release_agent_run: {
+        Args: { p_run_id: string; p_token: string }
+        Returns: undefined
+      }
       reserve_geocode_calls: {
         Args: { p_book_id: string; p_daily_cap: number; p_want: number }
         Returns: number

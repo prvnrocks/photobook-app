@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AppHeader } from "@/components/layout/AppHeader";
-import { RebuildButton } from "@/components/review/RebuildButton";
-import { ReviewGrid } from "@/components/review/ReviewGrid";
+import { ReviewBody } from "@/components/review/ReviewBody";
 import { buttonVariants } from "@/components/ui/button";
 import { resolveAiMode } from "@/lib/ai/client";
 import { limitsFor } from "@/lib/ai/limits";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { docOrigin } from "@/lib/book/replaceable";
 import { countLiveRebuilds, getActiveRunForBook } from "@/lib/db/agent-runs";
 import { getBookForRun, getMyBook } from "@/lib/db/books";
 import { listReviewPhotos } from "@/lib/db/photos";
@@ -15,13 +15,14 @@ import { getMyProfile } from "@/lib/db/profiles";
 import {
   aiPicked,
   BANNER_COPY,
+  docPhotoIds,
   rebuildsLeft,
   rebuildVariant,
   reviewBanner,
   type ReviewTilePhoto,
 } from "@/lib/review/ui";
 import { cn } from "@/lib/utils";
-import { togglePhotoAction } from "./actions";
+import { togglePhotoAction, updateAlbumAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,11 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
     thumbUrl: p.thumbUrl,
   }));
   const toggle = togglePhotoAction.bind(null, book.id);
+  const updateAlbum = updateAlbumAction.bind(null, book.id);
+  // D-028: the client compares choices with the album's photo ids (docOutOfSync in ui.ts is the
+  // same rule as a boolean). Only ids go to the client, never the rest of the doc.
+  const albumPhotoIds = docPhotoIds(book.doc);
+  const userEdited = docOrigin(book.doc).userEdited;
 
   return (
     <>
@@ -94,40 +100,29 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
           </div>
         ) : null}
 
-        {tiles.length === 0 ? (
-          <div className="flex flex-col gap-3 rounded-xl border border-dashed p-6 text-center" data-testid="review-no-photos">
-            <h1 className="text-xl font-semibold">No photos yet</h1>
-            <p className="text-base text-muted-foreground">Add some photos and we&apos;ll pick the best ones.</p>
-            <Link
-              href={`/books/${book.id}/upload`}
-              className={cn(buttonVariants({ variant: "default" }), "h-11 self-center px-4 text-base")}
-            >
-              Add photos
-            </Link>
-          </div>
-        ) : (
-          <ReviewGrid photos={tiles} aiUsed={aiPicked(aiStatus)} toggle={toggle} />
-        )}
-
-        <div className="flex flex-col gap-3 border-t pt-4">
-          {tiles.length > 0 && !activeRun ? (
-            <RebuildButton bookId={book.id} variant={variant} rebuildsLeft={left} />
-          ) : null}
-          <Link
-            href="/dashboard"
-            className={cn(buttonVariants({ variant: "default" }), "h-12 w-full text-base")}
-            data-testid="review-continue"
-          >
-            Continue
-          </Link>
-          <Link
-            href={`/books/${book.id}/upload`}
-            className={cn(buttonVariants({ variant: "ghost" }), "h-11 w-full text-base")}
-            data-testid="review-add-photos"
-          >
-            Add more photos
-          </Link>
-        </div>
+        <ReviewBody
+          bookId={book.id}
+          photos={tiles}
+          aiUsed={aiPicked(aiStatus)}
+          toggle={toggle}
+          updateAlbum={updateAlbum}
+          albumPhotoIds={albumPhotoIds}
+          userEdited={userEdited}
+          building={!!activeRun}
+          rebuild={activeRun ? null : { variant, rebuildsLeft: left }}
+          empty={
+            <div className="flex flex-col gap-3 rounded-xl border border-dashed p-6 text-center" data-testid="review-no-photos">
+              <h1 className="text-xl font-semibold">No photos yet</h1>
+              <p className="text-base text-muted-foreground">Add some photos and we&apos;ll pick the best ones.</p>
+              <Link
+                href={`/books/${book.id}/upload`}
+                className={cn(buttonVariants({ variant: "default" }), "h-11 self-center px-4 text-base")}
+              >
+                Add photos
+              </Link>
+            </div>
+          }
+        />
       </main>
     </>
   );

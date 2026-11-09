@@ -18,8 +18,16 @@ import "server-only";
 // Resumability: the cursor (agent_runs.cursor) records the run's alias table, Curator batches,
 // finished batches and Storyteller attempts, so a resumed tick never re-bills finished work.
 // A batch whose photos already carry current-version notes (written by a tick that died before
-// its checkpoint) is marked done without a call. Re-logged steps (same step_key + attempt) are
-// ignored by the step logger.
+// its checkpoint) is marked done without a call. Every model call gets a fresh attempt number
+// that is RESERVED in the cursor (checkpointed) before the call, so a call re-run after a dead
+// tick logs its own agent_steps row instead of colliding with the dead tick's (step_key, attempt).
+//
+// Leases: claimRun() returns a lease token; every checkpoint carries it. A checkpoint that
+// returns false means another tick took over (our lease expired): the tick stops at once, writes
+// nothing more, does not release, and returns { leased: true }. Side effects outside agent_runs
+// (photo curation, the doc, books.ai_status) are preceded by a checkpoint, so a stale tick stops
+// before them. A model call starts only when its timeout (+ margin) fits in the remaining lease;
+// runAgentStep retries only within the same bound (SDK retries are off).
 //
 // Privacy (D-027): nothing here logs. Error codes are short code strings; cursor / progress hold
 // ids, counts and codes only — except `cursor.album.plan` (AI titles) between storytelling and
@@ -35,12 +43,13 @@ import {
   type Occasion,
   type Tone,
 } from "@/lib/book/options";
-import { isEmptyDoc, isReplaceableDoc } from "@/lib/book/replaceable";
+import { docOrigin, isEmptyDoc, isReplaceableDoc } from "@/lib/book/replaceable";
 import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import type { BookDoc } from "@/lib/book/types";
 import * as agentRunsDb from "@/lib/db/agent-runs";
 import type {
-  CreateRunInput,
+  CreateRunCappedInput,
+  CreateRunCappedResult,
   OwnerRun,
   RunAiStatus,
   RunCheckpointPatch,
@@ -57,7 +66,7 @@ import type { Json } from "@/lib/supabase/database.types";
 import { curateBatch, needsCuration, CURATOR_PROMPT_VERSION } from "./agents/curator";
 import { MAX_RETRY_ISSUES, planAlbum } from "./agents/storyteller";
 import { buildBatches } from "./batches";
-import { AI_MODEL, CURATOR_CONCURRENCY, resolveAiMode, type AiMode } from "./client";
+import { AGENT_TIMEOUT_MS, AI_MODEL, CURATOR_CONCURRENCY, resolveAiMode, type AiMode } from "./client";
 import {
   ensureAtLeastOneKept,
   isDropReason,
@@ -66,9 +75,9 @@ import {
   type DropReason,
 } from "./fallback";
 import { limitsFor } from "./limits";
-import { planToDoc } from "./plan-to-doc";
+import { planToDoc, prunePlan } from "./plan-to-doc";
 import { STORYTELLER_PROMPT_VERSION } from "./prompts/storyteller";
-import type { StepErrorCode, StepLogger } from "./run-step";
+import type { RetryOptions, StepErrorCode, StepLogger } from "./run-step";
 import { AlbumPlanStrictSchema, MOODS, SCENES, type AlbumPlan } from "./schemas";
 import type { StoryAnalysis, StoryBook, StoryPhoto } from "./story";
 import { getTransport } from "./transport-factory";
@@ -77,20 +86,31 @@ import type { AgentName, AgentTransport } from "./transport";
 // ---------------------------------------------------------------------------------------------
 // Tunables (tick timing — see the HANDOFF in .agentos/runs/m3.md)
 
-/** DB lease per tick (claim_agent_run). Must exceed budget + one in-flight call (AI_TIMEOUT_MS). */
-export const LEASE_SECONDS = 90;
-/** Default work budget of one advance() call (route maxDuration should be ≥ 60 s). */
+/**
+ * DB lease per tick (claim_agent_run allows ≤ MAX_LEASE_SECONDS). Must cover the longest single
+ * request (the Storyteller, AGENT_TIMEOUT_MS.storyteller = 180 s) + LEASE_MARGIN_MS of DB work,
+ * started at the beginning of a tick. The advance route's maxDuration (300 s) must stay ≥ this.
+ */
+export const LEASE_SECONDS = 240;
+/** Upper bound accepted by claim_agent_run. */
+export const MAX_LEASE_SECONDS = 300;
+/** Time reserved after the last model call of a tick for writes + checkpoint + release. */
+export const LEASE_MARGIN_MS = 20_000;
+/**
+ * Soft work budget of one advance() call: no new Curator wave starts after
+ * CURATOR_WAVE_CUTOFF of it (keeps progress updates frequent). The hard bound is the lease.
+ */
 export const DEFAULT_TICK_BUDGET_MS = 40_000;
-/** No new Curator wave starts after this fraction of the budget (a wave can take ~AI_TIMEOUT). */
 export const CURATOR_WAVE_CUTOFF = 0.5;
-/** The Storyteller (one long call) starts only before this fraction, unless nothing ran yet. */
-export const STORYTELLER_START_CUTOFF = 0.25;
-/** Storyteller attempts per run (attempt 2 gets the validation issues of attempt 1). */
+/** Storyteller attempts per run, incl. attempts lost in dead ticks (attempt 2 gets the issues). */
 export const MAX_STORY_ATTEMPTS = 2;
+/** Calls per Curator batch, incl. calls lost in dead ticks; then the batch is rule-curated. */
+export const MAX_BATCH_ATTEMPTS = 2;
+/** Transport retries inside one agent step (only if they still fit the lease). */
+export const STEP_RETRIES = 1;
 /** Optimistic-lock conflicts tolerated when saving the doc (each retried on the next tick). */
 export const MAX_WRITE_CONFLICTS = 1;
 export const CURSOR_VERSION = 1;
-const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_FAILURE_CODES = 20;
 
 // ---------------------------------------------------------------------------------------------
@@ -106,21 +126,28 @@ export interface OrchestratorDeps {
   writeCuration(bookId: string, rows: CurationWrite[]): Promise<void>;
   loadThumbBase64(paths: string[]): Promise<Map<string, string>>;
   // runs
-  createRun(input: CreateRunInput): Promise<{ id: string } | { error: "already_running" }>;
-  claimRun(runId: string, leaseSeconds: number): Promise<boolean>;
-  releaseRun(runId: string): Promise<void>;
-  checkpointRun(runId: string, patch: RunCheckpointPatch): Promise<void>;
+  /** Atomic: one active run per book + daily / rebuild caps (when `enforce`) + insert. */
+  createRunCapped(input: CreateRunCappedInput): Promise<CreateRunCappedResult>;
+  /** Lease token, or null (lease held by another tick, or the run is finished / missing). */
+  claimRun(runId: string, leaseSeconds: number): Promise<string | null>;
+  /** No-op when `token` no longer holds the lease. */
+  releaseRun(runId: string, token: string): Promise<void>;
+  /** false = stale tick (lease lost): stop immediately, write nothing more. */
+  checkpointRun(runId: string, token: string, patch: RunCheckpointPatch): Promise<boolean>;
   getRunForTick(runId: string): Promise<RunForTick | null>;
   getRunForOwner(runId: string): Promise<OwnerRun | null>;
-  countLiveRuns(input: { userId: string; since: string; triggers?: RunTrigger[] }): Promise<number>;
-  countLiveRebuilds(bookId: string): Promise<number>;
+  /** The book already had a finished live AI run (→ a new "build" is really a rebuild). */
+  hasFinishedLiveAiRun(bookId: string): Promise<boolean>;
   stepLogger(runId: string): StepLogger;
   // AI
   resolveMode(): AiMode;
   transportFor(mode: "live" | "replay"): AgentTransport | null;
-  // clock (ms since epoch)
+  // clock (ms since epoch) + backoff sleep
   now(): number;
+  sleep(ms: number): Promise<void>;
 }
+
+export type { CreateRunCappedInput, CreateRunCappedResult };
 
 export function defaultDeps(): OrchestratorDeps {
   return {
@@ -130,18 +157,18 @@ export function defaultDeps(): OrchestratorDeps {
     listPhotosForCuration: photosDb.listPhotosForCuration,
     writeCuration: photosDb.writeCuration,
     loadThumbBase64: photosDb.loadThumbBase64,
-    createRun: agentRunsDb.createRun,
+    createRunCapped: agentRunsDb.createRunCapped,
     claimRun: agentRunsDb.claimRun,
     releaseRun: agentRunsDb.releaseRun,
     checkpointRun: agentRunsDb.checkpointRun,
     getRunForTick: agentRunsDb.getRunForTick,
     getRunForOwner: agentRunsDb.getRunForOwner,
-    countLiveRuns: agentRunsDb.countLiveRuns,
-    countLiveRebuilds: agentRunsDb.countLiveRebuilds,
+    hasFinishedLiveAiRun: agentRunsDb.hasFinishedLiveAiRun,
     stepLogger: agentRunsDb.stepLogger,
     resolveMode: () => resolveAiMode(),
     transportFor: (mode) => getTransport(mode),
     now: () => Date.now(),
+    sleep: (ms) => new Promise<void>((r) => setTimeout(r, ms)),
   };
 }
 
@@ -201,13 +228,15 @@ export interface RunCursor {
   /** Curator batches as alias numbers (1-based). Step key of batch i = `curator:${i}`. */
   batches: number[][];
   batchesDone: number[];
+  /** Model calls reserved per batch (index = batch). Checkpointed BEFORE each call. */
+  batchAttempts: number[];
   /** Batches answered by the model (usedAi). */
   batchesAi: number;
   /** Batches that fell back to rule decisions (refusal / error / no loadable thumbs). */
   aiFailures: number;
   photosCapped: number;
   curationDone: boolean;
-  /** Storyteller attempts made (0..MAX_STORY_ATTEMPTS). */
+  /** Storyteller attempts reserved (0..MAX_STORY_ATTEMPTS). Checkpointed BEFORE each call. */
   storyAttempt: number;
   /** Validation issues of the last Storyteller attempt (no user text). */
   issues: string[];
@@ -215,6 +244,8 @@ export interface RunCursor {
   /** Failure codes in order, e.g. "curator_refusal" (codes only). */
   failures: string[];
   writeConflicts: number;
+  /** books.ai_status before the run — restored when the run does not replace the doc. */
+  prevBookStatus: BookAiStatus;
 }
 
 function isObj(v: unknown): v is Record<string, unknown> {
@@ -244,6 +275,7 @@ export function parseCursor(raw: unknown): RunCursor | null {
     aliasIds: c.aliasIds,
     batches: c.batches as number[][],
     batchesDone: c.batchesDone,
+    batchAttempts: isIntArr(c.batchAttempts) ? c.batchAttempts : [],
     batchesAi: num("batchesAi"),
     aiFailures: num("aiFailures"),
     photosCapped: num("photosCapped"),
@@ -253,7 +285,20 @@ export function parseCursor(raw: unknown): RunCursor | null {
     album,
     failures: isStrArr(c.failures) ? c.failures : [],
     writeConflicts: num("writeConflicts"),
+    prevBookStatus: restorableStatus(c.prevBookStatus),
   };
+}
+
+/** A stored cursor nobody has written yet (startRun creates runs without one). */
+function isBlankCursor(raw: unknown): boolean {
+  return raw === null || raw === undefined || (isObj(raw) && Object.keys(raw).length === 0);
+}
+
+const SETTLED_BOOK_STATUSES: readonly BookAiStatus[] = ["idle", "done", "partial", "failed"];
+
+/** A settled books.ai_status to restore (in-progress values of a crashed run → 'idle'). */
+export function restorableStatus(v: unknown): BookAiStatus {
+  return (SETTLED_BOOK_STATUSES as readonly unknown[]).includes(v) ? (v as BookAiStatus) : "idle";
 }
 
 function emptyProgress(phase: RunState): RunProgress {
@@ -388,7 +433,7 @@ const aliasOfMap = (c: RunCursor) => new Map(c.aliasIds.map((id, i) => [id, `p${
 const aliasToIdMap = (c: RunCursor) => new Map(c.aliasIds.map((id, i) => [`p${i + 1}`, id]));
 
 /** Initial cursor: aliases over all ready photos; batches over photos needing analysis, capped. */
-export function initialCursor(photos: CurationPhoto[], maxAnalyzedPhotos: number): RunCursor {
+export function initialCursor(photos: CurationPhoto[], maxAnalyzedPhotos: number, prevBookStatus: unknown = "idle"): RunCursor {
   const sorted = [...photos].sort(byTime);
   const aliasIds = sorted.map((p) => p.id);
   const aliasNo = new Map(aliasIds.map((id, i) => [id, i + 1]));
@@ -404,6 +449,7 @@ export function initialCursor(photos: CurationPhoto[], maxAnalyzedPhotos: number
     aliasIds,
     batches,
     batchesDone: [],
+    batchAttempts: batches.map(() => 0),
     batchesAi: 0,
     aiFailures: 0,
     photosCapped: candidates.length - selected.length,
@@ -413,6 +459,7 @@ export function initialCursor(photos: CurationPhoto[], maxAnalyzedPhotos: number
     album: null,
     failures: [],
     writeConflicts: 0,
+    prevBookStatus: restorableStatus(prevBookStatus),
   };
 }
 
@@ -514,34 +561,59 @@ export async function startRun(input: StartInput, deps: OrchestratorDeps = defau
   const transport = aiMode === "off" ? null : deps.transportFor(aiMode);
   if (aiMode === "off" || !transport) return startRuleRun(input, book, deps);
 
-  // Limits BEFORE creating the run (CLAUDE.md: enforce limits before calling). Only live runs count.
+  // Limits are enforced atomically by createRunCapped BEFORE any model call (live runs only).
+  // The route derives the trigger server-side; defensively, a "build" on a book whose album the
+  // AI already made (or that already had a finished live AI run) counts as a rebuild.
+  const trigger = await effectiveTrigger(input.trigger, book, aiMode, deps);
   const limits = limitsFor(book.is_paid === true);
-  const since = new Date(deps.now() - DAY_MS).toISOString();
-  if ((await deps.countLiveRuns({ userId: input.userId, since })) >= limits.maxLiveBuildsPerUserPerDay) {
-    return { ok: false, error: "limit", limit: "daily_builds" };
-  }
-  if (input.trigger === "rebuild" && (await deps.countLiveRebuilds(book.id)) >= limits.maxRebuilds) {
-    return { ok: false, error: "limit", limit: "rebuilds" };
-  }
-
-  const photos = (await deps.listPhotosForCuration(book.id)).map(toCurationPhoto);
-  const created = await deps.createRun({ bookId: book.id, userId: input.userId, trigger: input.trigger, mode: aiMode });
-  if ("error" in created) return { ok: false, error: "already_running" };
-
-  const cursor = initialCursor(photos, limits.maxAnalyzedPhotos);
-  await deps.checkpointRun(created.id, {
-    state: "queued",
-    cursor: toJson(cursor),
-    progress: toJson(progressOf(cursor, "queued")),
+  const created = await deps.createRunCapped({
+    bookId: book.id,
+    userId: input.userId,
+    trigger,
+    mode: aiMode,
+    dailyCap: limits.maxLiveBuildsPerUserPerDay,
+    rebuildCap: limits.maxRebuilds,
+    enforce: aiMode === "live",
   });
+  if ("error" in created) {
+    return created.error === "limit"
+      ? { ok: false, error: "limit", limit: created.limit }
+      : { ok: false, error: "already_running" };
+  }
+  // No cursor yet: the first tick builds it from the photos as they are then (state 'queued').
   return { ok: true, runId: created.id, mode: aiMode, state: "queued" };
+}
+
+async function effectiveTrigger(
+  requested: StartInput["trigger"],
+  book: BookForRun,
+  mode: AiMode,
+  deps: OrchestratorDeps,
+): Promise<RunTrigger> {
+  if (requested === "rebuild") return "rebuild";
+  if (docOrigin(book.doc).generator === "ai") return "rebuild";
+  if (mode === "live" && (await deps.hasFinishedLiveAiRun(book.id))) return "rebuild";
+  return "build";
 }
 
 /** AI off (D-024): rule curation + rule album, synchronously. The run is logged with mode 'rule'. */
 async function startRuleRun(input: StartInput, book: BookForRun, deps: OrchestratorDeps): Promise<StartResult> {
-  const created = await deps.createRun({ bookId: book.id, userId: input.userId, trigger: input.trigger, mode: "rule" });
+  const limits = limitsFor(book.is_paid === true);
+  const created = await deps.createRunCapped({
+    bookId: book.id,
+    userId: input.userId,
+    trigger: input.trigger,
+    mode: "rule",
+    dailyCap: limits.maxLiveBuildsPerUserPerDay,
+    rebuildCap: limits.maxRebuilds,
+    enforce: false,
+  });
   if ("error" in created) return { ok: false, error: "already_running" };
   const runId = created.id;
+  // A run that cannot be claimed right after creation stays queued; the first advance() finishes
+  // it with the rule album (its mode never matches resolveAiMode() → 'mode_changed' path).
+  const token = await deps.claimRun(runId, LEASE_SECONDS);
+  if (!token) return { ok: true, runId, mode: "rule", state: "queued" };
   const progress = emptyProgress("done");
   try {
     const photos = (await deps.listPhotosForCuration(book.id)).map(toCurationPhoto);
@@ -557,26 +629,28 @@ async function startRuleRun(input: StartInput, book: BookForRun, deps: Orchestra
     if (!fresh) throw new OrchestratorError("not_found");
     const w = await deps.writeDocIfReplaceable(book.id, toJson(doc), doc.pages.length, { updatedAt: fresh.updated_at });
     const errorCode = w.ok ? null : w.reason;
-    await deps.setBookAiStatus(book.id, "idle");
-    await deps.checkpointRun(runId, {
+    if (w.ok) await deps.setBookAiStatus(book.id, "idle");
+    const saved = await deps.checkpointRun(runId, token, {
       state: "done",
       ai_status: null,
       error_code: errorCode,
       progress: toJson(progress),
       finished_at: new Date(deps.now()).toISOString(),
     });
-    return { ok: true, runId, mode: "rule", state: "done" };
+    return { ok: true, runId, mode: "rule", state: saved ? "done" : "queued" };
   } catch (e) {
-    await deps
-      .checkpointRun(runId, {
+    const saved = await deps
+      .checkpointRun(runId, token, {
         state: "failed",
         ai_status: null,
         error_code: errorCodeOf(e),
         progress: toJson(emptyProgress("failed")),
         finished_at: new Date(deps.now()).toISOString(),
       })
-      .catch(() => undefined);
-    return { ok: true, runId, mode: "rule", state: "failed" };
+      .catch(() => false);
+    return { ok: true, runId, mode: "rule", state: saved ? "failed" : "queued" };
+  } finally {
+    await deps.releaseRun(runId, token).catch(() => undefined);
   }
 }
 
@@ -589,18 +663,23 @@ export async function advance(
   deps: OrchestratorDeps = defaultDeps(),
 ): Promise<AdvanceResult> {
   const budgetMs = opts.budgetMs ?? DEFAULT_TICK_BUDGET_MS;
-  const claimed = await deps.claimRun(runId, LEASE_SECONDS);
-  if (!claimed) {
+  // Taken BEFORE the claim: our view of the lease end is never later than the DB's.
+  const t0 = deps.now();
+  const token = await deps.claimRun(runId, LEASE_SECONDS);
+  if (!token) {
     // Lease held by another tick — or the run is finished / missing (claim refuses those too).
     const run = await deps.getRunForTick(runId);
     if (!run) return { notFound: true };
     if (isFinished(run.state)) return finishedResult(run);
     return { leased: true };
   }
+  let result: AdvanceResult | null = null;
   try {
-    return await tick(runId, budgetMs, deps);
+    result = await tick(runId, token, t0, budgetMs, deps);
+    return result;
   } finally {
-    await deps.releaseRun(runId).catch(() => undefined);
+    // A stale tick (lease taken over) must not touch the new holder's lease.
+    if (!result || !("leased" in result)) await deps.releaseRun(runId, token).catch(() => undefined);
   }
 }
 
@@ -615,24 +694,35 @@ function finishedResult(run: Pick<RunForTick, "state" | "progress" | "ai_status"
   };
 }
 
+/** Thrown when a checkpoint reports that our lease was taken over. Never escapes tick(). */
+class StaleLeaseError extends Error {
+  constructor() {
+    super("orchestrator: stale lease");
+    this.name = "StaleLeaseError";
+  }
+}
+
 interface Tick {
   deps: OrchestratorDeps;
   runId: string;
+  token: string;
   run: RunForTick;
   book: BookForRun;
   photos: CurationPhoto[];
   cursor: RunCursor;
   state: RunState;
-  transport: AgentTransport;
+  /** null only on the mode-changed path (no model call is made). */
+  transport: AgentTransport | null;
   logger: StepLogger;
   t0: number;
   budgetMs: number;
+  /** End of our lease on the deps clock. */
+  leaseEnd: number;
   /** A model call (wave / Storyteller) already ran in this tick. */
   heavyDone: boolean;
 }
 
-async function tick(runId: string, budgetMs: number, deps: OrchestratorDeps): Promise<AdvanceResult> {
-  const t0 = deps.now();
+async function tick(runId: string, token: string, t0: number, budgetMs: number, deps: OrchestratorDeps): Promise<AdvanceResult> {
   const run = await deps.getRunForTick(runId);
   if (!run) return { notFound: true };
   if (isFinished(run.state)) return finishedResult(run);
@@ -641,24 +731,36 @@ async function tick(runId: string, budgetMs: number, deps: OrchestratorDeps): Pr
   try {
     const book = run.book_id ? await deps.getBookForRun(run.book_id) : null;
     if (!book || book.user_id !== run.user_id) {
-      return await finishRun(deps, runId, null, null, {
+      return await finishRun(deps, runId, token, null, null, {
         state: "failed",
         aiStatus: "failed",
         errorCode: "not_found",
         progress: { ...parseProgress(run.progress, "failed"), phase: "failed" },
+        bookStatus: null,
       });
     }
-    const cursor = parseCursor(run.cursor);
-    if (!cursor) throw new OrchestratorError("bad_cursor");
-    if (run.mode !== "live" && run.mode !== "replay") throw new OrchestratorError("bad_mode");
-    const transport = deps.transportFor(run.mode);
-    if (!transport) throw new OrchestratorError("ai_unavailable");
-
     const photos = (await deps.listPhotosForCuration(book.id)).map(toCurationPhoto);
+    let cursor = parseCursor(run.cursor);
+    if (!cursor && run.state === "queued" && isBlankCursor(run.cursor)) {
+      cursor = initialCursor(photos, limitsFor(book.is_paid === true).maxAnalyzedPhotos, book.ai_status);
+    }
+    if (!cursor) throw new OrchestratorError("bad_cursor");
     extendAliases(cursor, photos);
+
+    // The AI mode may have changed since the run started (key removed, AI_MODE switched,
+    // replay run seen by a production server): never call a transport the run was not made for.
+    const modeChanged = deps.resolveMode() !== run.mode;
+    let transport: AgentTransport | null = null;
+    if (!modeChanged) {
+      if (run.mode !== "live" && run.mode !== "replay") throw new OrchestratorError("bad_mode");
+      transport = deps.transportFor(run.mode);
+      if (!transport) throw new OrchestratorError("ai_unavailable");
+    }
+
     ctx = {
       deps,
       runId,
+      token,
       run,
       book,
       photos,
@@ -668,27 +770,51 @@ async function tick(runId: string, budgetMs: number, deps: OrchestratorDeps): Pr
       logger: deps.stepLogger(runId),
       t0,
       budgetMs,
+      leaseEnd: t0 + LEASE_SECONDS * 1000,
       heavyDone: false,
     };
+    if (modeChanged) return await finishWithRuleAlbum(ctx, "mode_changed");
     return await loop(ctx);
   } catch (e) {
-    return crash(deps, run, ctx, errorCodeOf(e));
+    if (e instanceof StaleLeaseError) return { leased: true };
+    return crash(deps, run, token, ctx, errorCodeOf(e));
   }
 }
 
 const elapsed = (c: Tick) => c.deps.now() - c.t0;
 
+/** Does a request with this timeout (plus the write margin) still fit in our lease? */
+const callFits = (c: Tick, timeoutMs: number) => c.deps.now() + timeoutMs + LEASE_MARGIN_MS <= c.leaseEnd;
+
+/** Retry policy for agent steps: retries only while they fit the lease (runAgentStep checks). */
+function stepRetry(c: Tick): RetryOptions {
+  return { retries: STEP_RETRIES, deadline: c.leaseEnd - LEASE_MARGIN_MS, sleep: c.deps.sleep };
+}
+
+function needTransport(c: Tick): AgentTransport {
+  if (!c.transport) throw new OrchestratorError("ai_unavailable");
+  return c.transport;
+}
+
+/** Checkpoint with our lease token; throws StaleLeaseError when the lease was taken over. */
 async function save(c: Tick, extra: RunCheckpointPatch = {}): Promise<void> {
-  await c.deps.checkpointRun(c.runId, {
+  const ok = await c.deps.checkpointRun(c.runId, c.token, {
     state: c.state,
     cursor: toJson(c.cursor),
     progress: toJson(progressOf(c.cursor, c.state)),
     ...extra,
   });
+  if (!ok) throw new StaleLeaseError();
 }
 
 function yieldTick(c: Tick): AdvanceResult {
   return { state: c.state, progress: progressOf(c.cursor, c.state), done: false, aiStatus: null, errorCode: null };
+}
+
+/** Wave size: batch 0 alone first (writes the prompt cache), then the rest of the first wave. */
+function waveSize(batchesDone: number): number {
+  if (batchesDone === 0) return 1;
+  return batchesDone < CURATOR_CONCURRENCY ? CURATOR_CONCURRENCY - batchesDone : CURATOR_CONCURRENCY;
 }
 
 async function loop(c: Tick): Promise<AdvanceResult> {
@@ -696,8 +822,8 @@ async function loop(c: Tick): Promise<AdvanceResult> {
     switch (c.state) {
       case "queued":
         c.state = "curating";
-        await c.deps.setBookAiStatus(c.book.id, "analyzing");
         await save(c);
+        await c.deps.setBookAiStatus(c.book.id, "analyzing");
         continue;
 
       case "curating": {
@@ -705,18 +831,20 @@ async function loop(c: Tick): Promise<AdvanceResult> {
         const pending = c.cursor.batches.map((_, i) => i).filter((i) => !done.has(i));
         if (pending.length) {
           if (c.heavyDone && elapsed(c) > c.budgetMs * CURATOR_WAVE_CUTOFF) return yieldTick(c);
-          await curatorWave(c, pending.slice(0, CURATOR_CONCURRENCY));
+          if (!callFits(c, AGENT_TIMEOUT_MS.curator)) return yieldTick(c);
+          await curatorWave(c, pending.slice(0, waveSize(done.size)));
           continue;
         }
         await finishCuration(c);
         c.state = "storytelling";
-        await c.deps.setBookAiStatus(c.book.id, "planning");
         await save(c);
+        await c.deps.setBookAiStatus(c.book.id, "planning");
         continue;
       }
 
       case "storytelling":
-        if (c.heavyDone && elapsed(c) > c.budgetMs * STORYTELLER_START_CUTOFF) return yieldTick(c);
+        // The Storyteller is one long request: it runs alone, at the start of its own tick.
+        if (c.heavyDone || !callFits(c, AGENT_TIMEOUT_MS.storyteller)) return yieldTick(c);
         await storytellerStep(c);
         continue;
 
@@ -742,35 +870,59 @@ async function loop(c: Tick): Promise<AdvanceResult> {
   }
 }
 
+type WaveOutcome = { bi: number; result: Awaited<ReturnType<typeof curateBatch>> | null };
+
 async function curatorWave(c: Tick, indices: number[]): Promise<void> {
+  const transport = needTransport(c);
   const byId = new Map(c.photos.map((p) => [p.id, p]));
   const aliasOf = aliasOfMap(c.cursor);
   const occasion = asOccasion(c.book.occasion);
 
-  const outcomes = await Promise.all(
-    indices.map(async (bi) => {
-      const batch = c.cursor.batches[bi]
-        .map((n) => byId.get(c.cursor.aliasIds[n - 1]))
-        .filter((p): p is CurationPhoto => p !== undefined);
-      // Photos gone, or notes already written by a tick that died before its checkpoint.
-      if (batch.length === 0 || batch.every((p) => !needsCuration(p))) return { bi, result: null };
-      const result = await curateBatch({
+  // 1. Plan the wave and reserve one attempt per real call (checkpointed before any call).
+  const outcomes: WaveOutcome[] = [];
+  const calls: Array<{ bi: number; attempt: number; batch: CurationPhoto[] }> = [];
+  for (const bi of indices) {
+    const batch = c.cursor.batches[bi]
+      .map((n) => byId.get(c.cursor.aliasIds[n - 1]))
+      .filter((p): p is CurationPhoto => p !== undefined);
+    // Photos gone, or notes already written by a tick that died before its checkpoint.
+    if (batch.length === 0 || batch.every((p) => !needsCuration(p))) {
+      outcomes.push({ bi, result: null });
+      continue;
+    }
+    const used = c.cursor.batchAttempts[bi] ?? 0;
+    if (used >= MAX_BATCH_ATTEMPTS) {
+      outcomes.push({ bi, result: ruleBatchResult(batch, "attempts") });
+      continue;
+    }
+    c.cursor.batchAttempts[bi] = used + 1;
+    calls.push({ bi, attempt: used + 1, batch });
+  }
+  if (calls.length) await save(c);
+
+  // 2. The calls (parallel).
+  const results = await Promise.all(
+    calls.map(async ({ bi, attempt, batch }) => ({
+      bi,
+      result: await curateBatch({
         runId: c.runId,
         stepKey: `curator:${bi}`,
-        attempt: 1,
+        attempt,
         batch,
         occasion,
         aliasOf,
-        transport: c.transport,
+        transport,
         logger: c.logger,
         deps: { loadThumbs: c.deps.loadThumbBase64 },
-        retry: { retries: 0 },
-      });
-      return { bi, result };
-    }),
+        retry: stepRetry(c),
+      }),
+    })),
   );
-  c.heavyDone = true;
+  outcomes.push(...results);
+  if (calls.length) c.heavyDone = true;
 
+  // 3. Still our lease? Only then touch photos.
+  await save(c);
   const rows: CurationWrite[] = [];
   for (const { result } of outcomes) {
     if (!result) continue;
@@ -786,7 +938,7 @@ async function curatorWave(c: Tick, indices: number[]): Promise<void> {
     applyRows(c.photos, rows);
   }
 
-  for (const { bi, result } of outcomes) {
+  for (const { bi, result } of outcomes.sort((x, y) => x.bi - y.bi)) {
     c.cursor.batchesDone.push(bi);
     if (!result) continue;
     if (result.usedAi) c.cursor.batchesAi++;
@@ -798,13 +950,32 @@ async function curatorWave(c: Tick, indices: number[]): Promise<void> {
   await save(c);
 }
 
-/** Book-level: rule-curate leftovers (over the cap / added later), then guarantee ≥ 1 kept. */
+/** Rule decisions for a whole batch without a call (its attempts were used up by dead ticks). */
+function ruleBatchResult(batch: CurationPhoto[], code: "attempts"): WaveOutcome["result"] {
+  const rule = ruleCurate(batch, { ensureOneKept: false });
+  const results = new Map(
+    batch.map((p) => {
+      const d = rule.get(p.id)!;
+      return [p.id, { keep: d.keep, dropReason: d.dropReason, ai: null, source: "rule" as const }];
+    }),
+  );
+  return { results, usedAi: false, failure: { code: code as StepErrorCode, retryable: false }, costUsd: 0 };
+}
+
+/**
+ * Book-level: rule-curate photos still needing curation that no finished batch covered (over the
+ * cap, added later, or — on the mode-changed path — in batches never sent), then ≥ 1 kept.
+ */
 async function finishCuration(c: Tick): Promise<void> {
   if (c.cursor.curationDone) return;
-  const batched = new Set(c.cursor.batches.flat().map((n) => c.cursor.aliasIds[n - 1]));
-  const leftovers = c.photos.filter((p) => needsCuration(p) && !batched.has(p.id));
+  const done = new Set(c.cursor.batchesDone);
+  const covered = new Set(
+    c.cursor.batches.flatMap((b, i) => (done.has(i) ? b : [])).map((n) => c.cursor.aliasIds[n - 1]),
+  );
+  const leftovers = c.photos.filter((p) => needsCuration(p) && !covered.has(p.id));
   const rows = ruleCurationRows(c.photos, leftovers);
   if (rows.length) {
+    await save(c);
     await c.deps.writeCuration(c.book.id, rows);
     applyRows(c.photos, rows);
   }
@@ -819,11 +990,19 @@ function retryableStoryFailure(code: StepErrorCode, retryable: boolean): boolean
 async function storytellerStep(c: Tick): Promise<void> {
   const attempt = c.cursor.storyAttempt + 1;
   if (attempt > MAX_STORY_ATTEMPTS) {
-    c.cursor.album = c.cursor.album ?? { kind: "rule", reason: "storyteller_attempts" };
+    if (!c.cursor.album) {
+      pushFailure(c.cursor, "storyteller_attempts");
+      c.cursor.album = { kind: "rule", reason: "storyteller_attempts" };
+    }
     c.state = "captioning";
     await save(c);
     return;
   }
+  const transport = needTransport(c);
+  // Reserve the attempt before the call: a resumed tick logs attempt + 1, never a duplicate.
+  c.cursor.storyAttempt = attempt;
+  await save(c);
+
   const photos = storyPhotosOf(c.photos);
   const book = storyBookOf(c.book);
   const result = await planAlbum({
@@ -833,13 +1012,12 @@ async function storytellerStep(c: Tick): Promise<void> {
     photos,
     book,
     aliasOf: aliasOfMap(c.cursor),
-    transport: c.transport,
+    transport,
     logger: c.logger,
     previousIssues: c.cursor.issues.length ? c.cursor.issues : undefined,
-    retry: { retries: 0 },
+    retry: stepRetry(c),
   });
   c.heavyDone = true;
-  c.cursor.storyAttempt = attempt;
 
   let failure: string | null = null;
   let retry = false;
@@ -867,7 +1045,7 @@ async function storytellerStep(c: Tick): Promise<void> {
 
   if (failure) {
     if (retry && attempt < MAX_STORY_ATTEMPTS) {
-      await save(c); // stay in storytelling; attempt 2 runs now or on the next tick
+      await save(c); // stay in storytelling; attempt 2 runs on the next tick (alone)
       return;
     }
     pushFailure(c.cursor, failure);
@@ -906,14 +1084,28 @@ function computeAiStatus(cursor: RunCursor, aiPlanUsed: boolean): RunAiStatus {
   return "failed";
 }
 
+/** Ends the run without further model calls: rule curation for the rest + the rule album. */
+async function finishWithRuleAlbum(c: Tick, reason: "mode_changed"): Promise<AdvanceResult> {
+  await finishCuration(c);
+  c.cursor.album = { kind: "rule", reason };
+  c.cursor.issues = [];
+  c.state = "validating";
+  await save(c);
+  return validateAndSave(c);
+}
+
 async function validateAndSave(c: Tick): Promise<AdvanceResult> {
   let doc: BookDoc | null = null;
   let aiPlanUsed = false;
   const album = c.cursor.album;
   if (album?.kind === "ai" && album.plan) {
-    const out = planToDoc(album.plan, {
-      aliasToId: aliasToIdMap(c.cursor),
-      photos: storyPhotosOf(c.photos),
+    const photos = storyPhotosOf(c.photos);
+    const aliasToId = aliasToIdMap(c.cursor);
+    // Photos the user removed while the run was going leave the plan; the rest of it is kept.
+    const pruned = prunePlan(album.plan, { aliasToId, photos });
+    const out = planToDoc(pruned.plan, {
+      aliasToId,
+      photos,
       book: storyBookOf(c.book),
       runId: c.runId,
       generatorVersion: STORYTELLER_PROMPT_VERSION,
@@ -932,6 +1124,7 @@ async function validateAndSave(c: Tick): Promise<AdvanceResult> {
     if (docIssues(doc, c.photos, c.book).length) throw new OrchestratorError("rule_album_invalid");
   }
 
+  await save(c); // lease check right before the doc write
   const fresh = await c.deps.getBookForRun(c.book.id);
   const w: WriteDocResult = fresh
     ? await c.deps.writeDocIfReplaceable(c.book.id, toJson(doc), doc.pages.length, { updatedAt: fresh.updated_at })
@@ -945,33 +1138,50 @@ async function validateAndSave(c: Tick): Promise<AdvanceResult> {
 
   const progress = progressOf(c.cursor, "done");
   if (!w.ok) {
+    // The previous doc stays → so does the book's previous ai_status (the run keeps the code).
     const state: RunState = w.reason === "not_found" ? "failed" : "done";
     const errorCode = w.reason === "conflict" ? "write_conflict" : w.reason;
-    return finishRun(c.deps, c.runId, w.reason === "not_found" ? null : c.book.id, c.cursor, {
+    return finishRun(c.deps, c.runId, c.token, w.reason === "not_found" ? null : c.book.id, c.cursor, {
       state,
       aiStatus: "failed",
       errorCode,
       progress: { ...progress, phase: state },
+      bookStatus: c.cursor.prevBookStatus,
     });
   }
   const aiStatus = computeAiStatus(c.cursor, aiPlanUsed);
-  const errorCode = aiStatus === "ok" ? null : (c.cursor.failures[0] ?? null);
-  return finishRun(c.deps, c.runId, c.book.id, c.cursor, { state: "done", aiStatus, errorCode, progress });
+  const forced = album?.kind === "rule" && album.reason === "mode_changed" ? "mode_changed" : null;
+  const errorCode = forced ?? (aiStatus === "ok" ? null : (c.cursor.failures[0] ?? null));
+  return finishRun(c.deps, c.runId, c.token, c.book.id, c.cursor, {
+    state: "done",
+    aiStatus,
+    errorCode,
+    progress,
+    bookStatus: bookStatusOf(aiStatus),
+  });
 }
 
 async function finishRun(
   deps: OrchestratorDeps,
   runId: string,
+  token: string,
   bookId: string | null,
   cursor: RunCursor | null,
-  out: { state: RunState; aiStatus: RunAiStatus; errorCode: string | null; progress: RunProgress },
+  out: {
+    state: RunState;
+    aiStatus: RunAiStatus;
+    errorCode: string | null;
+    progress: RunProgress;
+    /** books.ai_status to set (null = leave as is). */
+    bookStatus: BookAiStatus | null;
+  },
 ): Promise<AdvanceResult> {
   // The AI plan (titles) is dropped from the cursor once the run is over (privacy).
   const finalCursor = cursor
     ? { ...cursor, album: cursor.album?.kind === "ai" ? { kind: "ai" as const } : cursor.album }
     : undefined;
-  if (bookId) await deps.setBookAiStatus(bookId, bookStatusOf(out.aiStatus));
-  await deps.checkpointRun(runId, {
+  if (bookId && out.bookStatus) await deps.setBookAiStatus(bookId, out.bookStatus);
+  const ok = await deps.checkpointRun(runId, token, {
     state: out.state,
     ai_status: out.aiStatus,
     error_code: out.errorCode,
@@ -979,17 +1189,40 @@ async function finishRun(
     ...(finalCursor ? { cursor: toJson(finalCursor) } : {}),
     finished_at: new Date(deps.now()).toISOString(),
   });
+  if (!ok) throw new StaleLeaseError();
   return { state: out.state, progress: out.progress, done: true, aiStatus: out.aiStatus, errorCode: out.errorCode };
 }
 
 /**
- * Unexpected exception: never block the user. If the book has no album yet, write the rule
- * album; then mark the run failed. Every step is best effort.
+ * Unexpected exception: never block the user. Mark the run failed (with our lease — a stale tick
+ * stops here), then, if the book has no album yet, write the rule album. The book shows 'failed'
+ * only when it has no other album; a kept previous doc keeps its previous ai_status. Every step
+ * after the checkpoint is best effort.
  */
-async function crash(deps: OrchestratorDeps, run: RunForTick, ctx: Tick | null, code: string): Promise<AdvanceResult> {
+async function crash(
+  deps: OrchestratorDeps,
+  run: RunForTick,
+  token: string,
+  ctx: Tick | null,
+  code: string,
+): Promise<AdvanceResult> {
   const progress = { ...(ctx ? progressOf(ctx.cursor, "failed") : parseProgress(run.progress, "failed")), phase: "failed" as const };
+  const cursor = ctx?.cursor;
+  const saved = await deps
+    .checkpointRun(run.id, token, {
+      state: "failed",
+      ai_status: "failed",
+      error_code: code,
+      progress: toJson(progress),
+      ...(cursor ? { cursor: toJson({ ...cursor, album: null }) } : {}),
+      finished_at: new Date(deps.now()).toISOString(),
+    })
+    .catch(() => null);
+  if (saved === false) return { leased: true };
+
   const bookId = run.book_id;
   if (bookId) {
+    let status: BookAiStatus = "failed";
     try {
       const book = await deps.getBookForRun(bookId);
       if (book && isEmptyDoc(book.doc)) {
@@ -998,23 +1231,14 @@ async function crash(deps: OrchestratorDeps, run: RunForTick, ctx: Tick | null, 
         if (docIssues(doc, photos, book).length === 0) {
           await deps.writeDocIfReplaceable(bookId, toJson(doc), doc.pages.length, { updatedAt: book.updated_at });
         }
+      } else if (book) {
+        status = cursor ? cursor.prevBookStatus : restorableStatus(book.ai_status);
       }
     } catch {
       // best effort
     }
-    await deps.setBookAiStatus(bookId, "failed").catch(() => undefined);
+    await deps.setBookAiStatus(bookId, status).catch(() => undefined);
   }
-  const cursor = ctx?.cursor;
-  await deps
-    .checkpointRun(run.id, {
-      state: "failed",
-      ai_status: "failed",
-      error_code: code,
-      progress: toJson(progress),
-      ...(cursor ? { cursor: toJson({ ...cursor, album: null }) } : {}),
-      finished_at: new Date(deps.now()).toISOString(),
-    })
-    .catch(() => undefined);
   return { state: "failed", progress, done: true, aiStatus: "failed", errorCode: code };
 }
 

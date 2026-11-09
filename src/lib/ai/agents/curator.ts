@@ -14,7 +14,7 @@
 //  - Privacy (D-027): the step log holds only alias → keep/dropReason/quality/scene/coverWorthy.
 
 import { z } from "zod";
-import { EFFORT } from "../client";
+import { AGENT_TIMEOUT_MS, EFFORT } from "../client";
 import {
   aspectRatio,
   compareRuleRank,
@@ -246,6 +246,7 @@ export async function curateBatch(args: CurateBatchArgs): Promise<CurateBatchRes
       schema: CuratorBatchAiSchema,
       effort: EFFORT.curator,
       maxTokens: CURATOR_MAX_TOKENS,
+      timeoutMs: AGENT_TIMEOUT_MS.curator,
       scenarioMeta: { aliases, hints },
     },
     strictSchema: curatorStrictSchema(new Set(aliases)),

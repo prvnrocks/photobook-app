@@ -6,6 +6,7 @@ import { z } from "zod";
 
 vi.mock("server-only", () => ({}));
 
+import { AGENT_TIMEOUT_MS } from "@/lib/ai/client";
 import { CuratorBatchAiSchema } from "@/lib/ai/schemas";
 import { cachedSystem, TransportError, type AgentRequest } from "@/lib/ai/transport";
 import { LiveTransport, lenientOutputFormat, toTransportError } from "@/lib/ai/transport-live";
@@ -20,7 +21,7 @@ interface Captured {
 }
 
 /** Real SDK client whose fetch returns a recorded body — exercises the whole SDK parse path. */
-function clientReturning(status: number, body: string, captured: Captured[] = []) {
+function clientReturning(status: number, body: string, captured: Captured[] = [], clientMaxRetries = 0) {
   const fetchStub = async (url: string | URL | Request, init?: RequestInit) => {
     captured.push({
       url: String(url),
@@ -29,7 +30,7 @@ function clientReturning(status: number, body: string, captured: Captured[] = []
     });
     return new Response(body, { status, headers: { "content-type": "application/json" } });
   };
-  return new Anthropic({ apiKey: "test-key-not-real", maxRetries: 0, fetch: fetchStub as typeof fetch });
+  return new Anthropic({ apiKey: "test-key-not-real", maxRetries: clientMaxRetries, fetch: fetchStub as typeof fetch });
 }
 
 const req = (): AgentRequest<z.infer<typeof CuratorBatchAiSchema>> => ({
@@ -117,6 +118,42 @@ describe("LiveTransport request shape", () => {
     const r = { ...req(), messages: [{ role: "user" as const, content: Array.from({ length: 11 }, () => image) }] };
     await expect(t.parse(r)).rejects.toMatchObject({ code: "bad_request", retryable: false });
     expect(cap).toHaveLength(0);
+  });
+});
+
+describe("LiveTransport retries / timeouts (runAgentStep owns retries)", () => {
+  it.each([true, false])("sends maxRetries 0 + the agent timeout + an abort signal per request (fallbacks=%s)", async (fallbacks) => {
+    const seen: Array<Record<string, unknown> | undefined> = [];
+    const message = JSON.parse(fixture("curator-ok.message.json"));
+    const spy = async (_body: unknown, options?: Record<string, unknown>) => {
+      seen.push(options);
+      return { ...message, parsed_output: null };
+    };
+    const client = { messages: { parse: spy }, beta: { messages: { parse: spy } } } as unknown as Anthropic;
+    await new LiveTransport({ client, useServerFallbacks: fallbacks }).parse(req());
+    await new LiveTransport({ client, useServerFallbacks: fallbacks }).parse({ ...req(), agent: "storyteller" });
+    await new LiveTransport({ client, useServerFallbacks: fallbacks }).parse({ ...req(), timeoutMs: 1234 });
+    expect(seen.map((o) => o?.maxRetries)).toEqual([0, 0, 0]);
+    expect(seen.map((o) => o?.timeout)).toEqual([AGENT_TIMEOUT_MS.curator, AGENT_TIMEOUT_MS.storyteller, 1234]);
+    expect(seen.every((o) => o?.signal instanceof AbortSignal)).toBe(true);
+  });
+
+  it("a client built with maxRetries 2 still makes exactly one HTTP request on 429 (per-request override)", async () => {
+    const cap: Captured[] = [];
+    const body = JSON.stringify({ type: "error", error: { type: "rate_limit_error", message: "slow down" } });
+    const t = new LiveTransport({ client: clientReturning(429, body, cap, 2) });
+    await expect(t.parse(req())).rejects.toMatchObject({ code: "rate_limited" });
+    expect(cap).toHaveLength(1);
+  });
+
+  it("hard wall-clock timeout → TransportError timeout (retryable)", async () => {
+    const hanging = async (_url: string | URL | Request, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      });
+    const client = new Anthropic({ apiKey: "test-key-not-real", maxRetries: 0, fetch: hanging as typeof fetch });
+    const t = new LiveTransport({ client, timeoutMs: 20 });
+    await expect(t.parse(req())).rejects.toMatchObject({ code: "timeout", retryable: true });
   });
 });
 

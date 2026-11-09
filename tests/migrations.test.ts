@@ -785,10 +785,11 @@ describe("migrations: Milestone 3 agent pipeline (0600)", () => {
     });
 
     it.each([
-      ["agent_runs", ["select"]],
+      // agent_runs: table-level SELECT replaced by column grants in 0700 (checked there).
+      ["agent_runs", []],
       ["agent_steps", []],
       ["user_memory", ["delete", "select"]],
-    ])("authenticated ends with exactly the expected privileges on public.%s", (t, expected) => {
+    ])("authenticated ends with exactly the expected table privileges on public.%s", (t, expected) => {
       expect(sorted(acl[`public.${t}`]?.authenticated)).toEqual(expected);
     });
 
@@ -812,35 +813,32 @@ describe("migrations: Milestone 3 agent pipeline (0600)", () => {
     });
   });
 
-  describe("lease RPCs", () => {
+  describe("lease RPCs (0600 versions; replaced in 0700)", () => {
+    // Functions as defined in the 0600 file itself (0700 drops and recreates them).
+    const own = (name: string) =>
+      matchesAll(/create\s+(?:or\s+replace\s+)?function\s+([\w.]+)\s*\(([\s\S]*?)\bas\s+\$\$([\s\S]*?)\$\$/, sql)
+        .map((x) => ({ name: x[1], header: x[2], body: x[3] }))
+        .find((f) => f.name === name);
+
     it.each([
       ["public.claim_agent_run", "uuid, integer"],
       ["public.release_agent_run", "uuid"],
     ])("%s is SECURITY INVOKER, revoked from clients, executable by service_role only", (name, sig) => {
-      const f = latestFunction(name);
+      const f = own(name);
       expect(f).toBeDefined();
       expect(f!.header).toMatch(/security\s+invoker/);
       expect(f!.header).not.toMatch(/security\s+definer/);
       expect(f!.header).toMatch(/set\s+search_path\s*=\s*''/);
       expect(flat).toContain(`revoke all on function ${name}(${sig}) from public, anon, authenticated`);
-      const grants = matchesAll(new RegExp(`grant execute on function ${esc(name)}\\([^)]*\\) to ([a-z_, ]+?);`), all);
+      const grants = matchesAll(new RegExp(`grant execute on function ${esc(name)}\\([^)]*\\) to ([a-z_, ]+?);`), sql);
       expect(grants.map((g) => g[1].trim())).toEqual(["service_role"]);
     });
 
-    it("claim is one guarded update with the lease clamped to 5..300 s and returns found", () => {
-      const f = latestFunction("public.claim_agent_run")!;
-      expect(f.header).toMatch(/returns\s+boolean/);
-      const body = ws(f.body);
+    it("claim is one guarded update with the lease clamped to 5..300 s", () => {
+      const body = ws(own("public.claim_agent_run")!.body);
       expect(body).toContain("v_secs := least(300, greatest(5, p_lease_seconds));");
       expect(body).toContain(
         "update public.agent_runs as r set lease_until = now() + make_interval(secs => v_secs), attempts = r.attempts + 1 where r.id = p_run_id and r.state not in ('done', 'failed') and (r.lease_until is null or r.lease_until < now());",
-      );
-      expect(body).toContain("return found;");
-    });
-
-    it("release clears the lease", () => {
-      expect(ws(latestFunction("public.release_agent_run")!.body)).toContain(
-        "update public.agent_runs as r set lease_until = null where r.id = p_run_id;",
       );
     });
   });
@@ -908,5 +906,172 @@ describe("migrations: Milestone 3 agent pipeline (0600)", () => {
   it("does not touch photos/orders/profiles grants or policies", () => {
     expect(sql).not.toMatch(/\b(grant|revoke)\s+[a-z_\s,]+\s+on\s+(?:table\s+)?public\.(photos|orders|profiles|books)\b/);
     expect(sql).not.toMatch(/\b(create|drop|alter)\s+policy\b[^;]*\bon\s+public\.(photos|orders|profiles|books)\b/);
+  });
+});
+
+describe("migrations: M3 review fixes — agent pipeline hardening (0700)", () => {
+  const m = migrations.find((x) => x.name.endsWith("_agent_pipeline_hardening.sql"));
+  const sql = m?.sql ?? "";
+  const ws = (s: string) => s.replace(/\s+/g, " ");
+  const flat = ws(sql);
+  const raw = m ? readFileSync(join(MIGRATIONS_DIR, m.name), "utf8") : "";
+  const grantsTo = (fn: string) =>
+    matchesAll(new RegExp(`grant execute on function ${esc(fn)}\\s*\\([^)]*\\)\\s+to\\s+([a-z_, ]+?)\\s*;`), all).map((g) =>
+      g[1].trim(),
+    );
+  const RPCS: [string, string][] = [
+    ["public.claim_agent_run", "uuid, integer"],
+    ["public.release_agent_run", "uuid, uuid"],
+    ["public.create_agent_run_capped", "uuid, uuid, text, text, integer, integer, boolean"],
+  ];
+
+  it("exists, sorts after 0600 and is the latest migration", () => {
+    expect(m, "20261109000700_agent_pipeline_hardening.sql missing").toBeDefined();
+    expect(m!.name).toBe("20261109000700_agent_pipeline_hardening.sql");
+    expect(files.indexOf(m!.name)).toBeGreaterThan(files.indexOf("20261108000600_agent_pipeline.sql"));
+  });
+
+  it("is additive: no table/column drops, no RLS changes, no policy changes", () => {
+    expect(sql).not.toMatch(/\bdrop\s+(table|column|policy|index|trigger)\b/);
+    expect(sql).not.toMatch(/\brow\s+level\s+security\b/);
+    expect(sql).not.toMatch(/\b(create|alter)\s+policy\b/);
+    expect(sql).not.toMatch(/\b(grant|revoke)\s+[a-z_\s,()]+\s+on\s+(?:table\s+)?public\.(photos|orders|profiles|books|agent_steps|user_memory)\b/);
+  });
+
+  it("widens the cost columns to numeric(12, 6) (T16 #16)", () => {
+    expect(flat).toContain("alter table public.agent_runs alter column total_cost_usd type numeric(12, 6)");
+    expect(flat).toContain("alter table public.agent_steps alter column cost_usd type numeric(12, 6)");
+  });
+
+  describe("lease tokens", () => {
+    it("adds agent_runs.lease_token uuid and drops the 0600 RPC signatures", () => {
+      expect(flat).toContain("alter table public.agent_runs add column lease_token uuid");
+      expect(flat).toContain("drop function public.claim_agent_run(uuid, integer)");
+      expect(flat).toContain("drop function public.release_agent_run(uuid)");
+      expect(flat.indexOf("drop function public.claim_agent_run")).toBeLessThan(
+        flat.indexOf("create or replace function public.claim_agent_run"),
+      );
+    });
+
+    it.each(RPCS)("%s is SECURITY INVOKER, revoked from clients, executable by service_role only", (name, sig) => {
+      const f = latestFunction(name);
+      expect(f).toBeDefined();
+      expect(sql).toContain(f!.body);
+      expect(f!.header).toMatch(/security\s+invoker/);
+      expect(f!.header).not.toMatch(/security\s+definer/);
+      expect(f!.header).toMatch(/set\s+search_path\s*=\s*''/);
+      expect(flat).toContain(`revoke all on function ${name}(${sig}) from public, anon, authenticated`);
+      expect(flat).toMatch(new RegExp(`grant execute on function ${esc(name)}\\(${esc(sig)}\\) to service_role;`));
+    });
+
+    it("no client role is ever granted EXECUTE on the run RPCs", () => {
+      for (const [name] of RPCS) {
+        const grants = grantsTo(name);
+        expect(grants.length, name).toBeGreaterThanOrEqual(1);
+        for (const roles of grants) expect(roles, name).toBe("service_role");
+      }
+    });
+
+    it("claim returns a fresh token stored on the run, null when not claimable", () => {
+      const f = latestFunction("public.claim_agent_run")!;
+      expect(f.header).toMatch(/returns\s+uuid/);
+      const body = ws(f.body);
+      expect(body).toContain("v_secs := least(300, greatest(5, p_lease_seconds));");
+      expect(body).toContain("v_token := gen_random_uuid();");
+      expect(body).toContain(
+        "update public.agent_runs as r set lease_until = now() + make_interval(secs => v_secs), lease_token = v_token, attempts = r.attempts + 1 where r.id = p_run_id and r.state not in ('done', 'failed') and (r.lease_until is null or r.lease_until < now());",
+      );
+      expect(body).toContain("if not found then return null; end if; return v_token;");
+    });
+
+    it("release only clears a lease whose token matches", () => {
+      const body = ws(latestFunction("public.release_agent_run")!.body);
+      expect(body).toContain(
+        "update public.agent_runs as r set lease_until = null, lease_token = null where r.id = p_run_id and r.lease_token = p_token;",
+      );
+    });
+
+    it("documents that checkpoints check the token client-side", () => {
+      expect(raw).toMatch(/\.eq\('lease_token', token\)/);
+    });
+  });
+
+  describe("create_agent_run_capped (T16 #4 / #5)", () => {
+    const f = latestFunction("public.create_agent_run_capped");
+    const body = ws(f?.body ?? "");
+
+    it("returns jsonb and serialises per user with a transaction advisory lock", () => {
+      expect(f!.header).toMatch(/returns\s+jsonb/);
+      expect(body).toContain("perform pg_advisory_xact_lock(hashtextextended(p_user_id::text, 1));");
+      expect(body.indexOf("pg_advisory_xact_lock")).toBeLessThan(body.indexOf("select count(*)"));
+      expect(body.indexOf("pg_advisory_xact_lock")).toBeLessThan(body.indexOf("insert into public.agent_runs"));
+    });
+
+    it("rejects null arguments", () => {
+      expect(body).toMatch(/if p_book_id is null or p_user_id is null[\s\S]*?raise exception 'invalid_argument' using errcode = '22023'/);
+    });
+
+    it("daily cap: live build/rebuild runs of the user in 24 h that cost something or are still active", () => {
+      expect(body).toContain(
+        "where r.user_id = p_user_id and r.mode = 'live' and r.trigger in ('build', 'rebuild') and r.started_at >= now() - interval '24 hours' and (r.total_cost_usd > 0 or r.state not in ('done', 'failed'));",
+      );
+      expect(body).toContain("if v_n >= p_daily_cap then return jsonb_build_object('error', 'limit', 'limit', 'daily_builds');");
+    });
+
+    it("rebuild cap: billed successful live rebuilds of the book", () => {
+      expect(body).toContain(
+        "where r.book_id = p_book_id and r.mode = 'live' and r.trigger = 'rebuild' and r.total_cost_usd > 0 and r.ai_status in ('ok', 'partial');",
+      );
+      expect(body).toContain("if v_n >= p_rebuild_cap then return jsonb_build_object('error', 'limit', 'limit', 'rebuilds');");
+    });
+
+    it("caps only when p_enforce; unique violation → already_running; success → {id}", () => {
+      expect(body).toContain("if p_enforce then");
+      expect(body).toContain("exception when unique_violation then return jsonb_build_object('error', 'already_running');");
+      expect(body).toContain("return jsonb_build_object('id', v_id);");
+    });
+  });
+
+  describe("agent_runs column grants (T16 #6)", () => {
+    const OWNER_COLS = ["id", "book_id", "user_id", "state", "ai_status", "progress", "error_code", "mode", "trigger", "started_at", "finished_at"];
+
+    it("revokes table-level SELECT and grants exactly the progress-screen columns", () => {
+      expect(flat).toContain("revoke select on table public.agent_runs from authenticated;");
+      const g = flat.match(/grant select \(([^)]*)\) on public\.agent_runs to authenticated;/);
+      expect(g).not.toBeNull();
+      expect(g![1].split(",").map((c) => c.trim())).toEqual(OWNER_COLS);
+      expect(flat.indexOf("revoke select on table public.agent_runs")).toBeLessThan(flat.indexOf("grant select ("));
+    });
+
+    it.each(["cursor", "lease_token", "lease_until", "attempts", "total_cost_usd", "total_input_tokens", "total_output_tokens", "critic_score"])(
+      "never grants %s to a client role",
+      (col) => {
+        for (const g of matchesAll(/grant\s+select\s*\(([^)]*)\)\s+on\s+(?:table\s+)?public\.agent_runs\s+to\s+([a-z_, ]+);/)) {
+          expect(g[1].split(",").map((c) => c.trim()), g[0]).not.toContain(col);
+        }
+      },
+    );
+
+    it("src/lib/db/agent-runs.ts owner reads select only granted columns", () => {
+      const src = readFileSync(join(process.cwd(), "src", "lib", "db", "agent-runs.ts"), "utf8");
+      const cols = src.match(/const OWNER_RUN_COLUMNS =\s*"([^"]+)"/);
+      expect(cols).not.toBeNull();
+      for (const c of cols![1].split(",").map((x) => x.trim())) expect(OWNER_COLS, c).toContain(c);
+    });
+  });
+
+  describe("scrub on book delete (T16 #7)", () => {
+    it("latest private.scrub_agent_steps also clears the run's cursor and progress", () => {
+      const f = latestFunction("private.scrub_agent_steps")!;
+      expect(sql).toContain(f.body);
+      expect(f.header).toMatch(/security\s+invoker/);
+      expect(f.header).toMatch(/set\s+search_path\s*=\s*''/);
+      const body = ws(f.body);
+      expect(body).toContain("if old.book_id is not null and new.book_id is null then");
+      expect(body).toMatch(/update public\.agent_steps as s set output = null, input_summary = null where s\.run_id = new\.id/);
+      expect(body).toContain("new.cursor := '{}'::jsonb; new.progress := '{}'::jsonb;");
+      expect(body).not.toMatch(/cost_usd|_tokens/);
+      expect(flat).toContain("revoke all on function private.scrub_agent_steps() from public, anon, authenticated");
+    });
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+import { PRICING } from "@/lib/ai/client";
 import { addUsage, costUsd } from "@/lib/ai/cost";
 
 const M = "claude-opus-5-5";
@@ -27,9 +28,16 @@ describe("costUsd", () => {
     expect(costUsd(M, { input: -5, output: Number.NaN, cacheRead: 0, cacheWrite: 0 })).toBe(0);
   });
 
-  it("prices unknown models (e.g. a server fallback) like AI_MODEL", () => {
-    const u = { input: 1000, output: 1000, cacheRead: 0, cacheWrite: 0 };
-    expect(costUsd("some-fallback-model", u)).toBe(costUsd(M, u));
+  it("prices unknown models (e.g. a server fallback) at the most expensive known rate", () => {
+    const u = { input: 1000, output: 1000, cacheRead: 1000, cacheWrite: 1000 };
+    const max = Object.values(PRICING).reduce(
+      (m, p) => ({ input: Math.max(m.input, p.input), output: Math.max(m.output, p.output), cacheRead: Math.max(m.cacheRead, p.cacheRead), cacheWrite: Math.max(m.cacheWrite, p.cacheWrite) }),
+      { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    );
+    const expected = Math.round(((max.input + max.output + max.cacheRead + max.cacheWrite) * 1000) / 1_000_000 * 1e6) / 1e6;
+    expect(costUsd("some-fallback-model", u)).toBe(expected);
+    expect(costUsd("some-fallback-model", u)).toBeGreaterThanOrEqual(costUsd(M, u));
+    expect(costUsd("__proto__", u)).toBe(expected);
   });
 
   it("addUsage sums buckets", () => {

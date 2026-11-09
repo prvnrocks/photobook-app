@@ -73,6 +73,12 @@ export interface StepLogger {
 export interface RetryOptions {
   /** Extra attempts after the first for retryable TransportErrors (default 2). */
   retries?: number;
+  /**
+   * Absolute deadline (same clock as `now`, ms). A retry starts only when
+   * now + backoff + request timeout < deadline — the orchestrator passes the end of its tick
+   * lease (minus a margin), so no request can outlive the lease. No deadline = unbounded.
+   */
+  deadline?: number;
   /** Delay before retry n (0-based). Default 1 s, 3 s, 9 s… capped at 10 s. */
   backoffMs?: (retry: number, err: TransportError) => number;
   sleep?: (ms: number) => Promise<void>;
@@ -112,9 +118,14 @@ export type StepResult<S> =
 export const defaultBackoffMs = (retry: number) => Math.min(10_000, 1000 * 3 ** retry);
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+/** Timeout used for retry budgeting when a request carries none (matches LiveTransport). */
+const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
+
 export async function runAgentStep<T, S>(args: RunAgentStepArgs<T, S>): Promise<StepResult<S>> {
   const now = args.now ?? Date.now;
   const maxRetries = Math.max(0, args.retry?.retries ?? 2);
+  const deadline = args.retry?.deadline;
+  const requestTimeout = args.request.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   const backoff = args.retry?.backoffMs ?? defaultBackoffMs;
   const sleep = args.retry?.sleep ?? defaultSleep;
   const t0 = now();
@@ -131,7 +142,9 @@ export async function runAgentStep<T, S>(args: RunAgentStepArgs<T, S>): Promise<
     } catch (e) {
       failure = isTransportError(e) ? e : new TransportError("unknown", "unexpected transport error");
       if (!failure.retryable || retries >= maxRetries) break;
-      await sleep(Math.max(0, backoff(retries, failure)));
+      const wait = Math.max(0, backoff(retries, failure));
+      if (deadline !== undefined && now() + wait + requestTimeout >= deadline) break;
+      await sleep(wait);
       retries++;
     }
   }
@@ -175,7 +188,10 @@ export async function runAgentStep<T, S>(args: RunAgentStepArgs<T, S>): Promise<
 
   const requestedModel = args.request.model ?? AI_MODEL;
 
-  // Transport failure (after retries): nothing billed that we know of.
+  // Transport failure (after retries): logged with cost 0. Known under-count: a request that timed
+  // out (or lost its connection) AFTER it was sent may still be billed by the API, but no usage
+  // comes back, so the row says error "timeout" with 0 tokens / $0. The real figure is only in the
+  // Anthropic console; the row's latency shows how long it ran.
   if (!response) {
     const err = failure ?? new TransportError("unknown", "no response");
     const cost = await finish(

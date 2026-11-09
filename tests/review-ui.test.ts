@@ -4,10 +4,16 @@ import {
   aiPicked,
   applyUserChoice,
   BANNER_COPY,
+  changedPhotosCopy,
+  CONTINUE_UNSYNCED_NOTE,
   countKept,
+  docOutOfSync,
+  docPhotoIds,
   headerCopy,
   reasonLabel,
+  REBUILD_LABELS,
   REBUILD_MESSAGES,
+  rebuildHint,
   rebuildOutcome,
   rebuildsLeft,
   rebuildsLeftLabel,
@@ -16,6 +22,9 @@ import {
   requestRebuild,
   reviewBanner,
   thumbSize,
+  unsyncedPhotoIds,
+  UPDATE_ALBUM_MESSAGES,
+  updateAlbumOutcome,
   USER_REMOVED_REASON,
   visiblePhotos,
   type ReviewTilePhoto,
@@ -160,6 +169,7 @@ describe("rebuildOutcome (T11 shapes)", () => {
     expect(rebuildOutcome(429, { error: "limit", limit: "rebuilds" })).toEqual({ kind: "error", message: REBUILD_MESSAGES.limitRebuilds });
     expect(rebuildOutcome(429, { error: "limit", limit: "daily_builds" })).toEqual({ kind: "error", message: REBUILD_MESSAGES.limitDaily });
     expect(rebuildOutcome(429, { error: "limit", limit: "analysed_photos" })).toEqual({ kind: "error", message: REBUILD_MESSAGES.limitPhotos });
+    expect(rebuildOutcome(429, { error: "limit", limit: "rate" })).toEqual({ kind: "error", message: REBUILD_MESSAGES.limitRate });
   });
   it("other statuses and junk bodies", () => {
     expect(rebuildOutcome(401, null)).toEqual({ kind: "error", message: REBUILD_MESSAGES.signedOut });
@@ -216,5 +226,135 @@ describe("grid helpers", () => {
     expect(thumbSize({ width: 4000, height: 3000 })).toEqual({ width: 512, height: 384 });
     expect(thumbSize({ width: 1080, height: 1920 })).toEqual({ width: 288, height: 512 });
     expect(thumbSize({ width: null, height: null })).toEqual({ width: 512, height: 512 });
+  });
+});
+
+describe("album sync (D-028)", () => {
+  const A = "a1";
+  const B = "b2";
+  const C = "c3";
+  const D = "d4";
+  const doc = (pageIds: (string | null)[][], cover: string | null = null) => ({
+    version: 1,
+    cover: { layout: "cover-full", photoId: cover, title: "T" },
+    pages: pageIds.map((ids, i) => ({
+      id: `p${i}`,
+      layout: "x",
+      slots: ids.map((photoId) => ({ photoId, crop: { x: 0, y: 0, zoom: 1 } })),
+    })),
+  });
+
+  it("docPhotoIds reads page slots + cover, skips nulls and garbage", () => {
+    expect(docPhotoIds(doc([[A, null], [B]], C)).sort()).toEqual([A, B, C]);
+    expect(docPhotoIds(doc([[A], [A]], A))).toEqual([A]);
+    expect(docPhotoIds({})).toEqual([]);
+    expect(docPhotoIds(null)).toEqual([]);
+    expect(docPhotoIds([])).toEqual([]);
+    expect(docPhotoIds({ pages: "x", cover: 3 })).toEqual([]);
+    expect(docPhotoIds({ pages: [null, { slots: [null, { photoId: 7 }, { photoId: "" }, { photoId: D }] }] })).toEqual([D]);
+  });
+
+  const opts = { hasAlbum: true, userEdited: false, building: false };
+
+  it("dropped photo still in the album is unsynced; dropped photo outside it is not", () => {
+    const photos = [
+      photo(A, { status: "dropped", dropReason: USER_REMOVED_REASON, userOverride: true }),
+      photo(B, { status: "dropped", dropReason: "blurry" }),
+    ];
+    expect(unsyncedPhotoIds(photos, new Set([A]), opts)).toEqual([A]);
+  });
+
+  it("user-kept photo missing from the album is unsynced; AI-kept missing photo is not", () => {
+    const photos = [photo(A, { userOverride: true }), photo(B), photo(C, { userOverride: true })];
+    expect(unsyncedPhotoIds(photos, new Set([C]), opts)).toEqual([A]);
+  });
+
+  it("covers the cover photo too", () => {
+    const photos = [photo(A, { status: "dropped", userOverride: true })];
+    expect(docOutOfSync(doc([[B]], A), photos, { userEdited: false, building: false })).toBe(true);
+  });
+
+  it("nothing is out of sync with no album, a user-edited album, or while building", () => {
+    const photos = [photo(A, { status: "dropped", userOverride: true })];
+    const ids = new Set([A]);
+    expect(unsyncedPhotoIds(photos, ids, { ...opts, hasAlbum: false })).toEqual([]);
+    expect(unsyncedPhotoIds(photos, ids, { ...opts, userEdited: true })).toEqual([]);
+    expect(unsyncedPhotoIds(photos, ids, { ...opts, building: true })).toEqual([]);
+    expect(docOutOfSync({}, [photo(A, { userOverride: true })], { userEdited: false, building: false })).toBe(false);
+    expect(docOutOfSync(doc([[A]]), photos, { userEdited: true, building: false })).toBe(false);
+  });
+
+  it("in sync album → false", () => {
+    const photos = [photo(A, { userOverride: true }), photo(B), photo(C, { status: "dropped" })];
+    expect(docOutOfSync(doc([[A, B]]), photos, { userEdited: false, building: false })).toBe(false);
+  });
+
+  it("toggling a photo flips it in and out of sync", () => {
+    const inAlbum = photo(A);
+    const ids = new Set([A]);
+    const dropped = applyUserChoice(inAlbum, false);
+    expect(unsyncedPhotoIds([dropped], ids, opts)).toEqual([A]);
+    expect(unsyncedPhotoIds([applyUserChoice(dropped, true)], ids, opts)).toEqual([]);
+  });
+
+  it("changed copy", () => {
+    expect(changedPhotosCopy(1)).toBe("You changed 1 photo.");
+    expect(changedPhotosCopy(3)).toBe("You changed 3 photos.");
+    expect(CONTINUE_UNSYNCED_NOTE).toBe("Your changes aren't in the album yet — tap Update album.");
+  });
+});
+
+describe("updateAlbumOutcome", () => {
+  it("success → toast", () => {
+    expect(updateAlbumOutcome(BOOK, { ok: true, changed: true, pages: 12 })).toEqual({ kind: "updated", toast: "Album updated" });
+    expect(updateAlbumOutcome(BOOK, { ok: true, changed: false, pages: 12 })).toEqual({
+      kind: "updated",
+      toast: "Already up to date",
+    });
+  });
+
+  it("user_edited / busy / signed_out / not_found / failed", () => {
+    expect(updateAlbumOutcome(BOOK, { ok: false, error: "user_edited" })).toEqual({
+      kind: "error",
+      error: "user_edited",
+      message: "You've edited this album, so we won't change it.",
+      link: null,
+    });
+    expect(updateAlbumOutcome(BOOK, { ok: false, error: "busy" })).toEqual({
+      kind: "error",
+      error: "busy",
+      message: "Your album is still being built — try again in a moment.",
+      link: { href: `/books/${BOOK}/build`, label: "See progress" },
+    });
+    const signedOut = updateAlbumOutcome(BOOK, { ok: false, error: "signed_out" });
+    expect(signedOut).toMatchObject({ kind: "error", error: "signed_out", message: UPDATE_ALBUM_MESSAGES.signedOut });
+    expect(signedOut.kind === "error" && signedOut.link?.href).toBe(
+      `/login?next=${encodeURIComponent(`/books/${BOOK}/review`)}`,
+    );
+    expect(updateAlbumOutcome(BOOK, { ok: false, error: "not_found" })).toMatchObject({
+      error: "not_found",
+      message: UPDATE_ALBUM_MESSAGES.notFound,
+      link: null,
+    });
+    expect(updateAlbumOutcome(BOOK, { ok: false, error: "failed" })).toMatchObject({
+      error: "failed",
+      message: UPDATE_ALBUM_MESSAGES.generic,
+    });
+  });
+
+  it("thrown call / unknown error → generic", () => {
+    expect(updateAlbumOutcome(BOOK, null)).toMatchObject({ kind: "error", error: "failed", message: UPDATE_ALBUM_MESSAGES.generic });
+    expect(
+      updateAlbumOutcome(BOOK, { ok: false, error: "weird" } as unknown as Parameters<typeof updateAlbumOutcome>[1]),
+    ).toMatchObject({ error: "failed", message: UPDATE_ALBUM_MESSAGES.generic });
+  });
+});
+
+describe("rebuild as secondary (D-028)", () => {
+  it("labels + hint", () => {
+    expect(REBUILD_LABELS.rebuild).toBe("Rebuild with AI");
+    expect(REBUILD_LABELS.ai_off).toBe("Rebuild album");
+    expect(rebuildHint(2)).toBe("Re-plans the whole story with AI (2 left)");
+    expect(rebuildHint(null)).toBe("Re-plans the whole story with AI.");
   });
 });

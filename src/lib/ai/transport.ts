@@ -52,6 +52,11 @@ export interface AgentRequest<T> {
   /** Override AI_MODEL for this step. */
   model?: string;
   /**
+   * Hard wall-clock timeout of ONE request in ms (AGENT_TIMEOUT_MS[agent]); also used by
+   * runAgentStep / the orchestrator to decide whether a (re)try still fits the tick lease.
+   */
+  timeoutMs?: number;
+  /**
    * Replay only (never sent to the API): data a replay synthesiser needs to build a
    * schema-valid answer, e.g. `{ aliases: ["p1","p2"] }`, and an optional `fixtureName`.
    */

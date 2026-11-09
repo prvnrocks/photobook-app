@@ -17,9 +17,10 @@ import { BOOK_TITLE_MAX_CODE_POINTS } from "@/lib/book/options";
 import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import type { BookDoc, BookPage, Chapter, Crop } from "@/lib/book/types";
 import { COVER_LAYOUT_ID, getLayout } from "@/lib/layouts";
+import { bestPageLayout } from "@/lib/layouts/fit";
 import { clipCodePoints, clipText } from "@/lib/text/clip";
 import { AI_TEXT_LIMITS, LAYOUT_ID_RE, PHOTO_ALIAS_RE, type AlbumPlan } from "./schemas";
-import { dubaiDay, effectiveMaxPages, photoMs, placeKey, type StoryBook, type StoryPhoto } from "./story";
+import { dubaiDay, effectiveMaxPages, orientationOf, photoMs, placeKey, type StoryBook, type StoryPhoto } from "./story";
 
 export interface PlanToDocOptions {
   /** Alias ("p7") → real photo id. */
@@ -176,4 +177,66 @@ export function planToDoc(plan: AlbumPlan, opts: PlanToDocOptions): PlanToDocRes
   const docIssues = validateBookDoc(parsed.doc, { photoIds: kept, maxPages });
   if (docIssues.length) return { issues: docIssues.map((i) => `doc: ${i}`) };
   return { doc: parsed.doc };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Pruning a validated plan when photos changed during the run (review toggles while building)
+
+export interface PrunePlanOptions {
+  aliasToId: ReadonlyMap<string, string>;
+  /** Current photos of the book (kept and dropped). */
+  photos: readonly StoryPhoto[];
+}
+
+export interface PrunedPlan {
+  plan: AlbumPlan;
+  /** Slots removed (photos no longer kept / gone). */
+  removed: number;
+  /** False = the input plan is returned unchanged. */
+  changed: boolean;
+}
+
+/**
+ * Removes photos that are no longer kept (e.g. the user removed them on the review screen while
+ * the run was going) from an AI plan instead of discarding the whole plan: their slots go, an
+ * affected page gets the best-fitting page layout for the photos left on it (or is dropped when
+ * empty), empty moments are dropped and a removed cover is replaced by the first photo left.
+ * Pure. The result still has to pass planToDoc (+ validateBookDoc); if it does not, the caller
+ * falls back to the rule-based album.
+ */
+export function prunePlan(plan: AlbumPlan, { aliasToId, photos }: PrunePlanOptions): PrunedPlan {
+  const byId = new Map(photos.map((p) => [p.id, p]));
+  const photoOf = (alias: string) => {
+    const id = aliasToId.get(alias);
+    return id === undefined ? undefined : byId.get(id);
+  };
+  const usable = (alias: string) => photoOf(alias)?.keep === true;
+  const orientOf = (alias: string) => {
+    const p = photoOf(alias);
+    return p ? orientationOf(p.width, p.height) : ("square" as const);
+  };
+
+  let removed = 0;
+  const moments: AlbumPlan["moments"] = [];
+  for (const m of plan.moments) {
+    const pages: AlbumPlan["moments"][number]["pages"] = [];
+    for (const pg of m.pages) {
+      const left = pg.photoIds.filter(usable);
+      removed += pg.photoIds.length - left.length;
+      if (left.length === 0) continue;
+      if (left.length === pg.photoIds.length) {
+        pages.push(pg);
+        continue;
+      }
+      const layoutId = bestPageLayout(left.map(orientOf));
+      if (layoutId) pages.push({ ...pg, layoutId, photoIds: left });
+      else removed += left.length; // no layout for this count: drop the page
+    }
+    if (pages.length) moments.push({ ...m, pages });
+  }
+  if (removed === 0 && usable(plan.coverPhotoId)) return { plan, removed: 0, changed: false };
+
+  const firstLeft = moments[0]?.pages[0]?.photoIds[0];
+  const coverPhotoId = usable(plan.coverPhotoId) ? plan.coverPhotoId : (firstLeft ?? plan.coverPhotoId);
+  return { plan: { ...plan, coverPhotoId, moments }, removed, changed: true };
 }

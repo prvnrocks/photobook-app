@@ -4,6 +4,8 @@ vi.mock("server-only", () => ({}));
 
 type Result = { data?: unknown; error: { code?: string; statusCode?: string; message?: string } | null; count?: number };
 
+const JPEG_SOI = vi.hoisted(() => new Uint8Array([0xff, 0xd8, 0xff]));
+
 // Records every query chain (client, table, op, payload, options, filters) and
 // resolves to the next queued result. Storage calls are recorded separately.
 const fake = vi.hoisted(() => {
@@ -29,7 +31,7 @@ const fake = vi.hoisted(() => {
     const entry = { client, table, op, payload, options, calls: [] as unknown[][] };
     state.chains.push(entry);
     const b: Record<string, unknown> = {};
-    for (const m of ["eq", "in", "is", "not", "gte", "filter", "order", "select", "limit", "single", "maybeSingle"]) {
+    for (const m of ["eq", "in", "is", "not", "gt", "gte", "or", "filter", "order", "select", "limit", "single", "maybeSingle"]) {
       b[m] = (...args: unknown[]) => {
         entry.calls.push([m, ...args]);
         return b;
@@ -64,7 +66,7 @@ const fake = vi.hoisted(() => {
           state.inFlight--;
           return (
             state.downloadResults.get(path) ?? {
-              data: new Blob([new TextEncoder().encode(`img:${path}`)]),
+              data: new Blob([JPEG_SOI, new TextEncoder().encode(`img:${path}`)]),
               error: null,
             }
           );
@@ -95,6 +97,8 @@ const books = await import("@/lib/db/books");
 const U = "11111111-1111-4111-8111-111111111111";
 const B = "22222222-2222-4222-8222-222222222222";
 const R = "44444444-4444-4444-8444-444444444444";
+const T1 = "55555555-5555-4555-8555-555555555555";
+const T2 = "66666666-6666-4666-8666-666666666666";
 const TS = "2026-11-08T10:00:00.123456+00:00";
 const ids = (n: number) =>
   Array.from({ length: n }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`);
@@ -137,59 +141,121 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("agent runs: create / lease / checkpoint", () => {
-  it("createRun inserts with the admin client and returns the id", async () => {
-    fake.state.results.push({ data: { id: R }, error: null });
-    expect(await runs.createRun({ bookId: B, userId: U, trigger: "build", mode: "replay" })).toEqual({ id: R });
-    const [c] = fake.state.chains;
-    expect(c).toMatchObject({
-      client: "admin",
-      table: "agent_runs",
-      op: "insert",
-      payload: { book_id: B, user_id: U, trigger: "build", mode: "replay" },
-    });
-  });
-
-  it("createRun maps 23505 (one active run per book) to already_running", async () => {
-    fake.state.results.push({ data: null, error: { code: "23505", message: "duplicate key ... secret" } });
-    expect(await runs.createRun({ bookId: B, userId: U, trigger: "rebuild", mode: "live" })).toEqual({
-      error: "already_running",
-    });
-  });
-
-  it("other errors → AgentRunsQueryError with the code only (no message / ids)", async () => {
-    fake.state.results.push({ data: null, error: { code: "42501", message: `row ${B} leaked` } });
-    const err = await runs.createRun({ bookId: B, userId: U, trigger: "build", mode: "live" }).catch((e) => e);
-    expect(err).toBeInstanceOf(runs.AgentRunsQueryError);
-    expect(err.code).toBe("42501");
-    expect(err.message).not.toContain(B);
-    expect(err.message).not.toContain("leaked");
-    await expect(runs.createRun({ bookId: "x", userId: U, trigger: "build", mode: "live" })).rejects.toMatchObject({
-      code: "invalid_id",
-    });
-  });
-
-  it("claimRun / releaseRun call the lease RPCs with the admin client", async () => {
-    fake.state.results.push({ data: true, error: null }, { data: false, error: null }, { data: null, error: null });
-    expect(await runs.claimRun(R, 45)).toBe(true);
-    expect(await runs.claimRun(R, 45)).toBe(false);
-    await runs.releaseRun(R);
+  it("claimRun returns the lease token (null when not claimable); releaseRun passes the token", async () => {
+    fake.state.results.push({ data: T1, error: null }, { data: null, error: null }, { data: null, error: null });
+    expect(await runs.claimRun(R, 45)).toBe(T1);
+    expect(await runs.claimRun(R, 45)).toBeNull();
+    await runs.releaseRun(R, T1);
     expect(fake.state.rpcs).toEqual([
       { client: "admin", fn: "claim_agent_run", args: { p_run_id: R, p_lease_seconds: 45 } },
       { client: "admin", fn: "claim_agent_run", args: { p_run_id: R, p_lease_seconds: 45 } },
-      { client: "admin", fn: "release_agent_run", args: { p_run_id: R } },
+      { client: "admin", fn: "release_agent_run", args: { p_run_id: R, p_token: T1 } },
     ]);
-    expect(await runs.claimRun("bad", 45)).toBe(false);
+    expect(await runs.claimRun("bad", 45)).toBeNull();
+    await runs.releaseRun(R, "not-a-token");
+    await runs.releaseRun("bad", T1);
     expect(fake.state.rpcs).toHaveLength(3);
   });
 
-  it("checkpointRun writes only the given keys and clips error_code to 64", async () => {
-    await runs.checkpointRun(R, { state: "storytelling", progress: { done: 3 }, error_code: "x".repeat(100) });
+  it("claimRun treats a non-uuid RPC result as not claimed; errors carry the code only", async () => {
+    fake.state.results.push({ data: true, error: null });
+    expect(await runs.claimRun(R, 45)).toBeNull();
+    fake.state.results.push({ data: null, error: { code: "42501", message: `run ${R}` } });
+    const err = await runs.claimRun(R, 45).catch((e) => e);
+    expect(err).toBeInstanceOf(runs.AgentRunsQueryError);
+    expect(err.code).toBe("42501");
+    expect(err.message).not.toContain(R);
+  });
+
+  it("checkpointRun writes only the given keys, guarded by the lease token, and clips error_code", async () => {
+    fake.state.results.push({ data: [{ id: R }], error: null });
+    expect(
+      await runs.checkpointRun(R, T1, { state: "storytelling", progress: { done: 3 }, error_code: "x".repeat(100) }),
+    ).toBe(true);
     const [c] = fake.state.chains;
     expect(c).toMatchObject({ client: "admin", table: "agent_runs", op: "update" });
     expect(c.payload).toEqual({ state: "storytelling", progress: { done: 3 }, error_code: "x".repeat(64) });
-    expect(c.calls).toEqual([["eq", "id", R]]);
-    await runs.checkpointRun(R, {});
+    expect(c.calls).toEqual([
+      ["eq", "id", R],
+      ["eq", "lease_token", T1],
+      ["select", "id"],
+    ]);
+  });
+
+  it("checkpointRun with a stale token writes 0 rows → false", async () => {
+    fake.state.results.push({ data: [], error: null });
+    expect(await runs.checkpointRun(R, T2, { state: "done" })).toBe(false);
+    expect(await runs.checkpointRun(R, "not-a-token", { state: "done" })).toBe(false);
     expect(fake.state.chains).toHaveLength(1);
+  });
+
+  it("checkpointRun with an empty patch only verifies the token (no write)", async () => {
+    fake.state.results.push({ data: { id: R }, error: null }, { data: null, error: null });
+    expect(await runs.checkpointRun(R, T1, {})).toBe(true);
+    expect(await runs.checkpointRun(R, T2, {})).toBe(false);
+    expect(fake.state.chains.every((c) => c.op === "select")).toBe(true);
+    expect(fake.state.chains[0].calls).toEqual(
+      expect.arrayContaining([
+        ["eq", "id", R],
+        ["eq", "lease_token", T1],
+      ]),
+    );
+    await expect(runs.checkpointRun("bad", T1, {})).rejects.toMatchObject({ code: "invalid_id" });
+  });
+});
+
+describe("agent runs: createRunCapped", () => {
+  const input = { bookId: B, userId: U, trigger: "rebuild" as const, mode: "live" as const, dailyCap: 3, rebuildCap: 2, enforce: true };
+
+  it("calls create_agent_run_capped with the admin client and returns the id", async () => {
+    fake.state.results.push({ data: { id: R }, error: null });
+    expect(await runs.createRunCapped(input)).toEqual({ id: R });
+    expect(fake.state.rpcs).toEqual([
+      {
+        client: "admin",
+        fn: "create_agent_run_capped",
+        args: {
+          p_book_id: B,
+          p_user_id: U,
+          p_trigger: "rebuild",
+          p_mode: "live",
+          p_daily_cap: 3,
+          p_rebuild_cap: 2,
+          p_enforce: true,
+        },
+      },
+    ]);
+  });
+
+  it.each([
+    [{ error: "already_running" }, { error: "already_running" }],
+    [{ error: "limit", limit: "daily_builds" }, { error: "limit", limit: "daily_builds" }],
+    [{ error: "limit", limit: "rebuilds" }, { error: "limit", limit: "rebuilds" }],
+  ])("maps %j", async (data, expected) => {
+    fake.state.results.push({ data, error: null });
+    expect(await runs.createRunCapped(input)).toEqual(expected);
+  });
+
+  it("an unexpected RPC result throws bad_result (never treated as success)", async () => {
+    for (const data of [null, true, { id: "nope" }, { error: "limit", limit: "other" }, [{ id: R }]]) {
+      fake.state.results.push({ data, error: null });
+      await expect(runs.createRunCapped(input)).rejects.toMatchObject({ code: "bad_result" });
+    }
+  });
+
+  it("enforce false is passed through; caps are floored and never negative", async () => {
+    fake.state.results.push({ data: { id: R }, error: null });
+    await runs.createRunCapped({ ...input, mode: "replay", enforce: false, dailyCap: -1, rebuildCap: 2.7 });
+    expect(fake.state.rpcs[0].args).toMatchObject({ p_enforce: false, p_daily_cap: 0, p_rebuild_cap: 2, p_mode: "replay" });
+  });
+
+  it("bad ids → invalid_id without a call; db errors → code only", async () => {
+    await expect(runs.createRunCapped({ ...input, userId: "x" })).rejects.toMatchObject({ code: "invalid_id" });
+    expect(fake.state.rpcs).toHaveLength(0);
+    fake.state.results.push({ data: null, error: { code: "22023", message: `user ${U}` } });
+    const err = await runs.createRunCapped(input).catch((e) => e);
+    expect(err.code).toBe("22023");
+    expect(err.message).not.toContain(U);
   });
 });
 
@@ -227,21 +293,59 @@ describe("stepLogger", () => {
     expect(row.output).toBeNull();
   });
 
-  it("insertStep upserts with ON CONFLICT (run_id, step_key, attempt) DO NOTHING", async () => {
+  it("insertStep is a plain insert (every real call gets a row)", async () => {
     await runs.stepLogger(R).insertStep(step());
     const [c] = fake.state.chains;
-    expect(c).toMatchObject({ client: "admin", table: "agent_steps", op: "upsert" });
-    expect(c.options).toEqual({ onConflict: "run_id,step_key,attempt", ignoreDuplicates: true });
+    expect(c).toMatchObject({ client: "admin", table: "agent_steps", op: "insert" });
+    expect((c.payload as { attempt: number }).attempt).toBe(1);
+    expect(fake.state.chains.filter((x) => x.op === "upsert")).toHaveLength(0);
   });
 
-  it("a duplicate step (resume) is ignored and does not double the run totals", async () => {
+  it("a conflicting attempt is re-inserted with the next free attempt (resume re-run is logged)", async () => {
+    fake.state.results.push(
+      { data: null, error: { code: "23505" } }, // insert attempt 1 → conflict
+      { data: { attempt: 2 }, error: null }, // nextAttempt → 3
+      { data: null, error: null }, // insert attempt 3
+    );
+    await runs.stepLogger(R).insertStep(step());
+    const inserts = fake.state.chains.filter((c) => c.op === "insert");
+    expect(inserts.map((c) => (c.payload as { attempt: number }).attempt)).toEqual([1, 3]);
+    const lookup = fake.state.chains.find((c) => c.op === "select")!;
+    expect(lookup.calls).toEqual(
+      expect.arrayContaining([
+        ["eq", "run_id", R],
+        ["eq", "step_key", "curator:1"],
+        ["order", "attempt", { ascending: false }],
+        ["limit", 1],
+      ]),
+    );
+  });
+
+  it("gives up after STEP_INSERT_CONFLICT_RETRIES conflicts with a 23505 error", async () => {
+    for (let i = 0; i <= runs.STEP_INSERT_CONFLICT_RETRIES; i++) {
+      fake.state.results.push({ data: null, error: { code: "23505" } });
+      if (i < runs.STEP_INSERT_CONFLICT_RETRIES) fake.state.results.push({ data: null, error: null });
+    }
+    const err = await runs.stepLogger(R).insertStep(step()).catch((e) => e);
+    expect(err).toBeInstanceOf(runs.AgentRunsQueryError);
+    expect(err.code).toBe("23505");
+    const inserts = fake.state.chains.filter((c) => c.op === "insert");
+    expect(inserts.map((c) => (c.payload as { attempt: number }).attempt)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("nextAttempt = max(attempt) + 1, or 1 when the step has no rows", async () => {
+    fake.state.results.push({ data: { attempt: 4 }, error: null }, { data: null, error: null });
+    expect(await runs.nextAttempt(R, "storyteller")).toBe(5);
+    expect(await runs.nextAttempt(R, "storyteller")).toBe(1);
+    await expect(runs.nextAttempt("bad", "x")).rejects.toMatchObject({ code: "invalid_id" });
+  });
+
+  it("totals are re-summed from steps, so re-syncing never doubles them", async () => {
     const logger = runs.stepLogger(R);
     const one = { cost_usd: 0.0081, input_tokens: 1000, output_tokens: 200 };
-    // insert #1, totals (select steps, update run), insert #2 (ignored → no row), totals again
     fake.state.results.push(
       { data: null, error: null },
       { data: [one], error: null },
-      { data: null, error: null },
       { data: null, error: null },
       { data: [one], error: null },
       { data: null, error: null },
@@ -249,7 +353,6 @@ describe("stepLogger", () => {
     const delta = { costUsd: 0.0081, inputTokens: 1000, outputTokens: 200, cacheReadTokens: 0, cacheWriteTokens: 0 };
     await logger.insertStep(step());
     await logger.addRunTotals(R, delta);
-    await logger.insertStep(step());
     await logger.addRunTotals(R, delta);
     const totals = fake.state.chains.filter((c) => c.table === "agent_runs" && c.op === "update");
     expect(totals).toHaveLength(2);
@@ -257,6 +360,11 @@ describe("stepLogger", () => {
       expect(t.payload).toEqual({ total_cost_usd: 0.0081, total_input_tokens: 1000, total_output_tokens: 200 });
       expect(t.calls).toEqual([["eq", "id", R]]);
     }
+  });
+
+  it("totals keep 6 decimals (numeric(12, 6) since 0700)", async () => {
+    fake.state.results.push({ data: [{ cost_usd: 0.000123, input_tokens: 1, output_tokens: 1 }, { cost_usd: "0.0000014", input_tokens: 1, output_tokens: 1 }], error: null });
+    expect((await runs.syncRunTotals(R)).costUsd).toBe(0.000124);
   });
 
   it("totals sum every step of the run (numeric strings tolerated)", async () => {
@@ -267,7 +375,7 @@ describe("stepLogger", () => {
       ],
       error: null,
     });
-    expect(await runs.syncRunTotals(R)).toEqual({ costUsd: 0.0031, inputTokens: 30, outputTokens: 3 });
+    expect(await runs.syncRunTotals(R)).toEqual({ costUsd: 0.00305, inputTokens: 30, outputTokens: 3 });
     expect(fake.state.chains[0].calls).toContainEqual(["eq", "run_id", R]);
   });
 
@@ -316,11 +424,12 @@ describe("agent runs: reads and counters", () => {
         ["eq", "mode", "live"],
         ["in", "trigger", ["build", "rebuild"]],
         ["gte", "started_at", TS],
+        ["or", "total_cost_usd.gt.0,state.not.in.(done,failed)"],
       ]),
     );
   });
 
-  it("countLiveRebuilds counts live rebuilds of the book", async () => {
+  it("countLiveRebuilds counts billed, successful live rebuilds of the book", async () => {
     fake.state.results.push({ data: null, error: null, count: 1 });
     expect(await runs.countLiveRebuilds(B)).toBe(1);
     expect(fake.state.chains[0].calls).toEqual(
@@ -328,8 +437,39 @@ describe("agent runs: reads and counters", () => {
         ["eq", "book_id", B],
         ["eq", "mode", "live"],
         ["eq", "trigger", "rebuild"],
+        ["gt", "total_cost_usd", 0],
+        ["in", "ai_status", ["ok", "partial"]],
       ]),
     );
+  });
+
+  it("hasFinishedLiveAiRun: a done live run with ai_status ok/partial", async () => {
+    fake.state.results.push({ data: null, error: null, count: 2 }, { data: null, error: null, count: 0 });
+    expect(await runs.hasFinishedLiveAiRun(B)).toBe(true);
+    expect(await runs.hasFinishedLiveAiRun(B)).toBe(false);
+    expect(await runs.hasFinishedLiveAiRun("bad")).toBe(false);
+    const [c] = fake.state.chains;
+    expect(c.client).toBe("admin");
+    expect(c.calls).toEqual(
+      expect.arrayContaining([
+        ["eq", "book_id", B],
+        ["eq", "mode", "live"],
+        ["eq", "state", "done"],
+        ["in", "ai_status", ["ok", "partial"]],
+      ]),
+    );
+    expect(fake.state.chains).toHaveLength(2);
+  });
+
+  it("getLatestRunForBook: RLS client, owner-granted columns only, newest first", async () => {
+    fake.state.results.push({ data: { id: R, mode: "rule", state: "done", started_at: TS }, error: null });
+    expect(await runs.getLatestRunForBook(B)).toEqual({ id: R, mode: "rule", state: "done", started_at: TS });
+    const [c] = fake.state.chains;
+    expect(c.client).toBe("user");
+    expect(c.calls[0]).toEqual(["select", "id, mode, state, started_at"]);
+    expect(c.calls).toContainEqual(["eq", "book_id", B]);
+    expect(c.calls).toContainEqual(["order", "started_at", { ascending: false }]);
+    expect(await runs.getLatestRunForBook("bad")).toBeNull();
   });
 
   it("getRunTrace loads run + ordered steps with the admin client", async () => {
@@ -424,7 +564,23 @@ describe("photos: curation", () => {
     expect(fake.state.maxInFlight).toBeLessThanOrEqual(photos.THUMB_DOWNLOAD_CONCURRENCY);
     expect(map.size).toBe(11);
     expect(map.has(paths[3])).toBe(false);
-    expect(Buffer.from(map.get(paths[0])!, "base64").toString()).toBe(`img:${paths[0]}`);
+    expect(Buffer.from(map.get(paths[0])!, "base64").subarray(3).toString()).toBe(`img:${paths[0]}`);
+  });
+
+  it("loadThumbBase64 skips thumbs over 1 MB or without the JPEG magic bytes (T16 #17)", async () => {
+    const [ok, png, big, empty] = ["t/ok.jpg", "t/png.jpg", "t/big.jpg", "t/empty.jpg"];
+    fake.state.downloadResults.set(png, {
+      data: new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a])]),
+      error: null,
+    });
+    fake.state.downloadResults.set(big, {
+      data: new Blob([JPEG_SOI, new Uint8Array(photos.THUMB_MAX_BYTES)]),
+      error: null,
+    });
+    fake.state.downloadResults.set(empty, { data: new Blob([new Uint8Array([0xff, 0xd8])]), error: null });
+    const map = await photos.loadThumbBase64([ok, png, big, empty]);
+    expect([...map.keys()]).toEqual([ok]);
+    expect(photos.THUMB_MAX_BYTES).toBe(1024 * 1024);
   });
 });
 

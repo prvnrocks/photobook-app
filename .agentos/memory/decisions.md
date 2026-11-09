@@ -82,3 +82,6 @@ Format: `## D-NNN — title (YYYY-MM-DD)` → **Decision**, **Why**, **Alternati
 
 ## D-027 — AI trace privacy (2026-11-08)
 **Decision:** Curator step logs store only ids/keep/reason/quality/scene/coverWorthy; descriptions only in `photos.ai` (deleted with the photo). Deleting a book nulls its runs' step outputs (costs kept). `/admin/runs/[id]` is limited to server-only `ADMIN_USER_IDS`; privacy policy must mention admin trace access.
+
+## D-028 — Free "Update album" re-layout after review changes (2026-11-09)
+**Decision:** After keep/drop changes on the review screen, an "Update album" button re-lays out the current album with the rule-based filler — keeps the AI's chapters, title and order where possible, removes dropped photos, adds newly kept ones to the right chapter by time. Free, unlimited, never counts as an AI rebuild, never runs on a user-edited album. AI rebuilds remain for re-planning the whole story. **Why:** with only 2 free rebuilds, review choices would otherwise never reach the album ("AI drafts, the user decides"). **Rejected:** re-flowing on every tap (layout jumps while deciding); leaving it to the M5 editor.

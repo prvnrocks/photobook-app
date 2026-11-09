@@ -494,7 +494,7 @@ test("b. review: header, screenshot + duplicate dropped, toggle persists; DB run
   await expect(page.getByTestId("review-header")).toHaveText(`AI kept ${kept.length} of ${rows.length}`);
   await expect(page.getByTestId("review-banner-partial")).toHaveCount(0);
   await expect(page.getByTestId("review-banner-failed")).toHaveCount(0);
-  await expect(page.getByTestId("rebuild-button")).toHaveText("Rebuild album");
+  await expect(page.getByTestId("rebuild-button")).toHaveText("Rebuild with AI");
 
   // Screenshot → dropped with a "Screenshot" chip.
   const png = rows.filter((r) => r.original_mime === "image/png");

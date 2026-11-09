@@ -468,13 +468,32 @@ function candidates(q: P[], long: boolean): { layout: string; take: number[]; or
   return out.sort((x, y) => key(x) - key(y));
 }
 
-function fillChapter(photos: P[]): PagePlan[] {
+/**
+ * Greedy, orientation-aware page filler (rule 5) for photos that are appended to an existing
+ * chapter (relayoutDoc, D-028): photos are sorted by time (undated last, ties by id), no chapter
+ * opener unless asked, and `prevLayout` (the chapter's last page) is not repeated first.
+ * Same rules and output as the autolayout filler. Pure, deterministic.
+ */
+export function fillPages(
+  photos: readonly Pick<AutoPhoto, "id" | "width" | "height" | "takenAt" | "place" | "blurScore">[],
+  opts: { opener?: boolean; prevLayout?: string | null } = {},
+): { layout: string; photoIds: string[] }[] {
+  const ps = photos
+    .map((ph) => toP({ ...ph, dateSource: null, status: "kept", dupGroup: null }))
+    .sort(byTime);
+  return fillChapter(ps, opts.opener ?? false, opts.prevLayout ?? null).map((pg) => ({
+    layout: pg.layout,
+    photoIds: pg.photos.map((p) => p.id),
+  }));
+}
+
+function fillChapter(photos: P[], opener = true, prevLayout: string | null = null): PagePlan[] {
   const pages: PagePlan[] = [];
   const q = [...photos];
   const long = photos.length >= LONG_CHAPTER;
-  let prev: string | null = null;
+  let prev: string | null = prevLayout;
 
-  if (q.length >= OPENER_MIN) {
+  if (opener && q.length >= OPENER_MIN) {
     const opener = single(q.shift() as P, null);
     pages.push(opener);
     prev = opener.layout;

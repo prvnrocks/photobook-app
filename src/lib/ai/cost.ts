@@ -1,11 +1,28 @@
 // Cost of one call in USD. Anthropic usage.input_tokens excludes cache tokens, so the four
-// buckets are additive. Unknown models are priced as AI_MODEL (logged costs stay non-zero).
+// buckets are additive.
+//
+// Unknown models (e.g. the model a server-side refusal fallback answered with, or a renamed model)
+// are priced CONSERVATIVELY: each bucket at the most expensive rate of any known model. Logged
+// costs may then over-state, never under-state, spend — limits and cost dashboards stay safe.
+// Add the real price to PRICING in client.ts when a new model shows up in agent_steps.model.
 
-import { AI_MODEL, PRICING } from "./client";
+import { PRICING } from "./client";
 import type { TokenUsage } from "./transport";
 
-export function priceFor(model: string) {
-  return PRICING[model] ?? PRICING[AI_MODEL];
+type Price = (typeof PRICING)[string];
+
+const MAX_KNOWN_PRICE: Price = Object.values(PRICING).reduce<Price>(
+  (m, p) => ({
+    input: Math.max(m.input, p.input),
+    output: Math.max(m.output, p.output),
+    cacheRead: Math.max(m.cacheRead, p.cacheRead),
+    cacheWrite: Math.max(m.cacheWrite, p.cacheWrite),
+  }),
+  { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+);
+
+export function priceFor(model: string): Price {
+  return Object.prototype.hasOwnProperty.call(PRICING, model) ? PRICING[model] : MAX_KNOWN_PRICE;
 }
 
 export function costUsd(model: string, usage: TokenUsage): number {

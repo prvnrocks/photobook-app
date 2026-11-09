@@ -54,7 +54,7 @@ beforeEach(() => {
   sleeps = [];
 });
 
-function run(transport: AgentTransport, retries?: number) {
+function run(transport: AgentTransport, retries?: number, extra: { deadline?: number; timeoutMs?: number; clock?: () => number } = {}) {
   return runAgentStep({
     runId: "run-1",
     agent: "curator",
@@ -67,6 +67,7 @@ function run(transport: AgentTransport, retries?: number) {
       schema: CuratorBatchAiSchema,
       effort: "low",
       maxTokens: 3000,
+      timeoutMs: extra.timeoutMs,
       scenarioMeta: { aliases: ALIASES },
     },
     strictSchema: CuratorBatchStrictSchema,
@@ -79,8 +80,9 @@ function run(transport: AgentTransport, retries?: number) {
       sleep: async (ms) => {
         sleeps.push(ms);
       },
+      deadline: extra.deadline,
     },
-    now: () => 1000,
+    now: extra.clock ?? (() => 1000),
   });
 }
 
@@ -176,6 +178,35 @@ describe("runAgentStep (replay)", () => {
     expect(sleeps).toEqual([100, 200]);
     const row = onlyRow();
     expect(row).toMatchObject({ status: "error", error: "server_error", retries: 2, stopReason: null, inputTokens: 0, costUsd: 0, latencyMs: 0 });
+  });
+
+  it("deadline: no retry when backoff + request timeout would pass it (lease budget)", async () => {
+    const t = replay("rate_limit");
+    // now 1000 + backoff 100 + timeout 60 000 ≥ deadline 61 000 → no retry
+    const res = await run(t, 2, { deadline: 61_000, timeoutMs: 60_000 });
+    expect(res).toMatchObject({ ok: false, code: "rate_limited", retryable: true });
+    expect(t.callCount).toBe(1);
+    expect(sleeps).toEqual([]);
+    expect(onlyRow()).toMatchObject({ retries: 0, error: "rate_limited" });
+  });
+
+  it("deadline: retries while they fit, stops at the first that does not", async () => {
+    let clock = 0;
+    const inner = replay("server_error");
+    // every call "takes" its full 10 s timeout
+    const slow: AgentTransport = {
+      kind: "replay",
+      parse: async (req) => {
+        clock += 10_000;
+        return inner.parse(req);
+      },
+    };
+    const res = await run(slow, 5, { deadline: 35_000, timeoutMs: 10_000, clock: () => clock });
+    expect(res).toMatchObject({ ok: false, code: "server_error" });
+    // 10 s + 0.1 s + 10 s < 35 s → retry; 20 s + 0.2 s + 10 s < 35 s → retry; 30 s + … ≥ 35 s → stop
+    expect(inner.callCount).toBe(3);
+    expect(sleeps).toEqual([100, 200]);
+    expect(onlyRow().retries).toBe(2);
   });
 
   it("retries: 0 → single attempt", async () => {

@@ -53,7 +53,7 @@ const ERROR_COPY: Record<StopError, string> = {
   not_found: "We couldn't find this album build. It may have been removed.",
   unavailable:
     "We lost the connection while building your album. Your photos are safe — try again to pick up where we left off.",
-  run_failed: "We couldn't finish the AI album. Your photos are safe and your draft album is ready.",
+  run_failed: "We couldn't finish with AI. Your photos are safe — open the review to continue.",
 };
 
 const boxClass = "rounded-xl border p-4 text-base break-words";

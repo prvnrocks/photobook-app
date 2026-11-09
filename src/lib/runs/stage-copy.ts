@@ -44,7 +44,7 @@ export function stageCopy(state: RunState, progress: RunProgress | null): StageC
   }
 }
 
-export type LimitKind = "daily_builds" | "rebuilds" | "analysed_photos";
+export type LimitKind = "daily_builds" | "rebuilds" | "analysed_photos" | "rate";
 
 /** Copy for a 429 from POST /api/ai/runs. The rule album still exists in every case. */
 export function limitCopy(limit: LimitKind, isPaid: boolean, dailyCap: number): string {
@@ -57,6 +57,8 @@ export function limitCopy(limit: LimitKind, isPaid: boolean, dailyCap: number): 
       return "No AI rebuilds left for this book.";
     case "analysed_photos":
       return "This book has more photos than AI can look at on your plan.";
+    case "rate":
+      return "Your album was just built. Please wait a few seconds and try again.";
   }
 }
 

@@ -1,10 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { autolayout } from "@/lib/autolayout";
 import { getCurrentUser } from "@/lib/auth/current-user";
-import { getMyBook } from "@/lib/db/books";
-import { setUserOverride } from "@/lib/db/photos";
+import { CAPTION_LANGS, OCCASIONS, type CaptionLang, type Occasion } from "@/lib/book/options";
+import { relayoutDoc, type RelayoutPhoto } from "@/lib/book/relayout";
+import { isEmptyDoc, isReplaceableDoc } from "@/lib/book/replaceable";
+import { parseBookDoc } from "@/lib/book/schema";
+import type { BookDoc } from "@/lib/book/types";
+import { getActiveRunForBook } from "@/lib/db/agent-runs";
+import { getBookForRun, getMyBook, writeDocIfReplaceable, type BookForRun } from "@/lib/db/books";
+import { listPhotosForCuration, setUserOverride, type CurationPhotoRow } from "@/lib/db/photos";
 import { errorCodeOf } from "@/lib/http/json";
+import type { Json } from "@/lib/supabase/database.types";
 import { isUuid } from "@/lib/uuid";
 
 const MSG_SIGNED_OUT = "Please sign in again.";
@@ -37,4 +45,94 @@ export async function togglePhotoAction(
   }
   revalidatePath(`/books/${bookId}/review`);
   return { ok: true };
+}
+
+export type UpdateAlbumResult =
+  | { ok: true; changed: boolean; pages: number }
+  | { ok: false; error: "signed_out" | "not_found" | "user_edited" | "busy" | "failed" };
+
+/**
+ * "Update album" (D-028): re-lays out the current album after review keep/drop changes with the
+ * rule-based filler (relayoutDoc) — AI chapters, title and order kept, dropped photos removed,
+ * newly kept photos added by time. A `{}` doc gets a fresh rule album. Free and unlimited: no AI
+ * call, no agent_runs row, not counted against any limit. Refused while a run is active (busy) or
+ * when the album was edited by the user (user_edited). Logs error codes only, never photo data.
+ */
+export async function updateAlbumAction(bookId: string): Promise<UpdateAlbumResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "signed_out" };
+  if (typeof bookId !== "string" || !isUuid(bookId)) return { ok: false, error: "not_found" };
+
+  try {
+    const mine = await getMyBook(bookId);
+    if (!mine) return { ok: false, error: "not_found" };
+    if (await getActiveRunForBook(mine.id)) return { ok: false, error: "busy" };
+
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const book = await getBookForRun(mine.id);
+      if (!book) return { ok: false, error: "not_found" };
+      if (!isReplaceableDoc(book.doc)) return { ok: false, error: "user_edited" };
+
+      const rows = await listPhotosForCuration(book.id);
+      const next = nextDoc(book, rows.map(toRelayoutPhoto));
+      if (next === "invalid") return { ok: false, error: "user_edited" };
+      if (!next.changed) return { ok: true, changed: false, pages: next.doc?.pages.length ?? 0 };
+      const doc = next.doc as BookDoc;
+
+      const write = await writeDocIfReplaceable(book.id, doc as unknown as Json, doc.pages.length, {
+        updatedAt: book.updated_at,
+      });
+      if (write.ok) {
+        revalidatePath(`/books/${book.id}/review`);
+        revalidatePath("/dashboard");
+        return { ok: true, changed: true, pages: doc.pages.length };
+      }
+      if (write.reason === "user_edited") return { ok: false, error: "user_edited" };
+      if (write.reason === "not_found") return { ok: false, error: "not_found" };
+      // conflict: the book changed since we read it → reload and retry once
+    }
+    return { ok: false, error: "busy" };
+  } catch (err) {
+    console.error(`[review] update album failed (${errorCodeOf(err)})`);
+    return { ok: false, error: "failed" };
+  }
+}
+
+function toRelayoutPhoto(r: CurationPhotoRow): RelayoutPhoto & { dateSource: "exif" | "file" | null } {
+  const positive = (v: number | null) => (v !== null && Number.isFinite(v) && v > 0 ? v : 1);
+  return {
+    id: r.id,
+    width: positive(r.width),
+    height: positive(r.height),
+    takenAt: r.taken_at,
+    dateSource: r.date_source === "exif" || r.date_source === "file" ? r.date_source : null,
+    status: r.status === "dropped" ? "dropped" : "kept",
+    place: r.place,
+    dupGroup: r.dup_group,
+    blurScore: r.blur_score,
+  };
+}
+
+/** The doc to write, `{ changed:false }` for a no-op, or "invalid" for an unparsable doc. */
+function nextDoc(
+  book: BookForRun,
+  photos: (RelayoutPhoto & { dateSource: "exif" | "file" | null })[],
+): { changed: boolean; doc: BookDoc | null } | "invalid" {
+  const occasion: Occasion = (OCCASIONS as readonly string[]).includes(book.occasion ?? "")
+    ? (book.occasion as Occasion)
+    : "other";
+  const captionLang: CaptionLang = (CAPTION_LANGS as readonly string[]).includes(book.caption_lang ?? "")
+    ? (book.caption_lang as CaptionLang)
+    : "en";
+  const isPaid = book.is_paid === true;
+
+  if (isEmptyDoc(book.doc)) {
+    if (!photos.some((p) => p.status === "kept")) return { changed: false, doc: null };
+    // Fresh rule album (meta generator "rule", runId null, D-018).
+    return { changed: true, doc: autolayout(photos, { occasion, title: book.title, captionLang, isPaid, runId: null }) };
+  }
+  const parsed = parseBookDoc(book.doc);
+  if (!parsed.ok) return "invalid"; // isReplaceableDoc already refuses this; belt and braces
+  const r = relayoutDoc(parsed.doc, photos, { isPaid, maxPages: book.max_pages, captionLang });
+  return { changed: r.changed, doc: r.doc };
 }

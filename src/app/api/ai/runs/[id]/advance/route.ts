@@ -14,7 +14,8 @@ import { isUuid } from "@/lib/uuid";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// Fluid compute; the 40 s tick budget keeps real requests well under 60 s.
+// Ticks are soft-budgeted at 40 s, but a Storyteller tick can run up to LEASE_SECONDS (240 s);
+// maxDuration (300) must stay ≥ LEASE_SECONDS. Requires Vercel Fluid compute.
 export const maxDuration = 300;
 
 const TICK_BUDGET_MS = 40_000;

@@ -3,7 +3,7 @@
 // Keep / drop review grid (M3). Kept | Dropped tabs; tapping a tile toggles it optimistically
 // through the `toggle` server action (user_override = true, so the AI never changes it again).
 // Tiles the user toggled stay where they are until the tab changes, so nothing jumps under a tap.
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { PhotoTile } from "@/components/review/PhotoTile";
 import {
@@ -26,6 +26,10 @@ type ReviewGridProps = {
   aiUsed: boolean;
   /** Bound server action: (photoId, keep) → result. */
   toggle: (photoId: string, keep: boolean) => Promise<ToggleResult>;
+  /** Called with the photos incl. optimistic choices whenever they change (must be stable). */
+  onPhotosChange?: (photos: ReviewTilePhoto[]) => void;
+  /** Lift the toast above a sticky bottom bar. */
+  raiseToast?: boolean;
 };
 
 type Choice = Pick<ReviewTilePhoto, "status" | "dropReason" | "userOverride">;
@@ -35,7 +39,7 @@ const TOAST_MS = 4000;
 /** Signed thumb URLs expire after 10 min; re-sign (router.refresh) at most this often. */
 const RESIGN_MIN_GAP_MS = 60_000;
 
-export function ReviewGrid({ photos, aiUsed, toggle }: ReviewGridProps) {
+export function ReviewGrid({ photos, aiUsed, toggle, onPhotosChange, raiseToast = false }: ReviewGridProps) {
   const router = useRouter();
   const [overrides, setOverrides] = useState<Map<string, Choice>>(() => new Map());
   const [pending, setPending] = useState<Set<string>>(() => new Set());
@@ -46,14 +50,22 @@ export function ReviewGrid({ photos, aiUsed, toggle }: ReviewGridProps) {
   const tabRefs = useRef<Record<ReviewTab, HTMLButtonElement | null>>({ kept: null, dropped: null });
 
   // Server props (refreshed after each toggle via revalidatePath) + optimistic choices on top.
-  const merged = photos.map((p) => {
-    const o = overrides.get(p.id);
-    return o ? { ...p, ...o } : p;
-  });
+  const merged = useMemo(
+    () =>
+      photos.map((p) => {
+        const o = overrides.get(p.id);
+        return o ? { ...p, ...o } : p;
+      }),
+    [photos, overrides],
+  );
   const kept = countKept(merged);
   const dropped = merged.length - kept;
   const shown = visiblePhotos(merged, tab, pinned);
   const indexOf = new Map(photos.map((p, i) => [p.id, i + 1]));
+
+  useEffect(() => {
+    onPhotosChange?.(merged);
+  }, [merged, onPhotosChange]);
 
   useEffect(() => {
     if (!toast) return;
@@ -188,7 +200,10 @@ export function ReviewGrid({ photos, aiUsed, toggle }: ReviewGridProps) {
       <div
         role="status"
         aria-live="polite"
-        className="pointer-events-none fixed inset-x-0 bottom-4 z-20 flex justify-center px-4"
+        className={cn(
+          "pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4",
+          raiseToast ? "bottom-[calc(7rem+env(safe-area-inset-bottom))]" : "bottom-4",
+        )}
       >
         {toast ? (
           <p

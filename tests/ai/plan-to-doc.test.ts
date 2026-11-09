@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planToDoc, validatePlanAgainstPhotos } from "@/lib/ai/plan-to-doc";
+import { planToDoc, prunePlan, validatePlanAgainstPhotos } from "@/lib/ai/plan-to-doc";
 import { effectiveMaxPages } from "@/lib/ai/story";
 import { AlbumPlanStrictSchema, type AlbumPlan } from "@/lib/ai/schemas";
 import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
@@ -151,5 +151,52 @@ describe("planToDoc — invalid plans → issues", () => {
   it("an invalid runId surfaces as a doc issue, not a throw", () => {
     const r = planToDoc(fixturePlan(), { ...base, runId: "not-a-uuid" });
     expect("issues" in r && r.issues.some((i) => i.startsWith("doc: meta.runId"))).toBe(true);
+  });
+});
+
+describe("prunePlan — photos removed during the run", () => {
+  const withDropped = (aliases: string[]) =>
+    photos.map((p) => (aliases.some((a) => aliasToId.get(a) === p.id) ? { ...p, keep: false } : p));
+
+  it("unchanged plan when every photo is still kept", () => {
+    const plan = fixturePlan();
+    const r = prunePlan(plan, { aliasToId, photos });
+    expect(r).toEqual({ plan, removed: 0, changed: false });
+  });
+
+  it("removes the photo, re-picks a layout for the page's photo count, and the doc validates", () => {
+    const plan = fixturePlan();
+    // page 2 is three-mixed [p3, p2, p4]; drop p2 → 2 photos left
+    const ps = withDropped(["p2"]);
+    const r = prunePlan(plan, { aliasToId, photos: ps });
+    expect(r.changed).toBe(true);
+    expect(r.removed).toBe(1);
+    const page = r.plan.moments[0].pages[1];
+    expect(page.photoIds).toEqual(["p3", "p4"]);
+    expect(["two-vertical", "two-horizontal"]).toContain(page.layoutId);
+    const out = planToDoc(r.plan, { ...base, photos: ps });
+    expect("doc" in out).toBe(true);
+    expect(JSON.stringify(out)).not.toContain(aliasToId.get("p2")!);
+  });
+
+  it("drops emptied pages and moments; replaces a removed cover with the first photo left", () => {
+    const plan = fixturePlan();
+    const all = plan.moments[1].pages.flatMap((pg) => pg.photoIds);
+    const ps = withDropped([...all, plan.coverPhotoId]);
+    const r = prunePlan(plan, { aliasToId, photos: ps });
+    expect(r.plan.moments).toHaveLength(plan.moments.length - 1);
+    expect(r.plan.coverPhotoId).not.toBe(plan.coverPhotoId);
+    expect(r.plan.coverPhotoId).toBe(r.plan.moments[0].pages[0].photoIds[0]);
+    const out = planToDoc(r.plan, { ...base, photos: ps });
+    expect("doc" in out).toBe(true);
+  });
+
+  it("everything removed → empty plan that planToDoc rejects (caller falls back to rule)", () => {
+    const plan = fixturePlan();
+    const used = plan.moments.flatMap((m) => m.pages.flatMap((pg) => pg.photoIds));
+    const ps = withDropped([...used, plan.coverPhotoId]);
+    const r = prunePlan(plan, { aliasToId, photos: ps });
+    expect(r.plan.moments).toEqual([]);
+    expect("issues" in planToDoc(r.plan, { ...base, photos: ps })).toBe(true);
   });
 });

@@ -310,11 +310,20 @@ export async function listPhotosForCuration(bookId: string): Promise<CurationPho
 /** Parallel downloads in loadThumbBase64. */
 export const THUMB_DOWNLOAD_CONCURRENCY = 5;
 
+/** Thumbs are ~512 px JPEGs (≈30–150 KB); anything bigger isn't one of ours (T16 #17). */
+export const THUMB_MAX_BYTES = 1024 * 1024;
+
+/** JPEG SOI + marker prefix. */
+function isJpeg(bytes: Uint8Array): boolean {
+  return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+}
+
 /**
  * Downloads thumbs (admin storage) → Map path → base64 (JPEG bytes).
- * Paths that fail to download are simply absent from the map (the caller
- * treats them as "not analysed"); duplicates are fetched once. Never throws
- * for a single missing object.
+ * Paths that fail to download, are larger than THUMB_MAX_BYTES or don't start
+ * with the JPEG magic bytes FF D8 FF are simply absent from the map (the
+ * caller treats them as "not analysed" — never sent to the model);
+ * duplicates are fetched once. Never throws for a single bad object.
  */
 export async function loadThumbBase64(paths: string[]): Promise<Map<string, string>> {
   const unique = [...new Set(paths.filter((p) => typeof p === "string" && p !== ""))];
@@ -329,7 +338,10 @@ export async function loadThumbBase64(paths: string[]): Promise<Map<string, stri
       try {
         const { data, error } = await bucket.download(path);
         if (error || !data) continue;
-        out.set(path, Buffer.from(await data.arrayBuffer()).toString("base64"));
+        if (typeof data.size === "number" && data.size > THUMB_MAX_BYTES) continue;
+        const bytes = new Uint8Array(await data.arrayBuffer());
+        if (bytes.length > THUMB_MAX_BYTES || !isJpeg(bytes)) continue;
+        out.set(path, Buffer.from(bytes).toString("base64"));
       } catch {
         // network / decode failure → absent from the map
       }

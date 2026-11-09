@@ -9,7 +9,9 @@
 --      photo column guard, pending-only storage writes, finalize rate limit)
 --      and 20261108000600_agent_pipeline.sql (agent_runs / agent_steps /
 --      user_memory, run lease RPCs, server-only books.ai_status, step scrub on
---      book delete).
+--      book delete)
+--      and 20261109000700_agent_pipeline_hardening.sql (lease tokens, capped
+--      run creation, agent_runs column grants, cursor scrub, cost precision).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -18,7 +20,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 74 checks passed
+--       RLS OK — all 80 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -61,6 +63,13 @@ declare
   run_b      uuid;
   run_del    uuid;
   book_del   uuid;
+  tok1       uuid;
+  tok2       uuid;
+  run_cap    uuid;
+  book_c1    uuid;
+  book_c2    uuid;
+  book_c3    uuid;
+  v_res      jsonb;
   slug_pub   text := 'rls-check-pub-'   || substr(md5(random()::text), 1, 12);
   slug_unpub text := 'rls-check-unpub-' || substr(md5(random()::text), 1, 12);
   r          record;
@@ -761,9 +770,31 @@ begin
      or has_table_privilege('authenticated', 'public.user_memory', 'update')
      or has_function_privilege('authenticated', 'public.claim_agent_run(uuid, integer)', 'execute')
      or has_function_privilege('anon', 'public.claim_agent_run(uuid, integer)', 'execute')
-     or has_function_privilege('authenticated', 'public.release_agent_run(uuid)', 'execute')
-     or has_function_privilege('anon', 'public.release_agent_run(uuid)', 'execute') then
+     or has_function_privilege('authenticated', 'public.release_agent_run(uuid, uuid)', 'execute')
+     or has_function_privilege('anon', 'public.release_agent_run(uuid, uuid)', 'execute')
+     or has_function_privilege('authenticated',
+          'public.create_agent_run_capped(uuid, uuid, text, text, integer, integer, boolean)', 'execute')
+     or has_function_privilege('anon',
+          'public.create_agent_run_capped(uuid, uuid, text, text, integer, integer, boolean)', 'execute') then
     raise exception 'RLS FAIL [agent grants]: a client role has a write/step/RPC privilege it must not have';
+  end if;
+  checks := checks + 1;
+
+  -- 0700: authenticated reads agent_runs through column grants only (no cursor,
+  -- lease, attempts, costs or tokens); the table-level SELECT is gone.
+  if has_table_privilege('authenticated', 'public.agent_runs', 'select')
+     or has_column_privilege('authenticated', 'public.agent_runs', 'cursor', 'select')
+     or has_column_privilege('authenticated', 'public.agent_runs', 'lease_token', 'select')
+     or has_column_privilege('authenticated', 'public.agent_runs', 'lease_until', 'select')
+     or has_column_privilege('authenticated', 'public.agent_runs', 'attempts', 'select')
+     or has_column_privilege('authenticated', 'public.agent_runs', 'total_cost_usd', 'select')
+     or has_column_privilege('authenticated', 'public.agent_runs', 'total_input_tokens', 'select')
+     or has_column_privilege('authenticated', 'public.agent_runs', 'total_output_tokens', 'select')
+     or has_column_privilege('authenticated', 'public.agent_runs', 'critic_score', 'select')
+     or not has_column_privilege('authenticated', 'public.agent_runs', 'progress', 'select')
+     or not has_column_privilege('authenticated', 'public.agent_runs', 'state', 'select')
+     or not has_column_privilege('authenticated', 'public.agent_runs', 'finished_at', 'select') then
+    raise exception 'RLS FAIL [agent_runs column grants]: authenticated column privileges are wrong';
   end if;
   checks := checks + 1;
 
@@ -776,6 +807,36 @@ begin
   if n <> 1 or not exists (select 1 from public.agent_runs where id = run_a) then
     raise exception 'RLS FAIL [agent_runs select]: A sees % of (own, B''s) runs, expected only own', n;
   end if;
+  checks := checks + 1;
+
+  -- 0700 column grants: the progress-screen columns are readable, internals are not
+  select * into r from (
+    select id, book_id, user_id, state, ai_status, progress, error_code, mode, trigger, started_at, finished_at
+      from public.agent_runs where id = run_a
+  ) as owner_cols;
+  if r.id is distinct from run_a or r.state <> 'curating' then
+    raise exception 'RLS FAIL [agent_runs owner columns]: A could not read own run''s allowed columns';
+  end if;
+  begin
+    select count(*) into n from public.agent_runs where id = run_a and cursor is not null;
+    raise exception 'RLS FAIL [agent_runs cursor]: A can read agent_runs.cursor';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    select count(*) into n from public.agent_runs where id = run_a and total_cost_usd >= 0;
+    raise exception 'RLS FAIL [agent_runs cost]: A can read agent_runs.total_cost_usd';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    select count(*) into n from public.agent_runs where id = run_a and lease_token is null;
+    raise exception 'RLS FAIL [agent_runs lease_token]: A can read agent_runs.lease_token';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    select * into r from public.agent_runs where id = run_a;
+    raise exception 'RLS FAIL [agent_runs select *]: A can select * from agent_runs';
+  exception when insufficient_privilege then null;
+  end;
   checks := checks + 1;
 
   begin
@@ -846,8 +907,13 @@ begin
   exception when insufficient_privilege then null;
   end;
   begin
-    perform public.release_agent_run(run_a);
+    perform public.release_agent_run(run_a, gen_random_uuid());
     raise exception 'RLS FAIL [release_agent_run]: authenticated could call release_agent_run';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.create_agent_run_capped(book_a2, uid_a, 'build', 'live', 100, 100, false);
+    raise exception 'RLS FAIL [create_agent_run_capped]: authenticated could call create_agent_run_capped';
   exception when insufficient_privilege then null;
   end;
   checks := checks + 1;
@@ -855,8 +921,9 @@ begin
   -- owner deletes a book that has runs: allowed; steps scrubbed, costs kept (D-027)
   insert into public.books (user_id, title) values (uid_a, 'RLS check delete') returning id into book_del;
   reset role;
-  insert into public.agent_runs (book_id, user_id, trigger, mode, state, total_cost_usd)
-  values (book_del, uid_a, 'build', 'replay', 'done', 0.5)
+  insert into public.agent_runs (book_id, user_id, trigger, mode, state, total_cost_usd, cursor, progress)
+  values (book_del, uid_a, 'build', 'replay', 'done', 0.5,
+          '{"aliasIds":["p1"],"plan":{"title":"x"}}', '{"phase":"done","photosTotal":1}')
   returning id into run_del;
   insert into public.agent_steps (run_id, agent, step_key, status, output, input_summary, cost_usd)
   values (run_del, 'curator', 'curator:1', 'ok', '{"keep":["p1"]}', '{"photos":1}', 0.25),
@@ -876,38 +943,126 @@ begin
   select count(*) into n from public.agent_runs
    where id = run_del and book_id is null and user_id = uid_a and total_cost_usd = 0.5;
   if n <> 1 then raise exception 'RLS FAIL [book delete with runs]: run not kept with book_id = null'; end if;
+  select count(*) into n from public.agent_runs
+   where id = run_del and cursor = '{}'::jsonb and progress = '{}'::jsonb;
+  if n <> 1 then raise exception 'RLS FAIL [scrub run cursor]: cursor/progress not cleared on book delete'; end if;
   select count(*) into n from public.agent_steps
    where run_id = run_del and output is null and input_summary is null and cost_usd = 0.25;
   if n <> 2 then raise exception 'RLS FAIL [scrub steps]: % of 2 steps scrubbed with costs kept', n; end if;
   checks := checks + 1;
 
-  -- As service_role: lease claim works once until it expires or is released
+  -- As service_role: lease claim returns a token once until it expires or is
+  -- released; release / checkpoint with a stale token are no-ops (0700)
   set local role service_role;
-  if not public.claim_agent_run(run_a, 30) then
-    raise exception 'RLS FAIL [claim_agent_run]: first claim of an unleased run failed';
+  tok1 := public.claim_agent_run(run_a, 30);
+  if tok1 is null then
+    raise exception 'RLS FAIL [claim_agent_run]: first claim of an unleased run returned no token';
   end if;
-  if public.claim_agent_run(run_a, 30) then
+  if public.claim_agent_run(run_a, 30) is not null then
     raise exception 'RLS FAIL [claim_agent_run]: second claim succeeded while the lease is held';
   end if;
   update public.agent_runs set lease_until = now() - interval '1 second' where id = run_a;
-  if not public.claim_agent_run(run_a, 100000) then
-    raise exception 'RLS FAIL [claim_agent_run]: claim after lease expiry failed';
+  tok2 := public.claim_agent_run(run_a, 100000);
+  if tok2 is null or tok2 = tok1 then
+    raise exception 'RLS FAIL [claim_agent_run]: claim after lease expiry failed or reused the token';
   end if;
   select * into r from public.agent_runs where id = run_a;
-  if r.attempts <> 2 or r.lease_until > now() + interval '300 seconds' then
-    raise exception 'RLS FAIL [claim_agent_run]: attempts % / lease % (expected 2, clamped to 300 s)',
+  if r.attempts <> 2 or r.lease_until > now() + interval '300 seconds' or r.lease_token is distinct from tok2 then
+    raise exception 'RLS FAIL [claim_agent_run]: attempts % / lease % (expected 2, clamped to 300 s, token stored)',
       r.attempts, r.lease_until - now();
   end if;
   checks := checks + 1;
 
-  perform public.release_agent_run(run_a);
-  if not public.claim_agent_run(run_a, 30) then
+  -- stale tick (tok1) can neither release nor checkpoint
+  perform public.release_agent_run(run_a, tok1);
+  perform public.release_agent_run(run_a, null);
+  select * into r from public.agent_runs where id = run_a;
+  if r.lease_token is distinct from tok2 or r.lease_until is null then
+    raise exception 'RLS FAIL [release_agent_run]: a stale / null token released the current lease';
+  end if;
+  update public.agent_runs set state = 'storytelling' where id = run_a and lease_token = tok1;
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'RLS FAIL [checkpoint token]: a stale-token checkpoint wrote % rows', n; end if;
+  update public.agent_runs set state = 'storytelling' where id = run_a and lease_token = tok2;
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'RLS FAIL [checkpoint token]: the current-token checkpoint wrote % rows', n; end if;
+  checks := checks + 1;
+
+  perform public.release_agent_run(run_a, tok2);
+  select * into r from public.agent_runs where id = run_a;
+  if r.lease_token is not null or r.lease_until is not null then
+    raise exception 'RLS FAIL [release_agent_run]: the owning token did not clear the lease';
+  end if;
+  if public.claim_agent_run(run_a, 30) is null then
     raise exception 'RLS FAIL [release_agent_run]: claim after release failed';
   end if;
-  update public.agent_runs set state = 'done', lease_until = null where id = run_a;
-  if public.claim_agent_run(run_a, 30) then
+  update public.agent_runs set state = 'done', lease_until = null, lease_token = null where id = run_a;
+  if public.claim_agent_run(run_a, 30) is not null then
     raise exception 'RLS FAIL [claim_agent_run]: a finished run was claimed';
   end if;
+  checks := checks + 1;
+
+  -- create_agent_run_capped (0700): per-user daily cap counts live runs that
+  -- cost something or are still active; rebuild cap counts successful billed
+  -- live rebuilds of the book; one active run per book → already_running.
+  reset role;
+  insert into public.books (user_id, title) values (uid_b, 'RLS cap 1') returning id into book_c1;
+  insert into public.books (user_id, title) values (uid_b, 'RLS cap 2') returning id into book_c2;
+  insert into public.books (user_id, title) values (uid_b, 'RLS cap 3') returning id into book_c3;
+  -- B's earlier runs: a billed ok build (counts), a free failed build (doesn't),
+  -- a replay build (doesn't), an old billed failed rebuild (not daily, not a successful rebuild)
+  insert into public.agent_runs (book_id, user_id, trigger, mode, state, ai_status, total_cost_usd, started_at)
+  values (book_c1, uid_b, 'build',   'live',   'done',   'ok',     0.01, now() - interval '1 hour'),
+         (book_c1, uid_b, 'build',   'live',   'failed', 'failed', 0,    now() - interval '1 hour'),
+         (book_c2, uid_b, 'build',   'replay', 'done',   'ok',     0,    now() - interval '1 hour'),
+         (book_c1, uid_b, 'rebuild', 'live',   'failed', 'failed', 0.05, now() - interval '2 days');
+  set local role service_role;
+
+  v_res := public.create_agent_run_capped(book_c1, uid_b, 'rebuild', 'live', 3, 1, true);
+  if v_res ->> 'id' is null then
+    raise exception 'RLS FAIL [capped create]: 1st call (1 of 3 used) refused: %', v_res;
+  end if;
+  run_cap := (v_res ->> 'id')::uuid;
+  v_res := public.create_agent_run_capped(book_c2, uid_b, 'build', 'live', 3, 1, true);
+  if v_res ->> 'id' is null then
+    raise exception 'RLS FAIL [capped create]: 2nd call (2 of 3 used) refused: %', v_res;
+  end if;
+  v_res := public.create_agent_run_capped(book_c3, uid_b, 'build', 'live', 3, 1, true);
+  if v_res is distinct from '{"error":"limit","limit":"daily_builds"}'::jsonb then
+    raise exception 'RLS FAIL [capped create]: 3rd call over the daily cap (active runs count) returned %', v_res;
+  end if;
+  select count(*) into n from public.agent_runs where book_id = book_c3;
+  if n <> 0 then raise exception 'RLS FAIL [capped create]: a capped call inserted a run'; end if;
+  checks := checks + 1;
+
+  v_res := public.create_agent_run_capped(book_c1, uid_b, 'build', 'replay', 3, 1, false);
+  if v_res is distinct from '{"error":"already_running"}'::jsonb then
+    raise exception 'RLS FAIL [capped create]: second active run on a book returned %', v_res;
+  end if;
+  v_res := public.create_agent_run_capped(book_c3, uid_b, 'build', 'replay', 3, 1, false);
+  if v_res ->> 'id' is null then
+    raise exception 'RLS FAIL [capped create]: p_enforce = false still applied the cap: %', v_res;
+  end if;
+  checks := checks + 1;
+
+  -- finish: the rebuild succeeded (billed), book_c2's run failed without cost,
+  -- book_c3's replay run is done → daily = 2 billed live runs < 3
+  update public.agent_runs set state = 'done', ai_status = 'ok', total_cost_usd = 0.02 where id = run_cap;
+  update public.agent_runs set state = 'failed', ai_status = 'failed' where book_id = book_c2 and state = 'queued';
+  update public.agent_runs set state = 'done' where book_id = book_c3 and state = 'queued';
+  v_res := public.create_agent_run_capped(book_c1, uid_b, 'rebuild', 'live', 3, 1, true);
+  if v_res is distinct from '{"error":"limit","limit":"rebuilds"}'::jsonb then
+    raise exception 'RLS FAIL [capped create]: rebuild over the rebuild cap returned %', v_res;
+  end if;
+  v_res := public.create_agent_run_capped(book_c1, uid_b, 'rebuild', 'live', 3, 2, true);
+  if v_res ->> 'id' is null then
+    raise exception 'RLS FAIL [capped create]: rebuild under the cap (failed / free runs must not count) refused: %', v_res;
+  end if;
+  begin
+    perform public.create_agent_run_capped(book_c2, null, 'build', 'live', 3, 1, true);
+    raise exception 'RLS FAIL [capped create]: a null user id was accepted';
+  exception when invalid_parameter_value then null;
+  end;
   checks := checks + 1;
 
   -- ---------------------------------------------------------------------------

@@ -135,7 +135,7 @@ export function rebuildsLeftLabel(n: number): string {
 
 /**
  * What the rebuild button does:
- * - 'rebuild'  → AI picked these (done): "Rebuild album" (trigger rebuild, counts toward the limit)
+ * - 'rebuild'  → AI picked these (done): "Rebuild with AI" (trigger rebuild, counts toward the limit)
  * - 'retry_ai' → AI partial/failed: "Try AI again" (trigger rebuild)
  * - 'first_ai' → AI available but never used on this book: "Build with AI" (trigger build)
  * - 'ai_off'   → AI unavailable: "Rebuild album" re-runs the simple rules; "Try AI again" disabled
@@ -150,7 +150,7 @@ export function rebuildVariant(input: { aiAvailable: boolean; aiStatus: string |
 }
 
 export const REBUILD_LABELS: Record<RebuildVariant, string> = {
-  rebuild: "Rebuild album",
+  rebuild: "Rebuild with AI",
   retry_ai: "Try AI again",
   first_ai: "Build with AI",
   ai_off: "Rebuild album",
@@ -172,6 +172,7 @@ export const REBUILD_MESSAGES = {
   limitRebuilds: "You've used all the rebuilds for this book.",
   limitDaily: "You've reached today's AI limit. Please try again tomorrow.",
   limitPhotos: "This book has more photos than AI can check on this plan.",
+  limitRate: "Your album was just rebuilt. Please wait a few seconds and try again.",
   signedOut: "Please sign in again.",
   notFound: "That book wasn't found.",
   generic: "Something went wrong. Please try again.",
@@ -199,6 +200,7 @@ export function rebuildOutcome(status: number, body: unknown): RebuildOutcome {
   if (status === 429) {
     if (b.limit === "rebuilds") return { kind: "error", message: REBUILD_MESSAGES.limitRebuilds };
     if (b.limit === "analysed_photos") return { kind: "error", message: REBUILD_MESSAGES.limitPhotos };
+    if (b.limit === "rate") return { kind: "error", message: REBUILD_MESSAGES.limitRate };
     return { kind: "error", message: REBUILD_MESSAGES.limitDaily };
   }
   if (status === 401) return { kind: "error", message: REBUILD_MESSAGES.signedOut };
@@ -240,4 +242,123 @@ export function thumbSize(p: Pick<ReviewTilePhoto, "width" | "height">): { width
   const h = p.height && p.height > 0 ? p.height : 512;
   const scale = 512 / Math.max(w, h);
   return { width: Math.max(1, Math.round(w * scale)), height: Math.max(1, Math.round(h * scale)) };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Album sync (D-028): keep / drop choices reach the album through "Update album".
+
+/**
+ * Photo ids the album uses (page slots + cover). Loose read of the raw books.doc jsonb: anything
+ * that isn't the expected shape is skipped, so `{}` / garbage → empty set. Never throws.
+ */
+export function docPhotoIds(doc: unknown): string[] {
+  const ids = new Set<string>();
+  if (typeof doc !== "object" || doc === null || Array.isArray(doc)) return [];
+  const d = doc as { pages?: unknown; cover?: unknown };
+  if (Array.isArray(d.pages)) {
+    for (const page of d.pages) {
+      const slots = typeof page === "object" && page !== null ? (page as { slots?: unknown }).slots : null;
+      if (!Array.isArray(slots)) continue;
+      for (const s of slots) {
+        const id = typeof s === "object" && s !== null ? (s as { photoId?: unknown }).photoId : null;
+        if (typeof id === "string" && id.length > 0) ids.add(id);
+      }
+    }
+  }
+  const coverId =
+    typeof d.cover === "object" && d.cover !== null ? (d.cover as { photoId?: unknown }).photoId : null;
+  if (typeof coverId === "string" && coverId.length > 0) ids.add(coverId);
+  return [...ids];
+}
+
+/**
+ * Photos whose keep / drop choice isn't in the album yet:
+ * - a dropped photo the album still shows (page or cover), or
+ * - a photo the user chose to keep (user_override) that the album doesn't use.
+ * AI-kept photos the album leaves out are fine (the AI / page cap picks a subset), so they never
+ * count. Nothing is out of sync when there is no album yet (`{}`), when the album was edited by
+ * the user (D-028: Update album never runs on it), or while a build is running.
+ */
+export function unsyncedPhotoIds(
+  photos: readonly Pick<ReviewTilePhoto, "id" | "status" | "userOverride">[],
+  albumIds: ReadonlySet<string>,
+  opts: { hasAlbum: boolean; userEdited: boolean; building: boolean },
+): string[] {
+  if (!opts.hasAlbum || opts.userEdited || opts.building) return [];
+  const out: string[] = [];
+  for (const p of photos) {
+    const inAlbum = albumIds.has(p.id);
+    if (isKept(p) ? p.userOverride && !inAlbum : inAlbum) out.push(p.id);
+  }
+  return out;
+}
+
+/** Server-side flag for the review page: is any choice not in the album yet? */
+export function docOutOfSync(
+  doc: unknown,
+  photos: readonly Pick<ReviewTilePhoto, "id" | "status" | "userOverride">[],
+  opts: { userEdited: boolean; building: boolean },
+): boolean {
+  const ids = docPhotoIds(doc);
+  return unsyncedPhotoIds(photos, new Set(ids), { hasAlbum: ids.length > 0, ...opts }).length > 0;
+}
+
+export function changedPhotosCopy(n: number): string {
+  return n === 1 ? "You changed 1 photo." : `You changed ${n} photos.`;
+}
+
+/** Result of updateAlbumAction (src/app/books/[id]/review/actions.ts). */
+export type UpdateAlbumResult =
+  | { ok: true; changed: boolean; pages: number }
+  | { ok: false; error: "signed_out" | "not_found" | "user_edited" | "busy" | "failed" };
+
+export type UpdateAlbumOutcome =
+  | { kind: "updated"; toast: string }
+  | { kind: "error"; error: string; message: string; link: { href: string; label: string } | null };
+
+export const UPDATE_ALBUM_MESSAGES = {
+  updated: "Album updated",
+  upToDate: "Already up to date",
+  userEdited: "You've edited this album, so we won't change it.",
+  busy: "Your album is still being built — try again in a moment.",
+  signedOut: "Please sign in again.",
+  notFound: "That book wasn't found.",
+  generic: "We couldn't update your album. Please try again.",
+} as const;
+
+/** Maps an updateAlbumAction result (or a thrown call → null) to what the review screen shows. */
+export function updateAlbumOutcome(bookId: string, result: UpdateAlbumResult | null | undefined): UpdateAlbumOutcome {
+  if (result && result.ok === true) {
+    return { kind: "updated", toast: result.changed ? UPDATE_ALBUM_MESSAGES.updated : UPDATE_ALBUM_MESSAGES.upToDate };
+  }
+  const error = result && result.ok === false ? result.error : "failed";
+  switch (error) {
+    case "user_edited":
+      return { kind: "error", error, message: UPDATE_ALBUM_MESSAGES.userEdited, link: null };
+    case "busy":
+      return {
+        kind: "error",
+        error,
+        message: UPDATE_ALBUM_MESSAGES.busy,
+        link: { href: `/books/${bookId}/build`, label: "See progress" },
+      };
+    case "signed_out":
+      return {
+        kind: "error",
+        error,
+        message: UPDATE_ALBUM_MESSAGES.signedOut,
+        link: { href: `/login?next=${encodeURIComponent(`/books/${bookId}/review`)}`, label: "Sign in" },
+      };
+    case "not_found":
+      return { kind: "error", error, message: UPDATE_ALBUM_MESSAGES.notFound, link: null };
+    default:
+      return { kind: "error", error: "failed", message: UPDATE_ALBUM_MESSAGES.generic, link: null };
+  }
+}
+
+export const CONTINUE_UNSYNCED_NOTE = "Your changes aren't in the album yet — tap Update album.";
+
+/** Hint under the secondary "Rebuild with AI" button. */
+export function rebuildHint(left: number | null): string {
+  return left === null ? "Re-plans the whole story with AI." : `Re-plans the whole story with AI (${left} left)`;
 }
