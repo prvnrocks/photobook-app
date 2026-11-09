@@ -10,6 +10,9 @@ export const LIMITS = {
     maxPages: 20,
     /** D-026: live AI builds + rebuilds per user per rolling 24 h (all books). */
     maxLiveBuildsPerUserPerDay: 3,
+    /** D-034: internal caps for build captions (not the user-facing rewrite limit above). */
+    maxCaptionBatchesPerBuild: 10,
+    maxCaptionRepairsPerBatch: 1,
   },
   paid: {
     maxUploadPhotos: 500,
@@ -18,8 +21,13 @@ export const LIMITS = {
     maxCaptionRewrites: 200,
     maxPages: 100,
     maxLiveBuildsPerUserPerDay: 20,
+    maxCaptionBatchesPerBuild: 10,
+    maxCaptionRepairsPerBatch: 1,
   },
 } as const;
+
+/** D-029: captionable pages per Caption Writer call. */
+export const MAX_CAPTION_PAGES_PER_BATCH = 12;
 
 export type Limits = (typeof LIMITS)[keyof typeof LIMITS];
 

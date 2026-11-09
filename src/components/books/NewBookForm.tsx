@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import {
   CAPTION_LANG_LABELS,
   CAPTION_LANGS,
-  DEFAULT_TONE,
   OCCASION_LABELS,
   OCCASIONS,
   TONE_LABELS,
@@ -22,6 +21,7 @@ import {
   type Occasion,
   type Tone,
 } from "@/lib/book/options";
+import { effectiveTone, newBookInitialState, SETTINGS_COPY } from "@/lib/settings/ui";
 import { cn } from "@/lib/utils";
 
 /** Counter appears once the title gets close to the limit. */
@@ -69,19 +69,33 @@ function SubmitButton() {
   );
 }
 
-export function NewBookForm() {
+/** Prefill from user memory (D-032). Optional; the user can still change everything. */
+export type NewBookFormProps = {
+  initialTone?: Tone;
+  initialLang?: CaptionLang;
+  fromMemory?: boolean;
+};
+
+export function NewBookForm({ initialTone, initialLang, fromMemory = false }: NewBookFormProps = {}) {
   const [state, formAction] = useActionState<NewBookFormState, FormData>(
     createBookAction,
     initialNewBookFormState,
   );
   const uid = useId();
+  const [initial] = useState(() => newBookInitialState({ initialTone, initialLang }));
   const [occasion, setOccasion] = useState<Occasion | null>(null);
-  // null = follow the occasion's default tone; set once the user picks one.
-  const [manualTone, setManualTone] = useState<Tone | null>(null);
-  const [captionLang, setCaptionLang] = useState<CaptionLang>("en");
+  // null = follow the occasion's default tone; set once the user picks one (or from memory,
+  // so the remembered tone isn't overwritten by the occasion default).
+  const [manualTone, setManualTone] = useState<Tone | null>(initial.manualTone);
+  const [captionLang, setCaptionLang] = useState<CaptionLang>(initial.captionLang);
   const [title, setTitle] = useState("");
 
-  const tone: Tone = manualTone ?? (occasion ? DEFAULT_TONE[occasion] : DEFAULT_TONE.other);
+  const tone: Tone = effectiveTone(manualTone, occasion);
+  // Hint stays while at least one remembered value is still selected.
+  const showMemoryHint =
+    fromMemory &&
+    ((initial.manualTone !== null && tone === initial.manualTone) ||
+      (initialLang !== undefined && captionLang === initial.captionLang));
   const length = titleLength(title);
   const tooLong = length > TITLE_MAX_CHARS;
   const fe = state.fieldErrors ?? {};
@@ -138,6 +152,11 @@ export function NewBookForm() {
         aria-describedby={fe.tone ? ids.toneErr : undefined}
       >
         <legend className="mb-3 text-base font-medium">What feel should it have?</legend>
+        {showMemoryHint ? (
+          <p className="-mt-2 text-sm text-muted-foreground" data-testid="new-book-from-memory">
+            {SETTINGS_COPY.fromMemory} — change anything you like.
+          </p>
+        ) : null}
         <div className="flex flex-wrap gap-2">
           {TONES.map((id) => (
             <label key={id} className={chipClass}>

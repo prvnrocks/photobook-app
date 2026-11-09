@@ -5,6 +5,7 @@ import { NewBookForm } from "@/components/books/NewBookForm";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { getOwnMemoryView } from "@/lib/db/memory";
 import { getMyProfile } from "@/lib/db/profiles";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +17,14 @@ export default async function NewBookPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=%2Fbooks%2Fnew");
 
-  const profile = await getMyProfile().catch(() => null);
+  const [profile, memory] = await Promise.all([
+    getMyProfile().catch(() => null),
+    // Best effort prefill (D-032): a memory error must never block creating a book.
+    getOwnMemoryView().catch(() => null),
+  ]);
+  const initialTone = memory?.tone;
+  const initialLang = memory?.language;
+  const fromMemory = initialTone !== undefined || initialLang !== undefined;
   const displayName = profile?.name ?? profile?.email ?? user.email ?? null;
 
   return (
@@ -30,7 +38,7 @@ export default async function NewBookPage() {
           Tell us a little about it — you can change everything later.
         </p>
         <div className="mt-6">
-          <NewBookForm />
+          <NewBookForm initialTone={initialTone} initialLang={initialLang} fromMemory={fromMemory} />
         </div>
         <Link
           href="/dashboard"

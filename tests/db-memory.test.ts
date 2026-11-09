@@ -60,7 +60,7 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => fake.admin }))
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => fake.rls }));
 vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: async () => fake.state.user }));
 
-const { getUserMemoryAdmin, getOwnMemory, upsertUserMemory, deleteOwnMemory, assertMemoryWritable, MemoryQueryError, USER_MEMORY_MAX_BYTES } =
+const { getUserMemoryAdmin, getOwnMemory, getOwnMemoryView, upsertUserMemory, deleteOwnMemory, assertMemoryWritable, MemoryQueryError, USER_MEMORY_MAX_BYTES } =
   await import("@/lib/db/memory");
 
 const U = "11111111-1111-4111-8111-111111111111";
@@ -132,6 +132,54 @@ describe("getOwnMemory (RLS)", () => {
     fake.state.user = { id: U };
     fake.state.results.push({ data: null, error: { code: "PGRST301" } });
     expect((await caught(getOwnMemory())).code).toBe("PGRST301");
+  });
+});
+
+describe("getOwnMemoryView (RLS, sanitized)", () => {
+  it("signed out or no row → null", async () => {
+    await expect(getOwnMemoryView()).resolves.toBeNull();
+    fake.state.user = { id: U };
+    await expect(getOwnMemoryView()).resolves.toBeNull();
+    expect(fake.state.log).toEqual(["rls:select(prefs, updated_at)"]);
+  });
+
+  it("sanitizes: bad enums and unknown keys dropped, lists cleaned, no sources/v", async () => {
+    fake.state.user = { id: U };
+    fake.state.results.push({
+      data: {
+        prefs: {
+          v: 1,
+          tonePreference: "fun",
+          captionLength: "huge",
+          language: "ar",
+          knownNames: ["Sara", " sara ", 7],
+          avoid: ["\u202Eclowns"],
+          sources: { tone: "explicit" },
+          email: "x@example.com",
+        },
+        updated_at: "t",
+      },
+      error: null,
+    });
+    await expect(getOwnMemoryView()).resolves.toEqual({
+      tone: "fun",
+      language: "ar",
+      knownNames: ["Sara"],
+      avoid: ["clowns"],
+      updatedAt: "t",
+    });
+  });
+
+  it("a row that sanitizes to nothing → null", async () => {
+    fake.state.user = { id: U };
+    fake.state.results.push({ data: { prefs: { v: 1, tonePreference: "angry" }, updated_at: "t" }, error: null });
+    await expect(getOwnMemoryView()).resolves.toBeNull();
+  });
+
+  it("DB error → typed error (callers that prefill catch it)", async () => {
+    fake.state.user = { id: U };
+    fake.state.results.push({ data: null, error: { code: "PGRST301" } });
+    expect((await caught(getOwnMemoryView())).code).toBe("PGRST301");
   });
 });
 

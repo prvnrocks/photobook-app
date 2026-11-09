@@ -17,12 +17,28 @@ import {
   type TokenUsage,
 } from "./transport";
 
-export const REPLAY_SCENARIOS = ["ok", "refusal", "max_tokens", "rate_limit", "server_error", "invalid"] as const;
+/**
+ * `plant_bad_caption` (M4): the Caption Writer synth plants one pre-check failure and one Critic
+ * mismatch on its first attempt (see agents/caption-writer-replay.ts); the Critic synth flags the
+ * mismatch. Every other agent treats it exactly like "ok" (incl. falling back to `.ok` fixtures).
+ */
+export const REPLAY_SCENARIOS = [
+  "ok",
+  "refusal",
+  "max_tokens",
+  "rate_limit",
+  "server_error",
+  "invalid",
+  "plant_bad_caption",
+] as const;
 export type ReplayScenario = (typeof REPLAY_SCENARIOS)[number];
 
 export interface ReplaySynthContext {
-  /** "ok" → return a valid answer; "invalid" → return something the strict schema rejects. */
-  scenario: "ok" | "invalid";
+  /**
+   * "ok" → return a valid answer; "invalid" → return something the strict schema rejects;
+   * "plant_bad_caption" → like "ok" except for the Caption Writer / Critic synths.
+   */
+  scenario: "ok" | "invalid" | "plant_bad_caption";
   request: AgentRequest<unknown>;
 }
 
@@ -164,10 +180,10 @@ export class ReplayTransport implements AgentTransport {
 
   private loadFixture(req: AgentRequest<unknown>, scenario: ReplayScenario): ReplayFixture | null {
     const name = req.scenarioMeta?.fixtureName;
-    const candidates = [
-      ...(typeof name === "string" && /^[\w-]+$/.test(name) ? [`${req.agent}.${name}.${scenario}.json`] : []),
-      `${req.agent}.${scenario}.json`,
-    ];
+    const named = typeof name === "string" && /^[\w-]+$/.test(name) ? name : null;
+    const forScenario = (s: ReplayScenario) => [...(named ? [`${req.agent}.${named}.${s}.json`] : []), `${req.agent}.${s}.json`];
+    // plant_bad_caption behaves like "ok" for fixtures too (its own fixtures win when present).
+    const candidates = scenario === "plant_bad_caption" ? [...forScenario(scenario), ...forScenario("ok")] : forScenario(scenario);
     for (const file of candidates) {
       const p = join(this.fixturesDir, file);
       try {

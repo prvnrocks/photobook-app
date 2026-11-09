@@ -1,4 +1,5 @@
-// Sticky top bar for signed-in pages: home link, user's display name, sign out.
+// Sticky top bar for signed-in pages: home link, user's display name, settings, sign out.
+import { Settings } from "lucide-react";
 import Link from "next/link";
 import { signOut } from "@/app/auth/actions";
 import { buttonVariants } from "@/components/ui/button";
@@ -19,17 +20,26 @@ export function AppHeader({ displayName }: AppHeaderProps) {
         >
           Photobook
         </Link>
-        <div className="ml-auto flex min-w-0 items-center gap-2">
+        <div className="ml-auto flex min-w-0 items-center gap-1">
           {displayName ? (
             <span
               dir="auto"
-              className="min-w-0 truncate text-sm text-muted-foreground"
+              className="mr-1 min-w-0 truncate text-sm text-muted-foreground"
               data-testid="header-user"
               title={displayName}
             >
               {displayName}
             </span>
           ) : null}
+          <Link
+            href="/settings"
+            aria-label="Settings"
+            title="Settings"
+            className={cn(buttonVariants({ variant: "ghost" }), "size-11 shrink-0 p-0")}
+            data-testid="header-settings"
+          >
+            <Settings className="size-5" aria-hidden="true" />
+          </Link>
           <form action={signOut} className="shrink-0">
             <button
               type="submit"

@@ -9,8 +9,11 @@ import { COVER_LAYOUT_ID, getLayout, layoutsByRole } from "@/lib/layouts";
 import type { Layout } from "@/lib/book/types";
 import { cachedSystem, type SystemBlock } from "../transport";
 
-/** v2: prompt-injection guard (photo lines, descriptions and the user's title are data). */
-export const STORYTELLER_PROMPT_VERSION = 2;
+/**
+ * v2: prompt-injection guard (photo lines, descriptions and the user's title are data).
+ * v3: optional user-memory block in the USER message (D-032); system text unchanged.
+ */
+export const STORYTELLER_PROMPT_VERSION = 3;
 
 function catalogueLine(l: Layout): string {
   return `- ${l.id} · "${l.name}" · ${l.photoCount} photo${l.photoCount === 1 ? "" : "s"} · slots prefer ${l.prefers.join(", ")}`;

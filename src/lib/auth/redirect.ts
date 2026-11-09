@@ -55,7 +55,7 @@ export function safeNextPath(next: string | null | undefined): string {
 
 /** True for /dashboard, /books and their subpaths (not "/booksfoo"). */
 export function isProtectedPath(pathname: string): boolean {
-  return /^\/(dashboard|books)(?:\/|$)/.test(pathname);
+  return /^\/(dashboard|books|settings)(?:\/|$)/.test(pathname);
 }
 
 function trimTrailingSlashes(url: string): string {

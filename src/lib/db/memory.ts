@@ -11,7 +11,10 @@ import "server-only";
 // operation and a code — never prefs content or ids. The shape of prefs is
 // validated by callers with UserMemorySchema (src/lib/ai/schemas.ts); this
 // module only enforces "JSON object, ≤ 8 KB" so the DB check never trips.
+import { isEmptyMemory, sanitizeMemory } from "@/lib/ai/memory";
+import type { CaptionLength } from "@/lib/ai/schemas";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import type { CaptionLang, Tone } from "@/lib/book/options";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
@@ -120,4 +123,35 @@ export async function deleteOwnMemory(): Promise<boolean> {
     .eq("user_id", user.id);
   if (error) throw new MemoryQueryError("delete memory", error.code);
   return (count ?? 0) > 0;
+}
+
+/** What the Settings page and the new-book form may show — sanitized, enums + cleaned strings only. */
+export type OwnMemoryView = {
+  tone?: Tone;
+  captionLength?: CaptionLength;
+  language?: CaptionLang;
+  knownNames: string[];
+  avoid: string[];
+  updatedAt: string;
+};
+
+/**
+ * Signed-in user's memory for display (RLS read + sanitizeMemory). null when signed out or
+ * nothing has been learned yet (no row, or a row that sanitizes to nothing usable). Throws
+ * MemoryQueryError on a DB error — callers that only prefill treat that as null.
+ */
+export async function getOwnMemoryView(): Promise<OwnMemoryView | null> {
+  const row = await getOwnMemory();
+  if (!row) return null;
+  const mem = sanitizeMemory(row.prefs);
+  if (isEmptyMemory(mem)) return null;
+  const view: OwnMemoryView = {
+    knownNames: mem.knownNames ?? [],
+    avoid: mem.avoid ?? [],
+    updatedAt: row.updatedAt,
+  };
+  if (mem.tonePreference) view.tone = mem.tonePreference;
+  if (mem.captionLength) view.captionLength = mem.captionLength;
+  if (mem.language) view.language = mem.language;
+  return view;
 }

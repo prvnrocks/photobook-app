@@ -5,6 +5,10 @@
 import { registerReplaySynth } from "../transport-replay";
 import { curatorReplaySynth } from "./curator-replay";
 import { storytellerReplaySynth } from "./storyteller-replay";
+import { captionWriterReplaySynth } from "./caption-writer-replay";
+import { criticReplaySynth } from "./critic-replay";
 
 registerReplaySynth("curator", curatorReplaySynth);
 registerReplaySynth("storyteller", storytellerReplaySynth);
+registerReplaySynth("caption_writer", captionWriterReplaySynth);
+registerReplaySynth("critic", criticReplaySynth);

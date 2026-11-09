@@ -8,7 +8,14 @@ import { AGENT_TIMEOUT_MS, EFFORT } from "../client";
 import { STORYTELLER_PROMPT_VERSION, storytellerSystem } from "../prompts/storyteller";
 import { runAgentStep, type RetryOptions, type StepLogger, type StepResult } from "../run-step";
 import { clipText } from "@/lib/text/clip";
-import { AlbumPlanAiSchema, AlbumPlanStrictSchema, type AlbumPlan, type AlbumPlanAi } from "../schemas";
+import { isEmptyMemory, memoryPromptBlock, sanitizeMemory } from "../memory";
+import {
+  AlbumPlanAiSchema,
+  AlbumPlanStrictSchema,
+  type AlbumPlan,
+  type AlbumPlanAi,
+  type UserMemory,
+} from "../schemas";
 import {
   byStoryTime,
   effectiveMaxPages,
@@ -55,7 +62,25 @@ export interface PlanAlbumArgs {
   logger: StepLogger;
   /** Issues from validatePlanAgainstPhotos / planToDoc of the previous attempt. */
   previousIssues?: readonly string[];
+  /**
+   * The user's learned preferences (D-032). Rendered into the USER message only — the cached
+   * system prompt is byte-identical with or without it. Optional; null/empty → no block.
+   */
+  memory?: UserMemory | null;
   retry?: RetryOptions;
+}
+
+const MEMORY_KEYS = ["tonePreference", "captionLength", "language", "knownNames", "avoid"] as const;
+
+/** Which memory keys carry a usable value (for agent_steps.input_summary — never the values). */
+export function memoryKeysOf(memory: UserMemory | null | undefined): string[] {
+  if (!memory) return [];
+  const mem = sanitizeMemory(memory);
+  if (isEmptyMemory(mem)) return [];
+  return MEMORY_KEYS.filter((k) => {
+    const v = mem[k];
+    return Array.isArray(v) ? v.length > 0 : v !== undefined;
+  });
 }
 
 /** One line of model-facing text: no newlines, no double quotes, collapsed whitespace. */
@@ -96,8 +121,10 @@ export function buildStorytellerUserMessage(
   book: StoryBook,
   aliasOf: ReadonlyMap<string, string>,
   previousIssues?: readonly string[],
+  memory?: UserMemory | null,
 ): string {
   const kept = keptInStoryOrder(photos);
+  const memoryBlock = memory ? memoryPromptBlock(memory) : "";
   const userTitle = book.title && oneLine(book.title) ? `"${oneLine(book.title)}"` : "null";
   const lines = [
     "BOOK",
@@ -107,6 +134,7 @@ export function buildStorytellerUserMessage(
     `user title: ${userTitle}`,
     `maxPages: ${effectiveMaxPages(book)}`,
     `kept photos: ${kept.length}`,
+    ...(memoryBlock ? ["", memoryBlock] : []),
     "",
     "PHOTOS (time order, undated last)",
     ...kept.map((p) => photoLine(aliasOf.get(p.id) as string, p)),
@@ -165,13 +193,13 @@ export function planLogOutput(plan: AlbumPlan) {
 }
 
 export function buildStorytellerRequest(
-  args: Pick<PlanAlbumArgs, "photos" | "book" | "aliasOf" | "previousIssues">,
+  args: Pick<PlanAlbumArgs, "photos" | "book" | "aliasOf" | "previousIssues" | "memory">,
 ): AgentRequest<AlbumPlanAi> {
   const kept = keptInStoryOrder(args.photos);
   return {
     agent: "storyteller",
     system: storytellerSystem(),
-    messages: [{ role: "user", content: buildStorytellerUserMessage(args.photos, args.book, args.aliasOf, args.previousIssues) }],
+    messages: [{ role: "user", content: buildStorytellerUserMessage(args.photos, args.book, args.aliasOf, args.previousIssues, args.memory) }],
     schema: AlbumPlanAiSchema,
     effort: EFFORT.storyteller,
     maxTokens: storytellerMaxTokens(kept.length),
@@ -207,6 +235,7 @@ export async function planAlbum(args: PlanAlbumArgs): Promise<StepResult<AlbumPl
       captionLang: args.book.captionLang,
       hasUserTitle: Boolean(args.book.title?.trim()),
       previousIssueCount: args.previousIssues?.length ?? 0,
+      memoryKeys: memoryKeysOf(args.memory),
     },
     request,
     strictSchema: AlbumPlanStrictSchema,
