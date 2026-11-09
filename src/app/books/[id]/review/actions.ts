@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { deriveMemoryUpdate } from "@/lib/ai/agents/memory-keeper";
+import { learnFromBook } from "@/lib/ai/learn-from-book";
 import { autolayout } from "@/lib/autolayout";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { CAPTION_LANGS, OCCASIONS, type CaptionLang, type Occasion } from "@/lib/book/options";
@@ -12,7 +12,6 @@ import { parseBookDoc } from "@/lib/book/schema";
 import type { BookDoc } from "@/lib/book/types";
 import { getActiveRunForBook } from "@/lib/db/agent-runs";
 import { getBookForRun, getMyBook, writeDocIfReplaceable, type BookForRun } from "@/lib/db/books";
-import { getUserMemoryAdmin, upsertUserMemory } from "@/lib/db/memory";
 import { listPhotosForCuration, setUserOverride, type CurationPhotoRow } from "@/lib/db/photos";
 import { errorCodeOf } from "@/lib/http/json";
 import type { Json } from "@/lib/supabase/database.types";
@@ -128,28 +127,9 @@ export async function confirmAlbumAction(bookId: string): Promise<void> {
   }
   if (!mine) redirect("/dashboard");
 
-  await learnFromBook(user.id, mine.id);
+  await learnFromBook(user.id, mine.id, "review");
   revalidatePath("/dashboard");
   redirect("/dashboard");
-}
-
-/** Best-effort Memory Keeper write. Never throws; logs codes only. */
-async function learnFromBook(userId: string, bookId: string): Promise<void> {
-  try {
-    const book = await getBookForRun(bookId);
-    // Belt and braces: the admin read must still be this user's book.
-    if (!book || book.user_id !== userId) return;
-    const prev = await getUserMemoryAdmin(userId);
-    const { next, changed } = deriveMemoryUpdate(
-      prev?.prefs ?? null,
-      { occasion: book.occasion, tone: book.tone, caption_lang: book.caption_lang, title: book.title },
-      book.doc,
-    );
-    if (!changed) return;
-    await upsertUserMemory(userId, next as unknown as Json);
-  } catch (err) {
-    console.error(`[review] memory update failed (${errorCodeOf(err)})`);
-  }
 }
 
 function toRelayoutPhoto(r: CurationPhotoRow): RelayoutPhoto & { dateSource: "exif" | "file" | null } {
