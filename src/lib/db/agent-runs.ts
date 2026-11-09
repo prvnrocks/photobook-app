@@ -583,3 +583,97 @@ export async function getRunTrace(runId: string): Promise<RunTrace | null> {
   if (stepsError) throw new AgentRunsQueryError("load run trace", stepsError.code);
   return { run, steps };
 }
+
+// ---------------------------------------------------------------------------
+// ✨ Caption rewrite runs (M5, migration 0900, D-037 #6)
+
+export type CreateRewriteRunResult =
+  | { id: string }
+  | { error: "already_running" }
+  | { error: "limit" }
+  | { error: "not_found" };
+
+/**
+ * Atomic per-book "check rewrite cap + insert" (create_rewrite_run_capped, 0900): an advisory
+ * lock per book serialises starts.
+ *   already_running: a rewrite of this book is in flight (not finished, started < 5 min ago);
+ *   limit (only when `enforce`): ok rewrites + in-flight ones >= cap;
+ *   not_found: the book doesn't exist or isn't the user's (defence in depth).
+ * Admin client — the caller checked ownership (getMyBook) first.
+ */
+export async function createRewriteRun(
+  bookId: string,
+  userId: string,
+  mode: Exclude<RunMode, "rule">,
+  cap: number,
+  enforce: boolean,
+): Promise<CreateRewriteRunResult> {
+  if (!isUuid(bookId) || !isUuid(userId)) throw new AgentRunsQueryError("create rewrite run", "invalid_id");
+  if (mode !== "live" && mode !== "replay") throw new AgentRunsQueryError("create rewrite run", "invalid_mode");
+  const { data, error } = await createAdminClient().rpc("create_rewrite_run_capped", {
+    p_book: bookId,
+    p_user: userId,
+    p_mode: mode,
+    p_cap: Number.isFinite(cap) ? Math.max(0, Math.floor(cap)) : 0,
+    p_enforce: enforce === true,
+  });
+  if (error) throw new AgentRunsQueryError("create rewrite run", error.code);
+  return parseRewriteRunResult(data);
+}
+
+/** Validates create_rewrite_run_capped's jsonb. Exported for tests. */
+export function parseRewriteRunResult(data: unknown): CreateRewriteRunResult {
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    const o = data as Record<string, unknown>;
+    if (typeof o.id === "string" && isUuid(o.id)) return { id: o.id };
+    if (o.error === "already_running" || o.error === "limit" || o.error === "not_found") return { error: o.error };
+  }
+  throw new AgentRunsQueryError("create rewrite run", "bad_result");
+}
+
+/**
+ * Finishes a rewrite run: state done (ai_status ok) or failed, error code (clipped), finished_at.
+ * Only touches an unfinished rewrite run, so it is safe to call twice. Rewrite runs have no lease
+ * (one bounded request). Returns true when a row was updated. Admin client.
+ */
+export async function finishRewriteRun(
+  runId: string,
+  result: { ai_status: "ok" | "failed"; error_code?: string | null },
+): Promise<boolean> {
+  if (!isUuid(runId)) throw new AgentRunsQueryError("finish rewrite run", "invalid_id");
+  const ok = result.ai_status === "ok";
+  const errorCode = ok || !result.error_code ? null : clipText(result.error_code, RUN_ERROR_CODE_MAX, "");
+  const { data, error } = await createAdminClient()
+    .from("agent_runs")
+    .update({
+      state: ok ? "done" : "failed",
+      ai_status: ok ? "ok" : "failed",
+      error_code: errorCode,
+      finished_at: new Date().toISOString(),
+    })
+    .eq("id", runId)
+    .eq("trigger", "rewrite")
+    .not("state", "in", `(${ACTIVE_RUN_EXCLUDED_STATES.join(",")})`)
+    .select("id");
+  if (error) throw new AgentRunsQueryError("finish rewrite run", error.code);
+  return (data?.length ?? 0) === 1;
+}
+
+/**
+ * Successful ✨ rewrites of the book (rewrite runs with ai_status ok) — the count the rewrite
+ * limit uses (D-037 #6; in-flight runs are not included). RLS client: returns 0 for a book that
+ * isn't the signed-in user's, so the editor loader can call it directly.
+ * remaining = limitsFor(is_paid).maxCaptionRewrites − getRewritesUsed(bookId).
+ */
+export async function getRewritesUsed(bookId: string): Promise<number> {
+  if (!isUuid(bookId)) return 0;
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("agent_runs")
+    .select("id", { count: "exact", head: true })
+    .eq("book_id", bookId)
+    .eq("trigger", "rewrite")
+    .eq("ai_status", "ok");
+  if (error) throw new AgentRunsQueryError("count rewrites", error.code);
+  return count ?? 0;
+}
