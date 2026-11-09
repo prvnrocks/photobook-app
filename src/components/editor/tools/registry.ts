@@ -25,11 +25,35 @@
 import type { EditorContextValue } from "../editor-context";
 import { selectionKind } from "@/lib/editor/store";
 import type { EditorTool } from "./types";
+import { cropTool } from "./crop-mode";
+import { layoutPickerTool } from "./layout-picker";
+import { photoPickerTool } from "./photo-picker";
+import { aiCaptionTool } from "./ai-caption";
+import { captionEditorTool, captionStyleTool } from "./caption-editor";
+import { chapterTitleTool } from "./chapter-title";
+import { coverTextTool } from "./cover-text";
+import { addPageTool } from "./add-page";
+import { pageMenuTool } from "./page-menu";
+import { pagesTool } from "./pages";
+import { upgradeTool } from "../UpgradeSheet";
 
 export type { EditorPanelProps, EditorTool, ToolScope } from "./types";
 
 /** Registered tools. Tasks 9–11 append here. */
-export const EDITOR_TOOLS: readonly EditorTool[] = [];
+export const EDITOR_TOOLS: readonly EditorTool[] = [
+  photoPickerTool,
+  cropTool,
+  layoutPickerTool,
+  pagesTool,
+  addPageTool,
+  pageMenuTool,
+  upgradeTool,
+  captionEditorTool,
+  aiCaptionTool,
+  captionStyleTool,
+  chapterTitleTool,
+  coverTextTool,
+];
 
 /** Tools to show for the current editor state, sorted by order (then registry order). */
 export function visibleTools(tools: readonly EditorTool[], ctx: EditorContextValue): EditorTool[] {
