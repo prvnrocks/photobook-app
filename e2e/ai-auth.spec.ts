@@ -80,6 +80,7 @@ let synth: FileSpec[] = [];
 const MAIN_COUNT = 12; // orient6 jpg + heic, screenshot, near-dup pair, 7 synthetic
 let bookA = "";
 let toggledId = "";
+let userDroppedId = "";
 const runIds = new Set<string>();
 
 type PhotoRow = {
@@ -545,6 +546,10 @@ test("b. review: header, screenshot + duplicate dropped, toggle persists; DB run
   const keptTile = page.locator(`[data-testid="review-tile"][data-photo-id="${toggledId}"]`);
   await expect(keptTile).toHaveAttribute("data-state", "kept");
   await expect(keptTile.getByTestId("review-user-dot")).toHaveCount(1);
+  // D-028: the kept photo isn't in the album yet → Update album bar + Continue warning.
+  await expect(page.getByTestId("update-album-bar")).toBeVisible();
+  await expect(page.getByTestId("update-album-count")).toHaveText("You changed 1 photo.");
+  await expect(page.getByTestId("review-continue-warning")).toBeVisible();
   const toggled = (await photoRows(bookA)).find((r) => r.id === toggledId)!;
   expect(toggled).toMatchObject({ status: "kept", drop_reason: null, user_override: true });
 
@@ -622,6 +627,56 @@ test("b. review: header, screenshot + duplicate dropped, toggle persists; DB run
   await page.goto(`/books/${bookA}/review`);
 });
 
+test("u. Update album (D-028): drop 1 in-album photo + keep 1 dropped → re-layout, no AI run", async () => {
+  const before = await bookRow(bookA);
+  const runsBefore = (await runsFor(bookA)).length;
+  const inAlbum = docPhotoIds(before.doc);
+  const rows = await photoRows(bookA);
+  // A kept synthetic photo that is in the album (not the cover, if possible).
+  const cover = (before.doc as { cover?: { photoId?: string | null } }).cover?.photoId ?? null;
+  const candidates = rows.filter((r) => r.width === 900 && r.status === "kept" && inAlbum.has(r.id));
+  const target = candidates.find((r) => r.id !== cover) ?? candidates[0];
+  expect(target).toBeTruthy();
+  userDroppedId = target.id;
+
+  const tile = page.locator(`[data-testid="review-tile"][data-photo-id="${userDroppedId}"]`);
+  await expect(tile).toHaveAttribute("data-state", "kept");
+  await tile.click();
+  await expect(tile).toHaveAttribute("data-state", "dropped");
+  await expect
+    .poll(async () => (await photoRows(bookA)).find((r) => r.id === userDroppedId)?.user_override, { timeout: 15_000 })
+    .toBe(true);
+  await expect(page.getByTestId("update-album-count")).toHaveText("You changed 2 photos.");
+  const sw = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(sw).toBeLessThanOrEqual(VIEWPORT.width);
+
+  await page.getByTestId("update-album").click();
+  await expect(page.getByTestId("update-album-toast")).toHaveText("Album updated", { timeout: 30_000 });
+  await expect(page.getByTestId("update-album-error")).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByTestId("review-header")).toBeVisible();
+  await expect(page.getByTestId("update-album-bar")).toHaveCount(0);
+  await expect(page.getByTestId("review-continue-warning")).toHaveCount(0);
+
+  const after = await bookRow(bookA);
+  const ids = docPhotoIds(after.doc);
+  const rowsAfter = await photoRows(bookA);
+  const dropped = rowsAfter.find((r) => r.id === userDroppedId)!;
+  const meta = metaOf(after.doc);
+  const runsAfter = (await runsFor(bookA)).length;
+  console.log(
+    `[u] droppedInDoc=${ids.has(userDroppedId)} keptInDoc=${ids.has(toggledId)} generator=${String(meta.generator)} runIdSame=${meta.runId === metaOf(before.doc).runId} runs before=${runsBefore} after=${runsAfter} pages=${after.page_count} ai_status=${after.ai_status}`,
+  );
+  expect(dropped).toMatchObject({ status: "dropped", drop_reason: "user_removed", user_override: true });
+  expect(ids.has(userDroppedId)).toBe(false);
+  expect(ids.has(toggledId)).toBe(true);
+  expect(meta.generator).toBe("ai");
+  expect(meta.userEdited).not.toBe(true);
+  expect(after.ai_status).toBe("done");
+  expect(runsAfter).toBe(runsBefore);
+  expectValidDoc(after.doc, new Set(rowsAfter.filter((r) => r.status !== "dropped").map((r) => r.id)), after.max_pages ?? 20, "u");
+});
+
 test("c. rebuild: build → review; 0 new curator calls; user choice untouched; toggled photo in doc", async () => {
   await resetBuildStates();
   await page.getByTestId("rebuild-button").click();
@@ -652,8 +707,12 @@ test("c. rebuild: build → review; 0 new curator calls; user choice untouched; 
   const keptIds = new Set(rows.filter((r) => r.status !== "dropped").map((r) => r.id));
   expectValidDoc(book.doc, keptIds, book.max_pages ?? 20, "c");
   const inDoc = docPhotoIds(book.doc).has(toggledId);
-  console.log(`[c] toggled photo in doc=${inDoc}`);
+  const ud = rows.find((r) => r.id === userDroppedId)!;
+  console.log(`[c] toggled photo in doc=${inDoc} userDropped inDoc=${docPhotoIds(book.doc).has(userDroppedId)} status=${ud.status}`);
   expect(inDoc).toBe(true);
+  expect(ud).toMatchObject({ status: "dropped", drop_reason: "user_removed", user_override: true });
+  expect(docPhotoIds(book.doc).has(userDroppedId)).toBe(false);
+  await expect(page.getByTestId("update-album-bar")).toHaveCount(0);
   await expect(page.getByTestId("review-header")).toHaveText(`AI kept ${keptIds.size} of ${rows.length}`);
 });
 
@@ -752,7 +811,14 @@ test("e. AI off: Build my album → straight to review, rule album, ai_off banne
   expect(rows.every((r) => r.ai === null)).toBe(true);
   expectValidDoc(book.doc, new Set(rows.filter((r) => r.status !== "dropped").map((r) => r.id)), book.max_pages ?? 20, "e");
 
+  // Rule-mode POST /api/ai/runs is limited to 1 per 10 s per book → immediately 429 'rate'.
+  const limited = await postRun(bookC, "rebuild");
+  console.log(`[e] immediate rebuild status=${limited.status} limit=${String(limited.body.limit)}`);
+  expect(limited.status).toBe(429);
+  expect(limited.body).toMatchObject({ error: "limit", limit: "rate" });
+  await page.waitForTimeout(11_000);
   // "Rebuild album" in off mode re-runs the rules in place.
+  await expect(page.getByTestId("rebuild-button")).toHaveText("Rebuild album");
   await page.getByTestId("rebuild-button").click();
   await expect(page.getByTestId("rebuild-done")).toBeVisible({ timeout: 30_000 });
   expect(new URL(page.url()).pathname).toBe(`/books/${bookC}/review`);
