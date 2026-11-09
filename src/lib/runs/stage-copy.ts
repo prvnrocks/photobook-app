@@ -1,5 +1,7 @@
 // Plain-words copy + progress percent for the build screen. Pure — safe in client components.
-// Percent bands: queued 2 · curating 5–75 (by photos) · storytelling 82 · final check 92 · done 100.
+// Percent bands (monotonic along the stage order): queued 2 · curating 5–75 (by photos) ·
+// storytelling 82 · captioning 84–90 (by captions) · critiquing 93 · repairing 96 ·
+// validating 98 · done 100.
 import type { RunProgress, RunState } from "./client";
 
 export type StageCopy = {
@@ -13,6 +15,8 @@ export type StageCopy = {
 
 const CURATE_FROM = 5;
 const CURATE_TO = 75;
+const CAPTION_FROM = 84;
+const CAPTION_TO = 90;
 
 export function stageCopy(state: RunState, progress: RunProgress | null): StageCopy {
   const phase = state;
@@ -32,11 +36,22 @@ export function stageCopy(state: RunState, progress: RunProgress | null): StageC
     }
     case "storytelling":
       return { text: "Finding your moments…", detail: null, percent: 82 };
-    case "captioning":
+    case "captioning": {
+      const total = progress?.captionsTotal ?? 0;
+      const done = Math.min(progress?.captionsDone ?? 0, total);
+      const ratio = total > 0 ? done / total : 0;
+      return {
+        text: total > 0 ? `Writing captions ${done} / ${total}…` : "Writing captions…",
+        detail: null,
+        percent: Math.round(CAPTION_FROM + (CAPTION_TO - CAPTION_FROM) * ratio),
+      };
+    }
     case "critiquing":
+      return { text: "Final check…", detail: null, percent: 93 };
     case "repairing":
+      return { text: "Polishing…", detail: null, percent: 96 };
     case "validating":
-      return { text: "Final check…", detail: null, percent: 92 };
+      return { text: "Saving your album…", detail: null, percent: 98 };
     case "done":
       return { text: "Your album is ready", detail: null, percent: 100 };
     case "failed":
@@ -78,7 +93,8 @@ export type ProgressSnapshot = { state: RunState; progress: RunProgress | null }
 
 /**
  * The newer of two snapshots (the advance response and a parallel GET poll can arrive out of
- * order). Later stage wins; within curating, more photos done wins; ties keep `current`.
+ * order). Later stage wins; within a stage, more photos done (curating) or more captions done
+ * (captioning) wins; ties keep `current`.
  */
 export function newerSnapshot(current: ProgressSnapshot, next: ProgressSnapshot): ProgressSnapshot {
   const a = STAGE_RANK[current.state];
@@ -87,7 +103,11 @@ export function newerSnapshot(current: ProgressSnapshot, next: ProgressSnapshot)
   const da = current.progress?.photosDone ?? 0;
   const db = next.progress?.photosDone ?? 0;
   if (db !== da) return db > da ? next : current;
+  const ca = current.progress?.captionsDone ?? 0;
+  const cb = next.progress?.captionsDone ?? 0;
+  if (cb !== ca) return cb > ca ? next : current;
   // Same stage + count: prefer the one that has totals filled in.
   if ((next.progress?.photosTotal ?? 0) > (current.progress?.photosTotal ?? 0)) return next;
+  if ((next.progress?.captionsTotal ?? 0) > (current.progress?.captionsTotal ?? 0)) return next;
   return current;
 }

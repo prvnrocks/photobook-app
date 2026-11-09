@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AppHeader } from "@/components/layout/AppHeader";
+import { CaptionsPreview } from "@/components/review/CaptionsPreview";
 import { ReviewBody } from "@/components/review/ReviewBody";
 import { buttonVariants } from "@/components/ui/button";
 import { resolveAiMode } from "@/lib/ai/client";
@@ -12,17 +13,21 @@ import { countLiveRebuilds, getActiveRunForBook } from "@/lib/db/agent-runs";
 import { getBookForRun, getMyBook } from "@/lib/db/books";
 import { listReviewPhotos } from "@/lib/db/photos";
 import { getMyProfile } from "@/lib/db/profiles";
+import { getLayout } from "@/lib/layouts";
 import {
   aiPicked,
   BANNER_COPY,
+  captionsPreviewModel,
+  captionsPreviewOf,
   docPhotoIds,
+  partialCaptionsNote,
   rebuildsLeft,
   rebuildVariant,
   reviewBanner,
   type ReviewTilePhoto,
 } from "@/lib/review/ui";
 import { cn } from "@/lib/utils";
-import { togglePhotoAction, updateAlbumAction } from "./actions";
+import { confirmAlbumAction, togglePhotoAction, updateAlbumAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +75,11 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   // same rule as a boolean). Only ids go to the client, never the rest of the doc.
   const albumPhotoIds = docPhotoIds(book.doc);
   const userEdited = docOrigin(book.doc).userEdited;
+  const confirm = confirmAlbumAction.bind(null, book.id);
+  // Captions preview: chapter titles/dates + caption text/source per page — no photo ids or URLs.
+  const captionsPreview = captionsPreviewOf(book.doc, (layoutId) => !!getLayout(layoutId)?.caption);
+  const missingCaptions = captionsPreviewModel(captionsPreview)?.missing ?? 0;
+  const captionsNote = banner ? partialCaptionsNote(banner, missingCaptions) : null;
 
   return (
     <>
@@ -88,6 +98,11 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
             data-testid={`review-banner-${banner}`}
           >
             <p>{BANNER_COPY[banner]}</p>
+            {captionsNote ? (
+              <p className="text-sm text-muted-foreground" data-testid="review-banner-captions-note">
+                {captionsNote}
+              </p>
+            ) : null}
             {banner === "building" ? (
               <Link
                 href={`/books/${book.id}/build`}
@@ -110,6 +125,10 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
           userEdited={userEdited}
           building={!!activeRun}
           rebuild={activeRun ? null : { variant, rebuildsLeft: left }}
+          confirm={confirm}
+          captions={
+            activeRun ? null : <CaptionsPreview preview={captionsPreview} captionLang={book.caption_lang} />
+          }
           empty={
             <div className="flex flex-col gap-3 rounded-xl border border-dashed p-6 text-center" data-testid="review-no-photos">
               <h1 className="text-xl font-semibold">No photos yet</h1>

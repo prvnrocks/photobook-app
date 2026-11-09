@@ -1,15 +1,16 @@
 "use client";
 
 // Review screen body (M3 + D-028): grid, sticky "Update album" bar, secondary AI rebuild and the
-// Continue / Add photos links. Tracks which keep / drop choices aren't in the album yet
+// Continue form (confirmAlbumAction: Memory Keeper + redirect, D-032) / Add photos link. Tracks which keep / drop choices aren't in the album yet
 // (unsyncedPhotoIds over the grid's optimistic state and the album's photo ids from the server).
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
+import { useFormStatus } from "react-dom";
 import { RebuildButton } from "@/components/review/RebuildButton";
 import { ReviewGrid, type ToggleResult } from "@/components/review/ReviewGrid";
 import { UpdateAlbumBar } from "@/components/review/UpdateAlbumBar";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   CONTINUE_UNSYNCED_NOTE,
   unsyncedPhotoIds,
@@ -36,6 +37,10 @@ type ReviewBodyProps = {
   /** A build is running → no Update album, no rebuild. */
   building: boolean;
   rebuild: { variant: RebuildVariant; rebuildsLeft: number | null } | null;
+  /** Bound server action for "Continue": learns preferences, then redirects (never returns). */
+  confirm: () => Promise<void>;
+  /** Read-only captions preview, shown above Continue (null = nothing to show). */
+  captions?: ReactNode;
   /** Shown instead of the grid when the book has no photos. */
   empty: ReactNode;
 };
@@ -52,6 +57,8 @@ export function ReviewBody({
   userEdited,
   building,
   rebuild,
+  confirm,
+  captions,
   empty,
 }: ReviewBodyProps) {
   const router = useRouter();
@@ -122,6 +129,8 @@ export function ReviewBody({
         <ReviewGrid photos={photos} aiUsed={aiUsed} toggle={toggle} onPhotosChange={setCurrent} raiseToast={showBar} />
       )}
 
+      {captions}
+
       <div className="flex flex-col gap-3 border-t pt-4">
         {rebuild && photos.length > 0 ? <RebuildButton bookId={bookId} variant={rebuild.variant} rebuildsLeft={rebuild.rebuildsLeft} /> : null}
         {showBar ? (
@@ -133,14 +142,9 @@ export function ReviewBody({
             {CONTINUE_UNSYNCED_NOTE}
           </p>
         ) : null}
-        <Link
-          href="/dashboard"
-          className={cn(buttonVariants({ variant: showBar ? "outline" : "default" }), "h-12 w-full text-base")}
-          aria-describedby={showBar ? "review-continue-note" : undefined}
-          data-testid="review-continue"
-        >
-          Continue
-        </Link>
+        <form action={confirm} className="flex flex-col">
+          <ContinueButton outline={showBar} describedBy={showBar ? "review-continue-note" : undefined} />
+        </form>
         <Link
           href={`/books/${bookId}/upload`}
           className={cn(buttonVariants({ variant: "ghost" }), "h-11 w-full text-base")}
@@ -173,5 +177,21 @@ export function ReviewBody({
         ) : null}
       </div>
     </>
+  );
+}
+
+function ContinueButton({ outline, describedBy }: { outline: boolean; describedBy: string | undefined }) {
+  const { pending } = useFormStatus();
+  return (
+    <Button
+      type="submit"
+      variant={outline ? "outline" : "default"}
+      className="h-12 w-full text-base"
+      disabled={pending}
+      aria-describedby={describedBy}
+      data-testid="review-continue"
+    >
+      {pending ? "Saving…" : "Continue"}
+    </Button>
   );
 }

@@ -3,6 +3,8 @@ import {
   advanceRun,
   DEFAULT_LEASE_WAIT_MS,
   getRun,
+  parseProgress,
+  parseTick,
   startRun,
   type AdvanceOutcome,
   type FetchLike,
@@ -30,7 +32,16 @@ const fetchOnce = (r: Response | Error): FetchLike & { calls: [string, RequestIn
   return f;
 };
 
-const progress = { phase: "curating", photosTotal: 40, photosDone: 10, batchesTotal: 4, batchesDone: 1, photosCapped: 0 };
+const progress = {
+  phase: "curating",
+  photosTotal: 40,
+  photosDone: 10,
+  batchesTotal: 4,
+  batchesDone: 1,
+  photosCapped: 0,
+  captionsTotal: 0,
+  captionsDone: 0,
+};
 
 describe("startRun", () => {
   it("201 → started; sends bookId + trigger as JSON, same-origin, no-store", async () => {
@@ -105,7 +116,16 @@ describe("advanceRun", () => {
       kind: "tick",
       tick: {
         state: "done",
-        progress: { phase: "done", photosTotal: 0, photosDone: 0, batchesTotal: 0, batchesDone: 0, photosCapped: 0 },
+        progress: {
+          phase: "done",
+          photosTotal: 0,
+          photosDone: 0,
+          batchesTotal: 0,
+          batchesDone: 0,
+          photosCapped: 0,
+          captionsTotal: 0,
+          captionsDone: 0,
+        },
         done: true,
         aiStatus: "partial",
         errorCode: null,
@@ -254,5 +274,34 @@ describe("driveRun", () => {
 
   it("backoffMs: 2, 4, 8, 16, then capped", () => {
     expect([0, 1, 2, 3, 4, 5, 9].map(backoffMs)).toEqual([2000, 2000, 4000, 8000, 16000, 16000, 16000]);
+  });
+});
+
+describe("parseProgress — caption counters (M4)", () => {
+  it("reads captionsTotal / captionsDone", () => {
+    expect(
+      parseProgress({ phase: "captioning", captionsTotal: 24, captionsDone: 12, photosTotal: 40, photosDone: 40 }, "captioning"),
+    ).toMatchObject({ phase: "captioning", captionsTotal: 24, captionsDone: 12, photosDone: 40 });
+  });
+
+  it("missing / bad caption counters → 0; fractions floored", () => {
+    expect(parseProgress({ phase: "captioning" }, "captioning")).toMatchObject({ captionsTotal: 0, captionsDone: 0 });
+    expect(parseProgress({ captionsTotal: "12", captionsDone: -3 }, "captioning")).toMatchObject({
+      captionsTotal: 0,
+      captionsDone: 0,
+    });
+    expect(parseProgress({ captionsTotal: 7.9, captionsDone: Number.NaN }, "captioning")).toMatchObject({
+      captionsTotal: 7,
+      captionsDone: 0,
+    });
+  });
+
+  it.each(["captioning", "critiquing", "repairing", "validating"] as const)("phase %s is accepted", (phase) => {
+    expect(parseProgress({ phase }, "queued").phase).toBe(phase);
+    expect(parseTick({ state: phase, progress: { captionsTotal: 4, captionsDone: 2 }, done: false })?.progress).toMatchObject({
+      phase,
+      captionsTotal: 4,
+      captionsDone: 2,
+    });
   });
 });

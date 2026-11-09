@@ -30,6 +30,9 @@ export interface RunProgress {
   batchesTotal: number;
   batchesDone: number;
   photosCapped: number;
+  /** Caption keys planned / written so far (captioning stage, M4). 0 before captioning. */
+  captionsTotal: number;
+  captionsDone: number;
 }
 
 export interface RunTick {
@@ -109,6 +112,8 @@ export function parseProgress(raw: unknown, state: RunState): RunProgress {
     batchesTotal: count(o.batchesTotal),
     batchesDone: count(o.batchesDone),
     photosCapped: count(o.photosCapped),
+    captionsTotal: count(o.captionsTotal),
+    captionsDone: count(o.captionsDone),
   };
 }
 

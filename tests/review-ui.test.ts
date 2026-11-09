@@ -1,15 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
 import { DROP_REASONS } from "@/lib/ai/schemas";
+import { getLayout } from "@/lib/layouts";
 import {
   aiPicked,
   applyUserChoice,
   BANNER_COPY,
+  captionSourceLabel,
+  captionsPreviewModel,
+  captionsPreviewOf,
   changedPhotosCopy,
   CONTINUE_UNSYNCED_NOTE,
   countKept,
   docOutOfSync,
   docPhotoIds,
   headerCopy,
+  missingCaptionsCopy,
+  PARTIAL_CAPTIONS_NOTE,
+  partialCaptionsNote,
   reasonLabel,
   REBUILD_LABELS,
   REBUILD_MESSAGES,
@@ -356,5 +363,126 @@ describe("rebuild as secondary (D-028)", () => {
     expect(REBUILD_LABELS.ai_off).toBe("Rebuild album");
     expect(rebuildHint(2)).toBe("Re-plans the whole story with AI (2 left)");
     expect(rebuildHint(null)).toBe("Re-plans the whole story with AI.");
+  });
+});
+
+describe("captions preview (M4 T12)", () => {
+  const hasArea = (id: string) => !!getLayout(id)?.caption;
+  const cap = (text: string, source = "ai") => ({ text, font: "Cairo", align: "center", source });
+  const doc = {
+    version: 1,
+    chapters: [
+      { id: "c1", title: "Morning at the beach", dateLabel: "12 Mar 2026", place: "Saadiyat" },
+      { id: "c2", title: "Dinner", dateLabel: "13 Mar 2026", place: null },
+    ],
+    cover: { layout: "cover", photoId: "p0", title: "Trip", subtitle: "" },
+    pages: [
+      { id: "a", chapterId: "c1", layout: "one-portrait", slots: [{ photoId: "p1" }], caption: cap("Waves at sunrise") },
+      { id: "b", chapterId: "c1", layout: "full-page", slots: [{ photoId: "p2" }], caption: null },
+      { id: "c", chapterId: "c1", layout: "two-vertical", slots: [{ photoId: "p3" }], caption: null },
+      { id: "d", chapterId: "c2", layout: "four-grid", slots: [{ photoId: "p4" }], caption: cap("عشاء مع العائلة", "user") },
+      { id: "e", chapterId: null, layout: "three-mixed", slots: [], caption: cap("Loose page") },
+    ],
+  };
+
+  it("projects only titles, dates, caption text/source and captionable — no photo ids", () => {
+    const pv = captionsPreviewOf(doc, hasArea);
+    expect(pv).toEqual({
+      chapters: [
+        { title: "Morning at the beach", dateLabel: "12 Mar 2026" },
+        { title: "Dinner", dateLabel: "13 Mar 2026" },
+      ],
+      pages: [
+        { chapter: 0, caption: { text: "Waves at sunrise", source: "ai" }, captionable: true },
+        { chapter: 0, caption: null, captionable: false },
+        { chapter: 0, caption: null, captionable: true },
+        { chapter: 1, caption: { text: "عشاء مع العائلة", source: "user" }, captionable: true },
+        { chapter: null, caption: { text: "Loose page", source: "ai" }, captionable: true },
+      ],
+    });
+    const json = JSON.stringify(pv);
+    expect(json).not.toMatch(/p[0-4]"|photoId|Saadiyat|Cairo|font|align/);
+  });
+
+  it("garbage docs → empty projection, never throws", () => {
+    for (const bad of [null, undefined, {}, [], "x", 3, { pages: "no", chapters: {} }, { pages: [null, 1, "x"] }]) {
+      expect(captionsPreviewOf(bad, hasArea)).toEqual({ chapters: [], pages: [] });
+    }
+    const odd = captionsPreviewOf(
+      {
+        chapters: [{ id: "c1", title: 3, dateLabel: null }, { id: "c1", title: "dup" }, "x"],
+        pages: [
+          { chapterId: "c1", layout: "one-portrait", caption: { text: "   ", source: "ai" } },
+          { chapterId: "zz", layout: "nope", caption: { text: "hi", source: "evil" } },
+          { chapterId: "c1", layout: 5, caption: "text" },
+        ],
+      },
+      hasArea,
+    );
+    expect(odd).toEqual({
+      chapters: [{ title: "", dateLabel: "" }],
+      pages: [
+        { chapter: 0, caption: null, captionable: true },
+        { chapter: null, caption: { text: "hi", source: "ai" }, captionable: false },
+        { chapter: 0, caption: null, captionable: false },
+      ],
+    });
+  });
+
+  it("groups by consecutive chapter in page order and counts missing captions", () => {
+    const m = captionsPreviewModel(captionsPreviewOf(doc, hasArea));
+    expect(m).toEqual({
+      count: 3,
+      missing: 1,
+      groups: [
+        { title: "Morning at the beach", dateLabel: "12 Mar 2026", items: [{ text: "Waves at sunrise", source: "ai" }] },
+        { title: "Dinner", dateLabel: "13 Mar 2026", items: [{ text: "عشاء مع العائلة", source: "user" }] },
+        { title: null, dateLabel: null, items: [{ text: "Loose page", source: "ai" }] },
+      ],
+    });
+  });
+
+  it("a chapter split by another chapter's pages becomes two groups (page order wins)", () => {
+    const m = captionsPreviewModel({
+      chapters: [{ title: "A", dateLabel: "" }, { title: "B", dateLabel: "" }],
+      pages: [
+        { chapter: 0, caption: { text: "1", source: "ai" }, captionable: true },
+        { chapter: 1, caption: { text: "2", source: "ai" }, captionable: true },
+        { chapter: 0, caption: { text: "3", source: "ai" }, captionable: true },
+      ],
+    });
+    expect(m?.groups.map((g) => [g.title, g.dateLabel, g.items.length])).toEqual([
+      ["A", null, 1],
+      ["B", null, 1],
+      ["A", null, 1],
+    ]);
+  });
+
+  it("nothing to show → null; only missing captions → shown with count 0", () => {
+    expect(captionsPreviewModel(null)).toBeNull();
+    expect(captionsPreviewModel({ chapters: [], pages: [] })).toBeNull();
+    expect(
+      captionsPreviewModel({ chapters: [], pages: [{ chapter: null, caption: null, captionable: false }] }),
+    ).toBeNull();
+    expect(
+      captionsPreviewModel({ chapters: [], pages: [{ chapter: null, caption: null, captionable: true }] }),
+    ).toEqual({ count: 0, missing: 1, groups: [] });
+  });
+
+  it("copy", () => {
+    expect(captionSourceLabel("ai")).toBe("Written by AI");
+    expect(captionSourceLabel("user")).toBe("Your caption");
+    expect(captionSourceLabel("auto")).toBe("Added automatically");
+    expect(missingCaptionsCopy(1)).toBe("1 page has no caption yet");
+    expect(missingCaptionsCopy(4)).toBe("4 pages have no caption yet");
+  });
+
+  it("partial banner note only when partial and captions are missing", () => {
+    expect(partialCaptionsNote("partial", 2)).toBe(PARTIAL_CAPTIONS_NOTE);
+    expect(PARTIAL_CAPTIONS_NOTE).toBe("Some pages may not have captions yet.");
+    expect(partialCaptionsNote("partial", 0)).toBeNull();
+    expect(partialCaptionsNote("failed", 2)).toBeNull();
+    expect(partialCaptionsNote("building", 2)).toBeNull();
+    expect(partialCaptionsNote(null, 2)).toBeNull();
   });
 });

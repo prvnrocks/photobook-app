@@ -362,3 +362,127 @@ export const CONTINUE_UNSYNCED_NOTE = "Your changes aren't in the album yet — 
 export function rebuildHint(left: number | null): string {
   return left === null ? "Re-plans the whole story with AI." : `Re-plans the whole story with AI (${left} left)`;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Captions preview (M4 T12): read-only list of the album's captions on the review screen.
+
+export type PreviewCaptionSource = "ai" | "user" | "auto";
+
+/**
+ * Minimal projection of books.doc for the captions preview — no photo ids, URLs or crop data.
+ * `chapter` is the index into `chapters` (null = page without a chapter);
+ * `captionable` = the page's layout has a caption area.
+ */
+export type CaptionsPreviewDoc = {
+  chapters: { title: string; dateLabel: string }[];
+  pages: { chapter: number | null; caption: { text: string; source: PreviewCaptionSource } | null; captionable: boolean }[];
+};
+
+const PREVIEW_SOURCES: readonly PreviewCaptionSource[] = ["ai", "user", "auto"];
+
+function rec(v: unknown): Record<string, unknown> | null {
+  return typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+}
+
+function plainText(v: unknown): string {
+  return typeof v === "string" ? v.trim() : "";
+}
+
+/**
+ * Loose read of the raw books.doc jsonb into the preview projection. Never throws; malformed
+ * pages / chapters are skipped or treated as "no caption". `hasCaptionArea(layoutId)` decides
+ * whether a page could carry a caption (pass the layout catalogue lookup).
+ */
+export function captionsPreviewOf(
+  doc: unknown,
+  hasCaptionArea: (layoutId: string) => boolean,
+): CaptionsPreviewDoc {
+  const d = rec(doc);
+  const chapters: CaptionsPreviewDoc["chapters"] = [];
+  const chapterIndex = new Map<string, number>();
+  if (d && Array.isArray(d.chapters)) {
+    for (const raw of d.chapters) {
+      const c = rec(raw);
+      if (!c || typeof c.id !== "string" || chapterIndex.has(c.id)) continue;
+      chapterIndex.set(c.id, chapters.length);
+      chapters.push({ title: plainText(c.title), dateLabel: plainText(c.dateLabel) });
+    }
+  }
+  const pages: CaptionsPreviewDoc["pages"] = [];
+  if (d && Array.isArray(d.pages)) {
+    for (const raw of d.pages) {
+      const p = rec(raw);
+      if (!p) continue;
+      const chapter = typeof p.chapterId === "string" ? (chapterIndex.get(p.chapterId) ?? null) : null;
+      const cap = rec(p.caption);
+      const text = plainText(cap?.text);
+      const source = PREVIEW_SOURCES.find((s) => s === cap?.source) ?? "ai";
+      const captionable = typeof p.layout === "string" && hasCaptionArea(p.layout);
+      pages.push({ chapter, caption: cap && text ? { text, source } : null, captionable });
+    }
+  }
+  return { chapters, pages };
+}
+
+export type CaptionsPreviewGroup = {
+  /** Chapter heading (AI-written) — null for pages without a chapter. */
+  title: string | null;
+  dateLabel: string | null;
+  items: { text: string; source: PreviewCaptionSource }[];
+};
+
+export type CaptionsPreviewModel = {
+  count: number;
+  /** Pages whose layout has a caption area but no caption yet. */
+  missing: number;
+  groups: CaptionsPreviewGroup[];
+};
+
+/**
+ * Groups captions by consecutive chapter, in page order. Returns null when there is nothing to
+ * show (no captions and no captionable pages).
+ */
+export function captionsPreviewModel(preview: CaptionsPreviewDoc | null | undefined): CaptionsPreviewModel | null {
+  if (!preview) return null;
+  let count = 0;
+  let missing = 0;
+  let captionable = 0;
+  const groups: CaptionsPreviewGroup[] = [];
+  let current: { chapter: number | null; group: CaptionsPreviewGroup } | null = null;
+  for (const page of preview.pages) {
+    if (page.captionable) captionable += 1;
+    if (!page.caption) {
+      if (page.captionable) missing += 1;
+      continue;
+    }
+    count += 1;
+    if (!current || current.chapter !== page.chapter) {
+      const ch = page.chapter !== null ? preview.chapters[page.chapter] : undefined;
+      current = {
+        chapter: page.chapter,
+        group: { title: ch?.title || null, dateLabel: ch?.dateLabel || null, items: [] },
+      };
+      groups.push(current.group);
+    }
+    current.group.items.push(page.caption);
+  }
+  if (count === 0 && captionable === 0) return null;
+  return { count, missing, groups };
+}
+
+export function captionSourceLabel(source: PreviewCaptionSource): string {
+  if (source === "user") return "Your caption";
+  if (source === "auto") return "Added automatically";
+  return "Written by AI";
+}
+
+export function missingCaptionsCopy(n: number): string {
+  return n === 1 ? "1 page has no caption yet" : `${n} pages have no caption yet`;
+}
+
+export const PARTIAL_CAPTIONS_NOTE = "Some pages may not have captions yet.";
+
+/** Extra line under the partial banner when captionable pages are still empty. */
+export function partialCaptionsNote(banner: ReviewBanner, missing: number): string | null {
+  return banner === "partial" && missing > 0 ? PARTIAL_CAPTIONS_NOTE : null;
+}

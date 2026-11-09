@@ -10,6 +10,8 @@ const p = (over: Partial<RunProgress> = {}): RunProgress => ({
   batchesTotal: 4,
   batchesDone: 1,
   photosCapped: 0,
+  captionsTotal: 0,
+  captionsDone: 0,
   ...over,
 });
 
@@ -37,10 +39,10 @@ describe("stageCopy", () => {
   it.each([
     ["queued", "Getting ready…"],
     ["storytelling", "Finding your moments…"],
-    ["captioning", "Final check…"],
+    ["captioning", "Writing captions…"],
     ["critiquing", "Final check…"],
-    ["repairing", "Final check…"],
-    ["validating", "Final check…"],
+    ["repairing", "Polishing…"],
+    ["validating", "Saving your album…"],
     ["done", "Your album is ready"],
   ] as const)("%s → %s", (state, text) => {
     expect(stageCopy(state, p()).text).toBe(text);
@@ -50,6 +52,39 @@ describe("stageCopy", () => {
     const order = ["queued", "curating", "storytelling", "captioning", "validating", "done"] as const;
     const percents = order.map((s) => stageCopy(s, p({ photosDone: 40 })).percent);
     expect([...percents].sort((a, b) => a - b)).toEqual(percents);
+  });
+
+  it("captioning shows captions done / total and moves the bar within 84–90 %", () => {
+    expect(stageCopy("captioning", p({ captionsTotal: 4, captionsDone: 2 }))).toEqual({
+      text: "Writing captions 2 / 4…",
+      detail: null,
+      percent: 87,
+    });
+    expect(stageCopy("captioning", p({ captionsTotal: 4, captionsDone: 0 })).percent).toBe(84);
+    expect(stageCopy("captioning", p({ captionsTotal: 4, captionsDone: 4 })).percent).toBe(90);
+    expect(stageCopy("captioning", p({ captionsTotal: 4, captionsDone: 9 })).text).toBe("Writing captions 4 / 4…");
+    expect(stageCopy("captioning", null)).toEqual({ text: "Writing captions…", detail: null, percent: 84 });
+  });
+
+  it("critiquing / repairing / validating percents", () => {
+    expect(stageCopy("critiquing", p()).percent).toBe(93);
+    expect(stageCopy("repairing", p()).percent).toBe(96);
+    expect(stageCopy("validating", p()).percent).toBe(98);
+  });
+
+  it("percent strictly increases through every stage (worst and best case within each)", () => {
+    const order = ["queued", "curating", "storytelling", "captioning", "critiquing", "repairing", "validating", "done"] as const;
+    // Each stage at its lowest point must be ≥ the previous stage at its highest point.
+    const low = (s: (typeof order)[number]) =>
+      stageCopy(s, p({ photosDone: 0, captionsTotal: 10, captionsDone: 0 })).percent;
+    const high = (s: (typeof order)[number]) =>
+      stageCopy(s, p({ photosDone: 40, captionsTotal: 10, captionsDone: 10 })).percent;
+    for (let i = 1; i < order.length; i++) {
+      expect(low(order[i])).toBeGreaterThan(high(order[i - 1]));
+    }
+    // Within captioning: more captions never lowers the bar.
+    const within = [0, 1, 2, 3, 4, 5].map((d) => stageCopy("captioning", p({ captionsTotal: 5, captionsDone: d })).percent);
+    expect([...within].sort((a, b) => a - b)).toEqual(within);
   });
 });
 
@@ -68,6 +103,25 @@ describe("newerSnapshot", () => {
     expect(newerSnapshot(b, a)).toBe(b);
     const c = { state: "curating" as const, progress: p({ photosDone: 10 }) };
     expect(newerSnapshot(a, c)).toBe(a);
+  });
+
+  it("within captioning, more captions done wins; ties keep current", () => {
+    const a = { state: "captioning" as const, progress: p({ phase: "captioning", photosDone: 40, captionsTotal: 8, captionsDone: 2 }) };
+    const b = { state: "captioning" as const, progress: p({ phase: "captioning", photosDone: 40, captionsTotal: 8, captionsDone: 6 }) };
+    expect(newerSnapshot(a, b)).toBe(b);
+    expect(newerSnapshot(b, a)).toBe(b);
+    const c = { state: "captioning" as const, progress: p({ phase: "captioning", photosDone: 40, captionsTotal: 8, captionsDone: 2 }) };
+    expect(newerSnapshot(a, c)).toBe(a);
+    // A later stage still wins over captioning progress.
+    const crit = { state: "critiquing" as const, progress: p({ phase: "critiquing", captionsTotal: 8, captionsDone: 0 }) };
+    expect(newerSnapshot(b, crit)).toBe(crit);
+    expect(newerSnapshot(crit, b)).toBe(crit);
+  });
+
+  it("captioning without totals is replaced by one with caption totals", () => {
+    const a = { state: "captioning" as const, progress: p({ phase: "captioning", captionsTotal: 0 }) };
+    const b = { state: "captioning" as const, progress: p({ phase: "captioning", captionsTotal: 8 }) };
+    expect(newerSnapshot(a, b)).toBe(b);
   });
 
   it("the initial empty snapshot is replaced by one with totals", () => {
