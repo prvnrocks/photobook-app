@@ -7,7 +7,7 @@
 // Only items within WINDOW of the current one render a <BookPage>; the rest are empty boxes.
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { itemToPosition, positionToItem } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
 import { useEditor } from "./editor-context";
@@ -27,6 +27,17 @@ export function PageCarousel() {
   const count = state.doc.pages.length + 1;
   const currentRef = useRef(current);
   const firstRun = useRef(true);
+  // Items are keyed by page id, so when pages are added/removed/reordered (Task 11) the browser
+  // re-snaps to the element that was snapped before — not the store's position. For a moment
+  // after the page order changes, scroll events snap back to `current` instead of moving it.
+  const pinUntil = useRef(0);
+  const pageOrder = useMemo(() => state.doc.pages.map((p) => p.id).join("\n"), [state.doc.pages]);
+  useLayoutEffect(() => {
+    currentRef.current = current;
+    pinUntil.current = performance.now() + 250;
+    // current is read at the moment the order changes; deps are the order only on purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageOrder]);
 
   // store → scroll
   useEffect(() => {
@@ -51,6 +62,10 @@ export function PageCarousel() {
       raf = requestAnimationFrame(() => {
         if (el.clientWidth === 0) return;
         const shown = Math.round(el.scrollLeft / el.clientWidth);
+        if (shown !== currentRef.current && performance.now() < pinUntil.current) {
+          el.scrollTo({ left: currentRef.current * el.clientWidth, behavior: "instant" });
+          return;
+        }
         if (shown !== currentRef.current) {
           currentRef.current = shown;
           actions.goTo(itemToPosition(shown));

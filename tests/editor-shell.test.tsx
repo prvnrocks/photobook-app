@@ -23,7 +23,8 @@ function ctxWith(selection: EditorSelection, readOnly = false): EditorContextVal
 
 describe("EditorShell render smoke", () => {
   it("renders header, carousel, counter and toolbar hint", () => {
-    const html = renderToStaticMarkup(<EditorShell data={devEditorData("ok")} transport={devTransport("ok")} />);
+    // tools={[]}: the hint only shows when no tool applies (the real registry has "always" tools).
+    const html = renderToStaticMarkup(<EditorShell data={devEditorData("ok")} transport={devTransport("ok")} tools={[]} />);
     expect(html).toContain('data-testid="editor-shell"');
     expect(html).toContain('data-testid="editor-title"');
     expect(html).toContain("Sara &amp; Omar");
@@ -43,7 +44,9 @@ describe("EditorShell render smoke", () => {
   });
 
   it("read-only: banner, no tap targets, static captions", () => {
-    const html = renderToStaticMarkup(<EditorShell data={devEditorData("readonly")} transport={devTransport("readonly")} />);
+    const html = renderToStaticMarkup(
+      <EditorShell data={devEditorData("readonly")} transport={devTransport("readonly")} tools={[]} />,
+    );
     expect(html).toContain('data-testid="save-banner-readOnly"');
     expect(html).toContain('data-readonly="true"');
     expect(html).toContain("Saving unavailable");
@@ -93,8 +96,9 @@ describe("toolbar registry", () => {
     { id: "hidden", label: "X", icon: Icon, scopes: "always", isAvailable: () => false },
   ];
 
-  it("starts empty (Tasks 9–11 register tools)", () => {
-    expect(EDITOR_TOOLS).toEqual([]);
+  it("registered tools have unique ids", () => {
+    const ids = EDITOR_TOOLS.map((t) => t.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   it("filters by selection scope and sorts by order", () => {
