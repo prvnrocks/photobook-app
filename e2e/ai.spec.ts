@@ -20,6 +20,22 @@ test.describe("AI screens redirect to /login when signed out", () => {
     });
   }
 
+  test("/settings -> /login?next=%2Fsettings (M4)", async ({ page, request }) => {
+    const res = await request.get(`/settings`, { maxRedirects: 0 });
+    expect([302, 303, 307, 308]).toContain(res.status());
+    const loc = new URL(res.headers()["location"] ?? "", "http://x.invalid");
+    expect(loc.pathname).toBe("/login");
+    expect(loc.searchParams.get("next")).toBe("/settings");
+    expect(res.headers()["location"]).toContain("next=%2Fsettings");
+
+    await page.goto(`/settings`);
+    await expect(page).toHaveURL(/\/login\?next=%2Fsettings$/);
+    await expect(page.getByTestId("login-next")).toHaveValue("/settings");
+    await expect(page.getByTestId("settings-memory")).toHaveCount(0);
+    const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(scrollWidth).toBeLessThanOrEqual(375);
+  });
+
   test("build?trigger=rebuild keeps a same-origin relative next", async ({ page }) => {
     const id = randomUUID();
     await page.goto(`/books/${id}/build?trigger=rebuild`);

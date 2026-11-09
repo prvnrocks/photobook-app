@@ -21,6 +21,13 @@
  *                      ADMIN_USER_IDS=<that uuid>, the admin trace page is checked too,
  *                      otherwise the trace page must 404 for this (non-admin) user.
  *   E2E_ADMIN=1        set when the baseURL server has ADMIN_USER_IDS=E2E_USER_ID.
+ *   E2E_PLANT_URL      AI_MODE=replay AI_REPLAY_SCENARIO=plant_bad_caption — optional (M4 Critic catch)
+ *   E2E_CRITIC_REFUSAL_URL  AI_MODE=replay server started from an app copy whose
+ *                      tests/fixtures/ai/critic.ok.json is {"parsed":null,"stopReason":"refusal"}
+ *                      → only the Critic refuses — optional (M4)
+ *
+ * M4 (captions, Critic, memory): the main book is created with a non-default tone (nostalgic for
+ * travel) so the Memory Keeper learns it; caption checks log counts only — never caption text.
  *
  * Example (production build in another folder, three `next start` servers):
  *   AI_MODE=replay ADMIN_USER_IDS=$U next start -p 3500
@@ -34,7 +41,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { PLANTED_PRECHECK_TEXT, isPlantedMismatch } from "../src/lib/ai/agents/caption-writer-replay";
+import { buildCaptionContext, checkCaption } from "../src/lib/ai/caption-check";
+import { wordCount } from "../src/lib/ai/schemas";
 import { parseBookDoc, validateBookDoc } from "../src/lib/book/schema";
+import { getLayout } from "../src/lib/layouts";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live signed-in AI flow");
@@ -52,6 +63,8 @@ const BUCKET = "photos";
 const VIEWPORT = { width: 375, height: 812 };
 const REFUSAL_URL = process.env.E2E_REFUSAL_URL ?? "";
 const OFF_URL = process.env.E2E_OFF_URL ?? "";
+const PLANT_URL = process.env.E2E_PLANT_URL ?? "";
+const CRITIC_REFUSAL_URL = process.env.E2E_CRITIC_REFUSAL_URL ?? "";
 const FIXED_UID = process.env.E2E_USER_ID ?? "";
 const IS_ADMIN = process.env.E2E_ADMIN === "1" && !!FIXED_UID;
 const USER_EDITED_MSG = "You've edited this album, so we won't rebuild it over your changes.";
@@ -108,11 +121,20 @@ async function photoRows(bookId: string): Promise<PhotoRow[]> {
 async function bookRow(bookId: string) {
   const { data, error } = await admin
     .from("books")
-    .select("doc, ai_status, max_pages, page_count, updated_at")
+    .select("doc, ai_status, max_pages, page_count, updated_at, title, tone, caption_lang")
     .eq("id", bookId)
     .single();
   if (error) throw new Error(`books select failed (${error.code})`);
-  return data as { doc: unknown; ai_status: string; max_pages: number; page_count: number; updated_at: string };
+  return data as {
+    doc: unknown;
+    ai_status: string;
+    max_pages: number;
+    page_count: number;
+    updated_at: string;
+    title: string | null;
+    tone: string;
+    caption_lang: string;
+  };
 }
 
 type RunRow = {
@@ -123,6 +145,7 @@ type RunRow = {
   ai_status: string | null;
   error_code: string | null;
   total_cost_usd: number | string;
+  critic_score: number | string | null;
   started_at: string;
   finished_at: string | null;
 };
@@ -130,7 +153,7 @@ type RunRow = {
 async function runsFor(bookId: string): Promise<RunRow[]> {
   const { data, error } = await admin
     .from("agent_runs")
-    .select("id, trigger, mode, state, ai_status, error_code, total_cost_usd, started_at, finished_at")
+    .select("id, trigger, mode, state, ai_status, error_code, total_cost_usd, critic_score, started_at, finished_at")
     .eq("book_id", bookId)
     .order("started_at", { ascending: true });
   if (error) throw new Error(`agent_runs select failed (${error.code})`);
@@ -196,6 +219,85 @@ function expectValidDoc(doc: unknown, keptIds: Set<string>, maxPages: number, ta
   console.log(`[${tag}] doc pages=${parsed.doc.pages.length} issues=${issues.length}`);
   expect(issues).toEqual([]);
   expect(parsed.doc.pages.length).toBeGreaterThan(0);
+}
+
+// ----- M4 caption helpers (counts only; caption text is never logged) -----
+type DocCaption = { text: string; font: string; align: string; source: string };
+type DocPage = { id: string; layout: string; chapterId: string | null; slots: { photoId?: string | null }[]; caption: DocCaption | null };
+type DocChapter = { id: string; title: string; dateLabel: string; place: string | null };
+
+function pagesOf(doc: unknown): DocPage[] {
+  return ((doc as { pages?: DocPage[] } | null)?.pages ?? []) as DocPage[];
+}
+function chaptersOf(doc: unknown): DocChapter[] {
+  return ((doc as { chapters?: DocChapter[] } | null)?.chapters ?? []) as DocChapter[];
+}
+function isCaptionable(p: DocPage): boolean {
+  return !!getLayout(p.layout)?.caption;
+}
+function pagePhotoIds(p: DocPage): string[] {
+  return p.slots.map((s) => s.photoId).filter((x): x is string => typeof x === "string");
+}
+/** layout + photo ids — a page with the same signature is "untouched". */
+function pageSig(p: DocPage): string {
+  return `${p.layout}|${pagePhotoIds(p).join(",")}`;
+}
+
+type CaptionStats = {
+  pages: number;
+  captionable: number;
+  withCaption: number;
+  captionableWithCaption: number;
+  ai: number;
+  user: number;
+  nonCaptionableWithCaption: number;
+  maxWords: number;
+  over18: number;
+};
+function captionStats(doc: unknown): CaptionStats {
+  const pages = pagesOf(doc);
+  const st: CaptionStats = { pages: pages.length, captionable: 0, withCaption: 0, captionableWithCaption: 0, ai: 0, user: 0, nonCaptionableWithCaption: 0, maxWords: 0, over18: 0 };
+  for (const p of pages) {
+    const cap = isCaptionable(p);
+    if (cap) st.captionable++;
+    if (!p.caption) continue;
+    st.withCaption++;
+    if (cap) st.captionableWithCaption++;
+    else st.nonCaptionableWithCaption++;
+    if (p.caption.source === "ai") st.ai++;
+    if (p.caption.source === "user") st.user++;
+    const w = wordCount(p.caption.text);
+    st.maxWords = Math.max(st.maxWords, w);
+    if (w > 18) st.over18++;
+  }
+  return st;
+}
+/** Every caption text + chapter title in the doc (to assert they never leak into logs). */
+function captionTexts(doc: unknown): string[] {
+  const out = pagesOf(doc).flatMap((p) => (p.caption ? [p.caption.text] : []));
+  return out.filter((t) => t.trim().length >= 8);
+}
+function leaks(haystack: string, needles: string[]): number {
+  return needles.filter((n) => haystack.includes(n) || haystack.includes(JSON.stringify(n).slice(1, -1))).length;
+}
+function hasKey(v: unknown, key: string): boolean {
+  if (Array.isArray(v)) return v.some((x) => hasKey(x, key));
+  if (v && typeof v === "object") return Object.entries(v).some(([k, x]) => k === key || hasKey(x, key));
+  return false;
+}
+async function runCursor(runId: string): Promise<unknown> {
+  const { data, error } = await admin.from("agent_runs").select("cursor").eq("id", runId).single();
+  if (error) throw new Error(`cursor select failed (${error.code})`);
+  return (data as { cursor: unknown }).cursor;
+}
+async function memoryRow(): Promise<{ prefs: Record<string, unknown> } | null> {
+  const { data, error } = await admin.from("user_memory").select("prefs").eq("user_id", uid).maybeSingle();
+  if (error) throw new Error(`user_memory select failed (${error.code})`);
+  return (data as { prefs: Record<string, unknown> } | null) ?? null;
+}
+function memoryKeysOfStep(s: StepRow): string[] {
+  const k = (s.input_summary as { memoryKeys?: unknown } | null)?.memoryKeys;
+  return Array.isArray(k) ? k.map(String) : [];
 }
 
 async function signInLink(): Promise<string> {
@@ -318,10 +420,18 @@ async function makeSynthetic(p: Page, n: number): Promise<FileSpec[]> {
   return list.map((b64, i) => ({ name: `scene-${i + 1}.jpg`, mimeType: "image/jpeg", buffer: Buffer.from(b64, "base64") }));
 }
 
-async function createBookAt(base: string): Promise<string> {
+async function createBookAt(base: string, opts: { tone?: string; lang?: "en" | "ar" } = {}): Promise<string> {
   await page.goto(`${base}/books/new`);
   await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
   await expect(page.getByTestId("occasion-travel")).toBeChecked();
+  if (opts.tone) {
+    await page.locator("label", { has: page.getByTestId(`tone-${opts.tone}`) }).click();
+    await expect(page.getByTestId(`tone-${opts.tone}`)).toBeChecked();
+  }
+  if (opts.lang) {
+    await page.locator("label", { has: page.getByTestId(`lang-${opts.lang}`) }).click();
+    await expect(page.getByTestId(`lang-${opts.lang}`)).toBeChecked();
+  }
   await page.getByTestId("create-book").click();
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
   const id = new URL(page.url()).pathname.split("/")[2];
@@ -343,7 +453,30 @@ async function buildStates(): Promise<string[]> {
 async function resetBuildStates() {
   await page.evaluate(() => {
     (window as unknown as { __buildStates: string[] }).__buildStates = [];
+    (window as unknown as { __buildTexts: string[] }).__buildTexts = [];
   });
+}
+
+/** Every distinct build-stage line seen (copy only — e.g. "Writing captions 1 / 4…"). */
+async function buildTexts(): Promise<string[]> {
+  return page.evaluate(() => (window as unknown as { __buildTexts?: string[] }).__buildTexts ?? []);
+}
+
+/** Build my album on the upload screen → build → review. */
+async function buildToReview() {
+  await resetBuildStates();
+  await page.getByTestId("build-album").click();
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build$/, { timeout: 30_000 });
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/review$/, { timeout: 180_000 });
+}
+
+/** Opens the (collapsed) captions preview if present; returns its count text or null. */
+async function openCaptionsPreview(): Promise<string | null> {
+  const preview = page.getByTestId("captions-preview");
+  if ((await preview.count()) === 0) return null;
+  await preview.locator("summary").click();
+  await expect(preview).toHaveAttribute("open", "");
+  return (await page.getByTestId("captions-count").textContent())?.trim() ?? null;
 }
 
 async function postRun(bookId: string, trigger: "build" | "rebuild") {
@@ -370,7 +503,7 @@ test.beforeAll(async ({ browser }, info) => {
   admin = createClient(url, env("SUPABASE_SECRET_KEY"), {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  email = `e2e+m3-${randomBytes(6).toString("hex")}@example.com`;
+  email = `e2e+m4-${randomBytes(6).toString("hex")}@example.com`;
   const { data, error } = await admin.auth.admin.createUser({
     email,
     email_confirm: true,
@@ -382,13 +515,16 @@ test.beforeAll(async ({ browser }, info) => {
   context = await browser.newContext({ viewport: VIEWPORT, baseURL });
   // Records every data-state of the build progress box (client navigation keeps `window`).
   await context.addInitScript(() => {
-    const w = window as unknown as { __buildStates: string[] };
+    const w = window as unknown as { __buildStates: string[]; __buildTexts: string[] };
     w.__buildStates = [];
+    w.__buildTexts = [];
     new MutationObserver(() => {
       const el = document.querySelector('[data-testid="build-progress"]');
       const s = el?.getAttribute("data-state");
       if (s && w.__buildStates[w.__buildStates.length - 1] !== s) w.__buildStates.push(s);
-    }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-state"] });
+      const t = document.querySelector('[data-testid="build-stage"]')?.textContent?.trim();
+      if (t && w.__buildTexts[w.__buildTexts.length - 1] !== t) w.__buildTexts.push(t);
+    }).observe(document, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["data-state"] });
   });
   page = await context.newPage();
   page.on("dialog", (d) => void d.accept());
@@ -470,20 +606,27 @@ test.afterAll(async () => {
 });
 
 test("a. upload 12 photos → Build my album → progress → review (replay)", async () => {
-  bookA = await createBookAt(baseURL);
+  // M4: non-default tone for travel (default fun) → the Memory Keeper learns it on Continue.
+  bookA = await createBookAt(baseURL, { tone: "nostalgic" });
   await uploadAndWaitSummary(mainFiles, MAIN_COUNT);
   const rows = await photoRows(bookA);
   expect(rows.length).toBe(MAIN_COUNT);
-  await resetBuildStates();
 
   const t0 = Date.now();
-  await page.getByTestId("build-album").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build$/, { timeout: 30_000 });
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/review$/, { timeout: 180_000 });
+  await buildToReview();
   const ms = Date.now() - t0;
   const states = await buildStates();
-  console.log(`[a] build→review ms=${ms} states=${states.join(">")}`);
+  const texts = await buildTexts();
+  // Stage copy only (no user data): strip digits so the log stays generic.
+  console.log(`[a] build→review ms=${ms} states=${states.join(">")} stageTexts=${texts.map((t) => t.replace(/\d+/g, "#")).join(" | ")}`);
   expect(states.length).toBeGreaterThanOrEqual(2);
+  // M4 stages render. In replay the Storyteller tick usually runs the (single) caption batch too
+  // (calls take ~0 ms), so "captioning" / "Writing captions d / t…" is only seen when a tick yields
+  // mid-captioning — verify on a live key (M4b). "Final check…" (critiquing) must always show.
+  const sawCaptioning = states.includes("captioning") || texts.some((t) => t.startsWith("Writing captions"));
+  console.log(`[a] sawCaptioning=${sawCaptioning} sawFinalCheck=${texts.includes("Final check…")}`);
+  expect(states.some((s) => s === "captioning" || s === "critiquing")).toBe(true);
+  expect(texts.some((t) => t.startsWith("Writing captions") || t === "Final check…")).toBe(true);
   expect(new URL(page.url()).pathname).toBe(`/books/${bookA}/review`);
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(scrollWidth).toBeLessThanOrEqual(VIEWPORT.width);
@@ -629,6 +772,89 @@ test("b. review: header, screenshot + duplicate dropped, toggle persists; DB run
   await page.goto(`/books/${bookA}/review`);
 });
 
+test("m4a. captions on every captionable page (en), Critic ok, preview count, no caption text in logs", async () => {
+  const runs = await runsFor(bookA);
+  const run = runs[0];
+  const book = await bookRow(bookA);
+  const st = captionStats(book.doc);
+  const steps = await stepsFor(run.id);
+  const skipped = steps.filter((s) => s.status === "skipped").length;
+  const caption = steps.filter((s) => s.agent === "caption_writer");
+  const critic = steps.filter((s) => s.agent === "critic");
+  const repairs = caption.filter((s) => s.step_key.startsWith("caption_writer:repair:")).length;
+  const stepSum = steps.reduce((a, s) => a + Number(s.cost_usd), 0);
+
+  // Pre-check (lang en) over every caption, with the book's own metadata as allowlist.
+  const chapters = chaptersOf(book.doc);
+  const ctx = buildCaptionContext({ lang: "en", bookTitle: book.title, chapters });
+  const issueCodes: Record<string, number> = {};
+  for (const p of pagesOf(book.doc)) {
+    if (!p.caption) continue;
+    for (const i of checkCaption(p.caption.text, ctx)) issueCodes[i.code] = (issueCodes[i.code] ?? 0) + 1;
+  }
+  console.log(
+    `[m4a] ${JSON.stringify(st)} lang=${book.caption_lang} criticScore=${run.critic_score !== null} skipped=${skipped} captionSteps=${caption.length} repairs=${repairs} critic=${critic.map((s) => s.status).join(",")} precheckIssues=${JSON.stringify(issueCodes)} total=${Number(run.total_cost_usd)} stepSum=${stepSum.toFixed(6)}`,
+  );
+  expect(book.caption_lang).toBe("en");
+  expect(st.captionable).toBeGreaterThan(0);
+  expect(st.captionableWithCaption).toBe(st.captionable); // every captionable page has a caption
+  expect(st.ai).toBe(st.withCaption);
+  expect(st.user).toBe(0);
+  expect(st.nonCaptionableWithCaption).toBe(0);
+  expect(st.over18).toBe(0);
+  expect(skipped).toBe(0);
+  expect(caption.every((s) => s.status === "ok")).toBe(true);
+  expect(critic.map((s) => s.status)).toEqual(["ok"]);
+  expect(run.critic_score).not.toBeNull();
+  expect(Math.abs(Number(run.total_cost_usd) - stepSum)).toBeLessThan(0.0001);
+  // Unknown names/numbers are allowed only from metadata (places come from Mapbox) — log only for places.
+  expect(issueCodes.too_long ?? 0).toBe(0);
+  expect(issueCodes.arabic_in_english ?? 0).toBe(0);
+
+  // No caption text / Critic detail in steps, GET progress or the finished cursor.
+  const texts = captionTexts(book.doc);
+  const stepsJson = JSON.stringify(steps.map((s) => [s.output, s.input_summary]));
+  const stepLeaks = leaks(stepsJson, texts);
+  const detailKeys = steps.filter((s) => hasKey(s.output, "detail")).length;
+  const got = await page.evaluate(async (id) => {
+    const res = await fetch(`/api/ai/runs/${id}`, { credentials: "same-origin" });
+    return { status: res.status, text: await res.text() };
+  }, run.id);
+  const progress = (JSON.parse(got.text) as { progress?: Record<string, unknown> }).progress ?? {};
+  const getLeaks = leaks(got.text, texts);
+  const cursor = await runCursor(run.id);
+  const cursorJson = JSON.stringify(cursor ?? null);
+  const cursorLeaks = leaks(cursorJson, texts);
+  const cursorKeys = cursor && typeof cursor === "object" ? Object.keys(cursor as object) : [];
+  const heavyKeys = ["plan", "captions", "headings", "critique", "memory"].filter((k) => {
+    const v = (cursor as Record<string, unknown> | null)?.[k];
+    return v !== undefined && v !== null && !(typeof v === "object" && Object.keys(v as object).length === 0);
+  });
+  console.log(
+    `[m4a] captionTexts=${texts.length} stepLeaks=${stepLeaks} detailKeys=${detailKeys} GET=${got.status} getLeaks=${getLeaks} progressKeys=${Object.keys(progress).join(",")} captionsTotal=${String(progress.captionsTotal)} captionsDone=${String(progress.captionsDone)} cursorBytes=${cursorJson.length} cursorLeaks=${cursorLeaks} cursorHeavyKeys=${heavyKeys.join(",") || "none"} cursorKeys=${cursorKeys.length}`,
+  );
+  expect(texts.length).toBeGreaterThan(0);
+  expect(stepLeaks).toBe(0);
+  expect(detailKeys).toBe(0);
+  expect(got.status).toBe(200);
+  expect(getLeaks).toBe(0);
+  expect(cursorLeaks).toBe(0);
+  expect(heavyKeys).toEqual([]);
+
+  // Review UI: collapsed preview → "Captions (n)", n = captionable pages; no missing line.
+  await page.goto(`/books/${bookA}/review`);
+  const count = await openCaptionsPreview();
+  expect(count).toBe(`Captions (${st.captionable})`);
+  await expect(page.getByTestId("captions-missing")).toHaveCount(0);
+  await expect(page.getByTestId("captions-item")).toHaveCount(st.captionable);
+  await expect(page.getByTestId("captions-source-ai")).toHaveCount(st.captionable);
+  const dirs = await page.getByTestId("captions-text").evaluateAll((els) => els.map((e) => e.getAttribute("dir")));
+  expect(dirs.every((d) => d === "auto")).toBe(true);
+  const sw = await page.evaluate(() => document.documentElement.scrollWidth);
+  console.log(`[m4a] preview items=${st.captionable} chapters=${await page.getByTestId("captions-chapter").count()} scrollWidth=${sw}`);
+  expect(sw).toBeLessThanOrEqual(VIEWPORT.width);
+});
+
 test("u. Update album (D-028): drop 1 in-album photo + keep 1 dropped → re-layout, no AI run", async () => {
   const before = await bookRow(bookA);
   const runsBefore = (await runsFor(bookA)).length;
@@ -677,6 +903,34 @@ test("u. Update album (D-028): drop 1 in-album photo + keep 1 dropped → re-lay
   expect(after.ai_status).toBe("done");
   expect(runsAfter).toBe(runsBefore);
   expectValidDoc(after.doc, new Set(rowsAfter.filter((r) => r.status !== "dropped").map((r) => r.id)), after.max_pages ?? 20, "u");
+
+  // M4 (D-031): untouched pages (same layout + photos) keep their AI caption; re-fitted/new pages
+  // get caption null. Compared by value — never printed.
+  const beforeBySig = new Map(pagesOf(before.doc).map((p) => [pageSig(p), p.caption] as const));
+  let untouched = 0;
+  let untouchedKept = 0;
+  let refit = 0;
+  let refitNull = 0;
+  for (const p of pagesOf(after.doc)) {
+    if (beforeBySig.has(pageSig(p))) {
+      untouched++;
+      if (JSON.stringify(p.caption) === JSON.stringify(beforeBySig.get(pageSig(p)))) untouchedKept++;
+    } else {
+      refit++;
+      if (p.caption === null) refitNull++;
+    }
+  }
+  const chaptersBefore = chaptersOf(before.doc).map((c) => c.title);
+  const chaptersAfter = chaptersOf(after.doc).map((c) => c.title);
+  const headingsKept = chaptersAfter.filter((t) => chaptersBefore.includes(t)).length;
+  console.log(
+    `[u] captions: untouched=${untouched} kept=${untouchedKept} refit=${refit} refitNull=${refitNull} chapters before=${chaptersBefore.length} after=${chaptersAfter.length} headingsKept=${headingsKept} after=${JSON.stringify(captionStats(after.doc))}`,
+  );
+  expect(untouched).toBeGreaterThan(0);
+  expect(untouchedKept).toBe(untouched);
+  expect(refit).toBeGreaterThan(0);
+  expect(refitNull).toBe(refit);
+  expect(captionStats(after.doc).user).toBe(0);
 });
 
 test("c. rebuild: build → review; 0 new curator calls; user choice untouched; toggled photo in doc", async () => {
@@ -716,6 +970,118 @@ test("c. rebuild: build → review; 0 new curator calls; user choice untouched; 
   expect(docPhotoIds(book.doc).has(userDroppedId)).toBe(false);
   await expect(page.getByTestId("update-album-bar")).toHaveCount(0);
   await expect(page.getByTestId("review-header")).toHaveText(`AI kept ${keptIds.size} of ${rows.length}`);
+
+  // M4: the rebuild writes captions again (no user captions in the doc yet).
+  const st = captionStats(book.doc);
+  const caption = steps.filter((s) => s.agent === "caption_writer");
+  const critic = steps.filter((s) => s.agent === "critic");
+  console.log(`[c] ${JSON.stringify(st)} captionSteps=${caption.map((s) => s.status).join(",")} critic=${critic.map((s) => s.status).join(",")} criticScore=${run.critic_score !== null}`);
+  expect(st.captionableWithCaption).toBe(st.captionable);
+  expect(st.ai).toBe(st.withCaption);
+  expect(critic.map((s) => s.status)).toEqual(["ok"]);
+  expect(run.critic_score).not.toBeNull();
+});
+
+/** Short user captions (≤ 10 words → Memory Keeper learns captionLength 'short'). */
+const USER_CAPTIONS = ["Our quiet morning together", "Sun on our faces", "Back home at last", "One more slow walk"];
+
+test("h. user caption (D-031): AI rebuild 409 user_edited, doc unchanged; Update album keeps it", async () => {
+  await page.goto(`/books/${bookA}/review`);
+  const before = await bookRow(bookA);
+  const doc = structuredClone(before.doc) as { pages: DocPage[]; meta: Record<string, unknown>; cover: { photoId: string | null } };
+  const capIdx = doc.pages.map((p, i) => [p, i] as const).filter(([p]) => isCaptionable(p));
+  expect(capIdx.length).toBeGreaterThan(0);
+  const [target, ti] = capIdx.find(([p]) => pagePhotoIds(p).length >= 2) ?? capIdx[0];
+  doc.pages[ti] = {
+    ...target,
+    caption: { text: USER_CAPTIONS[0], font: target.caption?.font ?? "Playfair Display", align: "center", source: "user" },
+  };
+  const upd = await admin.from("books").update({ doc }).eq("id", bookA);
+  expect(upd.error).toBeNull();
+  const snapshot = (await bookRow(bookA)).doc;
+  expect(metaOf(snapshot).userEdited).toBe(false);
+  const runsBefore = (await runsFor(bookA)).length;
+
+  const res = await postRun(bookA, "rebuild");
+  console.log(`[h] POST status=${res.status} error=${String(res.body.error)} targetPhotos=${pagePhotoIds(target).length}`);
+  expect(res.status).toBe(409);
+  expect(res.body).toMatchObject({ error: "user_edited" });
+  expect((await bookRow(bookA)).doc).toEqual(snapshot);
+  expect((await runsFor(bookA)).length).toBe(runsBefore);
+
+  await page.reload();
+  await page.getByTestId("rebuild-button").click();
+  await expect(page.getByTestId("rebuild-error")).toHaveText(USER_EDITED_MSG);
+  expect(new URL(page.url()).pathname).toBe(`/books/${bookA}/review`);
+  await page.reload();
+  await openCaptionsPreview();
+  await expect(page.getByTestId("captions-source-user")).toHaveCount(1);
+
+  // Update album still works: drop a photo from the user-captioned page (if it has ≥ 2), else elsewhere.
+  const rows = await photoRows(bookA);
+  const keptInAlbum = rows.filter((r) => r.status === "kept" && docPhotoIds(snapshot).has(r.id) && r.id !== doc.cover.photoId);
+  const onTarget = pagePhotoIds(target).length >= 2 ? keptInAlbum.find((r) => pagePhotoIds(target).includes(r.id)) : undefined;
+  const drop = onTarget ?? keptInAlbum.find((r) => !pagePhotoIds(target).includes(r.id));
+  expect(drop).toBeTruthy();
+  const tile = page.locator(`[data-testid="review-tile"][data-photo-id="${drop!.id}"]`);
+  await expect(tile).toHaveAttribute("data-state", "kept");
+  await tile.click();
+  await expect(tile).toHaveAttribute("data-state", "dropped");
+  await expect
+    .poll(async () => (await photoRows(bookA)).find((r) => r.id === drop!.id)?.user_override, { timeout: 15_000 })
+    .toBe(true);
+  await page.getByTestId("update-album").click();
+  await expect(page.getByTestId("update-album-toast")).toHaveText("Album updated", { timeout: 30_000 });
+  await expect(page.getByTestId("update-album-error")).toHaveCount(0);
+
+  const after = await bookRow(bookA);
+  const userPages = pagesOf(after.doc).filter((p) => p.caption?.source === "user");
+  const sameText = userPages.filter((p) => p.caption?.text === USER_CAPTIONS[0]).length;
+  const rowsAfter = await photoRows(bookA);
+  console.log(
+    `[h] update album: droppedFromUserPage=${!!onTarget} userCaptions=${userPages.length} sameText=${sameText} onCaptionable=${userPages.filter(isCaptionable).length} runs=${(await runsFor(bookA)).length} generator=${String(metaOf(after.doc).generator)} userEdited=${String(metaOf(after.doc).userEdited)}`,
+  );
+  expect(userPages.length).toBe(1);
+  expect(sameText).toBe(1);
+  expect(docPhotoIds(after.doc).has(drop!.id)).toBe(false);
+  expect(metaOf(after.doc).userEdited).not.toBe(true);
+  expect((await runsFor(bookA)).length).toBe(runsBefore);
+  expectValidDoc(after.doc, new Set(rowsAfter.filter((r) => r.status !== "dropped").map((r) => r.id)), after.max_pages ?? 20, "h");
+});
+
+test("m. Memory Keeper: ≥ 3 short user captions + Continue → user_memory (tone, short, en)", async () => {
+  expect(await memoryRow()).toBeNull();
+  const before = await bookRow(bookA);
+  const doc = structuredClone(before.doc) as { pages: DocPage[] };
+  let users = doc.pages.filter((p) => p.caption?.source === "user").length;
+  let next = 1;
+  for (let i = 0; i < doc.pages.length && users < 4 && next < USER_CAPTIONS.length; i++) {
+    const p = doc.pages[i];
+    if (!isCaptionable(p) || p.caption?.source === "user") continue;
+    doc.pages[i] = { ...p, caption: { text: USER_CAPTIONS[next++], font: p.caption?.font ?? "Playfair Display", align: "center", source: "user" } };
+    users++;
+  }
+  console.log(`[m] user captions written=${users} captionable=${doc.pages.filter(isCaptionable).length}`);
+  expect(users).toBeGreaterThanOrEqual(3);
+  const upd = await admin.from("books").update({ doc }).eq("id", bookA);
+  expect(upd.error).toBeNull();
+  expect(metaOf((await bookRow(bookA)).doc).userEdited).toBe(false);
+
+  await page.goto(`/books/${bookA}/review`);
+  await page.getByTestId("review-continue").click();
+  await page.waitForURL(/\/dashboard$/, { timeout: 30_000 });
+  await expect.poll(async () => (await memoryRow()) !== null, { timeout: 15_000 }).toBe(true);
+  const prefs = (await memoryRow())!.prefs;
+  const keys = Object.keys(prefs).filter((k) => prefs[k] !== undefined && prefs[k] !== null).sort();
+  const checks = {
+    tone: prefs.tonePreference === "nostalgic",
+    short: prefs.captionLength === "short",
+    en: prefs.language === "en",
+    noNames: !Array.isArray(prefs.knownNames) || prefs.knownNames.length === 0,
+  };
+  console.log(`[m] memory keys=${keys.join(",")} checks=${JSON.stringify(checks)}`);
+  expect(checks).toEqual({ tone: true, short: true, en: true, noNames: true });
+  await page.goto(`/books/${bookA}/review`);
 });
 
 test("f. userEdited guard: rebuild refused 409 user_edited, message shown, doc unchanged", async () => {
@@ -746,6 +1112,208 @@ test("f. userEdited guard: rebuild refused 409 user_edited, message shown, doc u
   expect((await runsFor(bookA)).length).toBe(runsBefore);
 });
 
+test("n. memory → new book prefilled (tone + hint); book 2 build gets memory; replay captions ≤ 10 words", async () => {
+  await page.goto(`${baseURL}/books/new`);
+  await expect(page.getByTestId("new-book-from-memory")).toBeVisible();
+  await expect(page.getByTestId("tone-nostalgic")).toBeChecked();
+  await expect(page.getByTestId("lang-en")).toBeChecked();
+  await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
+  // The remembered tone survives picking an occasion whose default differs (travel → fun).
+  await expect(page.getByTestId("tone-nostalgic")).toBeChecked();
+  await expect(page.getByTestId("new-book-from-memory")).toBeVisible();
+  const sw = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(sw).toBeLessThanOrEqual(VIEWPORT.width);
+  await page.getByTestId("create-book").click();
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
+  const bookM = new URL(page.url()).pathname.split("/")[2];
+  const files = synth.slice(0, 6);
+  await uploadAndWaitSummary(files, files.length);
+  await buildToReview();
+
+  const book = await bookRow(bookM);
+  const runs = await runsFor(bookM);
+  const steps = await stepsFor(runs[0].id);
+  const story = steps.filter((s) => s.agent === "storyteller");
+  const writers = steps.filter((s) => s.agent === "caption_writer");
+  const st = captionStats(book.doc);
+  console.log(
+    `[n] tone=${book.tone} run=${runs[0].ai_status} storyMemoryKeys=${story.map((s) => memoryKeysOfStep(s).join("+")).join(",")} writerMemoryKeys=${writers.map((s) => memoryKeysOfStep(s).join("+")).join(",")} ${JSON.stringify(st)}`,
+  );
+  expect(book.tone).toBe("nostalgic");
+  expect(runs[0]).toMatchObject({ mode: "replay", state: "done", ai_status: "ok" });
+  expect(story.length).toBe(1);
+  expect(memoryKeysOfStep(story[0])).toContain("captionLength");
+  expect(writers.length).toBeGreaterThanOrEqual(1);
+  expect(writers.every((s) => memoryKeysOfStep(s).includes("captionLength"))).toBe(true);
+  expect(writers.every((s) => memoryKeysOfStep(s).includes("tonePreference"))).toBe(true);
+  expect(st.captionable).toBeGreaterThan(0);
+  expect(st.captionableWithCaption).toBe(st.captionable);
+  expect(st.maxWords).toBeLessThanOrEqual(10);
+  expect(leaks(JSON.stringify(steps.map((s) => [s.output, s.input_summary])), ["nostalgic\u0000"])).toBe(0);
+  const rows = await photoRows(bookM);
+  expectValidDoc(book.doc, new Set(rows.filter((r) => r.status !== "dropped").map((r) => r.id)), book.max_pages ?? 20, "n");
+});
+
+test("s. /settings shows learned rows; Clear → confirm → row deleted; next new book has no hint", async () => {
+  await page.goto(`${baseURL}/settings`);
+  await expect(page.getByTestId("settings-memory-list")).toBeVisible();
+  await expect(page.getByTestId("settings-row-tone")).toHaveCount(1);
+  await expect(page.getByTestId("settings-row-captionLength")).toHaveCount(1);
+  await expect(page.getByTestId("settings-row-language")).toHaveCount(1);
+  await expect(page.getByTestId("settings-privacy")).toBeVisible();
+  const sw = await page.evaluate(() => document.documentElement.scrollWidth);
+  console.log(`[s] rows=${await page.locator('[data-testid^="settings-row-"]').count()} scrollWidth=${sw}`);
+  expect(sw).toBeLessThanOrEqual(VIEWPORT.width);
+
+  // Cancel first: nothing deleted.
+  await page.getByTestId("settings-clear").click();
+  await expect(page.getByTestId("settings-clear-confirm")).toBeVisible();
+  await page.getByTestId("settings-clear-cancel").click();
+  await expect(page.getByTestId("settings-clear-confirm")).toHaveCount(0);
+  expect(await memoryRow()).not.toBeNull();
+
+  await page.getByTestId("settings-clear").click();
+  await page.getByTestId("settings-clear-yes").click();
+  await expect(page.getByTestId("settings-clear-done")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("settings-clear-error")).toHaveCount(0);
+  await expect.poll(async () => (await memoryRow()) === null, { timeout: 15_000 }).toBe(true);
+  await page.reload();
+  await expect(page.getByTestId("settings-empty")).toBeVisible();
+  await expect(page.getByTestId("settings-clear")).toHaveCount(0);
+
+  await page.goto(`${baseURL}/books/new`);
+  await expect(page.getByTestId("create-book")).toBeVisible();
+  await expect(page.getByTestId("new-book-from-memory")).toHaveCount(0);
+});
+
+test("ar. Arabic book: native Arabic captions pass the pre-check; preview dir=auto lang=ar Cairo; memory cleared", async () => {
+  const bookAr = await createBookAt(baseURL, { lang: "ar" });
+  const files = synth.slice(1, 7);
+  await uploadAndWaitSummary(files, files.length);
+  await buildToReview();
+
+  const book = await bookRow(bookAr);
+  const runs = await runsFor(bookAr);
+  const steps = await stepsFor(runs[0].id);
+  const story = steps.filter((s) => s.agent === "storyteller");
+  const writers = steps.filter((s) => s.agent === "caption_writer");
+  const st = captionStats(book.doc);
+  const ctx = buildCaptionContext({ lang: "ar", bookTitle: book.title, chapters: chaptersOf(book.doc) });
+  let issues = 0;
+  const codes: Record<string, number> = {};
+  for (const p of pagesOf(book.doc)) {
+    if (!p.caption) continue;
+    for (const i of checkCaption(p.caption.text, ctx)) {
+      issues++;
+      codes[i.code] = (codes[i.code] ?? 0) + 1;
+    }
+  }
+  const fonts = [...new Set(pagesOf(book.doc).flatMap((p) => (p.caption ? [p.caption.font] : [])))];
+  console.log(
+    `[ar] lang=${book.caption_lang} run=${runs[0].ai_status} ${JSON.stringify(st)} precheckIssues=${issues} ${JSON.stringify(codes)} captionFonts=${fonts.join(",")} storyMemoryKeys=${story.map((s) => memoryKeysOfStep(s).length).join(",")} writerMemoryKeys=${writers.map((s) => memoryKeysOfStep(s).length).join(",")}`,
+  );
+  expect(book.caption_lang).toBe("ar");
+  expect(runs[0]).toMatchObject({ mode: "replay", state: "done", ai_status: "ok" });
+  expect(st.captionable).toBeGreaterThan(0);
+  expect(st.captionableWithCaption).toBe(st.captionable);
+  expect(st.ai).toBe(st.withCaption);
+  expect(st.over18).toBe(0);
+  expect(issues).toBe(0);
+  expect(fonts).toEqual(["Cairo"]);
+  // Memory was cleared in "s" → nothing injected.
+  expect(story.every((s) => memoryKeysOfStep(s).length === 0)).toBe(true);
+  expect(writers.every((s) => memoryKeysOfStep(s).length === 0)).toBe(true);
+  const rows = await photoRows(bookAr);
+  expectValidDoc(book.doc, new Set(rows.filter((r) => r.status !== "dropped").map((r) => r.id)), book.max_pages ?? 20, "ar");
+
+  const count = await openCaptionsPreview();
+  expect(count).toBe(`Captions (${st.captionable})`);
+  const attrs = await page.getByTestId("captions-text").evaluateAll((els) =>
+    els.map((e) => ({ dir: e.getAttribute("dir"), lang: e.getAttribute("lang"), font: getComputedStyle(e).fontFamily, rtl: getComputedStyle(e).direction })),
+  );
+  const ok = attrs.filter((a) => a.dir === "auto" && a.lang === "ar" && /cairo/i.test(a.font)).length;
+  const rtl = attrs.filter((a) => a.rtl === "rtl").length;
+  await page.evaluate(() => document.fonts.ready);
+  const cairoLoaded = await page.evaluate(() => [...document.fonts].some((f) => /cairo/i.test(f.family) && f.status === "loaded"));
+  const sw = await page.evaluate(() => document.documentElement.scrollWidth);
+  console.log(`[ar] preview items=${attrs.length} dirAutoLangArCairo=${ok} rtl=${rtl} cairoLoaded=${cairoLoaded} scrollWidth=${sw}`);
+  expect(attrs.length).toBe(st.captionable);
+  expect(ok).toBe(attrs.length);
+  expect(rtl).toBe(attrs.length);
+  expect(sw).toBeLessThanOrEqual(VIEWPORT.width);
+});
+
+test("p. plant_bad_caption: pre-check + Critic catch the planted captions, one repair round, clean doc", async () => {
+  test.skip(!PLANT_URL, "set E2E_PLANT_URL (server with AI_REPLAY_SCENARIO=plant_bad_caption)");
+  const bookP = await createBookAt(PLANT_URL);
+  const files = synth.slice(0, 7);
+  await uploadAndWaitSummary(files, files.length);
+  await buildToReview();
+
+  const book = await bookRow(bookP);
+  const runs = await runsFor(bookP);
+  const run = runs[0];
+  const steps = await stepsFor(run.id);
+  const writers = steps.filter((s) => s.agent === "caption_writer");
+  const repairs = writers.filter((s) => s.step_key.startsWith("caption_writer:repair:"));
+  const critic = steps.filter((s) => s.agent === "critic");
+  const criticOut = JSON.stringify(critic.map((s) => s.output));
+  const pages = pagesOf(book.doc);
+  const planted = pages.filter((p) => isPlantedMismatch(p.caption?.text)).length;
+  const precheckPlanted = pages.filter((p) => p.caption?.text === PLANTED_PRECHECK_TEXT.en || p.caption?.text === PLANTED_PRECHECK_TEXT.ar).length;
+  const st = captionStats(book.doc);
+  const stepSum = steps.reduce((a, s) => a + Number(s.cost_usd), 0);
+  console.log(
+    `[p] run=${run.state}/${run.ai_status} book=${book.ai_status} steps=${steps.map((s) => `${s.step_key}:${s.status}`).join(",")} criticFlagsMismatch=${criticOut.includes("caption_mismatch")} criticScore=${run.critic_score !== null} planted=${planted} precheckPlanted=${precheckPlanted} ${JSON.stringify(st)} total=${Number(run.total_cost_usd)} stepSum=${stepSum.toFixed(6)}`,
+  );
+  expect(run).toMatchObject({ mode: "replay", state: "done", ai_status: "ok" });
+  expect(book.ai_status).toBe("done");
+  expect(repairs.length).toBeGreaterThanOrEqual(1);
+  expect(writers.every((s) => s.status === "ok")).toBe(true);
+  expect(critic.map((s) => s.status)).toEqual(["ok"]);
+  expect(criticOut.includes("caption_mismatch")).toBe(true);
+  expect(hasKey(critic.map((s) => s.output), "detail")).toBe(false);
+  expect(planted).toBe(0);
+  expect(precheckPlanted).toBe(0);
+  expect(st.over18).toBe(0);
+  expect(st.ai).toBe(st.withCaption);
+  expect(Math.abs(Number(run.total_cost_usd) - stepSum)).toBeLessThan(0.0001);
+  const rows = await photoRows(bookP);
+  expectValidDoc(book.doc, new Set(rows.filter((r) => r.status !== "dropped").map((r) => r.id)), book.max_pages ?? 20, "p");
+  await expect(page.getByTestId("review-banner-partial")).toHaveCount(0);
+});
+
+test("k. Critic refusal only: captions kept, critic refused, run partial, rule fallback not needed", async () => {
+  test.skip(!CRITIC_REFUSAL_URL, "set E2E_CRITIC_REFUSAL_URL (app copy with a refusing critic.ok.json fixture)");
+  const bookK = await createBookAt(CRITIC_REFUSAL_URL);
+  const files = synth.slice(2, 7);
+  await uploadAndWaitSummary(files, files.length);
+  await buildToReview();
+
+  const book = await bookRow(bookK);
+  const runs = await runsFor(bookK);
+  const run = runs[0];
+  const steps = await stepsFor(run.id);
+  const critic = steps.filter((s) => s.agent === "critic");
+  const writers = steps.filter((s) => s.agent === "caption_writer");
+  const st = captionStats(book.doc);
+  console.log(
+    `[k] run=${run.state}/${run.ai_status} error_code=${run.error_code} book=${book.ai_status} generator=${String(metaOf(book.doc).generator)} critic=${critic.map((s) => s.status).join(",")} writers=${writers.map((s) => s.status).join(",")} criticScore=${run.critic_score !== null} ${JSON.stringify(st)}`,
+  );
+  expect(run).toMatchObject({ mode: "replay", state: "done", ai_status: "partial" });
+  expect(book.ai_status).toBe("partial");
+  expect(metaOf(book.doc).generator).toBe("ai");
+  expect(critic.length).toBeGreaterThanOrEqual(1);
+  expect(critic.every((s) => s.status === "refused")).toBe(true);
+  expect(run.critic_score).toBeNull();
+  expect(writers.every((s) => s.status === "ok")).toBe(true);
+  expect(st.captionableWithCaption).toBe(st.captionable);
+  const rows = await photoRows(bookK);
+  expectValidDoc(book.doc, new Set(rows.filter((r) => r.status !== "dropped").map((r) => r.id)), book.max_pages ?? 20, "k");
+  await expect(page.getByTestId("review-banner-partial")).toBeVisible();
+  await expect(page.getByTestId("rebuild-button")).toHaveText("Try AI again");
+});
+
 test("d. refusal scenario: rule album, failed/partial banner, Try AI again", async () => {
   test.skip(!REFUSAL_URL, "set E2E_REFUSAL_URL (server with AI_REPLAY_SCENARIO=refusal)");
   const bookB = await createBookAt(REFUSAL_URL);
@@ -772,6 +1340,25 @@ test("d. refusal scenario: rule album, failed/partial banner, Try AI again", asy
   expect(refused).toBeGreaterThanOrEqual(1);
   expect(png).toMatchObject({ status: "dropped", drop_reason: "screenshot" }); // rule fallback
   expectValidDoc(book.doc, new Set(rows.filter((r) => r.status !== "dropped").map((r) => r.id)), book.max_pages ?? 20, "d");
+
+  // M4: rule album → no captions, one skipped caption_writer step (reason rule_album), no Critic.
+  const skippedCaption = steps.filter((s) => s.agent === "caption_writer" && s.status === "skipped");
+  const reasons = skippedCaption.map((s) => String((s.input_summary as { reason?: unknown } | null)?.reason));
+  const stD = captionStats(book.doc);
+  console.log(`[d] captionSteps=${steps.filter((s) => s.agent === "caption_writer").length} skippedReasons=${reasons.join(",")} critic=${steps.filter((s) => s.agent === "critic").length} ${JSON.stringify(stD)}`);
+  expect(reasons).toEqual(["rule_album"]);
+  expect(steps.filter((s) => s.agent === "caption_writer").length).toBe(1);
+  expect(steps.filter((s) => s.agent === "critic").length).toBe(0);
+  expect(stD.withCaption).toBe(0);
+  const countD = await openCaptionsPreview();
+  const missingD = (await page.getByTestId("captions-missing").count()) ? await page.getByTestId("captions-missing").textContent() : null;
+  console.log(`[d] preview=${countD ?? "absent"} missing=${missingD ?? "none"}`);
+  if (stD.captionable === 0) expect(countD).toBeNull();
+  else {
+    expect(countD).toBe("Captions (0)");
+    expect(missingD).toBe(stD.captionable === 1 ? "1 page has no caption yet" : `${stD.captionable} pages have no caption yet`);
+  }
+  await page.reload();
 
   const banner = book.ai_status === "failed" ? "review-banner-failed" : "review-banner-partial";
   await expect(page.getByTestId(banner)).toBeVisible();
@@ -812,6 +1399,17 @@ test("e. AI off: Build my album → straight to review, rule album, ai_off banne
   expect(book.ai_status).toBe("idle");
   expect(rows.every((r) => r.ai === null)).toBe(true);
   expectValidDoc(book.doc, new Set(rows.filter((r) => r.status !== "dropped").map((r) => r.id)), book.max_pages ?? 20, "e");
+  // M4: rule album (AI off) → no captions; the preview is absent or "Captions (0)" + missing line.
+  const stE = captionStats(book.doc);
+  const countE = await openCaptionsPreview();
+  const missingE = (await page.getByTestId("captions-missing").count()) ? await page.getByTestId("captions-missing").textContent() : null;
+  console.log(`[e] ${JSON.stringify(stE)} preview=${countE ?? "absent"} missing=${missingE ?? "none"}`);
+  expect(stE.withCaption).toBe(0);
+  if (stE.captionable === 0) expect(countE).toBeNull();
+  else {
+    expect(countE).toBe("Captions (0)");
+    expect(missingE).toBe(stE.captionable === 1 ? "1 page has no caption yet" : `${stE.captionable} pages have no caption yet`);
+  }
 
   // Rule-mode POST /api/ai/runs is limited to 1 per 10 s per book → immediately 429 'rate'.
   const limited = await postRun(bookC, "rebuild");
