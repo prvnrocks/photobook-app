@@ -44,7 +44,8 @@ export const AGENT_TIMEOUT_MS = {
   storyteller: 180_000,
   caption_writer: 90_000,
   critic: 90_000,
-  rewriter: 60_000,
+  /** One caption at effort low; the editor waits for it (D-037 #6). */
+  rewriter: 15_000,
   memory_keeper: 60_000,
 } as const;
 /** Default when a request carries no timeout. */

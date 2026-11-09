@@ -71,6 +71,22 @@ no two near-identical photos on the same spread · every caption matches what's 
 names/places/facts · captions not repetitive (no repeated opening words) · each chapter has 2+ pages ·
 captions are original (no well-known quote, lyric, film line, slogan or proverb → `caption_not_original`).
 
+### Rewriter (M5, on demand)
+
+`rewriteCaption({ ctx: { transport, logger, retry? }, runId, input })` in `src/lib/ai/agents/rewriter.ts`
+→ `{ ok: true, text, lang } | { ok: false, code }`. Instructions: `rewrite | shorter | tone:<Tone> | translate`
+(translate = EN↔AR, target from `translateTarget(text)`). Input: the caption, target lang, book occasion/tone/title,
+the doc's chapters, the page's photo notes as text (no images, D-037 #8) and user memory (user message only).
+Effort low, max_tokens 2000, timeout 15 s, server-side fallbacks as every agent.
+The output goes through the D-030 pre-check for the target lang (doc context + user title, page places/dates,
+known names, and names/numbers already in the input caption) plus `unchanged` / `not_shorter`; a failure gets
+ONE retry carrying the issue codes, then `rewrite_unusable`. Refusal / max_tokens / transport codes pass through.
+Each attempt is one `agent_steps` row (agent `rewriter`, stepKey `rewriter`, attempt 1|2) with instruction,
+langs, lengths, memory keys and issue codes only — never caption text or notes (D-027).
+Replay (`rewriter-replay.ts`) answers from tone pools in the target script, actually shorter for `shorter`.
+The route (`/api/ai/rewrite`) owns limits: one `agent_runs` row per rewrite (trigger `rewrite`), only `ok` counts
+(D-037 #6).
+
 ## Orchestrator (state machine)
 
 ```

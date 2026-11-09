@@ -7,8 +7,10 @@ import { curatorReplaySynth } from "./curator-replay";
 import { storytellerReplaySynth } from "./storyteller-replay";
 import { captionWriterReplaySynth } from "./caption-writer-replay";
 import { criticReplaySynth } from "./critic-replay";
+import { rewriterReplaySynth } from "./rewriter-replay";
 
 registerReplaySynth("curator", curatorReplaySynth);
 registerReplaySynth("storyteller", storytellerReplaySynth);
 registerReplaySynth("caption_writer", captionWriterReplaySynth);
 registerReplaySynth("critic", criticReplaySynth);
+registerReplaySynth("rewriter", rewriterReplaySynth);

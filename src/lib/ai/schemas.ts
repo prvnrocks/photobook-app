@@ -394,3 +394,51 @@ export function critiqueLogOutput(c: LooseCritique): CritiqueLogOutput {
     issues,
   };
 }
+
+// ---------------------------------------------------------------------------- Rewriter (M5)
+// One caption rewrite on demand in the editor (docs/AI-AGENTS.md → Rewriter, D-037 #6/#8).
+
+/** Instruction set of the ✨ rewrite menu. `tone:<Tone>` uses the book Tone enum. */
+export const REWRITE_BASE_INSTRUCTIONS = ["rewrite", "shorter", "translate"] as const;
+export type RewriteInstruction = (typeof REWRITE_BASE_INSTRUCTIONS)[number] | `tone:${(typeof TONES)[number]}`;
+export const REWRITE_INSTRUCTIONS: readonly RewriteInstruction[] = [
+  ...REWRITE_BASE_INSTRUCTIONS,
+  ...TONES.map((t) => `tone:${t}` as const),
+];
+/** For request bodies (route): one of REWRITE_INSTRUCTIONS. */
+export const RewriteInstructionSchema = z.custom<RewriteInstruction>(
+  (v) => typeof v === "string" && (REWRITE_INSTRUCTIONS as readonly string[]).includes(v),
+  { message: "unknown rewrite instruction" },
+);
+
+export const RewriteOutputAiSchema = z.object({
+  text: z.string().describe("The new caption only: original, at most 18 words, in the target language."),
+});
+
+export const RewriteOutputStrictSchema = z.object({ text: storedText(AI_TEXT_LIMITS.caption) });
+
+export type RewriteOutputAi = z.infer<typeof RewriteOutputAiSchema>;
+export type RewriteOutput = z.infer<typeof RewriteOutputStrictSchema>;
+
+export type RewriteLogOutput = {
+  lang: CaptionLang;
+  words: number;
+  /** Code points of the output text. */
+  chars: number;
+  issues?: string[];
+};
+
+/** Log-safe view of a Rewriter output (D-027): lang, word/char counts, issue codes — never text. */
+export function rewriteLogOutput(
+  out: { text: string },
+  lang: CaptionLang,
+  issues?: ReadonlyArray<{ code: string }>,
+): RewriteLogOutput {
+  const text = typeof out.text === "string" ? out.text : "";
+  return {
+    lang,
+    words: wordCount(text),
+    chars: Array.from(text).length,
+    ...(issues && issues.length ? { issues: issues.map((i) => i.code) } : {}),
+  };
+}
