@@ -43,7 +43,7 @@ const CALL_MS = 5_000;
 // ---------------------------------------------------------------------------------------------
 // Fake DB
 
-type FakeRun = RunForTick & { lease_until: number | null; lease_token: string | null; total_cost_usd: number };
+type FakeRun = RunForTick & { lease_until: number | null; lease_token: string | null; total_cost_usd: number; critic_score?: number | null };
 
 function photoRow(n: number, over: Partial<CurationPhotoRow> = {}): CurationPhotoRow {
   const day = Math.floor(n / 50); // 3 days for 150 photos
@@ -1030,5 +1030,412 @@ describe("orchestrator — AI off and curation guarantees", () => {
     expect(db.steps.filter((x) => x.agent === "storyteller")).toHaveLength(0);
     const r4 = await orch.advance(s.runId, {}, deps);
     expect(r4).toMatchObject({ state: "done", done: true });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// M4 — captions, Critic, repair (T7 + T11)
+
+const { getLayout } = await import("@/lib/layouts");
+const { validateBookDoc } = await import("@/lib/book/schema");
+const { buildCaptionContext, checkCaption } = await import("@/lib/ai/caption-check");
+const { pageCaptionKeys } = await import("@/lib/ai/repair");
+const { isPlantedMismatch, PLANTED_PRECHECK_TEXT } = await import("@/lib/ai/agents/caption-writer-replay");
+const { wordCount, MAX_QUOTE_WORDS } = await import("@/lib/ai/schemas");
+type BookDocT = import("@/lib/book/types").BookDoc;
+
+const hasCaptionArea = (layout: string) => {
+  const l = getLayout(layout);
+  return Boolean(l && l.role === "page" && l.caption);
+};
+const captionTexts = (doc: BookDocT) => doc.pages.map((p) => p.caption?.text).filter((t): t is string => typeof t === "string");
+const stepsOf = (db: FakeDb, prefix: string) => db.steps.filter((s) => s.stepKey.startsWith(prefix));
+const ARABIC = /[؀-ۿ]/;
+
+/** Asserts that no caption / heading text of `doc` (and no Critic detail) appears in steps, progress, cursor. */
+function expectNoText(db: FakeDb, runId: string, doc: BookDocT) {
+  const steps = JSON.stringify(db.steps.map((s) => [s.output, s.inputSummary, s.error]));
+  const run = db.run(runId);
+  const cursor = JSON.stringify(run.cursor);
+  const progress = JSON.stringify(run.progress);
+  const texts = [...captionTexts(doc), ...doc.chapters.map((c) => c.title)];
+  expect(texts.length).toBeGreaterThan(0);
+  for (const t of texts) {
+    expect(steps).not.toContain(t);
+    expect(cursor).not.toContain(t);
+    expect(progress).not.toContain(t);
+  }
+  expect(steps).not.toContain("Replay: the caption");
+  expect(steps).not.toContain('"detail"');
+  // progress: phase + counts only
+  for (const [k, v] of Object.entries(run.progress as Record<string, unknown>)) {
+    if (k === "phase") expect(typeof v).toBe("string");
+    else expect(typeof v).toBe("number");
+  }
+}
+
+describe("orchestrator — captions (M4)", () => {
+  it("English replay book: every captionable page captioned by the AI, ≤ 18 words, doc valid, totals = step sum", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 60));
+    const s = await start(deps);
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok", errorCode: null });
+    const doc = docOf(db);
+    const captionable = doc.pages.filter((p) => hasCaptionArea(p.layout));
+    expect(captionable.length).toBeGreaterThan(0);
+    for (const p of captionable) {
+      expect(p.caption).toMatchObject({ source: "ai", font: "Playfair", align: "center" });
+      expect(wordCount(p.caption!.text)).toBeLessThanOrEqual(MAX_QUOTE_WORDS);
+      expect(ARABIC.test(p.caption!.text)).toBe(false);
+    }
+    for (const p of doc.pages.filter((x) => !hasCaptionArea(x.layout))) expect(p.caption).toBeNull();
+    const kept = new Set(db.photos.filter((p) => p.status === "kept").map((p) => p.id));
+    expect(validateBookDoc(doc, { photoIds: kept, maxPages: 20 })).toEqual([]);
+
+    const writers = stepsOf(db, "caption_writer:");
+    expect(writers.length).toBeGreaterThan(0);
+    expect(writers.every((w) => /^caption_writer:\d+$/.test(w.stepKey) && w.status === "ok" && w.attempt === 1)).toBe(true);
+    expect(transport.count("caption_writer")).toBe(writers.length);
+    expect(stepsOf(db, "critic")).toHaveLength(1);
+    expect(db.run(s.runId)).toMatchObject({ critic_score: 8 });
+
+    const progress = (await orch.getProgress(s.runId, deps))!.progress;
+    expect(progress.captionsTotal).toBe(captionable.length);
+    expect(progress.captionsDone).toBe(captionable.length);
+
+    const sum = db.steps.reduce((n, x) => n + x.costUsd, 0);
+    expect(db.run(s.runId).total_cost_usd).toBeCloseTo(sum, 10);
+    expectNoText(db, s.runId, doc);
+  });
+
+  it("Arabic book: native Arabic captions that pass the Arabic script check, font Cairo", async () => {
+    const { db, deps } = setup(photos150().slice(0, 40), { book: { caption_lang: "ar" } });
+    const s = await start(deps);
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok" });
+    const doc = docOf(db);
+    const ctx = buildCaptionContext({ lang: "ar" });
+    const captioned = doc.pages.filter((p) => p.caption);
+    expect(captioned.length).toBe(doc.pages.filter((p) => hasCaptionArea(p.layout)).length);
+    for (const p of captioned) {
+      expect(p.caption).toMatchObject({ source: "ai", font: "Cairo" });
+      const codes = checkCaption(p.caption!.text, ctx).map((i) => i.code);
+      expect(codes).not.toContain("not_arabic");
+      expect(codes).not.toContain("latin_word");
+      expect(/[A-Za-z]/.test(p.caption!.text)).toBe(false);
+    }
+    expect(doc.chapters.every((c) => ARABIC.test(c.title))).toBe(true); // headings applied
+    expectNoText(db, s.runId, doc);
+  });
+
+  it("plant_bad_caption: pre-check and Critic each catch theirs, one repair round fixes both, ai_status ok", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 60), {
+      scenarioFor: (agent) => (agent === "caption_writer" || agent === "critic" ? "plant_bad_caption" : "ok"),
+    });
+    const s = await start(deps);
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok", errorCode: null });
+
+    // pre-check caught the planted 22-word caption in batch 0 (codes only in the log)
+    const b0 = db.steps.find((x) => x.stepKey === "caption_writer:0")!;
+    expect(JSON.stringify(b0.output)).toContain("too_long");
+    // the Critic caught the sentinel mismatch
+    const critic = db.steps.find((x) => x.agent === "critic")!;
+    expect(critic.output).toMatchObject({ score: 5, issues: [{ type: "caption_mismatch" }] });
+    expect(db.run(s.runId)).toMatchObject({ critic_score: 5 });
+
+    const repairs = stepsOf(db, "caption_writer:repair:");
+    expect(repairs.length).toBeGreaterThan(0);
+    expect(repairs.every((r) => r.attempt === 1 && r.status === "ok")).toBe(true);
+    expect(repairs[0].inputSummary.repairTargets).toBe(2);
+    expect(transport.count("caption_writer")).toBe(stepsOf(db, "caption_writer").length);
+    expect(transport.count("critic")).toBe(1); // never a second Critic / repair round
+
+    const doc = docOf(db);
+    for (const t of captionTexts(doc)) {
+      expect(isPlantedMismatch(t)).toBe(false);
+      expect(t).not.toBe(PLANTED_PRECHECK_TEXT.en);
+    }
+    const captionable = doc.pages.filter((p) => hasCaptionArea(p.layout));
+    expect(captionable.every((p) => p.caption?.source === "ai")).toBe(true);
+    expectNoText(db, s.runId, doc);
+  });
+
+  it("Critic refusal → captions kept, no repair of Critic issues, ai_status partial", async () => {
+    const { db, deps } = setup(photos150().slice(0, 40), {
+      scenarioFor: (agent) => (agent === "critic" ? "refusal" : "ok"),
+    });
+    const s = await start(deps);
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "partial", errorCode: "critic_refusal" });
+    const doc = docOf(db);
+    expect(doc.meta?.generator).toBe("ai");
+    expect(doc.pages.filter((p) => hasCaptionArea(p.layout)).every((p) => p.caption?.source === "ai")).toBe(true);
+    expect(stepsOf(db, "caption_writer:repair:")).toHaveLength(0);
+    expect(db.run(s.runId).critic_score ?? null).toBeNull();
+    expect(db.book.ai_status).toBe("partial");
+  });
+
+  it("caption batch refusal → that batch's pages stay null, other batches captioned, partial", async () => {
+    const { db, transport, deps } = setup(photos150(), {
+      scenarioFor: (agent, i) => (agent === "caption_writer" && i === 0 ? "refusal" : "ok"),
+    });
+    const s = await start(deps);
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "partial", errorCode: "caption_writer_refusal" });
+    const cursor = db.run(s.runId).cursor as { captionBatches: Array<{ keys: string[] }> };
+    expect(cursor.captionBatches.length).toBeGreaterThanOrEqual(2);
+    const batch0 = new Set(cursor.captionBatches[0].keys);
+    const doc = docOf(db);
+    const keys = pageCaptionKeys(doc);
+    doc.pages.forEach((p, i) => {
+      if (!hasCaptionArea(p.layout)) return;
+      if (batch0.has(keys[i]!)) expect(p.caption).toBeNull();
+      else expect(p.caption?.source).toBe("ai");
+    });
+    // a refusal is not retried
+    expect(db.steps.filter((x) => x.stepKey === "caption_writer:0")).toHaveLength(1);
+    expect(transport.count("caption_writer")).toBe(cursor.captionBatches.length);
+  });
+
+  it("resume after a dead tick mid-captioning: no duplicate attempts, every real call logged; stale tick writes nothing", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 60));
+    const s = await start(deps);
+    while (db.run(s.runId).state !== "storytelling") await orch.advance(s.runId, {}, deps); // curation
+    let stolen = false;
+    transport.onCall = (agent) => {
+      if (agent === "caption_writer" && !stolen) {
+        stolen = true;
+        db.now += orch.LEASE_SECONDS * 1000 + 1_000;
+        db.stealLease(s.runId);
+        db.writes = [];
+      }
+    };
+    expect(await orch.advance(s.runId, {}, deps)).toEqual({ leased: true });
+    expect(db.writes).toEqual([]);
+    const cur = db.run(s.runId).cursor as { captionAttempts: number[]; captionBatchesDone: number[]; captions: Record<string, string> };
+    expect(cur.captionAttempts[0]).toBe(1); // reserved before the call
+    expect(cur.captionBatchesDone).toEqual([]);
+    expect(cur.captions).toEqual({});
+    expect(stepsOf(db, "caption_writer:0")).toHaveLength(1); // the lost call is still logged
+
+    transport.onCall = null;
+    db.run(s.runId).lease_until = null;
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok" });
+    expect(stepsOf(db, "caption_writer:0").map((x) => x.attempt)).toEqual([1, 2]);
+    const keys = db.steps.map((x) => `${x.stepKey}#${x.attempt}`);
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const agent of ["caption_writer", "critic", "storyteller", "curator"] as const) {
+      expect(db.steps.filter((x) => x.agent === agent)).toHaveLength(transport.count(agent));
+    }
+    const sum = db.steps.reduce((n, x) => n + x.costUsd, 0);
+    expect(db.run(s.runId).total_cost_usd).toBeCloseTo(sum, 10);
+  });
+
+  it("stale lease during the Critic call → the stale tick writes nothing; the re-run is attempt 2", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 40));
+    const s = await start(deps);
+    await orch.advance(s.runId, {}, deps);
+    transport.onCall = (agent) => {
+      if (agent === "critic") {
+        db.now += orch.LEASE_SECONDS * 1000 + 1_000;
+        db.stealLease(s.runId);
+        db.writes = [];
+      }
+    };
+    expect(await orch.advance(s.runId, {}, deps)).toEqual({ leased: true });
+    expect(db.writes).toEqual([]);
+    expect(db.run(s.runId).state).toBe("critiquing");
+    expect(db.run(s.runId).critic_score ?? null).toBeNull();
+    transport.onCall = null;
+    db.run(s.runId).lease_until = null;
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok" });
+    expect(db.steps.filter((x) => x.agent === "critic").map((x) => x.attempt)).toEqual([1, 2]);
+  });
+
+  it("caption, Critic and repair calls never start when they don't fit in the lease", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 40));
+    const s = await start(deps);
+    const slow: OrchestratorDeps = {
+      ...deps,
+      getRunForTick: async (id) => {
+        db.now += (orch.LEASE_SECONDS - 100) * 1000;
+        return deps.getRunForTick(id);
+      },
+    };
+    // Tiny soft budget → each tick stops after its first model call.
+    const states: string[] = [];
+    for (let t = 0; t < 30; t++) {
+      const r = await orch.advance(s.runId, { budgetMs: 1 }, deps);
+      if ("state" in r) states.push(r.state);
+      if ("done" in r && r.done) break;
+      if ("state" in r && (r.state === "captioning" || r.state === "critiquing")) {
+        const before = transport.calls.length;
+        const x = await orch.advance(s.runId, { budgetMs: 1 }, slow);
+        expect(x).toMatchObject({ state: r.state, done: false });
+        expect(transport.calls.length).toBe(before);
+      }
+    }
+    expect(states).toContain("captioning");
+    expect(states).toContain("critiquing");
+    expect(states.at(-1)).toBe("done");
+  });
+
+  it("memory snapshot: loaded once, keys in Storyteller + Caption Writer input_summary, 'short' → ≤ 10 words, stripped at finish", async () => {
+    const { db, deps } = setup(photos150().slice(0, 40));
+    db.memory = { v: 1, captionLength: "short", tonePreference: "romantic", knownNames: ["Zubaida"], junk: "x" };
+    const s = await start(deps);
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok" });
+    expect(db.memoryLoads).toBe(1);
+    const story = db.steps.find((x) => x.agent === "storyteller")!;
+    expect(story.inputSummary.memoryKeys).toEqual(expect.arrayContaining(["captionLength", "tonePreference", "knownNames"]));
+    const writer = db.steps.find((x) => x.stepKey === "caption_writer:0")!;
+    expect(writer.inputSummary.memoryKeys).toEqual(expect.arrayContaining(["captionLength", "tonePreference", "knownNames"]));
+    const doc = docOf(db);
+    const texts = captionTexts(doc);
+    expect(texts.length).toBeGreaterThan(0);
+    for (const t of texts) expect(wordCount(t)).toBeLessThanOrEqual(10);
+    const stored = JSON.stringify(db.run(s.runId).cursor);
+    expect(stored).not.toContain("Zubaida");
+    expect(JSON.stringify(db.steps)).not.toContain("Zubaida");
+  });
+
+  it("memory load error → run continues without memory", async () => {
+    const { db, deps } = setup(photos150().slice(0, 20));
+    db.memory = "throw";
+    const s = await start(deps);
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok" });
+    expect(db.steps.find((x) => x.agent === "storyteller")!.inputSummary.memoryKeys).toEqual([]);
+    expect(db.steps.find((x) => x.stepKey === "caption_writer:0")!.inputSummary.memoryKeys).toEqual([]);
+  });
+
+  it("rule album (Storyteller refused) → one skipped caption_writer step 'rule_album', no captions, no Critic", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 30), {
+      scenarioFor: (agent) => (agent === "storyteller" ? "refusal" : "ok"),
+    });
+    const s = await start(deps);
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "partial", errorCode: "storyteller_refusal" });
+    const skipped = db.steps.filter((x) => x.status === "skipped");
+    expect(skipped).toHaveLength(1);
+    expect(skipped[0]).toMatchObject({ agent: "caption_writer", inputSummary: { reason: "rule_album" }, costUsd: 0 });
+    expect(transport.count("caption_writer")).toBe(0);
+    expect(transport.count("critic")).toBe(0);
+    expect(docOf(db).pages.every((p) => p.caption === null)).toBe(true);
+    expect((await orch.getProgress(s.runId, deps))!.progress).toMatchObject({ captionsTotal: 0, captionsDone: 0 });
+  });
+
+  it("finished cursor holds no caption / heading / critique / memory text", async () => {
+    const { db, deps } = setup(photos150().slice(0, 40), {
+      scenarioFor: (agent) => (agent === "critic" ? "plant_bad_caption" : "ok"),
+    });
+    const s = await start(deps);
+    await runToEnd(deps, s.runId);
+    const cursor = db.run(s.runId).cursor as Record<string, unknown>;
+    expect(cursor).toMatchObject({ captions: {}, headings: {}, critique: null, memory: null, album: { kind: "ai" } });
+    expect(JSON.stringify(cursor)).not.toContain('"title"');
+    expectNoText(db, s.runId, docOf(db));
+  });
+
+  it("captions follow their page through a mid-run photo removal; changed pages get null", async () => {
+    const { db, deps } = setup(photos150().slice(0, 40));
+    const s = await start(deps);
+    let removed: string | null = null;
+    let conflicts = 1;
+    const flaky: OrchestratorDeps = {
+      ...deps,
+      writeDocIfReplaceable: async (...args) => {
+        if (conflicts-- > 0) {
+          const doc = args[1] as unknown as BookDocT;
+          const i = doc.pages.findIndex((p) => p.slots.length >= 2 && p.caption);
+          removed = doc.pages[i].slots[0].photoId;
+          Object.assign(db.photos.find((x) => x.id === removed)!, { user_override: true, status: "dropped", drop_reason: "user_removed" });
+          return { ok: false, reason: "conflict" };
+        }
+        return deps.writeDocIfReplaceable(...args);
+      },
+    };
+    const { last } = await runToEnd(flaky, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok" });
+    const doc = docOf(db);
+    expect(JSON.stringify(doc)).not.toContain(removed!);
+    const captioned = doc.pages.filter((p) => p.caption);
+    expect(captioned.length).toBeGreaterThan(0);
+    // the re-fitted page lost its caption (its photos changed)
+    const refit = doc.pages.filter((p) => p.slots.some((sl) => db.photos.find((x) => x.id === sl.photoId)) && !p.caption && hasCaptionArea(p.layout));
+    expect(refit.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("an in-flight pre-M4 cursor (no caption fields) still parses and finishes", async () => {
+    const { db, deps } = setup(photos150().slice(0, 20));
+    const s = await start(deps);
+    await orch.advance(s.runId, { budgetMs: 1 }, deps); // curation done, at storytelling
+    const run = db.run(s.runId);
+    const legacy = structuredClone(run.cursor) as Record<string, unknown>;
+    for (const k of Object.keys(legacy)) if (/^(memory|caption|critic|critique|repair|coverSwap|headings)/.test(k)) delete legacy[k];
+    expect(Object.keys(legacy)).not.toContain("captions");
+    run.cursor = legacy as Json;
+    run.state = "critiquing"; // a pre-M4 run that had passed the placeholder captioning state
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done" });
+    expect(last).not.toMatchObject({ errorCode: "bad_cursor" });
+    expect(orch.parseCursor(legacy)).not.toBeNull();
+  });
+
+  it("cursor worst case (paid, 500 photos, 100 pages / moments, Arabic, max memory) stays under 256 KB", () => {
+    const rows = Array.from({ length: 500 }, (_, i) => photoRow(i + 1));
+    const cursor = orch.initialCursor(rows.map(orch.toCurationPhoto), 500, "done");
+    const ar = (n: number) => "ب".repeat(n);
+    cursor.album = {
+      kind: "ai",
+      plan: {
+        title: ar(60),
+        subtitle: ar(120),
+        coverPhotoId: "p1",
+        moments: Array.from({ length: 100 }, (_, m) => ({
+          id: `m${m + 1}`,
+          title: ar(80),
+          dateLabel: "12 Oct 2026 – 14 Oct 2026",
+          place: ar(80),
+          pages: [{ layoutId: "grid-4", photoIds: [1, 2, 3, 4].map((k) => `p${m * 5 + k}`) }],
+        })),
+      },
+    };
+    cursor.memory = {
+      v: 1,
+      tonePreference: "romantic",
+      captionLength: "long",
+      language: "ar",
+      knownNames: Array.from({ length: 20 }, (_, i) => `${ar(38)}${String(i).padStart(2, "0")}`),
+      avoid: Array.from({ length: 10 }, (_, i) => `${ar(58)}${String(i).padStart(2, "0")}`),
+    };
+    cursor.captionBatches = Array.from({ length: 10 }, (_, b) => ({
+      moments: Array.from({ length: 10 }, (_, k) => `m${b * 10 + k + 1}`),
+      keys: Array.from({ length: 10 }, (_, k) => `m${b * 10 + k + 1}:0`),
+    }));
+    cursor.captionAttempts = Array(10).fill(2);
+    cursor.captionBatchesDone = Array.from({ length: 10 }, (_, i) => i);
+    for (let m = 1; m <= 100; m++) {
+      cursor.captions[`m${m}:0`] = ar(200);
+      cursor.headings[`m${m}`] = ar(60);
+      cursor.captionIssues[`m${m}:0`] = ["too_long", "unknown_name", "latin_word", "duplicate", "repeated_opening"];
+    }
+    cursor.critique = { score: 4, issues: Array.from({ length: 50 }, (_, i) => ({ type: "caption_mismatch" as const, pageIndex: i, fix: "rewrite_caption" as const })) };
+    cursor.repairTargets = Array.from({ length: 100 }, (_, m) => ({ batch: Math.floor(m / 10), key: `m${m + 1}:0`, codes: ["too_long", "caption_mismatch"] }));
+    cursor.repairAttempts = Array(10).fill(1);
+    cursor.repairBatchesDone = Array.from({ length: 10 }, (_, i) => i);
+    cursor.failures = Array(20).fill("caption_writer_context_window_exceeded");
+    const bytes = Buffer.byteLength(JSON.stringify(cursor), "utf8");
+    expect(bytes).toBeLessThan(orch.MAX_CURSOR_BYTES);
+    expect(bytes).toBeGreaterThan(50_000); // sanity: the worst case really is big
+    // round-trips without losing caption state
+    const parsed = orch.parseCursor(JSON.parse(JSON.stringify(cursor)))!;
+    expect(Object.keys(parsed.captions)).toHaveLength(100);
+    expect(parsed.album).toMatchObject({ kind: "ai", plan: { moments: expect.any(Array) } });
+    expect(parsed.memory?.knownNames).toHaveLength(20);
   });
 });

@@ -573,8 +573,10 @@ test("b. review: header, screenshot + duplicate dropped, toggle persists; DB run
   expect(curator.every((s) => s.step_key.startsWith("curator:") && s.status === "ok")).toBe(true);
   expect(story.length).toBe(1);
   expect(story[0].status).toBe("ok");
-  expect(caption.map((s) => s.status)).toEqual(["skipped"]);
-  expect(critic.map((s) => s.status)).toEqual(["skipped"]);
+  // M4: real Caption Writer batches (caption_writer:{i}, repairs caption_writer:repair:{i}) + one Critic
+  expect(caption.length).toBeGreaterThanOrEqual(1);
+  expect(caption.every((s) => /^caption_writer:(?:repair:)?\d+$/.test(s.step_key) && s.status === "ok")).toBe(true);
+  expect(critic.map((s) => s.status)).toEqual(["ok"]);
   expect(descInOutput).toBe(0);
   expect(descInSummary).toBe(0);
   expect(Number(run.total_cost_usd)).toBeGreaterThan(0);
