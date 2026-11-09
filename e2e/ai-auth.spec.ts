@@ -846,6 +846,9 @@ test("m4a. captions on every captionable page (en), Critic ok, preview count, no
   const count = await openCaptionsPreview();
   expect(count).toBe(`Captions (${st.captionable})`);
   await expect(page.getByTestId("captions-missing")).toHaveCount(0);
+  // Complete AI album → no captions_missing / partial banner, "Rebuild with AI".
+  await expect(page.getByTestId("review-banner-captions_missing")).toHaveCount(0);
+  await expect(page.getByTestId("review-banner-partial")).toHaveCount(0);
   await expect(page.getByTestId("captions-item")).toHaveCount(st.captionable);
   await expect(page.getByTestId("captions-source-ai")).toHaveCount(st.captionable);
   const dirs = await page.getByTestId("captions-text").evaluateAll((els) => els.map((e) => e.getAttribute("dir")));
@@ -1239,6 +1242,8 @@ test("ar. Arabic book: native Arabic captions pass the pre-check; preview dir=au
   console.log(`[ar] preview items=${attrs.length} dirAutoLangArCairo=${ok} rtl=${rtl} cairoLoaded=${cairoLoaded} scrollWidth=${sw}`);
   expect(attrs.length).toBe(st.captionable);
   expect(ok).toBe(attrs.length);
+  await expect(page.getByTestId("review-banner-captions_missing")).toHaveCount(0);
+  await expect(page.getByTestId("review-banner-partial")).toHaveCount(0);
   expect(rtl).toBe(attrs.length);
   expect(sw).toBeLessThanOrEqual(VIEWPORT.width);
 });
@@ -1281,6 +1286,8 @@ test("p. plant_bad_caption: pre-check + Critic catch the planted captions, one r
   const rows = await photoRows(bookP);
   expectValidDoc(book.doc, new Set(rows.filter((r) => r.status !== "dropped").map((r) => r.id)), book.max_pages ?? 20, "p");
   await expect(page.getByTestId("review-banner-partial")).toHaveCount(0);
+  await expect(page.getByTestId("review-banner-captions_missing")).toHaveCount(0);
+  await expect(page.getByTestId("rebuild-button")).toHaveText("Rebuild with AI");
 });
 
 test("k. Critic refusal only: captions kept, critic refused, run partial, rule fallback not needed", async () => {

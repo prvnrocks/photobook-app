@@ -115,17 +115,19 @@ and the trace page shows every agent step with its cost.
 **M3a done (replay) 2026-11-09** — everything built, tested with recorded answers and deployed; AI is `off` in production. **M3b** needs `ANTHROPIC_API_KEY`: one real 150-photo book (< 90 s, cost per book, cache hits), prompt tuning, re-recorded fixtures, iPhone GPS-hint check. Also built: free "Update album" re-layout (D-028).
 
 ## Milestone 4 — AI quotes & captions (1 day) ⭐
-- [ ] `/api/ai/captions`: per moment, send the moment title + photo notes + occasion + tone + language →
-      returns one quote per page + a short chapter heading
-- [ ] Rules in the prompt: original lines only (no famous quotes/lyrics), ≤ 18 words, grounded in what's visible,
+- [ ] Caption Writer step inside the AI run (D-029; no `/api/ai/captions`): batches of moments ≤ 12 captionable pages, sends
+      moment title + photo notes + occasion + tone + language → one quote per captionable page + a short chapter heading
+      (built + replay-tested, live pending M4b)
+- [ ] Rules in the prompt (built + replay-tested; deterministic pre-check D-030; real quality pending M4b): original lines only (no famous quotes/lyrics), ≤ 18 words, grounded in what's visible,
       never invent names or facts, Arabic written natively (not translated word-by-word) when language = AR
-- [ ] Captions stored in the book doc with `source: "ai"`; once the user edits one it becomes `source: "user"`
+- [x] Captions stored in the book doc with `source: "ai"`; once the user edits one it becomes `source: "user"`
       and AI rebuilds never overwrite it
-- [ ] **Critic agent** + one targeted repair round (rubric in docs/AI-AGENTS.md)
-- [ ] **User memory**: inject `user_memory` into Storyteller / Caption Writer; Memory Keeper updates it on publish;
-      Settings page to view / clear it
+- [ ] **Critic agent** + one targeted repair round (rubric in docs/AI-AGENTS.md) (built + replay-tested, live pending M4b)
+- [x] **User memory**: inject `user_memory` into Storyteller / Caption Writer; Memory Keeper updates it on review
+      Continue (D-032; later also editor exit + publish); Settings page to view / clear it
 **Done when:** a generated book has fitting quotes on every page, in English or Arabic; the Critic catches a
 planted bad caption in tests; a second book reflects the user's earlier tone/length choices.
+**M4a done (replay) 2026-11-09** — planted bad caption caught + repaired (replay), second book reflects memory (replay), Arabic captions native-script with Cairo; "fitting quotes on every page" (every page with a caption area) waits for **M4b** with the live key (together with M3b). Also: per-run cost cap (D-035), migration 0800 (cursor 256 KB).
 
 ## Milestone 5 — Editor (2–3 days) ⭐
 - [ ] `/books/[id]/edit`: page strip + big current page; mobile = swipe pages, bottom toolbar
@@ -181,7 +183,7 @@ src/
     books/new/  books/[id]/review/  books/[id]/edit/
     b/[slug]/                         public flipbook (+ opengraph-image.tsx)
     print/[bookId]/
-    api/ai/analyze/  api/ai/plan/  api/ai/captions/  api/ai/rewrite/
+    api/ai/runs/ (+ [id], [id]/advance)  api/ai/rewrite/
     api/books/[id]/finalize/  api/stripe/checkout/  api/stripe/webhook/  api/books/[id]/pdf/  api/cron/cleanup/
   components/book/BookPage.tsx
   components/editor/  components/viewer/  components/review/
