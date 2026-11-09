@@ -1,7 +1,9 @@
 import "server-only";
-// Book queries for the signed-in user. Uses the RLS-enforced server client;
-// the explicit user_id filter is for the index, not for security. The AI
-// pipeline section at the bottom uses the admin client (see there).
+// Book queries for the signed-in user. Reads use the RLS-enforced server client;
+// the explicit user_id filter is for the index, not for security. Every write
+// of books.doc / page_count uses the admin client after an ownership check —
+// those columns are server-only from migration 0900 on (D-036): writeDocIfEmpty,
+// saveDocIfRev and the AI pipeline section at the bottom (see there).
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { isAiReplaceableDoc, isReplaceableDoc } from "@/lib/book/replaceable";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -27,7 +29,14 @@ export type MyBook = Pick<
   | "page_count"
   | "doc"
   | "updated_at"
->;
+> & {
+  /**
+   * Optimistic-concurrency revision of `doc` (migration 0900, D-036). `null` only while
+   * 0900 is not applied yet (column missing): the editor must treat that as "saving not
+   * available" — saveDocIfRev would fail. Drop the null once 0900 is applied everywhere.
+   */
+  doc_rev: number | null;
+};
 
 export type CreateBookInput = {
   title: string | null;
@@ -90,10 +99,22 @@ export async function createBook(input: CreateBookInput): Promise<{ id: string }
   return { id: data.id };
 }
 
+const MY_BOOK_COLUMNS = "id, title, occasion, tone, caption_lang, is_paid, max_pages, page_count, doc, updated_at";
+
+/** Postgres undefined_column (42703) / PostgREST schema-cache miss (PGRST204). */
+function isMissingColumnError(error: { code?: string; message?: string }, column: string): boolean {
+  if (error.code !== "42703" && error.code !== "PGRST204") return false;
+  return typeof error.message !== "string" || error.message.includes(column);
+}
+
 /**
  * One book of the current user, or null when the id is malformed, the book
  * doesn't exist, belongs to someone else (RLS: owner-only) or the user is
  * signed out.
+ *
+ * Deploy-order tolerance (0900): code ships before the migration, so when
+ * `doc_rev` doesn't exist yet the query is retried without it and `doc_rev` is
+ * null. Remove the fallback once 0900 is applied in every environment.
  */
 export async function getMyBook(id: string): Promise<MyBook | null> {
   if (!isUuid(id)) return null;
@@ -103,24 +124,35 @@ export async function getMyBook(id: string): Promise<MyBook | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("books")
-    .select("id, title, occasion, tone, caption_lang, is_paid, max_pages, page_count, doc, updated_at")
+    .select(`${MY_BOOK_COLUMNS}, doc_rev`)
     .eq("id", id)
     .maybeSingle();
 
-  if (error) throw new BooksQueryError("load book", error.code);
-  return data;
+  if (!error) return data;
+  if (!isMissingColumnError(error, "doc_rev")) {
+    throw new BooksQueryError("load book", error.code);
+  }
+
+  const legacy = await supabase.from("books").select(MY_BOOK_COLUMNS).eq("id", id).maybeSingle();
+  if (legacy.error) throw new BooksQueryError("load book", legacy.error.code);
+  return legacy.data ? { ...legacy.data, doc_rev: null } : null;
 }
 
 /**
  * Writes the fallback album only if the book's doc is still the empty object
- * (D-016). One UPDATE with two guards, so it never overwrites user or AI work:
+ * (D-016). One UPDATE with three guards, so it never overwrites user or AI work:
+ *   - `user_id = <current user>` — ownership (the caller already loaded the book
+ *     with getMyBook under RLS; this keeps the admin write scoped to the owner);
  *   - `doc = '{}'` — PostgREST `doc=eq.{}`; Postgres casts the literal to jsonb,
  *     and jsonb equality is semantic, so only an empty object matches.
  *   - `updated_at = expectedUpdatedAt` — optimistic lock: the books_set_updated_at
  *     trigger bumps updated_at on every write, so if anything changed the row
  *     since the caller read it (and saw doc = {}), 0 rows match.
+ * Admin client: books.doc / page_count are server-only from migration 0900 on
+ * (D-036) — a user-scoped update would silently keep the old doc. Works the
+ * same before 0900 (no new columns are referenced).
  * Returns true when exactly this call wrote the doc, false when a guard failed
- * (book changed meanwhile / not visible under RLS).
+ * (book changed meanwhile / not the caller's / signed out).
  */
 export async function writeDocIfEmpty(
   bookId: string,
@@ -129,17 +161,74 @@ export async function writeDocIfEmpty(
   expectedUpdatedAt: string,
 ): Promise<boolean> {
   if (!isUuid(bookId)) return false;
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  const user = await getCurrentUser();
+  if (!user) return false;
+  const { data, error } = await createAdminClient()
     .from("books")
     .update({ doc, page_count: pageCount })
     .eq("id", bookId)
+    .eq("user_id", user.id)
     .filter("doc", "eq", "{}")
     .eq("updated_at", expectedUpdatedAt)
     .select("id");
 
   if (error) throw new BooksQueryError("write book doc", error.code);
   return data.length === 1;
+}
+
+export type SaveDocResult =
+  | { ok: true; rev: number; savedAt: string }
+  | { ok: false; reason: "conflict" | "not_found" };
+
+/**
+ * Editor save (D-036): writes doc + page_count (+ optional title, D-037 (7))
+ * only when the stored revision is still `baseRev` — one UPDATE … WHERE id AND
+ * user_id AND doc_rev = baseRev RETURNING doc_rev, updated_at. The
+ * books_set_doc_rev trigger bumps doc_rev when doc changes (an identical doc
+ * keeps the rev). 0 rows → a follow-up existence check (same id + owner)
+ * tells `conflict` (someone saved first; no merge, client reloads) from
+ * `not_found` (deleted / not the owner's).
+ *
+ * Admin client: doc is server-only. The caller (PUT /api/books/[id]/doc) MUST
+ * have verified the session user = ownerId and validated the whole doc
+ * (shape, photo ownership, max_pages from DB, fonts) and title (≤ 120 code
+ * points, clipText) before calling. Requires migration 0900 (doc_rev);
+ * before it, Postgres rejects the filter → BooksQueryError.
+ */
+export async function saveDocIfRev(
+  bookId: string,
+  ownerId: string,
+  doc: Json,
+  pageCount: number,
+  baseRev: number,
+  extra: { title?: string | null } = {},
+): Promise<SaveDocResult> {
+  if (!isUuid(bookId) || !isUuid(ownerId)) return { ok: false, reason: "not_found" };
+  if (!Number.isSafeInteger(baseRev) || baseRev < 0) return { ok: false, reason: "conflict" };
+  if (!Number.isSafeInteger(pageCount) || pageCount < 0) throw new BooksQueryError("save book doc", "invalid_page_count");
+  const admin = createAdminClient();
+
+  const patch: { doc: Json; page_count: number; title?: string | null } = { doc, page_count: pageCount };
+  if (extra.title !== undefined) patch.title = extra.title;
+
+  const { data, error } = await admin
+    .from("books")
+    .update(patch)
+    .eq("id", bookId)
+    .eq("user_id", ownerId)
+    .eq("doc_rev", baseRev)
+    .select("doc_rev, updated_at");
+  if (error) throw new BooksQueryError("save book doc", error.code);
+  if (data.length === 1) return { ok: true, rev: data[0].doc_rev, savedAt: data[0].updated_at };
+
+  const { data: existing, error: readError } = await admin
+    .from("books")
+    .select("id")
+    .eq("id", bookId)
+    .eq("user_id", ownerId)
+    .maybeSingle();
+  if (readError) throw new BooksQueryError("save book doc", readError.code);
+  return { ok: false, reason: existing ? "conflict" : "not_found" };
 }
 
 // ---------------------------------------------------------------------------

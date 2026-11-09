@@ -1,0 +1,168 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+
+// M5 Task 1 (D-036): saveDocIfRev (admin, doc_rev optimistic lock) and the
+// deploy-order tolerant getMyBook (doc_rev may not exist before 0900).
+
+type Result = { data: unknown; error: { code?: string; message?: string } | null };
+
+const fake = vi.hoisted(() => {
+  const state = {
+    chains: [] as { client: "user" | "admin"; table: string; op: string; payload?: unknown; calls: unknown[][] }[],
+    results: [] as Result[],
+    user: { id: "u" } as { id: string } | null,
+  };
+  function builder(client: "user" | "admin", table: string, op: string, payload?: unknown) {
+    const entry = { client, table, op, payload, calls: [] as unknown[][] };
+    state.chains.push(entry);
+    const b: Record<string, unknown> = {};
+    for (const m of ["eq", "in", "is", "filter", "order", "select", "maybeSingle"]) {
+      b[m] = (...args: unknown[]) => {
+        entry.calls.push([m, ...args]);
+        return b;
+      };
+    }
+    b.then = (resolve: (r: Result) => unknown, reject: (e: unknown) => unknown) =>
+      Promise.resolve(state.results.shift() ?? { data: [], error: null }).then(resolve, reject);
+    return b;
+  }
+  const make = (kind: "user" | "admin") => ({
+    from: (table: string) => ({
+      select: (cols: string) => {
+        const b = builder(kind, table, "select");
+        (b.select as (c: string) => unknown)(cols);
+        return b;
+      },
+      update: (payload: unknown) => builder(kind, table, "update", payload),
+    }),
+  });
+  return { state, client: make("user"), admin: make("admin") };
+});
+
+vi.mock("@/lib/supabase/server", () => ({ createClient: async () => fake.client }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => fake.admin }));
+vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: async () => fake.state.user }));
+
+const { saveDocIfRev, getMyBook, writeDocIfEmpty, BooksQueryError } = await import("@/lib/db/books");
+
+const B = "22222222-2222-4222-8222-222222222222";
+const U = "33333333-3333-4333-8333-333333333333";
+const TS = "2026-11-10T10:00:00.123456+00:00";
+const DOC = { version: 1, pages: [] };
+
+beforeEach(() => {
+  fake.state.chains = [];
+  fake.state.results = [];
+  fake.state.user = { id: "u" };
+});
+
+describe("saveDocIfRev", () => {
+  it("one admin UPDATE guarded by id, owner and doc_rev; returns the new rev + updated_at", async () => {
+    fake.state.results.push({ data: [{ doc_rev: 8, updated_at: TS }], error: null });
+    expect(await saveDocIfRev(B, U, DOC, 3, 7)).toEqual({ ok: true, rev: 8, savedAt: TS });
+    expect(fake.state.chains).toHaveLength(1);
+    const [c] = fake.state.chains;
+    expect(c).toMatchObject({ client: "admin", table: "books", op: "update", payload: { doc: DOC, page_count: 3 } });
+    expect(c.payload).not.toHaveProperty("title");
+    expect(c.payload).not.toHaveProperty("doc_rev"); // trigger-managed
+    expect(c.calls).toEqual([
+      ["eq", "id", B],
+      ["eq", "user_id", U],
+      ["eq", "doc_rev", 7],
+      ["select", "doc_rev, updated_at"],
+    ]);
+  });
+
+  it("writes the title only when given (cover title edit, D-037 (7))", async () => {
+    fake.state.results.push({ data: [{ doc_rev: 1, updated_at: TS }], error: null });
+    await saveDocIfRev(B, U, DOC, 1, 0, { title: "Summer in Abu Dhabi" });
+    expect(fake.state.chains[0].payload).toEqual({ doc: DOC, page_count: 1, title: "Summer in Abu Dhabi" });
+  });
+
+  it("0 rows + the book still exists for the owner → conflict", async () => {
+    fake.state.results.push({ data: [], error: null }, { data: { id: B }, error: null });
+    expect(await saveDocIfRev(B, U, DOC, 1, 2)).toEqual({ ok: false, reason: "conflict" });
+    const [, check] = fake.state.chains;
+    expect(check).toMatchObject({ client: "admin", table: "books", op: "select" });
+    expect(check.calls).toEqual([
+      ["select", "id"],
+      ["eq", "id", B],
+      ["eq", "user_id", U],
+      ["maybeSingle"],
+    ]);
+  });
+
+  it("0 rows + no such book for the owner → not_found", async () => {
+    fake.state.results.push({ data: [], error: null }, { data: null, error: null });
+    expect(await saveDocIfRev(B, U, DOC, 1, 2)).toEqual({ ok: false, reason: "not_found" });
+  });
+
+  it("malformed ids → not_found, bad baseRev → conflict, both without a query", async () => {
+    expect(await saveDocIfRev("nope", U, DOC, 1, 0)).toEqual({ ok: false, reason: "not_found" });
+    expect(await saveDocIfRev(B, "nope", DOC, 1, 0)).toEqual({ ok: false, reason: "not_found" });
+    expect(await saveDocIfRev(B, U, DOC, 1, -1)).toEqual({ ok: false, reason: "conflict" });
+    expect(await saveDocIfRev(B, U, DOC, 1, 1.5)).toEqual({ ok: false, reason: "conflict" });
+    expect(fake.state.chains).toHaveLength(0);
+  });
+
+  it("db errors → BooksQueryError with the code only (update and existence check)", async () => {
+    fake.state.results.push({ data: null, error: { code: "42703", message: "column books.doc_rev does not exist" } });
+    const e1 = await saveDocIfRev(B, U, DOC, 1, 0).catch((e: unknown) => e);
+    expect(e1).toBeInstanceOf(BooksQueryError);
+    expect((e1 as InstanceType<typeof BooksQueryError>).code).toBe("42703");
+    expect((e1 as Error).message).not.toContain("doc_rev does not exist");
+
+    fake.state.results.push({ data: [], error: null }, { data: null, error: { code: "08006" } });
+    const e2 = await saveDocIfRev(B, U, DOC, 1, 0).catch((e: unknown) => e);
+    expect((e2 as InstanceType<typeof BooksQueryError>).code).toBe("08006");
+  });
+});
+
+describe("getMyBook (deploy-order tolerant)", () => {
+  it("selects doc_rev under RLS (user client)", async () => {
+    const row = { id: B, doc: {}, doc_rev: 4 };
+    fake.state.results.push({ data: row, error: null });
+    expect(await getMyBook(B)).toEqual(row);
+    const [c] = fake.state.chains;
+    expect(c.client).toBe("user");
+    expect(String(c.calls[0][1])).toMatch(/\bdoc_rev\b/);
+    expect(String(c.calls[0][1])).toMatch(/\bupdated_at\b/);
+  });
+
+  it("before migration 0900 (doc_rev missing) retries without it and returns doc_rev: null", async () => {
+    fake.state.results.push(
+      { data: null, error: { code: "42703", message: "column books.doc_rev does not exist" } },
+      { data: { id: B, doc: {} }, error: null },
+    );
+    expect(await getMyBook(B)).toEqual({ id: B, doc: {}, doc_rev: null });
+    expect(fake.state.chains).toHaveLength(2);
+    expect(String(fake.state.chains[1].calls[0][1])).not.toMatch(/doc_rev/);
+  });
+
+  it("legacy fallback keeps null for a missing book; other errors are not swallowed", async () => {
+    fake.state.results.push({ data: null, error: { code: "42703", message: "column books.doc_rev does not exist" } });
+    fake.state.results.push({ data: null, error: null });
+    expect(await getMyBook(B)).toBeNull();
+
+    fake.state.results.push({ data: null, error: { code: "42703", message: "column books.other does not exist" } });
+    await expect(getMyBook(B)).rejects.toBeInstanceOf(BooksQueryError);
+    fake.state.results.push({ data: null, error: { code: "42501", message: "permission denied" } });
+    await expect(getMyBook(B)).rejects.toBeInstanceOf(BooksQueryError);
+  });
+
+  it("signed out / malformed id → null without a query", async () => {
+    expect(await getMyBook("nope")).toBeNull();
+    fake.state.user = null;
+    expect(await getMyBook(B)).toBeNull();
+    expect(fake.state.chains).toHaveLength(0);
+  });
+});
+
+describe("writeDocIfEmpty", () => {
+  it("signed out → false without a query (the admin write is always owner-scoped)", async () => {
+    fake.state.user = null;
+    expect(await writeDocIfEmpty(B, DOC, 1, TS)).toBe(false);
+    expect(fake.state.chains).toHaveLength(0);
+  });
+});

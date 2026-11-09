@@ -72,14 +72,17 @@ beforeEach(() => {
 });
 
 describe("writeDocIfEmpty (conditional doc update)", () => {
-  it("updates doc + page_count guarded by id, doc = {} and updated_at", async () => {
+  it("updates doc + page_count with the admin client, guarded by id, owner, doc = {} and updated_at", async () => {
     fake.state.results.push({ data: [{ id: B }], error: null });
     const doc = { version: 1 };
     expect(await writeDocIfEmpty(B, doc, 7, TS)).toBe(true);
     const [c] = fake.state.chains;
-    expect(c).toMatchObject({ table: "books", op: "update", payload: { doc, page_count: 7 } });
+    // doc / page_count are server-only from migration 0900 (D-036): a user-scoped
+    // update would silently keep the old doc.
+    expect(c).toMatchObject({ client: "admin", table: "books", op: "update", payload: { doc, page_count: 7 } });
     expect(c.calls).toEqual([
       ["eq", "id", B],
+      ["eq", "user_id", "u"],
       ["filter", "doc", "eq", "{}"],
       ["eq", "updated_at", TS],
       ["select", "id"],

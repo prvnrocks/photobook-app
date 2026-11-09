@@ -68,6 +68,7 @@ function makeDb(initial: {
     max_pages: initial.isPaid ? 100 : 20,
     page_count: 0,
     doc: (initial.doc ?? {}) as MyBook["doc"],
+    doc_rev: 0,
     updated_at: "2026-11-08T10:00:00.000001+00:00",
   };
   const photos = initial.photos.map((p) => ({ ...p }));

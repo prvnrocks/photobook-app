@@ -169,6 +169,7 @@ export type Database = {
           caption_lang: string
           created_at: string
           doc: Json
+          doc_rev: number
           expires_at: string | null
           id: string
           is_paid: boolean
@@ -188,6 +189,7 @@ export type Database = {
           caption_lang?: string
           created_at?: string
           doc?: Json
+          doc_rev?: number
           expires_at?: string | null
           id?: string
           is_paid?: boolean
@@ -207,6 +209,7 @@ export type Database = {
           caption_lang?: string
           created_at?: string
           doc?: Json
+          doc_rev?: number
           expires_at?: string | null
           id?: string
           is_paid?: boolean
@@ -423,6 +426,16 @@ export type Database = {
           p_rebuild_cap: number
           p_trigger: string
           p_user_id: string
+        }
+        Returns: Json
+      }
+      create_rewrite_run_capped: {
+        Args: {
+          p_book: string
+          p_cap: number
+          p_enforce: boolean
+          p_mode: string
+          p_user: string
         }
         Returns: Json
       }

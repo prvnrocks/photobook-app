@@ -1,5 +1,5 @@
 -- =============================================================================
--- supabase/tests/rls_check.sql — live RLS / trigger / storage check (Milestones 1–4)
+-- supabase/tests/rls_check.sql — live RLS / trigger / storage check (Milestones 1–5)
 --
 -- HOW TO RUN
 --   1. Apply the migrations first (`npm run db:push`) — including
@@ -12,7 +12,10 @@
 --      book delete)
 --      and 20261109000700_agent_pipeline_hardening.sql (lease tokens, capped
 --      run creation, agent_runs column grants, cursor scrub, cost precision)
---      and 20261109000800_cursor_size.sql (agent_runs.cursor limit 256 KB).
+--      and 20261109000800_cursor_size.sql (agent_runs.cursor limit 256 KB)
+--      and 20261110000900_editor.sql (server-only doc / page_count / doc_rev,
+--      doc_rev bump trigger, rewrite runs outside the one-active-run index,
+--      create_rewrite_run_capped).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -21,7 +24,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 82 checks passed
+--       RLS OK — all 90 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -71,6 +74,8 @@ declare
   book_c2    uuid;
   book_c3    uuid;
   v_res      jsonb;
+  book_e     uuid;
+  run_rw     uuid;
   slug_pub   text := 'rls-check-pub-'   || substr(md5(random()::text), 1, 12);
   slug_unpub text := 'rls-check-unpub-' || substr(md5(random()::text), 1, 12);
   r          record;
@@ -1089,6 +1094,134 @@ begin
       from generate_series(1, 9000) as i;
     raise exception 'RLS FAIL [cursor size]: a cursor over 256 KB was accepted';
   exception when check_violation then null;
+  end;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- 0900 (D-036): books.doc / page_count / doc_rev are server-only; doc_rev is
+  -- bumped by books_set_doc_rev only when doc changes.
+  -- ---------------------------------------------------------------------------
+  reset role;
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  insert into public.books (user_id, title, doc, page_count, doc_rev)
+  values (uid_a, 'RLS editor', '{"pages":[{"n":1}]}', 5, 7)
+  returning id, doc, page_count, doc_rev into r;
+  book_e := r.id;
+  if r.doc <> '{}'::jsonb or r.page_count <> 0 or r.doc_rev <> 0 then
+    raise exception 'RLS FAIL [doc insert]: client set doc/page_count/doc_rev on insert: %', row_to_json(r);
+  end if;
+  checks := checks + 1;
+
+  update public.books
+     set doc = '{"pages":[{"n":2}]}', page_count = 3, doc_rev = 99, title = 'RLS editor (edited)'
+   where id = book_e;
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'RLS FAIL [doc update]: A could not update own book (% rows)', n; end if;
+  select doc, page_count, doc_rev, title into r from public.books where id = book_e;
+  if r.doc <> '{}'::jsonb or r.page_count <> 0 or r.doc_rev <> 0 or r.title <> 'RLS editor (edited)' then
+    raise exception 'RLS FAIL [doc update]: client changed doc/page_count/doc_rev or title not saved: %', row_to_json(r);
+  end if;
+  checks := checks + 1;
+
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  set local role service_role;
+  update public.books set doc = '{"pages":[{"n":1}]}', page_count = 1 where id = book_e;
+  select doc_rev into r from public.books where id = book_e;
+  if r.doc_rev <> 1 then raise exception 'RLS FAIL [doc_rev]: service doc write left doc_rev at %', r.doc_rev; end if;
+  update public.books set doc = '{"pages":[{"n":2}]}' where id = book_e and doc_rev = 1;
+  get diagnostics n = row_count;
+  select doc_rev into r from public.books where id = book_e;
+  if n <> 1 or r.doc_rev <> 2 then
+    raise exception 'RLS FAIL [doc_rev]: conditional save (rev 1) wrote % rows, doc_rev %', n, r.doc_rev;
+  end if;
+  update public.books set doc = '{"pages":[{"n":3}]}' where id = book_e and doc_rev = 1;
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'RLS FAIL [doc_rev]: a stale-rev save wrote % rows', n; end if;
+  checks := checks + 1;
+
+  update public.books set title = 'RLS editor (svc)', ai_status = 'done' where id = book_e;
+  update public.books set doc = '{"pages":[{"n":2}]}' where id = book_e; -- same doc: no bump
+  update public.books set doc_rev = 50 where id = book_e;                -- never set directly
+  select doc_rev into r from public.books where id = book_e;
+  if r.doc_rev <> 2 then
+    raise exception 'RLS FAIL [doc_rev]: non-doc / identical-doc / direct writes changed doc_rev to %', r.doc_rev;
+  end if;
+  checks := checks + 1;
+
+  -- the client guard keeps the service-written doc and rev
+  reset role;
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  update public.books set doc = '{}', page_count = 0, doc_rev = 0 where id = book_e;
+  select doc, page_count, doc_rev into r from public.books where id = book_e;
+  if r.doc <> '{"pages":[{"n":2}]}'::jsonb or r.page_count <> 1 or r.doc_rev <> 2 then
+    raise exception 'RLS FAIL [doc update]: client reset a service-written doc: %', row_to_json(r);
+  end if;
+  checks := checks + 1;
+
+  -- create_rewrite_run_capped: not executable by clients
+  if has_function_privilege('authenticated', 'public.create_rewrite_run_capped(uuid, uuid, text, integer, boolean)', 'execute')
+     or has_function_privilege('anon', 'public.create_rewrite_run_capped(uuid, uuid, text, integer, boolean)', 'execute') then
+    raise exception 'RLS FAIL [rewrite rpc grants]: a client role can execute create_rewrite_run_capped';
+  end if;
+  begin
+    perform public.create_rewrite_run_capped(book_e, uid_a, 'live', 100, false);
+    raise exception 'RLS FAIL [rewrite rpc]: authenticated could call create_rewrite_run_capped';
+  exception when insufficient_privilege then null;
+  end;
+  checks := checks + 1;
+
+  -- rewrite runs are outside the one-active-run index (D-037 (6)); max 1 in
+  -- flight per book; only ok rewrites count toward the cap; stale (> 5 min)
+  -- unfinished rewrites neither block nor count.
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  insert into public.agent_runs (book_id, user_id, trigger, mode) values (book_e, uid_a, 'build', 'replay');
+  set local role service_role;
+  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, true);
+  if v_res ->> 'id' is null then
+    raise exception 'RLS FAIL [rewrite run]: refused while a build run is active: %', v_res;
+  end if;
+  run_rw := (v_res ->> 'id')::uuid;
+  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, false);
+  if v_res is distinct from '{"error":"already_running"}'::jsonb then
+    raise exception 'RLS FAIL [rewrite run]: second in-flight rewrite returned %', v_res;
+  end if;
+  begin
+    insert into public.agent_runs (book_id, user_id, trigger, mode) values (book_e, uid_a, 'rebuild', 'replay');
+    raise exception 'RLS FAIL [one active run]: a second active build/rebuild run was accepted';
+  exception when unique_violation then null;
+  end;
+  v_res := public.create_rewrite_run_capped(book_e, uid_b, 'replay', 2, false);
+  if v_res is distinct from '{"error":"not_found"}'::jsonb then
+    raise exception 'RLS FAIL [rewrite run]: a rewrite run for another user''s book returned %', v_res;
+  end if;
+  checks := checks + 1;
+
+  update public.agent_runs set state = 'done', ai_status = 'ok' where id = run_rw;
+  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, true);   -- 1 ok of 2
+  if v_res ->> 'id' is null then raise exception 'RLS FAIL [rewrite cap]: 1 of 2 used refused: %', v_res; end if;
+  update public.agent_runs set state = 'failed', ai_status = 'failed' where id = (v_res ->> 'id')::uuid;
+  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, true);   -- failed doesn't count
+  if v_res ->> 'id' is null then raise exception 'RLS FAIL [rewrite cap]: a failed rewrite counted: %', v_res; end if;
+  update public.agent_runs set started_at = now() - interval '10 minutes' where id = (v_res ->> 'id')::uuid;
+  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, true);   -- stale run doesn't block/count
+  if v_res ->> 'id' is null then raise exception 'RLS FAIL [rewrite cap]: a stale unfinished rewrite blocked: %', v_res; end if;
+  update public.agent_runs set state = 'done', ai_status = 'ok' where id = (v_res ->> 'id')::uuid;
+  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, true);   -- 2 ok of 2
+  if v_res is distinct from '{"error":"limit","limit":"rewrites"}'::jsonb then
+    raise exception 'RLS FAIL [rewrite cap]: over the cap returned %', v_res;
+  end if;
+  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, false);  -- not enforced
+  if v_res ->> 'id' is null then raise exception 'RLS FAIL [rewrite cap]: p_enforce = false still capped: %', v_res; end if;
+  begin
+    perform public.create_rewrite_run_capped(book_e, null, 'replay', 2, true);
+    raise exception 'RLS FAIL [rewrite cap]: a null user id was accepted';
+  exception when invalid_parameter_value then null;
   end;
   checks := checks + 1;
 

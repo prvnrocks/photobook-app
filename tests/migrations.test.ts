@@ -854,10 +854,10 @@ describe("migrations: Milestone 3 agent pipeline (0600)", () => {
       );
     });
 
-    it("latest protect_book_columns is redefined here, stays INVOKER and forces ai_status", () => {
-      const defs = functions.filter((x) => x.name === "private.protect_book_columns");
-      const f = defs.at(-1)!;
-      expect(sql).toContain(f.body);
+    it("protect_book_columns is redefined here, stays INVOKER and forces ai_status", () => {
+      // The 0600 definition (0900 redefines it again; see the M5 editor block below).
+      const f = functions.filter((x) => x.name === "private.protect_book_columns").find((x) => sql.includes(x.body))!;
+      expect(f).toBeDefined();
       expect(f.header).not.toMatch(/security\s+definer/);
       expect(f.header).toMatch(/set\s+search_path\s*=\s*''/);
       const body = ws(f.body);
@@ -1107,5 +1107,179 @@ describe("migrations: Milestone 4 cursor size (0800, D-033)", () => {
   it("the latest agent_runs_cursor_size definition across all migrations is 256 KB", () => {
     const defs = matchesAll(/constraint\s+agent_runs_cursor_size\s+check\s*\(\s*pg_column_size\(cursor\)\s*<=\s*(\d+)\s*\)/);
     expect(defs.map((d) => Number(d[1]))).toEqual([65536, 262144]);
+  });
+});
+
+describe("migrations: Milestone 5 editor (0900, D-036 / D-037)", () => {
+  const name = "20261110000900_editor.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const ws = (s: string) => s.replace(/\s+/g, " ");
+  const flat = ws(sql);
+  const raw = m ? readFileSync(join(MIGRATIONS_DIR, m.name), "utf8") : "";
+  const RPC = "public.create_rewrite_run_capped";
+  const RPC_ARGS = "uuid, uuid, text, integer, boolean";
+
+  it("exists, sorts after 0800 and documents D-036 / D-037", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files.indexOf(name)).toBeGreaterThan(files.indexOf("20261109000800_cursor_size.sql"));
+    expect(raw).toMatch(/D-036/);
+    expect(raw).toMatch(/D-037/);
+  });
+
+  it("is additive: no table/column/policy drops, no RLS or table-grant changes", () => {
+    expect(sql).not.toMatch(/\bdrop\s+(table|column|policy|trigger|function)\b/);
+    expect(sql).not.toMatch(/\brow\s+level\s+security\b/);
+    expect(sql).not.toMatch(/\b(create|alter)\s+policy\b/);
+    expect(sql).not.toMatch(/\b(grant|revoke)\s+[a-z_\s,()]+\s+on\s+(?:table\s+)?public\.\w+/);
+  });
+
+  describe("books.doc_rev", () => {
+    it("adds doc_rev bigint not null default 0 (non-negative)", () => {
+      expect(flat).toContain("alter table public.books add column doc_rev bigint not null default 0;");
+      expect(flat).toContain("check (doc_rev >= 0)");
+    });
+
+    it("private.set_book_doc_rev bumps only when doc changes and otherwise keeps the old rev", () => {
+      const f = latestFunction("private.set_book_doc_rev");
+      expect(f).toBeDefined();
+      expect(sql).toContain(f!.body);
+      expect(f!.header).toMatch(/returns\s+trigger/);
+      expect(f!.header).toMatch(/security\s+invoker/);
+      expect(f!.header).toMatch(/set\s+search_path\s*=\s*''/);
+      expect(ws(f!.body)).toContain(
+        "if new.doc is distinct from old.doc then new.doc_rev := old.doc_rev + 1; else new.doc_rev := old.doc_rev; end if;",
+      );
+      expect(flat).toContain("revoke all on function private.set_book_doc_rev() from public, anon, authenticated");
+    });
+
+    it("runs as BEFORE UPDATE row trigger books_set_doc_rev, which sorts after books_protect_columns", () => {
+      expect(flat).toMatch(
+        /create trigger books_set_doc_rev before update on public\.books for each row execute function private\.set_book_doc_rev\(\)/,
+      );
+      // BEFORE triggers fire alphabetically: the guard must reset a client's doc first.
+      expect(ws(all)).toMatch(/create trigger books_protect_columns before insert or update on public\.books/);
+      expect("books_set_doc_rev" > "books_protect_columns").toBe(true);
+    });
+  });
+
+  describe("protect_book_columns (D-036)", () => {
+    const f = latestFunction("private.protect_book_columns");
+    const body = ws(f?.body ?? "");
+    const [ins, upd = ""] = body.split("elsif tg_op = 'update'");
+
+    it("latest definition lives in 0900, stays INVOKER with search_path '' and the privileged-role bypass", () => {
+      expect(sql).toContain(f!.body);
+      expect(f!.header).not.toMatch(/security\s+definer/);
+      expect(f!.header).toMatch(/set\s+search_path\s*=\s*''/);
+      expect(body).toMatch(/if current_user in \('postgres', 'service_role', 'supabase_admin'\) then return new; end if;/);
+      expect(flat).toContain("revoke all on function private.protect_book_columns() from public, anon, authenticated");
+      expect(raw).toMatch(/WARNING: any future SECURITY DEFINER function owned by postgres that writes\s*\n--\s*to public\.books bypasses this guard/);
+    });
+
+    it("INSERT forces doc '{}', page_count 0, doc_rev 0 plus everything 0600 forced", () => {
+      for (const s of [
+        "new.doc := '{}'::jsonb;",
+        "new.page_count := 0;",
+        "new.doc_rev := 0;",
+        "new.is_paid := false;",
+        "new.max_pages := 20;",
+        "new.expires_at := null;",
+        "new.slug := null;",
+        "new.published_at := null;",
+        "new.ai_status := 'idle';",
+      ]) {
+        expect(ins, s).toContain(s);
+      }
+    });
+
+    it.each(["doc", "page_count", "doc_rev", "id", "created_at", "is_paid", "max_pages", "expires_at", "slug", "published_at", "user_id", "ai_status"])(
+      "UPDATE keeps old.%s",
+      (col) => {
+        expect(upd).toContain(`new.${col} := old.${col};`);
+      },
+    );
+
+    it("title / occasion / tone / caption_lang stay client-editable", () => {
+      for (const col of ["title", "occasion", "tone", "caption_lang"]) expect(body).not.toMatch(new RegExp(`new\\.${col} :=`));
+    });
+  });
+
+  describe("one active run per book excludes rewrites (D-037 (6))", () => {
+    it("drops and recreates agent_runs_one_active_per_book_idx with trigger <> 'rewrite'", () => {
+      expect(flat).toContain("drop index public.agent_runs_one_active_per_book_idx;");
+      expect(flat).toContain(
+        "create unique index agent_runs_one_active_per_book_idx on public.agent_runs (book_id) where state not in ('done', 'failed') and trigger <> 'rewrite';",
+      );
+      expect(flat.indexOf("drop index")).toBeLessThan(flat.indexOf("create unique index"));
+    });
+
+    it("the latest definition across all migrations is the 0900 one", () => {
+      const defs = matchesAll(/create\s+unique\s+index\s+agent_runs_one_active_per_book_idx\s+on\s+public\.agent_runs\s*\(book_id\)\s+where\s+([^;]+);/);
+      expect(defs).toHaveLength(2);
+      expect(ws(defs.at(-1)![1])).toBe("state not in ('done', 'failed') and trigger <> 'rewrite'");
+    });
+  });
+
+  describe("create_rewrite_run_capped", () => {
+    const f = latestFunction(RPC);
+    const body = ws(f?.body ?? "");
+
+    it("signature (p_book, p_user, p_mode, p_cap, p_enforce) returns jsonb; INVOKER with search_path ''", () => {
+      expect(f).toBeDefined();
+      expect(ws(f!.header).trim()).toMatch(/^p_book uuid, p_user uuid, p_mode text, p_cap integer, p_enforce boolean \) returns jsonb/);
+      expect(f!.header).toMatch(/security\s+invoker/);
+      expect(f!.header).not.toMatch(/security\s+definer/);
+      expect(f!.header).toMatch(/set\s+search_path\s*=\s*''/);
+    });
+
+    it("rejects null arguments (cap only required when enforced)", () => {
+      expect(body).toContain(
+        "if p_book is null or p_user is null or p_mode is null or p_enforce is null or (p_enforce and p_cap is null) then raise exception 'invalid_argument' using errcode = '22023';",
+      );
+    });
+
+    it("serialises per book with a transaction advisory lock before any check or insert", () => {
+      expect(body).toContain("perform pg_advisory_xact_lock(hashtextextended(p_book::text, 2));");
+      const lock = body.indexOf("pg_advisory_xact_lock");
+      expect(lock).toBeLessThan(body.indexOf("select count(*)"));
+      expect(lock).toBeLessThan(body.indexOf("insert into public.agent_runs"));
+      expect(lock).toBeLessThan(body.indexOf("from public.books"));
+    });
+
+    it("returns not_found unless the book belongs to p_user", () => {
+      expect(body).toMatch(/if not exists \( select 1 from public\.books as b where b\.id = p_book and b\.user_id = p_user \) then return jsonb_build_object\('error', 'not_found'\);/);
+    });
+
+    it("max one rewrite in flight per book (stale > 5 min ignored) → already_running", () => {
+      expect(body).toContain(
+        "where r.book_id = p_book and r.trigger = 'rewrite' and r.state not in ('done', 'failed') and r.started_at > now() - interval '5 minutes'; if v_n > 0 then return jsonb_build_object('error', 'already_running');",
+      );
+    });
+
+    it("cap (only when p_enforce) counts ok rewrites + in-flight ones of the book", () => {
+      expect(body).toContain("if p_enforce then");
+      expect(body).toContain(
+        "where r.book_id = p_book and r.trigger = 'rewrite' and ( r.ai_status = 'ok' or (r.state not in ('done', 'failed') and r.started_at > now() - interval '5 minutes') ); if v_n >= p_cap then return jsonb_build_object('error', 'limit', 'limit', 'rewrites');",
+      );
+    });
+
+    it("inserts a 'rewrite' run and returns {id}", () => {
+      expect(body).toContain("insert into public.agent_runs (book_id, user_id, trigger, mode) values (p_book, p_user, 'rewrite', p_mode) returning id into v_id;");
+      expect(body).toContain("return jsonb_build_object('id', v_id);");
+    });
+
+    it("EXECUTE revoked from public/anon/authenticated, granted to service_role only", () => {
+      expect(flat).toContain(`revoke all on function ${RPC}(${RPC_ARGS}) from public, anon, authenticated;`);
+      const grants = matchesAll(new RegExp(`grant execute on function ${esc(RPC)}\\s*\\([^)]*\\)\\s+to\\s+([a-z_, ]+?)\\s*;`), all).map((g) => g[1].trim());
+      expect(grants).toEqual(["service_role"]);
+      expect(flat.indexOf(`revoke all on function ${RPC}`)).toBeLessThan(flat.indexOf(`grant execute on function ${RPC}`));
+    });
+  });
+
+  it("database.types.ts declares books.doc_rev and the RPC args (hand-edited until types gen)", () => {
+    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
+    expect(types.match(/doc_rev\??: number/g)).toHaveLength(3);
+    expect(types).toMatch(/create_rewrite_run_capped: \{\s*Args: \{\s*p_book: string\s*p_cap: number\s*p_enforce: boolean\s*p_mode: string\s*p_user: string\s*\}\s*Returns: Json/);
   });
 });
