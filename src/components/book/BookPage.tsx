@@ -4,13 +4,19 @@
 // No hooks / "use client": works in server components (viewer, print) and client ones (editor).
 
 import type { ReactNode } from "react";
-import { pageRenderModel, type RenderPhotos } from "@/lib/book/render";
+import {
+  CAPTION_FONT_SIZE_CQW,
+  CAPTION_LINE_HEIGHT,
+  pageRenderModel,
+  type RenderCaption,
+  type RenderPhotos,
+} from "@/lib/book/render";
 import type { BookDoc, Caption } from "@/lib/book/types";
 import { BookCover } from "./BookCover";
 import { Box, PageFrame, PhotoSlot, type BookRenderMode } from "./PageParts";
 
 export type { BookRenderMode } from "./PageParts";
-export type { RenderPhoto, RenderPhotos } from "@/lib/book/render";
+export type { RenderCaption, RenderPhoto, RenderPhotos } from "@/lib/book/render";
 
 export type BookPageProps = {
   doc: BookDoc;
@@ -25,9 +31,11 @@ export type BookPageProps = {
   renderSlotOverlay?: (slotIdx: number) => ReactNode;
   /**
    * Edit mode only: replaces the static caption inside the layout's caption area (called for
-   * every layout that HAS a caption area, with null when the page has no caption yet).
+   * every layout that HAS a caption area, with null when the page has no caption yet). The
+   * second argument is the caption's render model (resolved font family, lang, align) so an
+   * editable caption can look exactly like the static one.
    */
-  renderCaption?: (caption: Caption | null) => ReactNode;
+  renderCaption?: (caption: Caption | null, model: RenderCaption) => ReactNode;
   className?: string;
   /** First visible page(s): eager load + high fetch priority. Print mode is always eager. */
   priority?: boolean;
@@ -55,7 +63,7 @@ export function BookPage(props: BookPageProps) {
   }
 
   const c = m.caption;
-  const editCaption = mode === "edit" && renderCaption && c ? renderCaption(c.caption) : null;
+  const editCaption = mode === "edit" && renderCaption && c ? renderCaption(c.caption, c) : null;
 
   return (
     <PageFrame
@@ -84,7 +92,7 @@ export function BookPage(props: BookPageProps) {
               dir="auto"
               lang={c.lang}
               className="w-full whitespace-pre-line break-words text-neutral-800"
-              style={{ fontFamily: c.fontFamily, textAlign: c.align, fontSize: "2.6cqw", lineHeight: 1.25 }}
+              style={{ fontFamily: c.fontFamily, textAlign: c.align, fontSize: `${CAPTION_FONT_SIZE_CQW}cqw`, lineHeight: CAPTION_LINE_HEIGHT }}
               data-testid="page-caption"
             >
               {c.text}

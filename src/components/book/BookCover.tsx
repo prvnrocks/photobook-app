@@ -37,7 +37,11 @@ export function BookCover({ doc, mode, photos, captionLang, renderSlotOverlay, c
         />
       ) : null}
       {m.textRect ? (
-        <Box rect={m.textRect} className="flex flex-col items-center justify-center overflow-hidden text-center text-neutral-900">
+        <Box
+          rect={m.textRect}
+          className="flex flex-col items-center justify-center overflow-hidden text-center text-neutral-900"
+          data={{ "data-cover-text": "true" }}
+        >
           {m.title.text ? (
             <h2
               dir="auto"

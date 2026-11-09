@@ -70,6 +70,11 @@ export interface CoverRenderModel {
   subtitle: RenderText;
 }
 
+/** Page caption type size (cqw = % of page width) and line height — shared by the static caption
+ * in <BookPage> and the editor's tappable/editable caption so both look identical. */
+export const CAPTION_FONT_SIZE_CQW = 2.6;
+export const CAPTION_LINE_HEIGHT = 1.25;
+
 /** CSS position for a % rect: `position:absolute` + these. */
 export function rectStyle(rect: Rect): { left: string; top: string; width: string; height: string } {
   return { left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` };
