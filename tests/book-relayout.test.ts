@@ -325,3 +325,94 @@ describe("relayoutDoc — invariants", () => {
     expectValid(r.doc, photos);
   });
 });
+
+describe("relayoutDoc — captions (D-031)", () => {
+  const cap = (text: string, source: "ai" | "user" | "auto") => ({ text, font: "Playfair" as const, align: "center" as const, source });
+  /** Every page captioned: p1 AI, p2 AI, p3 user, p4 user. */
+  function captionedDoc(): BookDoc {
+    const doc = aiDoc();
+    doc.pages[0] = { ...doc.pages[0], caption: cap("Morning light on the water", "ai") };
+    doc.pages[1] = { ...doc.pages[1], caption: cap("Shells and sandcastles", "ai") };
+    doc.pages[2] = { ...doc.pages[2], caption: cap("Best day of the trip", "user") };
+    doc.pages[3] = { ...doc.pages[3], caption: cap("Dunes forever", "user") };
+    return doc;
+  }
+
+  it("AI and user captions on untouched pages are kept exactly", () => {
+    const doc = captionedDoc();
+    const photos = drop(BASE, "a2"); // only p2 is re-fitted
+    const r = relayoutDoc(doc, photos, OPTS);
+    expect(r.changed).toBe(true);
+    const byId = (id: string) => r.doc.pages.find((p) => p.id === id)!;
+    expect(byId("p1").caption).toEqual(cap("Morning light on the water", "ai"));
+    expect(byId("p3").caption).toEqual(cap("Best day of the trip", "user"));
+    expect(byId("p4").caption).toEqual(cap("Dunes forever", "user"));
+    expect(byId("p2").caption).toBeNull(); // AI caption on a re-fitted page goes
+    expectValid(r.doc, photos);
+  });
+
+  it("re-fitted page keeps a user caption when the new layout has a caption area; AI caption dropped", () => {
+    const doc = captionedDoc();
+    const photos = drop(BASE, "a5", "b1"); // p3 → 1 photo (user), p4 → 2 photos (user)
+    const r = relayoutDoc(doc, photos, OPTS);
+    const p3 = r.doc.pages.find((p) => p.id === "p3")!;
+    const p4 = r.doc.pages.find((p) => p.id === "p4")!;
+    expect(getLayout(p3.layout)?.caption).not.toBeNull();
+    expect(p3.caption).toEqual(cap("Best day of the trip", "user"));
+    expect(getLayout(p4.layout)?.caption).not.toBeNull();
+    expect(p4.caption).toEqual(cap("Dunes forever", "user"));
+    expectValid(r.doc, photos);
+  });
+
+  it("an 'auto' caption on a re-fitted page is dropped like an AI one", () => {
+    const doc = captionedDoc();
+    doc.pages[1] = { ...doc.pages[1], caption: cap("12 Oct 2026", "auto") };
+    const r = relayoutDoc(doc, drop(BASE, "a3"), OPTS);
+    expect(r.doc.pages.find((p) => p.id === "p2")!.caption).toBeNull();
+  });
+
+  it("new pages get caption null; existing captions and chapter titles kept", () => {
+    const doc = captionedDoc();
+    const photos = [...BASE, ph("n1", P, "2026-10-14T10:30:00"), ph("u1", P, null)];
+    const r = relayoutDoc(doc, photos, OPTS);
+    const oldIds = new Set(doc.pages.map((p) => p.id));
+    const fresh = r.doc.pages.filter((p) => !oldIds.has(p.id));
+    expect(fresh.length).toBeGreaterThan(0);
+    for (const p of fresh) expect(p.caption).toBeNull();
+    for (const old of doc.pages) expect(r.doc.pages.find((p) => p.id === old.id)).toEqual(old);
+    expect(r.doc.chapters.slice(0, 2).map((c) => c.title)).toEqual(["Beach mornings", "Into the dunes"]);
+    expectValid(r.doc, photos);
+  });
+
+  it("chapter titles kept when captioned pages are re-fitted or removed", () => {
+    const doc = captionedDoc();
+    const photos = drop(BASE, "a2", "a4", "a5", "b3");
+    const r = relayoutDoc(doc, photos, OPTS);
+    expect(r.doc.chapters.map((c) => c.title)).toEqual(["Beach mornings", "Into the dunes"]);
+    expect(r.doc.pages.map((p) => p.id)).toEqual(["p1", "p2", "p4"]);
+    expect(r.doc.pages[0].caption?.source).toBe("ai");
+    expect(r.doc.pages[1].caption).toBeNull();
+    expect(r.doc.pages[2].caption).toEqual(cap("Dunes forever", "user"));
+    expectValid(r.doc, photos);
+  });
+});
+
+describe("relayoutDoc — user caption on a page re-fitted to one photo (D-031)", () => {
+  it("prefers a captioned layout (one-portrait over full-page) so the user's caption survives", () => {
+    const doc = aiDoc();
+    const mine = { text: "Our favourite corner", font: "Playfair" as const, align: "center" as const, source: "user" as const };
+    doc.pages[1] = { ...doc.pages[1], caption: mine };
+    doc.pages[2] = { ...doc.pages[2], caption: { ...mine, source: "ai" as const } };
+    const photos = drop(BASE, "a2", "a5");
+    const r = relayoutDoc(doc, photos, OPTS);
+    const p2 = r.doc.pages.find((p) => p.id === "p2")!;
+    expect(p2.layout).toBe("one-portrait");
+    expect(p2.caption).toEqual(mine);
+    // without a user caption the plain best fit (catalogue order) is unchanged
+    const p3 = r.doc.pages.find((p) => p.id === "p3")!;
+    expect(p3.layout).toBe("full-page");
+    expect(p3.caption).toBeNull();
+    expectValid(r.doc, photos);
+    expect(relayoutDoc(r.doc, photos, OPTS).changed).toBe(false);
+  });
+});

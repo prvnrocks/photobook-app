@@ -164,8 +164,9 @@ class FakeDb {
       },
       writeDocIfReplaceable: async (id, doc, pageCount, expected) => {
         if (id !== this.book.id) return { ok: false, reason: "not_found" };
-        const { isReplaceableDoc } = await import("@/lib/book/replaceable");
-        if (!isReplaceableDoc(this.book.doc)) return { ok: false, reason: "user_edited" };
+        // Same guard as the real defaultDeps(): AI runs use isAiReplaceableDoc (D-018 + D-031).
+        const { isAiReplaceableDoc } = await import("@/lib/book/replaceable");
+        if (!isAiReplaceableDoc(this.book.doc)) return { ok: false, reason: "user_edited" };
         if (expected.updatedAt !== this.book.updated_at) return { ok: false, reason: "conflict" };
         void pageCount;
         this.writes.push("doc");
@@ -684,6 +685,43 @@ describe("orchestrator — user edits", () => {
     );
     return { ...doc, meta: { ...doc.meta!, userEdited: true } } as unknown as Json;
   }
+
+  /** Not marked userEdited, but one page carries a caption the user typed (D-031). */
+  function userCaptionDoc() {
+    const doc = autolayout(
+      photos150()
+        .slice(0, 10)
+        .map((p) => ({ id: p.id, width: p.width!, height: p.height!, takenAt: p.taken_at, dateSource: "exif" as const, place: null, status: "kept" as const, dupGroup: null, blurScore: 500 })),
+      { occasion: "travel", title: null, captionLang: "en", isPaid: false },
+    );
+    const i = doc.pages.findIndex((pg) => pg.layout !== "full-page");
+    expect(i).toBeGreaterThanOrEqual(0);
+    doc.pages[i] = { ...doc.pages[i], caption: { text: "Our first swim", font: "Playfair", align: "center", source: "user" } };
+    expect(doc.meta?.userEdited).toBe(false);
+    return doc as unknown as Json;
+  }
+
+  it("doc with a user caption (userEdited false) → startRun returns user_edited, no run, no transport call", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 10), { book: { doc: userCaptionDoc() } });
+    expect(await orch.startRun({ bookId: BOOK, userId: USER, trigger: "rebuild" }, deps)).toEqual({ ok: false, error: "user_edited" });
+    expect(await orch.startRun({ bookId: BOOK, userId: USER, trigger: "build" }, deps)).toEqual({ ok: false, error: "user_edited" });
+    expect(transport.calls).toHaveLength(0);
+    expect(db.runs.size).toBe(0);
+    expect(db.writes).not.toContain("doc");
+  });
+
+  it("doc gets a user caption mid-run → validating refuses (user_edited), doc untouched", async () => {
+    const { db, deps } = setup(photos150().slice(0, 40), { book: { ai_status: "partial" } });
+    const s = await start(deps);
+    await orch.advance(s.runId, {}, deps);
+    const withCaption = userCaptionDoc();
+    db.book.doc = withCaption;
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", done: true, errorCode: "user_edited", aiStatus: "failed" });
+    expect(db.run(s.runId)).toMatchObject({ ai_status: "failed", error_code: "user_edited" });
+    expect(db.book.doc).toEqual(withCaption);
+    expect(db.book.ai_status).toBe("partial");
+  });
 
   it("userEdited doc → startRun returns user_edited, no run, no transport call", async () => {
     const { db, transport, deps } = setup(photos150().slice(0, 10), { book: { doc: editedDoc() } });

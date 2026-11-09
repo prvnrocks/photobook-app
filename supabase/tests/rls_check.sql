@@ -1,5 +1,5 @@
 -- =============================================================================
--- supabase/tests/rls_check.sql — live RLS / trigger / storage check (Milestones 1–3)
+-- supabase/tests/rls_check.sql — live RLS / trigger / storage check (Milestones 1–4)
 --
 -- HOW TO RUN
 --   1. Apply the migrations first (`npm run db:push`) — including
@@ -11,7 +11,8 @@
 --      user_memory, run lease RPCs, server-only books.ai_status, step scrub on
 --      book delete)
 --      and 20261109000700_agent_pipeline_hardening.sql (lease tokens, capped
---      run creation, agent_runs column grants, cursor scrub, cost precision).
+--      run creation, agent_runs column grants, cursor scrub, cost precision)
+--      and 20261109000800_cursor_size.sql (agent_runs.cursor limit 256 KB).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -20,7 +21,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 80 checks passed
+--       RLS OK — all 82 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -1062,6 +1063,32 @@ begin
     perform public.create_agent_run_capped(book_c2, null, 'build', 'live', 3, 1, true);
     raise exception 'RLS FAIL [capped create]: a null user id was accepted';
   exception when invalid_parameter_value then null;
+  end;
+  checks := checks + 1;
+
+  -- 0800 (D-033): agent_runs.cursor may hold up to 256 KB (captions between
+  -- ticks); bigger cursors are rejected. md5 strings keep the jsonb incompressible.
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  begin
+    insert into public.agent_runs (book_id, user_id, trigger, mode, state, cursor)
+    select book_a, uid_a, 'build', 'replay', 'done',
+           jsonb_build_object('captions', jsonb_agg(md5(i::text || 'c')))
+      from generate_series(1, 3000) as i;
+  exception when check_violation then
+    raise exception 'RLS FAIL [cursor size]: a ~100 KB cursor was rejected (0800 not applied?)';
+  end;
+  select count(*) into n from public.agent_runs
+   where book_id = book_a and pg_column_size(cursor) > 65536 and pg_column_size(cursor) <= 262144;
+  if n < 1 then raise exception 'RLS FAIL [cursor size]: a ~100 KB cursor was not stored'; end if;
+  checks := checks + 1;
+  begin
+    insert into public.agent_runs (book_id, user_id, trigger, mode, state, cursor)
+    select book_a, uid_a, 'build', 'replay', 'done',
+           jsonb_build_object('captions', jsonb_agg(md5(i::text || 'c')))
+      from generate_series(1, 9000) as i;
+    raise exception 'RLS FAIL [cursor size]: a cursor over 256 KB was accepted';
+  exception when check_violation then null;
   end;
   checks := checks + 1;
 

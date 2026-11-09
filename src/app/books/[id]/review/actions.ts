@@ -79,9 +79,14 @@ export async function updateAlbumAction(bookId: string): Promise<UpdateAlbumResu
       if (!next.changed) return { ok: true, changed: false, pages: next.doc?.pages.length ?? 0 };
       const doc = next.doc as BookDoc;
 
-      const write = await writeDocIfReplaceable(book.id, doc as unknown as Json, doc.pages.length, {
-        updatedAt: book.updated_at,
-      });
+      // guard "relayout" (D-031): user captions don't block Update album — relayoutDoc keeps them.
+      const write = await writeDocIfReplaceable(
+        book.id,
+        doc as unknown as Json,
+        doc.pages.length,
+        { updatedAt: book.updated_at },
+        { guard: "relayout" },
+      );
       if (write.ok) {
         revalidatePath(`/books/${book.id}/review`);
         revalidatePath("/dashboard");

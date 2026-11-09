@@ -1075,3 +1075,37 @@ describe("migrations: M3 review fixes — agent pipeline hardening (0700)", () =
     });
   });
 });
+
+describe("migrations: Milestone 4 cursor size (0800, D-033)", () => {
+  const name = "20261109000800_cursor_size.sql";
+  const m = migrations.find((x) => x.name === name);
+  const flat = (m?.sql ?? "").replace(/\s+/g, " ").trim();
+  const raw = m ? readFileSync(join(MIGRATIONS_DIR, m.name), "utf8") : "";
+
+  it("exists and sorts after 0700", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files.indexOf(name)).toBeGreaterThan(files.indexOf("20261109000700_agent_pipeline_hardening.sql"));
+    expect(raw).toMatch(/D-033/);
+  });
+
+  it("drops the 0600 cursor check and re-adds it with the same name at 262144 bytes", () => {
+    expect(flat).toContain("alter table public.agent_runs drop constraint agent_runs_cursor_size;");
+    expect(flat).toContain(
+      "alter table public.agent_runs add constraint agent_runs_cursor_size check (pg_column_size(cursor) <= 262144);",
+    );
+    expect(flat.indexOf("drop constraint")).toBeLessThan(flat.indexOf("add constraint"));
+  });
+
+  it("contains nothing else (exactly the two statements)", () => {
+    const stmts = flat.split(";").map((s) => s.trim()).filter(Boolean);
+    expect(stmts).toEqual([
+      "alter table public.agent_runs drop constraint agent_runs_cursor_size",
+      "alter table public.agent_runs add constraint agent_runs_cursor_size check (pg_column_size(cursor) <= 262144)",
+    ]);
+  });
+
+  it("the latest agent_runs_cursor_size definition across all migrations is 256 KB", () => {
+    const defs = matchesAll(/constraint\s+agent_runs_cursor_size\s+check\s*\(\s*pg_column_size\(cursor\)\s*<=\s*(\d+)\s*\)/);
+    expect(defs.map((d) => Number(d[1]))).toEqual([65536, 262144]);
+  });
+});

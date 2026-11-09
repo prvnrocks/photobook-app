@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { autolayout, AUTOLAYOUT_VERSION } from "@/lib/autolayout";
 import { parseBookDoc } from "@/lib/book/schema";
-import { docOrigin, isEmptyDoc, isReplaceableDoc, withMeta } from "@/lib/book/replaceable";
+import { docOrigin, hasUserCaptions, isAiReplaceableDoc, isEmptyDoc, isReplaceableDoc, withMeta } from "@/lib/book/replaceable";
 import type { BookDoc, DocMeta } from "@/lib/book/types";
 
 const RUN_ID = "3f0c6a8e-2b1d-4c6e-9a7f-1e2d3c4b5a69";
@@ -101,6 +101,57 @@ describe("docOrigin / isReplaceableDoc", () => {
     // generator is still reported when the raw meta names one
     expect(docOrigin({ ...m2Doc(), meta: { ...aiMeta(), extra: true } }).generator).toBe("ai");
     expect(docOrigin({ version: 2 }).generator).toBe("rule");
+  });
+});
+
+describe("hasUserCaptions / isAiReplaceableDoc (D-031)", () => {
+  const cap = (source: "ai" | "user" | "auto") => ({ text: "A day by the sea", font: "Playfair", align: "center", source });
+  /** m2Doc with a second page (one-portrait has a caption area) carrying the given caption. */
+  const withCaption = (caption: unknown, meta: DocMeta | undefined = aiMeta()) => ({
+    ...m2Doc(),
+    pages: [
+      ...m2Doc().pages,
+      { id: "p2", chapterId: "c1", layout: "one-portrait", slots: [{ photoId: "b", crop: { x: 0.5, y: 0.5, zoom: 1 } }], caption },
+    ],
+    ...(meta ? { meta } : {}),
+  });
+
+  it("fixture with a user caption is a valid doc", () => {
+    expect(parseBookDoc(withCaption(cap("user"))).ok).toBe(true);
+  });
+
+  it("hasUserCaptions: true only for a caption with source 'user'", () => {
+    expect(hasUserCaptions({})).toBe(false);
+    expect(hasUserCaptions(m2Doc())).toBe(false);
+    expect(hasUserCaptions(withCaption(null))).toBe(false);
+    expect(hasUserCaptions(withCaption(cap("ai")))).toBe(false);
+    expect(hasUserCaptions(withCaption(cap("auto")))).toBe(false);
+    expect(hasUserCaptions(withCaption(cap("user")))).toBe(true);
+    expect(hasUserCaptions(withCaption(cap("user"), undefined))).toBe(true);
+  });
+
+  it("hasUserCaptions reads raw values: unparsable docs with a user caption still count; garbage is false", () => {
+    expect(hasUserCaptions({ pages: [{ caption: { source: "user" } }] })).toBe(true);
+    expect(hasUserCaptions({ ...withCaption(cap("user")), version: 2 })).toBe(true);
+    for (const g of [null, undefined, "doc", 42, [], { pages: "nope" }, { pages: [null, 1, "x", { caption: "user" }] }]) {
+      expect(hasUserCaptions(g)).toBe(false);
+    }
+  });
+
+  it("isAiReplaceableDoc = isReplaceableDoc && !hasUserCaptions", () => {
+    expect(isAiReplaceableDoc({})).toBe(true);
+    expect(isAiReplaceableDoc(m2Doc())).toBe(true);
+    expect(isAiReplaceableDoc(withCaption(cap("ai")))).toBe(true);
+    expect(isAiReplaceableDoc(withCaption(cap("auto"), undefined))).toBe(true);
+    // user caption: blocks AI runs but not relayout (isReplaceableDoc unchanged)
+    expect(isAiReplaceableDoc(withCaption(cap("user")))).toBe(false);
+    expect(isReplaceableDoc(withCaption(cap("user")))).toBe(true);
+    expect(isAiReplaceableDoc(withCaption(cap("user"), undefined))).toBe(false);
+    expect(isReplaceableDoc(withCaption(cap("user"), undefined))).toBe(true);
+    // user-edited / garbage stay refused by both
+    expect(isAiReplaceableDoc({ ...m2Doc(), meta: aiMeta({ userEdited: true }) })).toBe(false);
+    expect(isAiReplaceableDoc(null)).toBe(false);
+    expect(isAiReplaceableDoc({ version: 2 })).toBe(false);
   });
 });
 

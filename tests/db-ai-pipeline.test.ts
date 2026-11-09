@@ -672,6 +672,46 @@ describe("books: AI pipeline writes", () => {
     expect(fake.state.chains.filter((c) => c.op === "update")).toHaveLength(0);
   });
 
+  it("guard (D-031): a doc with a user caption is refused by default / 'ai', written with 'relayout'", async () => {
+    const captioned = {
+      version: 1,
+      format: "A5_PORTRAIT",
+      occasion: "travel",
+      cover: { layout: "cover", photoId: "a", title: "T", subtitle: "" },
+      chapters: [{ id: "c1", title: "Beach", dateLabel: "", place: null }],
+      pages: [
+        {
+          id: "p1",
+          chapterId: "c1",
+          layout: "one-portrait",
+          slots: [{ photoId: "a", crop: { x: 0.5, y: 0.5, zoom: 1 } }],
+          caption: { text: "mine", font: "Playfair", align: "center", source: "user" },
+        },
+      ],
+      style: { background: "#FFFFFF", font: "Playfair" },
+      meta: { generator: "ai", generatorVersion: 1, runId: null, userEdited: false },
+    };
+    for (const opts of [undefined, { guard: "ai" as const }]) {
+      fake.state.results.push({ data: { doc: captioned, updated_at: TS }, error: null });
+      expect(await books.writeDocIfReplaceable(B, ruleDoc, 4, { updatedAt: TS }, opts)).toEqual({
+        ok: false,
+        reason: "user_edited",
+      });
+    }
+    expect(fake.state.chains.filter((c) => c.op === "update")).toHaveLength(0);
+    fake.state.results.push({ data: { doc: captioned, updated_at: TS }, error: null }, { data: [{ id: B }], error: null });
+    expect(await books.writeDocIfReplaceable(B, ruleDoc, 4, { updatedAt: TS }, { guard: "relayout" })).toEqual({ ok: true });
+    // relayout still refuses a userEdited doc
+    fake.state.results.push({
+      data: { doc: { ...captioned, meta: { ...captioned.meta, userEdited: true } }, updated_at: TS },
+      error: null,
+    });
+    expect(await books.writeDocIfReplaceable(B, ruleDoc, 4, { updatedAt: TS }, { guard: "relayout" })).toEqual({
+      ok: false,
+      reason: "user_edited",
+    });
+  });
+
   it("updated_at mismatch on read → conflict, no write", async () => {
     fake.state.results.push({ data: { doc: {}, updated_at: "2026-11-08T11:00:00+00:00" }, error: null });
     expect(await books.writeDocIfReplaceable(B, ruleDoc, 4, { updatedAt: TS })).toEqual({

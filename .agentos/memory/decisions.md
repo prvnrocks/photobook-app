@@ -85,3 +85,21 @@ Format: `## D-NNN — title (YYYY-MM-DD)` → **Decision**, **Why**, **Alternati
 
 ## D-028 — Free "Update album" re-layout after review changes (2026-11-09)
 **Decision:** After keep/drop changes on the review screen, an "Update album" button re-lays out the current album with the rule-based filler — keeps the AI's chapters, title and order where possible, removes dropped photos, adds newly kept ones to the right chapter by time. Free, unlimited, never counts as an AI rebuild, never runs on a user-edited album. AI rebuilds remain for re-planning the whole story. **Why:** with only 2 free rebuilds, review choices would otherwise never reach the album ("AI drafts, the user decides"). **Rejected:** re-flowing on every tap (layout jumps while deciding); leaving it to the M5 editor.
+
+## D-029 — Caption Writer runs inside the AI run; no /api/ai/captions (2026-11-09)
+**Decision:** Captions are written in the orchestrator's captioning state (advance ticks, D-022/D-025), batched by consecutive moments up to 12 captionable pages per call (≤ ~10 calls per book), only for layouts with a caption area. `/api/ai/captions` is dropped; per-caption rewrite stays M5 `/api/ai/rewrite`. **Why:** consistent with resumable ticks; bounded calls. **Rejected:** one call per moment (up to 100 calls).
+
+## D-030 — Deterministic caption pre-check + Critic with one targeted repair round (2026-11-09)
+**Decision:** Every caption passes a code pre-check (≤ 18 words, language/script, no URLs/attribution, capitalised names/places and digits must exist in metadata, no duplicates). The Critic scores the book; repair re-calls only the Caption Writer for affected pages (pre-check failures always; Critic issues when score < 7), cover swaps are done in code, one round only; captions still failing become null. **Rejected:** Storyteller re-call during repair (slow, discards captions).
+
+## D-031 — User captions block AI rewrites, not Update album (2026-11-09)
+**Decision:** A doc containing any `caption.source = 'user'` is never overwritten by an AI run (409 user_edited), but the free Update album (D-028) still works and keeps user captions; re-fitted/new pages get `caption: null` (filled later by the M5 ✨ rewrite). Caption Writer headings replace Storyteller chapter titles unless they fail validation. Rule albums get no captions in M4.
+
+## D-032 — Memory Keeper is code-only in M4, triggered by review Continue (2026-11-09)
+**Decision:** `deriveMemoryUpdate` learns tone (only when it differs from the occasion default), caption language, and caption length (from ≥ 3 of the user's own captions); runs on review "Continue" (later also M5 editor exit and M6 publish). No AI summary until M5 has real edit diffs. Memory is injected into the Storyteller / Caption Writer user message (never the cached system prompt), framed as data. New books prefill tone + language from memory. /settings shows and clears it.
+
+## D-033 — agent_runs.cursor limit raised to 256 KB (2026-11-09)
+**Decision:** Migration 0800 raises the cursor size check to 262144 bytes so captions can live in the cursor between ticks (stripped at finish). **Rejected:** storing caption text in agent_steps (breaks D-027).
+
+## D-034 — Build captions have internal caps, separate from rewrite limits (2026-11-09)
+**Decision:** `maxCaptionBatchesPerBuild` 10 + one repair per batch in limits.ts; build captions don't count toward the CLAUDE.md caption-rewrite limits (20 free / 200 paid), which apply to the M5 Rewriter.

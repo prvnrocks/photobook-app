@@ -3,7 +3,7 @@ import "server-only";
 // the explicit user_id filter is for the index, not for security. The AI
 // pipeline section at the bottom uses the admin client (see there).
 import { getCurrentUser } from "@/lib/auth/current-user";
-import { isReplaceableDoc } from "@/lib/book/replaceable";
+import { isAiReplaceableDoc, isReplaceableDoc } from "@/lib/book/replaceable";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Json, Tables } from "@/lib/supabase/database.types";
@@ -195,10 +195,18 @@ export type WriteDocResult =
   | { ok: false; reason: "user_edited" | "conflict" | "not_found" };
 
 /**
- * Writes an AI / rebuilt album only when the current doc may be replaced
- * (D-018): `{}` or a draft with meta.userEdited !== true (isReplaceableDoc).
+ * Which "may this doc be replaced?" rule applies (D-031):
+ * - "ai" (default, safe side): AI runs — isAiReplaceableDoc (not user-edited AND no user captions).
+ * - "relayout": the free "Update album" (D-028) — isReplaceableDoc; it keeps user captions itself.
+ */
+export type WriteDocGuard = "ai" | "relayout";
+
+/**
+ * Writes an AI / rebuilt / re-laid-out album only when the current doc may be replaced
+ * (D-018, D-031): `{}` or a draft with meta.userEdited !== true, and — for guard "ai" — no
+ * caption with source "user".
  *   1. read doc + updated_at (admin);
- *   2. not replaceable → user_edited; updated_at ≠ expected → conflict;
+ *   2. not replaceable (per guard) → user_edited; updated_at ≠ expected → conflict;
  *   3. UPDATE … WHERE id AND updated_at = expected (optimistic lock — the
  *      books_set_updated_at trigger bumps it on every write), 0 rows → conflict.
  * So an edit landing between the read and the write is never clobbered.
@@ -208,7 +216,9 @@ export async function writeDocIfReplaceable(
   doc: Json,
   pageCount: number,
   expected: { updatedAt: string },
+  options: { guard?: WriteDocGuard } = {},
 ): Promise<WriteDocResult> {
+  const replaceable = options.guard === "relayout" ? isReplaceableDoc : isAiReplaceableDoc;
   if (!isUuid(bookId)) return { ok: false, reason: "not_found" };
   const admin = createAdminClient();
 
@@ -219,7 +229,7 @@ export async function writeDocIfReplaceable(
     .maybeSingle();
   if (readError) throw new BooksQueryError("load book doc", readError.code);
   if (!current) return { ok: false, reason: "not_found" };
-  if (!isReplaceableDoc(current.doc)) return { ok: false, reason: "user_edited" };
+  if (!replaceable(current.doc)) return { ok: false, reason: "user_edited" };
   if (current.updated_at !== expected.updatedAt) return { ok: false, reason: "conflict" };
 
   const { data, error } = await admin

@@ -10,8 +10,8 @@
 // Photo ids are short aliases ("p12") in prompts and outputs (D-023); code maps them back.
 
 import { z } from "zod";
-import { BOOK_TITLE_MAX_CODE_POINTS } from "@/lib/book/options";
-import { clipCodePoints, clipText } from "@/lib/text/clip";
+import { BOOK_TITLE_MAX_CODE_POINTS, CAPTION_LANGS, TONES, type CaptionLang } from "@/lib/book/options";
+import { clipCodePoints, clipText, hasLoneSurrogate } from "@/lib/text/clip";
 
 // ---------------------------------------------------------------------------- shared enums
 
@@ -38,6 +38,8 @@ export const DropReasonSchema = z.enum(DROP_REASONS);
 export const AI_TEXT_LIMITS = {
   description: 200,
   chapterTitle: 80,
+  /** Caption Writer chapter heading (fits the 80-unit chapter title in the book doc). */
+  heading: 60,
   dateLabel: 40,
   place: 80,
   subtitle: 120,
@@ -189,7 +191,7 @@ export const MomentCaptionsAiSchema = z.object({
 export const MomentCaptionsStrictSchema = z
   .object({
     momentId,
-    heading: storedText(AI_TEXT_LIMITS.chapterTitle),
+    heading: storedText(AI_TEXT_LIMITS.heading),
     pageCaptions: z.array(
       z.object({ pageIndex: int(0, 999), text: storedText(AI_TEXT_LIMITS.caption) }),
     ),
@@ -201,6 +203,21 @@ export const MomentCaptionsStrictSchema = z
 
 export type MomentCaptionsAi = z.infer<typeof MomentCaptionsAiSchema>;
 export type MomentCaptions = z.infer<typeof MomentCaptionsStrictSchema>;
+
+/** One Caption Writer call covers consecutive moments (D-029: ≤ 12 captionable pages per call). */
+export const CaptionBatchAiSchema = z.object({ moments: z.array(MomentCaptionsAiSchema) });
+
+export const CaptionBatchStrictSchema = z
+  .object({ moments: z.array(MomentCaptionsStrictSchema).min(1).max(100) })
+  .refine((b) => uniqueBy(b.moments, (m) => m.momentId), { message: "duplicate momentId", path: ["moments"] });
+
+export type CaptionBatchAi = z.infer<typeof CaptionBatchAiSchema>;
+export type CaptionBatch = z.infer<typeof CaptionBatchStrictSchema>;
+
+/** Stable key for one caption: "m3:0" (page caption) or "m3:heading". Used by caption-check + logs. */
+export function captionKey(momentId: string, pageIndex: number | "heading"): string {
+  return `${momentId}:${pageIndex}`;
+}
 
 /** Whitespace word count (works for English and Arabic) — quotes must be ≤ 18 words (M4 check). */
 export function wordCount(s: string): number {
@@ -239,3 +256,139 @@ export const CritiqueStrictSchema = z.object({
 
 export type CritiqueAi = z.infer<typeof CritiqueAiSchema>;
 export type Critique = z.infer<typeof CritiqueStrictSchema>;
+
+// ---------------------------------------------------------------------------- ⑥ User memory (M4)
+// `user_memory.prefs` (docs/AI-AGENTS.md → UserMemoryUpdate, D-032). Only what the user typed or
+// chose — never face data or guessed identities. Lenient coercion lives in src/lib/ai/memory.ts
+// (sanitizeMemory); this schema is the strict shape that sanitizeMemory always produces.
+
+export const CAPTION_LENGTHS = ["short", "medium", "long"] as const;
+export type CaptionLength = (typeof CAPTION_LENGTHS)[number];
+
+export const USER_MEMORY_LIMITS = {
+  knownNames: 20,
+  knownNameCodePoints: 40,
+  avoid: 10,
+  avoidCodePoints: 60,
+} as const;
+
+const cpString = (max: number) =>
+  z
+    .string()
+    .min(1)
+    .refine((v) => Array.from(v).length <= max && !hasLoneSurrogate(v), { message: `at most ${max} code points` });
+
+export const UserMemorySchema = z.object({
+  v: z.literal(1),
+  tonePreference: z.enum(TONES).optional(),
+  captionLength: z.enum(CAPTION_LENGTHS).optional(),
+  language: z.enum(CAPTION_LANGS).optional(),
+  knownNames: z.array(cpString(USER_MEMORY_LIMITS.knownNameCodePoints)).max(USER_MEMORY_LIMITS.knownNames).optional(),
+  avoid: z.array(cpString(USER_MEMORY_LIMITS.avoidCodePoints)).max(USER_MEMORY_LIMITS.avoid).optional(),
+  /** Where a learned value came from (shown in /settings). */
+  sources: z
+    .object({
+      tone: z.literal("explicit").optional(),
+      captionLength: z.literal("user_captions").optional(),
+    })
+    .optional(),
+});
+
+export type UserMemory = z.infer<typeof UserMemorySchema>;
+
+// ---------------------------------------------------------------------------- text-free log projections
+// agent_steps.output must never contain caption text, headings or critique detail (D-027): those
+// are user-derived content. These projections keep only ids, counts, enums and numbers. They accept
+// the loose AI shape too (logging a rejected output), so ids are re-checked and non-ids dropped.
+
+type LooseCaptionBatch = {
+  moments: ReadonlyArray<{
+    momentId: string;
+    heading: string;
+    pageCaptions: ReadonlyArray<{ pageIndex: number; text: string }>;
+  }>;
+};
+
+const safeMomentId = (id: unknown): string | null =>
+  typeof id === "string" && MOMENT_ID_RE.test(id) ? id : null;
+const safeIndex = (n: unknown): number | null =>
+  typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 999 ? n : null;
+
+export type CaptionLogOutput = {
+  lang: CaptionLang;
+  momentCount: number;
+  captionCount: number;
+  moments: Array<{
+    momentId: string | null;
+    headingWords: number;
+    pages: Array<{ pageIndex: number | null; words: number; issues?: string[] }>;
+    headingIssues?: string[];
+  }>;
+};
+
+/**
+ * Log-safe view of a Caption Writer output: ids, word counts, lang and (optionally) pre-check
+ * issue codes keyed by captionKey(). Never includes caption text or headings.
+ */
+export function captionLogOutput(
+  batch: LooseCaptionBatch,
+  lang: CaptionLang,
+  issues?: ReadonlyMap<string, ReadonlyArray<{ code: string }>>,
+): CaptionLogOutput {
+  const codes = (key: string | null) => {
+    const list = key ? issues?.get(key) : undefined;
+    return list && list.length ? list.map((i) => i.code) : undefined;
+  };
+  const moments = batch.moments.map((m) => {
+    const momentId = safeMomentId(m.momentId);
+    const headingIssues = codes(momentId && captionKey(momentId, "heading"));
+    return {
+      momentId,
+      headingWords: wordCount(typeof m.heading === "string" ? m.heading : ""),
+      pages: m.pageCaptions.map((p) => {
+        const pageIndex = safeIndex(p.pageIndex);
+        const pageIssues = codes(momentId !== null && pageIndex !== null ? captionKey(momentId, pageIndex) : null);
+        return {
+          pageIndex,
+          words: wordCount(typeof p.text === "string" ? p.text : ""),
+          ...(pageIssues ? { issues: pageIssues } : {}),
+        };
+      }),
+      ...(headingIssues ? { headingIssues } : {}),
+    };
+  });
+  return {
+    lang,
+    momentCount: moments.length,
+    captionCount: moments.reduce((n, m) => n + m.pages.length, 0),
+    moments,
+  };
+}
+
+type LooseCritique = {
+  score: number;
+  issues: ReadonlyArray<{ type: string; pageIndex: number | null; fix: string; detail?: string }>;
+};
+
+export type CritiqueLogOutput = {
+  score: number | null;
+  issueCount: number;
+  issues: Array<{ type: string | null; pageIndex: number | null; fix: string | null }>;
+};
+
+const inList = <T extends string>(list: readonly T[], v: unknown): T | null =>
+  typeof v === "string" && (list as readonly string[]).includes(v) ? (v as T) : null;
+
+/** Log-safe view of a Critique: score, issue types, pageIndex and fix enums — never `detail`. */
+export function critiqueLogOutput(c: LooseCritique): CritiqueLogOutput {
+  const issues = c.issues.map((i) => ({
+    type: inList(CRITIQUE_ISSUE_TYPES, i.type),
+    pageIndex: safeIndex(i.pageIndex),
+    fix: inList(CRITIQUE_FIXES, i.fix),
+  }));
+  return {
+    score: typeof c.score === "number" && Number.isFinite(c.score) ? c.score : null,
+    issueCount: issues.length,
+    issues,
+  };
+}

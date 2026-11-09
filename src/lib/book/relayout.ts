@@ -6,7 +6,8 @@
 // 1. Removal: every slot photo that is no longer kept (dropped, deleted, or a repeat) is removed.
 //    An affected page gets the best page layout for the photos left on it (bestPageLayout — same
 //    fitting as prunePlan; photo order and crops kept; caption kept only when source "user" and
-//    the new layout has a caption area), or is dropped when empty. A chapter that loses all its
+//    the new layout has a caption area — a page with a user caption prefers layouts that have
+//    one, D-031), or is dropped when empty. A chapter that loses all its
 //    pages is dropped. Untouched pages are returned as-is (layout, crops, captions, ids).
 // 2. Additions: kept photos not on any page and not the cover go to the chapter whose time range
 //    (min..max of its current photos) contains them (first in doc order); else the nearest dated
@@ -156,7 +157,12 @@ export function relayoutDoc(doc: BookDoc, photos: readonly RelayoutPhoto[], opts
     if (page.chapterId !== null) touched.add(page.chapterId);
     if (left.length === 0) continue;
 
-    const layoutId = bestPageLayout(left.map((s) => orient(s.photoId as string)));
+    // A page with the user's caption re-fits onto a layout with a caption area when one exists,
+    // so Update album never loses the user's words (D-031).
+    const layoutId = bestPageLayout(
+      left.map((s) => orient(s.photoId as string)),
+      { preferCaption: page.caption?.source === "user" },
+    );
     if (layoutId) {
       pages.push(refit(page, layoutId, left));
       continue;

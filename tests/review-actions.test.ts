@@ -187,12 +187,30 @@ describe("updateAlbumAction — success paths", () => {
     expect(id).toBe(BOOK);
     expect(pageCount).toBe(2);
     expect(lock).toEqual({ updatedAt: T0 });
+    expect(mocks.writeDocIfReplaceable.mock.calls[0][4]).toEqual({ guard: "relayout" });
     const doc = writtenDoc();
     expect(parseBookDoc(doc).ok).toBe(true);
     expect(doc.meta).toEqual({ generator: "ai", generatorVersion: 2, runId: RUN, userEdited: false });
     expect(doc.pages.flatMap((p) => p.slots.map((s) => s.photoId))).toEqual(["a1", "a3"]);
     expect(mocks.revalidatePath).toHaveBeenCalledWith(`/books/${BOOK}/review`);
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/dashboard");
+  });
+
+  it("album with user captions (D-031) → still updated with the relayout guard, user captions kept", async () => {
+    const userCap = (text: string) => ({ text, font: "Playfair" as const, align: "center" as const, source: "user" as const });
+    const doc0 = aiDoc();
+    doc0.pages[0] = { ...doc0.pages[0], caption: userCap("Untouched page, my words") };
+    doc0.pages[1] = { ...doc0.pages[1], caption: userCap("Refitted page, my words") };
+    mocks.getMyBook.mockResolvedValue({ id: BOOK, doc: doc0 });
+    mocks.getBookForRun.mockResolvedValue(book(doc0));
+    mocks.listPhotosForCuration.mockResolvedValue([ROWS[0], row("a2", "2026-10-12T11:00:00", "dropped"), ROWS[2]]);
+    expect(await updateAlbumAction(BOOK)).toEqual({ ok: true, changed: true, pages: 2 });
+    expect(mocks.writeDocIfReplaceable).toHaveBeenCalledTimes(1);
+    expect(mocks.writeDocIfReplaceable.mock.calls[0][4]).toEqual({ guard: "relayout" });
+    const doc = writtenDoc();
+    expect(doc.pages[0]).toEqual(doc0.pages[0]);
+    expect(doc.pages[1].slots.map((s) => s.photoId)).toEqual(["a3"]);
+    expect(doc.pages[1].caption).toEqual(userCap("Refitted page, my words")); // one-portrait has a caption area
   });
 
   it("newly kept photo → added", async () => {

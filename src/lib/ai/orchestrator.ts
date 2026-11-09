@@ -43,7 +43,7 @@ import {
   type Occasion,
   type Tone,
 } from "@/lib/book/options";
-import { docOrigin, isEmptyDoc, isReplaceableDoc } from "@/lib/book/replaceable";
+import { docOrigin, isAiReplaceableDoc, isEmptyDoc } from "@/lib/book/replaceable";
 import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import type { BookDoc } from "@/lib/book/types";
 import * as agentRunsDb from "@/lib/db/agent-runs";
@@ -153,7 +153,9 @@ export function defaultDeps(): OrchestratorDeps {
   return {
     getBookForRun: booksDb.getBookForRun,
     setBookAiStatus: booksDb.setBookAiStatus,
-    writeDocIfReplaceable: booksDb.writeDocIfReplaceable,
+    // AI runs always use the "ai" guard: never overwrite a doc with user captions (D-031).
+    writeDocIfReplaceable: (bookId, doc, pageCount, expected) =>
+      booksDb.writeDocIfReplaceable(bookId, doc, pageCount, expected, { guard: "ai" }),
     listPhotosForCuration: photosDb.listPhotosForCuration,
     writeCuration: photosDb.writeCuration,
     loadThumbBase64: photosDb.loadThumbBase64,
@@ -555,7 +557,7 @@ function pushFailure(c: RunCursor, code: string): void {
 export async function startRun(input: StartInput, deps: OrchestratorDeps = defaultDeps()): Promise<StartResult> {
   const book = await deps.getBookForRun(input.bookId);
   if (!book || book.user_id !== input.userId) return { ok: false, error: "not_found" };
-  if (!isReplaceableDoc(book.doc)) return { ok: false, error: "user_edited" };
+  if (!isAiReplaceableDoc(book.doc)) return { ok: false, error: "user_edited" }; // D-018 + D-031
 
   const aiMode = deps.resolveMode();
   const transport = aiMode === "off" ? null : deps.transportFor(aiMode);
