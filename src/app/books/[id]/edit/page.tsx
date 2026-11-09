@@ -7,6 +7,7 @@ import { getCurrentUser } from "@/lib/auth/current-user";
 import { getEditorData } from "@/lib/db/editor";
 import { editorRedirect, toEditorShellData } from "@/lib/editor/page-data";
 import { cn } from "@/lib/utils";
+import { finishEditingAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -48,5 +49,7 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
     );
   }
 
-  return <EditorShell data={shell} />;
+  // Header "Done": flush saves client-side, then Memory Keeper + redirect (T12/T13).
+  const finish = finishEditingAction.bind(null, data.book.id);
+  return <EditorShell data={shell} finish={finish} />;
 }

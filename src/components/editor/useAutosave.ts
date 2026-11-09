@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { BookDoc } from "@/lib/book/types";
 import { AutosaveScheduler, type AutosaveStatus } from "@/lib/editor/autosave";
+import { drainSaves } from "@/lib/editor/done";
 import type { EditorTransport } from "@/lib/editor/transport";
 
 export type SaveState = AutosaveStatus | { kind: "readOnly" };
@@ -21,7 +22,13 @@ export function useAutosave(opts: {
   baseRev: number | null;
   enabled: boolean;
   transport: EditorTransport;
-}): { status: SaveState; flush: () => void; hasUnsaved: () => boolean } {
+}): {
+  status: SaveState;
+  flush: () => void;
+  hasUnsaved: () => boolean;
+  /** Editor Done (T12): send what's pending now and wait for it; resolves with the final state. */
+  settle: () => Promise<SaveState>;
+} {
   const { doc, baseRev, enabled, transport } = opts;
   const [status, setStatus] = useState<SaveState>(() =>
     enabled && baseRev !== null ? { kind: "idle" } : { kind: "readOnly" },
@@ -71,5 +78,9 @@ export function useAutosave(opts: {
 
   const flush = useCallback(() => void scheduler?.flush(), [scheduler]);
   const hasUnsaved = useCallback(() => scheduler?.hasUnsaved() ?? false, [scheduler]);
-  return { status, flush, hasUnsaved };
+  const settle = useCallback(
+    async (): Promise<SaveState> => (scheduler ? drainSaves(scheduler) : { kind: "readOnly" }),
+    [scheduler],
+  );
+  return { status, flush, hasUnsaved, settle };
 }

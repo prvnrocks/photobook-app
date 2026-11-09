@@ -1,6 +1,8 @@
 // Pure helpers for the keep/drop review screen (M3). Safe on client and server: no imports
 // from src/lib/ai or src/lib/db (those are server-only); values are mirrored here as strings.
 
+import { docOrigin, hasUserCaptions } from "@/lib/book/replaceable";
+
 /** Photo row as the review UI needs it (subset of db ReviewPhoto, never AI descriptions). */
 export type ReviewTilePhoto = {
   id: string;
@@ -373,6 +375,26 @@ export function updateAlbumOutcome(bookId: string, result: UpdateAlbumResult | n
 }
 
 export const CONTINUE_UNSYNCED_NOTE = "Your changes aren't in the album yet — tap Update album.";
+
+/**
+ * The album has user edits (editor save → meta.userEdited, or any caption with source "user").
+ * Then the review screen offers only "Continue in the editor" — no Update album, no Rebuild
+ * with AI (D-037 #2). Unparsable docs count as edited (docOrigin's safe side).
+ */
+export function albumEditedByUser(doc: unknown): boolean {
+  return docOrigin(doc).userEdited || hasUserCaptions(doc);
+}
+
+export const EDITED_ALBUM_COPY = {
+  title: "You've edited this album — continue in the editor",
+  body: "Photo choices here no longer change the album. Add or swap photos in the editor.",
+  button: "Continue in the editor",
+} as const;
+
+/** The editor route for a book (review Continue and the edited-album button). */
+export function editorHref(bookId: string): string {
+  return `/books/${bookId}/edit`;
+}
 
 /** Hint under the secondary "Rebuild with AI" button. */
 export function rebuildHint(left: number | null): string {

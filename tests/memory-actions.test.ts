@@ -147,7 +147,7 @@ describe("confirmAlbumAction", () => {
 
   it("admin read owned by someone else (belt and braces) → no memory write", async () => {
     mocks.getBookForRun.mockResolvedValue(runBook({ user_id: OTHER }));
-    await expectRedirect(confirmAlbumAction(BOOK), "/dashboard");
+    await expectRedirect(confirmAlbumAction(BOOK), `/books/${BOOK}/edit`);
     expect(mocks.getUserMemoryAdmin).not.toHaveBeenCalled();
     expect(mocks.upsertUserMemory).not.toHaveBeenCalled();
   });
@@ -157,7 +157,7 @@ describe("confirmAlbumAction", () => {
       prefs: { v: 1, junk: "x", knownNames: ["Sara", "sara"] },
       updatedAt: UPDATED,
     });
-    await expectRedirect(confirmAlbumAction(BOOK), "/dashboard");
+    await expectRedirect(confirmAlbumAction(BOOK), `/books/${BOOK}/edit`);
     expect(mocks.getUserMemoryAdmin).toHaveBeenCalledWith(USER);
     expect(mocks.upsertUserMemory).toHaveBeenCalledTimes(1);
     const [uid, prefs] = mocks.upsertUserMemory.mock.calls[0];
@@ -186,7 +186,7 @@ describe("confirmAlbumAction", () => {
       },
       updatedAt: UPDATED,
     });
-    await expectRedirect(confirmAlbumAction(BOOK), "/dashboard");
+    await expectRedirect(confirmAlbumAction(BOOK), `/books/${BOOK}/edit`);
     expect(mocks.upsertUserMemory).not.toHaveBeenCalled();
   });
 
@@ -194,7 +194,7 @@ describe("confirmAlbumAction", () => {
     const d = doc();
     d.pages.forEach((p) => (p.caption = caption("A calm day by the sea", "ai")));
     mocks.getBookForRun.mockResolvedValue(runBook({ doc: d }));
-    await expectRedirect(confirmAlbumAction(BOOK), "/dashboard");
+    await expectRedirect(confirmAlbumAction(BOOK), `/books/${BOOK}/edit`);
     const prefs = mocks.upsertUserMemory.mock.calls[0][1];
     expect(prefs).not.toHaveProperty("captionLength");
   });
@@ -205,7 +205,7 @@ describe("confirmAlbumAction", () => {
     ["upsertUserMemory", () => mocks.upsertUserMemory.mockRejectedValue(Object.assign(new Error(SECRET), { code: "too_large" }))],
   ])("%s error → swallowed, still redirects, logs a code only", async (_name, arrange) => {
     arrange();
-    await expectRedirect(confirmAlbumAction(BOOK), "/dashboard");
+    await expectRedirect(confirmAlbumAction(BOOK), `/books/${BOOK}/edit`);
     const text = loggedText();
     expect(text).toMatch(/memory update failed \((PGRST301|42501|too_large)\)/);
     expect(text).not.toContain(SECRET);
@@ -221,7 +221,7 @@ describe("confirmAlbumAction", () => {
   });
 
   it("success logs nothing", async () => {
-    await expectRedirect(confirmAlbumAction(BOOK), "/dashboard");
+    await expectRedirect(confirmAlbumAction(BOOK), `/books/${BOOK}/edit`);
     expect(mocks.upsertUserMemory).toHaveBeenCalledTimes(1);
     expect(logs.every((s) => s.mock.calls.length === 0)).toBe(true);
   });

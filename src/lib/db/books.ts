@@ -14,8 +14,13 @@ import { isUuid } from "@/lib/uuid";
 
 export type BookListItem = Pick<
   Tables<"books">,
-  "id" | "title" | "updated_at" | "page_count" | "published_at" | "is_paid"
->;
+  "id" | "title" | "updated_at" | "page_count" | "published_at" | "is_paid" | "ai_status"
+> & {
+  /** Upload-finished photos (upload_state = 'ready'); routes empty books to upload vs build. */
+  photo_count: number;
+  /** doc.meta.userEdited === true (read as a JSON path, the doc itself is not loaded). */
+  user_edited: boolean;
+};
 
 export type MyBook = Pick<
   Tables<"books">,
@@ -55,7 +60,11 @@ export class BooksQueryError extends Error {
   }
 }
 
-/** Books owned by the current user, most recently edited first. [] if signed out. */
+/**
+ * Books owned by the current user, most recently edited first. [] if signed out.
+ * Also returns what the dashboard card needs to pick its route (src/lib/dashboard/card-target.ts):
+ * ai_status, the count of ready photos (embedded count, filtered) and doc.meta.userEdited.
+ */
 export async function listMyBooks(): Promise<BookListItem[]> {
   const user = await getCurrentUser();
   if (!user) return [];
@@ -63,12 +72,35 @@ export async function listMyBooks(): Promise<BookListItem[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("books")
-    .select("id, title, updated_at, page_count, published_at, is_paid")
+    .select(
+      "id, title, updated_at, page_count, published_at, is_paid, ai_status, user_edited:doc->meta->userEdited, photos(count)",
+    )
     .eq("user_id", user.id)
+    .eq("photos.upload_state", "ready")
     .order("updated_at", { ascending: false });
 
   if (error) throw new BooksQueryError("list books", error.code);
-  return data;
+  return (data ?? []).map((row) => toBookListItem(row as unknown as BookListRow));
+}
+
+type BookListRow = Omit<BookListItem, "photo_count" | "user_edited"> & {
+  user_edited: unknown;
+  photos: { count: number }[] | null;
+};
+
+function toBookListItem(row: BookListRow): BookListItem {
+  const count = Array.isArray(row.photos) ? row.photos[0]?.count : undefined;
+  return {
+    id: row.id,
+    title: row.title,
+    updated_at: row.updated_at,
+    page_count: row.page_count,
+    published_at: row.published_at,
+    is_paid: row.is_paid,
+    ai_status: row.ai_status,
+    photo_count: typeof count === "number" && Number.isFinite(count) ? count : 0,
+    user_edited: row.user_edited === true,
+  };
 }
 
 /**

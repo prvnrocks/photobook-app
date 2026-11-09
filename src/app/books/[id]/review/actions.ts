@@ -109,7 +109,8 @@ export async function updateAlbumAction(bookId: string): Promise<UpdateAlbumResu
  * Review "Continue" (form action, D-032): the user accepts the album. Ownership is checked under
  * RLS; then — best effort — the Memory Keeper learns tone / caption language / caption length
  * from this book and saves it. Memory failures never block the user: they are logged with an
- * error code only (never prefs, captions or ids) and the user still lands on /dashboard.
+ * error code only (never prefs, captions or ids) and the user still lands in the editor
+ * (/books/[id]/edit, M5 Task 12 — the editor itself redirects to build/upload when needed).
  */
 export async function confirmAlbumAction(bookId: string): Promise<void> {
   const user = await getCurrentUser();
@@ -129,7 +130,7 @@ export async function confirmAlbumAction(bookId: string): Promise<void> {
 
   await learnFromBook(user.id, mine.id, "review");
   revalidatePath("/dashboard");
-  redirect("/dashboard");
+  redirect(`/books/${mine.id}/edit`);
 }
 
 function toRelayoutPhoto(r: CurationPhotoRow): RelayoutPhoto & { dateSource: "exif" | "file" | null } {

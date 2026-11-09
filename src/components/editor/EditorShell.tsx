@@ -13,8 +13,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canRedo, canUndo } from "@/lib/editor/store";
 import { httpEditorTransport, type EditorTransport } from "@/lib/editor/transport";
+import type { FinishResult } from "@/lib/editor/done";
 import type { EditorShellData } from "@/lib/editor/types";
 import { EditorContext, type EditorContextValue } from "./editor-context";
+import { EditorDoneButton } from "./EditorDoneButton";
+import { EditorToastHost } from "./EditorToast";
 import { EditorPanelHost, EditorToolbar } from "./EditorToolbar";
 import { PageCarousel } from "./PageCarousel";
 import { PageStrip } from "./PageStrip";
@@ -33,6 +36,8 @@ export type EditorShellProps = {
   tools?: readonly EditorTool[];
   /** Back link target (default /dashboard). */
   backHref?: string;
+  /** Header "Done" (T12): bound finishEditingAction. Absent → Done saves, then goes to backHref. */
+  finish?: () => Promise<FinishResult>;
 };
 
 function isTypingTarget(t: EventTarget | null): boolean {
@@ -40,7 +45,7 @@ function isTypingTarget(t: EventTarget | null): boolean {
   return t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT";
 }
 
-export function EditorShell({ data, transport: transportProp, tools: toolsProp, backHref = "/dashboard" }: EditorShellProps) {
+export function EditorShell({ data, transport: transportProp, tools: toolsProp, backHref = "/dashboard", finish }: EditorShellProps) {
   const [transport] = useState(() => transportProp ?? httpEditorTransport(data.book.id));
   const saveEnabled = data.canSave && data.docRev !== null;
   const { state, actions } = useEditorStore(data.doc, { readOnly: !saveEnabled });
@@ -166,6 +171,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
           >
             <Redo2 className="size-5" aria-hidden="true" />
           </button>
+          <EditorDoneButton bookId={data.book.id} settle={autosave.settle} finish={finish} fallbackHref={backHref} />
         </header>
 
         <SaveBanner status={autosave.status} bookId={data.book.id} />
@@ -177,6 +183,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
             <EditorToolbar tools={shown} />
           </main>
           <EditorPanelHost tool={active} />
+          <EditorToastHost />
         </div>
       </div>
     </EditorContext.Provider>

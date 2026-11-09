@@ -1,7 +1,8 @@
 "use client";
 
 // Review screen body (M3 + D-028): grid, sticky "Update album" bar, secondary AI rebuild and the
-// Continue form (confirmAlbumAction: Memory Keeper + redirect, D-032) / Add photos link. Tracks which keep / drop choices aren't in the album yet
+// Continue form (confirmAlbumAction: Memory Keeper + redirect to the editor, D-032) / Add photos
+// link. A user-edited album shows only "Continue in the editor" (D-037 #2). Tracks which keep / drop choices aren't in the album yet
 // (unsyncedPhotoIds over the grid's optimistic state and the album's photo ids from the server).
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -13,6 +14,8 @@ import { UpdateAlbumBar } from "@/components/review/UpdateAlbumBar";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   CONTINUE_UNSYNCED_NOTE,
+  EDITED_ALBUM_COPY,
+  editorHref,
   unsyncedPhotoIds,
   updateAlbumOutcome,
   type RebuildVariant,
@@ -32,7 +35,10 @@ type ReviewBodyProps = {
   updateAlbum: () => Promise<UpdateAlbumResult>;
   /** Photo ids used by the album (pages + cover); empty = no album yet. */
   albumPhotoIds: string[];
-  /** Album edited by the user → Update album never runs on it. */
+  /**
+   * Album edited by the user (albumEditedByUser) → no Update album, no Rebuild with AI, and
+   * "Continue in the editor" instead of Continue (D-037 #2).
+   */
   userEdited: boolean;
   /** A build is running → no Update album, no rebuild. */
   building: boolean;
@@ -80,7 +86,7 @@ export function ReviewBody({
     }).filter((id) => settled.get(id) !== status.get(id));
   }, [current, albumIds, userEdited, building, settled]);
   const outOfSync = unsynced.length > 0;
-  const showBar = outOfSync && photos.length > 0;
+  const showBar = outOfSync && photos.length > 0 && !userEdited;
 
   // An error belongs to the changes it was about; drop it once nothing is out of sync.
   useEffect(() => {
@@ -132,7 +138,22 @@ export function ReviewBody({
       {captions}
 
       <div className="flex flex-col gap-3 border-t pt-4">
-        {rebuild && photos.length > 0 ? <RebuildButton bookId={bookId} variant={rebuild.variant} rebuildsLeft={rebuild.rebuildsLeft} /> : null}
+        {userEdited && !building ? (
+          <div className="flex flex-col gap-3 rounded-xl border bg-muted/50 p-4" data-testid="review-edited">
+            <p className="text-base font-medium">{EDITED_ALBUM_COPY.title}</p>
+            <p className="text-sm text-muted-foreground">{EDITED_ALBUM_COPY.body}</p>
+            <Link
+              href={editorHref(bookId)}
+              className={cn(buttonVariants({ variant: "default" }), "h-12 w-full text-base")}
+              data-testid="review-open-editor"
+            >
+              {EDITED_ALBUM_COPY.button}
+            </Link>
+          </div>
+        ) : null}
+        {rebuild && photos.length > 0 && !userEdited ? (
+          <RebuildButton bookId={bookId} variant={rebuild.variant} rebuildsLeft={rebuild.rebuildsLeft} />
+        ) : null}
         {showBar ? (
           <p
             id="review-continue-note"
@@ -142,9 +163,11 @@ export function ReviewBody({
             {CONTINUE_UNSYNCED_NOTE}
           </p>
         ) : null}
-        <form action={confirm} className="flex flex-col">
-          <ContinueButton outline={showBar} describedBy={showBar ? "review-continue-note" : undefined} />
-        </form>
+        {userEdited && !building ? null : (
+          <form action={confirm} className="flex flex-col">
+            <ContinueButton outline={showBar} describedBy={showBar ? "review-continue-note" : undefined} />
+          </form>
+        )}
         <Link
           href={`/books/${bookId}/upload`}
           className={cn(buttonVariants({ variant: "ghost" }), "h-11 w-full text-base")}

@@ -16,6 +16,7 @@ import { getMyProfile } from "@/lib/db/profiles";
 import { getLayout } from "@/lib/layouts";
 import {
   aiPicked,
+  albumEditedByUser,
   BANNER_COPY,
   captionsPreviewModel,
   captionsPreviewOf,
@@ -55,7 +56,9 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   // Captions preview: chapter titles/dates + caption text/source per page — no photo ids or URLs.
   const captionsPreview = captionsPreviewOf(book.doc, (layoutId) => !!getLayout(layoutId)?.caption);
   const missingCaptions = captionsPreviewModel(captionsPreview)?.missing ?? 0;
-  const { generator, userEdited } = docOrigin(book.doc);
+  const { generator } = docOrigin(book.doc);
+  // Editor saves / user captions → review offers only "Continue in the editor" (D-037 #2).
+  const userEdited = albumEditedByUser(book.doc);
   // Partial runs: the banner depends on whether the AI album was used and captions are missing.
   const banner = reviewBanner({ activeRun: !!activeRun, aiAvailable, aiStatus, generator, missingCaptions });
   const variant = rebuildVariant({ aiAvailable, aiStatus });

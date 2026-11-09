@@ -1,6 +1,7 @@
-// The signed-in user's books as tappable cards (D-017). A book with an album (page_count > 0 —
-// set whenever a doc with pages is saved) opens the review screen; an empty one opens upload.
+// The signed-in user's books as tappable cards (D-017). Each card opens the step the book is at
+// (upload / build / review / edit) — rules in src/lib/dashboard/card-target.ts (M5 Task 12).
 import Link from "next/link";
+import { bookCardHref } from "@/lib/dashboard/card-target";
 import type { BookListItem } from "@/lib/db/books";
 
 const dateFormat = new Intl.DateTimeFormat("en-GB", {
@@ -28,7 +29,7 @@ export function BookList({ books }: { books: BookListItem[] }) {
       {books.map((book) => (
         <li key={book.id}>
           <Link
-            href={book.page_count > 0 ? `/books/${book.id}/review` : `/books/${book.id}/upload`}
+            href={bookCardHref(book)}
             className="block min-h-11 rounded-xl border p-4 transition-colors hover:bg-muted/50"
             data-testid="book-card"
           >
