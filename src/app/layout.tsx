@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Cairo, Inter, Tajawal } from "next/font/google";
+import { Cairo, Inter, Playfair_Display, Tajawal } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({
@@ -11,6 +11,13 @@ const inter = Inter({
 const cairo = Cairo({
   variable: "--font-cairo",
   subsets: ["arabic", "latin"],
+  display: "swap",
+});
+
+// Default Latin caption / cover font (src/lib/book/fonts.ts → "Playfair").
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
+  subsets: ["latin"],
   display: "swap",
 });
 
@@ -41,7 +48,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${cairo.variable} ${tajawal.variable}`}
+      className={`${inter.variable} ${cairo.variable} ${tajawal.variable} ${playfair.variable}`}
     >
       <body className="antialiased">{children}</body>
     </html>

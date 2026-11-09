@@ -1,14 +1,97 @@
-// Milestone 5: the single shared page renderer. Editor, flipbook viewer and PDF (/print) all render
-// through this component from the book document JSON. Placeholder until the doc types exist.
+// The single shared page renderer. Editor, flipbook viewer and PDF (/print) all render through
+// this component from the book document JSON. Layout positions are data (src/lib/layouts), all
+// maths lives in src/lib/book/render.ts; this file only maps the render model to markup.
+// No hooks / "use client": works in server components (viewer, print) and client ones (editor).
+
+import type { ReactNode } from "react";
+import { pageRenderModel, type RenderPhotos } from "@/lib/book/render";
+import type { BookDoc, Caption } from "@/lib/book/types";
+import { BookCover } from "./BookCover";
+import { Box, PageFrame, PhotoSlot, type BookRenderMode } from "./PageParts";
+
+export type { BookRenderMode } from "./PageParts";
+export type { RenderPhoto, RenderPhotos } from "@/lib/book/render";
 
 export type BookPageProps = {
-  // Placeholder: replaced with the real book document + page types in a later milestone.
-  doc?: unknown;
-  pageIndex?: number;
-  mode?: "edit" | "view" | "print";
+  doc: BookDoc;
+  /** Index into `doc.pages`, or "cover". */
+  page: number | "cover";
+  mode: BookRenderMode;
+  /** photoId → signed web URL + stored pixel size (original's dims; aspect is what matters here). */
+  photos: RenderPhotos;
+  /** Book caption language (books.caption_lang, default "en"): lang/font for text without letters. */
+  captionLang?: string;
+  /** Edit mode only: rendered inside each photo slot (absolute-position it with `inset-0`). */
+  renderSlotOverlay?: (slotIdx: number) => ReactNode;
+  /**
+   * Edit mode only: replaces the static caption inside the layout's caption area (called for
+   * every layout that HAS a caption area, with null when the page has no caption yet).
+   */
+  renderCaption?: (caption: Caption | null) => ReactNode;
+  className?: string;
+  /** First visible page(s): eager load + high fetch priority. Print mode is always eager. */
+  priority?: boolean;
 };
 
-export function BookPage(props: BookPageProps): null {
-  void props;
-  return null;
+export function BookPage(props: BookPageProps) {
+  const { doc, page, mode, photos, captionLang, renderSlotOverlay, renderCaption, className, priority } = props;
+  if (page === "cover") {
+    return (
+      <BookCover
+        doc={doc}
+        mode={mode}
+        photos={photos}
+        captionLang={captionLang}
+        renderSlotOverlay={renderSlotOverlay}
+        className={className}
+        priority={priority}
+      />
+    );
+  }
+
+  const m = pageRenderModel(doc, page, photos, captionLang);
+  if (!m) {
+    return <PageFrame background={doc.style.background} mode={mode} className={className} data={{ "data-page": "missing" }} />;
+  }
+
+  const c = m.caption;
+  const editCaption = mode === "edit" && renderCaption && c ? renderCaption(c.caption) : null;
+
+  return (
+    <PageFrame
+      background={doc.style.background}
+      mode={mode}
+      className={className}
+      data={{ "data-page": String(page), "data-page-id": m.pageId, "data-layout": m.layoutId }}
+    >
+      {m.slots.map((slot) => (
+        <PhotoSlot
+          key={slot.index}
+          slot={slot}
+          mode={mode}
+          priority={priority}
+          overlay={renderSlotOverlay?.(slot.index)}
+        />
+      ))}
+      {c && (editCaption !== null || c.text) ? (
+        <Box
+          rect={c.rect}
+          className="flex flex-col justify-center overflow-hidden"
+          data={{ "data-caption-area": "true" }}
+        >
+          {editCaption ?? (
+            <p
+              dir="auto"
+              lang={c.lang}
+              className="w-full whitespace-pre-line break-words text-neutral-800"
+              style={{ fontFamily: c.fontFamily, textAlign: c.align, fontSize: "2.6cqw", lineHeight: 1.25 }}
+              data-testid="page-caption"
+            >
+              {c.text}
+            </p>
+          )}
+        </Box>
+      ) : null}
+    </PageFrame>
+  );
 }
