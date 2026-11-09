@@ -78,6 +78,9 @@ class FakeDb {
   bookStatusHistory: string[] = [];
   thumbLoads = 0;
   hangNextWriteCuration = false;
+  /** user_memory.prefs returned by getUserMemory (null = none); "throw" simulates a DB error. */
+  memory: unknown = null;
+  memoryLoads = 0;
   /** Every write outside agent_steps, in order (for "a stale tick writes nothing" checks). */
   writes: string[] = [];
   createCalls: Array<Record<string, unknown>> = [];
@@ -252,7 +255,8 @@ class FakeDb {
         for (const [k, v] of Object.entries(patch)) {
           if (v !== undefined) (r as Record<string, unknown>)[k] = structuredClone(v);
         }
-        expect(JSON.stringify(r.cursor).length).toBeLessThan(65_536);
+        // migration 0800: octet_length(cursor::text) ≤ 262144
+        expect(Buffer.byteLength(JSON.stringify(r.cursor), "utf8")).toBeLessThan(orch.MAX_CURSOR_BYTES);
         expect(JSON.stringify(r.progress).length).toBeLessThan(4_096);
         return true;
       },
@@ -282,6 +286,12 @@ class FakeDb {
           r.total_cost_usd = this.steps.filter((s) => s.runId === id).reduce((n, s) => n + s.costUsd, 0);
         },
       }),
+      getUserMemory: async (userId) => {
+        this.memoryLoads++;
+        if (userId !== USER) return null;
+        if (this.memory === "throw") throw new Error("memory db down");
+        return structuredClone(this.memory);
+      },
       resolveMode: () => mode,
       transportFor: () => transport,
       now: () => this.now,
@@ -402,9 +412,10 @@ describe("orchestrator — full replay run", () => {
     expect(sum).toBeGreaterThan(0);
     expect(run.total_cost_usd).toBeCloseTo(sum, 10);
 
-    // captioning + critiquing are M4: skipped rows, no transport call
-    const skipped = db.steps.filter((s) => s.status === "skipped").map((s) => s.agent);
-    expect(skipped.sort()).toEqual(["caption_writer", "critic"]);
+    // M4: captions + Critic run for real — no skipped rows on an AI album
+    expect(db.steps.filter((s) => s.status === "skipped")).toHaveLength(0);
+    expect(transport.count("caption_writer")).toBeGreaterThan(0);
+    expect(transport.count("critic")).toBe(1);
 
     expect(db.book.ai_status).toBe("done");
     expect(db.bookStatusHistory).toEqual(["analyzing", "planning", "done"]);

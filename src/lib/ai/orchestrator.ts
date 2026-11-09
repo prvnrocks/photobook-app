@@ -11,9 +11,17 @@ import "server-only";
 //               checkpoints after each chunk and returns progress.
 //   getProgress() owner-scoped read for GET /api/ai/runs/[id].
 //
-// States: queued → curating → storytelling → captioning → critiquing → validating → done
-//         (captioning / critiquing are M4: they only log a `skipped` step today)
+// States: queued → curating → storytelling → captioning → critiquing → repairing → validating → done
 //         any unexpected exception → failed (the rule album is written if the book had no doc).
+//
+//   captioning  (M4, D-029) the AI doc is rebuilt from the stored plan (planDocOf — structure frozen
+//               at storytelling), split into Caption Writer batches (captionBatches), sent in waves
+//               (batch 0 alone first: prompt cache). Rule albums: one `skipped` step, no captions.
+//   critiquing  (D-030) captions applied, whole-book pre-check, ONE Critic call, repair plan stored.
+//   repairing   one targeted Caption Writer call per affected batch (never a second round); still
+//               failing → null. A cover swap is decided in code and applied at validating.
+//   validating  prunePlan → planToDoc → captions re-mapped onto pages whose photos are unchanged →
+//               validate → writeDocIfReplaceable (guard 'ai': user captions are never overwritten).
 //
 // Resumability: the cursor (agent_runs.cursor) records the run's alias table, Curator batches,
 // finished batches and Storyteller attempts, so a resumed tick never re-bills finished work.
@@ -30,8 +38,9 @@ import "server-only";
 // runAgentStep retries only within the same bound (SDK retries are off).
 //
 // Privacy (D-027): nothing here logs. Error codes are short code strings; cursor / progress hold
-// ids, counts and codes only — except `cursor.album.plan` (AI titles) between storytelling and
-// validating, which is removed when the run finishes.
+// ids, counts and codes only — except, while the run is going, `cursor.album.plan` (AI titles),
+// `cursor.captions` / `cursor.headings` (AI text) and `cursor.memory` (the user's memory snapshot),
+// all removed when the run finishes (stripCursorText). Progress holds counts only.
 
 import { autolayout, parseTime, type AutoPhoto } from "@/lib/autolayout";
 import {
@@ -59,13 +68,18 @@ import type {
   RunTrigger,
 } from "@/lib/db/agent-runs";
 import * as booksDb from "@/lib/db/books";
+import { getUserMemoryAdmin } from "@/lib/db/memory";
 import type { BookAiStatus, BookForRun, WriteDocResult } from "@/lib/db/books";
 import * as photosDb from "@/lib/db/photos";
 import type { CurationPhotoRow, CurationWrite } from "@/lib/db/photos";
 import type { Json } from "@/lib/supabase/database.types";
 import { curateBatch, needsCuration, CURATOR_PROMPT_VERSION } from "./agents/curator";
+import { writeCaptions, type WriteCaptionsResult } from "./agents/caption-writer";
+import { critiqueBook } from "./agents/critic";
 import { MAX_RETRY_ISSUES, planAlbum } from "./agents/storyteller";
 import { buildBatches } from "./batches";
+import { buildCaptionContext, checkBookCaptions, CAPTION_ISSUE_CODES, type CaptionCheckContext, type CaptionIssue } from "./caption-check";
+import { applyCaptions, batchIndexOfKey, batchIndexOfMoment, captionBatches, type CaptionBatchSpec } from "./captions";
 import { AGENT_TIMEOUT_MS, AI_MODEL, CURATOR_CONCURRENCY, resolveAiMode, type AiMode } from "./client";
 import {
   ensureAtLeastOneKept,
@@ -75,10 +89,22 @@ import {
   type DropReason,
 } from "./fallback";
 import { limitsFor } from "./limits";
+import { isEmptyMemory, sanitizeMemory } from "./memory";
 import { planToDoc, prunePlan } from "./plan-to-doc";
 import { STORYTELLER_PROMPT_VERSION } from "./prompts/storyteller";
+import { momentIdOfKey, pageCaptionKeys, planRepair } from "./repair";
 import type { RetryOptions, StepErrorCode, StepLogger } from "./run-step";
-import { AlbumPlanStrictSchema, MOODS, SCENES, type AlbumPlan } from "./schemas";
+import {
+  AlbumPlanStrictSchema,
+  CRITIQUE_FIXES,
+  CRITIQUE_ISSUE_TYPES,
+  MOMENT_ID_RE,
+  MOODS,
+  SCENES,
+  UserMemorySchema,
+  type AlbumPlan,
+  type UserMemory,
+} from "./schemas";
 import type { StoryAnalysis, StoryBook, StoryPhoto } from "./story";
 import { getTransport } from "./transport-factory";
 import type { AgentName, AgentTransport } from "./transport";
@@ -108,6 +134,17 @@ export const MAX_STORY_ATTEMPTS = 2;
 export const MAX_BATCH_ATTEMPTS = 2;
 /** Transport retries inside one agent step (only if they still fit the lease). */
 export const STEP_RETRIES = 1;
+/** Caption Writer calls per caption batch, incl. calls lost in dead ticks; then the batch stays uncaptioned. */
+export const MAX_CAPTION_ATTEMPTS = 2;
+/** Critic calls per run, incl. calls lost in dead ticks (a failed answer is not retried). */
+export const MAX_CRITIC_ATTEMPTS = 2;
+/**
+ * Soft budget fraction after which no new caption wave / Critic / repair call starts in a tick
+ * that already made a model call (keeps progress frequent; the hard bound is the lease).
+ */
+export const CAPTION_WAVE_CUTOFF = 1;
+/** agent_runs.cursor size check (migration 0800, D-033), in bytes of the JSON text. */
+export const MAX_CURSOR_BYTES = 262_144;
 /** Optimistic-lock conflicts tolerated when saving the doc (each retried on the next tick). */
 export const MAX_WRITE_CONFLICTS = 1;
 export const CURSOR_VERSION = 1;
@@ -139,6 +176,9 @@ export interface OrchestratorDeps {
   /** The book already had a finished live AI run (→ a new "build" is really a rebuild). */
   hasFinishedLiveAiRun(bookId: string): Promise<boolean>;
   stepLogger(runId: string): StepLogger;
+  // memory (D-032)
+  /** user_memory.prefs of the user (raw jsonb, sanitised by the caller), or null. */
+  getUserMemory(userId: string): Promise<unknown>;
   // AI
   resolveMode(): AiMode;
   transportFor(mode: "live" | "replay"): AgentTransport | null;
@@ -167,6 +207,7 @@ export function defaultDeps(): OrchestratorDeps {
     getRunForOwner: agentRunsDb.getRunForOwner,
     hasFinishedLiveAiRun: agentRunsDb.hasFinishedLiveAiRun,
     stepLogger: agentRunsDb.stepLogger,
+    getUserMemory: async (userId) => (await getUserMemoryAdmin(userId))?.prefs ?? null,
     resolveMode: () => resolveAiMode(),
     transportFor: (mode) => getTransport(mode),
     now: () => Date.now(),
@@ -202,6 +243,10 @@ export interface RunProgress {
   batchesDone: number;
   /** Photos that needed analysis but were over the plan's analysed-photo cap (rule-curated). */
   photosCapped: number;
+  /** Pages the Caption Writer was asked to caption in this run (0 for rule albums). Counts only. */
+  captionsTotal: number;
+  /** Of those, pages in finished caption batches (captioned or left empty). Counts only. */
+  captionsDone: number;
 }
 
 export type AdvanceResult =
@@ -222,6 +267,34 @@ export interface ProgressView {
 // Cursor
 
 type AlbumChoice = { kind: "ai"; plan?: AlbumPlan } | { kind: "rule"; reason: string };
+
+/** One caption batch in compact form (the spec is recomputed from the plan each tick). */
+export interface CaptionBatchRef {
+  /** Moment ids in the batch (incl. heading-only moments). */
+  moments: string[];
+  /** Page caption keys ("m2:1"). Step key of batch i = `caption_writer:${i}`. */
+  keys: string[];
+}
+
+/** Critic result kept between critiquing and finish: score + issue types / pages (never `detail`). */
+export interface CursorCritique {
+  score: number;
+  issues: Array<{
+    type: (typeof CRITIQUE_ISSUE_TYPES)[number];
+    pageIndex: number | null;
+    fix: (typeof CRITIQUE_FIXES)[number];
+  }>;
+}
+
+/** One caption the repair round rewrites (codes only). */
+export interface CursorRepairTarget {
+  /** Caption batch whose spec holds the key. Step key `caption_writer:repair:${batch}`. */
+  batch: number;
+  /** captionKey ("m2:1" or "m2:heading"). */
+  key: string;
+  /** Pre-check codes / Critic issue types. */
+  codes: string[];
+}
 
 export interface RunCursor {
   v: typeof CURSOR_VERSION;
@@ -248,6 +321,36 @@ export interface RunCursor {
   writeConflicts: number;
   /** books.ai_status before the run — restored when the run does not replace the doc. */
   prevBookStatus: BookAiStatus;
+
+  // --- M4 (all optional in stored cursors: runs started before M4 parse with these defaults) ---
+  /** Sanitised user_memory snapshot taken when the cursor was created (D-032); null = none. */
+  memory: UserMemory | null;
+  /** Caption batches (compact); null = not planned yet. */
+  captionBatches: CaptionBatchRef[] | null;
+  /** Caption Writer calls reserved per caption batch. Checkpointed BEFORE each call. */
+  captionAttempts: number[];
+  captionBatchesDone: number[];
+  /** Caption batches / Critic / repair calls without a usable answer (→ ai_status partial). */
+  captionFailures: number;
+  /** captionKey → AI caption (passed the pre-check). Stripped at finish. */
+  captions: Record<string, string>;
+  /** momentId → AI heading. Stripped at finish. */
+  headings: Record<string, string>;
+  /** captionKey → pre-check issue codes of captions the batch rejected (codes only). */
+  captionIssues: Record<string, string[]>;
+  captionsDone: boolean;
+  /** Critic calls reserved. Checkpointed BEFORE the call. */
+  criticAttempts: number;
+  critique: CursorCritique | null;
+  critiqueDone: boolean;
+  /** Repair round targets (decided once, at the end of critiquing). */
+  repairTargets: CursorRepairTarget[];
+  /** Repair calls reserved per caption batch (≤ maxCaptionRepairsPerBatch, dead ticks included). */
+  repairAttempts: number[];
+  repairBatchesDone: number[];
+  /** New cover photo id chosen in code (Critic weak_cover), applied at validating. */
+  coverSwap: string | null;
+  repairDone: boolean;
 }
 
 function isObj(v: unknown): v is Record<string, unknown> {
@@ -255,6 +358,65 @@ function isObj(v: unknown): v is Record<string, unknown> {
 }
 const isIntArr = (v: unknown): v is number[] => Array.isArray(v) && v.every((n) => Number.isInteger(n));
 const isStrArr = (v: unknown): v is string[] => Array.isArray(v) && v.every((s) => typeof s === "string");
+
+const PAGE_KEY_RE = /^m[1-9]\d*:\d{1,3}$/;
+const ANY_KEY_RE = /^m[1-9]\d*:(?:\d{1,3}|heading)$/;
+const CODE_RE = /^[a-z_]{1,40}$/;
+
+/** Record<string, string> with keys matching `keyRe` (anything else dropped). */
+function strRecord(v: unknown, keyRe: RegExp): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!isObj(v)) return out;
+  for (const [k, t] of Object.entries(v)) if (keyRe.test(k) && typeof t === "string" && t.trim()) out[k] = t;
+  return out;
+}
+
+function codeRecord(v: unknown): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  if (!isObj(v)) return out;
+  for (const [k, list] of Object.entries(v)) {
+    if (ANY_KEY_RE.test(k) && isStrArr(list)) out[k] = list.filter((c) => CODE_RE.test(c));
+  }
+  return out;
+}
+
+function parseCaptionBatches(v: unknown): CaptionBatchRef[] | null {
+  if (!Array.isArray(v)) return null;
+  const out: CaptionBatchRef[] = [];
+  for (const b of v) {
+    if (!isObj(b) || !isStrArr(b.moments) || !isStrArr(b.keys)) return null;
+    if (!b.moments.every((m) => MOMENT_ID_RE.test(m)) || !b.keys.every((k) => PAGE_KEY_RE.test(k))) return null;
+    out.push({ moments: b.moments, keys: b.keys });
+  }
+  return out;
+}
+
+function parseCritique(v: unknown): CursorCritique | null {
+  if (!isObj(v) || typeof v.score !== "number" || !Number.isFinite(v.score) || !Array.isArray(v.issues)) return null;
+  const issues: CursorCritique["issues"] = [];
+  for (const i of v.issues) {
+    if (!isObj(i)) continue;
+    const type = (CRITIQUE_ISSUE_TYPES as readonly unknown[]).includes(i.type) ? (i.type as CursorCritique["issues"][number]["type"]) : null;
+    const fix = (CRITIQUE_FIXES as readonly unknown[]).includes(i.fix) ? (i.fix as CursorCritique["issues"][number]["fix"]) : null;
+    const pageIndex = i.pageIndex === null ? null : Number.isInteger(i.pageIndex) ? (i.pageIndex as number) : undefined;
+    if (type && fix && pageIndex !== undefined) issues.push({ type, pageIndex, fix });
+  }
+  return { score: v.score, issues };
+}
+
+function parseRepairTargets(v: unknown): CursorRepairTarget[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((t): t is Record<string, unknown> => isObj(t))
+    .filter((t) => Number.isInteger(t.batch) && typeof t.key === "string" && ANY_KEY_RE.test(t.key) && isStrArr(t.codes))
+    .map((t) => ({ batch: t.batch as number, key: t.key as string, codes: (t.codes as string[]).filter((c) => CODE_RE.test(c)) }));
+}
+
+function parseMemory(v: unknown): UserMemory | null {
+  if (!isObj(v)) return null;
+  const mem = sanitizeMemory(v);
+  return UserMemorySchema.safeParse(mem).success && !isEmptyMemory(mem) ? mem : null;
+}
 
 /** Reads a stored cursor; null when it is missing or not ours (→ run fails with 'bad_cursor'). */
 export function parseCursor(raw: unknown): RunCursor | null {
@@ -288,7 +450,74 @@ export function parseCursor(raw: unknown): RunCursor | null {
     failures: isStrArr(c.failures) ? c.failures : [],
     writeConflicts: num("writeConflicts"),
     prevBookStatus: restorableStatus(c.prevBookStatus),
+    memory: parseMemory(c.memory),
+    captionBatches: parseCaptionBatches(c.captionBatches),
+    captionAttempts: isIntArr(c.captionAttempts) ? c.captionAttempts : [],
+    captionBatchesDone: isIntArr(c.captionBatchesDone) ? c.captionBatchesDone : [],
+    captionFailures: num("captionFailures"),
+    captions: strRecord(c.captions, PAGE_KEY_RE),
+    headings: strRecord(c.headings, MOMENT_ID_RE),
+    captionIssues: codeRecord(c.captionIssues),
+    captionsDone: c.captionsDone === true,
+    criticAttempts: num("criticAttempts"),
+    critique: parseCritique(c.critique),
+    critiqueDone: c.critiqueDone === true,
+    repairTargets: parseRepairTargets(c.repairTargets),
+    repairAttempts: isIntArr(c.repairAttempts) ? c.repairAttempts : [],
+    repairBatchesDone: isIntArr(c.repairBatchesDone) ? c.repairBatchesDone : [],
+    coverSwap: typeof c.coverSwap === "string" && c.coverSwap ? c.coverSwap : null,
+    repairDone: c.repairDone === true,
   };
+}
+
+/** M4 cursor fields of a fresh run. */
+function emptyCaptionFields(): Pick<
+  RunCursor,
+  | "memory"
+  | "captionBatches"
+  | "captionAttempts"
+  | "captionBatchesDone"
+  | "captionFailures"
+  | "captions"
+  | "headings"
+  | "captionIssues"
+  | "captionsDone"
+  | "criticAttempts"
+  | "critique"
+  | "critiqueDone"
+  | "repairTargets"
+  | "repairAttempts"
+  | "repairBatchesDone"
+  | "coverSwap"
+  | "repairDone"
+> {
+  return {
+    memory: null,
+    captionBatches: null,
+    captionAttempts: [],
+    captionBatchesDone: [],
+    captionFailures: 0,
+    captions: {},
+    headings: {},
+    captionIssues: {},
+    captionsDone: false,
+    criticAttempts: 0,
+    critique: null,
+    critiqueDone: false,
+    repairTargets: [],
+    repairAttempts: [],
+    repairBatchesDone: [],
+    coverSwap: null,
+    repairDone: false,
+  };
+}
+
+/**
+ * The cursor as stored once the run is over: no AI plan (titles), captions, headings, critique or
+ * memory snapshot — ids, counts and codes only.
+ */
+export function stripCursorText(cursor: RunCursor, album: AlbumChoice | null = cursor.album?.kind === "ai" ? { kind: "ai" } : cursor.album): RunCursor {
+  return { ...cursor, album, memory: null, captions: {}, headings: {}, critique: null };
 }
 
 /** A stored cursor nobody has written yet (startRun creates runs without one). */
@@ -304,13 +533,13 @@ export function restorableStatus(v: unknown): BookAiStatus {
 }
 
 function emptyProgress(phase: RunState): RunProgress {
-  return { phase, photosTotal: 0, photosDone: 0, batchesTotal: 0, batchesDone: 0, photosCapped: 0 };
+  return { phase, photosTotal: 0, photosDone: 0, batchesTotal: 0, batchesDone: 0, photosCapped: 0, captionsTotal: 0, captionsDone: 0 };
 }
 
 export function parseProgress(raw: unknown, phase: RunState): RunProgress {
   const p = emptyProgress(phase);
   if (!isObj(raw)) return p;
-  for (const k of ["photosTotal", "photosDone", "batchesTotal", "batchesDone", "photosCapped"] as const) {
+  for (const k of ["photosTotal", "photosDone", "batchesTotal", "batchesDone", "photosCapped", "captionsTotal", "captionsDone"] as const) {
     const v = raw[k];
     if (typeof v === "number" && Number.isFinite(v) && v >= 0) p[k] = v;
   }
@@ -319,6 +548,8 @@ export function parseProgress(raw: unknown, phase: RunState): RunProgress {
 
 function progressOf(cursor: RunCursor, phase: RunState): RunProgress {
   const done = new Set(cursor.batchesDone);
+  const capDone = new Set(cursor.captionBatchesDone);
+  const capBatches = cursor.captionBatches ?? [];
   return {
     phase,
     photosTotal: cursor.batches.reduce((n, b) => n + b.length, 0),
@@ -326,6 +557,8 @@ function progressOf(cursor: RunCursor, phase: RunState): RunProgress {
     batchesTotal: cursor.batches.length,
     batchesDone: done.size,
     photosCapped: cursor.photosCapped,
+    captionsTotal: capBatches.reduce((n, b) => n + b.keys.length, 0),
+    captionsDone: capBatches.reduce((n, b, i) => n + (capDone.has(i) ? b.keys.length : 0), 0),
   };
 }
 
@@ -462,6 +695,7 @@ export function initialCursor(photos: CurationPhoto[], maxAnalyzedPhotos: number
     failures: [],
     writeConflicts: 0,
     prevBookStatus: restorableStatus(prevBookStatus),
+    ...emptyCaptionFields(),
   };
 }
 
@@ -722,6 +956,8 @@ interface Tick {
   leaseEnd: number;
   /** A model call (wave / Storyteller) already ran in this tick. */
   heavyDone: boolean;
+  /** planDocOf() of this tick (undefined = not computed yet). */
+  planDoc?: PlanDoc | null;
 }
 
 async function tick(runId: string, token: string, t0: number, budgetMs: number, deps: OrchestratorDeps): Promise<AdvanceResult> {
@@ -745,6 +981,8 @@ async function tick(runId: string, token: string, t0: number, budgetMs: number, 
     let cursor = parseCursor(run.cursor);
     if (!cursor && run.state === "queued" && isBlankCursor(run.cursor)) {
       cursor = initialCursor(photos, limitsFor(book.is_paid === true).maxAnalyzedPhotos, book.ai_status);
+      // Memory snapshot for the whole run (D-032), taken once when the run's cursor is created.
+      cursor.memory = await loadMemory(deps, book.user_id);
     }
     if (!cursor) throw new OrchestratorError("bad_cursor");
     extendAliases(cursor, photos);
@@ -780,6 +1018,18 @@ async function tick(runId: string, token: string, t0: number, budgetMs: number, 
   } catch (e) {
     if (e instanceof StaleLeaseError) return { leased: true };
     return crash(deps, run, token, ctx, errorCodeOf(e));
+  }
+}
+
+/** Sanitised, non-empty memory of the user, or null. Best effort: any error → no memory. */
+async function loadMemory(deps: OrchestratorDeps, userId: string): Promise<UserMemory | null> {
+  try {
+    const raw = await deps.getUserMemory(userId);
+    if (raw === null || raw === undefined) return null;
+    const mem = sanitizeMemory(raw);
+    return isEmptyMemory(mem) ? null : mem;
+  } catch {
+    return null;
   }
 }
 
@@ -851,16 +1101,15 @@ async function loop(c: Tick): Promise<AdvanceResult> {
         continue;
 
       case "captioning":
-        await skippedStep(c, "caption_writer");
-        c.state = "critiquing";
-        await save(c);
+        if ((await captioningStep(c)) === "yield") return yieldTick(c);
         continue;
 
       case "critiquing":
+        if ((await critiquingStep(c)) === "yield") return yieldTick(c);
+        continue;
+
       case "repairing":
-        await skippedStep(c, "critic");
-        c.state = "validating";
-        await save(c);
+        if ((await repairingStep(c)) === "yield") return yieldTick(c);
         continue;
 
       case "validating":
@@ -1017,6 +1266,7 @@ async function storytellerStep(c: Tick): Promise<void> {
     transport,
     logger: c.logger,
     previousIssues: c.cursor.issues.length ? c.cursor.issues : undefined,
+    memory: c.cursor.memory,
     retry: stepRetry(c),
   });
   c.heavyDone = true;
@@ -1057,8 +1307,8 @@ async function storytellerStep(c: Tick): Promise<void> {
   await save(c);
 }
 
-/** M4 placeholder: one `skipped` agent_steps row, no model call (idempotent on resume). */
-async function skippedStep(c: Tick, agent: AgentName): Promise<void> {
+/** One `skipped` agent_steps row, no model call (idempotent on resume: same key + attempt 1). */
+async function skippedStep(c: Tick, agent: AgentName, reason: string): Promise<void> {
   await c.logger.insertStep({
     runId: c.runId,
     agent,
@@ -1066,7 +1316,7 @@ async function skippedStep(c: Tick, agent: AgentName): Promise<void> {
     attempt: 1,
     retries: 0,
     status: "skipped",
-    inputSummary: { reason: "not_implemented_m4" },
+    inputSummary: { reason },
     output: null,
     model: AI_MODEL,
     inputTokens: 0,
@@ -1080,8 +1330,503 @@ async function skippedStep(c: Tick, agent: AgentName): Promise<void> {
   });
 }
 
+// ---------------------------------------------------------------------------------------------
+// Captions (M4): captioning → critiquing → repairing
+
+type StepOutcome = "next" | "yield";
+
+/** The AI doc of the stored plan + the photo view it was built from. */
+interface PlanDoc {
+  doc: BookDoc;
+  photos: StoryPhoto[];
+  photosById: Map<string, StoryPhoto>;
+  specs: CaptionBatchSpec[];
+}
+
+/**
+ * Rebuilds the (uncaptioned) AI doc of the stored plan. Photos the plan uses count as kept and
+ * photos deleted since get a neutral stand-in, so the page structure — and with it every caption
+ * key "m{n}:{k}" — stays exactly as planned while photos change under the run; validating maps
+ * the captions onto the pruned doc (captionsForDoc). null for rule albums.
+ */
+function planDocOf(c: Tick): PlanDoc | null {
+  if (c.planDoc !== undefined) return c.planDoc;
+  c.planDoc = null;
+  const album = c.cursor.album;
+  if (album?.kind !== "ai" || !album.plan) return null;
+  const aliasToId = aliasToIdMap(c.cursor);
+  const used = new Set<string>();
+  const addAlias = (a: string) => {
+    const id = aliasToId.get(a);
+    if (id) used.add(id);
+  };
+  for (const m of album.plan.moments) for (const pg of m.pages) pg.photoIds.forEach(addAlias);
+  addAlias(album.plan.coverPhotoId);
+  const photos = storyPhotosOf(c.photos).map((p) => (used.has(p.id) && !p.keep ? { ...p, keep: true } : p));
+  const have = new Set(photos.map((p) => p.id));
+  for (const id of used) {
+    if (!have.has(id)) photos.push({ id, width: 1, height: 1, takenAt: null, place: null, keep: true, analysis: null });
+  }
+  const out = planToDoc(album.plan, {
+    aliasToId,
+    photos,
+    book: storyBookOf(c.book),
+    runId: c.runId,
+    generatorVersion: STORYTELLER_PROMPT_VERSION,
+  });
+  if (!("doc" in out)) return null;
+  const specs = captionBatches(out.doc, {
+    lang: asCaptionLang(c.book.caption_lang),
+    maxBatches: limitsFor(c.book.is_paid === true).maxCaptionBatchesPerBuild,
+  });
+  c.planDoc = { doc: out.doc, photos, photosById: new Map(photos.map((p) => [p.id, p])), specs };
+  return c.planDoc;
+}
+
+const refOf = (s: CaptionBatchSpec): CaptionBatchRef => ({ moments: s.moments.map((m) => m.momentId), keys: [...s.keys] });
+const sameRefs = (a: CaptionBatchRef[], b: CaptionBatchRef[]) => JSON.stringify(a) === JSON.stringify(b);
+
+/** No new model call in this tick after the soft budget once a call already ran. */
+const pastSoftBudget = (c: Tick) => c.heavyDone && elapsed(c) > c.budgetMs * CAPTION_WAVE_CUTOFF;
+
+function captionBook(c: Tick) {
+  const b = storyBookOf(c.book);
+  return { occasion: b.occasion, tone: b.tone, captionLang: b.captionLang, title: b.title };
+}
+
+/** Caption Writer failures worth a second attempt (transient / malformed); refusals are final. */
+const retryableCaptionFailure = retryableStoryFailure;
+
+/** Ends the caption phases without (more) captions: straight to validating. */
+async function skipCaptions(c: Tick): Promise<void> {
+  c.cursor.captionsDone = true;
+  c.cursor.critiqueDone = true;
+  c.cursor.repairDone = true;
+  c.state = "validating";
+  await save(c);
+}
+
+/** Pre-check context of the whole book: user title, Storyteller chapters, photo places + dates, memory names. */
+function bookCaptionContext(c: Tick, pd: PlanDoc): CaptionCheckContext {
+  return buildCaptionContext({
+    lang: asCaptionLang(c.book.caption_lang),
+    bookTitle: c.book.title,
+    chapters: pd.doc.chapters,
+    photoPlaces: pd.photos.map((p) => p.place),
+    knownNames: c.cursor.memory?.knownNames ?? [],
+    dates: pd.photos.map((p) => p.takenAt),
+  });
+}
+
+/** Captions of the cursor in book order (keys of the plan doc). */
+function captionsInOrder(c: Tick, pd: PlanDoc): Array<{ key: string; text: string }> {
+  return pageCaptionKeys(pd.doc)
+    .filter((k): k is string => k !== null && typeof c.cursor.captions[k] === "string")
+    .map((k) => ({ key: k, text: c.cursor.captions[k] }));
+}
+
+const asIssues = (key: string, codes: readonly string[]): CaptionIssue[] =>
+  codes
+    .filter((code): code is CaptionIssue["code"] => (CAPTION_ISSUE_CODES as readonly string[]).includes(code))
+    .map((code) => ({ code, key }));
+
+/** Records one Caption Writer answer for `keys` / `momentIds` (missing → removed: null caption). */
+function mergeCaptionResult(c: Tick, keys: readonly string[], momentIds: readonly string[], r: WriteCaptionsResult): void {
+  for (const k of keys) {
+    const text = r.captions.get(k);
+    if (text) c.cursor.captions[k] = text;
+    else delete c.cursor.captions[k];
+  }
+  for (const m of momentIds) {
+    const h = r.headings.get(m);
+    if (h) c.cursor.headings[m] = h;
+    else delete c.cursor.headings[m];
+  }
+}
+
+/** captioning: plan the batches once, then waves of Caption Writer calls (D-029). */
+async function captioningStep(c: Tick): Promise<StepOutcome> {
+  if (c.cursor.captionsDone) {
+    c.state = "critiquing";
+    await save(c);
+    return "next";
+  }
+  const pd = planDocOf(c);
+  if (!pd) {
+    // Rule album (Storyteller failed / gave up): no captions in M4 (D-031).
+    const reason = c.cursor.album?.kind === "ai" ? "plan_unusable" : "rule_album";
+    if (reason !== "rule_album") pushFailure(c.cursor, "captions_plan_unusable");
+    await skippedStep(c, "caption_writer", reason);
+    await skipCaptions(c);
+    return "next";
+  }
+  const refs = pd.specs.map(refOf);
+  if (c.cursor.captionBatches === null) {
+    c.cursor.captionBatches = refs;
+    c.cursor.captionAttempts = refs.map(() => 0);
+    await save(c);
+  } else if (!sameRefs(c.cursor.captionBatches, refs)) {
+    // Cannot happen with an unchanged plan; never mix keys of two different batchings.
+    c.cursor.captionFailures++;
+    pushFailure(c.cursor, "caption_batches_changed");
+    await skipCaptions(c);
+    return "next";
+  }
+
+  const done = new Set(c.cursor.captionBatchesDone);
+  const pending = pd.specs.map((s) => s.index).filter((i) => !done.has(i));
+  if (pending.length === 0) {
+    c.cursor.captionsDone = true;
+    c.state = "critiquing";
+    await save(c);
+    return "next";
+  }
+  if (pastSoftBudget(c) || !callFits(c, AGENT_TIMEOUT_MS.caption_writer)) return "yield";
+  await captionWave(c, pd, pending.slice(0, waveSize(done.size)));
+  return "next";
+}
+
+async function captionWave(c: Tick, pd: PlanDoc, indices: number[]): Promise<void> {
+  const transport = needTransport(c);
+  // 1. Reserve one attempt per call (checkpointed before any call).
+  const calls: Array<{ bi: number; attempt: number }> = [];
+  for (const bi of indices) {
+    const used = c.cursor.captionAttempts[bi] ?? 0;
+    if (used >= MAX_CAPTION_ATTEMPTS) {
+      // Attempts used up (dead ticks / failures): this batch stays uncaptioned.
+      c.cursor.captionBatchesDone.push(bi);
+      c.cursor.captionFailures++;
+      pushFailure(c.cursor, "caption_writer_attempts");
+      continue;
+    }
+    c.cursor.captionAttempts[bi] = used + 1;
+    calls.push({ bi, attempt: used + 1 });
+  }
+  await save(c);
+  if (!calls.length) return;
+
+  // 2. The calls (parallel). Earlier batches' captions guard against repetition.
+  const book = captionBook(c);
+  const aliasOf = aliasOfMap(c.cursor);
+  const results = await Promise.all(
+    calls.map(async ({ bi, attempt }) => {
+      const spec = pd.specs[bi];
+      const own = new Set(spec.keys);
+      const otherCaptions = captionsInOrder(c, pd)
+        .filter((x) => !own.has(x.key))
+        .map((x) => x.text);
+      const result = await writeCaptions({
+        runId: c.runId,
+        stepKey: `caption_writer:${bi}`,
+        attempt,
+        spec,
+        book,
+        photosById: pd.photosById,
+        aliasOf,
+        memory: c.cursor.memory,
+        otherCaptions,
+        transport,
+        logger: c.logger,
+        retry: stepRetry(c),
+      });
+      return { bi, attempt, result };
+    }),
+  );
+  c.heavyDone = true;
+
+  // 3. Record (cursor only; the doc is written at validating).
+  for (const { bi, attempt, result } of results.sort((x, y) => x.bi - y.bi)) {
+    const spec = pd.specs[bi];
+    if (result.ok) {
+      mergeCaptionResult(
+        c,
+        spec.keys,
+        spec.moments.filter((m) => m.wantHeading).map((m) => m.momentId),
+        result,
+      );
+      for (const [k, list] of result.issues) {
+        const codes = [...new Set(list.map((i) => i.code))];
+        if (codes.length) c.cursor.captionIssues[k] = codes;
+      }
+      c.cursor.captionBatchesDone.push(bi);
+      continue;
+    }
+    const failure = result.failure;
+    const retry = failure ? retryableCaptionFailure(failure.code, failure.retryable) : false;
+    if (retry && attempt < MAX_CAPTION_ATTEMPTS) continue; // stays pending: next wave
+    c.cursor.captionBatchesDone.push(bi);
+    c.cursor.captionFailures++;
+    pushFailure(c.cursor, `caption_writer_${failure?.code ?? "error"}`);
+  }
+  await save(c);
+}
+
+/** critiquing: captions applied, whole-book pre-check, one Critic call, the repair plan (D-030). */
+async function critiquingStep(c: Tick): Promise<StepOutcome> {
+  if (c.cursor.critiqueDone) {
+    c.state = "repairing";
+    await save(c);
+    return "next";
+  }
+  const pd = planDocOf(c);
+  if (!pd || !c.cursor.captionsDone) {
+    // Rule album, or a run that reached this state before M4 (no caption phase).
+    await skipCaptions(c);
+    return "next";
+  }
+  const lang = asCaptionLang(c.book.caption_lang);
+  const doc = applyCaptions(pd.doc, new Map(Object.entries(c.cursor.captions)), new Map(Object.entries(c.cursor.headings)), { lang });
+
+  // Pre-check over the whole book (cross-batch duplicates / openings) + what the batches rejected.
+  const precheck = checkBookCaptions(captionsInOrder(c, pd), bookCaptionContext(c, pd));
+  for (const [k, codes] of Object.entries(c.cursor.captionIssues)) {
+    if (!precheck.has(k)) {
+      const list = asIssues(k, codes);
+      if (list.length) precheck.set(k, list);
+    }
+  }
+
+  let critique: Parameters<typeof planRepair>[0] = null;
+  let score: number | null = null;
+  const attempt = c.cursor.criticAttempts + 1;
+  if (attempt > MAX_CRITIC_ATTEMPTS) {
+    c.cursor.captionFailures++;
+    pushFailure(c.cursor, "critic_attempts");
+  } else {
+    if (pastSoftBudget(c) || !callFits(c, AGENT_TIMEOUT_MS.critic)) return "yield";
+    c.cursor.criticAttempts = attempt;
+    await save(c);
+    const book = storyBookOf(c.book);
+    const result = await critiqueBook({
+      runId: c.runId,
+      stepKey: "critic",
+      attempt,
+      doc,
+      aliasOf: aliasOfMap(c.cursor),
+      photosById: pd.photosById,
+      metadata: {
+        title: c.book.title,
+        places: pd.photos.map((p) => p.place),
+        dates: pd.photos.map((p) => p.takenAt),
+        knownNames: c.cursor.memory?.knownNames ?? [],
+      },
+      precheck,
+      book: { occasion: book.occasion, tone: book.tone, captionLang: book.captionLang },
+      transport: needTransport(c),
+      logger: c.logger,
+      retry: stepRetry(c),
+    });
+    c.heavyDone = true;
+    if (result.ok) {
+      critique = result.data;
+      score = result.data.score;
+      c.cursor.critique = {
+        score: result.data.score,
+        issues: result.data.issues.map((i) => ({ type: i.type, pageIndex: i.pageIndex, fix: i.fix })),
+      };
+    } else {
+      // No critique: pre-check failures are still repaired.
+      c.cursor.captionFailures++;
+      pushFailure(c.cursor, `critic_${result.code}`);
+    }
+  }
+
+  // The repair plan, decided once. planRepair groups by a moment's FIRST batch; a long moment's
+  // later pages live in a later batch, so page targets are re-grouped by the batch holding the key.
+  const byMoment = batchIndexOfMoment(pd.specs);
+  const byKey = batchIndexOfKey(pd.specs);
+  const plan = planRepair(critique, precheck, doc, { photos: storyPhotosOf(c.photos), batchIndexOf: byMoment });
+  const targets: CursorRepairTarget[] = [];
+  for (const list of plan.rewrite.values()) {
+    for (const t of list) {
+      const m = momentIdOfKey(t.key);
+      const batch = t.key.endsWith(":heading") ? (m ? byMoment(m) : undefined) : (byKey(t.key) ?? (m ? byMoment(m) : undefined));
+      if (batch === undefined) continue;
+      targets.push({ batch, key: t.key, codes: reasonCodes(t.reason) });
+    }
+  }
+  c.cursor.repairTargets = targets;
+  c.cursor.coverSwap = plan.coverSwap;
+  c.cursor.critiqueDone = true;
+  c.state = "repairing";
+  await save(c, score === null ? {} : { critic_score: score });
+  return "next";
+}
+
+/** "pre-check: too_long, unknown_name; critic: caption_mismatch" → ["too_long", "unknown_name", "caption_mismatch"]. */
+function reasonCodes(reason: string): string[] {
+  return [...new Set(reason.split(/[;,\s]+/).filter((t) => CODE_RE.test(t)))];
+}
+
+/** repairing: one targeted Caption Writer call per affected batch, one round only (D-030). */
+async function repairingStep(c: Tick): Promise<StepOutcome> {
+  if (c.cursor.repairDone) {
+    c.state = "validating";
+    await save(c);
+    return "next";
+  }
+  const pd = planDocOf(c);
+  if (!pd || !c.cursor.critiqueDone) {
+    await skipCaptions(c);
+    return "next";
+  }
+  const done = new Set(c.cursor.repairBatchesDone);
+  const pending = [...new Set(c.cursor.repairTargets.map((t) => t.batch))]
+    .filter((bi) => !done.has(bi) && bi >= 0 && bi < pd.specs.length)
+    .sort((a, b) => a - b);
+  if (pending.length === 0) {
+    finalizeCaptions(c, pd);
+    c.cursor.repairDone = true;
+    c.state = "validating";
+    await save(c);
+    return "next";
+  }
+  if (pastSoftBudget(c) || !callFits(c, AGENT_TIMEOUT_MS.caption_writer)) return "yield";
+  await repairWave(c, pd, pending.slice(0, CURATOR_CONCURRENCY));
+  return "next";
+}
+
+/** Drops a target's caption / heading (still failing → null; the Storyteller title stays). */
+function dropTargets(c: Tick, targets: readonly CursorRepairTarget[]): void {
+  for (const t of targets) {
+    if (t.key.endsWith(":heading")) {
+      const m = momentIdOfKey(t.key);
+      if (m) delete c.cursor.headings[m];
+    } else delete c.cursor.captions[t.key];
+  }
+}
+
+async function repairWave(c: Tick, pd: PlanDoc, indices: number[]): Promise<void> {
+  const transport = needTransport(c);
+  const maxRepairs = limitsFor(c.book.is_paid === true).maxCaptionRepairsPerBatch;
+  const calls: Array<{ bi: number; attempt: number; targets: CursorRepairTarget[] }> = [];
+  for (const bi of indices) {
+    const targets = c.cursor.repairTargets.filter((t) => t.batch === bi);
+    const used = c.cursor.repairAttempts[bi] ?? 0;
+    if (used >= maxRepairs) {
+      // The repair for this batch was already spent (e.g. lost in a dead tick): never a second one.
+      dropTargets(c, targets);
+      c.cursor.repairBatchesDone.push(bi);
+      continue;
+    }
+    c.cursor.repairAttempts[bi] = used + 1;
+    calls.push({ bi, attempt: used + 1, targets });
+  }
+  await save(c);
+  if (!calls.length) return;
+
+  const book = captionBook(c);
+  const aliasOf = aliasOfMap(c.cursor);
+  const allTargets = new Set(c.cursor.repairTargets.map((t) => t.key));
+  const otherCaptions = captionsInOrder(c, pd)
+    .filter((x) => !allTargets.has(x.key))
+    .map((x) => x.text);
+  const results = await Promise.all(
+    calls.map(async ({ bi, attempt, targets }) => ({
+      bi,
+      targets,
+      result: await writeCaptions({
+        runId: c.runId,
+        stepKey: `caption_writer:repair:${bi}`,
+        attempt,
+        spec: pd.specs[bi],
+        book,
+        photosById: pd.photosById,
+        aliasOf,
+        memory: c.cursor.memory,
+        otherCaptions,
+        repairTargets: targets.map((t) => ({ key: t.key, reason: t.codes })),
+        transport,
+        logger: c.logger,
+        retry: stepRetry(c),
+      }),
+    })),
+  );
+  c.heavyDone = true;
+
+  for (const { bi, targets, result } of results.sort((x, y) => x.bi - y.bi)) {
+    if (result.ok) {
+      // Answers already passed the pre-check (writeCaptions → precheckBatch); others → null.
+      const pageKeys = targets.filter((t) => !t.key.endsWith(":heading")).map((t) => t.key);
+      const momentIds = targets
+        .filter((t) => t.key.endsWith(":heading"))
+        .map((t) => momentIdOfKey(t.key))
+        .filter((m): m is string => m !== null);
+      mergeCaptionResult(c, pageKeys, momentIds, result);
+    } else {
+      dropTargets(c, targets);
+      c.cursor.captionFailures++;
+      pushFailure(c.cursor, `caption_repair_${result.failure?.code ?? "error"}`);
+    }
+    c.cursor.repairBatchesDone.push(bi);
+  }
+  await save(c);
+}
+
+/** Last code check over the whole book after the repair round: anything still failing → null. */
+function finalizeCaptions(c: Tick, pd: PlanDoc): void {
+  const issues = checkBookCaptions(captionsInOrder(c, pd), bookCaptionContext(c, pd));
+  for (const k of issues.keys()) delete c.cursor.captions[k];
+}
+
+/**
+ * Captions/headings of the plan doc mapped onto `target` (the doc actually saved, pruned when
+ * photos were removed mid-run): a caption follows its page only when the page kept the same
+ * layout and photos; a heading follows its moment (found via the moment's first photo).
+ */
+function captionsForDoc(c: Tick, pd: PlanDoc, target: BookDoc): { captions: Map<string, string>; headings: Map<string, string> } {
+  const sig = (p: BookDoc["pages"][number]) => `${p.layout}|${p.slots.map((s) => s.photoId ?? "").join(",")}`;
+  const baseKeys = pageCaptionKeys(pd.doc);
+  const keyBySig = new Map<string, string>();
+  const momentOfPhoto = new Map<string, string>();
+  pd.doc.pages.forEach((p, i) => {
+    const k = baseKeys[i];
+    if (!k) return;
+    keyBySig.set(sig(p), k);
+    const m = momentIdOfKey(k);
+    if (m) for (const s of p.slots) if (s.photoId) momentOfPhoto.set(s.photoId, m);
+  });
+  const captions = new Map<string, string>();
+  const headings = new Map<string, string>();
+  const targetKeys = pageCaptionKeys(target);
+  target.pages.forEach((p, i) => {
+    const tk = targetKeys[i];
+    if (!tk) return;
+    const bk = keyBySig.get(sig(p));
+    const text = bk ? c.cursor.captions[bk] : undefined;
+    if (text) captions.set(tk, text);
+    const tm = momentIdOfKey(tk);
+    if (tm && !headings.has(tm) && tk === `${tm}:0`) {
+      const first = p.slots.find((s) => s.photoId)?.photoId;
+      const bm = first ? momentOfPhoto.get(first) : undefined;
+      const h = bm ? c.cursor.headings[bm] : undefined;
+      if (h) headings.set(tm, h);
+    }
+  });
+  return { captions, headings };
+}
+
+/** The AI doc to save with captions, headings and the cover swap (each only if the doc stays valid). */
+function withCaptions(c: Tick, target: BookDoc): BookDoc {
+  const pd = planDocOf(c);
+  if (!pd) return target;
+  const { captions, headings } = captionsForDoc(c, pd, target);
+  let doc = target;
+  if (captions.size || headings.size) {
+    // applyCaptions never touches a source 'user' caption (D-031) — defensive: AI docs have none.
+    const next = applyCaptions(target, captions, headings, { lang: asCaptionLang(c.book.caption_lang) });
+    if (docIssues(next, c.photos, c.book).length === 0) doc = next;
+  }
+  const swap = c.cursor.coverSwap;
+  if (swap && swap !== doc.cover.photoId && c.photos.some((p) => p.id === swap && p.status === "kept")) {
+    const next = { ...doc, cover: { ...doc.cover, photoId: swap } };
+    if (docIssues(next, c.photos, c.book).length === 0) doc = next;
+  }
+  return doc;
+}
+
 function computeAiStatus(cursor: RunCursor, aiPlanUsed: boolean): RunAiStatus {
-  if (aiPlanUsed && cursor.aiFailures === 0) return "ok";
+  if (aiPlanUsed && cursor.aiFailures === 0 && cursor.captionFailures === 0) return "ok";
   if (aiPlanUsed || cursor.batchesAi > 0) return "partial";
   return "failed";
 }
@@ -1113,7 +1858,7 @@ async function validateAndSave(c: Tick): Promise<AdvanceResult> {
       generatorVersion: STORYTELLER_PROMPT_VERSION,
     });
     if ("doc" in out && docIssues(out.doc, c.photos, c.book).length === 0) {
-      doc = out.doc;
+      doc = withCaptions(c, out.doc);
       aiPlanUsed = true;
     } else {
       pushFailure(c.cursor, "plan_stale");
@@ -1178,10 +1923,9 @@ async function finishRun(
     bookStatus: BookAiStatus | null;
   },
 ): Promise<AdvanceResult> {
-  // The AI plan (titles) is dropped from the cursor once the run is over (privacy).
-  const finalCursor = cursor
-    ? { ...cursor, album: cursor.album?.kind === "ai" ? { kind: "ai" as const } : cursor.album }
-    : undefined;
+  // AI text (plan titles, captions, headings, critique) and the memory snapshot leave the cursor
+  // once the run is over (privacy).
+  const finalCursor = cursor ? stripCursorText(cursor) : undefined;
   if (bookId && out.bookStatus) await deps.setBookAiStatus(bookId, out.bookStatus);
   const ok = await deps.checkpointRun(runId, token, {
     state: out.state,
@@ -1216,7 +1960,7 @@ async function crash(
       ai_status: "failed",
       error_code: code,
       progress: toJson(progress),
-      ...(cursor ? { cursor: toJson({ ...cursor, album: null }) } : {}),
+      ...(cursor ? { cursor: toJson(stripCursorText(cursor, null)) } : {}),
       finished_at: new Date(deps.now()).toISOString(),
     })
     .catch(() => null);
