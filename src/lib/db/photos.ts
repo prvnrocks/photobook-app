@@ -421,6 +421,15 @@ export async function writeCuration(bookId: string, rows: CurationWrite[]): Prom
 /** drop_reason written when the user removes a photo themselves. */
 export const USER_DROP_REASON = "user_removed";
 
+/** Columns written for a user's own keep/drop decision (review toggle, editor placement). */
+function userChoicePatch(keep: boolean) {
+  return {
+    status: keep ? "kept" : "dropped",
+    drop_reason: keep ? null : USER_DROP_REASON,
+    user_override: true,
+  } as const;
+}
+
 /**
  * The user's own keep/drop decision (RLS client; these columns are
  * client-writable by design, 0500). Sets user_override = true so the AI never
@@ -431,11 +440,7 @@ export async function setUserOverride(bookId: string, photoId: string, keep: boo
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("photos")
-    .update({
-      status: keep ? "kept" : "dropped",
-      drop_reason: keep ? null : USER_DROP_REASON,
-      user_override: true,
-    })
+    .update(userChoicePatch(keep))
     .eq("id", photoId)
     .eq("book_id", bookId)
     .select("id");
@@ -522,4 +527,56 @@ export async function listReviewPhotos(bookId: string): Promise<ReviewPhoto[]> {
     takenAt: r.taken_at,
     thumbUrl: r.thumb_path ? (urls.get(r.thumb_path) ?? null) : null,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Editor (M5, D-036 / D-037 (4)). PUT /api/books/[id]/doc checks ownership
+// with getMyBook (RLS) before calling these.
+
+export type PlaceablePhoto = { id: string; status: string };
+
+/**
+ * Every upload-ready photo of the book with its keep/drop status (RLS client).
+ * Both `kept` and `dropped` photos may be placed in the editor — placing a
+ * dropped one marks it kept (markPlacedPhotosKept). [] for a malformed id.
+ */
+export async function listPlaceablePhotos(bookId: string): Promise<PlaceablePhoto[]> {
+  if (!isUuid(bookId)) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("photos")
+    .select("id, status")
+    .eq("book_id", bookId)
+    .eq("upload_state", "ready");
+  if (error) throw new PhotosQueryError("list placeable photos", error.code);
+  return data;
+}
+
+/**
+ * D-037 (4): photos the user placed in the album that are still `dropped`
+ * become `kept` with user_override = true — the same columns as the review
+ * screen's keep toggle (userChoicePatch), so the AI never drops them again.
+ * Admin client, filtered by book_id + status 'dropped' + upload_state 'ready';
+ * the caller MUST have checked book ownership. Non-uuid ids are ignored.
+ * Returns the number of photos changed.
+ */
+export async function markPlacedPhotosKept(bookId: string, photoIds: string[]): Promise<number> {
+  if (!isUuid(bookId)) return 0;
+  const ids = [...new Set(photoIds.filter(isUuid))];
+  if (ids.length === 0) return 0;
+  const admin = createAdminClient();
+  let changed = 0;
+  for (const batch of chunks(ids)) {
+    const { data, error } = await admin
+      .from("photos")
+      .update(userChoicePatch(true))
+      .eq("book_id", bookId)
+      .eq("status", "dropped")
+      .eq("upload_state", "ready")
+      .in("id", batch)
+      .select("id");
+    if (error) throw new PhotosQueryError("mark placed photos kept", error.code);
+    changed += data.length;
+  }
+  return changed;
 }
