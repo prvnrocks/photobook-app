@@ -36,13 +36,16 @@ export type BookPageProps = {
    * editable caption can look exactly like the static one.
    */
   renderCaption?: (caption: Caption | null, model: RenderCaption) => ReactNode;
+  /** Edit mode only, cover only: rendered inside the cover text area (absolute, `inset-0`). */
+  renderCoverTextOverlay?: () => ReactNode;
   className?: string;
   /** First visible page(s): eager load + high fetch priority. Print mode is always eager. */
   priority?: boolean;
 };
 
 export function BookPage(props: BookPageProps) {
-  const { doc, page, mode, photos, captionLang, renderSlotOverlay, renderCaption, className, priority } = props;
+  const { doc, page, mode, photos, captionLang, renderSlotOverlay, renderCaption, renderCoverTextOverlay, className, priority } =
+    props;
   if (page === "cover") {
     return (
       <BookCover
@@ -51,6 +54,7 @@ export function BookPage(props: BookPageProps) {
         photos={photos}
         captionLang={captionLang}
         renderSlotOverlay={renderSlotOverlay}
+        renderTextOverlay={renderCoverTextOverlay}
         className={className}
         priority={priority}
       />

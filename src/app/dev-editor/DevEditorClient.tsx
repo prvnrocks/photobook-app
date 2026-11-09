@@ -6,9 +6,11 @@
 import { Eraser, PanelBottom, Type } from "lucide-react";
 import { useState } from "react";
 import { EditorShell } from "@/components/editor/EditorShell";
+import { EDITOR_TOOLS } from "@/components/editor/tools/registry";
 import type { EditorTool } from "@/components/editor/tools/types";
 import { replacePhoto, setCover } from "@/lib/book/edit-ops";
-import { devEditorData, devTransport, type DevSaveMode } from "@/lib/editor/dev-fixture";
+import { devEditorData, devTransport, type DevAiMode, type DevSaveMode } from "@/lib/editor/dev-fixture";
+import { withDevPagesData } from "@/lib/editor/dev-pages-fixture";
 
 const DEV_TOOLS: EditorTool[] = [
   {
@@ -45,8 +47,19 @@ const DEV_TOOLS: EditorTool[] = [
   },
 ];
 
-export function DevEditorClient({ mode }: { mode: DevSaveMode }) {
-  const [data] = useState(() => devEditorData(mode));
+/** Real registered tools + the demo tools. */
+const TOOLS: EditorTool[] = [...EDITOR_TOOLS, ...DEV_TOOLS];
+
+export function DevEditorClient({
+  mode,
+  ai = "off",
+  pages = null,
+}: {
+  mode: DevSaveMode;
+  ai?: DevAiMode;
+  pages?: number | null;
+}) {
+  const [data] = useState(() => withDevPagesData(devEditorData(mode, ai), pages));
   const [transport] = useState(() => devTransport(mode));
-  return <EditorShell data={data} transport={transport} tools={DEV_TOOLS} backHref="/dev-editor" />;
+  return <EditorShell data={data} transport={transport} tools={TOOLS} backHref="/dev-editor" />;
 }

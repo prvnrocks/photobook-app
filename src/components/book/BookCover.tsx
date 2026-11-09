@@ -14,12 +14,14 @@ export type BookCoverProps = {
   captionLang?: string;
   /** Edit mode only: rendered inside the cover photo slot (always slot index 0). */
   renderSlotOverlay?: (slotIdx: number) => ReactNode;
+  /** Edit mode only: rendered inside the cover text area (absolute-position it with `inset-0`). */
+  renderTextOverlay?: () => ReactNode;
   className?: string;
   /** Load the cover photo eagerly with high fetch priority (above the fold). */
   priority?: boolean;
 };
 
-export function BookCover({ doc, mode, photos, captionLang, renderSlotOverlay, className, priority }: BookCoverProps) {
+export function BookCover({ doc, mode, photos, captionLang, renderSlotOverlay, renderTextOverlay, className, priority }: BookCoverProps) {
   const m = coverRenderModel(doc, photos, captionLang);
   return (
     <PageFrame
@@ -64,6 +66,7 @@ export function BookCover({ doc, mode, photos, captionLang, renderSlotOverlay, c
               {m.subtitle.text}
             </p>
           ) : null}
+          {mode === "edit" ? renderTextOverlay?.() : null}
         </Box>
       ) : null}
     </PageFrame>

@@ -10,7 +10,12 @@ export type DevSaveMode = "ok" | "conflict" | "unavailable" | "offline" | "inval
 
 export const DEV_SAVE_MODES: readonly DevSaveMode[] = ["ok", "conflict", "unavailable", "offline", "invalid", "readonly"];
 
-export function devEditorData(mode: DevSaveMode): EditorShellData {
+/** `?ai=` on /dev-editor: AI off (default), on (replay; the rewrite call itself is real or mocked), or no rewrites left. */
+export type DevAiMode = "off" | "replay" | "limit";
+
+export const DEV_AI_MODES: readonly DevAiMode[] = ["off", "replay", "limit"];
+
+export function devEditorData(mode: DevSaveMode, ai: DevAiMode = "off"): EditorShellData {
   const doc = devPreviewDoc();
   const photos = devPreviewPhotos();
   return {
@@ -26,12 +31,13 @@ export function devEditorData(mode: DevSaveMode): EditorShellData {
     doc,
     docRev: mode === "readonly" ? null : 1,
     canSave: mode !== "readonly",
-    aiMode: "off",
-    rewritesUsed: 0,
-    rewritesLeft: 20,
+    aiMode: ai === "off" ? "off" : "replay",
+    rewritesUsed: ai === "limit" ? 20 : 0,
+    rewritesLeft: ai === "limit" ? 0 : 20,
     photos: Object.entries(photos).map(([id, p]) => ({
       id,
-      status: "kept" as const,
+      // d14/d15 = AI-dropped (photo picker "Dropped by AI" tab); d13 = kept but unused.
+      status: id === "d14" || id === "d15" ? ("dropped" as const) : ("kept" as const),
       userOverride: false,
       width: p?.width ?? null,
       height: p?.height ?? null,

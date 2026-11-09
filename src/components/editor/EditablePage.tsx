@@ -6,6 +6,7 @@
 // - Cover title/subtitle area → selects { cover, text }.
 // - Tap on empty page space → clears the selection.
 // Read-only: no tap targets, static captions.
+// Cover text → CoverTextTarget overlay (Task 10; cover-text tool opens on select).
 // Task 9 can add slot badges (low-res etc.) inside SlotOverlay; Task 10 replaces CaptionTarget's
 // content (or opens its panel via a tool with openOnSelect).
 
@@ -16,6 +17,7 @@ import type { Caption } from "@/lib/book/types";
 import type { EditorPosition, EditorSelection } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
 import { useEditor } from "./editor-context";
+import { LowResBadge } from "./tools/low-res-badge";
 
 function sameSelection(a: EditorSelection, b: EditorSelection): boolean {
   if (a === null || b === null) return a === b;
@@ -73,10 +75,24 @@ export function EditablePage({ page, priority }: { page: EditorPosition; priorit
           readOnly
             ? undefined
             : (slotIdx) => (
-                <SlotOverlay
-                  selected={sameSelection(selection, slotSel(slotIdx))}
-                  label={`Photo ${slotIdx + 1} on ${label}`}
-                  onClick={toggle(slotSel(slotIdx))}
+                <>
+                  <SlotOverlay
+                    selected={sameSelection(selection, slotSel(slotIdx))}
+                    label={`Photo ${slotIdx + 1} on ${label}`}
+                    onClick={toggle(slotSel(slotIdx))}
+                  />
+                  <LowResBadge page={page} slotIdx={slotIdx} />
+                </>
+              )
+        }
+        renderCoverTextOverlay={
+          readOnly || page !== "cover"
+            ? undefined
+            : () => (
+                <CoverTextTarget
+                  empty={!doc.cover.title && !doc.cover.subtitle}
+                  selected={coverTextSelected}
+                  onClick={toggle({ kind: "cover", part: "text" })}
                 />
               )
         }
@@ -111,6 +127,29 @@ function SlotOverlay({ selected, label, onClick }: { selected: boolean; label: s
       data-testid="slot-target"
       data-selected={selected ? "true" : undefined}
     />
+  );
+}
+
+function CoverTextTarget({ empty, selected, onClick }: { empty: boolean; selected: boolean; onClick: (e: MouseEvent) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      aria-label={empty ? "Add a cover title" : "Edit cover title"}
+      className={cn(
+        "absolute inset-0 flex cursor-pointer items-center justify-center outline-none focus-visible:ring-4 focus-visible:ring-primary/60 focus-visible:ring-inset",
+        !selected && "hover:bg-black/5",
+      )}
+      data-testid="cover-text-target"
+      data-selected={selected ? "true" : undefined}
+    >
+      {empty ? (
+        <span className="text-neutral-400 italic" style={{ fontSize: "4cqw" }}>
+          Tap to add a title
+        </span>
+      ) : null}
+    </button>
   );
 }
 
