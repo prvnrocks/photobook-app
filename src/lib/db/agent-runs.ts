@@ -196,6 +196,58 @@ export async function checkpointRun(runId: string, token: string, patch: RunChec
   return data.length === 1;
 }
 
+/**
+ * Settings "forget me" follow-up (D-032, M4 review SF8): removes the `memory`
+ * snapshot from the cursor of the user's active (not done/failed) runs, so a
+ * run started before the clear stops using the forgotten prefs. Other cursor
+ * fields are kept. Returns how many runs were changed. Admin client — the
+ * caller resolved `userId` from the session itself.
+ *
+ * Known race (accepted, memory is enum-only prefs in M4): a tick that holds
+ * the lease already has the old cursor in memory and its next checkpointRun
+ * writes it back, re-adding `memory` for the rest of that run. Each update is
+ * still scoped to the user and to active states, so a run that finished in
+ * between is left alone. Stale runs that never finish are an M9 reaper item.
+ *
+ * Every run is attempted; the first error (code only) is thrown afterwards.
+ */
+export async function clearMemoryFromActiveRuns(userId: string): Promise<number> {
+  if (!isUuid(userId)) throw new AgentRunsQueryError("clear run memory", "invalid_id");
+  const admin = createAdminClient();
+  const excluded = `(${ACTIVE_RUN_EXCLUDED_STATES.join(",")})`;
+  const { data, error } = await admin
+    .from("agent_runs")
+    .select("id, cursor")
+    .eq("user_id", userId)
+    .not("state", "in", excluded);
+  if (error) throw new AgentRunsQueryError("clear run memory", error.code);
+
+  let changed = 0;
+  let firstErrorCode: string | undefined;
+  let failed = false;
+  for (const row of data ?? []) {
+    const cursor = row.cursor;
+    if (!cursor || typeof cursor !== "object" || Array.isArray(cursor) || !("memory" in cursor)) continue;
+    const { memory: _memory, ...rest } = cursor as Record<string, Json | undefined>;
+    void _memory;
+    const { data: updated, error: updateError } = await admin
+      .from("agent_runs")
+      .update({ cursor: rest as Json })
+      .eq("id", row.id)
+      .eq("user_id", userId)
+      .not("state", "in", excluded)
+      .select("id");
+    if (updateError) {
+      if (!failed) firstErrorCode = updateError.code;
+      failed = true;
+      continue;
+    }
+    changed += updated?.length ?? 0;
+  }
+  if (failed) throw new AgentRunsQueryError("clear run memory", firstErrorCode);
+  return changed;
+}
+
 // ---------------------------------------------------------------------------
 // Step logger (implements src/lib/ai/run-step.ts StepLogger)
 

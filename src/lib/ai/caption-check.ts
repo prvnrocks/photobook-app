@@ -6,8 +6,19 @@
 //
 // The checks are conservative heuristics for CLAUDE.md's quote rules: original text, ≤ 18 words,
 // no invented names/places/facts (capitalised words and numbers must come from the metadata),
-// native Arabic when caption_lang = 'ar'. Arabic-script names cannot be detected by
-// capitalisation; the Critic covers those (caption_invented_fact).
+// native Arabic when caption_lang = 'ar'.
+//
+// The allowlists come ONLY from user data and metadata (the user's book title, GPS places of the
+// photos / chapters, names the user typed, photo dates) — never from AI text such as Storyteller
+// chapter titles, or an invented name in an AI title would whitelist itself.
+//
+// Known false negatives (by design — the Critic covers them, rubric 5 caption_invented_fact):
+// - sentence-initial names ("Ahmed laughed at everything") — capitalisation tells nothing there;
+// - spelled-out numbers ("twenty years later") — only digit runs are checked;
+// - Arabic-script names — Arabic has no capital letters;
+// - weekday names are always allowed (not checked against the dates).
+// Known-safe capitalised words (months that occur in the dates, weekdays, holidays, family words,
+// common acronyms, "Happy Birthday"-style phrases) are not flagged (false-positive guard).
 
 import type { CaptionLang } from "@/lib/book/options";
 import { MAX_QUOTE_WORDS, captionKey, wordCount } from "@/lib/ai/schemas";
@@ -40,10 +51,15 @@ export type CaptionIssue = { code: CaptionIssueCode; key?: string };
 
 export type CaptionCheckContext = {
   lang: CaptionLang;
-  /** Names/places that may appear: book title words, chapter titles + places, photo places, knownNames. */
+  /** Names/places that may appear: the user's book title, metadata places, knownNames (never AI text). */
   allowNames: ReadonlySet<string>;
   /** Numbers that may appear (years/months/days from the photo dates), Latin digits, e.g. "2026". */
   allowDigits: ReadonlySet<string>;
+  /**
+   * Months (1-12) of the photo dates: an English month name ("October") passes only when its
+   * month is here. Undefined = any month name passes (hand-built contexts).
+   */
+  allowMonths?: ReadonlySet<number>;
 };
 
 /** Max times the same opening word may start a caption in one book. */
@@ -115,8 +131,13 @@ export function nameWords(values: Iterable<string>): Set<string> {
 
 export type CaptionContextInput = {
   lang: CaptionLang;
+  /** The USER's title (books.title) — never an AI title. */
   bookTitle?: string | null;
-  chapters?: ReadonlyArray<{ title?: string | null; place?: string | null }>;
+  /**
+   * Chapter places (grounded in GPS metadata by planToDoc). Chapter TITLES are AI text and are
+   * ignored on purpose (SF3): an invented name in a title must not allowlist itself.
+   */
+  chapters?: ReadonlyArray<{ place?: string | null }>;
   photoPlaces?: ReadonlyArray<string | null | undefined>;
   knownNames?: ReadonlyArray<string>;
   /** Photo dates (ISO strings like "2026-10-12T19:30:00+04:00" or Date). Local Y-M-D of the string is used. */
@@ -144,12 +165,26 @@ export function digitsFromDates(dates: ReadonlyArray<string | Date | null | unde
   return out;
 }
 
+/** Months (1-12) of the photo dates (same parsing as digitsFromDates). */
+export function monthsFromDates(dates: ReadonlyArray<string | Date | null | undefined>): Set<number> {
+  const out = new Set<number>();
+  for (const d of dates) {
+    if (d instanceof Date) {
+      if (!Number.isNaN(d.getTime())) out.add(d.getUTCMonth() + 1);
+    } else if (typeof d === "string") {
+      const r = /^\d{4}-(\d{2})-\d{2}/.exec(d.trim());
+      const m = r ? Number(r[1]) : 0;
+      if (m >= 1 && m <= 12) out.add(m);
+    }
+  }
+  return out;
+}
+
 /** Build the allowlists from the book's metadata (all inputs are user/metadata data, never AI text). */
 export function buildCaptionContext(input: CaptionContextInput): CaptionCheckContext {
   const names: string[] = [];
   if (input.bookTitle) names.push(input.bookTitle);
   for (const c of input.chapters ?? []) {
-    if (c.title) names.push(c.title);
     if (c.place) names.push(c.place);
   }
   for (const p of input.photoPlaces ?? []) if (p) names.push(p);
@@ -157,7 +192,7 @@ export function buildCaptionContext(input: CaptionContextInput): CaptionCheckCon
   const digits = digitsFromDates(input.dates ?? []);
   // Numbers the user typed into the book title (e.g. "Class of 2026") are metadata too.
   for (const run of (input.bookTitle ?? "").match(DIGIT_RUN_G) ?? []) digits.add(normalizeNumber(run));
-  return { lang: input.lang, allowNames: nameWords(names), allowDigits: digits };
+  return { lang: input.lang, allowNames: nameWords(names), allowDigits: digits, allowMonths: monthsFromDates(input.dates ?? []) };
 }
 
 // ---------------------------------------------------------------------------- rule helpers
@@ -186,6 +221,41 @@ const ENDS_CLAUSE = /[:—–―]$/;
 /** Words that may be capitalised without being a name: I, I'm, OK (any case). */
 const ALWAYS_OK = new Set(["i", "i'm", "i’m", "i've", "i’ve", "i'll", "i’ll", "i'd", "i’d", "ok", "okay"]);
 
+/** English month names / abbreviations → month number (allowed when the month is in the dates). */
+const MONTH_WORDS: ReadonlyMap<string, number> = new Map(
+  [
+    ["january", "jan"],
+    ["february", "feb"],
+    ["march", "mar"],
+    ["april", "apr"],
+    ["may", "may"],
+    ["june", "jun"],
+    ["july", "jul"],
+    ["august", "aug"],
+    ["september", "sep", "sept"],
+    ["october", "oct"],
+    ["november", "nov"],
+    ["december", "dec"],
+  ].flatMap((names, i) => names.map((n) => [n, i + 1] as [string, number])),
+);
+
+/**
+ * Capitalised words that are not names of people or places (SF4 false-positive guard): weekdays,
+ * holidays, family words, common acronyms. Arabic is unaffected (no capitals).
+ */
+const KNOWN_SAFE = new Set(
+  (
+    "monday tuesday wednesday thursday friday saturday sunday " +
+    "eid ramadan christmas diwali easter hanukkah hanukah chanukah xmas fitr adha iftar suhoor " +
+    "mom mum mommy mummy dad daddy mama baba papa grandma grandpa granny grandad granddad nana teta jiddo " +
+    "tv ok diy bbq"
+  ).split(" "),
+);
+
+/** Greeting / holiday phrases written in Title Case mid-sentence ("a loud Happy Birthday"). */
+const SAFE_PHRASES_RE =
+  /\b(?:happy\s+(?:birthday|anniversary|holidays|eid|new\s+year)|new\s+year(?:['’]s)?(?:\s+eve)?|christmas\s+eve|(?:eid|ramadan)\s+(?:mubarak|kareem)|eid\s+al[-\s](?:fitr|adha))\b/gi;
+
 /** Common words that are often capitalised after ":" or "—" ("Our day — Pure joy"). */
 const COMMON_AFTER_BREAK = new Set(
   (
@@ -210,9 +280,18 @@ function startsUpper(w: string): boolean {
   return LATIN_LETTER.test(first) && first !== first.toLowerCase() && first === first.toUpperCase();
 }
 
+/** A capitalised, non-name word that needs no allowlisting (months only when in the dates). */
+function isKnownSafeWord(w: string, ctx: Pick<CaptionCheckContext, "allowMonths">): boolean {
+  if (KNOWN_SAFE.has(w)) return true;
+  const month = MONTH_WORDS.get(w);
+  return month !== undefined && (!ctx.allowMonths || ctx.allowMonths.has(month));
+}
+
 /** English: capitalised words that are not sentence-initial must be allowlisted. */
-function hasUnknownCapitalised(text: string, allow: ReadonlySet<string>): boolean {
-  for (const line of text.split(/\n+/)) {
+function hasUnknownCapitalised(text: string, ctx: Pick<CaptionCheckContext, "allowNames" | "allowMonths">): boolean {
+  const allow = ctx.allowNames;
+  const safe = text.replace(SAFE_PHRASES_RE, (m) => m.toLowerCase());
+  for (const line of safe.split(/\n+/)) {
     const tokens = line.split(/\s+/).filter(Boolean);
     let prev: string | null = null;
     for (const tok of tokens) {
@@ -228,6 +307,7 @@ function hasUnknownCapitalised(text: string, allow: ReadonlySet<string>): boolea
         const w = normalizeWord(trimmed);
         if (!w || ALWAYS_OK.has(w) || allow.has(w)) continue;
         if (afterBreak && COMMON_AFTER_BREAK.has(w)) continue;
+        if (isKnownSafeWord(w, ctx)) continue;
         return true;
       }
     }
@@ -264,7 +344,7 @@ function hasAttribution(text: string, ctx: CaptionCheckContext): boolean {
     const words = parts.map(normalizeWord);
     const looksLikeName =
       parts.length > 0 && parts.every(startsUpper) && !COMMON_AFTER_BREAK.has(words[0]) && !ALWAYS_OK.has(words[0]);
-    if (looksLikeName && !words.some((w) => ctx.allowNames.has(w))) return true;
+    if (looksLikeName && !words.some((w) => ctx.allowNames.has(w) || KNOWN_SAFE.has(w))) return true;
   }
   return false;
 }
@@ -300,7 +380,7 @@ export function checkCaption(text: string, ctx: CaptionCheckContext): CaptionIss
   // inside ("“Sun” and “sea”" is not wrapped).
   if (WRAPPED_RE.test(t) && !/["“”«»„]/.test(Array.from(t).slice(1, -1).join(""))) add("wrapped_in_quotes");
 
-  if (ctx.lang === "en" && hasUnknownCapitalised(t, ctx.allowNames)) add("unknown_name");
+  if (ctx.lang === "en" && hasUnknownCapitalised(t, ctx)) add("unknown_name");
 
   const allowDigits = new Set(Array.from(ctx.allowDigits, normalizeNumber));
   for (const run of t.match(DIGIT_RUN_G) ?? []) {

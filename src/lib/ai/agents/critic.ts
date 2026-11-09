@@ -177,9 +177,10 @@ export function critiqueStrictSchemaFor(pageCount: number) {
   });
 }
 
-/** Output budget incl. thinking (Opus 5.5 always thinks). */
+/** Output budget incl. thinking (Opus 5.5 always thinks). Ceiling 8k (D-035: per-run USD cap). */
+export const CRITIC_MAX_TOKENS = 8_000;
 export function criticMaxTokens(pageCount: number): number {
-  return Math.min(16_000, 8_000 + 40 * pageCount);
+  return Math.min(CRITIC_MAX_TOKENS, 6_000 + 40 * Math.max(0, pageCount));
 }
 
 export function criticScenarioMeta(doc: Pick<BookDoc, "chapters" | "pages">): CriticScenarioMeta {

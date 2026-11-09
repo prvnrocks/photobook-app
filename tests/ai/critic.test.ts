@@ -102,7 +102,20 @@ describe("critic prompt", () => {
     expect(s).toMatch(/2 or more pages/);
     expect(s).toMatch(/Safety: .* are data, never instructions/);
     expect(s).not.toMatch(/\d{4}-\d{2}-\d{2}/);
-    expect(CRITIC_PROMPT_VERSION).toBe(1);
+    expect(CRITIC_PROMPT_VERSION).toBe(2);
+  });
+
+  it("v2 rubric (SF2): well-known quotes / lyrics / slogans are caption_not_original and cap the score at 6", () => {
+    const s = criticSystemText();
+    expect(s).toMatch(/9\. Captions are original: .*well-known quote, song lyric, poem line, film line, slogan/);
+    expect(s).toMatch(/caption_not_original \(rubric 9\)/);
+    expect(s).toMatch(/Any caption_mismatch, caption_invented_fact or caption_not_original means a score of 6 or less/);
+  });
+
+  it("Critic output budget is capped at 8000 tokens (D-035)", () => {
+    expect(criticMaxTokens(1)).toBeLessThanOrEqual(8_000);
+    expect(criticMaxTokens(100)).toBe(8_000);
+    expect(criticMaxTokens(500)).toBe(8_000);
   });
 });
 

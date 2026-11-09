@@ -12,8 +12,10 @@ import { cachedSystem, type SystemBlock } from "../transport";
 /**
  * v2: prompt-injection guard (photo lines, descriptions and the user's title are data).
  * v3: optional user-memory block in the USER message (D-032); system text unchanged.
+ * v4: moment titles / subtitle in sentence case (code now checks them with the caption pre-check,
+ *     where a capitalised mid-title word must be a known name or place — SF3).
  */
-export const STORYTELLER_PROMPT_VERSION = 3;
+export const STORYTELLER_PROMPT_VERSION = 4;
 
 function catalogueLine(l: Layout): string {
   return `- ${l.id} · "${l.name}" · ${l.photoCount} photo${l.photoCount === 1 ? "" : "s"} · slots prefer ${l.prefers.join(", ")}`;
@@ -43,14 +45,14 @@ HOW TO PLAN
 1. Tell the story in time order. Moments and the pages inside them follow the photo dates; undated photos go at the end.
 2. Group photos into moments using date gaps (a new day or a gap of several hours usually starts a new moment), place changes (only when a place is given) and scene changes (for example ceremony, dinner, beach, a different activity).
 3. Place is optional and often null. Never invent, guess or infer a place: a moment's "place" must be copied exactly from the place field of its photos, or null. When places are missing, build moments from dates and visible content only.
-4. Moment titles: short (at most 6 words), original, describing what is visible or the part of the day (for example "Getting Ready", "Dinner by the Water"). Never invent people's names, places or facts that are not in the photo lines or the book info.
+4. Moment titles: short (at most 6 words), original, describing what is visible or the part of the day, in sentence case: only the first word and real names or places capitalised (for example "Getting ready", "Dinner by the water"). Never invent people's names, places or facts that are not in the photo lines or the book info.
 5. dateLabel: derived from the photo dates only, for example "12 Oct 2026" or "12–14 Oct 2026"; empty string for undated moments.
 6. Layouts: choose layoutId only from the catalogue below. photoIds must contain exactly as many aliases as the layout has photos. Put photos whose orientation matches the slot preference into that slot (a landscape photo in a landscape slot, portrait photos in portrait slots; square fits either). A single landscape photo on full-page is centre-cropped, so prefer pairing landscapes on two-horizontal or using them as the wide slot of three-mixed.
 7. Use each alias at most once across all pages. Only use aliases from the photo lines. The cover photo may additionally appear once on a page.
 8. Respect the page limit: the total number of pages across all moments must not exceed maxPages from the book info. If the photos do not all fit, leave out the weakest ones (low quality, near-identical to another photo of the same moment) rather than exceeding the limit. Otherwise use the good photos generously; give strong photos (high quality, cover yes) a page of their own now and then.
 9. Vary the layouts: avoid the same layout on consecutive pages when another layout fits, and open a moment with a strong single photo when the moment has several photos. Aim for 2 or more pages per moment; merge tiny moments with a neighbour when that reads better.
 10. Cover: choose coverPhotoId from photos marked cover yes when possible — a sharp, people-forward photo that works on a portrait page (portrait or square orientation preferred, high quality).
-11. Title and subtitle: original wording, at most 8 words each, matching the occasion and tone. No people's names unless they appear in the user's title. If the book info gives a user title, return exactly that title unchanged. The subtitle may be a date range or a short phrase; use an empty string if nothing fits. Write the title, subtitle and moment titles in the caption language from the book info (natural, native Arabic when it is "ar").
+11. Title and subtitle: original wording, at most 8 words each, matching the occasion and tone. No people's names unless they appear in the user's title. If the book info gives a user title, return exactly that title unchanged. The subtitle may be a date range or a short phrase in sentence case; use an empty string if nothing fits. Write the title, subtitle and moment titles in the caption language from the book info (natural, native Arabic when it is "ar").
 12. Moment ids are "m1", "m2", ... in order.
 13. Captions are written later by another agent; do not write captions.
 

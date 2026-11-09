@@ -103,3 +103,6 @@ Format: `## D-NNN — title (YYYY-MM-DD)` → **Decision**, **Why**, **Alternati
 
 ## D-034 — Build captions have internal caps, separate from rewrite limits (2026-11-09)
 **Decision:** `maxCaptionBatchesPerBuild` 10 + one repair per batch in limits.ts; build captions don't count toward the CLAUDE.md caption-rewrite limits (20 free / 200 paid), which apply to the M5 Rewriter.
+
+## D-035 — Per-run AI spending cap (2026-11-09)
+**Decision:** `maxRunCostUsd` in limits.ts — free $1.50, paid $6.00 — checked before every Caption Writer, Critic and repair call (run total from agent_steps). Over the cap → finish with captions so far, run ai_status partial (error_code run_budget). Caption repairs use effort `low` (CLAUDE.md: rewrites low). Critic is skipped when the book has no AI captions. **Why:** worst-case caption+critic+repair spend was ~$4.6 per paid build with no dollar ceiling. Verify real costs in M4b and tune.

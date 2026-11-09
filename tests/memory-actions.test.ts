@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   getUserMemoryAdmin: vi.fn(),
   upsertUserMemory: vi.fn(),
   deleteOwnMemory: vi.fn(),
+  clearMemoryFromActiveRuns: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: async () => mocks.user }));
@@ -29,7 +30,10 @@ vi.mock("@/lib/db/memory", () => ({
   upsertUserMemory: mocks.upsertUserMemory,
   deleteOwnMemory: mocks.deleteOwnMemory,
 }));
-vi.mock("@/lib/db/agent-runs", () => ({ getActiveRunForBook: vi.fn() }));
+vi.mock("@/lib/db/agent-runs", () => ({
+  getActiveRunForBook: vi.fn(),
+  clearMemoryFromActiveRuns: mocks.clearMemoryFromActiveRuns,
+}));
 vi.mock("@/lib/db/photos", () => ({ listPhotosForCuration: vi.fn(), setUserOverride: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("next/navigation", () => ({
@@ -101,6 +105,7 @@ beforeEach(() => {
   mocks.getBookForRun.mockResolvedValue(runBook());
   mocks.getUserMemoryAdmin.mockResolvedValue(null);
   mocks.upsertUserMemory.mockResolvedValue(undefined);
+  mocks.clearMemoryFromActiveRuns.mockResolvedValue(0);
   logs = (["error", "warn", "log", "info", "debug"] as const).map((m) =>
     vi.spyOn(console, m).mockImplementation(() => {}),
   );
@@ -227,7 +232,39 @@ describe("clearMemoryAction", () => {
     mocks.user = null;
     await expect(clearMemoryAction()).resolves.toEqual({ ok: false, error: "signed_out" });
     expect(mocks.deleteOwnMemory).not.toHaveBeenCalled();
+    expect(mocks.clearMemoryFromActiveRuns).not.toHaveBeenCalled();
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("also strips memory from the session user's active runs", async () => {
+    mocks.deleteOwnMemory.mockResolvedValue(true);
+    mocks.clearMemoryFromActiveRuns.mockResolvedValue(2);
+    await expect(clearMemoryAction()).resolves.toEqual({ ok: true, cleared: true });
+    expect(mocks.clearMemoryFromActiveRuns).toHaveBeenCalledTimes(1);
+    expect(mocks.clearMemoryFromActiveRuns).toHaveBeenCalledWith(USER);
+    expect(mocks.deleteOwnMemory.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.clearMemoryFromActiveRuns.mock.invocationCallOrder[0],
+    );
+    expect(logs.every((s) => s.mock.calls.length === 0)).toBe(true);
+  });
+
+  it("nothing to forget → still strips active runs", async () => {
+    mocks.deleteOwnMemory.mockResolvedValue(false);
+    await expect(clearMemoryAction()).resolves.toEqual({ ok: true, cleared: false });
+    expect(mocks.clearMemoryFromActiveRuns).toHaveBeenCalledWith(USER);
+  });
+
+  it.each([true, false])("run strip failure is tolerated (cleared=%s), code only logged", async (cleared) => {
+    mocks.deleteOwnMemory.mockResolvedValue(cleared);
+    mocks.clearMemoryFromActiveRuns.mockRejectedValue(
+      Object.assign(new Error(`${SECRET} ${USER}`), { code: "08006" }),
+    );
+    await expect(clearMemoryAction()).resolves.toEqual({ ok: true, cleared });
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/settings");
+    const text = loggedText();
+    expect(text).toMatch(/clear run memory failed \(08006\)/);
+    expect(text).not.toContain(SECRET);
+    expect(text).not.toContain(USER);
   });
 
   it("success → cleared true + revalidates /settings", async () => {
@@ -244,6 +281,7 @@ describe("clearMemoryAction", () => {
   it("db error → failed, code only logged", async () => {
     mocks.deleteOwnMemory.mockRejectedValue(Object.assign(new Error(SECRET), { code: "42501" }));
     await expect(clearMemoryAction()).resolves.toEqual({ ok: false, error: "failed" });
+    expect(mocks.clearMemoryFromActiveRuns).not.toHaveBeenCalled();
     const text = loggedText();
     expect(text).toContain("42501");
     expect(text).not.toContain(SECRET);

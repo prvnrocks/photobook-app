@@ -93,21 +93,36 @@ export function headerCopy(input: { aiUsed: boolean; kept: number; total: number
   return aiUsed ? `AI kept ${kept} of ${total}` : `Kept ${kept} of ${total}`;
 }
 
-export type ReviewBanner = "building" | "ai_off" | "partial" | "failed" | null;
+export type ReviewBanner = "building" | "ai_off" | "partial" | "captions_missing" | "failed" | null;
 
 /**
  * Which banner to show. An active run wins; then AI unavailable (only if the AI never picked
  * these); then a partial / failed AI result.
+ *
+ * A partial run is told apart by what the album actually is (`generator` = docOrigin(doc).generator):
+ * - the AI album was used ('ai') and some captionable pages are empty → "captions_missing"
+ *   (no "simple rules" claim — the album is the AI's);
+ * - the AI album was used and every captionable page has a caption (e.g. only the final check
+ *   failed) → no banner;
+ * - otherwise (rule fallback, or unknown) → "partial" ("Some of this was done with simple rules").
+ * Both optional inputs default to the pre-M4 behaviour ("partial").
  */
 export function reviewBanner(input: {
   activeRun: boolean;
   aiAvailable: boolean;
   aiStatus: string | null | undefined;
+  /** docOrigin(books.doc).generator: 'ai' | 'rule' | 'none'. */
+  generator?: string | null;
+  /** Captionable pages without a caption (captionsPreviewModel(...).missing). */
+  missingCaptions?: number;
 }): ReviewBanner {
   if (input.activeRun) return "building";
   const s = input.aiStatus;
   if (!input.aiAvailable && !aiPicked(s)) return "ai_off";
-  if (s === "partial") return "partial";
+  if (s === "partial") {
+    if (input.generator !== "ai") return "partial";
+    return (input.missingCaptions ?? 0) > 0 ? "captions_missing" : null;
+  }
   if (s === "failed") return "failed";
   return null;
 }
@@ -116,6 +131,7 @@ export const BANNER_COPY: Record<Exclude<ReviewBanner, null>, string> = {
   building: "Your album is still being built…",
   ai_off: "AI isn't switched on yet — we picked these with simple rules.",
   partial: "Some of this was done with simple rules. Try AI again?",
+  captions_missing: "Your album is ready. Some pages don't have captions yet — you can add them later.",
   failed: "AI couldn't finish this time — we picked these with simple rules. Try AI again?",
 };
 
@@ -481,6 +497,39 @@ export function missingCaptionsCopy(n: number): string {
 }
 
 export const PARTIAL_CAPTIONS_NOTE = "Some pages may not have captions yet.";
+
+/**
+ * True when the text is mainly Arabic script: more Arabic-script letters than Latin letters
+ * (digits, punctuation, emoji and spaces don't count). Used for lang="ar" per caption; dir="auto"
+ * is always set regardless.
+ */
+export function isMainlyArabic(text: string): boolean {
+  let arabic = 0;
+  let latin = 0;
+  for (const ch of text) {
+    const c = ch.codePointAt(0) ?? 0;
+    if (
+      (c >= 0x0600 && c <= 0x06ff) ||
+      (c >= 0x0750 && c <= 0x077f) ||
+      (c >= 0x08a0 && c <= 0x08ff) ||
+      (c >= 0xfb50 && c <= 0xfdff) ||
+      (c >= 0xfe70 && c <= 0xfeff)
+    ) {
+      // Skip Arabic-Indic digits and Arabic punctuation (comma, semicolon, question mark).
+      if ((c >= 0x0660 && c <= 0x0669) || (c >= 0x06f0 && c <= 0x06f9) || c === 0x060c || c === 0x061b || c === 0x061f) continue;
+      arabic += 1;
+    } else if ((c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a) || (c >= 0xc0 && c <= 0x24f && c !== 0xd7 && c !== 0xf7)) {
+      latin += 1;
+    }
+  }
+  return arabic > 0 && arabic > latin;
+}
+
+/** lang / font for one caption: lang="ar" only for Arabic-script text; Cairo for ar books or Arabic text. */
+export function captionTextAttrs(text: string, captionLang: string): { lang: "ar" | undefined; arabicFont: boolean } {
+  const ar = isMainlyArabic(text);
+  return { lang: ar ? "ar" : undefined, arabicFont: ar || captionLang === "ar" };
+}
 
 /** Extra line under the partial banner when captionable pages are still empty. */
 export function partialCaptionsNote(banner: ReviewBanner, missing: number): string | null {

@@ -195,7 +195,7 @@ export function buildCaptionUserMessage(input: CaptionUserMessageInput): string 
   lines.push("", "MOMENTS");
   for (const m of spec.moments) {
     lines.push(
-      `${m.momentId} · chapter ${quoted(m.title, AI_TEXT_LIMITS.chapterTitle)} · date ${oneLine(m.dateLabel) || "undated"} · place ${quoted(m.place, AI_TEXT_LIMITS.place)}`,
+      `${m.momentId} · chapter ${quoted(m.title, AI_TEXT_LIMITS.chapterTitle)} · date ${m.dateLabel.trim() ? quoted(m.dateLabel, AI_TEXT_LIMITS.dateLabel) : "undated"} · place ${quoted(m.place, AI_TEXT_LIMITS.place)}`,
     );
     if (m.pages.length === 0) lines.push("- (no page captions needed; heading only)");
     for (const p of m.pages) {
@@ -299,7 +299,8 @@ export function buildCaptionWriterRequest(args: WriteCaptionsArgs): AgentRequest
       },
     ],
     schema: CaptionBatchAiSchema,
-    effort: EFFORT.caption_writer,
+    // A repair round rewrites a few captions: effort low (CLAUDE.md); full batches: medium.
+    effort: repair ? EFFORT.caption_repair : EFFORT.caption_writer,
     maxTokens: captionWriterMaxTokens(pageCount),
     timeoutMs: AGENT_TIMEOUT_MS.caption_writer,
     scenarioMeta: { ...meta },
@@ -347,7 +348,8 @@ export function precheckBatch(
   const ctx = buildCaptionContext({
     lang: spec.lang,
     bookTitle: args.book.title,
-    chapters: spec.moments.map((m) => ({ title: m.title, place: m.place })),
+    // Places only: chapter titles are AI text and never allowlist names (SF3).
+    chapters: spec.moments.map((m) => ({ place: m.place })),
     photoPlaces: photos.map((p) => p?.place ?? null),
     knownNames: args.memory?.knownNames ?? [],
     dates: photos.map((p) => p?.takenAt ?? null),

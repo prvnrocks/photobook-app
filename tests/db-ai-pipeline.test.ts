@@ -204,6 +204,78 @@ describe("agent runs: create / lease / checkpoint", () => {
   });
 });
 
+describe("agent runs: clearMemoryFromActiveRuns", () => {
+  const R2 = "77777777-7777-4777-8777-777777777777";
+  const R3 = "88888888-8888-4888-8888-888888888888";
+
+  it("selects only the user's active runs and strips memory, keeping other cursor fields", async () => {
+    fake.state.results.push(
+      {
+        data: [
+          { id: R, cursor: { v: 1, phase: "captioning", memory: { v: 1, tonePreference: "fun" }, plan: { a: 1 } } },
+          { id: R2, cursor: { v: 1, phase: "curating" } }, // no memory → untouched
+          { id: R3, cursor: null },
+        ],
+        error: null,
+      },
+      { data: [{ id: R }], error: null },
+    );
+    expect(await runs.clearMemoryFromActiveRuns(U)).toBe(1);
+    expect(fake.state.chains).toHaveLength(2);
+    const [sel, upd] = fake.state.chains;
+    expect(sel).toMatchObject({ client: "admin", table: "agent_runs", op: "select" });
+    expect(sel.calls).toEqual([
+      ["select", "id, cursor"],
+      ["eq", "user_id", U],
+      ["not", "state", "in", "(done,failed)"],
+    ]);
+    expect(upd).toMatchObject({ client: "admin", table: "agent_runs", op: "update" });
+    expect(upd.payload).toEqual({ cursor: { v: 1, phase: "captioning", plan: { a: 1 } } });
+    expect(upd.calls).toEqual([
+      ["eq", "id", R],
+      ["eq", "user_id", U],
+      ["not", "state", "in", "(done,failed)"],
+      ["select", "id"],
+    ]);
+  });
+
+  it("a run that finished in between (0 rows updated) is not counted", async () => {
+    fake.state.results.push(
+      { data: [{ id: R, cursor: { memory: {} } }, { id: R2, cursor: { memory: { v: 1 }, x: 1 } }], error: null },
+      { data: [], error: null },
+      { data: [{ id: R2 }], error: null },
+    );
+    expect(await runs.clearMemoryFromActiveRuns(U)).toBe(1);
+  });
+
+  it("no active runs → 0, no writes; invalid id → invalid_id without a query", async () => {
+    fake.state.results.push({ data: [], error: null });
+    expect(await runs.clearMemoryFromActiveRuns(U)).toBe(0);
+    expect(fake.state.chains).toHaveLength(1);
+    await expect(runs.clearMemoryFromActiveRuns("bad")).rejects.toMatchObject({ code: "invalid_id" });
+    expect(fake.state.chains).toHaveLength(1);
+  });
+
+  it("errors carry the code only; an update error still tries the remaining runs", async () => {
+    fake.state.results.push({ data: null, error: { code: "42501", message: `user ${U}` } });
+    const err = await runs.clearMemoryFromActiveRuns(U).catch((e) => e);
+    expect(err).toBeInstanceOf(runs.AgentRunsQueryError);
+    expect(err.code).toBe("42501");
+    expect(err.message).not.toContain(U);
+
+    fake.state.chains = [];
+    fake.state.results.push(
+      { data: [{ id: R, cursor: { memory: {} } }, { id: R2, cursor: { memory: {} } }], error: null },
+      { data: null, error: { code: "23514", message: `run ${R}` } },
+      { data: [{ id: R2 }], error: null },
+    );
+    const err2 = await runs.clearMemoryFromActiveRuns(U).catch((e) => e);
+    expect(err2).toMatchObject({ code: "23514" });
+    expect(err2.message).not.toContain(R);
+    expect(fake.state.chains.filter((c) => c.op === "update")).toHaveLength(2);
+  });
+});
+
 describe("agent runs: createRunCapped", () => {
   const input = { bookId: B, userId: U, trigger: "rebuild" as const, mode: "live" as const, dailyCap: 3, rebuildCap: 2, enforce: true };
 

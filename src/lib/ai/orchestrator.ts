@@ -37,6 +37,14 @@ import "server-only";
 // before them. A model call starts only when its timeout (+ margin) fits in the remaining lease;
 // runAgentStep retries only within the same bound (SDK retries are off).
 //
+// Guards (M4 review): the cursor is measured before every checkpoint (cursorBytes vs
+// cursorByteLimit — AI_MAX_CURSOR_BYTES, default the DB check); a caption-phase cursor that would
+// not fit sheds its pending caption work and the run finishes with the AI album and the captions
+// that fit (ai_status partial, error_code cursor_too_large). Every Caption Writer / Critic / repair
+// call first checks the run's spend + a pessimistic estimate of the call against
+// limits.maxRunCostUsd (D-035); over → that work stops (error_code run_budget). Critic-only
+// failures mark the RUN partial but not the book (criticFailures, SF5).
+//
 // Privacy (D-027): nothing here logs. Error codes are short code strings; cursor / progress hold
 // ids, counts and codes only — except, while the run is going, `cursor.album.plan` (AI titles),
 // `cursor.captions` / `cursor.headings` (AI text) and `cursor.memory` (the user's memory snapshot),
@@ -74,12 +82,19 @@ import * as photosDb from "@/lib/db/photos";
 import type { CurationPhotoRow, CurationWrite } from "@/lib/db/photos";
 import type { Json } from "@/lib/supabase/database.types";
 import { curateBatch, needsCuration, CURATOR_PROMPT_VERSION } from "./agents/curator";
-import { writeCaptions, type WriteCaptionsResult } from "./agents/caption-writer";
-import { critiqueBook } from "./agents/critic";
+import { captionWriterMaxTokens, writeCaptions, type WriteCaptionsResult } from "./agents/caption-writer";
+import { critiqueBook, criticMaxTokens } from "./agents/critic";
 import { MAX_RETRY_ISSUES, planAlbum } from "./agents/storyteller";
 import { buildBatches } from "./batches";
 import { buildCaptionContext, checkBookCaptions, CAPTION_ISSUE_CODES, type CaptionCheckContext, type CaptionIssue } from "./caption-check";
-import { applyCaptions, batchIndexOfKey, batchIndexOfMoment, captionBatches, type CaptionBatchSpec } from "./captions";
+import {
+  applyCaptions,
+  batchIndexOfKey,
+  batchIndexOfMoment,
+  captionBatches,
+  groundStoryText,
+  type CaptionBatchSpec,
+} from "./captions";
 import { AGENT_TIMEOUT_MS, AI_MODEL, CURATOR_CONCURRENCY, resolveAiMode, type AiMode } from "./client";
 import {
   ensureAtLeastOneKept,
@@ -88,6 +103,7 @@ import {
   type CurationPhoto,
   type DropReason,
 } from "./fallback";
+import { estimateCallCostUsd } from "./cost";
 import { limitsFor } from "./limits";
 import { isEmptyMemory, sanitizeMemory } from "./memory";
 import { planToDoc, prunePlan } from "./plan-to-doc";
@@ -143,8 +159,28 @@ export const MAX_CRITIC_ATTEMPTS = 2;
  * that already made a model call (keeps progress frequent; the hard bound is the lease).
  */
 export const CAPTION_WAVE_CUTOFF = 1;
-/** agent_runs.cursor size check (migration 0800, D-033), in bytes of the JSON text. */
+/** agent_runs.cursor size check (migration 0800, D-033: pg_column_size(cursor) ≤ 262144). */
 export const MAX_CURSOR_BYTES = 262_144;
+/** jsonb storage overhead over the UTF-8 JSON text (conservative). */
+export const CURSOR_SIZE_FACTOR = 1.15;
+/** Rough input tokens of one Caption Writer call (system + book info + per page notes) — D-035 estimate. */
+const CAPTION_CALL_INPUT_TOKENS = (pages: number) => 5_000 + 400 * Math.max(1, pages);
+/** Rough input tokens of one Critic call (system + per page line + photo notes) — D-035 estimate. */
+const CRITIC_CALL_INPUT_TOKENS = (pages: number) => 4_000 + 300 * Math.max(1, pages);
+
+/**
+ * Cursor byte limit used by the guard: env AI_MAX_CURSOR_BYTES (positive integer, never above the
+ * DB check), else MAX_CURSOR_BYTES.
+ */
+export function cursorByteLimit(env: Record<string, string | undefined> = process.env): number {
+  const raw = Number.parseInt((env.AI_MAX_CURSOR_BYTES ?? "").trim(), 10);
+  return Number.isFinite(raw) && raw > 0 ? Math.min(raw, MAX_CURSOR_BYTES) : MAX_CURSOR_BYTES;
+}
+
+/** Pessimistic stored size of a cursor: UTF-8 bytes of its JSON × CURSOR_SIZE_FACTOR. */
+export function cursorBytes(cursor: unknown): number {
+  return Math.ceil(new TextEncoder().encode(JSON.stringify(cursor)).length * CURSOR_SIZE_FACTOR);
+}
 /** Optimistic-lock conflicts tolerated when saving the doc (each retried on the next tick). */
 export const MAX_WRITE_CONFLICTS = 1;
 export const CURSOR_VERSION = 1;
@@ -176,6 +212,10 @@ export interface OrchestratorDeps {
   /** The book already had a finished live AI run (→ a new "build" is really a rebuild). */
   hasFinishedLiveAiRun(bookId: string): Promise<boolean>;
   stepLogger(runId: string): StepLogger;
+  /** USD spent by the run so far (sum of its agent_steps) — D-035 run budget. */
+  getRunCostUsd(runId: string): Promise<number>;
+  /** Optional override of cursorByteLimit() (tests). */
+  maxCursorBytes?: () => number;
   // memory (D-032)
   /** user_memory.prefs of the user (raw jsonb, sanitised by the caller), or null. */
   getUserMemory(userId: string): Promise<unknown>;
@@ -207,6 +247,8 @@ export function defaultDeps(): OrchestratorDeps {
     getRunForOwner: agentRunsDb.getRunForOwner,
     hasFinishedLiveAiRun: agentRunsDb.hasFinishedLiveAiRun,
     stepLogger: agentRunsDb.stepLogger,
+    // Re-sums agent_steps into agent_runs.total_* (idempotent) and returns the total.
+    getRunCostUsd: async (runId) => (await agentRunsDb.syncRunTotals(runId)).costUsd,
     getUserMemory: async (userId) => (await getUserMemoryAdmin(userId))?.prefs ?? null,
     resolveMode: () => resolveAiMode(),
     transportFor: (mode) => getTransport(mode),
@@ -330,8 +372,12 @@ export interface RunCursor {
   /** Caption Writer calls reserved per caption batch. Checkpointed BEFORE each call. */
   captionAttempts: number[];
   captionBatchesDone: number[];
-  /** Caption batches / Critic / repair calls without a usable answer (→ ai_status partial). */
+  /** Caption batches / repair calls without a usable answer, budget / size stops (→ run AND book partial). */
   captionFailures: number;
+  /** Critic refusals / errors / budget skips (→ run partial only; the book follows the captions, SF5). */
+  criticFailures: number;
+  /** Step keys of `skipped` agent_steps rows already written (idempotent skippedStep). */
+  skippedSteps: string[];
   /** captionKey → AI caption (passed the pre-check). Stripped at finish. */
   captions: Record<string, string>;
   /** momentId → AI heading. Stripped at finish. */
@@ -455,6 +501,8 @@ export function parseCursor(raw: unknown): RunCursor | null {
     captionAttempts: isIntArr(c.captionAttempts) ? c.captionAttempts : [],
     captionBatchesDone: isIntArr(c.captionBatchesDone) ? c.captionBatchesDone : [],
     captionFailures: num("captionFailures"),
+    criticFailures: num("criticFailures"),
+    skippedSteps: isStrArr(c.skippedSteps) ? c.skippedSteps : [],
     captions: strRecord(c.captions, PAGE_KEY_RE),
     headings: strRecord(c.headings, MOMENT_ID_RE),
     captionIssues: codeRecord(c.captionIssues),
@@ -478,6 +526,8 @@ function emptyCaptionFields(): Pick<
   | "captionAttempts"
   | "captionBatchesDone"
   | "captionFailures"
+  | "criticFailures"
+  | "skippedSteps"
   | "captions"
   | "headings"
   | "captionIssues"
@@ -497,6 +547,8 @@ function emptyCaptionFields(): Pick<
     captionAttempts: [],
     captionBatchesDone: [],
     captionFailures: 0,
+    criticFailures: 0,
+    skippedSteps: [],
     captions: {},
     headings: {},
     captionIssues: {},
@@ -785,6 +837,22 @@ function pushFailure(c: RunCursor, code: string): void {
   if (c.failures.length < MAX_FAILURE_CODES) c.failures.push(code);
 }
 
+/** Failure codes that become the run's error_code whenever present (they explain a partial run). */
+const PRIORITY_FAILURES = ["cursor_too_large", "run_budget"] as const;
+
+/** Records a priority code once; it is kept even when the failure list is full. */
+function pushFailureOnce(c: RunCursor, code: (typeof PRIORITY_FAILURES)[number]): void {
+  if (c.failures.includes(code)) return;
+  if (c.failures.length >= MAX_FAILURE_CODES) c.failures[c.failures.length - 1] = code;
+  else c.failures.push(code);
+}
+
+/** error_code of a finished, non-ok run: a priority code if any, else the first failure. */
+function runErrorCode(c: RunCursor): string | null {
+  for (const p of PRIORITY_FAILURES) if (c.failures.includes(p)) return p;
+  return c.failures[0] ?? null;
+}
+
 // ---------------------------------------------------------------------------------------------
 // startRun
 
@@ -958,6 +1026,16 @@ interface Tick {
   heavyDone: boolean;
   /** planDocOf() of this tick (undefined = not computed yet). */
   planDoc?: PlanDoc | null;
+  /** Captions / headings as of the last successful checkpoint (restored when a cursor is too large). */
+  saved: { captions: Record<string, string>; headings: Record<string, string> };
+}
+
+/** Thrown by save() after it shed the caption work of an oversized cursor; loop() continues at validating. */
+class CaptionsShedSignal extends Error {
+  constructor() {
+    super("orchestrator: caption work shed");
+    this.name = "CaptionsShedSignal";
+  }
 }
 
 async function tick(runId: string, token: string, t0: number, budgetMs: number, deps: OrchestratorDeps): Promise<AdvanceResult> {
@@ -1012,6 +1090,7 @@ async function tick(runId: string, token: string, t0: number, budgetMs: number, 
       budgetMs,
       leaseEnd: t0 + LEASE_SECONDS * 1000,
       heavyDone: false,
+      saved: { captions: { ...cursor.captions }, headings: { ...cursor.headings } },
     };
     if (modeChanged) return await finishWithRuleAlbum(ctx, "mode_changed");
     return await loop(ctx);
@@ -1048,8 +1127,52 @@ function needTransport(c: Tick): AgentTransport {
   return c.transport;
 }
 
-/** Checkpoint with our lease token; throws StaleLeaseError when the lease was taken over. */
+const CAPTION_STATES: readonly RunState[] = ["captioning", "critiquing", "repairing", "validating"];
+
+/**
+ * SF1: an oversized caption-phase cursor drops its pending caption work instead of failing the
+ * checkpoint: captions/headings go back to the last checkpointed ones (all of them if even that
+ * is too large), still-failing ones are removed, no Critic / repair is left to do and the run
+ * continues at validating with the AI album. false = nothing to shed (not a caption phase).
+ */
+function shedCaptionWork(c: Tick, limit: number): boolean {
+  if (!CAPTION_STATES.includes(c.state)) return false;
+  const cur = c.cursor;
+  cur.captions = { ...c.saved.captions };
+  cur.headings = { ...c.saved.headings };
+  if (cursorBytes(cur) > limit) {
+    cur.captions = {};
+    cur.headings = {};
+  }
+  const pd = planDocOf(c);
+  if (pd) finalizeCaptions(c, pd);
+  cur.captionIssues = {};
+  cur.critique = null;
+  cur.repairTargets = [];
+  cur.coverSwap = null;
+  cur.captionBatchesDone = (cur.captionBatches ?? []).map((_, i) => i);
+  cur.captionsDone = true;
+  cur.critiqueDone = true;
+  cur.repairDone = true;
+  cur.captionFailures++;
+  pushFailureOnce(cur, "cursor_too_large");
+  c.state = "validating";
+  return true;
+}
+
+/**
+ * Checkpoint with our lease token; throws StaleLeaseError when the lease was taken over. A cursor
+ * over the size limit is shed in caption phases (then CaptionsShedSignal), else the run fails
+ * with cursor_too_large.
+ */
 async function save(c: Tick, extra: RunCheckpointPatch = {}): Promise<void> {
+  const limit = c.deps.maxCursorBytes?.() ?? cursorByteLimit();
+  let shedFrom: RunState | null = null;
+  if (cursorBytes(c.cursor) > limit) {
+    const from = c.state;
+    if (!shedCaptionWork(c, limit) || cursorBytes(c.cursor) > limit) throw new OrchestratorError("cursor_too_large");
+    shedFrom = from;
+  }
   const ok = await c.deps.checkpointRun(c.runId, c.token, {
     state: c.state,
     cursor: toJson(c.cursor),
@@ -1057,6 +1180,9 @@ async function save(c: Tick, extra: RunCheckpointPatch = {}): Promise<void> {
     ...extra,
   });
   if (!ok) throw new StaleLeaseError();
+  c.saved = { captions: { ...c.cursor.captions }, headings: { ...c.cursor.headings } };
+  // Callers in a caption phase must not continue their (now dropped) work.
+  if (shedFrom !== null && shedFrom !== "validating") throw new CaptionsShedSignal();
 }
 
 function yieldTick(c: Tick): AdvanceResult {
@@ -1071,53 +1197,64 @@ function waveSize(batchesDone: number): number {
 
 async function loop(c: Tick): Promise<AdvanceResult> {
   for (;;) {
-    switch (c.state) {
-      case "queued":
-        c.state = "curating";
-        await save(c);
-        await c.deps.setBookAiStatus(c.book.id, "analyzing");
-        continue;
-
-      case "curating": {
-        const done = new Set(c.cursor.batchesDone);
-        const pending = c.cursor.batches.map((_, i) => i).filter((i) => !done.has(i));
-        if (pending.length) {
-          if (c.heavyDone && elapsed(c) > c.budgetMs * CURATOR_WAVE_CUTOFF) return yieldTick(c);
-          if (!callFits(c, AGENT_TIMEOUT_MS.curator)) return yieldTick(c);
-          await curatorWave(c, pending.slice(0, waveSize(done.size)));
-          continue;
-        }
-        await finishCuration(c);
-        c.state = "storytelling";
-        await save(c);
-        await c.deps.setBookAiStatus(c.book.id, "planning");
-        continue;
-      }
-
-      case "storytelling":
-        // The Storyteller is one long request: it runs alone, at the start of its own tick.
-        if (c.heavyDone || !callFits(c, AGENT_TIMEOUT_MS.storyteller)) return yieldTick(c);
-        await storytellerStep(c);
-        continue;
-
-      case "captioning":
-        if ((await captioningStep(c)) === "yield") return yieldTick(c);
-        continue;
-
-      case "critiquing":
-        if ((await critiquingStep(c)) === "yield") return yieldTick(c);
-        continue;
-
-      case "repairing":
-        if ((await repairingStep(c)) === "yield") return yieldTick(c);
-        continue;
-
-      case "validating":
-        return validateAndSave(c);
-
-      default:
-        throw new OrchestratorError("bad_state");
+    try {
+      const out = await loopStep(c);
+      if (out) return out;
+    } catch (e) {
+      if (e instanceof CaptionsShedSignal) continue; // state is now validating
+      throw e;
     }
+  }
+}
+
+/** One state of the machine; null = continue with the next state. */
+async function loopStep(c: Tick): Promise<AdvanceResult | null> {
+  switch (c.state) {
+    case "queued":
+      c.state = "curating";
+      await save(c);
+      await c.deps.setBookAiStatus(c.book.id, "analyzing");
+      return null;
+
+    case "curating": {
+      const done = new Set(c.cursor.batchesDone);
+      const pending = c.cursor.batches.map((_, i) => i).filter((i) => !done.has(i));
+      if (pending.length) {
+        if (c.heavyDone && elapsed(c) > c.budgetMs * CURATOR_WAVE_CUTOFF) return yieldTick(c);
+        if (!callFits(c, AGENT_TIMEOUT_MS.curator)) return yieldTick(c);
+        await curatorWave(c, pending.slice(0, waveSize(done.size)));
+        return null;
+      }
+      await finishCuration(c);
+      c.state = "storytelling";
+      await save(c);
+      await c.deps.setBookAiStatus(c.book.id, "planning");
+      return null;
+    }
+
+    case "storytelling":
+      // The Storyteller is one long request: it runs alone, at the start of its own tick.
+      if (c.heavyDone || !callFits(c, AGENT_TIMEOUT_MS.storyteller)) return yieldTick(c);
+      await storytellerStep(c);
+      return null;
+
+    case "captioning":
+      if ((await captioningStep(c)) === "yield") return yieldTick(c);
+      return null;
+
+    case "critiquing":
+      if ((await critiquingStep(c)) === "yield") return yieldTick(c);
+      return null;
+
+    case "repairing":
+      if ((await repairingStep(c)) === "yield") return yieldTick(c);
+      return null;
+
+    case "validating":
+      return await validateAndSave(c);
+
+    default:
+      throw new OrchestratorError("bad_state");
   }
 }
 
@@ -1307,12 +1444,20 @@ async function storytellerStep(c: Tick): Promise<void> {
   await save(c);
 }
 
-/** One `skipped` agent_steps row, no model call (idempotent on resume: same key + attempt 1). */
+/**
+ * One `skipped` agent_steps row (step key "{agent}:skipped"), no model call. Idempotent: the key
+ * is recorded in the cursor and checkpointed BEFORE the insert, so a resumed tick never writes a
+ * second row (a tick dying between the two loses the cosmetic row, never duplicates it).
+ */
 async function skippedStep(c: Tick, agent: AgentName, reason: string): Promise<void> {
+  const stepKey = `${agent}:skipped`;
+  if (c.cursor.skippedSteps.includes(stepKey)) return;
+  c.cursor.skippedSteps.push(stepKey);
+  await save(c);
   await c.logger.insertStep({
     runId: c.runId,
     agent,
-    stepKey: agent,
+    stepKey,
     attempt: 1,
     retries: 0,
     status: "skipped",
@@ -1375,6 +1520,8 @@ function planDocOf(c: Tick): PlanDoc | null {
     generatorVersion: STORYTELLER_PROMPT_VERSION,
   });
   if (!("doc" in out)) return null;
+  // Grounded titles: the Caption Writer and the Critic see the same neutral titles the book gets.
+  out.doc = groundedDoc(c, out.doc, photos);
   const specs = captionBatches(out.doc, {
     lang: asCaptionLang(c.book.caption_lang),
     maxBatches: limitsFor(c.book.is_paid === true).maxCaptionBatchesPerBuild,
@@ -1406,17 +1553,55 @@ async function skipCaptions(c: Tick): Promise<void> {
   await save(c);
 }
 
-/** Pre-check context of the whole book: user title, Storyteller chapters, photo places + dates, memory names. */
-function bookCaptionContext(c: Tick, pd: PlanDoc): CaptionCheckContext {
+/**
+ * Pre-check context from user data + metadata only (SF3): the USER's title (books.title, never the
+ * AI cover title), GPS places of the photos and chapters, names the user typed (memory), photo
+ * dates. Storyteller chapter titles are AI text and never allowlist anything.
+ */
+function metaCaptionContext(c: Tick, photos: readonly StoryPhoto[], chapters: BookDoc["chapters"] = []): CaptionCheckContext {
   return buildCaptionContext({
     lang: asCaptionLang(c.book.caption_lang),
     bookTitle: c.book.title,
-    chapters: pd.doc.chapters,
-    photoPlaces: pd.photos.map((p) => p.place),
+    chapters: chapters.map((ch) => ({ place: ch.place })),
+    photoPlaces: photos.map((p) => p.place),
     knownNames: c.cursor.memory?.knownNames ?? [],
-    dates: pd.photos.map((p) => p.takenAt),
+    dates: photos.map((p) => p.takenAt),
   });
 }
+
+/** Pre-check context of the whole book (plan doc). */
+function bookCaptionContext(c: Tick, pd: PlanDoc): CaptionCheckContext {
+  return metaCaptionContext(c, pd.photos, pd.doc.chapters);
+}
+
+/** SF3: Storyteller chapter titles / subtitle that fail the pre-check become neutral (pure). */
+function groundedDoc(c: Tick, doc: BookDoc, photos: readonly StoryPhoto[]): BookDoc {
+  return groundStoryText(doc, metaCaptionContext(c, photos, doc.chapters), {
+    lang: asCaptionLang(c.book.caption_lang),
+    dates: photos.filter((p) => p.keep).map((p) => p.takenAt),
+  }).doc;
+}
+
+// --- D-035 run budget -------------------------------------------------------------------------
+
+/** USD spent by the run so far (agent_steps sum). */
+async function runSpentUsd(c: Tick): Promise<number> {
+  const v = await c.deps.getRunCostUsd(c.runId);
+  return Number.isFinite(v) && v > 0 ? v : 0;
+}
+
+const runCapUsd = (c: Tick) => limitsFor(c.book.is_paid === true).maxRunCostUsd;
+
+/** Pessimistic cost of one Caption Writer call over `spec` (full or repair). */
+const captionCallEstimate = (spec: CaptionBatchSpec) =>
+  estimateCallCostUsd(AI_MODEL, {
+    inputTokens: CAPTION_CALL_INPUT_TOKENS(spec.keys.length),
+    maxOutputTokens: captionWriterMaxTokens(spec.keys.length),
+  });
+
+/** Pessimistic cost of the Critic call over a doc with `pages` pages. */
+const criticCallEstimate = (pages: number) =>
+  estimateCallCostUsd(AI_MODEL, { inputTokens: CRITIC_CALL_INPUT_TOKENS(pages), maxOutputTokens: criticMaxTokens(pages) });
 
 /** Captions of the cursor in book order (keys of the plan doc). */
 function captionsInOrder(c: Tick, pd: PlanDoc): Array<{ key: string; text: string }> {
@@ -1488,7 +1673,12 @@ async function captioningStep(c: Tick): Promise<StepOutcome> {
 
 async function captionWave(c: Tick, pd: PlanDoc, indices: number[]): Promise<void> {
   const transport = needTransport(c);
-  // 1. Reserve one attempt per call (checkpointed before any call).
+  // 1. Reserve one attempt per call (checkpointed before any call) — only for calls that fit the
+  //    run budget (D-035); a batch that does not fit stays pending for the next wave.
+  const spent = await runSpentUsd(c);
+  const cap = runCapUsd(c);
+  let planned = 0;
+  let overBudget = 0;
   const calls: Array<{ bi: number; attempt: number }> = [];
   for (const bi of indices) {
     const used = c.cursor.captionAttempts[bi] ?? 0;
@@ -1499,8 +1689,23 @@ async function captionWave(c: Tick, pd: PlanDoc, indices: number[]): Promise<voi
       pushFailure(c.cursor, "caption_writer_attempts");
       continue;
     }
+    const est = captionCallEstimate(pd.specs[bi]);
+    if (spent + planned + est > cap) {
+      overBudget++;
+      continue;
+    }
+    planned += est;
     c.cursor.captionAttempts[bi] = used + 1;
     calls.push({ bi, attempt: used + 1 });
+  }
+  if (!calls.length && overBudget > 0) {
+    // Nothing fits the run budget any more: the remaining batches stay uncaptioned.
+    const done = new Set(c.cursor.captionBatchesDone);
+    for (const s of pd.specs) if (!done.has(s.index)) c.cursor.captionBatchesDone.push(s.index);
+    c.cursor.captionFailures++;
+    pushFailureOnce(c.cursor, "run_budget");
+    c.cursor.captionsDone = true;
+    c.state = "critiquing";
   }
   await save(c);
   if (!calls.length) return;
@@ -1575,7 +1780,10 @@ async function critiquingStep(c: Tick): Promise<StepOutcome> {
     return "next";
   }
   const lang = asCaptionLang(c.book.caption_lang);
-  const doc = applyCaptions(pd.doc, new Map(Object.entries(c.cursor.captions)), new Map(Object.entries(c.cursor.headings)), { lang });
+  const doc = applyCaptions(pd.doc, new Map(Object.entries(c.cursor.captions)), new Map(Object.entries(c.cursor.headings)), {
+    lang,
+    ctx: bookCaptionContext(c, pd),
+  });
 
   // Pre-check over the whole book (cross-batch duplicates / openings) + what the batches rejected.
   const precheck = checkBookCaptions(captionsInOrder(c, pd), bookCaptionContext(c, pd));
@@ -1589,11 +1797,23 @@ async function critiquingStep(c: Tick): Promise<StepOutcome> {
   let critique: Parameters<typeof planRepair>[0] = null;
   let score: number | null = null;
   const attempt = c.cursor.criticAttempts + 1;
-  if (attempt > MAX_CRITIC_ATTEMPTS) {
-    c.cursor.captionFailures++;
+  let callCritic = false;
+  if (Object.keys(c.cursor.captions).length === 0) {
+    // SF6: nothing to judge (no AI caption survived) — no Critic call, not a failure.
+    await skippedStep(c, "critic", "no_captions");
+  } else if (attempt > MAX_CRITIC_ATTEMPTS) {
+    c.cursor.criticFailures++;
     pushFailure(c.cursor, "critic_attempts");
   } else {
     if (pastSoftBudget(c) || !callFits(c, AGENT_TIMEOUT_MS.critic)) return "yield";
+    if ((await runSpentUsd(c)) + criticCallEstimate(doc.pages.length) > runCapUsd(c)) {
+      // D-035: no Critic over the run budget (captions stay; pre-check targets are still planned).
+      c.cursor.criticFailures++;
+      pushFailureOnce(c.cursor, "run_budget");
+      await skippedStep(c, "critic", "run_budget");
+    } else callCritic = true;
+  }
+  if (callCritic) {
     c.cursor.criticAttempts = attempt;
     await save(c);
     const book = storyBookOf(c.book);
@@ -1625,8 +1845,9 @@ async function critiquingStep(c: Tick): Promise<StepOutcome> {
         issues: result.data.issues.map((i) => ({ type: i.type, pageIndex: i.pageIndex, fix: i.fix })),
       };
     } else {
-      // No critique: pre-check failures are still repaired.
-      c.cursor.captionFailures++;
+      // No critique: pre-check failures are still repaired. The run is partial, the book is not
+      // (its captions are all there) — SF5.
+      c.cursor.criticFailures++;
       pushFailure(c.cursor, `critic_${result.code}`);
     }
   }
@@ -1699,6 +1920,9 @@ function dropTargets(c: Tick, targets: readonly CursorRepairTarget[]): void {
 async function repairWave(c: Tick, pd: PlanDoc, indices: number[]): Promise<void> {
   const transport = needTransport(c);
   const maxRepairs = limitsFor(c.book.is_paid === true).maxCaptionRepairsPerBatch;
+  const spent = await runSpentUsd(c);
+  const cap = runCapUsd(c);
+  let planned = 0;
   const calls: Array<{ bi: number; attempt: number; targets: CursorRepairTarget[] }> = [];
   for (const bi of indices) {
     const targets = c.cursor.repairTargets.filter((t) => t.batch === bi);
@@ -1709,6 +1933,16 @@ async function repairWave(c: Tick, pd: PlanDoc, indices: number[]): Promise<void
       c.cursor.repairBatchesDone.push(bi);
       continue;
     }
+    const est = captionCallEstimate(pd.specs[bi]);
+    if (spent + planned + est > cap) {
+      // D-035: over the run budget — this batch's flagged captions become null (no repair call).
+      dropTargets(c, targets);
+      c.cursor.repairBatchesDone.push(bi);
+      c.cursor.captionFailures++;
+      pushFailureOnce(c.cursor, "run_budget");
+      continue;
+    }
+    planned += est;
     c.cursor.repairAttempts[bi] = used + 1;
     calls.push({ bi, attempt: used + 1, targets });
   }
@@ -1814,7 +2048,10 @@ function withCaptions(c: Tick, target: BookDoc): BookDoc {
   let doc = target;
   if (captions.size || headings.size) {
     // applyCaptions never touches a source 'user' caption (D-031) — defensive: AI docs have none.
-    const next = applyCaptions(target, captions, headings, { lang: asCaptionLang(c.book.caption_lang) });
+    const next = applyCaptions(target, captions, headings, {
+      lang: asCaptionLang(c.book.caption_lang),
+      ctx: bookCaptionContext(c, pd),
+    });
     if (docIssues(next, c.photos, c.book).length === 0) doc = next;
   }
   const swap = c.cursor.coverSwap;
@@ -1825,8 +2062,17 @@ function withCaptions(c: Tick, target: BookDoc): BookDoc {
   return doc;
 }
 
-function computeAiStatus(cursor: RunCursor, aiPlanUsed: boolean): RunAiStatus {
-  if (aiPlanUsed && cursor.aiFailures === 0 && cursor.captionFailures === 0) return "ok";
+/**
+ * Run ai_status. `forBook` = the books.ai_status view (SF5): Critic-only failures (refusal, error,
+ * budget skip) do not make the BOOK partial — its album and captions are complete.
+ */
+export function computeAiStatus(
+  cursor: Pick<RunCursor, "aiFailures" | "captionFailures" | "criticFailures" | "batchesAi">,
+  aiPlanUsed: boolean,
+  forBook = false,
+): RunAiStatus {
+  const criticOk = forBook || cursor.criticFailures === 0;
+  if (aiPlanUsed && cursor.aiFailures === 0 && cursor.captionFailures === 0 && criticOk) return "ok";
   if (aiPlanUsed || cursor.batchesAi > 0) return "partial";
   return "failed";
 }
@@ -1858,7 +2104,8 @@ async function validateAndSave(c: Tick): Promise<AdvanceResult> {
       generatorVersion: STORYTELLER_PROMPT_VERSION,
     });
     if ("doc" in out && docIssues(out.doc, c.photos, c.book).length === 0) {
-      doc = withCaptions(c, out.doc);
+      // SF3: Storyteller titles / subtitle that fail the pre-check become neutral, then captions.
+      doc = withCaptions(c, groundedDoc(c, out.doc, photos));
       aiPlanUsed = true;
     } else {
       pushFailure(c.cursor, "plan_stale");
@@ -1898,13 +2145,13 @@ async function validateAndSave(c: Tick): Promise<AdvanceResult> {
   }
   const aiStatus = computeAiStatus(c.cursor, aiPlanUsed);
   const forced = album?.kind === "rule" && album.reason === "mode_changed" ? "mode_changed" : null;
-  const errorCode = forced ?? (aiStatus === "ok" ? null : (c.cursor.failures[0] ?? null));
+  const errorCode = forced ?? (aiStatus === "ok" ? null : runErrorCode(c.cursor));
   return finishRun(c.deps, c.runId, c.token, c.book.id, c.cursor, {
     state: "done",
     aiStatus,
     errorCode,
     progress,
-    bookStatus: bookStatusOf(aiStatus),
+    bookStatus: bookStatusOf(computeAiStatus(c.cursor, aiPlanUsed, true)),
   });
 }
 

@@ -81,6 +81,7 @@ class FakeDb {
   /** user_memory.prefs returned by getUserMemory (null = none); "throw" simulates a DB error. */
   memory: unknown = null;
   memoryLoads = 0;
+  costReads = 0;
   /** Every write outside agent_steps, in order (for "a stale tick writes nothing" checks). */
   writes: string[] = [];
   createCalls: Array<Record<string, unknown>> = [];
@@ -286,6 +287,10 @@ class FakeDb {
           r.total_cost_usd = this.steps.filter((s) => s.runId === id).reduce((n, s) => n + s.costUsd, 0);
         },
       }),
+      getRunCostUsd: async (id) => {
+        this.costReads++;
+        return this.run(id).total_cost_usd;
+      },
       getUserMemory: async (userId) => {
         this.memoryLoads++;
         if (userId !== USER) return null;
@@ -1161,7 +1166,7 @@ describe("orchestrator — captions (M4)", () => {
     expectNoText(db, s.runId, doc);
   });
 
-  it("Critic refusal → captions kept, no repair of Critic issues, ai_status partial", async () => {
+  it("Critic refusal → captions kept, no repair of Critic issues, RUN partial but book done (SF5)", async () => {
     const { db, deps } = setup(photos150().slice(0, 40), {
       scenarioFor: (agent) => (agent === "critic" ? "refusal" : "ok"),
     });
@@ -1173,7 +1178,13 @@ describe("orchestrator — captions (M4)", () => {
     expect(doc.pages.filter((p) => hasCaptionArea(p.layout)).every((p) => p.caption?.source === "ai")).toBe(true);
     expect(stepsOf(db, "caption_writer:repair:")).toHaveLength(0);
     expect(db.run(s.runId).critic_score ?? null).toBeNull();
-    expect(db.book.ai_status).toBe("partial");
+    expect(db.run(s.runId)).toMatchObject({ ai_status: "partial", error_code: "critic_refusal" });
+    // SF5: every caption is there → the book is not flagged partial (no misleading banner).
+    expect(db.book.ai_status).toBe("done");
+    expect((db.run(s.runId).cursor as { criticFailures: number; captionFailures: number })).toMatchObject({
+      criticFailures: 1,
+      captionFailures: 0,
+    });
   });
 
   it("caption batch refusal → that batch's pages stay null, other batches captioned, partial", async () => {
@@ -1437,5 +1448,182 @@ describe("orchestrator — captions (M4)", () => {
     expect(Object.keys(parsed.captions)).toHaveLength(100);
     expect(parsed.album).toMatchObject({ kind: "ai", plan: { moments: expect.any(Array) } });
     expect(parsed.memory?.knownNames).toHaveLength(20);
+  });
+});
+
+describe("orchestrator — M4 review fixes", () => {
+  /** Ticks with a tiny soft budget until the stored run state is `state` (each tick stops after one call). */
+  async function advanceUntil(deps: OrchestratorDeps, db: FakeDb, runId: string, state: string) {
+    for (let t = 0; t < 30 && db.run(runId).state !== state; t++) await orch.advance(runId, { budgetMs: 1 }, deps);
+    expect(db.run(runId).state).toBe(state);
+  }
+
+  it("SF1 cursorByteLimit: env AI_MAX_CURSOR_BYTES (positive, never above the DB check), else the DB limit", () => {
+    expect(orch.cursorByteLimit({})).toBe(orch.MAX_CURSOR_BYTES);
+    expect(orch.cursorByteLimit({ AI_MAX_CURSOR_BYTES: "1000" })).toBe(1000);
+    expect(orch.cursorByteLimit({ AI_MAX_CURSOR_BYTES: "abc" })).toBe(orch.MAX_CURSOR_BYTES);
+    expect(orch.cursorByteLimit({ AI_MAX_CURSOR_BYTES: "-5" })).toBe(orch.MAX_CURSOR_BYTES);
+    expect(orch.cursorByteLimit({ AI_MAX_CURSOR_BYTES: "999999999" })).toBe(orch.MAX_CURSOR_BYTES);
+    expect(orch.cursorBytes({ a: "é" })).toBe(Math.ceil(Buffer.byteLength('{"a":"é"}') * orch.CURSOR_SIZE_FACTOR));
+  });
+
+  it("SF1: a captioning checkpoint over the cursor limit drops caption work and finishes with the AI album (partial, cursor_too_large)", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 60));
+    const s = await start(deps);
+    await advanceUntil(deps, db, s.runId, "captioning");
+    const run = db.run(s.runId);
+    expect((run.cursor as { album: { plan?: unknown } }).album.plan).toBeTruthy();
+    expect((run.cursor as { captions: object }).captions).toEqual({});
+    // Room for the plan + bookkeeping, not for a batch of captions.
+    const limit = orch.cursorBytes(run.cursor) + 200;
+    const small: OrchestratorDeps = { ...deps, maxCursorBytes: () => limit };
+    const { last } = await runToEnd(small, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "partial", errorCode: "cursor_too_large" });
+    const doc = docOf(db);
+    expect(doc.meta?.generator).toBe("ai"); // the AI album is never lost
+    expect(doc.pages.every((p) => p.caption === null)).toBe(true);
+    expect(transport.count("caption_writer")).toBeGreaterThan(0);
+    expect(transport.count("critic")).toBe(0); // pending caption work dropped
+    expect(db.book.ai_status).toBe("partial");
+    const cursor = db.run(s.runId).cursor as { captionFailures: number; failures: string[] };
+    expect(cursor.failures).toContain("cursor_too_large");
+    expect(orch.cursorBytes(db.run(s.runId).cursor)).toBeLessThanOrEqual(limit);
+  });
+
+  it("SF1: before captioning (no caption work to shed) an oversized cursor fails the run, the rule album is still written", async () => {
+    const { db, deps } = setup(photos150().slice(0, 20));
+    const s = await start(deps);
+    const { last } = await runToEnd({ ...deps, maxCursorBytes: () => 100 }, s.runId);
+    expect(last).toMatchObject({ state: "failed", errorCode: "cursor_too_large" });
+    expect(docOf(db).pages.length).toBeGreaterThan(0);
+  });
+
+  it("SF5: Critic budget skip → run partial (run_budget), book done; one skipped critic row", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 40));
+    const s = await start(deps);
+    const pricey: OrchestratorDeps = {
+      ...deps,
+      getRunCostUsd: async (id) => (db.run(id).state === "critiquing" ? 1.49 : deps.getRunCostUsd(id)),
+    };
+    const { last } = await runToEnd(pricey, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "partial", errorCode: "run_budget" });
+    expect(transport.count("critic")).toBe(0);
+    const skipped = db.steps.filter((x) => x.status === "skipped");
+    expect(skipped).toHaveLength(1);
+    expect(skipped[0]).toMatchObject({ agent: "critic", stepKey: "critic:skipped", inputSummary: { reason: "run_budget" }, costUsd: 0 });
+    const doc = docOf(db);
+    expect(doc.pages.filter((p) => hasCaptionArea(p.layout)).every((p) => p.caption?.source === "ai")).toBe(true);
+    expect(db.book.ai_status).toBe("done");
+  });
+
+  it("SF6: no AI caption survived → Critic skipped ('no_captions'), no Critic call", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 40), {
+      scenarioFor: (agent) => (agent === "caption_writer" ? "refusal" : "ok"),
+    });
+    const s = await start(deps);
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "partial", errorCode: "caption_writer_refusal" });
+    expect(transport.count("critic")).toBe(0);
+    const skipped = db.steps.filter((x) => x.status === "skipped");
+    expect(skipped.map((x) => [x.agent, x.inputSummary.reason])).toEqual([["critic", "no_captions"]]);
+    expect((db.run(s.runId).cursor as { criticFailures: number }).criticFailures).toBe(0);
+  });
+
+  it("SF7: run budget reached before captioning → no Caption Writer call, AI album without captions, run_budget", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 40));
+    const s = await start(deps);
+    const pricey: OrchestratorDeps = {
+      ...deps,
+      getRunCostUsd: async (id) => (db.run(id).state === "captioning" ? 1.45 : deps.getRunCostUsd(id)),
+    };
+    const { last } = await runToEnd(pricey, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "partial", errorCode: "run_budget" });
+    expect(transport.count("caption_writer")).toBe(0);
+    expect(transport.count("critic")).toBe(0);
+    const doc = docOf(db);
+    expect(doc.meta?.generator).toBe("ai");
+    expect(doc.pages.every((p) => p.caption === null)).toBe(true);
+    expect(db.book.ai_status).toBe("partial");
+    const progress = (await orch.getProgress(s.runId, deps))!.progress;
+    expect(progress.captionsDone).toBe(progress.captionsTotal); // the bar completes
+  });
+
+  it("SF7: paid books get the higher cap (same spend still captions)", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 40), { book: { is_paid: true, max_pages: 100 } });
+    const s = await start(deps);
+    const spent: OrchestratorDeps = { ...deps, getRunCostUsd: async () => 1.45 };
+    const { last } = await runToEnd(spent, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok" });
+    expect(transport.count("caption_writer")).toBeGreaterThan(0);
+    expect(transport.count("critic")).toBe(1);
+    void db;
+  });
+
+  it("SF7: repair over budget → flagged captions become null without a repair call (run_budget)", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 60), {
+      scenarioFor: (agent) => (agent === "caption_writer" || agent === "critic" ? "plant_bad_caption" : "ok"),
+    });
+    const s = await start(deps);
+    const pricey: OrchestratorDeps = {
+      ...deps,
+      getRunCostUsd: async (id) => (db.run(id).state === "repairing" ? 1.49 : deps.getRunCostUsd(id)),
+    };
+    const { last } = await runToEnd(pricey, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "partial", errorCode: "run_budget" });
+    expect(stepsOf(db, "caption_writer:repair:")).toHaveLength(0);
+    expect(transport.count("critic")).toBe(1);
+    const doc = docOf(db);
+    for (const t of captionTexts(doc)) {
+      expect(isPlantedMismatch(t)).toBe(false);
+      expect(t).not.toBe(PLANTED_PRECHECK_TEXT.en);
+    }
+    expect(doc.pages.some((p) => hasCaptionArea(p.layout) && p.caption === null)).toBe(true);
+    expect(db.book.ai_status).toBe("partial");
+  });
+
+  it("SF7: a normal run reads the run spend before caption / Critic calls and stays ok", async () => {
+    const { db, deps } = setup(photos150().slice(0, 40));
+    const s = await start(deps);
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok" });
+    expect(db.costReads).toBeGreaterThanOrEqual(2);
+  });
+
+  it("skipped rows are idempotent: a tick dying right after the insert does not write a second row", async () => {
+    const { db, deps } = setup(photos150().slice(0, 30), {
+      scenarioFor: (agent) => (agent === "storyteller" ? "refusal" : "ok"),
+    });
+    const s = await start(deps);
+    let skippedInserts = 0;
+    let killed = false;
+    const dying: OrchestratorDeps = {
+      ...deps,
+      stepLogger: (runId) => {
+        const inner = deps.stepLogger(runId);
+        return {
+          ...inner,
+          insertStep: async (row) => {
+            if (row.status === "skipped") {
+              skippedInserts++;
+              if (!killed) {
+                killed = true;
+                db.now += orch.LEASE_SECONDS * 1000 + 1_000;
+                db.stealLease(s.runId); // the tick's next checkpoint fails: it "dies" here
+              }
+            }
+            return inner.insertStep(row);
+          },
+        };
+      },
+    };
+    for (let t = 0; t < 20; t++) {
+      const r = await orch.advance(s.runId, {}, dying);
+      if ("leased" in r) db.run(s.runId).lease_until = null;
+      if ("done" in r && r.done) break;
+    }
+    expect(db.run(s.runId).state).toBe("done");
+    expect(killed).toBe(true);
+    expect(skippedInserts).toBe(1);
+    expect(db.steps.filter((x) => x.status === "skipped").map((x) => x.stepKey)).toEqual(["caption_writer:skipped"]);
   });
 });

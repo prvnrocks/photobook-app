@@ -23,6 +23,8 @@ export const EFFORT = {
   curator: "low",
   storyteller: "medium",
   caption_writer: "medium",
+  /** Caption Writer repair round = caption rewrites (CLAUDE.md: rewrites use effort low). */
+  caption_repair: "low",
   critic: "medium",
   rewriter: "low",
   memory_keeper: "low",

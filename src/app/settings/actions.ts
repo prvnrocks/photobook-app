@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { clearMemoryFromActiveRuns } from "@/lib/db/agent-runs";
 import { deleteOwnMemory } from "@/lib/db/memory";
 import { errorCodeOf } from "@/lib/http/json";
 
@@ -18,6 +19,13 @@ export async function clearMemoryAction(): Promise<ClearMemoryResult> {
   if (!user) return { ok: false, error: "signed_out" };
   try {
     const cleared = await deleteOwnMemory();
+    // Best effort (M4 review SF8): drop the memory snapshot from unfinished runs.
+    // Failure never changes the result; logged as a code only.
+    try {
+      await clearMemoryFromActiveRuns(user.id);
+    } catch (err) {
+      console.error(`[settings] clear run memory failed (${errorCodeOf(err)})`);
+    }
     revalidatePath("/settings");
     return { ok: true, cleared };
   } catch (err) {

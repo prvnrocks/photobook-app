@@ -52,7 +52,12 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   ]);
   const aiStatus = forRun?.ai_status ?? "idle";
   const aiAvailable = aiMode !== "off";
-  const banner = reviewBanner({ activeRun: !!activeRun, aiAvailable, aiStatus });
+  // Captions preview: chapter titles/dates + caption text/source per page — no photo ids or URLs.
+  const captionsPreview = captionsPreviewOf(book.doc, (layoutId) => !!getLayout(layoutId)?.caption);
+  const missingCaptions = captionsPreviewModel(captionsPreview)?.missing ?? 0;
+  const { generator, userEdited } = docOrigin(book.doc);
+  // Partial runs: the banner depends on whether the AI album was used and captions are missing.
+  const banner = reviewBanner({ activeRun: !!activeRun, aiAvailable, aiStatus, generator, missingCaptions });
   const variant = rebuildVariant({ aiAvailable, aiStatus });
   // Only live runs are limited (D-021: counted from agent_runs).
   const left = aiMode === "live" ? rebuildsLeft(limitsFor(book.is_paid).maxRebuilds, usedRebuilds) : null;
@@ -74,11 +79,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   // D-028: the client compares choices with the album's photo ids (docOutOfSync in ui.ts is the
   // same rule as a boolean). Only ids go to the client, never the rest of the doc.
   const albumPhotoIds = docPhotoIds(book.doc);
-  const userEdited = docOrigin(book.doc).userEdited;
   const confirm = confirmAlbumAction.bind(null, book.id);
-  // Captions preview: chapter titles/dates + caption text/source per page — no photo ids or URLs.
-  const captionsPreview = captionsPreviewOf(book.doc, (layoutId) => !!getLayout(layoutId)?.caption);
-  const missingCaptions = captionsPreviewModel(captionsPreview)?.missing ?? 0;
   const captionsNote = banner ? partialCaptionsNote(banner, missingCaptions) : null;
 
   return (

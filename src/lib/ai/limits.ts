@@ -13,6 +13,12 @@ export const LIMITS = {
     /** D-034: internal caps for build captions (not the user-facing rewrite limit above). */
     maxCaptionBatchesPerBuild: 10,
     maxCaptionRepairsPerBatch: 1,
+    /**
+     * D-035: USD ceiling per run (all agent_steps of the run). Checked before every Caption Writer,
+     * Critic and repair call with a pessimistic estimate of that call; over → finish with the
+     * captions so far (run ai_status partial, error_code run_budget).
+     */
+    maxRunCostUsd: 1.5,
   },
   paid: {
     maxUploadPhotos: 500,
@@ -23,6 +29,7 @@ export const LIMITS = {
     maxLiveBuildsPerUserPerDay: 20,
     maxCaptionBatchesPerBuild: 10,
     maxCaptionRepairsPerBatch: 1,
+    maxRunCostUsd: 6.0,
   },
 } as const;
 

@@ -6,6 +6,7 @@ import {
   applyUserChoice,
   BANNER_COPY,
   captionSourceLabel,
+  captionTextAttrs,
   captionsPreviewModel,
   captionsPreviewOf,
   changedPhotosCopy,
@@ -14,6 +15,7 @@ import {
   docOutOfSync,
   docPhotoIds,
   headerCopy,
+  isMainlyArabic,
   missingCaptionsCopy,
   PARTIAL_CAPTIONS_NOTE,
   partialCaptionsNote,
@@ -120,6 +122,29 @@ describe("reviewBanner", () => {
   it("AI done → none", () => {
     expect(reviewBanner({ activeRun: false, aiAvailable: true, aiStatus: "done" })).toBeNull();
     expect(reviewBanner({ activeRun: false, aiAvailable: true, aiStatus: "idle" })).toBeNull();
+  });
+  it("partial with the AI album: captions missing → captions_missing (no 'simple rules' claim)", () => {
+    const base = { activeRun: false, aiAvailable: true, aiStatus: "partial" } as const;
+    expect(reviewBanner({ ...base, generator: "ai", missingCaptions: 3 })).toBe("captions_missing");
+    expect(BANNER_COPY.captions_missing).not.toMatch(/simple rules|Try AI again/);
+    expect(BANNER_COPY.captions_missing).toMatch(/^Your album is ready\. Some pages don't have captions yet/);
+  });
+  it("partial with the AI album and every caption present (Critic-only failure) → no banner", () => {
+    const base = { activeRun: false, aiAvailable: true, aiStatus: "partial" } as const;
+    expect(reviewBanner({ ...base, generator: "ai", missingCaptions: 0 })).toBeNull();
+    expect(reviewBanner({ ...base, generator: "ai" })).toBeNull();
+  });
+  it("partial with the rule fallback (or unknown album) keeps the 'simple rules' banner", () => {
+    const base = { activeRun: false, aiAvailable: true, aiStatus: "partial" } as const;
+    expect(reviewBanner({ ...base, generator: "rule", missingCaptions: 0 })).toBe("partial");
+    expect(reviewBanner({ ...base, generator: "rule", missingCaptions: 4 })).toBe("partial");
+    expect(reviewBanner({ ...base, generator: "none", missingCaptions: 0 })).toBe("partial");
+    expect(reviewBanner({ ...base, generator: null })).toBe("partial");
+  });
+  it("failed / building / ai_off ignore the album origin", () => {
+    expect(reviewBanner({ activeRun: false, aiAvailable: true, aiStatus: "failed", generator: "ai", missingCaptions: 0 })).toBe("failed");
+    expect(reviewBanner({ activeRun: true, aiAvailable: true, aiStatus: "partial", generator: "ai", missingCaptions: 2 })).toBe("building");
+    expect(reviewBanner({ activeRun: false, aiAvailable: false, aiStatus: "idle", generator: "rule" })).toBe("ai_off");
   });
   it("copy matches the plan", () => {
     expect(BANNER_COPY.ai_off).toBe("AI isn't switched on yet — we picked these with simple rules.");
@@ -484,5 +509,33 @@ describe("captions preview (M4 T12)", () => {
     expect(partialCaptionsNote("failed", 2)).toBeNull();
     expect(partialCaptionsNote("building", 2)).toBeNull();
     expect(partialCaptionsNote(null, 2)).toBeNull();
+    expect(partialCaptionsNote("captions_missing", 2)).toBeNull();
+  });
+});
+
+describe("caption script detection", () => {
+  it("isMainlyArabic", () => {
+    expect(isMainlyArabic("يوم جميل على الشاطئ")).toBe(true);
+    expect(isMainlyArabic("عيد مبارك 2026!")).toBe(true);
+    expect(isMainlyArabic("A day at the beach")).toBe(false);
+    expect(isMainlyArabic("Café crème")).toBe(false);
+    expect(isMainlyArabic("Beach day with جدة")).toBe(false);
+    expect(isMainlyArabic("يوم في Dubai Mall مع العائلة")).toBe(true);
+    expect(isMainlyArabic("١٢٣ ، ؟")).toBe(false);
+    expect(isMainlyArabic("2026 🎉")).toBe(false);
+    expect(isMainlyArabic("")).toBe(false);
+  });
+  it("captionTextAttrs: lang per caption, Cairo for ar books or Arabic text", () => {
+    expect(captionTextAttrs("يوم جميل", "ar")).toEqual({ lang: "ar", arabicFont: true });
+    expect(captionTextAttrs("Sunset walk", "ar")).toEqual({ lang: undefined, arabicFont: true });
+    expect(captionTextAttrs("Sunset walk", "en")).toEqual({ lang: undefined, arabicFont: false });
+    expect(captionTextAttrs("يوم جميل", "en")).toEqual({ lang: "ar", arabicFont: true });
+  });
+  it("CaptionsPreview keeps dir=auto and sets lang per caption", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/components/review/CaptionsPreview.tsx", "utf8");
+    expect(src).toContain("captionTextAttrs(");
+    expect(src).not.toMatch(/lang=\{ar \?/);
+    expect((src.match(/dir="auto"/g) ?? []).length).toBeGreaterThanOrEqual(3);
   });
 });

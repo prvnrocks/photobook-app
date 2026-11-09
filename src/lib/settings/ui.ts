@@ -130,3 +130,23 @@ export function newBookInitialState(props: { initialTone?: unknown; initialLang?
 export function effectiveTone(manualTone: Tone | null, occasion: Occasion | null): Tone {
   return manualTone ?? (occasion ? DEFAULT_TONE[occasion] : DEFAULT_TONE.other);
 }
+
+/**
+ * Show "From your last book" only when a remembered value is still selected AND differs from what
+ * the form would show anyway (tone ≠ the current occasion's default — DEFAULT_TONE.other while no
+ * occasion is picked — or language ≠ 'en'). Seeding is unaffected (newBookInitialState).
+ */
+export function showFromMemoryHint(input: {
+  fromMemory: boolean;
+  rememberedTone: Tone | null;
+  rememberedLang: CaptionLang | null;
+  occasion: Occasion | null;
+  tone: Tone;
+  captionLang: CaptionLang;
+}): boolean {
+  if (!input.fromMemory) return false;
+  const defaultTone = input.occasion ? DEFAULT_TONE[input.occasion] : DEFAULT_TONE.other;
+  const toneHint = input.rememberedTone !== null && input.tone === input.rememberedTone && input.rememberedTone !== defaultTone;
+  const langHint = input.rememberedLang !== null && input.captionLang === input.rememberedLang && input.rememberedLang !== "en";
+  return toneHint || langHint;
+}

@@ -8,7 +8,11 @@ import {
   checkHeading,
   countCaptionablePages,
   docCaptionContext,
+  groundStoryText,
+  headingContext,
+  neutralSubtitle,
 } from "@/lib/ai/captions";
+import { buildCaptionContext } from "@/lib/ai/caption-check";
 import { LIMITS } from "@/lib/ai/limits";
 import { planToDoc } from "@/lib/ai/plan-to-doc";
 import { pageCaptionKeys } from "@/lib/ai/repair";
@@ -188,10 +192,10 @@ describe("applyCaptions", () => {
     expect(out.chapters.map((c) => c.title)).toEqual(doc.chapters.map((c) => c.title));
   });
 
-  it("heading check: chapter-title words and date-label numbers are allowed", () => {
+  it("heading check (SF3): date-label numbers are allowed, chapter-title words are NOT (AI text)", () => {
     const doc = fixtureDoc();
     const ctx = docCaptionContext(doc, "en");
-    expect(checkHeading("Before the Ready moment", ctx)).toEqual([]);
+    expect(checkHeading("Before the Ready moment", ctx).map((i) => i.code)).toContain("unknown_name");
     expect(checkHeading("At last in Paris", ctx).map((i) => i.code)).toContain("unknown_name");
     expect(checkHeading("Our best 2026", ctx)).toEqual([]);
   });
@@ -202,5 +206,62 @@ describe("applyCaptions", () => {
     const out = applyCaptions(doc, new Map([["m1:0", long]]), new Map(), { lang: "en" });
     expect(out.pages[0].caption!.text.length).toBeLessThanOrEqual(200);
     expect(parseBookDoc(out).ok).toBe(true);
+  });
+});
+
+describe("groundStoryText (SF3)", () => {
+  const dates = storyPhotos().map((p) => p.takenAt);
+  const ctx = (over: Partial<Parameters<typeof buildCaptionContext>[0]> = {}) =>
+    buildCaptionContext({ lang: "en", dates, ...over });
+  const withText = (titles: string[], subtitle: string): BookDoc => {
+    const d = fixtureDoc();
+    return { ...d, cover: { ...d.cover, subtitle }, chapters: d.chapters.map((c, i) => ({ ...c, title: titles[i] ?? c.title })) };
+  };
+
+  it("clean sentence-case titles, 'Day 2' ordinals and an empty subtitle are kept (same object)", () => {
+    const doc = withText(["Getting ready", "Day 2"], "");
+    const r = groundStoryText(doc, ctx(), { lang: "en", dates });
+    expect(r.doc).toBe(doc);
+    expect(r).toMatchObject({ chapters: [], subtitle: false });
+  });
+
+  it("an invented name / place in a chapter title → its date label; in the subtitle → the date range", () => {
+    const doc = withText(["Dinner with Ahmed", "Evenings in Paris"], "A weekend with Ahmed");
+    const r = groundStoryText(doc, ctx(), { lang: "en", dates });
+    expect(r.chapters).toEqual([0, 1]);
+    expect(r.subtitle).toBe(true);
+    expect(r.doc.chapters[0].title).toBe(doc.chapters[0].dateLabel);
+    expect(r.doc.cover.subtitle).toBe("12–13 Oct 2026");
+    expect(parseBookDoc(r.doc).ok).toBe(true);
+  });
+
+  it("names from user data are fine: user title, knownNames, GPS places", () => {
+    const doc = withText(["Dinner with Ahmed", "Evenings in Paris"], "Sara and Omar");
+    const r = groundStoryText(doc, ctx({ knownNames: ["Ahmed"], photoPlaces: ["Paris"], bookTitle: "Sara & Omar" }), { lang: "en", dates });
+    expect(r).toMatchObject({ chapters: [], subtitle: false });
+  });
+
+  it("no date label → 'Chapter n' (en) / 'الفصل n' (ar); undated subtitle → the one shared place, else empty", () => {
+    const base = withText(["Dinner with Ahmed", "Fine"], "A weekend with Ahmed");
+    const doc: BookDoc = { ...base, chapters: base.chapters.map((c) => ({ ...c, dateLabel: "" })) };
+    expect(groundStoryText(doc, ctx(), { lang: "en", dates: [] }).doc.chapters[0].title).toBe("Chapter 1");
+    const arDoc: BookDoc = { ...doc, chapters: doc.chapters.map((c) => ({ ...c, title: "Ahmed" })) };
+    const ar = groundStoryText(arDoc, buildCaptionContext({ lang: "ar" }), { lang: "ar", dates: [] });
+    expect(ar.doc.chapters.map((c) => c.title)).toEqual(["الفصل 1", "الفصل 2"]);
+    expect(groundStoryText(doc, ctx(), { lang: "en", dates: [] }).doc.cover.subtitle).toBe("");
+    const placed: BookDoc = { ...doc, chapters: doc.chapters.map((c) => ({ ...c, place: "Abu Dhabi" })) };
+    expect(neutralSubtitle(placed, [])).toBe("Abu Dhabi");
+  });
+
+  it("headingContext adds chapter ordinals only", () => {
+    const h = headingContext(ctx(), 3);
+    expect(checkHeading("Day 3", h)).toEqual([]);
+    expect(checkHeading("Day 4", h).map((i) => i.code)).toContain("unknown_number");
+  });
+
+  it("applyCaptions with a metadata ctx rejects a heading that only an AI chapter title would allow", () => {
+    const doc = withText(["Dinner with Ahmed", "Fine"], "");
+    const out = applyCaptions(doc, new Map(), new Map([["m2", "More time with Ahmed"]]), { lang: "en", ctx: ctx() });
+    expect(out.chapters[1].title).toBe("Fine");
   });
 });

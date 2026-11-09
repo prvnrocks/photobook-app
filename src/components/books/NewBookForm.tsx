@@ -21,7 +21,7 @@ import {
   type Occasion,
   type Tone,
 } from "@/lib/book/options";
-import { effectiveTone, newBookInitialState, SETTINGS_COPY } from "@/lib/settings/ui";
+import { effectiveTone, newBookInitialState, SETTINGS_COPY, showFromMemoryHint } from "@/lib/settings/ui";
 import { cn } from "@/lib/utils";
 
 /** Counter appears once the title gets close to the limit. */
@@ -91,11 +91,15 @@ export function NewBookForm({ initialTone, initialLang, fromMemory = false }: Ne
   const [title, setTitle] = useState("");
 
   const tone: Tone = effectiveTone(manualTone, occasion);
-  // Hint stays while at least one remembered value is still selected.
-  const showMemoryHint =
-    fromMemory &&
-    ((initial.manualTone !== null && tone === initial.manualTone) ||
-      (initialLang !== undefined && captionLang === initial.captionLang));
+  // Hint only while a remembered value is still selected and differs from the default.
+  const showMemoryHint = showFromMemoryHint({
+    fromMemory,
+    rememberedTone: initial.manualTone,
+    rememberedLang: initialLang !== undefined ? initial.captionLang : null,
+    occasion,
+    tone,
+    captionLang,
+  });
   const length = titleLength(title);
   const tooLong = length > TITLE_MAX_CHARS;
   const fe = state.fieldErrors ?? {};

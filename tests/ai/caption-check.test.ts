@@ -208,3 +208,90 @@ describe("checkBookCaptions", () => {
     expect(r.get("m1:1")?.map((i) => i.code)).toEqual(["empty"]);
   });
 });
+
+describe("SF3 — allowlist is user data + metadata only", () => {
+  it("chapter titles (AI text) never allowlist names; chapter places do", () => {
+    const ctx = buildCaptionContext({
+      lang: "en",
+      chapters: [{ title: "Dinner with Ahmed", place: "Saadiyat Island" } as { title: string; place: string }],
+    });
+    expect(codes("Laughing all night with Ahmed", ctx)).toContain("unknown_name");
+    expect(codes("Golden light over Saadiyat Island", ctx)).toEqual([]);
+    expect(ctx.allowNames.has("ahmed")).toBe(false);
+    expect(ctx.allowNames.has("dinner")).toBe(false);
+  });
+
+  it("the user's title still allowlists its words", () => {
+    const ctx = buildCaptionContext({ lang: "en", bookTitle: "Sara & Omar" });
+    expect(codes("Our first dance, Sara and Omar", ctx)).toEqual([]);
+  });
+});
+
+describe("SF4 — pre-check false positives (review probes)", () => {
+  // Dates: 12 + 14 Oct 2026 (meta) → October allowed, other months not.
+  it.each([
+    ["Eid", "Our first Eid together by the sea"],
+    ["Eid Mubarak pair", "Hugs all round and Eid Mubarak wishes"],
+    ["Eid al-Fitr", "Sweets on the table for Eid al-Fitr"],
+    ["Ramadan mid-sentence", "Lanterns glowing on a quiet Ramadan night"],
+    ["Ramadan Kareem pair", "Dates, laughter and a warm Ramadan Kareem"],
+    ["Christmas", "Paper crowns at the Christmas table"],
+    ["Diwali", "Little lamps glowing for Diwali"],
+    ["Easter", "Chocolate eggs everywhere this Easter"],
+    ["Hanukkah", "Candles lit for Hanukkah"],
+    ["New Year", "Fireworks and wishes for the New Year"],
+    ["Happy New Year's Eve", "Countdown smiles on New Year's Eve"],
+    ["Mom", "Cake in the kitchen with Mom"],
+    ["Mum", "Breakfast in bed for Mum"],
+    ["Dad", "Shoulder rides with Dad"],
+    ["Mama / Baba", "Holding hands with Mama and Baba"],
+    ["Grandma / Grandpa", "Stories from Grandma while Grandpa naps"],
+    ["Nana / Granny", "Tea with Nana, cookies with Granny"],
+    ["Teta / Jiddo", "Sunday lunch at Teta and Jiddo's"],
+    ["Happy Birthday mid-sentence", "Candles, cake and a loud Happy Birthday"],
+    ["Happy Anniversary mid-sentence", "Two glasses raised to a Happy Anniversary"],
+    ["October 2026 with October in the dates", "Golden evenings of October 2026"],
+    ["abbreviated month in the dates", "Long lunches in Oct"],
+    ["weekday", "Lazy mornings every Friday"],
+    ["TV", "Movie night in front of the TV"],
+    ["DIY", "Our DIY banner looked perfect"],
+    ["BBQ", "Smoke and laughter at the BBQ"],
+    ["family word as a dash tail is not an attribution", "Love you to the moon — Mom"],
+  ])("%s", (_name, text) => {
+    expect(codes(text)).toEqual([]);
+  });
+
+  it("a month NOT in the photo dates is still an invented fact", () => {
+    expect(codes("Golden evenings of March")).toContain("unknown_name");
+    expect(codes("Golden evenings of October", buildCaptionContext({ lang: "en" }))).toContain("unknown_name");
+  });
+
+  it("'Birthday' needs its 'Happy'; a holiday word does not allowlist a following name", () => {
+    expect(codes("Cake for the Birthday girl")).toContain("unknown_name");
+    expect(codes("Our Eid with Ahmed")).toContain("unknown_name");
+  });
+
+  it("Arabic captions are unaffected (no capitals)", () => {
+    expect(codes("عيد سعيد مع ماما وبابا", ar)).toEqual([]);
+  });
+
+  it("UAE is a place, not a safe acronym: only allowed from metadata", () => {
+    expect(codes("Our summer in the UAE")).toContain("unknown_name");
+    expect(codes("Our summer in the UAE", buildCaptionContext({ lang: "en", photoPlaces: ["UAE"] }))).toEqual([]);
+  });
+});
+
+describe("known false negatives (documented: the Critic's job, rubric 5)", () => {
+  it.each([
+    ["sentence-initial name", "Ahmed laughed at everything that night"],
+    ["sentence-initial place after a full stop", "We landed. Paris was waiting"],
+    ["spelled-out number", "Twenty years of friendship in one room"],
+    ["weekday that may not match the date", "Our lazy Monday by the pool"],
+  ])("en: %s passes the pre-check", (_name, text) => {
+    expect(codes(text)).toEqual([]);
+  });
+
+  it("ar: an Arabic-script name passes the pre-check", () => {
+    expect(codes("ليلة جميلة مع أحمد", ar)).toEqual([]);
+  });
+});

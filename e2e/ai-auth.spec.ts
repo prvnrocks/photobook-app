@@ -1300,8 +1300,9 @@ test("k. Critic refusal only: captions kept, critic refused, run partial, rule f
   console.log(
     `[k] run=${run.state}/${run.ai_status} error_code=${run.error_code} book=${book.ai_status} generator=${String(metaOf(book.doc).generator)} critic=${critic.map((s) => s.status).join(",")} writers=${writers.map((s) => s.status).join(",")} criticScore=${run.critic_score !== null} ${JSON.stringify(st)}`,
   );
-  expect(run).toMatchObject({ mode: "replay", state: "done", ai_status: "partial" });
-  expect(book.ai_status).toBe("partial");
+  expect(run).toMatchObject({ mode: "replay", state: "done", ai_status: "partial", error_code: "critic_refusal" });
+  // SF5: a Critic-only failure keeps the RUN partial (admin) but the book follows its captions.
+  expect(book.ai_status).toBe("done");
   expect(metaOf(book.doc).generator).toBe("ai");
   expect(critic.length).toBeGreaterThanOrEqual(1);
   expect(critic.every((s) => s.status === "refused")).toBe(true);
@@ -1310,8 +1311,10 @@ test("k. Critic refusal only: captions kept, critic refused, run partial, rule f
   expect(st.captionableWithCaption).toBe(st.captionable);
   const rows = await photoRows(bookK);
   expectValidDoc(book.doc, new Set(rows.filter((r) => r.status !== "dropped").map((r) => r.id)), book.max_pages ?? 20, "k");
-  await expect(page.getByTestId("review-banner-partial")).toBeVisible();
-  await expect(page.getByTestId("rebuild-button")).toHaveText("Try AI again");
+  // SF5: AI album used and every caption present → no "simple rules" / captions banner.
+  await expect(page.getByTestId("review-banner-partial")).toHaveCount(0);
+  await expect(page.getByTestId("review-banner-captions_missing")).toHaveCount(0);
+  await expect(page.getByTestId("rebuild-button")).toHaveText("Rebuild with AI"); // book done → rebuild variant
 });
 
 test("d. refusal scenario: rule album, failed/partial banner, Try AI again", async () => {

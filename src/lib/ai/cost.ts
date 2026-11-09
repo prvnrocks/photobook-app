@@ -45,3 +45,15 @@ export function addUsage(a: TokenUsage, b: TokenUsage): TokenUsage {
     cacheWrite: a.cacheWrite + b.cacheWrite,
   };
 }
+
+/**
+ * Pessimistic cost of a call that has not happened yet (D-035 run budget): every input token at
+ * the higher of the input / cache-write rate, plus the FULL output budget (maxTokens, incl.
+ * thinking) at the output rate. Real calls cost less (cache reads, shorter answers).
+ */
+export function estimateCallCostUsd(model: string, call: { inputTokens: number; maxOutputTokens: number }): number {
+  const p = priceFor(model);
+  const n = (v: number) => (Number.isFinite(v) && v > 0 ? v : 0);
+  const usd = (n(call.inputTokens) * Math.max(p.input, p.cacheWrite) + n(call.maxOutputTokens) * p.output) / 1_000_000;
+  return Math.round(usd * 1e6) / 1e6;
+}

@@ -5,6 +5,7 @@
 import { ChevronDown } from "lucide-react";
 import {
   captionSourceLabel,
+  captionTextAttrs,
   captionsPreviewModel,
   missingCaptionsCopy,
   type CaptionsPreviewDoc,
@@ -13,14 +14,16 @@ import { cn } from "@/lib/utils";
 
 type CaptionsPreviewProps = {
   preview: CaptionsPreviewDoc | null;
-  /** books.caption_lang — 'ar' captions get lang="ar" and the Arabic font (Cairo / Tajawal). */
+  /**
+   * books.caption_lang — 'ar' books use the Arabic font (Cairo / Tajawal) throughout; lang="ar" is
+   * set per text, only where the text is mainly Arabic script (captionTextAttrs). dir="auto" always.
+   */
   captionLang: string;
 };
 
 export function CaptionsPreview({ preview, captionLang }: CaptionsPreviewProps) {
   const model = captionsPreviewModel(preview);
   if (!model) return null;
-  const ar = captionLang === "ar";
 
   return (
     <details className="group min-w-0 rounded-xl border" data-testid="captions-preview">
@@ -42,15 +45,7 @@ export function CaptionsPreview({ preview, captionLang }: CaptionsPreviewProps) 
           <section key={gi} className="flex min-w-0 flex-col gap-3" data-testid="captions-chapter">
             {group.title || group.dateLabel ? (
               <header className="min-w-0">
-                {group.title ? (
-                  <h3
-                    dir="auto"
-                    lang={ar ? "ar" : undefined}
-                    className={cn("text-base font-semibold break-words", ar && "font-arabic")}
-                  >
-                    {group.title}
-                  </h3>
-                ) : null}
+                {group.title ? <ChapterTitle title={group.title} captionLang={captionLang} /> : null}
                 {group.dateLabel ? (
                   <p dir="auto" className="text-sm text-muted-foreground break-words">
                     {group.dateLabel}
@@ -59,25 +54,41 @@ export function CaptionsPreview({ preview, captionLang }: CaptionsPreviewProps) 
               </header>
             ) : null}
             <ul className="flex min-w-0 flex-col gap-3">
-              {group.items.map((item, ii) => (
-                <li key={ii} className="min-w-0 rounded-lg bg-muted/50 px-3 py-2" data-testid="captions-item">
-                  <p
-                    dir="auto"
-                    lang={ar ? "ar" : undefined}
-                    className={cn("text-base break-words", ar && "font-arabic")}
-                    data-testid="captions-text"
-                  >
-                    {item.text}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground" data-testid={`captions-source-${item.source}`}>
-                    {captionSourceLabel(item.source)}
-                  </p>
-                </li>
-              ))}
+              {group.items.map((item, ii) => {
+                const attrs = captionTextAttrs(item.text, captionLang);
+                return (
+                  <li key={ii} className="min-w-0 rounded-lg bg-muted/50 px-3 py-2" data-testid="captions-item">
+                    <p
+                      dir="auto"
+                      lang={attrs.lang}
+                      className={cn("text-base break-words", attrs.arabicFont && "font-arabic")}
+                      data-testid="captions-text"
+                    >
+                      {item.text}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground" data-testid={`captions-source-${item.source}`}>
+                      {captionSourceLabel(item.source)}
+                    </p>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         ))}
       </div>
     </details>
+  );
+}
+
+function ChapterTitle({ title, captionLang }: { title: string; captionLang: string }) {
+  const attrs = captionTextAttrs(title, captionLang);
+  return (
+    <h3
+      dir="auto"
+      lang={attrs.lang}
+      className={cn("text-base font-semibold break-words", attrs.arabicFont && "font-arabic")}
+    >
+      {title}
+    </h3>
   );
 }

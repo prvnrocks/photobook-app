@@ -13,6 +13,7 @@ import {
   newBookInitialState,
   SETTINGS_CAPTION_LENGTHS,
   SETTINGS_COPY,
+  showFromMemoryHint,
 } from "@/lib/settings/ui";
 
 describe("settings ui helpers", () => {
@@ -114,6 +115,47 @@ describe("new-book prefill from memory (D-032)", () => {
       manualTone: null,
       captionLang: "en",
     });
+  });
+});
+
+describe("showFromMemoryHint", () => {
+  const base = {
+    fromMemory: true,
+    rememberedTone: null,
+    rememberedLang: null,
+    occasion: null,
+    tone: "minimal",
+    captionLang: "en",
+  } as const;
+
+  it("never without memory", () => {
+    expect(showFromMemoryHint({ ...base, fromMemory: false, rememberedTone: "fun", tone: "fun" })).toBe(false);
+    expect(showFromMemoryHint({ ...base, fromMemory: false, rememberedLang: "ar", captionLang: "ar" })).toBe(false);
+  });
+
+  it("remembered tone that differs from the occasion default and is still selected", () => {
+    expect(showFromMemoryHint({ ...base, rememberedTone: "fun", tone: "fun" })).toBe(true); // other → minimal
+    expect(showFromMemoryHint({ ...base, rememberedTone: "fun", tone: "fun", occasion: "wedding" })).toBe(true);
+    // user picked another tone → remembered value no longer selected
+    expect(showFromMemoryHint({ ...base, rememberedTone: "fun", tone: "romantic", occasion: "wedding" })).toBe(false);
+  });
+
+  it("remembered tone equal to the default → no hint", () => {
+    expect(showFromMemoryHint({ ...base, rememberedTone: "minimal", tone: "minimal" })).toBe(false); // no occasion
+    expect(showFromMemoryHint({ ...base, rememberedTone: "fun", tone: "fun", occasion: "travel" })).toBe(false);
+    expect(showFromMemoryHint({ ...base, rememberedTone: "romantic", tone: "romantic", occasion: "wedding" })).toBe(false);
+    // the same remembered tone shows again when the occasion's default differs
+    expect(showFromMemoryHint({ ...base, rememberedTone: "romantic", tone: "romantic", occasion: "family" })).toBe(true);
+  });
+
+  it("language: only a remembered non-English choice that is still selected", () => {
+    expect(showFromMemoryHint({ ...base, rememberedLang: "en", captionLang: "en" })).toBe(false);
+    expect(showFromMemoryHint({ ...base, rememberedLang: "ar", captionLang: "ar" })).toBe(true);
+    expect(showFromMemoryHint({ ...base, rememberedLang: "ar", captionLang: "en" })).toBe(false);
+    // default tone + Arabic → still a hint (language differs)
+    expect(
+      showFromMemoryHint({ ...base, rememberedTone: "minimal", tone: "minimal", rememberedLang: "ar", captionLang: "ar" }),
+    ).toBe(true);
   });
 });
 

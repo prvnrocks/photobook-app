@@ -49,7 +49,7 @@ Critique = {
   score: number,                       // 1–10 overall
   issues: [{
     type: "duplicate_feel" | "weak_cover" | "chronology" | "caption_mismatch" | "caption_invented_fact"
-        | "too_repetitive" | "unbalanced_chapter" | "low_quality_photo",
+        | "caption_not_original" | "too_repetitive" | "unbalanced_chapter" | "low_quality_photo",
     pageIndex: number | null,
     detail: string,
     fix: "swap_photo" | "reorder" | "rewrite_caption" | "change_layout" | "change_cover",
@@ -68,7 +68,8 @@ UserMemoryUpdate = {
 
 **Critic rubric** (in its prompt): cover is a strong, people-forward photo · chapters in time order ·
 no two near-identical photos on the same spread · every caption matches what's visible · no invented
-names/places/facts · captions not repetitive (no repeated opening words) · each chapter has 2+ pages.
+names/places/facts · captions not repetitive (no repeated opening words) · each chapter has 2+ pages ·
+captions are original (no well-known quote, lyric, film line, slogan or proverb → `caption_not_original`).
 
 ## Orchestrator (state machine)
 

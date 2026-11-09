@@ -136,6 +136,16 @@ describe("caption writer prompt + request", () => {
     expect(JSON.stringify(a.messages)).not.toContain('"image"');
   });
 
+  it("system prompt (v2): names never from chapter titles, well-known quotes banned, sentence-case example", () => {
+    const s = CAPTION_WRITER_SYSTEM_PROMPT;
+    expect(CAPTION_WRITER_PROMPT_VERSION).toBe(2);
+    expect(s).toMatch(/never take names from them/);
+    expect(s).toMatch(/do not closely paraphrase/);
+    expect(s).toMatch(/caption_not_original/);
+    expect(s).toContain('chapter "Dinner by the water" · date "12 Oct 2026"');
+    expect(s).not.toMatch(/Dinner by the Water/);
+  });
+
   it("system prompt states the quote rules and the safety paragraph", () => {
     const s = CAPTION_WRITER_SYSTEM_PROMPT;
     expect(s).toMatch(/famous quotes/);
@@ -154,6 +164,7 @@ describe("caption writer prompt + request", () => {
     await writeCaptions(args(spec, { transport: t, photosById: new Map(photos.map((p) => [p.id, p])) }));
     const msg = userText(t.requests[0]);
     expect(msg).toContain('m1 · chapter "Getting Ready" · date ');
+    expect(msg).toMatch(/· date "[^"]+" · place /); // date label quoted (data)
     expect(msg).toMatch(/- m1:0 · layout one-portrait · photos: p1 "He said 'hi' then word0 /);
     expect(msg).toContain("word20…"); // 25 words
     expect(msg).not.toContain("word21");
@@ -350,6 +361,10 @@ describe("plant_bad_caption scenario", () => {
     expect(r.headings.size).toBe(0); // headings not targeted
     expect([...r.captions.values()].some(isPlantedMismatch)).toBe(false);
     expect(logger.rows[1].inputSummary).toMatchObject({ repairTargets: 2 });
+    // CLAUDE.md: caption rewrites run at effort low; full batches at medium.
+    expect(t.requests[0].effort).toBe(EFFORT.caption_writer);
+    expect(t.requests[1].effort).toBe(EFFORT.caption_repair);
+    expect(EFFORT.caption_repair).toBe("low");
   });
 
   it("critic replay imports the same PLANTED_MISMATCH_KEY", () => {

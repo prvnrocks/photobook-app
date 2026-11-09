@@ -13,7 +13,8 @@
 //   pageCaptionKeys(doc)[pageIndex] gives the key; pageIndexOfKey(doc, key) the reverse.
 //
 // Rules: pre-check failures are always targets; Critic issues only when score < CRITIC_REPAIR_BELOW:
-// caption_mismatch | caption_invented_fact | too_repetitive → rewrite that page's caption;
+// caption_mismatch | caption_invented_fact | caption_not_original | too_repetitive → rewrite that
+// page's caption;
 // weak_cover → cover swap (best kept cover-worthy portrait/group photo, highest quality, not the
 // current cover); everything else is logged only. Captions with source "user" are never targeted.
 // Reasons and logged entries carry codes/indices only — never caption text or critique detail.
@@ -21,19 +22,23 @@
 import type { BookDoc } from "@/lib/book/types";
 import { getLayout } from "@/lib/layouts";
 import type { CaptionIssue } from "./caption-check";
+import { momentIdsOfChapters } from "./captions";
 import { captionKey, MOMENT_ID_RE, type Critique } from "./schemas";
 import { byStoryTime, type StoryPhoto } from "./story";
 
 /** Critic issues trigger repair only below this score (AI-AGENTS.md: "issues & score < 7"). */
 export const CRITIC_REPAIR_BELOW = 7;
 
-export const CAPTION_REPAIR_TYPES = ["caption_mismatch", "caption_invented_fact", "too_repetitive"] as const;
+export const CAPTION_REPAIR_TYPES = [
+  "caption_mismatch",
+  "caption_invented_fact",
+  "caption_not_original",
+  "too_repetitive",
+] as const;
 const COVER_SCENES = new Set(["portrait", "group"]);
 
-/** Moment id ("m3") of each chapter id, by chapter order. */
-export function momentIdsByChapter(doc: Pick<BookDoc, "chapters">): Map<string, string> {
-  return new Map(doc.chapters.map((c, i) => [c.id, `m${i + 1}`]));
-}
+/** Moment id ("m3") of each chapter id, by chapter order — the shared helper (first position wins). */
+export const momentIdsByChapter = momentIdsOfChapters;
 
 /** captionKey of every page (index = doc.pages index); null when the page has no / an unknown chapter. */
 export function pageCaptionKeys(doc: Pick<BookDoc, "chapters" | "pages">): Array<string | null> {

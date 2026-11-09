@@ -203,3 +203,27 @@ describe("cover swap", () => {
     expect(locked.loggedOnly).toEqual(["weak_cover@book:cover_locked"]);
   });
 });
+
+describe("M4 review fixes", () => {
+  it("caption_not_original (SF2) → rewrite_caption target below the threshold", () => {
+    const doc = draftDoc(CLEAN_CAPTIONS);
+    const critique: Critique = { score: 6, issues: [issue("caption_not_original", 1)] };
+    const plan = planRepair(critique, new Map(), doc, opts);
+    expect(plan.rewrite.get(0)).toEqual([{ key: "m1:1", reason: "critic: caption_not_original" }]);
+  });
+
+  it("one moment-id helper: a duplicate chapter id keeps its FIRST position", async () => {
+    const { momentIdsByChapter } = await import("@/lib/ai/repair");
+    const { momentIdsOfChapters } = await import("@/lib/ai/captions");
+    expect(momentIdsByChapter).toBe(momentIdsOfChapters);
+    const chapters = [
+      { id: "c1", title: "a", dateLabel: "", place: null },
+      { id: "c2", title: "b", dateLabel: "", place: null },
+      { id: "c1", title: "c", dateLabel: "", place: null },
+    ];
+    expect([...momentIdsByChapter({ chapters })]).toEqual([
+      ["c1", "m1"],
+      ["c2", "m2"],
+    ]);
+  });
+});

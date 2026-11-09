@@ -10,6 +10,7 @@
 // Only pages whose layout has a caption area are captioned (getLayout(id).caption != null), and a
 // caption with source 'user' is never touched.
 
+import { dayRange } from "@/lib/autolayout";
 import type { CaptionLang } from "@/lib/book/options";
 import { parseBookDoc } from "@/lib/book/schema";
 import type { BookDoc, Caption } from "@/lib/book/types";
@@ -18,9 +19,12 @@ import { clipText } from "@/lib/text/clip";
 import { buildCaptionContext, checkCaption, type CaptionCheckContext, type CaptionIssue } from "./caption-check";
 import { LIMITS, MAX_CAPTION_PAGES_PER_BATCH } from "./limits";
 import { AI_TEXT_LIMITS, captionKey, MOMENT_ID_RE, wordCount, type AlbumPlan } from "./schemas";
+import { dubaiDay, photoMs } from "./story";
 
 /** Headings are short chapter titles; longer ones are rejected (the Storyteller title stays). */
 export const MAX_HEADING_WORDS = 8;
+/** Storyteller cover subtitle word cap for the grounding check (prompt asks for ≤ 8). */
+export const MAX_SUBTITLE_WORDS = 12;
 
 export interface CaptionBatchPage {
   /** captionKey(momentId, pageIndex), e.g. "m2:1". */
@@ -65,7 +69,10 @@ export interface CaptionBatchOptions {
 type SourcePage = { layout: string; photoIds: string[]; userCaption: boolean; bookPageIndex: number };
 type SourceMoment = { momentId: string; title: string; dateLabel: string; place: string | null; pages: SourcePage[] };
 
-/** Chapter id → moment id "m{n}" by chapter position (1-based), as repair.ts momentIdsByChapter. */
+/**
+ * Chapter id → moment id "m{n}" by chapter position (1-based). The ONE mapping used by captions,
+ * repair (pageCaptionKeys) and the orchestrator; a duplicate chapter id keeps its FIRST position.
+ */
 export function momentIdsOfChapters(doc: Pick<BookDoc, "chapters">): Map<string, string> {
   const out = new Map<string, string>();
   doc.chapters.forEach((c, i) => {
@@ -200,15 +207,29 @@ export function batchIndexOfKey(batches: readonly CaptionBatchSpec[]): (key: str
 
 export interface ApplyCaptionsOptions {
   lang: CaptionLang;
-  /** Pre-check context for headings; default: built from the doc (title, chapters, date labels). */
+  /**
+   * Pre-check context for headings (pass the book's metadata context: user title, metadata places,
+   * knownNames, dates); default: docCaptionContext (chapter places + date-label numbers only).
+   */
   ctx?: CaptionCheckContext;
 }
 
-/** Default heading context from the doc alone (title, chapter titles/places, date-label numbers). */
+/**
+ * Fallback heading context from the doc alone: chapter places (GPS-grounded by planToDoc) and the
+ * numbers of the code-computed date labels. Never chapter titles or the cover title (AI text may
+ * be in either — SF3); callers with the user's title / knownNames / dates should pass `ctx`.
+ */
 export function docCaptionContext(doc: BookDoc, lang: CaptionLang): CaptionCheckContext {
-  const ctx = buildCaptionContext({ lang, bookTitle: doc.cover.title, chapters: doc.chapters });
+  const ctx = buildCaptionContext({ lang, chapters: doc.chapters });
   const digits = new Set(ctx.allowDigits);
   for (const c of doc.chapters) for (const run of c.dateLabel.match(/[0-9]+/g) ?? []) digits.add(String(Number(run)));
+  return { ...ctx, allowDigits: digits, allowMonths: undefined };
+}
+
+/** Heading context: `ctx` + chapter ordinals 1..chapterCount ("Day 2" is not an invented number). */
+export function headingContext(ctx: CaptionCheckContext, chapterCount: number): CaptionCheckContext {
+  const digits = new Set(ctx.allowDigits);
+  for (let i = 1; i <= Math.min(chapterCount, 100); i++) digits.add(String(i));
   return { ...ctx, allowDigits: digits };
 }
 
@@ -220,6 +241,70 @@ export function checkHeading(text: string, ctx: CaptionCheckContext): CaptionIss
   const issues = checkCaption(t, ctx);
   if (t && wordCount(t) > MAX_HEADING_WORDS && !issues.some((i) => i.code === "too_long")) issues.push({ code: "too_long" });
   return issues;
+}
+
+/** Storyteller text check: the caption pre-check on the WHOLE text + a word cap (codes only). [] = usable. */
+export function checkStoryText(text: string, ctx: CaptionCheckContext, maxWords: number): CaptionIssue[] {
+  const t = text.replace(/\s+/g, " ").trim();
+  const issues = checkCaption(t, ctx);
+  if (t && wordCount(t) > maxWords && !issues.some((i) => i.code === "too_long")) issues.push({ code: "too_long" });
+  return issues;
+}
+
+/** Neutral chapter title: its (code-computed) date label, else "Chapter n" / "الفصل n". */
+export function neutralChapterTitle(ch: Pick<BookDoc["chapters"][number], "dateLabel">, n: number, lang: CaptionLang): string {
+  return ch.dateLabel.trim() || (lang === "ar" ? `الفصل ${n}` : `Chapter ${n}`);
+}
+
+/** Neutral subtitle: date range of the photo dates, else the one place all chapters share, else "". */
+export function neutralSubtitle(
+  doc: Pick<BookDoc, "chapters">,
+  dates: ReadonlyArray<string | null | undefined>,
+): string {
+  const days = dates
+    .map((d) => photoMs({ takenAt: d ?? null }))
+    .filter((ms): ms is number => ms !== null)
+    .map(dubaiDay);
+  if (days.length) return clipText(dayRange(Math.min(...days), Math.max(...days)), AI_TEXT_LIMITS.subtitle);
+  const places = new Set(doc.chapters.map((c) => c.place?.trim()).filter((p): p is string => Boolean(p)));
+  return places.size === 1 ? clipText([...places][0], AI_TEXT_LIMITS.subtitle) : "";
+}
+
+export interface GroundStoryTextResult {
+  doc: BookDoc;
+  /** Chapter indexes whose Storyteller title was replaced (for logs: indices only). */
+  chapters: number[];
+  subtitle: boolean;
+}
+
+/**
+ * SF3: run the caption pre-check (metadata context, never AI text) over the Storyteller's chapter
+ * titles and cover subtitle; failing ones become neutral (date label / "Chapter n"; date range /
+ * place). The cover title is the user's title whenever they typed one (planToDoc). Pure; returns
+ * the input doc when nothing changes or the result would not parse.
+ */
+export function groundStoryText(
+  doc: BookDoc,
+  ctx: CaptionCheckContext,
+  opts: { lang: CaptionLang; dates: ReadonlyArray<string | null | undefined> },
+): GroundStoryTextResult {
+  const hctx = headingContext(ctx, doc.chapters.length);
+  const replaced: number[] = [];
+  const chapters = doc.chapters.map((ch, i) => {
+    if (!ch.title.trim() || checkStoryText(ch.title, hctx, MAX_HEADING_WORDS).length === 0) return ch;
+    replaced.push(i);
+    return { ...ch, title: clipText(neutralChapterTitle(ch, i + 1, opts.lang), AI_TEXT_LIMITS.chapterTitle) };
+  });
+  const sub = doc.cover.subtitle ?? "";
+  const subtitleBad = sub.trim() !== "" && checkStoryText(sub, hctx, MAX_SUBTITLE_WORDS).length > 0;
+  if (!replaced.length && !subtitleBad) return { doc, chapters: [], subtitle: false };
+  const next: BookDoc = {
+    ...doc,
+    chapters,
+    cover: subtitleBad ? { ...doc.cover, subtitle: neutralSubtitle(doc, opts.dates) } : doc.cover,
+  };
+  const parsed = parseBookDoc(next);
+  return parsed.ok ? { doc: parsed.doc, chapters: replaced, subtitle: subtitleBad } : { doc, chapters: [], subtitle: false };
 }
 
 /**
@@ -235,7 +320,7 @@ export function applyCaptions(
   opts: ApplyCaptionsOptions,
 ): BookDoc {
   const font = opts.lang === "ar" ? "Cairo" : "Playfair";
-  const ctx = opts.ctx ?? docCaptionContext(doc, opts.lang);
+  const ctx = headingContext(opts.ctx ?? docCaptionContext(doc, opts.lang), doc.chapters.length);
   const perChapter = new Map<string, number>();
   const momentOf = momentIdsOfChapters(doc);
 

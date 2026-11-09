@@ -24,6 +24,8 @@ export const CRITIQUE_ISSUE_TYPES = [
   "chronology",
   "caption_mismatch",
   "caption_invented_fact",
+  /** SF2: a well-known quote, lyric, film line, slogan or proverb presented as a quote. */
+  "caption_not_original",
   "too_repetitive",
   "unbalanced_chapter",
   "low_quality_photo",

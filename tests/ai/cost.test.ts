@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { PRICING } from "@/lib/ai/client";
-import { addUsage, costUsd } from "@/lib/ai/cost";
+import { addUsage, costUsd, estimateCallCostUsd } from "@/lib/ai/cost";
 
 const M = "claude-opus-5-5";
 
@@ -44,5 +44,22 @@ describe("costUsd", () => {
     expect(
       addUsage({ input: 1, output: 2, cacheRead: 3, cacheWrite: 4 }, { input: 10, output: 20, cacheRead: 30, cacheWrite: 40 }),
     ).toEqual({ input: 11, output: 22, cacheRead: 33, cacheWrite: 44 });
+  });
+});
+
+describe("estimateCallCostUsd (D-035)", () => {
+  it("prices all input at the cache-write rate and the full output budget", () => {
+    // 10k input × $5/M + 8k output × $20/M
+    expect(estimateCallCostUsd(M, { inputTokens: 10_000, maxOutputTokens: 8_000 })).toBeCloseTo(0.05 + 0.16, 6);
+  });
+
+  it("is never below the real cost of a call within that budget", () => {
+    const real = costUsd(M, { input: 4_000, output: 8_000, cacheRead: 3_000, cacheWrite: 3_000 });
+    expect(estimateCallCostUsd(M, { inputTokens: 10_000, maxOutputTokens: 8_000 })).toBeGreaterThanOrEqual(real);
+  });
+
+  it("unknown models use the most expensive known prices; bad numbers count as 0", () => {
+    expect(estimateCallCostUsd("future-model", { inputTokens: 1_000_000, maxOutputTokens: 0 })).toBe(5);
+    expect(estimateCallCostUsd(M, { inputTokens: Number.NaN, maxOutputTokens: -1 })).toBe(0);
   });
 });
