@@ -47,7 +47,7 @@ Key rule: **AI drafts, the user decides.** Nothing the AI does is final; every c
 | ④ Quotes | ~8k in / ~3k out | ~$0.09 |
 | **Total** | | **≈ $0.85 per 200-photo book** (≈ AED 3) |
 
-These numbers are rough estimates; measure real token usage in M3 (we log it in `ai_usage`).
+These numbers are rough estimates; measure real token usage in M3 (we log it in `agent_steps` / `agent_runs.total_cost_usd`).
 Against an AED 39 sale this is fine, but free users also cost AED ~3 each → see the free-tier AI limits
 in CLAUDE.md. If costs are too high, a cheaper model (Claude Haiku 5.5) can be used for step ② only —
 that's a product decision for you; the code makes the model a single config value.
@@ -61,7 +61,7 @@ that's a product decision for you; the code makes the model a single config valu
 - [ ] Mapbox account (free tier) for turning GPS into place names
 - [ ] Stripe: test mode now. Live mode in the UAE needs a trade licence (free-zone is fine) + UAE bank —
       start that paperwork now.
-- [ ] `.env.local` keys: `NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, SUPABASE_SECRET_KEY,
+- [ ] `.env.local` keys: `NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, SUPABASE_SECRET_KEY, AI_MODE, ADMIN_USER_IDS,
       ANTHROPIC_API_KEY, MAPBOX_TOKEN, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, NEXT_PUBLIC_APP_URL, CRON_SECRET`
 - [ ] Privacy policy must say photos are processed by an AI provider (Anthropic) to build the album.
 
@@ -94,24 +94,25 @@ that's a product decision for you; the code makes the model a single config valu
 
 ## Milestone 3 — AI agent pipeline: curation + album generation (3–4 days) ⭐⭐ the magic
 Design: **docs/AI-AGENTS.md** (Curator → Storyteller → Caption Writer → Critic, code orchestrator, logging, memory).
-- [ ] Migration: `agent_runs`, `agent_steps`, `user_memory` (replace `ai_usage`)
-- [ ] `src/lib/ai/run-step.ts` (`runAgentStep` logs every call) + `orchestrator.ts` (state machine, resumable)
-- [ ] Live progress: `GET /api/ai/runs/[id]` + progress screen
-- [ ] `src/lib/ai/` module — all Claude calls live here (see CLAUDE.md → AI rules)
-- [ ] **Step A – analyse photos**: `/api/ai/analyze` takes 10 photo IDs, sends their 512px thumbnails + metadata,
+- [x] Migration: `agent_runs`, `agent_steps`, `user_memory` (replace `ai_usage`)
+- [x] `src/lib/ai/run-step.ts` (`runAgentStep` logs every call) + `orchestrator.ts` (state machine, resumable)
+- [x] Live progress: `GET /api/ai/runs/[id]` + progress screen
+- [x] `src/lib/ai/` module — all Claude calls live here (see CLAUDE.md → AI rules)
+- [ ] **Step A – analyse photos** (built + replay-tested, live pending M3b; endpoint is `/api/ai/runs` + advance ticks per D-022/D-025): takes 10 photo IDs, sends their 512px thumbnails + metadata,
       returns structured JSON per photo (schema below). Client calls it in parallel batches (3 at a time) with a
       progress screen: "Looking at your photos… 120 / 200"
-- [ ] Duplicate groups (from pHash): AI picks the best shot of each group, the rest marked `dropped: duplicate`
-- [ ] **Step B – plan album**: `/api/ai/plan` sends all photo notes (text only, no images) + dates + places + occasion +
+- [ ] Duplicate groups (from pHash): AI picks the best shot of each group, the rest marked `dropped: duplicate` (built + replay-tested, live pending M3b)
+- [ ] **Step B – plan album** (built + replay-tested, live pending M3b; Storyteller tick in `/api/ai/runs/[id]/advance`): sends all photo notes (text only, no images) + dates + places + occasion +
       target page count → returns moments, page plan (layout IDs only from our list), cover, title (schema below)
-- [ ] Validate the plan in code: every photoId exists, layout slot count matches photos, page count within limit;
+- [x] Validate the plan in code: every photoId exists, layout slot count matches photos, page count within limit;
       if invalid → retry once, then fall back to rule-based auto-layout
-- [ ] **Review screen** `/books/[id]/review`: "AI kept 64 of 200" — grid of kept / dropped (with reason chip),
+- [x] **Review screen** `/books/[id]/review`: "AI kept 64 of 200" — grid of kept / dropped (with reason chip),
       tap to toggle, "Rebuild album" button
-- [ ] Every call logged in `agent_steps` via `runAgentStep`; enforce free-tier limits
-- [ ] `/admin/runs/[id]` trace page (step timeline, outputs, cost)
+- [x] Every call logged in `agent_steps` via `runAgentStep`; enforce free-tier limits
+- [x] `/admin/runs/[id]` trace page (step timeline, outputs, cost)
 **Done when:** 150 mixed photos (incl. screenshots, duplicates, blurry ones) become a sensible, chaptered book in < 90 s,
 and the trace page shows every agent step with its cost.
+**M3a done (replay) 2026-11-09** — everything built, tested with recorded answers and deployed; AI is `off` in production. **M3b** needs `ANTHROPIC_API_KEY`: one real 150-photo book (< 90 s, cost per book, cache hits), prompt tuning, re-recorded fixtures, iPhone GPS-hint check. Also built: free "Update album" re-layout (D-028).
 
 ## Milestone 4 — AI quotes & captions (1 day) ⭐
 - [ ] `/api/ai/captions`: per moment, send the moment title + photo notes + occasion + tone + language →
@@ -160,7 +161,7 @@ planted bad caption in tests; a second book reflects the user's earlier tone/len
 - [ ] Daily cron: delete unpaid books + photos 30 days after publish; abandoned drafts after 45 days; orphan uploads after 7 days
 - [ ] Emails (Resend): "Your book expires in 3 days"
 - [ ] Landing page: "Upload 200 photos → AI builds your album in 60 seconds" demo video, 3 example flipbooks, pricing, FAQ
-- [ ] Legal pages (mention AI processing), analytics (PostHog), errors (Sentry), AI spend dashboard (sum of `ai_usage` per day)
+- [ ] Legal pages (mention AI processing), analytics (PostHog), errors (Sentry), AI spend dashboard (sum of `agent_runs.total_cost_usd` per day)
 - [ ] Playwright smoke: login → upload → AI build → edit caption → publish → view → pay (test mode)
 - [ ] Stripe live mode when licence is ready → 🚀 launch
 
