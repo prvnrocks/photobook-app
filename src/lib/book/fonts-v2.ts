@@ -6,13 +6,13 @@
 // the version rule, kept separate so the doc-version module has no dependency on font loading.
 
 export const V2_CAPTION_FONTS = [
-  "Great Vibes",
-  "Bebas Neue",
-  "Cormorant Garamond",
-  "Aref Ruqaa",
-  "Lalezar",
+  "Cormorant",
   "Amiri",
-] as const;
+  "Bebas",
+  "Lalezar",
+  "GreatVibes",
+  "ArefRuqaa",
+] as const; // same ids as BOOK_FONTS_M10B in fonts.ts (short ids, like "Playfair"); a test keeps them equal
 
 export type V2CaptionFont = (typeof V2_CAPTION_FONTS)[number];
 

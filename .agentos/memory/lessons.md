@@ -90,3 +90,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-11, supabase) Backfill UPDATE on books bumps updated_at (draft idle clock) — disable books_set_updated_at around it in the same transaction; prove with db:dry-run --seed/--seed-before.
 - (2026-11-11, e2e) Pin a scratch copy with `git archive HEAD | tar -x` + only your changed files (symlink node_modules/.env.local) so parallel builders' WIP is excluded.
 - (2026-11-11, testing) Test-only catalogue entries: vi.mock("@/lib/layouts", async (orig) => withTestSpreads(await orig())) from tests/fixtures/test-spread-layouts.ts.
+- (2026-11-11, fonts) next/font adds a '<Name> Fallback' face (local Arial/Times) with Arabic glyphs, so Arabic in a Latin chain skips our Arabic face (and can print as Type3): use adjustFontFallback:false and no fallback list on book fonts.

@@ -35,7 +35,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { BookPage } from "@/components/book/BookPage";
 import { PRINT_FONT_CLASSES, PRINT_FONT_VARS } from "@/components/print/print-fonts";
-import { CAPTION_FONT_VARS } from "@/lib/book/fonts";
+import { BOOK_FONTS, CAPTION_FONT_VARS } from "@/lib/book/fonts";
 import nextConfig, { PRINT_ROUTE_HEADERS } from "../next.config";
 
 const SECRET = "s".repeat(40);
@@ -359,11 +359,14 @@ describe("print fonts (static instances, Type0 in the PDF)", () => {
   const doc = makeDoc(3);
   const photos = printRenderPhotos(Array.from({ length: 4 }, (_, i) => ({ id: pid(i), width: 1200, height: 1600 })));
 
-  it("re-declares every caption font variable the renderer uses", () => {
-    expect([...PRINT_FONT_VARS].sort()).toEqual(Object.values(CAPTION_FONT_VARS).sort());
+  it("re-declares every font variable the renderer uses (classic + M10b registry)", () => {
+    for (const v of Object.values(CAPTION_FONT_VARS)) expect(PRINT_FONT_VARS).toContain(v);
+    expect([...PRINT_FONT_VARS].sort()).toEqual(Object.values(BOOK_FONTS).map((f) => f.cssVar).sort());
     for (const v of PRINT_FONT_VARS) expect(loader).toContain(`variable: "${v}"`);
+    // const names = CSS family names: unique and print-prefixed (never merge with screen faces)
+    for (const f of Object.values(BOOK_FONTS)) expect(loader).toContain(`const ${f.printConst} = localFont(`);
     const classes = PRINT_FONT_CLASSES.split(" ");
-    expect(classes).toHaveLength(4);
+    expect(classes).toHaveLength(10);
     for (const v of PRINT_FONT_VARS) expect(classes).toContain(`__variable_${v.slice(2)}`);
   });
 
@@ -388,24 +391,34 @@ describe("print fonts (static instances, Type0 in the PDF)", () => {
     }
   });
 
-  it("ships exactly the weights the renderer uses (400 captions, 600 cover title; Tajawal 400/700)", () => {
+  it("ships exactly the weights the renderer uses (400 captions, 600 cover title; Tajawal 400/700; M10b pairs)", () => {
     expect(woff2).toEqual([
+      "Amiri-400.woff2",
+      "Amiri-700.woff2",
+      "ArefRuqaa-400.woff2",
+      "ArefRuqaa-700.woff2",
+      "BebasNeue-400.woff2",
       "Cairo-400.woff2",
       "Cairo-600.woff2",
+      "CormorantGaramond-400.woff2",
+      "CormorantGaramond-400italic.woff2",
+      "CormorantGaramond-600.woff2",
+      "GreatVibes-400.woff2",
       "Inter-400.woff2",
       "Inter-600.woff2",
+      "Lalezar-400.woff2",
       "PlayfairDisplay-400.woff2",
       "PlayfairDisplay-600.woff2",
       "Tajawal-400.woff2",
       "Tajawal-700.woff2",
     ]);
     for (const f of woff2) {
-      const w = /-(\d{3})\.woff2$/.exec(f)![1];
-      expect(loader).toContain(`{ path: "./fonts/${f}", weight: "${w}", style: "normal" }`);
+      const [, w, italic] = /-(\d{3})(italic)?\.woff2$/.exec(f)!;
+      expect(loader).toContain(`{ path: "./fonts/${f}", weight: "${w}", style: "${italic ? "italic" : "normal"}" }`);
     }
   });
 
-  it.each(["Cairo-400.woff2", "Cairo-600.woff2", "Inter-400.woff2", "Inter-600.woff2", "PlayfairDisplay-400.woff2", "PlayfairDisplay-600.woff2", "Tajawal-400.woff2", "Tajawal-700.woff2"])(
+  it.each(readdirSync(path.join(__dirname, "../src/components/print/fonts")).filter((f) => f.endsWith(".woff2")))(
     "%s is a static TrueType font (glyf, no fvar/gvar/CFF) with shaping tables, under 150 KB",
     (f) => {
       const buf = readFileSync(path.join(FONT_DIR, f));
@@ -418,7 +431,7 @@ describe("print fonts (static instances, Type0 in the PDF)", () => {
   );
 
   it("each family ships its SIL OFL 1.1 licence", () => {
-    for (const fam of ["Cairo", "Inter", "PlayfairDisplay", "Tajawal"]) {
+    for (const fam of ["Cairo", "Inter", "PlayfairDisplay", "Tajawal", "Amiri", "ArefRuqaa", "BebasNeue", "CormorantGaramond", "GreatVibes", "Lalezar"]) {
       expect(files).toContain(`OFL-${fam}.txt`);
       expect(readFileSync(path.join(FONT_DIR, `OFL-${fam}.txt`), "utf8")).toContain("SIL Open Font License, Version 1.1");
     }
