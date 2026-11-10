@@ -6,6 +6,7 @@ import { Faq } from "@/components/marketing/Faq";
 import { HeroIllustration } from "@/components/marketing/HeroIllustration";
 import { HowItWorks } from "@/components/marketing/HowItWorks";
 import { Pricing } from "@/components/marketing/Pricing";
+import { AccountDeletedNotice } from "@/components/settings/AccountDeletedNotice";
 import { buttonVariants } from "@/components/ui/button";
 import { APP_NAME } from "@/lib/brand";
 import { CTA_HREF, CTA_LABEL, HERO_CLAIM, HERO_SUBCOPY, LANDING_DESCRIPTION, LANDING_TITLE } from "@/lib/marketing/copy";
@@ -25,6 +26,9 @@ export default function LandingPage() {
   const showDemo = hasDemoVideo();
   return (
     <main className="flex flex-col">
+      <div className="px-4 sm:px-6">
+        <AccountDeletedNotice />
+      </div>
       <section
         data-testid="section-hero"
         className="bg-gradient-to-b from-amber-50 via-background to-background"

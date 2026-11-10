@@ -14,7 +14,16 @@ import { isUuid } from "@/lib/uuid";
 
 export type BookListItem = Pick<
   Tables<"books">,
-  "id" | "title" | "updated_at" | "page_count" | "published_at" | "is_paid" | "ai_status" | "slug" | "expires_at"
+  | "id"
+  | "title"
+  | "updated_at"
+  | "page_count"
+  | "published_at"
+  | "is_paid"
+  | "ai_status"
+  | "slug"
+  | "expires_at"
+  | "draft_warning_sent_at"
 > & {
   /**
    * Live snapshot exists (published_doc is not null, read as `published_doc->version`). Unpublish
@@ -87,7 +96,7 @@ export async function listMyBooks(): Promise<BookListItem[]> {
 }
 
 const BOOK_LIST_COLUMNS =
-  "id, title, updated_at, page_count, published_at, is_paid, ai_status, slug, expires_at, user_edited:doc->meta->userEdited, live:published_doc->version, photos(count)";
+  "id, title, updated_at, page_count, published_at, is_paid, ai_status, slug, expires_at, draft_warning_sent_at, user_edited:doc->meta->userEdited, live:published_doc->version, photos(count)";
 
 type BookListRow = Omit<BookListItem, "photo_count" | "user_edited" | "published"> & {
   user_edited: unknown;
@@ -108,6 +117,7 @@ function toBookListItem(row: BookListRow): BookListItem {
     ai_status: row.ai_status,
     slug: row.slug,
     expires_at: row.expires_at,
+    draft_warning_sent_at: row.draft_warning_sent_at ?? null,
     published: row.live !== null && row.live !== undefined,
     photo_count: typeof count === "number" && Number.isFinite(count) ? count : 0,
     user_edited: row.user_edited === true,

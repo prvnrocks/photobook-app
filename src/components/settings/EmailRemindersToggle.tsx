@@ -1,0 +1,148 @@
+"use client";
+
+// Settings → "Email reminders" switch (M9 T10, D-057). Saves immediately (optimistic); on failure
+// it flips back and shows why. <EmailRemindersToggleView> takes the action as a prop (unit tests).
+
+import { useState, useTransition } from "react";
+import { setEmailRemindersAction } from "@/app/settings/actions";
+import {
+  ACCOUNT_COPY,
+  remindersErrorCopy,
+  type SetEmailRemindersResult,
+} from "@/lib/settings/account";
+import { cn } from "@/lib/utils";
+
+export function EmailRemindersToggle({
+  initialOn,
+}: {
+  initialOn: boolean | null;
+}) {
+  return (
+    <EmailRemindersToggleView
+      initialOn={initialOn}
+      save={setEmailRemindersAction}
+    />
+  );
+}
+
+export function EmailRemindersToggleView({
+  initialOn,
+  save,
+}: {
+  /** null = the current value couldn't be loaded. */
+  initialOn: boolean | null;
+  save: (on: boolean) => Promise<SetEmailRemindersResult>;
+}) {
+  const [on, setOn] = useState(initialOn === true);
+  const [message, setMessage] = useState<{
+    tone: "ok" | "error";
+    text: string;
+  } | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const toggle = () => {
+    const next = !on;
+    setOn(next);
+    setMessage(null);
+    startTransition(async () => {
+      let result: SetEmailRemindersResult | null = null;
+      try {
+        result = await save(next);
+      } catch {
+        result = null;
+      }
+      if (result?.ok) {
+        setOn(result.on);
+        setMessage({ tone: "ok", text: ACCOUNT_COPY.remindersSaved });
+      } else {
+        setOn(!next);
+        setMessage({
+          tone: "error",
+          text: remindersErrorCopy(result && !result.ok ? result.error : null),
+        });
+      }
+    });
+  };
+
+  return (
+    <section
+      aria-labelledby="settings-reminders-heading"
+      className="flex min-w-0 flex-col gap-3 rounded-xl border p-4"
+      data-testid="settings-reminders"
+    >
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <h2 id="settings-reminders-heading" className="text-lg font-semibold">
+          {ACCOUNT_COPY.remindersHeading}
+        </h2>
+        {initialOn === null ? null : (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={on}
+            aria-labelledby="settings-reminders-heading"
+            aria-describedby="settings-reminders-detail"
+            aria-busy={pending}
+            disabled={pending}
+            onClick={toggle}
+            className="flex min-h-11 shrink-0 items-center gap-2 rounded-full px-1 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-60"
+            data-testid="settings-reminders-toggle"
+            data-state={on ? "on" : "off"}
+          >
+            <span
+              className="w-7 text-right text-muted-foreground"
+              aria-hidden="true"
+            >
+              {on ? ACCOUNT_COPY.remindersOn : ACCOUNT_COPY.remindersOff}
+            </span>
+            <span
+              aria-hidden="true"
+              className={cn(
+                "relative inline-flex h-7 w-12 items-center rounded-full transition-colors",
+                on ? "bg-primary" : "bg-muted-foreground/30",
+              )}
+            >
+              <span
+                className={cn(
+                  "inline-block size-6 rounded-full bg-white shadow transition-transform",
+                  on ? "translate-x-[1.375rem]" : "translate-x-0.5",
+                )}
+              />
+            </span>
+          </button>
+        )}
+      </div>
+      <p
+        id="settings-reminders-detail"
+        className="text-sm text-muted-foreground"
+      >
+        {ACCOUNT_COPY.remindersDetail}
+      </p>
+      {initialOn === null ? (
+        <p
+          className="text-sm text-destructive"
+          data-testid="settings-reminders-load-error"
+        >
+          {ACCOUNT_COPY.remindersLoadError}
+        </p>
+      ) : null}
+      <div aria-live="polite">
+        {message ? (
+          <p
+            className={
+              message.tone === "error"
+                ? "text-sm text-destructive"
+                : "text-sm text-muted-foreground"
+            }
+            data-testid={
+              message.tone === "error"
+                ? "settings-reminders-error"
+                : "settings-reminders-saved"
+            }
+          >
+            {message.text}
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
+}

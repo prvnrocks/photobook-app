@@ -1,5 +1,6 @@
 import "server-only";
-// Deletes one book of one user completely (D-060): row first (guarded — never a protected book),
+// Deletes one book of one user completely (D-060): row first via the delete_book_guarded RPC
+// (migration 1700 — never a paid / comped / payment-pending book),
 // then its Storage prefixes in `photos` and `exports`. Row-then-storage (D-056): a Storage failure
 // leaves invisible objects without a row, which the daily orphan sweep removes after
 // ORPHAN_OBJECT_DAYS; it never leaves a visible book with missing files.

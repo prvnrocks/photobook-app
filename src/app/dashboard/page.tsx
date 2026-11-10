@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { deleteBookAction } from "@/app/books/actions";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { BookList } from "@/components/dashboard/BookList";
 import { EmptyState } from "@/components/dashboard/EmptyState";
@@ -64,7 +65,7 @@ export default async function DashboardPage() {
         ) : books.length === 0 ? (
           <EmptyState />
         ) : (
-          <BookList books={books} />
+          <BookList books={books} deleteBook={deleteBookAction} />
         )}
       </main>
     </>

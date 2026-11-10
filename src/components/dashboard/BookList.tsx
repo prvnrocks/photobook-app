@@ -1,9 +1,13 @@
 // The signed-in user's books as tappable cards (D-017). Each card opens the step the book is at
 // (upload / build / review / edit) — rules in src/lib/dashboard/card-target.ts (M5 Task 12).
 // Published books show their link state and a Share link to /books/[id]/publish (M6 T8).
+// M9 T10: deletion chips (src/lib/dashboard/deletion-chip.ts) and a "⋯" menu with "Delete book"
+// (rendered only when the page passes the deleteBook server action).
 import { Share2 } from "lucide-react";
 import Link from "next/link";
+import { BookCardMenu, type DeleteBookFn } from "@/components/dashboard/BookCardMenu";
 import { bookCardHref } from "@/lib/dashboard/card-target";
+import { bookDeletionChip } from "@/lib/dashboard/deletion-chip";
 import { bookPublishChip, bookShareHref, type PublishChip } from "@/lib/dashboard/publish-chip";
 import type { BookListItem } from "@/lib/db/books";
 
@@ -33,12 +37,21 @@ function Chip({ children, tone = "neutral", testId }: { children: React.ReactNod
   );
 }
 
-export function BookList({ books, now }: { books: BookListItem[]; now?: Date }) {
+export function BookList({
+  books,
+  now,
+  deleteBook,
+}: {
+  books: BookListItem[];
+  now?: Date;
+  deleteBook?: DeleteBookFn;
+}) {
   return (
     <ul className="flex flex-col gap-3" data-testid="book-list">
       {books.map((book) => {
         const chip = bookPublishChip(book, now);
         const share = bookShareHref(book);
+        const deletion = bookDeletionChip(book, now);
         return (
           <li key={book.id} className="flex items-stretch rounded-xl border transition-colors hover:bg-muted/50">
             <Link href={bookCardHref(book)} className="block min-h-11 min-w-0 flex-1 p-4" data-testid="book-card">
@@ -50,6 +63,11 @@ export function BookList({ books, now }: { books: BookListItem[]; now?: Date }) 
                   {chip.label}
                 </Chip>
                 {book.is_paid ? <Chip>Paid</Chip> : null}
+                {deletion ? (
+                  <Chip tone="expired" testId="book-delete-chip">
+                    {deletion.label}
+                  </Chip>
+                ) : null}
                 <span>
                   {book.page_count} {book.page_count === 1 ? "page" : "pages"}
                 </span>
@@ -66,6 +84,7 @@ export function BookList({ books, now }: { books: BookListItem[]; now?: Date }) 
                 Share
               </Link>
             ) : null}
+            {deleteBook ? <BookCardMenu bookId={book.id} title={book.title} deleteBook={deleteBook} /> : null}
           </li>
         );
       })}

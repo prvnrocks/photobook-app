@@ -219,60 +219,27 @@ export async function releaseWarning(bookId: string, kind: WarningKind): Promise
 
 export type DeleteBookRowResult = "deleted" | "not_found" | "protected";
 
-async function hasProtectedOrder(bookId: string): Promise<boolean> {
-  const { count, error } = await createAdminClient()
-    .from("orders")
-    .select("id", { count: "exact", head: true })
-    .eq("book_id", bookId)
-    .in("status", [...PROTECTED_ORDER_STATUSES]);
-  if (error) throw new CleanupQueryError("check book orders", error.code);
-  return (count ?? 0) > 0;
-}
+const DELETE_BOOK_RESULTS: readonly DeleteBookRowResult[] = ["deleted", "not_found", "protected"];
 
 /**
- * Deletes the owner's book row unless it is protected (is_paid, or an order in a protected
- * status). The delete itself is guarded (`id` + `user_id` + `is_paid = false`), so a book that
- * became paid after the order check is never deleted. Cascades photos / exports / unlock attempts
- * / AI notes; orders and agent runs keep their rows with book_id null.
- *
- * Known window (no migration in this wave): an order inserted between the order check and the
- * delete would end up with book_id null. Only the owner can create one, by starting checkout on
- * the book they are deleting at the same moment. A guarded RPC can close it later.
+ * Deletes the owner's book row through public.delete_book_guarded (migration 1700): locks the
+ * row (id + user_id), refuses when is_paid or any order is pending / paid / needs_review /
+ * disputed / comped ('protected'), else deletes it. A foreign or missing book is 'not_found'.
+ * FK cascades remove photos / exports / unlock attempts / AI notes; orders and agent runs keep
+ * their rows with book_id null. Storage is NOT touched — the caller removes the prefixes.
+ * Throws CleanupQueryError (code only) on a DB error or an unexpected result.
  */
 export async function deleteOwnUnprotectedBook(bookId: string, userId: string): Promise<DeleteBookRowResult> {
   if (!isUuid(bookId) || !isUuid(userId)) return "not_found";
-  const admin = createAdminClient();
-
-  const { data: book, error: readError } = await admin
-    .from("books")
-    .select("id, is_paid")
-    .eq("id", bookId)
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (readError) throw new CleanupQueryError("read book", readError.code);
-  if (!book) return "not_found";
-  if (book.is_paid) return "protected";
-  if (await hasProtectedOrder(bookId)) return "protected";
-
-  const { data: deleted, error: deleteError } = await admin
-    .from("books")
-    .delete()
-    .eq("id", bookId)
-    .eq("user_id", userId)
-    .eq("is_paid", false)
-    .select("id");
-  if (deleteError) throw new CleanupQueryError("delete book", deleteError.code);
-  if ((deleted ?? []).length > 0) return "deleted";
-
-  // Nothing deleted: either it became paid meanwhile, or it is gone.
-  const { data: again, error: againError } = await admin
-    .from("books")
-    .select("id")
-    .eq("id", bookId)
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (againError) throw new CleanupQueryError("read book", againError.code);
-  return again ? "protected" : "not_found";
+  const { data, error } = await createAdminClient().rpc("delete_book_guarded", {
+    p_book: bookId,
+    p_user: userId,
+  });
+  if (error) throw new CleanupQueryError("delete book", error.code);
+  if (typeof data === "string" && (DELETE_BOOK_RESULTS as readonly string[]).includes(data)) {
+    return data as DeleteBookRowResult;
+  }
+  throw new CleanupQueryError("delete book", "bad_result");
 }
 
 // ---------------------------------------------------------------------------

@@ -6,10 +6,14 @@
 // maxDuration 300 = the Hobby + Fluid compute ceiling; the cleanup stops starting new batches
 // after CRON_TIME_BUDGET_MS (240 s) and the next day continues.
 //
+// Reminder emails (D-057) run first via the warnings hook; they are a no-op (nothing claimed)
+// unless RESEND_API_KEY + EMAIL_FROM are set.
+//
 // Excluded from the middleware matcher (no cookies / session). Responses carry counts only.
 import { NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/lib/cleanup/cron-auth";
 import { runCleanup } from "@/lib/cleanup/run";
+import { sendWarningEmails } from "@/lib/email/warnings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,7 +33,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const counts = await runCleanup();
+    const counts = await runCleanup({ sendWarnings: sendWarningEmails });
     return NextResponse.json(counts, { status: counts.ok ? 200 : 500, headers: NO_STORE });
   } catch {
     console.error("[cleanup] run failed");

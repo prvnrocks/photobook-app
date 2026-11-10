@@ -309,70 +309,59 @@ describe("runCleanup — logs contain counts only", () => {
   });
 });
 
-describe("deleteBookCompletely", () => {
-  const bookRow = (isPaid: boolean) => ({ data: { id: B1, is_paid: isPaid }, error: null });
+describe("deleteBookCompletely (delete_book_guarded RPC)", () => {
+  const guarded = (r: Result) => {
+    fake.state.rpc.delete_book_guarded = [r];
+  };
 
-  it("refuses a paid book without deleting", async () => {
-    fake.state.tableResults = [bookRow(true)];
-    expect(await deleteBookCompletely({ bookId: B1, userId: U })).toEqual({ ok: false, error: "protected" });
-    expect(fake.state.tables.map((t) => t.op)).toEqual(["select"]);
-    expect(fake.state.calls.some((c) => c.startsWith("remove:"))).toBe(false);
+  it("passes the book and the session user to the RPC", async () => {
+    guarded({ data: "not_found", error: null });
+    await deleteBookCompletely({ bookId: B1, userId: U });
+    expect(fake.state.rpcArgs).toEqual([{ fn: "delete_book_guarded", args: { p_book: B1, p_user: U } }]);
   });
 
-  it("refuses a book with a protected order (pending / paid / needs_review / disputed)", async () => {
-    fake.state.tableResults = [bookRow(false), { data: null, error: null, count: 1 }];
+  it("protected (paid / comped / payment pending) → error, no storage touched", async () => {
+    guarded({ data: "protected", error: null });
     expect(await deleteBookCompletely({ bookId: B1, userId: U })).toEqual({ ok: false, error: "protected" });
-    const orders = fake.state.tables.find((t) => t.table === "orders")!;
-    expect(orders.calls).toContainEqual(["in", "status", ["pending", "paid", "needs_review", "disputed"]]);
-    expect(fake.state.tables.some((t) => t.op === "delete")).toBe(false);
-  });
-
-  it("guarded delete: owner + unpaid filters; became paid meanwhile → protected", async () => {
-    fake.state.tableResults = [
-      bookRow(false),
-      { data: null, error: null, count: 0 },
-      { data: [], error: null }, // delete matched nothing
-      { data: { id: B1 }, error: null }, // still there
-    ];
-    expect(await deleteBookCompletely({ bookId: B1, userId: U })).toEqual({ ok: false, error: "protected" });
-    const del = fake.state.tables.find((t) => t.op === "delete")!;
-    expect(del.calls).toEqual(
-      expect.arrayContaining([
-        ["eq", "id", B1],
-        ["eq", "user_id", U],
-        ["eq", "is_paid", false],
-      ]),
-    );
+    expect(fake.state.calls.some((c) => c.startsWith("list:") || c.startsWith("remove:"))).toBe(false);
+    expect(fake.state.tables).toEqual([]);
   });
 
   it("deletes the row, then removes both prefixes", async () => {
-    fake.state.tableResults = [bookRow(false), { data: null, error: null, count: 0 }, { data: [{ id: B1 }], error: null }];
+    guarded({ data: "deleted", error: null });
     fake.state.objects.photos = { [`${U}/${B1}`]: [{ name: "a-web.jpg", id: "1" }] };
     fake.state.objects.exports = { [`${U}/${B1}`]: [{ name: "e.pdf", id: "2" }] };
     expect(await deleteBookCompletely({ bookId: B1, userId: U })).toEqual({ ok: true, storageRemoved: 2, storageFailures: 0 });
-    expect(fake.state.calls.indexOf("delete:books")).toBeLessThan(fake.state.calls.indexOf("list:photos"));
+    expect(fake.state.calls.indexOf("rpc:delete_book_guarded")).toBeLessThan(fake.state.calls.indexOf("list:photos"));
     expect(fake.state.removed).toEqual({ photos: [[`${U}/${B1}/a-web.jpg`]], exports: [[`${U}/${B1}/e.pdf`]] });
   });
 
   it("storage failure after the row delete → ok with the failure counted and a code-only log", async () => {
-    fake.state.tableResults = [bookRow(false), { data: null, error: null, count: 0 }, { data: [{ id: B1 }], error: null }];
+    guarded({ data: "deleted", error: null });
     fake.state.listError.exports = { statusCode: "403" };
     expect(await deleteBookCompletely({ bookId: B1, userId: U })).toEqual({ ok: true, storageRemoved: 0, storageFailures: 1 });
     expect(error.mock.calls.map((c) => String(c[0]))).toEqual(["[cleanup] delete_book storage_fail bucket=exports code=403"]);
   });
 
   it("not found / foreign / invalid ids", async () => {
-    fake.state.tableResults = [{ data: null, error: null }];
+    guarded({ data: "not_found", error: null });
     expect(await deleteBookCompletely({ bookId: B1, userId: U })).toEqual({ ok: false, error: "not_found" });
     expect(await deleteBookCompletely({ bookId: "nope", userId: U })).toEqual({ ok: false, error: "invalid" });
-    const read = fake.state.tables[0];
-    expect(read.calls).toContainEqual(["eq", "user_id", U]);
+    expect(await deleteBookCompletely({ bookId: B1, userId: "nope" })).toEqual({ ok: false, error: "invalid" });
+    expect(rpcCalls()).toEqual(["rpc:delete_book_guarded"]);
   });
 
   it("DB error → failed (code only)", async () => {
-    fake.state.tableResults = [{ data: null, error: { code: "57014", message: "statement timeout on book 'Our trip'" } }];
+    guarded({ data: null, error: { code: "57014", message: "statement timeout on book 'Our trip'" } });
     expect(await deleteBookCompletely({ bookId: B1, userId: U })).toEqual({ ok: false, error: "failed" });
     expect(error.mock.calls.map((c) => String(c[0]))).toEqual(["[cleanup] delete_book failed code=57014"]);
+  });
+
+  it("unexpected RPC result → failed, nothing removed", async () => {
+    guarded({ data: "maybe", error: null });
+    expect(await deleteBookCompletely({ bookId: B1, userId: U })).toEqual({ ok: false, error: "failed" });
+    expect(error.mock.calls.map((c) => String(c[0]))).toEqual(["[cleanup] delete_book failed code=bad_result"]);
+    expect(fake.state.calls.some((c) => c.startsWith("list:"))).toBe(false);
   });
 });
 

@@ -156,7 +156,16 @@ orphans_exports, old_exports, unlock_attempts, stale_runs`.
 - Stuck jobs: `select id, status, attempt, error_code, created_at from public.exports where book_id = ':book' order by created_at desc;`
   Rows stuck in `rendering` past their lease are re-claimed automatically (stale after 360 s).
 
-## 5. Delete a user on request (until T6 ships in-app delete)
+## 5. Delete a user on request
+Users can do this themselves: Settings → Delete account (type DELETE). It deletes every book (paid ones too),
+both Storage prefixes per book, then the auth user, signs out and lands on `/?account=deleted`. It refuses with
+"A payment is still being processed" while any of their orders is `pending` (Checkout sessions expire after
+31 min). A single book: dashboard card ⋯ → Delete book — refused for books with a payment (paid, comped, or an
+order pending / needs_review / disputed): "contact support". Logs: `[account] deleted books=N storage_failures=N`
+or `[account] delete failed step=check|books|storage|user code=…` (step=user: books are gone, the account
+still exists — retrying in Settings, or step 3 below, finishes it).
+
+Manual path (support request, or a book the owner can't delete):
 1. Find the user: `select id, email from auth.users where email = '<email>';`
 2. Delete Storage first, in **both** buckets `photos` and `exports`: Dashboard → Storage → bucket → folder
    `<user_id>` → select all → Delete. (Direct SQL deletes on `storage.objects` are blocked on Supabase.)
