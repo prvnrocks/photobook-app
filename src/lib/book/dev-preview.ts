@@ -63,3 +63,49 @@ export function devPreviewDoc(format: BookFormat = "A5_PORTRAIT"): BookDoc {
     style: { background: { kind: "color", hex: "#FFFFFF" }, designStyle: "classic", font: "Playfair" },
   };
 }
+
+/** `?bg=` of the dev print/page routes (M10a A6): background fixtures; anything else → none. */
+export type DevBackgrounds = "tile" | "wash" | "photo" | "mix";
+
+export function parseDevBackgrounds(raw: unknown): DevBackgrounds | null {
+  return raw === "tile" || raw === "wash" || raw === "photo" || raw === "mix" ? raw : null;
+}
+
+/**
+ * The fixture doc with backgrounds: `tile` / `wash` / `photo` set the book default (cover + every
+ * page); `mix` sets a cream-paper book default and per-page overrides cycling through linen,
+ * blush wash, photo + white veil, photo + navy veil (light ink), tinted kraft and navy colour.
+ * Background photos are uuid aliases of d15 / d1 (see devPreviewPhotosWithBackgrounds).
+ */
+export function withDevBackgrounds(doc: BookDoc, kind: DevBackgrounds): BookDoc {
+  const tile = { kind: "texture", textureId: "paper-cream" } as const;
+  const wash = { kind: "texture", textureId: "watercolour-blush" } as const;
+  const photo = { kind: "photo", photoId: DEV_BG_PHOTO_UUID, veil: 0.75, veilColor: "#FFFFFF" } as const;
+  if (kind !== "mix") {
+    const bg = kind === "tile" ? tile : kind === "wash" ? wash : photo;
+    return { ...doc, style: { ...doc.style, background: bg } };
+  }
+  const cycle = [
+    { kind: "texture", textureId: "linen", source: "user" },
+    { kind: "texture", textureId: "watercolour-blush", source: "user" },
+    { kind: "photo", photoId: DEV_BG_PHOTO_UUID, veil: 0.75, veilColor: "#FFFFFF", source: "user" },
+    { kind: "photo", photoId: DEV_SLOT_PHOTO_UUID, veil: 0.6, veilColor: "#1E2A47", source: "user" },
+    { kind: "texture", textureId: "kraft", tint: "#CFE1F0", source: "user" },
+    { kind: "color", hex: "#1E2A47", source: "user" },
+  ] as const;
+  return {
+    ...doc,
+    style: { ...doc.style, background: tile },
+    pages: doc.pages.map((p, i) => ({ ...p, background: { ...cycle[i % cycle.length] } })),
+  };
+}
+
+// Photo backgrounds need uuid photo ids (schema); the dev photo map aliases them to d15 / d1.
+export const DEV_BG_PHOTO_UUID = "00000000-0000-4000-8000-0000000000f5";
+export const DEV_SLOT_PHOTO_UUID = "00000000-0000-4000-8000-000000000001";
+
+/** devPreviewPhotos() plus the uuid aliases used by withDevBackgrounds. */
+export function devPreviewPhotosWithBackgrounds(): RenderPhotos {
+  const p = devPreviewPhotos();
+  return { ...p, [DEV_BG_PHOTO_UUID]: p.d15, [DEV_SLOT_PHOTO_UUID]: p.d1 };
+}

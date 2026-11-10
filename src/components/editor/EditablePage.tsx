@@ -12,7 +12,9 @@
 
 import type { MouseEvent } from "react";
 import { BookPage, type RenderCaption } from "@/components/book/BookPage";
-import { CAPTION_FONT_SIZE_CQW, CAPTION_LINE_HEIGHT } from "@/lib/book/render";
+import { INK_TEXT } from "@/components/book/PageParts";
+import type { Ink } from "@/lib/design/backgrounds";
+import { CAPTION_FONT_SIZE_CQW, CAPTION_LINE_HEIGHT, resolveBackground } from "@/lib/book/render";
 import type { Caption } from "@/lib/book/types";
 import type { EditorPosition, EditorSelection } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
@@ -91,6 +93,7 @@ export function EditablePage({ page, priority }: { page: EditorPosition; priorit
             : () => (
                 <CoverTextTarget
                   empty={!doc.cover.title && !doc.cover.subtitle}
+                  ink={resolveBackground(doc).ink}
                   selected={coverTextSelected}
                   onClick={toggle({ kind: "cover", part: "text" })}
                 />
@@ -99,10 +102,11 @@ export function EditablePage({ page, priority }: { page: EditorPosition; priorit
         renderCaption={
           readOnly || page === "cover"
             ? undefined
-            : (caption, model) => (
+            : (caption, model, ink) => (
                 <CaptionTarget
                   caption={caption}
                   model={model}
+                  ink={ink}
                   selected={sameSelection(selection, { kind: "caption", pageIdx: page })}
                   onClick={toggle({ kind: "caption", pageIdx: page })}
                 />
@@ -130,7 +134,17 @@ function SlotOverlay({ selected, label, onClick }: { selected: boolean; label: s
   );
 }
 
-function CoverTextTarget({ empty, selected, onClick }: { empty: boolean; selected: boolean; onClick: (e: MouseEvent) => void }) {
+function CoverTextTarget({
+  empty,
+  ink,
+  selected,
+  onClick,
+}: {
+  empty: boolean;
+  ink: Ink;
+  selected: boolean;
+  onClick: (e: MouseEvent) => void;
+}) {
   return (
     <button
       type="button"
@@ -145,7 +159,7 @@ function CoverTextTarget({ empty, selected, onClick }: { empty: boolean; selecte
       data-selected={selected ? "true" : undefined}
     >
       {empty ? (
-        <span className="text-neutral-400 italic" style={{ fontSize: "4cqw" }}>
+        <span className={cn("italic", ink === "light" ? "text-white/70" : "text-neutral-400")} style={{ fontSize: "4cqw" }}>
           Tap to add a title
         </span>
       ) : null}
@@ -156,11 +170,14 @@ function CoverTextTarget({ empty, selected, onClick }: { empty: boolean; selecte
 function CaptionTarget({
   caption,
   model,
+  ink,
   selected,
   onClick,
 }: {
   caption: Caption | null;
   model: RenderCaption;
+  /** Page background's text ink (M10a A6): same colour as the static caption. */
+  ink: Ink;
   selected: boolean;
   onClick: (e: MouseEvent) => void;
 }) {
@@ -181,7 +198,7 @@ function CaptionTarget({
         <span
           dir="auto"
           lang={model.lang}
-          className="block w-full whitespace-pre-line break-words text-neutral-800"
+          className={cn("block w-full whitespace-pre-line break-words", INK_TEXT.caption[ink])}
           style={{
             fontFamily: model.fontFamily,
             textAlign: model.align,
@@ -194,7 +211,7 @@ function CaptionTarget({
         </span>
       ) : (
         <span
-          className="block w-full text-center text-neutral-400 italic"
+          className={cn("block w-full text-center italic", ink === "light" ? "text-white/70" : "text-neutral-400")}
           style={{ fontSize: `${CAPTION_FONT_SIZE_CQW}cqw`, lineHeight: CAPTION_LINE_HEIGHT }}
         >
           Tap to add a caption

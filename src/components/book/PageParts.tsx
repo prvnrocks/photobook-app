@@ -3,8 +3,10 @@
 // server components (viewer, print) and client components (editor) alike.
 
 import type { CSSProperties, ReactNode } from "react";
-import { cropBoxStyle, rectStyle, type RenderSlot } from "@/lib/book/render";
-import { pageMm, sheetMm } from "@/lib/book/format";
+import { rgbaOf, textureLayerStyle } from "@/lib/book/background-style";
+import { cropBoxStyle, rectStyle, type RenderSlot, type ResolvedBackground } from "@/lib/book/render";
+import { orientationOf, pageMm, sheetMm } from "@/lib/book/format";
+import { textureSrc } from "@/lib/design/backgrounds";
 import { withPageAspect } from "@/lib/book/format-style";
 import type { BookFormat, Rect } from "@/lib/book/types";
 import { BLEED_MM } from "@/lib/layouts";
@@ -18,13 +20,17 @@ export type BookRenderMode = "edit" | "view" | "print";
  */
 export function PageFrame({
   background,
+  layer,
   mode,
   format,
   className,
   children,
   data,
 }: {
+  /** Plain CSS colour of the frame (the colour background, or the base under `layer`). */
   background: string;
+  /** Texture / photo background layer (<BackgroundLayer>), painted first; covers the bleed in print. */
+  layer?: ReactNode;
   mode: BookRenderMode;
   /** doc.format; missing → A5 portrait. */
   format?: BookFormat | null;
@@ -34,7 +40,7 @@ export function PageFrame({
 }) {
   if (mode === "print") {
     return (
-      <PrintSheet background={background} format={format} className={className} data={data}>
+      <PrintSheet background={background} layer={layer} format={format} className={className} data={data}>
         {children}
       </PrintSheet>
     );
@@ -55,6 +61,7 @@ export function PageFrame({
       data-mode={mode}
       {...data}
     >
+      {layer}
       {children}
     </div>
   );
@@ -70,12 +77,14 @@ export function PageFrame({
  */
 function PrintSheet({
   background,
+  layer,
   format,
   className,
   children,
   data,
 }: {
   background: string;
+  layer?: ReactNode;
   format?: BookFormat | null;
   className?: string;
   children?: ReactNode;
@@ -105,6 +114,7 @@ function PrintSheet({
       data-print-sheet="true"
       {...data}
     >
+      {layer}
       <div className="absolute" style={trim} data-print-trim="true">
         {children}
       </div>
@@ -170,3 +180,78 @@ export function PhotoSlot({
     </Box>
   );
 }
+
+/**
+ * Texture / faded-photo background layer (M10a A6), the first child of the frame: the trim page on
+ * screen, the whole bleed sheet in print. Colour backgrounds have no layer (the frame's own
+ * background colour, unchanged markup). No CSS `filter` anywhere (rasterises in the PDF).
+ * In print, textures carry `data-bg-src` so <PrintReady> waits for the CSS image to load.
+ */
+export function BackgroundLayer({
+  bg,
+  mode,
+  format,
+  priority,
+}: {
+  bg: ResolvedBackground;
+  mode: BookRenderMode;
+  format?: BookFormat | null;
+  priority?: boolean;
+}) {
+  if (bg.kind === "color") return null;
+  const target = mode === "print" ? "print" : "screen";
+  if (bg.kind === "texture") {
+    const style = textureLayerStyle(bg.texture, format, target);
+    return (
+      <>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0"
+          style={style}
+          data-bg="texture"
+          data-bg-texture={bg.texture.id}
+          {...(target === "print" ? { "data-bg-src": textureSrc(bg.texture, orientationOf(format), "print") } : {})}
+        />
+        {bg.tint ? (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0"
+            style={{ background: bg.tint, mixBlendMode: "multiply" }}
+            data-bg="tint"
+          />
+        ) : null}
+      </>
+    );
+  }
+  return (
+    <>
+      {bg.photoSrc ? (
+        // eslint-disable-next-line @next/next/no-img-element -- short-lived signed URLs; next/image would cache/proxy them
+        <img
+          src={bg.photoSrc}
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+          decoding="async"
+          loading={priority || mode === "print" ? "eager" : "lazy"}
+          className="pointer-events-none absolute inset-0 block h-full w-full object-cover"
+          style={{ maxWidth: "none" }}
+          data-bg="photo"
+        />
+      ) : null}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{ background: rgbaOf(bg.veilColor, bg.veil) }}
+        data-bg="veil"
+      />
+    </>
+  );
+}
+
+/** Text colour classes per ink. Dark = the classes M1–M9 markup always used (goldens). */
+export const INK_TEXT = {
+  caption: { dark: "text-neutral-800", light: "text-white" },
+  coverTitle: { dark: "text-neutral-900", light: "text-white" },
+  coverSubtitle: { dark: "text-neutral-600", light: "text-neutral-200" },
+} as const;

@@ -7,10 +7,14 @@
 // per printed inch on both axes. A photo used more than once gets the largest need. The result
 // is capped by the original's pixels (never upscale) and by `maxLongEdge`, keeping the photo's
 // aspect ratio, then rounded to integers.
+//
+// Background photos (M10a A6): a faded photo background cover-fits the whole bleed sheet
+// (sheetMm) under a ≥ 50 % veil, so it is planned at BACKGROUND_PRINT_DPI (150, like the texture
+// washes; capped by the pass dpi). A photo that is also in a slot gets the larger of both needs.
 
 import { bleedRect, printSlotSizeMm } from "@/lib/book/bleed";
 import { clampCrop, DEFAULT_CROP } from "@/lib/book/crop";
-import { pageMm } from "@/lib/book/format";
+import { pageMm, sheetMm } from "@/lib/book/format";
 import type { BookDoc, BookFormat, Crop, Layout, Rect } from "@/lib/book/types";
 import { BLEED_MM, getLayout } from "@/lib/layouts";
 
@@ -38,6 +42,8 @@ export interface PlanOptions {
 }
 
 export const PRINT_DPI = 300;
+/** Faded photo backgrounds: full sheet under a veil — 150 dpi is plenty (A7: washes at 150). */
+export const BACKGROUND_PRINT_DPI = 150;
 export const PRINT_MAX_LONG_EDGE = 3000;
 
 const finitePos = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
@@ -92,6 +98,21 @@ interface Use {
   crop: Crop;
 }
 
+/**
+ * Background photo ids the doc shows: the cover (book default) and every page (its override,
+ * else the book default) — pages with unknown layouts too, they render blank on their background.
+ */
+export function backgroundPhotoUses(doc: Pick<BookDoc, "style" | "pages">): string[] {
+  const ids = new Set<string>();
+  const bookBg = doc.style.background.kind === "photo" ? doc.style.background.photoId : null;
+  if (bookBg) ids.add(bookBg); // the cover always shows the book default
+  for (const page of doc.pages) {
+    const bg = page.background ?? doc.style.background;
+    if (bg.kind === "photo") ids.add(bg.photoId);
+  }
+  return [...ids];
+}
+
 function usesOf(doc: BookDoc): Use[] {
   const uses: Use[] = [];
   const cover = getLayout(doc.cover.layout);
@@ -141,6 +162,21 @@ export function planPrintImages(
     const prev = need.get(photo.id);
     // Same photo ⇒ same aspect, so the larger width is the larger need on both axes.
     if (!prev || n.w > prev.w) need.set(photo.id, n);
+  }
+
+  // Background photos: cover-fit the full sheet at zoom 1, BACKGROUND_PRINT_DPI (≤ pass dpi).
+  const sheet = sheetMm(doc.format);
+  const bgDpi = Math.min(BACKGROUND_PRINT_DPI, dpi);
+  for (const id of backgroundPhotoUses(doc)) {
+    const photo = byId.get(id);
+    if (!photo || plan.has(id)) continue; // unknown size already planned as a max box
+    if (!finitePos(photo.width) || !finitePos(photo.height)) {
+      plan.set(id, { width: maxLongEdge, height: maxLongEdge });
+      continue;
+    }
+    const n = neededPx(photo.width, photo.height, sheet.w, sheet.h, 1, bgDpi);
+    const prev = need.get(id);
+    if (!prev || n.w > prev.w) need.set(id, n);
   }
 
   for (const [id, n] of need) {

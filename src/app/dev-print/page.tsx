@@ -7,12 +7,20 @@
 // print CSS and the __PRINT_READY__ signal) for that sheet range of the fixture doc, without the
 // DB or a token — for Playwright / page.pdf checks. Add `?printAssets=1` to point every photo at
 // the print-asset origin (as /print does; images then fail unless the client intercepts them).
+// `?bg=tile|wash|photo|mix` adds page backgrounds (M10a A6, see withDevBackgrounds).
 // 404s in production builds (incl. Vercel previews, which run NODE_ENV=production).
 
 import { notFound } from "next/navigation";
 import { BookPage } from "@/components/book/BookPage";
 import { PrintDocument } from "@/components/print/PrintDocument";
-import { devPreviewDoc, devPreviewPhotos, parseDevFormat } from "@/lib/book/dev-preview";
+import {
+  devPreviewDoc,
+  devPreviewPhotos,
+  devPreviewPhotosWithBackgrounds,
+  parseDevBackgrounds,
+  parseDevFormat,
+  withDevBackgrounds,
+} from "@/lib/book/dev-preview";
 import { pageMm, sheetMm, type SizeMm } from "@/lib/book/format";
 import { BLEED_MM, SAFE_MM } from "@/lib/layouts";
 import { printRenderPhotos, printSheetTargets } from "@/lib/pdf/print-doc";
@@ -49,10 +57,11 @@ export default async function DevPrintPreview({
   const sp = await searchParams;
   const guides = sp.guides !== "0";
   const format = parseDevFormat(sp.format);
-  const doc = devPreviewDoc(format);
+  const bgKind = parseDevBackgrounds(sp.bg);
+  const doc = bgKind ? withDevBackgrounds(devPreviewDoc(format), bgKind) : devPreviewDoc(format);
   const sheet = sheetMm(format);
   const trim = pageMm(format);
-  const photos = devPreviewPhotos();
+  const photos = bgKind ? devPreviewPhotosWithBackgrounds() : devPreviewPhotos();
   if (typeof sp.sheets === "string") {
     const m = /^(\d{1,3})-(\d{1,3})$/.exec(sp.sheets);
     const sheets = m ? printSheetTargets(doc.pages.length, Number(m[1]), Number(m[2])) : null;

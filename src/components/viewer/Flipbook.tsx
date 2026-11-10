@@ -37,8 +37,9 @@ import {
   type Ref,
 } from "react";
 import { BookPage, type RenderPhotos } from "@/components/book/BookPage";
+import { BackgroundLayer } from "@/components/book/PageParts";
 import { withPageAspect } from "@/lib/book/format-style";
-import { backgroundColor } from "@/lib/book/render";
+import { resolveBackground } from "@/lib/book/render";
 import type { BookDoc } from "@/lib/book/types";
 import { fitBook, pageRatio, SPREAD_MEDIA_QUERY, type PageRatio } from "@/lib/viewer/fit";
 import { flipLayout, flipPageKind, startIndexFor, type FlipLayout } from "@/lib/viewer/pages";
@@ -141,12 +142,17 @@ function WindowedPage({ index }: { index: number }) {
   const kind = flipPageKind(ctx.layout, index).kind;
   if (kind === "end") return <>{ctx.endPage}</>;
   if (kind === "filler") {
+    // Book default background; colour books keep the M9 markup (no layer, no container).
+    const bg = resolveBackground(ctx.doc, null, inPhotoWindow(ctx.win, index) ? ctx.photos : EMPTY_PHOTOS);
+    const layered = bg.kind !== "color";
     return (
       <div
-        className="aspect-[148/210] w-full"
-        style={withPageAspect({ background: backgroundColor(ctx.doc.style.background) }, ctx.doc.format)}
+        className={layered ? "relative aspect-[148/210] w-full overflow-hidden" : "aspect-[148/210] w-full"}
+        style={withPageAspect(layered ? { background: bg.baseHex, containerType: "inline-size" } : { background: bg.baseHex }, ctx.doc.format)}
         data-filler="true"
-      />
+      >
+        {layered ? <BackgroundLayer bg={bg} mode="view" format={ctx.doc.format} /> : null}
+      </div>
     );
   }
   const inWin = inPhotoWindow(ctx.win, index);

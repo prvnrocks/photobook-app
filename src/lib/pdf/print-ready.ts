@@ -4,6 +4,20 @@
 // Ready = every <img> has decode()d or failed (a failure is recorded as error "image" but still
 // counts as settled) AND document.fonts.ready resolved — or the hard cap elapsed (timeout).
 
+/**
+ * CSS background images (M10a A6 texture layers) are not in document.images: the layers carry
+ * `data-bg-src`; the ready check loads each distinct URL as an Image so it is cached and decoded
+ * before the PDF is taken. Distinct, non-empty, in document order.
+ */
+export function backgroundImageSources(root: { querySelectorAll(sel: string): Iterable<Element> | ArrayLike<Element> }): string[] {
+  const out = new Set<string>();
+  for (const el of Array.from(root.querySelectorAll("[data-bg-src]"))) {
+    const src = el.getAttribute("data-bg-src");
+    if (src) out.add(src);
+  }
+  return [...out];
+}
+
 /** Hard cap: after this the page reports ready anyway, flagged as a timeout. */
 export const PRINT_READY_TIMEOUT_MS = 20_000;
 

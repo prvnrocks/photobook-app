@@ -2,7 +2,7 @@
 // the book document + layout data. Pure (no React, no DOM) so editor, flipbook viewer and print
 // produce identical output and the maths is unit-testable. Components only map this to markup.
 
-import { textureById } from "@/lib/design/backgrounds";
+import { BACKGROUND_SWATCHES, inkFor, textureById, type Ink, type Texture } from "@/lib/design/backgrounds";
 import { getLayout } from "@/lib/layouts";
 import { captionTextAttrs, isMainlyArabic } from "@/lib/review/ui";
 import { cropToStyle, DEFAULT_CROP, type CropStyle } from "./crop";
@@ -108,6 +108,72 @@ export function backgroundColor(bg: Background): string {
 /** The background a page shows: its own override (`page.background`), else the book default. */
 export function effectiveBackground(doc: Pick<BookDoc, "style">, page?: Pick<BookPage, "background"> | null): Background {
   return page?.background ?? doc.style.background;
+}
+
+/**
+ * A background resolved for rendering (M10a A6). `baseHex` is the frame's plain CSS colour —
+ * exactly backgroundColor() — painted under any texture/photo layer (and shown while a layer
+ * loads or if it fails). `ink` is the text colour family that reads on it (inkFor).
+ */
+export type ResolvedBackground =
+  | { kind: "color"; hex: string; baseHex: string; ink: Ink }
+  | { kind: "texture"; texture: Texture; tint?: string; baseHex: string; ink: Ink }
+  | {
+      kind: "photo";
+      photoId: string;
+      veil: number;
+      veilColor: string;
+      baseHex: string;
+      ink: Ink;
+      /** URL of the background photo from the render map; undefined = not loaded (veil colour only). */
+      photoSrc?: string;
+    };
+
+/**
+ * Text ink on a colour background: the swatch's declared ink (contrast-tested, = inkFor) for a
+ * catalogue swatch; any other hex keeps the M1–M9 dark text, so colour-only docs render
+ * byte-identically to the M9 goldens (which freeze dark text on a non-swatch #1F2937). Only the
+ * swatch picker sets colours from M10 on; widen to inkFor() if custom colours are ever offered.
+ */
+export function colorInk(hex: string): Ink {
+  const h = hex.toUpperCase();
+  return BACKGROUND_SWATCHES.find((s) => s.hex === h)?.ink ?? "dark";
+}
+
+/**
+ * The background a page (or, without `page`, the cover = book default — the cover has no page
+ * entry, so it never has an override) shows, resolved for rendering. A texture id missing from the
+ * catalogue renders as a white colour background. Photo src comes from `photos` (web URL on
+ * screen, print-asset URL in print); a photo absent from the map renders the veil colour only.
+ */
+export function resolveBackground(
+  doc: Pick<BookDoc, "style">,
+  page?: Pick<BookPage, "background"> | null,
+  photos?: RenderPhotos,
+): ResolvedBackground {
+  const bg = effectiveBackground(doc, page);
+  const baseHex = backgroundColor(bg);
+  switch (bg.kind) {
+    case "color":
+      return { kind: "color", hex: bg.hex, baseHex, ink: colorInk(bg.hex) };
+    case "texture": {
+      const texture = textureById(bg.textureId);
+      if (!texture) return { kind: "color", hex: "#FFFFFF", baseHex: "#FFFFFF", ink: "dark" };
+      return { kind: "texture", texture, ...(bg.tint ? { tint: bg.tint } : {}), baseHex, ink: inkFor(bg) };
+    }
+    case "photo": {
+      const p = photos && Object.prototype.hasOwnProperty.call(photos, bg.photoId) ? photos[bg.photoId] : undefined;
+      return {
+        kind: "photo",
+        photoId: bg.photoId,
+        veil: bg.veil,
+        veilColor: bg.veilColor,
+        baseHex,
+        ink: inkFor(bg),
+        ...(p?.url ? { photoSrc: p.url } : {}),
+      };
+    }
+  }
 }
 
 /** Page caption type size (cqw = % of page width) and line height — shared by the static caption

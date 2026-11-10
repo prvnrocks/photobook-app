@@ -2,9 +2,9 @@
 // Rendered through <BookPage page="cover"> in editor, viewer and print; can also be used directly.
 
 import type { ReactNode } from "react";
-import { backgroundColor, coverRenderModel, type RenderPhotos } from "@/lib/book/render";
+import { coverRenderModel, resolveBackground, type RenderPhotos } from "@/lib/book/render";
 import type { BookDoc } from "@/lib/book/types";
-import { Box, PageFrame, PhotoSlot, type BookRenderMode } from "./PageParts";
+import { BackgroundLayer, Box, INK_TEXT, PageFrame, PhotoSlot, type BookRenderMode } from "./PageParts";
 
 export type BookCoverProps = {
   doc: BookDoc;
@@ -23,9 +23,12 @@ export type BookCoverProps = {
 
 export function BookCover({ doc, mode, photos, captionLang, renderSlotOverlay, renderTextOverlay, className, priority }: BookCoverProps) {
   const m = coverRenderModel(doc, photos, captionLang, { bleed: mode === "print" });
+  // The cover has no page entry, so no override: it always shows the book default background.
+  const bg = resolveBackground(doc, null, photos);
   return (
     <PageFrame
-      background={backgroundColor(doc.style.background)}
+      background={bg.baseHex}
+      layer={<BackgroundLayer bg={bg} mode={mode} format={doc.format} priority={priority} />}
       mode={mode}
       format={doc.format}
       className={className}
@@ -42,7 +45,7 @@ export function BookCover({ doc, mode, photos, captionLang, renderSlotOverlay, r
       {m.textRect ? (
         <Box
           rect={m.textRect}
-          className="flex flex-col items-center justify-center overflow-hidden text-center text-neutral-900"
+          className={`flex flex-col items-center justify-center overflow-hidden text-center ${INK_TEXT.coverTitle[bg.ink]}`}
           data={{ "data-cover-text": "true" }}
         >
           {m.title.text ? (
@@ -60,7 +63,7 @@ export function BookCover({ doc, mode, photos, captionLang, renderSlotOverlay, r
             <p
               dir="auto"
               lang={m.subtitle.lang}
-              className="w-full break-words text-neutral-600"
+              className={`w-full break-words ${INK_TEXT.coverSubtitle[bg.ink]}`}
               style={{ fontFamily: m.subtitle.fontFamily, fontSize: "3cqw", lineHeight: 1.3, marginTop: "1.5cqw" }}
               data-testid="cover-subtitle"
             >

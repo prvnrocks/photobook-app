@@ -39,17 +39,41 @@ export function printRenderPhotos(rows: Iterable<PrintPhotoDims>): RenderPhotos 
   return out;
 }
 
-/** Photo ids the given sheets show (cover photo + page slots), deduplicated, in order. */
+/** A background as print-doc needs it (v2 union, or a v1 hex string = colour). */
+type BackgroundRef = { kind: string; photoId?: string } | string | null | undefined;
+
+function backgroundPhotoId(bg: BackgroundRef): string | null {
+  return bg && typeof bg === "object" && bg.kind === "photo" && typeof bg.photoId === "string" ? bg.photoId : null;
+}
+
+/**
+ * Photo ids the given sheets show, deduplicated, in order: per sheet its content photos (cover
+ * photo / page slots) then its background photo (M10a A6: the cover shows the book default
+ * background; a page its own override, else the book default).
+ */
 export function printPhotoIds(
-  doc: { cover: { photoId: string | null }; pages: { slots: { photoId: string | null }[] }[] },
+  doc: {
+    cover: { photoId: string | null };
+    pages: { slots: { photoId: string | null }[]; background?: BackgroundRef }[];
+    style?: { background?: BackgroundRef };
+  },
   targets: readonly PrintSheetTarget[],
 ): string[] {
   const ids = new Set<string>();
+  const bookBg = backgroundPhotoId(doc.style?.background);
   for (const t of targets) {
     if (t === "cover") {
       if (doc.cover.photoId) ids.add(doc.cover.photoId);
+      if (bookBg) ids.add(bookBg);
     } else {
-      for (const s of doc.pages[t]?.slots ?? []) if (s.photoId) ids.add(s.photoId);
+      const page = doc.pages[t];
+      if (!page) {
+        if (bookBg) ids.add(bookBg); // a missing page renders blank on the book default
+        continue;
+      }
+      for (const s of page.slots) if (s.photoId) ids.add(s.photoId);
+      const bg = page.background ? backgroundPhotoId(page.background) : bookBg;
+      if (bg) ids.add(bg);
     }
   }
   return [...ids];

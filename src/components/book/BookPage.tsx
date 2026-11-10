@@ -5,17 +5,17 @@
 
 import type { ReactNode } from "react";
 import {
-  backgroundColor,
-  effectiveBackground,
   CAPTION_FONT_SIZE_CQW,
   CAPTION_LINE_HEIGHT,
   pageRenderModel,
+  resolveBackground,
   type RenderCaption,
   type RenderPhotos,
 } from "@/lib/book/render";
+import type { Ink } from "@/lib/design/backgrounds";
 import type { BookDoc, Caption } from "@/lib/book/types";
 import { BookCover } from "./BookCover";
-import { Box, PageFrame, PhotoSlot, type BookRenderMode } from "./PageParts";
+import { BackgroundLayer, Box, INK_TEXT, PageFrame, PhotoSlot, type BookRenderMode } from "./PageParts";
 
 export type { BookRenderMode } from "./PageParts";
 export type { RenderCaption, RenderPhoto, RenderPhotos } from "@/lib/book/render";
@@ -35,9 +35,10 @@ export type BookPageProps = {
    * Edit mode only: replaces the static caption inside the layout's caption area (called for
    * every layout that HAS a caption area, with null when the page has no caption yet). The
    * second argument is the caption's render model (resolved font family, lang, align) so an
-   * editable caption can look exactly like the static one.
+   * editable caption can look exactly like the static one. `ink` = the page background's text
+   * colour family (INK_TEXT.caption[ink] is the static caption's class).
    */
-  renderCaption?: (caption: Caption | null, model: RenderCaption) => ReactNode;
+  renderCaption?: (caption: Caption | null, model: RenderCaption, ink: Ink) => ReactNode;
   /** Edit mode only, cover only: rendered inside the cover text area (absolute, `inset-0`). */
   renderCoverTextOverlay?: () => ReactNode;
   className?: string;
@@ -65,15 +66,27 @@ export function BookPage(props: BookPageProps) {
 
   const m = pageRenderModel(doc, page, photos, captionLang, { bleed: mode === "print" });
   if (!m) {
-    return <PageFrame background={backgroundColor(doc.style.background)} mode={mode} format={doc.format} className={className} data={{ "data-page": "missing" }} />;
+    const bookBg = resolveBackground(doc, null, photos);
+    return (
+      <PageFrame
+        background={bookBg.baseHex}
+        layer={<BackgroundLayer bg={bookBg} mode={mode} format={doc.format} priority={priority} />}
+        mode={mode}
+        format={doc.format}
+        className={className}
+        data={{ "data-page": "missing" }}
+      />
+    );
   }
 
+  const bg = resolveBackground(doc, doc.pages[page], photos);
   const c = m.caption;
-  const editCaption = mode === "edit" && renderCaption && c ? renderCaption(c.caption, c) : null;
+  const editCaption = mode === "edit" && renderCaption && c ? renderCaption(c.caption, c, bg.ink) : null;
 
   return (
     <PageFrame
-      background={backgroundColor(effectiveBackground(doc, doc.pages[page]))}
+      background={bg.baseHex}
+      layer={<BackgroundLayer bg={bg} mode={mode} format={doc.format} priority={priority} />}
       mode={mode}
       format={doc.format}
       className={className}
@@ -98,7 +111,7 @@ export function BookPage(props: BookPageProps) {
             <p
               dir="auto"
               lang={c.lang}
-              className="w-full whitespace-pre-line break-words text-neutral-800"
+              className={`w-full whitespace-pre-line break-words ${INK_TEXT.caption[bg.ink]}`}
               style={{ fontFamily: c.fontFamily, textAlign: c.align, fontSize: `${CAPTION_FONT_SIZE_CQW}cqw`, lineHeight: CAPTION_LINE_HEIGHT }}
               data-testid="page-caption"
             >
