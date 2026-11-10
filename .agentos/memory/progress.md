@@ -86,3 +86,4 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - main = 86114f7 (merge of m6-publish-viewer), live on https://photobook-app-alpha.vercel.app. BOOK_ACCESS_SECRET set in Vercel (user). Migration 1100 present in prod (clear_unlock_attempt RPC answers).
 - Prod probes OK: /b/<unknown> 404 + X-Robots-Tag noindex, dev-viewer/dev-publish 404, /books/<id>/publish → login, generic OG PNG 200.
 - LEFT (NEEDS-HUMAN): rls_check.sql in Supabase SQL Editor → expect "RLS OK — all 106 checks passed"; "Done when" phone check (WhatsApp preview + flip on another phone; iPhone battery with idle flipbook). NEXT: Milestone 7 (Stripe).
+- (2026-11-10) User ran rls_check on prod: "RLS OK — all 106 checks passed". Phone "Done when" check still pending. Starting Milestone 7.
