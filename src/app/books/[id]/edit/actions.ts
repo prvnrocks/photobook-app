@@ -11,8 +11,8 @@ export type FinishEditingResult =
   | { ok: true; redirectTo: string }
   | { ok: false; error: "signed_out" | "not_found" | "failed" };
 
-/** Where the editor goes after Done. M6 changes this to the publish step. */
-const AFTER_EDIT_PATH = "/dashboard";
+/** Where the editor goes after Done: the publish step (D-040). */
+const afterEditPath = (bookId: string) => `/books/${bookId}/publish`;
 
 /**
  * Editor "Done" (M5, D-032): the Memory Keeper learns from the SAVED book (tone if it differs
@@ -42,5 +42,5 @@ export async function finishEditingAction(bookId: string): Promise<FinishEditing
 
   await learnFromBook(user.id, mine.id, "editor");
   revalidatePath("/dashboard");
-  return { ok: true, redirectTo: AFTER_EDIT_PATH };
+  return { ok: true, redirectTo: afterEditPath(mine.id) };
 }

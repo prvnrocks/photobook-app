@@ -36,6 +36,8 @@ export type EditorShellData = {
   doc: BookDoc;
   /** null = saving not available (migration 0900 missing) → read-only. */
   docRev: number | null;
+  /** doc_rev of the live published snapshot; null = not published. */
+  publishedRev: number | null;
   canSave: boolean;
   aiMode: EditorAiMode;
   rewritesUsed: number;

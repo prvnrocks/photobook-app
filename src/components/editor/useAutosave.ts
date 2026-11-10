@@ -28,19 +28,23 @@ export function useAutosave(opts: {
   hasUnsaved: () => boolean;
   /** Editor Done (T12): send what's pending now and wait for it; resolves with the final state. */
   settle: () => Promise<SaveState>;
+  /** books.doc_rev as of the last successful save (baseRev until then). */
+  rev: number | null;
 } {
   const { doc, baseRev, enabled, transport } = opts;
   const [status, setStatus] = useState<SaveState>(() =>
     enabled && baseRev !== null ? { kind: "idle" } : { kind: "readOnly" },
   );
+  const [rev, setRev] = useState<number | null>(baseRev);
   // Created once with the doc as loaded (= saved at baseRev).
   const [scheduler] = useState(() =>
     enabled && baseRev !== null
       ? new AutosaveScheduler({
           baseRev,
           savedDoc: doc,
-          send: (d, rev, o) => transport.save(d, rev, o),
+          send: (d, r, o) => transport.save(d, r, o),
           onStatus: setStatus,
+          onSaved: (r) => setRev(r),
         })
       : null,
   );
@@ -82,5 +86,5 @@ export function useAutosave(opts: {
     async (): Promise<SaveState> => (scheduler ? drainSaves(scheduler) : { kind: "readOnly" }),
     [scheduler],
   );
-  return { status, flush, hasUnsaved, settle };
+  return { status, flush, hasUnsaved, settle, rev };
 }

@@ -127,7 +127,7 @@ function effectiveTablePrivileges(): Acl {
 const sorted = (s: Set<string> | undefined) => [...(s ?? [])].sort();
 
 /** Tables with RLS on and no policies: only the service role (BYPASSRLS) touches them. */
-const SERVICE_ROLE_ONLY_TABLES = ["agent_steps"];
+const SERVICE_ROLE_ONLY_TABLES = ["agent_steps", "book_unlock_attempts"];
 
 describe("migrations: files", () => {
   it("found the migration files and parsed them", () => {
@@ -294,9 +294,10 @@ describe("migrations: functions", () => {
 describe("migrations: public.get_published_book", () => {
   const f = latestFunction("public.get_published_book");
 
-  it("exists and is security definer", () => {
+  it("exists; the latest definition (1000) is SECURITY INVOKER (read by the server with the admin client)", () => {
     expect(f).toBeDefined();
-    expect(f!.header).toMatch(/security\s+definer/);
+    expect(f!.header).toMatch(/security\s+invoker/);
+    expect(f!.header).not.toMatch(/security\s+definer/);
   });
 
   it("never returns or selects user_id", () => {
@@ -313,11 +314,12 @@ describe("migrations: public.get_published_book", () => {
     expect(nullTests).toBe(total);
   });
 
-  it("only returns published rows", () => {
+  it("only returns published rows (live = published_doc is not null)", () => {
     expect(f!.body).toMatch(/published_at\s+is\s+not\s+null/);
+    expect(f!.body).toMatch(/published_doc\s+is\s+not\s+null/);
   });
 
-  it("revokes from public before granting to anon, authenticated", () => {
+  it("0200 revoked from public before granting to anon, authenticated (superseded by 1000)", () => {
     const revoke = all.search(/revoke\s+all\s+on\s+function\s+public\.get_published_book\s*\([^)]*\)\s+from\s+public/);
     const grant = all.search(
       /grant\s+execute\s+on\s+function\s+public\.get_published_book\s*\([^)]*\)\s+to\s+anon\s*,\s*authenticated/,
@@ -1181,12 +1183,15 @@ describe("migrations: Milestone 5 editor (0900, D-036 / D-037)", () => {
   });
 
   describe("protect_book_columns (D-036)", () => {
-    const f = latestFunction("private.protect_book_columns");
+    // The 0900 definition itself (1000 redefines it as a superset — checked in the 1000 suite).
+    const f = matchesAll(/create\s+(?:or\s+replace\s+)?function\s+([\w.]+)\s*\(([\s\S]*?)\bas\s+\$\$([\s\S]*?)\$\$/, sql)
+      .map((x) => ({ name: x[1], header: x[2], body: x[3] }))
+      .find((x) => x.name === "private.protect_book_columns");
     const body = ws(f?.body ?? "");
     const [ins, upd = ""] = body.split("elsif tg_op = 'update'");
 
-    it("latest definition lives in 0900, stays INVOKER with search_path '' and the privileged-role bypass", () => {
-      expect(sql).toContain(f!.body);
+    it("0900 defines it, INVOKER with search_path '' and the privileged-role bypass", () => {
+      expect(f).toBeDefined();
       expect(f!.header).not.toMatch(/security\s+definer/);
       expect(f!.header).toMatch(/set\s+search_path\s*=\s*''/);
       expect(body).toMatch(/if current_user in \('postgres', 'service_role', 'supabase_admin'\) then return new; end if;/);
@@ -1348,5 +1353,344 @@ describe("migrations: Milestone 5 editor (0900, D-036 / D-037)", () => {
     expect(types).toMatch(
       /create_rewrite_run_capped: \{\s*Args: \{\s*p_book: string\s*p_cap: number\s*p_daily_cap: number\s*p_enforce: boolean\s*p_mode: string\s*p_user: string\s*\}\s*Returns: Json/,
     );
+  });
+});
+
+describe("migrations: Milestone 6 publish (1000, D-039 / D-040)", () => {
+  const name = "20261111001000_publish.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const ws = (s: string) => s.replace(/\s+/g, " ");
+  const flat = ws(sql);
+  const raw = m ? readFileSync(join(MIGRATIONS_DIR, m.name), "utf8") : "";
+  const own = (fn: string) =>
+    matchesAll(/create\s+(?:or\s+replace\s+)?function\s+([\w.]+)\s*\(([\s\S]*?)\bas\s+\$\$([\s\S]*?)\$\$/, sql)
+      .map((x) => ({ name: x[1], header: x[2], body: x[3] }))
+      .find((x) => x.name === fn);
+  const grantsTo = (fn: string) =>
+    matchesAll(new RegExp(`grant execute on function ${esc(fn)}\\s*\\([^)]*\\)\\s+to\\s+([a-z_, ]+?)\\s*;`), sql).map((g) =>
+      g[1].trim(),
+    );
+  const GUARDED = ["published_doc", "published_rev", "last_published_at", "password_hash"];
+  const UNLOCK = "public.try_book_unlock";
+  const UNLOCK_ARGS = "uuid, text, integer, integer, integer";
+
+  it("exists, sorts after 0900 and documents D-039 / D-040", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files.indexOf(name)).toBeGreaterThan(files.indexOf("20261110000900_editor.sql"));
+    expect(raw).toMatch(/D-039/);
+    expect(raw).toMatch(/D-040/);
+  });
+
+  it("is additive: only get_published_book is dropped; no policies, no RLS disable, no core table-grant changes", () => {
+    expect(sql).not.toMatch(/\bdrop\s+(table|column|policy|trigger|index|constraint)\b/);
+    expect(matchesAll(/\bdrop\s+function\s+([\w.]+)/, sql).map((x) => x[1])).toEqual(["public.get_published_book"]);
+    expect(sql).not.toMatch(/\b(create|alter)\s+policy\b/);
+    expect(matchesAll(/row\s+level\s+security/, sql)).toHaveLength(1);
+    expect(flat).toContain("alter table public.book_unlock_attempts enable row level security;");
+    expect(sql).not.toMatch(
+      /\b(grant|revoke)\s+[a-z_\s,()]+\s+on\s+(?:table\s+)?public\.(photos|orders|profiles|books|agent_runs|agent_steps|user_memory)\b/,
+    );
+  });
+
+  describe("books publish columns", () => {
+    it("adds published_doc jsonb, published_rev bigint, last_published_at timestamptz (all nullable)", () => {
+      expect(flat).toContain(
+        "alter table public.books add column published_doc jsonb, add column published_rev bigint, add column last_published_at timestamptz;",
+      );
+    });
+
+    it("published_doc has the same 1 MiB limit as doc; published_rev >= 0", () => {
+      expect(flat).toContain("add constraint books_published_doc_size check (pg_column_size(published_doc) <= 1048576)");
+      expect(flat).toContain("add constraint books_published_rev_check check (published_rev >= 0)");
+    });
+
+    it("a snapshot requires slug + published_at and published_rev + last_published_at", () => {
+      expect(flat).toContain(
+        "add constraint books_published_doc_requires_publish check ( published_doc is null or (slug is not null and published_at is not null) )",
+      );
+      expect(flat).toContain(
+        "add constraint books_published_doc_has_rev check ( published_doc is null or (published_rev is not null and last_published_at is not null) )",
+      );
+    });
+  });
+
+  describe("protect_book_columns (extends D-011 / D-036)", () => {
+    const f = latestFunction("private.protect_book_columns");
+    const body = ws(f?.body ?? "");
+    const [ins, upd = ""] = body.split("elsif tg_op = 'update'");
+    const prev = matchesAll(
+      /create\s+(?:or\s+replace\s+)?function\s+([\w.]+)\s*\(([\s\S]*?)\bas\s+\$\$([\s\S]*?)\$\$/,
+      migrations.find((x) => x.name === "20261110000900_editor.sql")!.sql,
+    )
+      .map((x) => ({ name: x[1], body: x[3] }))
+      .find((x) => x.name === "private.protect_book_columns")!;
+    const [prevIns, prevUpd = ""] = ws(prev.body).split("elsif tg_op = 'update'");
+    const assigns = (s: string) => matchesAll(/new\.\w+ := [^;]+;/, s).map((x) => x[0]);
+
+    it("latest definition is the 1000 one: INVOKER, search_path '', privileged-role bypass, revoked", () => {
+      expect(f).toBeDefined();
+      expect(sql).toContain(f!.body);
+      expect(f!.header).not.toMatch(/security\s+definer/);
+      expect(f!.header).toMatch(/set\s+search_path\s*=\s*''/);
+      expect(body).toMatch(/if current_user in \('postgres', 'service_role', 'supabase_admin'\) then return new; end if;/);
+      expect(flat).toContain("revoke all on function private.protect_book_columns() from public, anon, authenticated");
+      expect(raw).toMatch(/WARNING: any future SECURITY DEFINER function owned by postgres that writes\s*\n--\s*to public\.books bypasses this guard/);
+    });
+
+    it("keeps every assignment of the 0900 guard (INSERT and UPDATE)", () => {
+      expect(assigns(prevIns).length).toBeGreaterThanOrEqual(9);
+      expect(assigns(prevUpd).length).toBeGreaterThanOrEqual(12);
+      for (const a of assigns(prevIns)) expect(assigns(ins), a).toContain(a);
+      for (const a of assigns(prevUpd)) expect(assigns(upd), a).toContain(a);
+    });
+
+    it.each(GUARDED)("INSERT forces new.%s := null and UPDATE keeps the old value", (col) => {
+      expect(assigns(ins)).toContain(`new.${col} := null;`);
+      expect(assigns(upd)).toContain(`new.${col} := old.${col};`);
+    });
+
+    it("adds nothing beyond the 4 new columns; title / occasion / tone / caption_lang stay client-editable", () => {
+      expect(assigns(ins).length).toBe(assigns(prevIns).length + GUARDED.length);
+      expect(assigns(upd).length).toBe(assigns(prevUpd).length + GUARDED.length);
+      for (const col of ["title", "occasion", "tone", "caption_lang"]) expect(body).not.toMatch(new RegExp(`new\\.${col} :=`));
+    });
+
+    it("does not recreate any trigger; BEFORE trigger order on books is unchanged", () => {
+      expect(sql).not.toMatch(/\bcreate\s+trigger\b/);
+      const names = [...new Set(matchesAll(/create\s+trigger\s+(\w+)\s+before\s+[^;]*?\bon\s+public\.books\b/).map((x) => x[1]))].sort();
+      expect(names).toEqual(["books_protect_columns", "books_set_doc_rev", "books_set_updated_at"]);
+    });
+  });
+
+  describe("public.book_unlock_attempts", () => {
+    const acl = effectiveTablePrivileges();
+
+    it("columns, FK cascade with the book, ip_hash length check", () => {
+      expect(flat).toContain(
+        "create table public.book_unlock_attempts ( id bigserial primary key, book_id uuid not null references public.books (id) on delete cascade, ip_hash text not null, created_at timestamptz not null default now(),",
+      );
+      expect(flat).toContain("check (char_length(ip_hash) between 1 and 128)");
+    });
+
+    it("indexes (book_id, created_at) and (ip_hash, created_at)", () => {
+      expect(flat).toMatch(/create index \w+ on public\.book_unlock_attempts \(book_id, created_at\);/);
+      expect(flat).toMatch(/create index \w+ on public\.book_unlock_attempts \(ip_hash, created_at\);/);
+    });
+
+    it("RLS on, no policies, clients have no privileges, service_role all (table + sequence)", () => {
+      expect(policies.filter((p) => p.table === "public.book_unlock_attempts")).toEqual([]);
+      expect(sorted(acl["public.book_unlock_attempts"]?.anon)).toEqual([]);
+      expect(sorted(acl["public.book_unlock_attempts"]?.authenticated)).toEqual([]);
+      expect(sorted(acl["public.book_unlock_attempts"]?.service_role)).toEqual([...ALL_PRIVS].sort());
+      expect(flat).toContain("revoke all on table public.book_unlock_attempts from public, anon, authenticated;");
+      expect(flat).toContain("revoke all on sequence public.book_unlock_attempts_id_seq from public, anon, authenticated;");
+      expect(flat).toContain("grant usage, select on sequence public.book_unlock_attempts_id_seq to service_role;");
+    });
+  });
+
+  describe("try_book_unlock", () => {
+    const f = own(UNLOCK);
+    const body = ws(f?.body ?? "");
+
+    it("signature (p_book, p_ip_hash, p_ip_limit, p_book_limit, p_window_s) returns boolean; INVOKER, search_path ''", () => {
+      expect(f).toBeDefined();
+      expect(latestFunction(UNLOCK)!.body).toBe(f!.body);
+      expect(ws(f!.header).trim()).toMatch(
+        /^p_book uuid, p_ip_hash text, p_ip_limit integer, p_book_limit integer, p_window_s integer \) returns boolean language plpgsql volatile security invoker set search_path = ''/,
+      );
+      expect(f!.header).not.toMatch(/security\s+definer/);
+    });
+
+    it("rejects null / non-positive limits / out-of-range window / empty ip hash", () => {
+      expect(body).toContain(
+        "if p_book is null or p_ip_hash is null or p_ip_limit is null or p_book_limit is null or p_window_s is null or p_ip_limit < 1 or p_book_limit < 1 or p_window_s < 1 or p_window_s > 86400 or char_length(p_ip_hash) = 0 then raise exception 'invalid_argument' using errcode = '22023';",
+      );
+    });
+
+    it("locks the book (key space 4) then the ip (key space 5) before any delete, count or insert", () => {
+      const book = body.indexOf("perform pg_advisory_xact_lock(hashtextextended(p_book::text, 4));");
+      const ip = body.indexOf("perform pg_advisory_xact_lock(hashtextextended(p_ip_hash, 5));");
+      expect(book).toBeGreaterThanOrEqual(0);
+      expect(ip).toBeGreaterThan(book);
+      for (const s of ["delete from", "select count(*)", "insert into"]) expect(ip, s).toBeLessThan(body.indexOf(s));
+    });
+
+    it("advisory key spaces 4 and 5 are used only by the unlock RPCs (try_book_unlock + 1100 clear_unlock_attempt)", () => {
+      const spaces = matchesAll(/hashtextextended\s*\([^,]+,\s*(\d+)\s*\)/).map((x) => x[1]);
+      expect(spaces.filter((k) => k === "4")).toHaveLength(2);
+      expect(spaces.filter((k) => k === "5")).toHaveLength(2);
+      const unlockSql = migrations
+        .filter((x) => x.name === name || x.name === "20261111001100_unlock_tuning.sql")
+        .map((x) => x.sql)
+        .join("\n");
+      expect(matchesAll(/hashtextextended\s*\([^,]+,\s*[45]\s*\)/, unlockSql)).toHaveLength(4);
+    });
+
+    it("housekeeping deletes this book's and this ip's rows older than greatest(window, 1 h)", () => {
+      expect(body).toContain("v_keep := make_interval(secs => greatest(p_window_s, 3600));");
+      expect(body).toContain("delete from public.book_unlock_attempts as a where a.book_id = p_book and a.created_at < now() - v_keep;");
+      expect(body).toContain("delete from public.book_unlock_attempts as a where a.ip_hash = p_ip_hash and a.created_at < now() - v_keep;");
+    });
+
+    it("ip limit counts the ip across books in p_window_s; book limit counts the book across ips in 1 hour", () => {
+      expect(body).toContain(
+        "select count(*) into v_ip_n from public.book_unlock_attempts as a where a.ip_hash = p_ip_hash and a.created_at > now() - make_interval(secs => p_window_s); if v_ip_n >= p_ip_limit then return false;",
+      );
+      expect(body).toContain(
+        "select count(*) into v_book_n from public.book_unlock_attempts as a where a.book_id = p_book and a.created_at > now() - interval '1 hour'; if v_book_n >= p_book_limit then return false;",
+      );
+    });
+
+    it("records the attempt only when allowed, then returns true", () => {
+      expect(body.trim()).toMatch(/insert into public\.book_unlock_attempts \(book_id, ip_hash\) values \(p_book, p_ip_hash\); return true; end;$/);
+      expect(body.lastIndexOf("return false")).toBeLessThan(body.indexOf("insert into"));
+    });
+
+    it("EXECUTE revoked from public/anon/authenticated, granted to service_role only", () => {
+      expect(flat).toContain(`revoke all on function ${UNLOCK}(${UNLOCK_ARGS}) from public, anon, authenticated;`);
+      expect(grantsTo(UNLOCK)).toEqual(["service_role"]);
+      expect(flat.indexOf(`revoke all on function ${UNLOCK}`)).toBeLessThan(flat.indexOf(`grant execute on function ${UNLOCK}`));
+    });
+  });
+
+  describe("get_published_book (snapshot read)", () => {
+    const f = own("public.get_published_book");
+    const body = ws(f?.body ?? "");
+    const expired = "(not b.is_paid and b.expires_at is not null and b.expires_at <= now())";
+
+    it("is dropped then created (return type changed) and is the latest definition", () => {
+      expect(f).toBeDefined();
+      expect(latestFunction("public.get_published_book")!.body).toBe(f!.body);
+      expect(flat.indexOf("drop function public.get_published_book(text);")).toBeLessThan(
+        flat.indexOf("create function public.get_published_book"),
+      );
+    });
+
+    it("returns exactly the documented columns, stable INVOKER with search_path ''", () => {
+      expect(ws(f!.header).trim()).toMatch(
+        /^p_slug text\) returns table \( id uuid, slug text, title text, caption_lang text, is_paid boolean, page_count integer, published_rev bigint, published_at timestamptz, expires_at timestamptz, is_expired boolean, has_password boolean, doc jsonb \) language sql stable security invoker set search_path = ''/,
+      );
+    });
+
+    it("live = published_doc is not null; never reads books.doc, user_id or the password hash value", () => {
+      expect(body).toMatch(/where b\.slug = p_slug and b\.published_doc is not null and b\.published_at is not null limit 1;/);
+      expect(body).not.toMatch(/\bb\.doc\b/);
+      expect(body).not.toMatch(/\buser_id\b/);
+      expect(body).not.toMatch(/\bb\.\*|select \*/);
+    });
+
+    it("page_count comes from published_doc.pages", () => {
+      expect(body).toContain(
+        "case when jsonb_typeof(b.published_doc -> 'pages') = 'array' then jsonb_array_length(b.published_doc -> 'pages') else 0 end as page_count",
+      );
+    });
+
+    it("paid books never expire; doc is the snapshot only when not expired and no password", () => {
+      expect(body).toContain(`${expired} as is_expired`);
+      expect(body).toContain(
+        `case when ${expired} then null when b.password_hash is not null then null else b.published_doc end as doc`,
+      );
+    });
+
+    it("EXECUTE: revoked from public/anon/authenticated, granted to service_role only", () => {
+      expect(flat).toContain("revoke all on function public.get_published_book(text) from public, anon, authenticated;");
+      expect(grantsTo("public.get_published_book")).toEqual(["service_role"]);
+      expect(flat.indexOf("revoke all on function public.get_published_book")).toBeGreaterThan(
+        flat.indexOf("create function public.get_published_book"),
+      );
+    });
+  });
+
+  it("database.types.ts declares the publish columns, book_unlock_attempts and both RPCs (hand-edited)", () => {
+    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
+    expect(types.match(/published_doc\??: Json \| null/g)).toHaveLength(3);
+    expect(types.match(/published_rev\??: number \| null/g)).toHaveLength(3);
+    expect(types.match(/last_published_at\??: string \| null/g)).toHaveLength(3);
+    expect(types).toMatch(/book_unlock_attempts: \{\s*Row: \{\s*book_id: string\s*created_at: string\s*id: number\s*ip_hash: string\s*\}/);
+    expect(types).toMatch(
+      /try_book_unlock: \{\s*Args: \{\s*p_book: string\s*p_book_limit: number\s*p_ip_hash: string\s*p_ip_limit: number\s*p_window_s: number\s*\}\s*Returns: boolean/,
+    );
+    expect(types).toMatch(/get_published_book: \{[\s\S]*?published_rev: number[\s\S]*?\}\[\]/);
+  });
+});
+
+describe("migrations: M6 review S2 unlock tuning (1100)", () => {
+  const name = "20261111001100_unlock_tuning.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const ws = (s: string) => s.replace(/\s+/g, " ");
+  const flat = ws(sql);
+  const FN = "public.clear_unlock_attempt";
+  const f = matchesAll(/create\s+(?:or\s+replace\s+)?function\s+([\w.]+)\s*\(([\s\S]*?)\bas\s+\$\$([\s\S]*?)\$\$/, sql)
+    .map((x) => ({ name: x[1], header: x[2], body: x[3] }))
+    .find((x) => x.name === FN);
+  const body = ws(f?.body ?? "");
+
+  it("exists, sorts right after 1000 and does not touch the applied 1000 objects", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files.indexOf(name)).toBe(files.indexOf("20261111001000_publish.sql") + 1);
+    expect(sql).not.toMatch(/\bdrop\b/);
+    expect(sql).not.toMatch(/\b(create|alter)\s+(policy|table)\b/);
+    expect(sql).not.toMatch(/row\s+level\s+security/);
+    expect(sql).not.toMatch(/function\s+public\.(try_book_unlock|get_published_book)\b/);
+    expect(sql).not.toMatch(/\b(grant|revoke)\s+[a-z_\s,()]+\s+on\s+(?:table\s+)?public\./);
+  });
+
+  it("clear_unlock_attempt(p_book uuid, p_ip_hash text) returns boolean; INVOKER, search_path '', latest definition", () => {
+    expect(f).toBeDefined();
+    expect(latestFunction(FN)!.body).toBe(f!.body);
+    expect(ws(f!.header).trim()).toMatch(
+      /^p_book uuid, p_ip_hash text \) returns boolean language plpgsql volatile security invoker set search_path = ''$/,
+    );
+    expect(f!.header).not.toMatch(/security\s+definer/);
+  });
+
+  it("rejects null book / null or empty ip hash with 22023", () => {
+    expect(body).toContain(
+      "if p_book is null or p_ip_hash is null or char_length(p_ip_hash) = 0 then raise exception 'invalid_argument' using errcode = '22023';",
+    );
+  });
+
+  it("takes the same advisory locks as try_book_unlock (book 4, then ip 5) before deleting", () => {
+    const book = body.indexOf("perform pg_advisory_xact_lock(hashtextextended(p_book::text, 4));");
+    const ip = body.indexOf("perform pg_advisory_xact_lock(hashtextextended(p_ip_hash, 5));");
+    expect(book).toBeGreaterThanOrEqual(0);
+    expect(ip).toBeGreaterThan(book);
+    expect(ip).toBeLessThan(body.indexOf("delete from"));
+  });
+
+  it("deletes only the newest row of the (book, ip) pair from the last hour and reports it", () => {
+    expect(body).toContain(
+      "delete from public.book_unlock_attempts as a where a.id = ( select x.id from public.book_unlock_attempts as x where x.book_id = p_book and x.ip_hash = p_ip_hash and x.created_at > now() - interval '1 hour' order by x.created_at desc, x.id desc limit 1 );",
+    );
+    expect(matchesAll(/delete from/, body)).toHaveLength(1);
+    expect(body).toContain("get diagnostics v_n = row_count; return v_n > 0;");
+    expect(body).not.toMatch(/insert into|update public/);
+  });
+
+  it("EXECUTE revoked from public/anon/authenticated, granted to service_role only", () => {
+    expect(flat).toContain(`revoke all on function ${FN}(uuid, text) from public, anon, authenticated;`);
+    const grants = matchesAll(new RegExp(`grant execute on function ${esc(FN)}\\s*\\([^)]*\\)\\s+to\\s+([a-z_, ]+?)\\s*;`), sql).map((g) =>
+      g[1].trim(),
+    );
+    expect(grants).toEqual(["service_role"]);
+    expect(matchesAll(new RegExp(`grant execute on function ${esc(FN)}\\b`))).toHaveLength(1);
+    expect(flat.indexOf(`revoke all on function ${FN}`)).toBeLessThan(flat.indexOf(`grant execute on function ${FN}`));
+  });
+
+  it("rls_check.sql covers clear_unlock_attempt (grants + behaviour) and counts 106 checks", () => {
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain("20261111001100_unlock_tuning.sql");
+    expect(rls).toContain("RLS FAIL [clear_unlock_attempt grants]");
+    expect(rls).toContain("RLS FAIL [anon clear_unlock_attempt]");
+    expect(rls).toContain("RLS FAIL [authenticated clear_unlock_attempt]");
+    expect(rls).toContain("RLS FAIL [clear_unlock_attempt flow]");
+    expect(rls).toContain("RLS OK — all 106 checks passed");
+  });
+
+  it("database.types.ts declares clear_unlock_attempt (hand-edited)", () => {
+    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
+    expect(types).toMatch(/clear_unlock_attempt: \{\s*Args: \{ p_book: string; p_ip_hash: string \}\s*Returns: boolean/);
   });
 });

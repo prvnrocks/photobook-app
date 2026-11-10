@@ -163,6 +163,35 @@ export type Database = {
           },
         ]
       }
+      book_unlock_attempts: {
+        Row: {
+          book_id: string
+          created_at: string
+          id: number
+          ip_hash: string
+        }
+        Insert: {
+          book_id: string
+          created_at?: string
+          id?: number
+          ip_hash: string
+        }
+        Update: {
+          book_id?: string
+          created_at?: string
+          id?: number
+          ip_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "book_unlock_attempts_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       books: {
         Row: {
           ai_status: string
@@ -173,11 +202,14 @@ export type Database = {
           expires_at: string | null
           id: string
           is_paid: boolean
+          last_published_at: string | null
           max_pages: number
           occasion: string | null
           page_count: number
           password_hash: string | null
           published_at: string | null
+          published_doc: Json | null
+          published_rev: number | null
           slug: string | null
           title: string | null
           tone: string | null
@@ -193,11 +225,14 @@ export type Database = {
           expires_at?: string | null
           id?: string
           is_paid?: boolean
+          last_published_at?: string | null
           max_pages?: number
           occasion?: string | null
           page_count?: number
           password_hash?: string | null
           published_at?: string | null
+          published_doc?: Json | null
+          published_rev?: number | null
           slug?: string | null
           title?: string | null
           tone?: string | null
@@ -213,11 +248,14 @@ export type Database = {
           expires_at?: string | null
           id?: string
           is_paid?: boolean
+          last_published_at?: string | null
           max_pages?: number
           occasion?: string | null
           page_count?: number
           password_hash?: string | null
           published_at?: string | null
+          published_doc?: Json | null
+          published_rev?: number | null
           slug?: string | null
           title?: string | null
           tone?: string | null
@@ -417,6 +455,10 @@ export type Database = {
         Args: { p_book_id: string; p_min_interval_seconds: number }
         Returns: number
       }
+      clear_unlock_attempt: {
+        Args: { p_book: string; p_ip_hash: string }
+        Returns: boolean
+      }
       create_agent_run_capped: {
         Args: {
           p_book_id: string
@@ -452,6 +494,7 @@ export type Database = {
           is_paid: boolean
           page_count: number
           published_at: string
+          published_rev: number
           slug: string
           title: string
         }[]
@@ -463,6 +506,16 @@ export type Database = {
       reserve_geocode_calls: {
         Args: { p_book_id: string; p_daily_cap: number; p_want: number }
         Returns: number
+      }
+      try_book_unlock: {
+        Args: {
+          p_book: string
+          p_book_limit: number
+          p_ip_hash: string
+          p_ip_limit: number
+          p_window_s: number
+        }
+        Returns: boolean
       }
     }
     Enums: {

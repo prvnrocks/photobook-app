@@ -1,5 +1,5 @@
 -- =============================================================================
--- supabase/tests/rls_check.sql — live RLS / trigger / storage check (Milestones 1–5)
+-- supabase/tests/rls_check.sql — live RLS / trigger / storage check (Milestones 1–6)
 --
 -- HOW TO RUN
 --   1. Apply the migrations first (`npm run db:push`) — including
@@ -16,7 +16,13 @@
 --      and 20261110000900_editor.sql (server-only doc / page_count / doc_rev,
 --      doc_rev bump trigger, rewrite runs outside the one-active-run index,
 --      'rewriting' state + claim_agent_run refuses rewrites,
---      create_rewrite_run_capped with stale reaping + per-user daily ceiling).
+--      create_rewrite_run_capped with stale reaping + per-user daily ceiling)
+--      and 20261111001000_publish.sql (published_doc snapshot columns +
+--      checks, server-only publish columns / password_hash,
+--      book_unlock_attempts + try_book_unlock rate limit, get_published_book
+--      reads the snapshot and is service-role only)
+--      and 20261111001100_unlock_tuning.sql (clear_unlock_attempt: a successful
+--      unlock removes its own attempt row; service-role only).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -25,7 +31,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 93 checks passed
+--       RLS OK — all 106 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -41,7 +47,7 @@
 --   in an exception (pass or fail), so Postgres rolls back everything it did:
 --   the 2 fake auth.users (A, B), their profiles, books, photo rows (incl. the
 --   500 photo-cap test rows), storage object rows, agent runs/steps and
---   user_memory rows. Nothing is committed, so nothing needs cleaning up.
+--   user_memory rows, unlock attempts. Nothing is committed, so nothing needs cleaning up.
 --   (We deliberately do NOT use `begin; … rollback;`: when a statement errors,
 --   Postgres skips the rest of the batch, so a trailing `rollback;` would never
 --   run and the editor's connection would be left in an aborted transaction.)
@@ -77,6 +83,11 @@ declare
   v_res      jsonb;
   book_e     uuid;
   run_rw     uuid;
+  book_p     uuid;
+  ip_1       text;
+  ip_2       text;
+  ip_3       text;
+  ip_4       text;
   slug_pub   text := 'rls-check-pub-'   || substr(md5(random()::text), 1, 12);
   slug_unpub text := 'rls-check-unpub-' || substr(md5(random()::text), 1, 12);
   r          record;
@@ -381,16 +392,36 @@ begin
   if n <> 1 then raise exception 'RLS FAIL [B side effects]: A''s profile was changed by B'; end if;
   checks := checks + 1;
 
+  -- Publish = snapshot (1000, D-039): live means published_doc is not null.
   update public.books
-     set slug = slug_pub, published_at = now(), expires_at = now() + interval '30 days'
+     set slug = slug_pub, published_at = now(), expires_at = now() + interval '30 days',
+         published_doc = '{"pages":[{"n":1},{"n":2}]}', published_rev = 0, last_published_at = now()
    where id = book_a;
-  update public.books set slug = slug_unpub where id = book_a2; -- slug but not published
-  select count(*) into n from public.books where id = book_a and slug = slug_pub and published_at is not null;
+  -- book_a2: has a slug and a first-publish time but no snapshot (= unpublished)
+  update public.books set slug = slug_unpub, published_at = now() where id = book_a2;
+  select count(*) into n from public.books
+   where id = book_a and slug = slug_pub and published_at is not null and published_doc is not null;
   if n <> 1 then raise exception 'RLS FAIL [postgres publish]: privileged caller could not publish'; end if;
   checks := checks + 1;
 
+  -- 1000: a snapshot needs slug + published_at, and a rev + last_published_at
+  begin
+    update public.books set published_doc = '{"pages":[]}', published_rev = 0, last_published_at = now(),
+                            slug = null
+     where id = book_a2;
+    raise exception 'RLS FAIL [published_doc check]: snapshot without slug accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.books set published_doc = '{"pages":[]}' where id = book_a2;
+    raise exception 'RLS FAIL [published_doc check]: snapshot without published_rev accepted';
+  exception when check_violation then null;
+  end;
+  checks := checks + 1;
+
   -- ---------------------------------------------------------------------------
-  -- As anon: no table access; only get_published_book
+  -- As anon: no table access, and (since 1000) no RPCs either — the viewer
+  -- reads get_published_book with the admin client.
   -- ---------------------------------------------------------------------------
   set local role anon;
   perform set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
@@ -418,38 +449,72 @@ begin
     raise exception 'RLS FAIL [anon grants]: anon still has SELECT on a core table';
   end if;
   checks := checks + 1;
+
+  if has_function_privilege('anon', 'public.get_published_book(text)', 'execute')
+     or has_function_privilege('authenticated', 'public.get_published_book(text)', 'execute')
+     or has_function_privilege('anon', 'public.try_book_unlock(uuid, text, integer, integer, integer)', 'execute')
+     or has_function_privilege('authenticated', 'public.try_book_unlock(uuid, text, integer, integer, integer)', 'execute')
+     or not has_function_privilege('service_role', 'public.get_published_book(text)', 'execute')
+     or not has_function_privilege('service_role', 'public.try_book_unlock(uuid, text, integer, integer, integer)', 'execute') then
+    raise exception 'RLS FAIL [publish RPC grants]: get_published_book / try_book_unlock EXECUTE not service-role only';
+  end if;
   set local role anon;
+  begin
+    perform * from public.get_published_book(slug_pub);
+    raise exception 'RLS FAIL [anon get_published_book]: anon could execute it';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.try_book_unlock(book_a, 'rls-check-ip-anon', 5, 5, 60);
+    raise exception 'RLS FAIL [anon try_book_unlock]: anon could execute it';
+  exception when insufficient_privilege then null;
+  end;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- As service_role: get_published_book returns the snapshot (1000)
+  -- ---------------------------------------------------------------------------
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  set local role service_role;
 
   select * into r from public.get_published_book(slug_pub);
-  if not found then raise exception 'RLS FAIL [anon get_published_book]: published book not returned'; end if;
-  if r.doc is null or r.is_expired or r.has_password or r.id <> book_a then
-    raise exception 'RLS FAIL [anon get_published_book]: expected live doc, got %', row_to_json(r);
+  if not found then raise exception 'RLS FAIL [get_published_book]: published book not returned'; end if;
+  if r.doc is distinct from '{"pages":[{"n":1},{"n":2}]}'::jsonb or r.is_expired or r.has_password
+     or r.id <> book_a or r.page_count <> 2 or r.published_rev <> 0 or r.slug <> slug_pub then
+    raise exception 'RLS FAIL [get_published_book]: expected live snapshot, got %', row_to_json(r);
   end if;
   checks := checks + 1;
 
-  -- expired
-  reset role;
+  -- free + expired → row with is_expired, doc null
   update public.books set expires_at = now() - interval '1 minute' where id = book_a;
-  set local role anon;
   select * into r from public.get_published_book(slug_pub);
   if not found or r.doc is not null or not r.is_expired then
     raise exception 'RLS FAIL [expired]: expected row with doc null + is_expired, got %', row_to_json(r);
   end if;
   checks := checks + 1;
 
+  -- paid with a past expires_at → never expired (D-039)
+  update public.books set is_paid = true where id = book_a;
+  select * into r from public.get_published_book(slug_pub);
+  if not found or r.doc is null or r.is_expired or not r.is_paid then
+    raise exception 'RLS FAIL [paid expiry]: paid book with past expires_at treated as expired: %', row_to_json(r);
+  end if;
+  update public.books set is_paid = false where id = book_a;
+  checks := checks + 1;
+
   -- password protected
-  reset role;
   update public.books set expires_at = now() + interval '30 days', password_hash = 'not-a-real-hash'
    where id = book_a;
-  set local role anon;
   select * into r from public.get_published_book(slug_pub);
   if not found or r.doc is not null or not r.has_password or r.is_expired then
     raise exception 'RLS FAIL [password]: expected row with doc null + has_password, got %', row_to_json(r);
   end if;
   checks := checks + 1;
 
+  -- unpublished (slug + published_at but no snapshot) / unknown slug → no row
   select count(*) into n from public.get_published_book(slug_unpub);
-  if n <> 0 then raise exception 'RLS FAIL [unpublished]: unpublished book returned'; end if;
+  if n <> 0 then raise exception 'RLS FAIL [unpublished]: book without published_doc returned'; end if;
   select count(*) into n from public.get_published_book('rls-check-does-not-exist');
   if n <> 0 then raise exception 'RLS FAIL [unknown slug]: rows returned for unknown slug'; end if;
   checks := checks + 1;
@@ -1301,6 +1366,232 @@ begin
   if v_res ->> 'id' is null then
     raise exception 'RLS FAIL [rewrite daily]: p_enforce = false still hit the daily ceiling: %', v_res;
   end if;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- 1000 (D-039 / D-040): published_doc / published_rev / last_published_at /
+  -- password_hash are server-only; book_unlock_attempts is service-role only;
+  -- try_book_unlock rate-limits per ip (window) and per book (1 hour).
+  -- ---------------------------------------------------------------------------
+  reset role;
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  insert into public.books (user_id, title, published_doc, published_rev, last_published_at, password_hash)
+  values (uid_a, 'RLS publish', '{"pages":[]}', 3, now(), 'client-hash')
+  returning id, published_doc, published_rev, last_published_at, password_hash into r;
+  book_p := r.id;
+  if r.published_doc is not null or r.published_rev is not null or r.last_published_at is not null
+     or r.password_hash is not null then
+    raise exception 'RLS FAIL [publish insert]: client set publish columns / password_hash: %', row_to_json(r);
+  end if;
+  checks := checks + 1;
+
+  update public.books
+     set published_doc = '{"pages":[]}', published_rev = 99, last_published_at = now() - interval '1 day',
+         password_hash = null
+   where id = book_a;
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'RLS FAIL [publish update]: A could not update own book (% rows)', n; end if;
+  select published_doc, published_rev, last_published_at, password_hash into r from public.books where id = book_a;
+  if r.published_doc is distinct from '{"pages":[{"n":1},{"n":2}]}'::jsonb or r.published_rev <> 0
+     or r.last_published_at < now() - interval '1 hour' or r.password_hash is distinct from 'not-a-real-hash' then
+    raise exception 'RLS FAIL [publish update]: client changed publish columns / password_hash: %', row_to_json(r);
+  end if;
+  checks := checks + 1;
+
+  begin
+    perform * from public.get_published_book(slug_pub);
+    raise exception 'RLS FAIL [authenticated get_published_book]: authenticated could execute it';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.try_book_unlock(book_a, 'rls-check-ip-auth', 5, 5, 60);
+    raise exception 'RLS FAIL [authenticated try_book_unlock]: authenticated could execute it';
+  exception when insufficient_privilege then null;
+  end;
+  checks := checks + 1;
+
+  begin
+    select count(*) into n from public.book_unlock_attempts;
+    raise exception 'RLS FAIL [unlock attempts]: authenticated could read book_unlock_attempts (% rows)', n;
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.book_unlock_attempts (book_id, ip_hash) values (book_a, 'rls-check-ip-auth');
+    raise exception 'RLS FAIL [unlock attempts]: authenticated could insert into book_unlock_attempts';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  set local role anon;
+  perform set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
+  begin
+    select count(*) into n from public.book_unlock_attempts;
+    raise exception 'RLS FAIL [unlock attempts]: anon could read book_unlock_attempts (% rows)', n;
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  if has_table_privilege('anon', 'public.book_unlock_attempts', 'select, insert, update, delete')
+     or has_table_privilege('authenticated', 'public.book_unlock_attempts', 'select, insert, update, delete')
+     or not (select c.relrowsecurity from pg_class as c where c.oid = 'public.book_unlock_attempts'::regclass)
+     or exists (select 1 from pg_policies as p
+                 where p.schemaname = 'public' and p.tablename = 'book_unlock_attempts') then
+    raise exception 'RLS FAIL [unlock attempts]: client grants, RLS off or a policy exists';
+  end if;
+  checks := checks + 1;
+
+  -- try_book_unlock: ip limit (window, across books); refused attempts are not recorded
+  set local role service_role;
+  ip_1 := 'rls-check-ip1-' || md5(random()::text);
+  ip_2 := 'rls-check-ip2-' || md5(random()::text);
+  ip_3 := 'rls-check-ip3-' || md5(random()::text);
+  for k in 1..3 loop
+    if not public.try_book_unlock(book_a, ip_1, 3, 1000, 60) then
+      raise exception 'RLS FAIL [unlock ip limit]: attempt % of 3 refused', k;
+    end if;
+  end loop;
+  if public.try_book_unlock(book_a, ip_1, 3, 1000, 60) then
+    raise exception 'RLS FAIL [unlock ip limit]: 4th attempt within the window allowed';
+  end if;
+  select count(*) into n from public.book_unlock_attempts where book_id = book_a and ip_hash = ip_1;
+  if n <> 3 then raise exception 'RLS FAIL [unlock ip limit]: % attempts recorded (expected 3; refused must not count)', n; end if;
+  if public.try_book_unlock(book_e, ip_1, 3, 1000, 60) then
+    raise exception 'RLS FAIL [unlock ip limit]: the ip limit is not across books';
+  end if;
+  if not public.try_book_unlock(book_a, ip_2, 3, 1000, 60) then
+    raise exception 'RLS FAIL [unlock ip limit]: another ip was refused on the same book';
+  end if;
+  checks := checks + 1;
+
+  -- book limit (1 hour, across ips): book_e has no attempts yet
+  if not public.try_book_unlock(book_e, ip_2, 100, 2, 60) or not public.try_book_unlock(book_e, ip_3, 100, 2, 60) then
+    raise exception 'RLS FAIL [unlock book limit]: attempts under the book limit refused';
+  end if;
+  if public.try_book_unlock(book_e, 'rls-check-ip4-' || md5(random()::text), 100, 2, 60) then
+    raise exception 'RLS FAIL [unlock book limit]: a 3rd ip got past a book limit of 2';
+  end if;
+  -- attempts older than the ip window but inside the hour still count for the book
+  update public.book_unlock_attempts set created_at = now() - interval '30 minutes' where book_id = book_e;
+  if public.try_book_unlock(book_e, ip_3, 100, 2, 60) then
+    raise exception 'RLS FAIL [unlock book limit]: the book limit window is shorter than 1 hour';
+  end if;
+  checks := checks + 1;
+
+  -- housekeeping: rows older than greatest(window, 1 h) are deleted; invalid args raise 22023
+  update public.book_unlock_attempts set created_at = now() - interval '2 hours' where book_id = book_e;
+  if not public.try_book_unlock(book_e, ip_3, 100, 2, 60) then
+    raise exception 'RLS FAIL [unlock housekeeping]: attempts older than 1 hour still counted';
+  end if;
+  select count(*) into n from public.book_unlock_attempts
+   where book_id = book_e and created_at < now() - interval '1 hour';
+  if n <> 0 then raise exception 'RLS FAIL [unlock housekeeping]: % old attempts of the book left', n; end if;
+  begin
+    perform public.try_book_unlock(book_e, ip_3, 0, 2, 60);
+    raise exception 'RLS FAIL [unlock args]: ip limit 0 accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.try_book_unlock(book_e, null, 5, 5, 60);
+    raise exception 'RLS FAIL [unlock args]: null ip hash accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.try_book_unlock(book_e, ip_3, 5, 5, 0);
+    raise exception 'RLS FAIL [unlock args]: window 0 accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- 1100 (M6 review S2): clear_unlock_attempt — service-role only; a successful
+  -- unlock deletes the newest attempt row of its (book, ip) pair, so only failures
+  -- count toward the limits.
+  -- ---------------------------------------------------------------------------
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  if has_function_privilege('anon', 'public.clear_unlock_attempt(uuid, text)', 'execute')
+     or has_function_privilege('authenticated', 'public.clear_unlock_attempt(uuid, text)', 'execute')
+     or has_function_privilege('public', 'public.clear_unlock_attempt(uuid, text)', 'execute')
+     or not has_function_privilege('service_role', 'public.clear_unlock_attempt(uuid, text)', 'execute')
+     or not exists (select 1 from pg_proc as p
+                     where p.oid = 'public.clear_unlock_attempt(uuid, text)'::regprocedure
+                       and not p.prosecdef
+                       and p.proconfig @> array['search_path=""']) then
+    raise exception 'RLS FAIL [clear_unlock_attempt grants]: EXECUTE not service-role only, DEFINER, or search_path not fixed';
+  end if;
+  set local role anon;
+  perform set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
+  begin
+    perform public.clear_unlock_attempt(book_a, ip_1);
+    raise exception 'RLS FAIL [anon clear_unlock_attempt]: anon could execute it';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  begin
+    perform public.clear_unlock_attempt(book_a, ip_1);
+    raise exception 'RLS FAIL [authenticated clear_unlock_attempt]: the owner could execute it';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  checks := checks + 1;
+
+  -- behaviour: deletes exactly one (the newest) row of the pair; other pairs untouched
+  set local role service_role;
+  ip_4 := 'rls-check-ip5-' || md5(random()::text);
+  delete from public.book_unlock_attempts where book_id = book_e;
+  insert into public.book_unlock_attempts (book_id, ip_hash, created_at)
+  values (book_e, ip_4, now() - interval '10 minutes'),
+         (book_e, ip_4, now() - interval '1 minute'),
+         (book_e, ip_3, now()),
+         (book_a, ip_4, now());
+  if not public.clear_unlock_attempt(book_e, ip_4) then
+    raise exception 'RLS FAIL [clear_unlock_attempt]: returned false with rows present';
+  end if;
+  select count(*) into n from public.book_unlock_attempts where book_id = book_e and ip_hash = ip_4;
+  if n <> 1 then raise exception 'RLS FAIL [clear_unlock_attempt]: % rows of the pair left (expected 1)', n; end if;
+  if not exists (select 1 from public.book_unlock_attempts
+                  where book_id = book_e and ip_hash = ip_4 and created_at < now() - interval '5 minutes') then
+    raise exception 'RLS FAIL [clear_unlock_attempt]: did not delete the newest row of the pair';
+  end if;
+  select count(*) into n from public.book_unlock_attempts
+   where (book_id = book_e and ip_hash = ip_3) or (book_id = book_a and ip_hash = ip_4);
+  if n <> 2 then raise exception 'RLS FAIL [clear_unlock_attempt]: touched another pair (% of 2 left)', n; end if;
+  -- rows older than 1 hour are never cleared; no row → false
+  update public.book_unlock_attempts set created_at = now() - interval '2 hours'
+   where book_id = book_e and ip_hash = ip_4;
+  if public.clear_unlock_attempt(book_e, ip_4) then
+    raise exception 'RLS FAIL [clear_unlock_attempt]: cleared a row older than 1 hour';
+  end if;
+  if public.clear_unlock_attempt(book_e, 'rls-check-ip6-' || md5(random()::text)) then
+    raise exception 'RLS FAIL [clear_unlock_attempt]: returned true for an unknown pair';
+  end if;
+  checks := checks + 1;
+
+  -- success flow: attempt → clear keeps the book under its limit (only failures count)
+  delete from public.book_unlock_attempts where book_id = book_e;
+  for k in 1..5 loop
+    if not public.try_book_unlock(book_e, ip_4, 100, 2, 60) then
+      raise exception 'RLS FAIL [clear_unlock_attempt flow]: successful attempt % refused', k;
+    end if;
+    perform public.clear_unlock_attempt(book_e, ip_4);
+  end loop;
+  select count(*) into n from public.book_unlock_attempts where book_id = book_e;
+  if n <> 0 then raise exception 'RLS FAIL [clear_unlock_attempt flow]: % attempts left after cleared successes', n; end if;
+  begin
+    perform public.clear_unlock_attempt(book_e, '');
+    raise exception 'RLS FAIL [clear_unlock_attempt args]: empty ip hash accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.clear_unlock_attempt(null, ip_4);
+    raise exception 'RLS FAIL [clear_unlock_attempt args]: null book accepted';
+  exception when invalid_parameter_value then null;
+  end;
   checks := checks + 1;
 
   -- ---------------------------------------------------------------------------

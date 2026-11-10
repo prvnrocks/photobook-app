@@ -30,6 +30,7 @@ export function devEditorData(mode: DevSaveMode, ai: DevAiMode = "off"): EditorS
     },
     doc,
     docRev: mode === "readonly" ? null : 1,
+    publishedRev: null,
     canSave: mode !== "readonly",
     aiMode: ai === "off" ? "off" : "replay",
     rewritesUsed: ai === "limit" ? 20 : 0,

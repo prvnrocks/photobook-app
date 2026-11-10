@@ -14,8 +14,14 @@ import { isUuid } from "@/lib/uuid";
 
 export type BookListItem = Pick<
   Tables<"books">,
-  "id" | "title" | "updated_at" | "page_count" | "published_at" | "is_paid" | "ai_status"
+  "id" | "title" | "updated_at" | "page_count" | "published_at" | "is_paid" | "ai_status" | "slug" | "expires_at"
 > & {
+  /**
+   * Live snapshot exists (published_doc is not null, read as `published_doc->version`). Unpublish
+   * clears only published_doc (published_rev / slug / published_at survive), so this — not
+   * published_rev or published_at — is what "published" means.
+   */
+  published: boolean;
   /** Upload-finished photos (upload_state = 'ready'); routes empty books to upload vs build. */
   photo_count: number;
   /** doc.meta.userEdited === true (read as a JSON path, the doc itself is not loaded). */
@@ -72,19 +78,21 @@ export async function listMyBooks(): Promise<BookListItem[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("books")
-    .select(
-      "id, title, updated_at, page_count, published_at, is_paid, ai_status, user_edited:doc->meta->userEdited, photos(count)",
-    )
+    .select(BOOK_LIST_COLUMNS)
     .eq("user_id", user.id)
     .eq("photos.upload_state", "ready")
     .order("updated_at", { ascending: false });
-
   if (error) throw new BooksQueryError("list books", error.code);
-  return (data ?? []).map((row) => toBookListItem(row as unknown as BookListRow));
+  return ((data ?? []) as unknown as BookListRow[]).map(toBookListItem);
 }
 
-type BookListRow = Omit<BookListItem, "photo_count" | "user_edited"> & {
+const BOOK_LIST_COLUMNS =
+  "id, title, updated_at, page_count, published_at, is_paid, ai_status, slug, expires_at, user_edited:doc->meta->userEdited, live:published_doc->version, photos(count)";
+
+type BookListRow = Omit<BookListItem, "photo_count" | "user_edited" | "published"> & {
   user_edited: unknown;
+  /** published_doc->version: null/absent when there is no live snapshot. */
+  live: unknown;
   photos: { count: number }[] | null;
 };
 
@@ -98,6 +106,9 @@ function toBookListItem(row: BookListRow): BookListItem {
     published_at: row.published_at,
     is_paid: row.is_paid,
     ai_status: row.ai_status,
+    slug: row.slug,
+    expires_at: row.expires_at,
+    published: row.live !== null && row.live !== undefined,
     photo_count: typeof count === "number" && Number.isFinite(count) ? count : 0,
     user_edited: row.user_edited === true,
   };
@@ -365,4 +376,23 @@ export async function writeDocIfReplaceable(
     .select("id");
   if (error) throw new BooksQueryError("write book doc", error.code);
   return data.length === 1 ? { ok: true } : { ok: false, reason: "conflict" };
+}
+
+/**
+ * Display title of one of the current user's books (books.title, else the doc's cover title —
+ * read as a JSON path, the doc itself is not loaded). null when untitled / not visible.
+ */
+export async function getMyBookTitle(id: string): Promise<string | null> {
+  if (!isUuid(id)) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("books")
+    .select("title, cover_title:doc->cover->>title")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new BooksQueryError("load book title", error.code);
+  if (!data) return null;
+  const row = data as unknown as { title: string | null; cover_title: unknown };
+  const title = row.title?.trim() || (typeof row.cover_title === "string" ? row.cover_title.trim() : "");
+  return title || null;
 }

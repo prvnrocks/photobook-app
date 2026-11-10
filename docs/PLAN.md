@@ -142,11 +142,12 @@ planted bad caption in tests; a second book reflects the user's earlier tone/len
 > M5a (2026-11-10): built + tested (2111 unit, 45 editor e2e at 375 px, live signed-in pre-0900). Live save needs migration 0900 (deploy code first, then `db push`); phone "Done when" check is NEEDS-HUMAN.
 
 ## Milestone 6 — Publish + flipbook viewer + sharing (1 day)
-- [ ] Publish → unique slug, `published_at`, `expires_at = now + 30 days` if unpaid
-- [ ] `/b/[slug]`: `react-pageflip` flipbook, swipe, fullscreen, page counter, chapter headings
-- [ ] Watermark if unpaid + "Made with <App> — create yours" footer (growth loop)
-- [ ] Expired page, WhatsApp / copy / native share, OG image via `next/og`, optional password
+- [x] Publish → unique slug, `published_at`, `expires_at = now + 30 days` if unpaid
+- [x] `/b/[slug]`: `react-pageflip` flipbook, swipe, fullscreen, page counter, chapter headings
+- [x] Watermark if unpaid + "Made with <App> — create yours" footer (growth loop)
+- [x] Expired page, WhatsApp / copy / native share, OG image via `next/og`, optional password
 **Done when:** a WhatsApp link previews nicely and flips smoothly on another phone.
+> M6 (2026-11-10): built + tested (2477 unit, 22 e2e, live publish-auth 8/1 skip), reviewed + re-review APPROVED, PGlite rls_check 106 ✓. NOT deployed: needs BOOK_ACCESS_SECRET in Vercel → code → `db push` (1100). "Done when" (WhatsApp preview + flip on another phone) is NEEDS-HUMAN after deploy.
 
 ## Milestone 7 — Payments (1 day)
 - [ ] "Upgrade this book — AED 39" → Stripe Checkout (`aed`, Apple Pay / Google Pay)

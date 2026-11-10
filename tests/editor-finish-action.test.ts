@@ -119,7 +119,7 @@ describe("finishEditingAction", () => {
     const before = structuredClone(book.doc);
     mocks.getBookForRun.mockResolvedValue(book);
 
-    await expect(finishEditingAction(BOOK)).resolves.toEqual({ ok: true, redirectTo: "/dashboard" });
+    await expect(finishEditingAction(BOOK)).resolves.toEqual({ ok: true, redirectTo: `/books/${BOOK}/publish` });
 
     expect(mocks.getBookForRun).toHaveBeenCalledWith(BOOK);
     expect(mocks.getUserMemoryAdmin).toHaveBeenCalledWith(USER);
@@ -193,7 +193,7 @@ describe("finishEditingAction", () => {
 
   it("memory write error → still ok, logs a code only (no captions, prefs or ids)", async () => {
     mocks.upsertUserMemory.mockRejectedValue(Object.assign(new Error(SECRET), { code: "too_large" }));
-    await expect(finishEditingAction(BOOK)).resolves.toEqual({ ok: true, redirectTo: "/dashboard" });
+    await expect(finishEditingAction(BOOK)).resolves.toEqual({ ok: true, redirectTo: `/books/${BOOK}/publish` });
     const text = loggedText();
     expect(text).toMatch(/\[editor\] memory update failed \(too_large\)/);
     expect(text).not.toContain(SECRET);

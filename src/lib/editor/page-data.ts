@@ -25,6 +25,7 @@ export function toEditorShellData(data: EditorData): EditorShellData | null {
     book: data.book,
     doc: data.doc,
     docRev: data.docRev,
+    publishedRev: data.publishedRev,
     canSave: data.canSave,
     aiMode: data.aiMode,
     rewritesUsed: data.rewritesUsed,
