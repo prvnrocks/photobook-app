@@ -68,3 +68,7 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - LEFT: deploy code → user `npm run db:push` (0900) → rls_check 93 → regen types, drop getMyBook doc_rev fallback → run E2E_AUTH c/d/r. NEEDS-HUMAN: phone "Done when" check (swipe, pinch crop, touch drag reorder, iOS keyboard vs docked caption sheet). M5b with API key: ✨ latency ~1 s, Arabic translation quality, cost per rewrite.
 - Backlog: EditorToast single API + dismissOnEdit default (N2), carousel guard on slot tap (N1), stale rewrite rows with null book_id → cron (N3), toolbar sideways scroll at 375 px, keepalive 64 KB for 100-page books (N5), tone unlearning, "confirmed" marker for dashboard routing.
 - NEXT: Milestone 6 (publish + flipbook viewer + sharing).
+
+## 2026-11-10 — Milestone 5a — deployed
+- Code live (main), migration 0900 applied (rls_check 93). Live signed-in tests pass: save + rev/409, 21-page 422, column guard no-op, rewrite (replay), Done.
+- LEFT: phone "Done when" check (NEEDS-HUMAN); M5b live ✨ with API key. NEXT: Milestone 6.

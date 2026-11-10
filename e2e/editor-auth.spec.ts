@@ -229,7 +229,7 @@ test("a. build an album (replay) → review → Continue opens the editor at 375
   expect(row.page_count).toBeGreaterThan(0);
 });
 
-test("r. ✨ POST /api/ai/rewrite in replay → 200/502 after 0900 (500/503 before); doc untouched", async () => {
+test("r. ✨ POST /api/ai/rewrite in replay → 200/502 after 0900 (503 ai_unavailable before); doc untouched", async () => {
   const before = await bookRow();
   const pages = (before.doc as { pages?: { id: string; caption: { text: string } | null }[] }).pages ?? [];
   const p = pages.find((x) => x.caption && x.caption.text.trim().length > 0) ?? pages[0];
@@ -244,13 +244,13 @@ test("r. ✨ POST /api/ai/rewrite in replay → 200/502 after 0900 (500/503 befo
       });
       return { status: r.status, body: (await r.json()) as Record<string, unknown> };
     },
-    { bookId, pageId: p.id, instruction: "shorter", text },
+    { bookId, pageId: p.id, instruction: "rewrite", text },
   );
   console.log(`[r] status=${res.status} keys=${Object.keys(res.body).sort().join(",")}`);
   if (docRevSupported !== true) {
-    // create_rewrite_run_capped ships in 0900: before it the route fails (PGRST202). Today that is a
-    // generic 500 server_error (reported in T14: should be a 503 like the save route). Accept either.
-    expect([500, 503]).toContain(res.status);
+    // create_rewrite_run_capped ships in 0900: before it the route answers 503 ai_unavailable.
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject({ error: "ai_unavailable" });
     expect(JSON.stringify((await bookRow()).doc)).toBe(JSON.stringify(before.doc));
     return;
   }
@@ -324,7 +324,8 @@ test("c. after 0900: save 200 + rev bump + persisted; 409 stale; 422 page_limit;
   expect(JSON.stringify(final.doc)).toBe(JSON.stringify(after.doc));
   expect(final.page_count).toBe(after.page_count);
   expect(Number(final.doc_rev)).toBe(Number(after.doc_rev));
-  await anon.auth.signOut().catch(() => {});
+  // scope "local": the default "global" sign-out would also end the browser session.
+  await anon.auth.signOut({ scope: "local" }).catch(() => {});
 
   // Edited book → dashboard card opens the editor.
   await page.goto("/dashboard");
@@ -335,6 +336,10 @@ test("d. after 0900: edit the cover title in the UI → Saved ✓ → DB + Done 
   test.skip(docRevSupported !== true, "migration 0900 not applied yet");
   await page.goto(`/books/${bookId}/edit`);
   await expect(page.getByTestId("editor-shell")).toBeVisible();
+  // Post-0900 counterpart of test b: the editor is editable, no read-only banner.
+  await expect(page.getByTestId("save-banner-readOnly")).toHaveCount(0);
+  await expect(page.getByTestId("save-banner-unavailable")).toHaveCount(0);
+  await expect(page.getByTestId("editor-tool-add-page")).toBeVisible();
   await page.getByTestId("cover-text-target").click();
   await page.getByTestId("cover-title-input").fill("عطلتنا");
   await expect(page.getByTestId("save-status")).toHaveAttribute("data-state", "saved", { timeout: 15_000 });
