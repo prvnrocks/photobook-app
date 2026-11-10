@@ -70,7 +70,8 @@ export async function setEmailRemindersAction(on: boolean): Promise<SetEmailRemi
 /**
  * Settings → "Delete account" (D-060). Requires `confirm` === "DELETE". Deletes every book of the
  * user (paid ones too), their Storage files and the auth user — refused with
- * 'payment_in_progress' while an order is pending (src/lib/account/delete-account.ts). On success
+ * 'payment_in_progress' while an order is pending, 'payment_in_review' while an order is disputed /
+ * needs_review (src/lib/account/delete-account.ts). On success
  * signs out and redirects to "/?account=deleted" (never returns).
  */
 export async function deleteAccountAction(confirm: string): Promise<DeleteAccountActionResult> {
@@ -80,7 +81,9 @@ export async function deleteAccountAction(confirm: string): Promise<DeleteAccoun
 
   const result = await deleteAccountCompletely(user.id);
   if (!result.ok) {
-    return { ok: false, error: result.error === "payment_in_progress" ? "payment_in_progress" : "failed" };
+    const error =
+      result.error === "payment_in_progress" || result.error === "payment_in_review" ? result.error : "failed";
+    return { ok: false, error };
   }
 
   // The auth user is gone; clear the session cookies. The Auth API may answer 403/404 for the

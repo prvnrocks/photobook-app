@@ -169,8 +169,13 @@ export async function reapStaleAgentRuns(hours: number): Promise<number> {
 }
 
 /**
- * Claims (marks sent) up to `limit` "link expires soon" warnings. The caller sends the emails and
- * calls releaseWarning(bookId, "expiry") for any that failed, so the next run retries them.
+ * Claims up to `limit` "link expires soon" warnings. The caller sends the emails, then calls
+ * confirmWarning(bookId, "expiry") for each one that went out and releaseWarning(bookId, "expiry")
+ * for any that failed / never started, so the next run retries them.
+ *
+ * With migration 1800 a claim only sets *_warning_claimed_at; *_warning_sent_at is set by
+ * confirm_warning. Without 1800 (1600 semantics) the claim itself sets *_warning_sent_at and
+ * confirmWarning reports "unsupported" — see src/lib/email/warnings.ts.
  */
 export async function claimExpiryWarnings(limit: number, daysBefore: number): Promise<ExpiryWarningRow[]> {
   const { data, error } = await createAdminClient().rpc("claim_expiry_warnings", {
@@ -206,7 +211,28 @@ export async function claimDraftWarnings(limit: number, warnDays: number, delete
   }));
 }
 
-/** Un-claims a warning (email failed) so the next run retries it. True when a claim was cleared. */
+export type ConfirmWarningResult = "confirmed" | "not_claimed" | "unsupported";
+
+/**
+ * Marks a claimed warning as sent (migration 1800: *_sent_at := *_claimed_at, claim cleared).
+ * 'not_claimed' when no claim existed (released / reclaimed meanwhile). 'unsupported' when the
+ * database has no confirm_warning yet (PGRST202 — 1600 semantics: the claim already set sent_at).
+ * Throws CleanupQueryError (code only) on any other error.
+ */
+export async function confirmWarning(bookId: string, kind: WarningKind): Promise<ConfirmWarningResult> {
+  if (!isUuid(bookId)) return "not_claimed";
+  const { data, error } = await createAdminClient().rpc("confirm_warning", { p_book: bookId, p_kind: kind });
+  if (error) {
+    if (error.code === "PGRST202") return "unsupported";
+    throw new CleanupQueryError("confirm warning", error.code);
+  }
+  return data === true ? "confirmed" : "not_claimed";
+}
+
+/**
+ * Un-claims a warning (email failed or never started) so the next run retries it. True when a
+ * claim was cleared. 1800: clears *_claimed_at; 1600: clears *_sent_at (the claim column then).
+ */
 export async function releaseWarning(bookId: string, kind: WarningKind): Promise<boolean> {
   if (!isUuid(bookId)) return false;
   const { data, error } = await createAdminClient().rpc("release_warning", { p_book: bookId, p_kind: kind });

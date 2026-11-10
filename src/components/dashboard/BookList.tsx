@@ -41,17 +41,20 @@ export function BookList({
   books,
   now,
   deleteBook,
+  emailable = true,
 }: {
   books: BookListItem[];
   now?: Date;
   deleteBook?: DeleteBookFn;
+  /** Viewer gets warning emails (reminders on + has an email); null = unknown. See deletion-chip.ts. */
+  emailable?: boolean | null;
 }) {
   return (
     <ul className="flex flex-col gap-3" data-testid="book-list">
       {books.map((book) => {
         const chip = bookPublishChip(book, now);
         const share = bookShareHref(book);
-        const deletion = bookDeletionChip(book, now);
+        const deletion = bookDeletionChip(book, now, { emailable });
         return (
           <li key={book.id} className="flex items-stretch rounded-xl border transition-colors hover:bg-muted/50">
             <Link href={bookCardHref(book)} className="block min-h-11 min-w-0 flex-1 p-4" data-testid="book-card">

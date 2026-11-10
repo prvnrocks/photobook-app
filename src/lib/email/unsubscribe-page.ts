@@ -2,6 +2,7 @@
 // raw HTML (no app layout, no client JS): mail scanners and one-click POSTs hit it, so it must be
 // cheap and must not set cookies.
 import { APP_NAME, SUPPORT_EMAIL } from "@/lib/brand";
+import { REMINDERS_OFF_NOTICE } from "@/lib/cleanup/rules";
 import { escapeHtml } from "@/lib/email/templates/layout";
 
 export type UnsubscribePageKind = "confirm" | "done" | "invalid" | "error";
@@ -53,7 +54,8 @@ export function unsubscribePage(kind: UnsubscribePageKind, formAction = ""): str
     case "confirm":
       return page(
         "Turn off reminder emails?",
-        p("We'll stop emailing you when a free share link is about to expire or an unpublished draft is about to be deleted. Your books stay exactly as they are.") +
+        p("We'll stop emailing you when a free share link is about to expire or an unpublished draft is about to be deleted.") +
+          p(escapeHtml(REMINDERS_OFF_NOTICE)) +
           `<form method="post" action="${escapeHtml(formAction)}" style="margin:0 0 16px;">` +
           '<input type="hidden" name="List-Unsubscribe" value="One-Click">' +
           '<button type="submit" style="font-size:16px;font-weight:600;padding:14px 22px;border:0;border-radius:8px;background:#111827;color:#fff;cursor:pointer;">Unsubscribe</button>' +
@@ -62,7 +64,7 @@ export function unsubscribePage(kind: UnsubscribePageKind, formAction = ""): str
     case "done":
       return page(
         "You're unsubscribed",
-        p("You won't get any more reminder emails about expiring links or drafts.") + settingsLine,
+        p(escapeHtml(REMINDERS_OFF_NOTICE)) + settingsLine,
       );
     case "invalid":
       return page(

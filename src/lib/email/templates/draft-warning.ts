@@ -33,7 +33,8 @@ export function draftWarningEmail(input: DraftWarningEmailInput): EmailContent {
   const href = appLink(input.links.appUrl, `/books/${input.bookId}/edit`);
   const cta = { label: "Open it to keep it", href };
   const heading = "Your draft photobook will be deleted soon";
-  const after = "Any edit or new photo restarts the clock. Publishing it keeps it too.";
+  // Opening the editor of a warned draft touches it server-side (review S3), so the CTA is accurate.
+  const after = `Opening it in the editor keeps it for another ${DRAFT_IDLE_DAYS} days. Publishing it keeps it too.`;
 
   const html = renderHtml({
     preheader: `Open it before ${deleteDate} to keep it.`,

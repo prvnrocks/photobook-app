@@ -199,8 +199,10 @@ export type Database = {
           created_at: string
           doc: Json
           doc_rev: number
+          draft_warning_claimed_at: string | null
           draft_warning_sent_at: string | null
           expires_at: string | null
+          expiry_warning_claimed_at: string | null
           expiry_warning_sent_at: string | null
           id: string
           is_paid: boolean
@@ -224,8 +226,10 @@ export type Database = {
           created_at?: string
           doc?: Json
           doc_rev?: number
+          draft_warning_claimed_at?: string | null
           draft_warning_sent_at?: string | null
           expires_at?: string | null
+          expiry_warning_claimed_at?: string | null
           expiry_warning_sent_at?: string | null
           id?: string
           is_paid?: boolean
@@ -249,8 +253,10 @@ export type Database = {
           created_at?: string
           doc?: Json
           doc_rev?: number
+          draft_warning_claimed_at?: string | null
           draft_warning_sent_at?: string | null
           expires_at?: string | null
+          expiry_warning_claimed_at?: string | null
           expiry_warning_sent_at?: string | null
           id?: string
           is_paid?: boolean
@@ -635,6 +641,10 @@ export type Database = {
       comp_book: {
         Args: { p_admin: string; p_book: string; p_reason: string }
         Returns: string
+      }
+      confirm_warning: {
+        Args: { p_book: string; p_kind: string }
+        Returns: boolean
       }
       create_agent_run_capped: {
         Args: {

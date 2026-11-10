@@ -8,7 +8,7 @@ export type SetEmailRemindersResult =
 
 export type DeleteAccountActionResult = {
   ok: false;
-  error: "unauthenticated" | "confirm" | "payment_in_progress" | "failed";
+  error: "unauthenticated" | "confirm" | "payment_in_progress" | "payment_in_review" | "failed";
 };
 
 /** The word the user must type to delete their account. */
@@ -27,7 +27,9 @@ export const ACCOUNT_DELETED_HREF = `/?${ACCOUNT_DELETED_PARAM}=${ACCOUNT_DELETE
 export const ACCOUNT_COPY = {
   remindersHeading: "Email reminders",
   remindersDetail:
-    "We email you before a free book's link expires and before an unused draft is deleted. Turn this off to stop these emails.",
+    "We email you before a free book's link expires and before an unused draft is deleted.",
+  /** Shown after remindersDetail while the switch is on; REMINDERS_OFF_NOTICE (cleanup/rules) while off. */
+  remindersOnHint: "Turn this off to stop these emails.",
   remindersOn: "On",
   remindersOff: "Off",
   remindersSaved: "Saved.",
@@ -55,6 +57,8 @@ export function deleteAccountErrorCopy(error: string | null | undefined): string
       return `Please type ${DELETE_ACCOUNT_CONFIRM_WORD} to confirm.`;
     case "payment_in_progress":
       return "A payment is still being processed. Please try again in about 30 minutes, or contact support.";
+    case "payment_in_review":
+      return "One of your payments is being reviewed — contact support to delete your account.";
     case "unauthenticated":
       return "Your session has ended. Please sign in again.";
     default:

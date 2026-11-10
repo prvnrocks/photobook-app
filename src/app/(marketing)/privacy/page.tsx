@@ -161,9 +161,11 @@ function sections(): LegalSection[] {
               </li>
             ))}
           </ul>
-          <p>
-            You can delete a book, or your whole account, at any time in Settings. Deleted photos and books are removed
-            from our storage; backups held by our providers roll over within their normal backup cycle.
+          <p data-testid="privacy-delete-how">
+            Delete a free book from its ⋯ menu on your dashboard. Books with a payment can&apos;t be deleted
+            individually — delete your account in Settings (which removes all your books) or email us at{" "}
+            {mail}. Deleted photos and books are removed from our
+            storage; backups held by our providers roll over within their normal backup cycle.
           </p>
         </>
       ),
@@ -191,7 +193,7 @@ function sections(): LegalSection[] {
           <ul>
             <li>access the personal data we hold about you and get a copy of it;</li>
             <li>correct data that is wrong;</li>
-            <li>delete your data — delete a book or your account in Settings, or ask us;</li>
+            <li>delete your data — delete a free book from your dashboard, delete your account in Settings, or ask us;</li>
             <li>object to or restrict some processing, and withdraw consent where we rely on it.</li>
           </ul>
           <p>

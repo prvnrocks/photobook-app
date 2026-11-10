@@ -7,7 +7,7 @@ import "server-only";
 import { Resend } from "resend";
 
 /** Hard bound on one send (abort + treat as failed). */
-export const EMAIL_SEND_TIMEOUT_MS = 10_000;
+export const EMAIL_SEND_TIMEOUT_MS = 8_000;
 
 export type SendEmailInput = {
   to: string;

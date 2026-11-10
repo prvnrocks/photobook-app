@@ -100,6 +100,12 @@ describe("draft warning email", () => {
     expect(mail.text).toContain(`Open it to keep it:\n${APP}/books/${BOOK}/edit`);
   });
 
+  it("says opening it in the editor keeps it (server-side touch, review S3)", () => {
+    expect(mail.html).toContain("Opening it in the editor keeps it for another 45 days.");
+    expect(mail.text).toContain("Opening it in the editor keeps it for another 45 days.");
+    expect(mail.text).not.toContain("restarts the clock");
+  });
+
   it("footer has the unsubscribe link and support email", () => {
     expect(mail.html).toContain("Unsubscribe from reminder emails");
     expect(mail.html).toContain(`mailto:${SUPPORT_EMAIL}`);

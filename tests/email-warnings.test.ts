@@ -1,5 +1,7 @@
 // M9 T5 (D-057): warning-email hook for the cleanup cron — nothing claimed without config,
 // failed sends released, deadline respected, claim semantics never double-email, count-only logs.
+// Review B1 (migration 1800): confirm after each send, unstarted claims released at the phase
+// deadline, crash between claim and confirm never counts as sent, 1600 compatibility (PGRST202).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -11,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   claimExpiryWarnings: vi.fn(),
   claimDraftWarnings: vi.fn(),
   releaseWarning: vi.fn(),
+  confirmWarning: vi.fn(),
   isEmailEnabled: vi.fn(),
   sendEmail: vi.fn(),
 }));
@@ -18,10 +21,11 @@ vi.mock("@/lib/db/cleanup", () => ({
   claimExpiryWarnings: mocks.claimExpiryWarnings,
   claimDraftWarnings: mocks.claimDraftWarnings,
   releaseWarning: mocks.releaseWarning,
+  confirmWarning: mocks.confirmWarning,
 }));
 vi.mock("@/lib/email/client", () => ({ isEmailEnabled: mocks.isEmailEnabled, sendEmail: mocks.sendEmail }));
 
-const { createWarningSender } = await import("@/lib/email/warnings");
+const { createWarningSender, SEND_RESERVE_MS, WARNINGS_BUDGET_MS } = await import("@/lib/email/warnings");
 const { verifyUnsubscribeToken, getUnsubscribeKey } = await import("@/lib/email/unsubscribe-token");
 const { DRAFT_IDLE_DAYS, DRAFT_WARNING_DAYS, EXPIRY_WARNING_DAYS_BEFORE } = await import("@/lib/cleanup/rules");
 
@@ -68,6 +72,7 @@ beforeEach(() => {
   mocks.claimExpiryWarnings.mockResolvedValue([]);
   mocks.claimDraftWarnings.mockResolvedValue([]);
   mocks.releaseWarning.mockResolvedValue(true);
+  mocks.confirmWarning.mockResolvedValue("confirmed");
   info = vi.spyOn(console, "info").mockImplementation(() => {});
   error = vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -105,10 +110,10 @@ describe("warnings hook", () => {
   it("claims with the rules constants and sends each email with unsubscribe headers", async () => {
     mocks.claimExpiryWarnings.mockResolvedValueOnce([expiryRow(1), expiryRow(2)]);
     mocks.claimDraftWarnings.mockResolvedValueOnce([draftRow(3)]);
-    const r = await createWarningSender({ ...fast, batch: 50 })(ctx());
+    const r = await createWarningSender(fast)(ctx());
     expect(r).toEqual({ sent: 3, failed: 0, complete: true });
-    expect(mocks.claimExpiryWarnings).toHaveBeenCalledWith(50, EXPIRY_WARNING_DAYS_BEFORE);
-    expect(mocks.claimDraftWarnings).toHaveBeenCalledWith(50, DRAFT_WARNING_DAYS, DRAFT_IDLE_DAYS);
+    expect(mocks.claimExpiryWarnings).toHaveBeenCalledWith(20, EXPIRY_WARNING_DAYS_BEFORE);
+    expect(mocks.claimDraftWarnings).toHaveBeenCalledWith(20, DRAFT_WARNING_DAYS, DRAFT_IDLE_DAYS);
     expect(mocks.releaseWarning).not.toHaveBeenCalled();
 
     const calls = mocks.sendEmail.mock.calls.map((c) => c[0]);
@@ -186,17 +191,159 @@ describe("warnings hook", () => {
     expect(mocks.claimDraftWarnings).not.toHaveBeenCalled();
   });
 
-  it("deadline between batches: no new claim once time is up", async () => {
+  it("phase deadline between batches: no new claim once the warnings budget is spent", async () => {
     let t = NOW;
-    mocks.claimExpiryWarnings.mockResolvedValue([expiryRow(1), expiryRow(2)]);
+    mocks.claimExpiryWarnings.mockResolvedValue([expiryRow(1)]);
     mocks.sendEmail.mockImplementation(async () => {
-      t += 100_000;
+      t += 60_000;
       return { ok: true };
     });
-    const r = await createWarningSender({ ...fast, batch: 2 })(ctx({ now: () => t, deadline: NOW + 150_000 }));
-    expect(mocks.claimExpiryWarnings).toHaveBeenCalledTimes(1);
+    const r = await createWarningSender({ ...fast, batch: 1 })(ctx({ now: () => t }));
+    // starts at 0 s and 60 s; at 120 s the 100 s warnings budget is spent
+    expect(mocks.claimExpiryWarnings).toHaveBeenCalledTimes(2);
     expect(mocks.claimDraftWarnings).not.toHaveBeenCalled();
     expect(r).toEqual({ sent: 2, failed: 0, complete: false });
+    expect(WARNINGS_BUDGET_MS).toBe(100_000);
+  });
+
+  it("claimed items not started before the deadline are released (deferred), never confirmed", async () => {
+    let t = NOW;
+    mocks.claimExpiryWarnings.mockResolvedValueOnce([1, 2, 3, 4, 5, 6].map((n) => expiryRow(n)));
+    mocks.sendEmail.mockImplementation(async () => {
+      t += 40_000;
+      return { ok: true };
+    });
+    const hook = createWarningSender({ ...fast, batch: 20 });
+    const r = await hook(ctx({ now: () => t }));
+    // 3 workers start at t=0 (all three pass the check before any send advances the clock),
+    // then the clock is at 120 s > 100 s: the other 3 are never started.
+    expect(r).toEqual({ sent: 3, failed: 0, complete: false });
+    expect(mocks.confirmWarning).toHaveBeenCalledTimes(3);
+    const released = mocks.releaseWarning.mock.calls.map((c) => c[0]).sort();
+    const confirmed = mocks.confirmWarning.mock.calls.map((c) => c[0]).sort();
+    expect(released).toHaveLength(3);
+    expect(released.some((id) => confirmed.includes(id))).toBe(false);
+    expect(mocks.claimDraftWarnings).not.toHaveBeenCalled();
+    expect(logs()).toContain("deferred=3");
+  });
+
+  it("stops starting sends SEND_RESERVE_MS before the cron deadline (even inside the warnings budget)", async () => {
+    const r = await createWarningSender(fast)(ctx({ deadline: NOW + SEND_RESERVE_MS }));
+    expect(r).toEqual({ sent: 0, failed: 0, complete: false });
+    expect(mocks.claimExpiryWarnings).not.toHaveBeenCalled();
+    expect(SEND_RESERVE_MS).toBe(25_000);
+  });
+
+  it("a send whose pacing slot lands after the deadline is not started and is released", async () => {
+    let t = NOW;
+    mocks.claimExpiryWarnings.mockResolvedValueOnce([expiryRow(3), expiryRow(4), expiryRow(5)]);
+    // Real-sleep-like: wakes at (call time + ms) in timer order.
+    const sleep = async (ms: number) => {
+      const wake = t + ms;
+      await new Promise((r) => setTimeout(r, 0));
+      t = Math.max(t, wake);
+    };
+    const r2 = await createWarningSender({ sleep, minIntervalMs: 60_000, retryDelayMs: 0, batch: 20 })(
+      ctx({ now: () => t }),
+    );
+    // slots 0 s, 60 s, 120 s → the third slot is past the 100 s budget: not sent, released
+    expect(mocks.sendEmail).toHaveBeenCalledTimes(2);
+    expect(r2).toEqual({ sent: 2, failed: 0, complete: false });
+    expect(mocks.releaseWarning).toHaveBeenCalledTimes(1);
+  });
+
+  it("retry is skipped when it would start after the deadline (released as failed)", async () => {
+    let t = NOW;
+    mocks.claimExpiryWarnings.mockResolvedValueOnce([expiryRow(1)]);
+    mocks.sendEmail.mockImplementation(async () => {
+      t += 99_000;
+      return { ok: false, code: "timeout", retryable: true };
+    });
+    const r = await createWarningSender({ ...fast, retryDelayMs: 1_500 })(ctx({ now: () => t }));
+    expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
+    expect(r.failed).toBe(1);
+    expect(mocks.releaseWarning).toHaveBeenCalledWith(uuid(1), "expiry");
+  });
+
+  it("each successful send is confirmed (book, kind); failed ones are not", async () => {
+    mocks.claimExpiryWarnings.mockResolvedValueOnce([expiryRow(1), expiryRow(2)]);
+    mocks.claimDraftWarnings.mockResolvedValueOnce([draftRow(3)]);
+    mocks.sendEmail.mockImplementation(async (i: { to: string }) =>
+      i.to === "owner2@mail.example" ? { ok: false, code: "rejected", retryable: false } : { ok: true },
+    );
+    await createWarningSender(fast)(ctx());
+    expect(mocks.confirmWarning.mock.calls.sort()).toEqual([
+      [uuid(1), "expiry"],
+      [uuid(3), "draft"],
+    ]);
+    expect(mocks.releaseWarning.mock.calls).toEqual([[uuid(2), "expiry"]]);
+  });
+
+  it("confirm failure: logged as a code, item stays claimed (not released), still counted as sent", async () => {
+    mocks.claimExpiryWarnings.mockResolvedValueOnce([expiryRow(1)]);
+    mocks.confirmWarning.mockRejectedValueOnce(Object.assign(new Error("x"), { code: "57014" }));
+    const r = await createWarningSender(fast)(ctx());
+    expect(r).toEqual({ sent: 1, failed: 0, complete: true });
+    expect(mocks.releaseWarning).not.toHaveBeenCalled();
+    expect(logs()).toContain("codes=confirm_57014:1");
+    expect(error).toHaveBeenCalled();
+  });
+
+  it("1600 database (confirm_warning missing → unsupported): stops confirming, behaves as claim = sent", async () => {
+    mocks.claimExpiryWarnings.mockResolvedValueOnce([expiryRow(1), expiryRow(2), expiryRow(3), expiryRow(4)]);
+    mocks.confirmWarning.mockResolvedValue("unsupported");
+    mocks.sendEmail.mockImplementation(async (i: { to: string }) =>
+      i.to === "owner4@mail.example" ? { ok: false, code: "rejected", retryable: false } : { ok: true },
+    );
+    const sleeps: number[] = [];
+    // pacing serialises completions so the first unsupported is seen before the last confirm
+    const r = await createWarningSender({ sleep: async (ms) => void sleeps.push(ms), minIntervalMs: 0, retryDelayMs: 0 })(
+      ctx(),
+    );
+    expect(r).toEqual({ sent: 3, failed: 1, complete: true });
+    expect(mocks.confirmWarning.mock.calls.length).toBeLessThanOrEqual(3);
+    expect(mocks.releaseWarning.mock.calls).toEqual([[uuid(4), "expiry"]]);
+    expect(logs()).toContain("legacy=1");
+    expect(logs()).not.toContain("confirm_");
+  });
+
+  it("crash between claim and confirm never makes a draft 'sent' (1800 semantics, emulated)", async () => {
+    // Emulates 1800: claim sets claimedAt, confirm moves it to sentAt, release clears claimedAt,
+    // a claim older than 1 h is reclaimable. Deletion requires sentAt.
+    const HOUR = 3_600_000;
+    let t = NOW;
+    type B = { row: Draft; claimedAt: number | null; sentAt: number | null };
+    const db = new Map<string, B>([1, 2].map((n) => [uuid(n), { row: draftRow(n), claimedAt: null, sentAt: null }]));
+    mocks.claimDraftWarnings.mockImplementation(async (limit: number) => {
+      const picked = [...db.values()]
+        .filter((b) => b.sentAt === null && (b.claimedAt === null || b.claimedAt < t - HOUR))
+        .slice(0, limit);
+      for (const b of picked) b.claimedAt = t;
+      return picked.map((b) => b.row);
+    });
+    mocks.confirmWarning.mockImplementation(async (id: string) => {
+      const b = db.get(id)!;
+      if (b.claimedAt === null) return "not_claimed";
+      b.sentAt = b.claimedAt;
+      b.claimedAt = null;
+      return "confirmed";
+    });
+    // run 1 "crashes": the process dies inside sendEmail (promise never settles)
+    mocks.sendEmail.mockImplementationOnce(() => new Promise(() => {}));
+    mocks.sendEmail.mockImplementationOnce(() => new Promise(() => {}));
+    void createWarningSender(fast)(ctx({ now: () => t }));
+    await new Promise((r) => setTimeout(r, 5));
+    expect([...db.values()].every((b) => b.claimedAt !== null && b.sentAt === null)).toBe(true);
+    // 30 min later: still claimed → not reclaimed yet
+    t = NOW + HOUR / 2;
+    mocks.sendEmail.mockResolvedValue({ ok: true });
+    let r = await createWarningSender(fast)(ctx({ now: () => t, deadline: t + 240_000 }));
+    expect(r.sent).toBe(0);
+    // next day: reclaimed, sent and confirmed
+    t = NOW + 24 * HOUR;
+    r = await createWarningSender(fast)(ctx({ now: () => t, deadline: t + 240_000 }));
+    expect(r.sent).toBe(2);
+    expect([...db.values()].every((b) => b.sentAt === t && b.claimedAt === null)).toBe(true);
   });
 
   it("a whole failed batch stops the kind (provider outage) and releases it", async () => {

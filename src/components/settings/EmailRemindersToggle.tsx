@@ -5,6 +5,7 @@
 
 import { useState, useTransition } from "react";
 import { setEmailRemindersAction } from "@/app/settings/actions";
+import { REMINDERS_OFF_NOTICE } from "@/lib/cleanup/rules";
 import {
   ACCOUNT_COPY,
   remindersErrorCopy,
@@ -115,7 +116,11 @@ export function EmailRemindersToggleView({
         id="settings-reminders-detail"
         className="text-sm text-muted-foreground"
       >
-        {ACCOUNT_COPY.remindersDetail}
+        {ACCOUNT_COPY.remindersDetail}{" "}
+        {/* Unknown setting (null) → the off notice too: deletions happen either way. */}
+        <span data-testid="settings-reminders-note">
+          {on ? ACCOUNT_COPY.remindersOnHint : REMINDERS_OFF_NOTICE}
+        </span>
       </p>
       {initialOn === null ? (
         <p

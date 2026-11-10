@@ -36,22 +36,39 @@ export async function getOwnEmailReminders(userId: string): Promise<boolean> {
 // ---------------------------------------------------------------------------
 // Delete account (admin)
 
-/**
- * True when the user has an order still in 'pending' (a Checkout Session may be paid any moment) —
- * by the order's user_id, or on any of the user's books.
- */
-export async function hasPendingOrder(userId: string, bookIds: readonly string[]): Promise<boolean> {
-  if (!isUuid(userId)) throw new AccountQueryError("check pending orders", "invalid");
+/** Order statuses that block account deletion as "in review" (money moved; support must act). */
+export const IN_REVIEW_ORDER_STATUSES = ["disputed", "needs_review"] as const;
+
+async function hasOrderWithStatus(
+  op: string,
+  userId: string,
+  bookIds: readonly string[],
+  statuses: readonly string[],
+): Promise<boolean> {
+  if (!isUuid(userId)) throw new AccountQueryError(op, "invalid");
   const admin = createAdminClient();
   const ids = bookIds.filter(isUuid);
   const filter = ids.length > 0 ? `user_id.eq.${userId},book_id.in.(${ids.join(",")})` : `user_id.eq.${userId}`;
   const { count, error } = await admin
     .from("orders")
     .select("id", { count: "exact", head: true })
-    .eq("status", "pending")
+    .in("status", [...statuses])
     .or(filter);
-  if (error) throw new AccountQueryError("check pending orders", error.code);
+  if (error) throw new AccountQueryError(op, error.code);
   return (count ?? 0) > 0;
+}
+
+/**
+ * True when the user has an order still in 'pending' (a Checkout Session may be paid any moment) —
+ * by the order's user_id, or on any of the user's books.
+ */
+export async function hasPendingOrder(userId: string, bookIds: readonly string[]): Promise<boolean> {
+  return hasOrderWithStatus("check pending orders", userId, bookIds, ["pending"]);
+}
+
+/** True when any of the user's orders (by user_id or on any of their books) is disputed / needs_review. */
+export async function hasOrderInReview(userId: string, bookIds: readonly string[]): Promise<boolean> {
+  return hasOrderWithStatus("check orders in review", userId, bookIds, IN_REVIEW_ORDER_STATUSES);
 }
 
 /** Ids of every book the user owns (paid ones included). */

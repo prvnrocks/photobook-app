@@ -43,7 +43,7 @@ export const CLEANUP_BATCH = {
   abandonedDrafts: 25,
   pendingUploads: 200,
   orphanObjects: 500,
-  warningEmails: 50,
+  warningEmails: 20,
 } as const;
 
 /** Storage remove() limit per request (Supabase Storage API). */
@@ -75,6 +75,14 @@ export function draftDeleteAfter(lastActivity: Date, warnedAt: Date | null): Dat
 }
 
 const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"}`;
+
+/**
+ * What still happens with reminder emails OFF (review S2) — the unsubscribe pages and Settings show
+ * it so nobody believes turning emails off also stops the deletions.
+ */
+export const REMINDERS_OFF_NOTICE =
+  `You won't get reminder emails. Unpublished drafts are still deleted after ${plural(DRAFT_IDLE_DAYS, "day")} without changes, ` +
+  "and free links still expire — you'll see the dates on your dashboard.";
 
 export interface RetentionRule {
   key: "paid" | "free_published" | "draft" | "pending_upload" | "pdf" | "ai_notes";

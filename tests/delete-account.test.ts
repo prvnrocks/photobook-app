@@ -170,8 +170,33 @@ describe("deleteAccountCompletely", () => {
     expect(fake.state.calls).toEqual(["admin:select:books", "admin:select:orders"]);
     expect(fake.state.deletedUsers).toEqual([]);
     const orders = fake.state.chains.find((c) => c.table === "orders")!;
-    expect(orders.calls).toContainEqual(["eq", "status", "pending"]);
+    expect(orders.calls).toContainEqual(["in", "status", ["pending"]]);
     expect(orders.calls).toContainEqual(["or", `user_id.eq.${U},book_id.in.(${B1})`]);
+  });
+
+  it("a disputed / needs_review order blocks it — payment_in_review, nothing deleted (review N3)", async () => {
+    fake.state.results["admin:select:books"] = [{ data: [{ id: B1 }], error: null }];
+    fake.state.results["admin:select:orders"] = [
+      { data: null, error: null, count: 0 },
+      { data: null, error: null, count: 1 },
+    ];
+    expect(await deleteAccountCompletely(U)).toEqual({ ok: false, error: "payment_in_review" });
+    expect(fake.state.calls).toEqual(["admin:select:books", "admin:select:orders", "admin:select:orders"]);
+    expect(fake.state.deletedUsers).toEqual([]);
+    const review = fake.state.chains.filter((c) => c.table === "orders")[1];
+    expect(review.calls).toContainEqual(["in", "status", ["disputed", "needs_review"]]);
+    expect(review.calls).toContainEqual(["or", `user_id.eq.${U},book_id.in.(${B1})`]);
+  });
+
+  it("DB error on the review check → failed, nothing deleted", async () => {
+    fake.state.results["admin:select:books"] = [{ data: [], error: null }];
+    fake.state.results["admin:select:orders"] = [
+      { data: null, error: null, count: 0 },
+      { data: null, error: { code: "57014" }, count: null },
+    ];
+    expect(await deleteAccountCompletely(U)).toEqual({ ok: false, error: "failed" });
+    expect(fake.state.calls.some((c) => c.startsWith("admin:delete") || c === "auth:deleteUser")).toBe(false);
+    expect(logLines()).toEqual(["[account] delete failed step=check code=57014"]);
   });
 
   it("no books → pending check by user only", async () => {
@@ -261,6 +286,17 @@ describe("deleteAccountAction", () => {
     expect(fake.redirect).not.toHaveBeenCalled();
   });
 
+  it("order in review → payment_in_review, no sign-out", async () => {
+    fake.state.results["admin:select:books"] = [{ data: [], error: null }];
+    fake.state.results["admin:select:orders"] = [
+      { data: null, error: null, count: 0 },
+      { data: null, error: null, count: 1 },
+    ];
+    expect(await deleteAccountAction("DELETE")).toEqual({ ok: false, error: "payment_in_review" });
+    expect(fake.state.signOut).toEqual([]);
+    expect(fake.redirect).not.toHaveBeenCalled();
+  });
+
   it("success → deletes books + storage + auth user, signs out locally, redirects with the flash", async () => {
     happyPath();
     await expect(deleteAccountAction("DELETE")).rejects.toMatchObject({ message: "NEXT_REDIRECT" });
@@ -287,6 +323,9 @@ describe("deleteAccountAction", () => {
 
   it("error copy", () => {
     expect(accountUi.deleteAccountErrorCopy("payment_in_progress")).toMatch(/payment is still being processed/);
+    expect(accountUi.deleteAccountErrorCopy("payment_in_review")).toBe(
+      "One of your payments is being reviewed — contact support to delete your account.",
+    );
     expect(accountUi.deleteAccountErrorCopy("confirm")).toBe("Please type DELETE to confirm.");
     expect(accountUi.deleteAccountErrorCopy("failed")).toMatch(/try again/);
   });
