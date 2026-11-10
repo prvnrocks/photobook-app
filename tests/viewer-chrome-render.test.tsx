@@ -45,16 +45,17 @@ describe("viewer chrome markup", () => {
     expect(html.split(APP_NAME).length - 1).toBeGreaterThan(10);
     expect(html).not.toContain("style=");
   });
-  it("end card: CTA when unpaid, small link when paid", () => {
+  it("end card: CTA when unpaid, The end + Made with link when paid", () => {
     const free = renderToStaticMarkup(<EndCard isPaid={false} />);
-    const paid = renderToStaticMarkup(<EndCard isPaid />);
+    const paid = renderToStaticMarkup(<EndCard isPaid onReplay={() => {}} onShare={() => {}} />);
     expect(free).toContain("Make your own photobook");
     expect(free).toContain('href="/?ref=book"');
     expect(paid).not.toContain("Make your own photobook");
     expect(paid).toContain(`Made with ${APP_NAME}`);
+    expect(paid).toContain("The end");
     // page-flip forwards taps only when the target IS the <a>: links must hold text only.
     for (const html of [free, paid]) {
-      for (const m of html.matchAll(/<a [^>]*>([\s\S]*?)<\/a>/g)) expect(m[1]).not.toContain("<");
+      for (const m of html.matchAll(/<(?:a|button) [^>]*>([\s\S]*?)<\/(?:a|button)>/g)) expect(m[1]).not.toContain("<");
     }
   });
   it("footer links to /?ref=book", () => {

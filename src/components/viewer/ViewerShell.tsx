@@ -11,6 +11,7 @@ import type { RenderPhotos } from "@/components/book/BookPage";
 import { Watermark } from "@/components/book/Watermark";
 import type { BookDoc } from "@/lib/book/types";
 import { chapterForPage, labelFontStyle } from "@/lib/viewer/chapters";
+import { endCardModel } from "@/lib/viewer/end-card";
 import { firstVisiblePageIdx, flipLayout } from "@/lib/viewer/pages";
 import { visiblePages } from "@/lib/viewer/window";
 import { ChapterLabel } from "./ChapterLabel";
@@ -60,7 +61,18 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
   const atEnd = visible.includes(layout.count - 1);
 
   // Stable nodes: Flipbook puts them in context; new identities re-render every page.
-  const endPage = useMemo(() => <EndCard isPaid={isPaid} />, [isPaid]);
+  // Paid end card (D-054): snapshot title in the cover font on the page background; Replay flips
+  // back to the cover, Share opens the share sheet. Callbacks are stable (ref + state setter).
+  const endModel = useMemo(
+    () => (isPaid ? endCardModel({ title, styleFont: doc.style.font, background: doc.style.background }) : undefined),
+    [isPaid, title, doc.style.font, doc.style.background],
+  );
+  const replay = useCallback(() => api.current?.goTo(0), []);
+  const openShare = useCallback(() => setSheet("share"), []);
+  const endPage = useMemo(
+    () => <EndCard isPaid={isPaid} model={endModel} onReplay={replay} onShare={openShare} />,
+    [isPaid, endModel, replay, openShare],
+  );
   const pageOverlay = useMemo(() => (isPaid ? undefined : <Watermark />), [isPaid]);
 
   const onReady = useCallback((info: FlipbookReadyInfo) => setSpread(info.spread), []);

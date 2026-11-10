@@ -2,6 +2,8 @@
 // like e2e/editor.spec.ts. 375 px touch (single page) + 1280 px (spread). Covers swipe, counter,
 // chapter label, Contents, watermark + footer (unpaid only), Arabic, end card, pseudo-fullscreen,
 // photo windowing (≤ 5 pages carry image URLs on a phone) and no horizontal overflow.
+// M9 T1 (D-054): paid end card ("The end", title, Replay, Share) at 375×812 on a 20-page book,
+// and the spread filler (odd page count) uses the page background.
 // (Replaces e2e/viewer-chrome.spec.ts from T5.)
 import { expect, test, type Page } from "@playwright/test";
 
@@ -172,6 +174,58 @@ test.describe("phone 375 (touch)", () => {
     await expect(counter(page)).toHaveText("1 / 12");
   });
 
+  test("paid 20 pages: end card with The end + title, Share opens sheet, Replay returns to cover", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await ready(page, "/dev-viewer?paid=1&pages=20&bg=F5EFE6");
+    await expect(counter(page)).toHaveText("Cover");
+    // Phones: 20 pages → flip indexes 0..21, end card at 21, no filler.
+    await expect(page.locator("[data-flip-index]")).toHaveCount(22);
+    await expect(page.locator("[data-filler]")).toHaveCount(0);
+    for (let i = 0; i < 21; i++) await page.getByTestId("next-page").click();
+    await expect(counter(page)).toHaveText("End");
+    await expect(page.getByTestId("flipbook")).toHaveAttribute("data-current-page", "21");
+    const card = page.locator('[data-flip-index="21"] [data-testid="end-card"]');
+    await expect(card).toHaveAttribute("data-paid", "true");
+    await expect(card.getByTestId("end-card-heading")).toHaveText("The end");
+    await expect(card.getByTestId("end-card-heading")).toBeVisible();
+    const title = card.getByTestId("end-card-title");
+    await expect(title).toHaveText("Our Abu Dhabi trip");
+    await expect(title).toHaveAttribute("dir", "auto");
+    for (const id of ["end-card-replay", "end-card-share"]) {
+      const b = (await card.getByTestId(id).boundingBox())!;
+      expect(b.height).toBeGreaterThanOrEqual(44);
+    }
+    await expect(card.getByTestId("end-card-made-with")).toBeVisible();
+    expect(await card.locator("> div").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(245, 239, 230)");
+    await noHorizontalOverflow(page);
+    await page.screenshot({ path: test.info().outputPath("paid-end-card-en-375.png") });
+
+    await card.getByTestId("end-card-share").click();
+    await expect(page.getByTestId("share-sheet")).toBeVisible();
+    await expect(page.getByTestId("share-whatsapp")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("share-sheet")).toHaveCount(0);
+
+    await card.getByTestId("end-card-replay").click();
+    await expect(counter(page)).toHaveText("Cover");
+    await expect(page.getByTestId("flipbook")).toHaveAttribute("data-current-page", "0");
+  });
+
+  test("paid end card with an Arabic title renders RTL in Cairo", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await ready(page, "/dev-viewer?paid=1&lang=ar&pages=20&bg=F5EFE6");
+    for (let i = 0; i < 21; i++) await page.getByTestId("next-page").click();
+    await expect(counter(page)).toHaveText("End");
+    const title = page.getByTestId("end-card-title");
+    await expect(title).toHaveText("رحلتنا إلى أبوظبي");
+    const s = await title.evaluate((el) => ({ d: getComputedStyle(el).direction, f: getComputedStyle(el).fontFamily }));
+    expect(s.d).toBe("rtl");
+    expect(s.f.toLowerCase()).toContain("cairo");
+    await expect(page.getByTestId("end-card-replay")).toBeVisible();
+    await noHorizontalOverflow(page);
+    await page.screenshot({ path: test.info().outputPath("paid-end-card-ar-375.png") });
+  });
+
   test("Arabic captions use dir=auto and render RTL", async ({ page }) => {
     await ready(page, "/dev-viewer?paid=0&lang=ar");
     for (let i = 0; i < 4; i++) await page.getByTestId("next-page").click();
@@ -212,6 +266,23 @@ test.describe("desktop 1280 (spread)", () => {
     await expect(counter(page)).toHaveText("End");
     await expect(page.getByTestId("end-card-cta")).toBeVisible();
     await noHorizontalOverflow(page);
+  });
+
+  test("paid odd page count: filler uses the page background, end card alone", async ({ page }) => {
+    await ready(page, "/dev-viewer?paid=1&pages=19&bg=F5EFE6");
+    await expect(page.getByTestId("flipbook")).toHaveAttribute("data-spread", "true");
+    // 19 pages → 0 cover, 1..19 pages, 20 filler, 21 end card.
+    await expect(page.locator("[data-flip-index]")).toHaveCount(22);
+    const filler = page.locator('[data-flip-index="20"] [data-filler]');
+    await expect(filler).toHaveCount(1);
+    expect(await filler.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(245, 239, 230)");
+    for (let i = 0; i < 11; i++) await page.getByTestId("next-page").click();
+    await expect(counter(page)).toHaveText("End");
+    await expect(page.getByTestId("end-card")).toHaveAttribute("data-paid", "true");
+    await expect(page.getByTestId("end-card-heading")).toBeVisible();
+    await expect(page.getByTestId("next-page")).toBeDisabled();
+    await noHorizontalOverflow(page);
+    await page.screenshot({ path: test.info().outputPath("paid-end-card-spread-1280.png") });
   });
 
   test("native fullscreen keeps the controls", async ({ page }) => {

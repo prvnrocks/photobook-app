@@ -1,5 +1,5 @@
 -- =============================================================================
--- supabase/tests/rls_check.sql — live RLS / trigger / storage check (Milestones 1–8)
+-- supabase/tests/rls_check.sql — live RLS / trigger / storage check (Milestones 1–9)
 --
 -- HOW TO RUN
 --   1. Apply the migrations first (`npm run db:push`) — including
@@ -36,7 +36,12 @@
 --      and 20261113001500_exports_review.sql (status 'superseded' + purged_at:
 --      cleanup never deletes rows, so the daily cap keeps counting them;
 --      renderer_version in ready reuse; supersede_exports service-role only;
---      reaper: rendering rows only with an expired lease, claimable re-kick).
+--      reaper: rendering rows only with an expired lease, claimable re-kick)
+--      and 20261114001600_cleanup.sql (server-only warning columns, updated_at
+--      kept on claim-only updates, owner-writable profiles.email_reminders,
+--      service-role-only retention RPCs: expired books / abandoned drafts /
+--      pending uploads / orphan objects / old exports / unlock attempts /
+--      stale runs / warning claims / AI spend by Dubai day).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -45,7 +50,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 146 checks passed
+--       RLS OK — all 162 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -129,6 +134,70 @@ declare
   etok2      uuid;
   erev       bigint;
   erev3      bigint;
+  cl_guard    uuid;
+  cl_upd      uuid;
+  cl_bk       uuid;
+  cl_bk2      uuid;
+  cl_bk3      uuid;
+  cl_ph       uuid;
+  cl_ph2      uuid;
+  cl_x        uuid;
+  cl_e1       uuid;
+  cl_e2       uuid;
+  cl_p1       uuid;
+  cl_p2       uuid;
+  cl_p3       uuid;
+  cl_p4       uuid;
+  cl_ex_paid  uuid;
+  cl_ex_pend  uuid;
+  cl_ex_rev   uuid;
+  cl_ex_ord   uuid;
+  cl_ex1      uuid;
+  cl_ex2      uuid;
+  cl_ex3      uuid;
+  cl_ex_grace uuid;
+  cl_d_optout uuid;
+  cl_d_empty  uuid;
+  cl_d_wold   uuid;
+  cl_d_wnew   uuid;
+  cl_d_wstale uuid;
+  cl_d_unw    uuid;
+  cl_d_paid   uuid;
+  cl_d_ord    uuid;
+  cl_d_fresh  uuid;
+  cl_d_pub    uuid;
+  cl_w1       uuid;
+  cl_w2       uuid;
+  cl_w3       uuid;
+  cl_w4       uuid;
+  cl_w5       uuid;
+  cl_w6       uuid;
+  cl_w7       uuid;
+  cl_rb1      uuid;
+  cl_rb2      uuid;
+  cl_rb3      uuid;
+  cl_rb4      uuid;
+  cl_rb5      uuid;
+  cl_r1       uuid;
+  cl_r2       uuid;
+  cl_r3       uuid;
+  cl_r4       uuid;
+  cl_r5       uuid;
+  cl_r6       uuid;
+  cl_ids      uuid[];
+  cl_names    text[];
+  cl_ts       timestamptz;
+  v_bool      boolean;
+  cl_day      date;
+  cl_day2     date;
+  cl_day3     date;
+  cl_usd      numeric;
+  cl_usd2     numeric;
+  cl_usd3     numeric;
+  cl_usd4     numeric;
+  cl_n1       integer;
+  cl_n2       integer;
+  cl_n3       integer;
   r          record;
   a2_created timestamptz;
   n          integer;
@@ -2390,6 +2459,630 @@ begin
   if exists (select 1 from public.exports where id = exp_b) then
     raise exception 'RLS FAIL [exports cascade]: export row survived its book';
   end if;
+  checks := checks + 1;
+
+  -- ===========================================================================
+  -- 1600 cleanup (D-055 / D-056 / D-057 / D-059, D-051 amended)
+  -- Ages are set ~20 years in the past and the windows passed accordingly, so on
+  -- a real project only this script's rows are eligible (everything rolls back).
+  -- ===========================================================================
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+
+  -- service-role only: no anon / authenticated EXECUTE on any new function
+  foreach v_txt in array array[
+    'public.cleanup_delete_expired_books(integer, integer)',
+    'public.cleanup_delete_abandoned_drafts(integer, integer, integer)',
+    'public.cleanup_pending_uploads(integer, integer)',
+    'public.cleanup_orphan_objects(text, integer, integer)',
+    'public.cleanup_old_exports(integer)',
+    'public.cleanup_unlock_attempts(integer)',
+    'public.reap_stale_agent_runs(integer)',
+    'public.claim_expiry_warnings(integer, integer)',
+    'public.claim_draft_warnings(integer, integer, integer)',
+    'public.release_warning(uuid, text)',
+    'public.admin_ai_spend_daily(integer)',
+    'private.auth_user_email(uuid)'
+  ] loop
+    if has_function_privilege('anon', v_txt, 'execute')
+       or has_function_privilege('authenticated', v_txt, 'execute')
+       or has_function_privilege('public', v_txt, 'execute') then
+      raise exception 'RLS FAIL [cleanup grants]: a client role can execute %', v_txt;
+    end if;
+    if not has_function_privilege('service_role', v_txt, 'execute') then
+      raise exception 'RLS FAIL [cleanup grants]: service_role cannot execute %', v_txt;
+    end if;
+  end loop;
+  checks := checks + 1;
+
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  begin
+    perform public.cleanup_delete_expired_books(10, 14);
+    raise exception 'RLS FAIL [cleanup grants]: authenticated could execute cleanup_delete_expired_books';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.claim_expiry_warnings(10, 3);
+    raise exception 'RLS FAIL [cleanup grants]: authenticated could execute claim_expiry_warnings';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.admin_ai_spend_daily(7);
+    raise exception 'RLS FAIL [cleanup grants]: authenticated could execute admin_ai_spend_daily';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  set local role anon;
+  perform set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
+  begin
+    perform public.cleanup_orphan_objects('photos', 7, 10);
+    raise exception 'RLS FAIL [cleanup grants]: anon could execute cleanup_orphan_objects';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.release_warning(gen_random_uuid(), 'draft');
+    raise exception 'RLS FAIL [cleanup grants]: anon could execute release_warning';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  checks := checks + 1;
+
+  -- warning columns are server-only: owner writes are silently undone
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  insert into public.books (user_id, title, expiry_warning_sent_at, draft_warning_sent_at)
+  values (uid_a, 'RLS cleanup guard', now(), now())
+  returning id, expiry_warning_sent_at, draft_warning_sent_at into r;
+  cl_guard := r.id;
+  if r.expiry_warning_sent_at is not null or r.draft_warning_sent_at is not null then
+    raise exception 'RLS FAIL [cleanup warning guard]: owner set warning columns on insert';
+  end if;
+  reset role;
+  set local role service_role;
+  update public.books set expiry_warning_sent_at = now() - interval '1 day',
+                          draft_warning_sent_at  = now() - interval '1 day'
+   where id = cl_guard;
+  reset role;
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  update public.books set expiry_warning_sent_at = null, draft_warning_sent_at = null, title = 'RLS cleanup guard 2'
+   where id = cl_guard;
+  get diagnostics n = row_count;
+  reset role;
+  if n <> 1 or not exists (
+    select 1 from public.books
+     where id = cl_guard and title = 'RLS cleanup guard 2'
+       and expiry_warning_sent_at < now() - interval '23 hours'
+       and draft_warning_sent_at  < now() - interval '23 hours') then
+    raise exception 'RLS FAIL [cleanup warning guard]: owner changed warning columns (or title not saved)';
+  end if;
+  checks := checks + 1;
+
+  -- a warning-claim-only update keeps updated_at (else claiming resets the idle clock)
+  set local role service_role;
+  insert into public.books (user_id, title, updated_at)
+  values (uid_a, 'RLS cleanup updated_at', now() - interval '50 days')
+  returning id into cl_upd;
+  update public.books set draft_warning_sent_at = now() where id = cl_upd;
+  update public.books set expiry_warning_sent_at = now() where id = cl_upd;
+  if not exists (select 1 from public.books where id = cl_upd and updated_at < now() - interval '49 days') then
+    raise exception 'RLS FAIL [cleanup updated_at]: a warning-only update bumped updated_at';
+  end if;
+  update public.books set title = 'RLS cleanup updated_at 2', draft_warning_sent_at = null where id = cl_upd;
+  if not exists (select 1 from public.books where id = cl_upd and updated_at > now() - interval '1 minute') then
+    raise exception 'RLS FAIL [cleanup updated_at]: a real edit did not bump updated_at';
+  end if;
+  reset role;
+  checks := checks + 1;
+
+  -- profiles.email_reminders: owner toggles own, never another user's
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  update public.profiles set email_reminders = false where id = uid_a;
+  get diagnostics n = row_count;
+  if n <> 1 or not exists (select 1 from public.profiles where id = uid_a and not email_reminders) then
+    raise exception 'RLS FAIL [cleanup email_reminders]: owner could not turn reminders off';
+  end if;
+  update public.profiles set email_reminders = false where id = uid_b;
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'RLS FAIL [cleanup email_reminders]: A changed B''s reminders'; end if;
+  update public.profiles set email_reminders = true where id = uid_a;
+  reset role;
+  if not exists (select 1 from public.profiles where id = uid_b and email_reminders)
+     or not exists (select 1 from public.profiles where id = uid_a and email_reminders) then
+    raise exception 'RLS FAIL [cleanup email_reminders]: reminders not as expected after toggles';
+  end if;
+  set local role anon;
+  perform set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
+  begin
+    update public.profiles set email_reminders = false where id = uid_a;
+    get diagnostics n = row_count;
+    if n <> 0 then raise exception 'RLS FAIL [cleanup email_reminders]: anon changed reminders'; end if;
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- orphan objects (read-only; names only)
+  -- ---------------------------------------------------------------------------
+  set local role service_role;
+  insert into public.books (user_id, title) values (uid_a, 'RLS cleanup orphans') returning id into cl_bk;
+  cl_ph := gen_random_uuid();
+  insert into public.photos (id, user_id, book_id, fingerprint, upload_state, original_path, web_path, thumb_path,
+                             width, height, original_mime, original_bytes)
+  values (cl_ph, uid_a, cl_bk, 'rls-cleanup-orphan-ready', 'ready',
+          uid_a || '/' || cl_bk || '/' || cl_ph || '-original.jpg',
+          uid_a || '/' || cl_bk || '/' || cl_ph || '-web.jpg',
+          uid_a || '/' || cl_bk || '/' || cl_ph || '-thumb.jpg', 10, 10, 'image/jpeg', 100);
+  cl_ph2 := gen_random_uuid();
+  insert into public.photos (id, user_id, book_id, fingerprint)
+  values (cl_ph2, uid_a, cl_bk, 'rls-cleanup-orphan-pending');
+  cl_x := gen_random_uuid();
+  insert into storage.objects (bucket_id, name, owner, created_at) values
+    ('photos', 'rls-cleanup/garbage-' || cl_x || '.txt', uid_a, now() - interval '7302 days'),
+    ('photos', uid_a || '/' || cl_bk || '/' || cl_x || '-web.jpg', uid_a, now() - interval '7301 days 12 hours'),
+    ('photos', uid_a || '/' || cl_bk || '/' || cl_ph || '-original.png', uid_a, now() - interval '7301 days'),
+    ('photos', uid_a || '/' || cl_bk || '/' || cl_ph || '-web.jpg', uid_a, now() - interval '7303 days'),
+    ('photos', uid_a || '/' || cl_bk || '/' || cl_ph2 || '-original.jpg', uid_a, now() - interval '7303 days'),
+    ('photos', uid_a || '/' || gen_random_uuid() || '/' || cl_ph || '-thumb.jpg', uid_a, now() - interval '7303 days'),
+    ('photos', 'rls-cleanup/recent-' || cl_x || '.txt', uid_a, now());
+  select array_agg(o.name order by o.name) into cl_names
+    from public.cleanup_orphan_objects('photos', 7299, 1000) as o;
+  if cl_names is null
+     or not ('rls-cleanup/garbage-' || cl_x || '.txt' = any (cl_names))
+     or not (uid_a || '/' || cl_bk || '/' || cl_x || '-web.jpg' = any (cl_names))
+     or not (uid_a || '/' || cl_bk || '/' || cl_ph || '-original.png' = any (cl_names))
+     or (select count(*) from unnest(cl_names) as x where x like '%/' || cl_ph || '-thumb.jpg') <> 1
+     or array_length(cl_names, 1) <> 4 then
+    raise exception 'RLS FAIL [cleanup orphans]: wrong photo orphans %', cl_names;
+  end if;
+  select array_agg(o.name) into cl_names from public.cleanup_orphan_objects('photos', 7299, 2) as o;
+  if array_length(cl_names, 1) <> 2
+     or not (cl_names[1] like '%/' || cl_ph || '-thumb.jpg' and cl_names[2] = 'rls-cleanup/garbage-' || cl_x || '.txt') then
+    raise exception 'RLS FAIL [cleanup orphans]: limit / oldest-first not respected %', cl_names;
+  end if;
+  if (select count(*) from storage.objects where name like '%' || cl_x || '%') <> 3 then
+    raise exception 'RLS FAIL [cleanup orphans]: the function deleted storage rows';
+  end if;
+  checks := checks + 1;
+
+  -- exports bucket: a ready row's PDF is kept; a superseded row's / unknown PDF is an orphan
+  cl_e1 := gen_random_uuid();
+  cl_e2 := gen_random_uuid();
+  insert into public.exports (id, book_id, user_id, doc_rev, doc, status, path, bytes, page_count, finished_at)
+  values (cl_e1, cl_bk, uid_a, 0, '{}', 'ready', uid_a || '/' || cl_bk || '/' || cl_e1 || '.pdf', 100, 2, now());
+  insert into public.exports (id, book_id, user_id, doc_rev, doc, status, path, purged_at, finished_at)
+  values (cl_e2, cl_bk, uid_a, 0, '{}', 'superseded', null, now(), now());
+  insert into storage.objects (bucket_id, name, owner, created_at) values
+    ('exports', uid_a || '/' || cl_bk || '/' || cl_e1 || '.pdf', uid_a, now() - interval '7303 days'),
+    ('exports', uid_a || '/' || cl_bk || '/' || cl_e2 || '.pdf', uid_a, now() - interval '7302 days'),
+    ('exports', 'rls-cleanup/' || cl_x || '.pdf', uid_a, now() - interval '7301 days');
+  select array_agg(o.name order by o.name) into cl_names
+    from public.cleanup_orphan_objects('exports', 7299, 1000) as o;
+  if cl_names is distinct from (select array_agg(x order by x) from unnest(array[
+       uid_a || '/' || cl_bk || '/' || cl_e2 || '.pdf', 'rls-cleanup/' || cl_x || '.pdf']) as x) then
+    raise exception 'RLS FAIL [cleanup orphans]: wrong export orphans %', cl_names;
+  end if;
+  begin
+    perform public.cleanup_orphan_objects('avatars', 7, 10);
+    raise exception 'RLS FAIL [cleanup orphans]: unknown bucket accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.cleanup_orphan_objects('photos', 0, 10);
+    raise exception 'RLS FAIL [cleanup orphans]: 0-day window accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- pending uploads: old pending rows deleted, object names returned
+  -- ---------------------------------------------------------------------------
+  insert into public.books (user_id, title) values (uid_a, 'RLS cleanup pending') returning id into cl_bk2;
+  cl_p1 := gen_random_uuid();
+  cl_p2 := gen_random_uuid();
+  cl_p3 := gen_random_uuid();
+  cl_p4 := gen_random_uuid();
+  insert into public.photos (id, user_id, book_id, fingerprint, created_at) values
+    (cl_p1, uid_a, cl_bk2, 'rls-cleanup-pending-1', now() - interval '7302 days'),
+    (cl_p2, uid_a, cl_bk2, 'rls-cleanup-pending-2', now() - interval '7301 days'),
+    (cl_p4, uid_a, cl_bk2, 'rls-cleanup-pending-4', now() - interval '1 day');
+  insert into public.photos (id, user_id, book_id, fingerprint, created_at, upload_state, original_path, web_path,
+                             thumb_path, width, height, original_mime, original_bytes)
+  values (cl_p3, uid_a, cl_bk2, 'rls-cleanup-pending-3', now() - interval '7303 days', 'ready',
+          uid_a || '/' || cl_bk2 || '/' || cl_p3 || '-original.jpg',
+          uid_a || '/' || cl_bk2 || '/' || cl_p3 || '-web.jpg',
+          uid_a || '/' || cl_bk2 || '/' || cl_p3 || '-thumb.jpg', 10, 10, 'image/jpeg', 100);
+  insert into storage.objects (bucket_id, name, owner) values
+    ('photos', uid_a || '/' || cl_bk2 || '/' || cl_p1 || '-original.webp', uid_a),
+    ('photos', uid_a || '/' || cl_bk2 || '/' || cl_p1 || '-thumb.jpg', uid_a);
+  select count(*) into n from public.cleanup_pending_uploads(1, 7299);
+  if n <> 1 or exists (select 1 from public.photos where id = cl_p1)
+     or not exists (select 1 from public.photos where id = cl_p2) then
+    raise exception 'RLS FAIL [cleanup pending]: limit 1 did not delete exactly the oldest pending row';
+  end if;
+  -- (re-create p1 to check the returned paths in one call)
+  insert into public.photos (id, user_id, book_id, fingerprint, created_at)
+  values (cl_p1, uid_a, cl_bk2, 'rls-cleanup-pending-1', now() - interval '7302 days');
+  cl_names := null;
+  for r in select * from public.cleanup_pending_uploads(1000, 7299) loop
+    if r.photo_id = cl_p1 then
+      if r.user_id <> uid_a or r.book_id <> cl_bk2
+         or r.paths is distinct from array[uid_a || '/' || cl_bk2 || '/' || cl_p1 || '-original.webp',
+                                           uid_a || '/' || cl_bk2 || '/' || cl_p1 || '-thumb.jpg'] then
+        raise exception 'RLS FAIL [cleanup pending]: wrong row / paths for p1: %', row_to_json(r);
+      end if;
+      cl_names := array_append(cl_names, 'p1');
+    elsif r.photo_id = cl_p2 then
+      if r.paths is distinct from array[]::text[] then
+        raise exception 'RLS FAIL [cleanup pending]: p2 has no objects but paths %', r.paths;
+      end if;
+      cl_names := array_append(cl_names, 'p2');
+    else
+      raise exception 'RLS FAIL [cleanup pending]: unexpected photo % returned', r.photo_id;
+    end if;
+  end loop;
+  if cl_names is distinct from array['p1', 'p2'] and cl_names is distinct from array['p2', 'p1'] then
+    raise exception 'RLS FAIL [cleanup pending]: expected p1 + p2, got %', cl_names;
+  end if;
+  if exists (select 1 from public.photos where id in (cl_p1, cl_p2))
+     or (select count(*) from public.photos where id in (cl_p3, cl_p4)) <> 2 then
+    raise exception 'RLS FAIL [cleanup pending]: ready / recent rows touched or old pending rows kept';
+  end if;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- expired free books: grace, protected books, limit
+  -- ---------------------------------------------------------------------------
+  insert into public.books (user_id, title, is_paid, max_pages, published_at, expires_at) values
+    (uid_a, 'RLS cleanup paid', true, 100, now() - interval '7340 days', now() - interval '7310 days')
+  returning id into cl_ex_paid;
+  insert into public.books (user_id, title, published_at, expires_at) values
+    (uid_a, 'RLS cleanup pending order', now() - interval '7339 days', now() - interval '7309 days')
+  returning id into cl_ex_pend;
+  insert into public.books (user_id, title, published_at, expires_at) values
+    (uid_a, 'RLS cleanup review order', now() - interval '7338 days', now() - interval '7308 days')
+  returning id into cl_ex_rev;
+  insert into public.books (user_id, title, published_at, expires_at) values
+    (uid_a, 'RLS cleanup paid order', now() - interval '7337 days', now() - interval '7307 days')
+  returning id into cl_ex_ord;
+  insert into public.books (user_id, title, published_at, expires_at) values
+    (uid_a, 'RLS cleanup ex1', now() - interval '7335 days', now() - interval '7305 days')
+  returning id into cl_ex1;
+  insert into public.books (user_id, title, published_at, expires_at) values
+    (uid_a, 'RLS cleanup ex2', now() - interval '7334 days', now() - interval '7304 days')
+  returning id into cl_ex2;
+  insert into public.books (user_id, title, published_at, expires_at) values
+    (uid_b, 'RLS cleanup ex3', now() - interval '7333 days', now() - interval '7303 days')
+  returning id into cl_ex3;
+  insert into public.books (user_id, title, published_at, expires_at) values
+    (uid_a, 'RLS cleanup grace', now() - interval '7330 days 12 hours', now() - interval '7300 days 12 hours')
+  returning id into cl_ex_grace;
+  insert into public.orders (user_id, book_id, type, amount, status) values
+    (uid_a, cl_ex_pend, 'digital', 3900, 'pending'),
+    (uid_a, cl_ex_rev,  'digital', 3900, 'needs_review'),
+    (uid_a, cl_ex_ord,  'digital', 3900, 'paid'),
+    (uid_a, cl_ex1,     'digital', 3900, 'expired');
+  insert into public.photos (user_id, book_id, fingerprint) values (uid_a, cl_ex1, 'rls-cleanup-ex1-photo');
+
+  select array_agg(d.book_id order by d.book_id), bool_and(d.user_id = uid_a) into cl_ids, v_bool
+    from public.cleanup_delete_expired_books(2, 7302) as d;
+  if cl_ids is distinct from (select array_agg(x order by x) from unnest(array[cl_ex1, cl_ex2]) as x) or not v_bool then
+    raise exception 'RLS FAIL [cleanup expired]: limit 2 did not delete the 2 oldest unprotected books (%)', cl_ids;
+  end if;
+  if exists (select 1 from public.photos where book_id = cl_ex1)
+     or not exists (select 1 from public.orders where status = 'expired' and book_id is null and user_id = uid_a) then
+    raise exception 'RLS FAIL [cleanup expired]: photos not cascaded or order history lost';
+  end if;
+  select array_agg(d.book_id), bool_and(d.user_id = uid_b) into cl_ids, v_bool
+    from public.cleanup_delete_expired_books(1000, 7302) as d;
+  if cl_ids is distinct from array[cl_ex3] or not v_bool then
+    raise exception 'RLS FAIL [cleanup expired]: protected / in-grace books returned (%)', cl_ids;
+  end if;
+  select array_agg(d.book_id) into cl_ids from public.cleanup_delete_expired_books(1000, 7300) as d;
+  if cl_ids is distinct from array[cl_ex_grace] then
+    raise exception 'RLS FAIL [cleanup expired]: grace window wrong (%)', cl_ids;
+  end if;
+  if (select count(*) from public.books where id in (cl_ex_paid, cl_ex_pend, cl_ex_rev, cl_ex_ord)) <> 4 then
+    raise exception 'RLS FAIL [cleanup expired]: a paid or order-protected book was deleted';
+  end if;
+  begin
+    perform public.cleanup_delete_expired_books(1001, 14);
+    raise exception 'RLS FAIL [cleanup expired]: limit 1001 accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- abandoned drafts + draft warnings
+  -- ---------------------------------------------------------------------------
+  update public.profiles set email_reminders = false where id = uid_b;
+  insert into public.books (user_id, title, updated_at) values
+    (uid_b, 'RLS draft optout', now() - interval '7309 days') returning id into cl_d_optout;
+  insert into public.books (user_id, title, updated_at) values
+    (uid_a, 'RLS draft empty', now() - interval '7308 days') returning id into cl_d_empty;
+  insert into public.books (user_id, title, updated_at, draft_warning_sent_at) values
+    (uid_a, 'RLS draft warned old', now() - interval '7307 days', now() - interval '8 days') returning id into cl_d_wold;
+  insert into public.books (user_id, title, updated_at, draft_warning_sent_at) values
+    (uid_a, 'RLS draft warned recent', now() - interval '7306 days', now() - interval '2 days') returning id into cl_d_wnew;
+  insert into public.books (user_id, title, updated_at, draft_warning_sent_at) values
+    (uid_a, 'RLS draft warned stale', now() - interval '7305 days', now() - interval '7306 days') returning id into cl_d_wstale;
+  insert into public.books (user_id, title, updated_at) values
+    (uid_a, 'RLS draft unwarned', now() - interval '7304 days') returning id into cl_d_unw;
+  insert into public.books (user_id, title, updated_at, is_paid, max_pages) values
+    (uid_a, 'RLS draft paid', now() - interval '7310 days', true, 100) returning id into cl_d_paid;
+  insert into public.books (user_id, title, updated_at) values
+    (uid_a, 'RLS draft order', now() - interval '7310 days') returning id into cl_d_ord;
+  insert into public.books (user_id, title, updated_at) values
+    (uid_a, 'RLS draft fresh photo', now() - interval '7310 days') returning id into cl_d_fresh;
+  insert into public.books (user_id, title, updated_at, published_at) values
+    (uid_a, 'RLS draft published', now() - interval '7310 days', now() - interval '7310 days') returning id into cl_d_pub;
+  insert into public.orders (user_id, book_id, type, amount, status) values (uid_a, cl_d_ord, 'digital', 3900, 'pending');
+  insert into public.photos (user_id, book_id, fingerprint, created_at)
+  select b.user_id, b.id, 'rls-cleanup-draft-' || b.id, b.updated_at
+    from public.books as b
+   where b.id in (cl_d_optout, cl_d_wold, cl_d_wnew, cl_d_wstale, cl_d_unw, cl_d_paid, cl_d_pub);
+  insert into public.photos (user_id, book_id, fingerprint) values (uid_a, cl_d_fresh, 'rls-cleanup-draft-fresh');
+  insert into public.photos (user_id, book_id, fingerprint, created_at)
+  values (uid_a, cl_d_ord, 'rls-cleanup-draft-ord', now() - interval '7310 days');
+
+  -- claims: only unwarned-since-activity, emailable, unprotected drafts with photos; limit; no double claim
+  select count(*), min(w.email), min(w.delete_after) into n, v_txt, cl_ts
+    from public.claim_draft_warnings(1, 7300, 7310) as w;
+  if n <> 1 or v_txt is distinct from 'rls-check-a-' || uid_a || '@example.invalid'
+     or cl_ts < now() + interval '9 days 23 hours' then
+    raise exception 'RLS FAIL [cleanup draft warnings]: limit 1 / email / delete_after wrong (%, %, %)', n, v_txt, cl_ts;
+  end if;
+  select array_agg(w.book_id) into cl_ids from public.claim_draft_warnings(1000, 7300, 7310) as w;
+  if array_length(cl_ids, 1) <> 1 or not (cl_ids[1] in (cl_d_wstale, cl_d_unw)) then
+    raise exception 'RLS FAIL [cleanup draft warnings]: second claim returned %', cl_ids;
+  end if;
+  if (select count(*) from public.books where id in (cl_d_wstale, cl_d_unw)
+        and draft_warning_sent_at > now() - interval '1 minute'
+        and updated_at < now() - interval '7300 days') <> 2 then
+    raise exception 'RLS FAIL [cleanup draft warnings]: claims not recorded, or they bumped updated_at';
+  end if;
+  select count(*) into n from public.claim_draft_warnings(1000, 7300, 7310);
+  if n <> 0 then raise exception 'RLS FAIL [cleanup draft warnings]: % drafts claimed twice', n; end if;
+  if not public.release_warning(cl_d_unw, 'draft') or public.release_warning(cl_d_unw, 'draft') then
+    raise exception 'RLS FAIL [cleanup draft warnings]: release_warning result wrong';
+  end if;
+  select array_agg(w.book_id) into cl_ids from public.claim_draft_warnings(1000, 7300, 7310) as w;
+  if cl_ids is distinct from array[cl_d_unw] then
+    raise exception 'RLS FAIL [cleanup draft warnings]: released draft not re-claimed (%)', cl_ids;
+  end if;
+  begin
+    perform public.release_warning(cl_d_unw, 'bogus');
+    raise exception 'RLS FAIL [cleanup draft warnings]: unknown kind accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.claim_draft_warnings(10, 45, 45);
+    raise exception 'RLS FAIL [cleanup draft warnings]: warn days = delete days accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  checks := checks + 1;
+
+  -- deletion: no photos / not emailable / warned ≥ notice ago; never protected, fresh, published
+  select array_agg(d.book_id) into cl_ids from public.cleanup_delete_abandoned_drafts(1, 7300, 7) as d;
+  if cl_ids is distinct from array[cl_d_optout] then
+    raise exception 'RLS FAIL [cleanup drafts]: limit 1 did not take the oldest eligible draft (%)', cl_ids;
+  end if;
+  select array_agg(d.book_id order by d.book_id) into cl_ids from public.cleanup_delete_abandoned_drafts(1000, 7300, 7) as d;
+  if cl_ids is distinct from (select array_agg(x order by x) from unnest(array[cl_d_empty, cl_d_wold]) as x) then
+    raise exception 'RLS FAIL [cleanup drafts]: wrong drafts deleted (%)', cl_ids;
+  end if;
+  if (select count(*) from public.books
+       where id in (cl_d_wnew, cl_d_wstale, cl_d_unw, cl_d_paid, cl_d_ord, cl_d_fresh, cl_d_pub)) <> 7 then
+    raise exception 'RLS FAIL [cleanup drafts]: a protected / noticed-too-recently / active draft was deleted';
+  end if;
+  begin
+    perform public.cleanup_delete_abandoned_drafts(10, 45, 46);
+    raise exception 'RLS FAIL [cleanup drafts]: notice longer than the idle window accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- expiry warnings
+  -- ---------------------------------------------------------------------------
+  insert into public.books (user_id, title, published_at, expires_at, slug, published_doc, published_rev, last_published_at)
+  values (uid_a, 'RLS warn live', now() - interval '28 days', now() + interval '1 day',
+          'rls-cleanup-' || substr(md5(random()::text), 1, 12), '{"pages":[]}', 0, now())
+  returning id into cl_w1;
+  insert into public.books (user_id, title, published_at, expires_at) values
+    (uid_a, 'RLS warn later',   now() - interval '25 days', now() + interval '5 days')  returning id into cl_w2;
+  insert into public.books (user_id, title, published_at, expires_at) values
+    (uid_a, 'RLS warn expired', now() - interval '31 days', now() - interval '1 hour')  returning id into cl_w3;
+  insert into public.books (user_id, title, published_at, expires_at, is_paid, max_pages) values
+    (uid_a, 'RLS warn paid',    now() - interval '28 days', now() + interval '1 day', true, 100) returning id into cl_w4;
+  insert into public.books (user_id, title, published_at, expires_at) values
+    (uid_a, 'RLS warn order',   now() - interval '28 days', now() + interval '1 day')   returning id into cl_w5;
+  insert into public.books (user_id, title, published_at, expires_at) values
+    (uid_b, 'RLS warn optout',  now() - interval '28 days', now() + interval '1 day')   returning id into cl_w6;
+  insert into public.books (user_id, title, published_at, expires_at, expiry_warning_sent_at) values
+    (uid_a, 'RLS warn done',    now() - interval '28 days', now() + interval '1 day', now() - interval '1 day') returning id into cl_w7;
+  insert into public.orders (user_id, book_id, type, amount, status) values (uid_a, cl_w5, 'digital', 3900, 'pending');
+
+  select array_agg(w.book_id) into cl_ids
+    from public.claim_expiry_warnings(1000, 3) as w
+   where w.book_id in (cl_w1, cl_w2, cl_w3, cl_w4, cl_w5, cl_w6, cl_w7);
+  if cl_ids is distinct from array[cl_w1] then
+    raise exception 'RLS FAIL [cleanup expiry warnings]: expected only the live free book, got %', cl_ids;
+  end if;
+  if not exists (select 1 from public.books where id = cl_w1 and expiry_warning_sent_at is not null) then
+    raise exception 'RLS FAIL [cleanup expiry warnings]: claim not recorded';
+  end if;
+  select count(*) into n from public.claim_expiry_warnings(1000, 3) as w where w.book_id = cl_w1;
+  if n <> 0 then raise exception 'RLS FAIL [cleanup expiry warnings]: book claimed twice'; end if;
+  if not public.release_warning(cl_w1, 'expiry') then
+    raise exception 'RLS FAIL [cleanup expiry warnings]: release_warning did not clear the claim';
+  end if;
+  select * into r from public.claim_expiry_warnings(1000, 3) as w where w.book_id = cl_w1;
+  if not found or not r.is_live or r.title <> 'RLS warn live' or r.user_id <> uid_a
+     or r.email is distinct from 'rls-check-a-' || uid_a || '@example.invalid' then
+    raise exception 'RLS FAIL [cleanup expiry warnings]: re-claim after release wrong (%)', row_to_json(r);
+  end if;
+  begin
+    perform public.claim_expiry_warnings(10, 0);
+    raise exception 'RLS FAIL [cleanup expiry warnings]: 0 days accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- old export rows (D-051 amended): only superseded / failed, finished long ago
+  -- ---------------------------------------------------------------------------
+  insert into public.books (user_id, title) values (uid_a, 'RLS cleanup exports') returning id into cl_bk3;
+  cl_e1 := gen_random_uuid();
+  insert into public.exports (book_id, user_id, doc_rev, doc, status, purged_at, finished_at, created_at) values
+    (cl_bk3, uid_a, 0, '{}', 'superseded', now() - interval '7300 days', now() - interval '7300 days', now() - interval '7300 days');
+  insert into public.exports (book_id, user_id, doc_rev, doc, status, error_code, finished_at, created_at) values
+    (cl_bk3, uid_a, 0, '{}', 'failed', 'stale', now() - interval '7300 days', now() - interval '7300 days');
+  insert into public.exports (id, book_id, user_id, doc_rev, doc, status, path, bytes, page_count, finished_at, created_at)
+  values (cl_e1, cl_bk3, uid_a, 0, '{}', 'ready', uid_a || '/' || cl_bk3 || '/' || cl_e1 || '.pdf', 100, 2,
+          now() - interval '7300 days', now() - interval '7300 days');
+  insert into public.exports (book_id, user_id, doc_rev, doc, status, purged_at, finished_at) values
+    (cl_bk3, uid_a, 0, '{}', 'superseded', now() - interval '1 day', now() - interval '1 day');
+  insert into public.exports (book_id, user_id, doc_rev, doc, status, created_at) values
+    (cl_bk3, uid_a, 0, '{}', 'queued', now() - interval '7300 days');
+  n := public.cleanup_old_exports(7299);
+  if n <> 2
+     or (select count(*) from public.exports where book_id = cl_bk3) <> 3
+     or exists (select 1 from public.exports where book_id = cl_bk3 and status = 'failed')
+     or not exists (select 1 from public.exports where book_id = cl_bk3 and status = 'superseded')
+     or not exists (select 1 from public.exports where id = cl_e1 and status = 'ready')
+     or not exists (select 1 from public.exports where book_id = cl_bk3 and status = 'queued') then
+    raise exception 'RLS FAIL [cleanup old exports]: deleted % rows; expected the 2 old superseded/failed only', n;
+  end if;
+  begin
+    perform public.cleanup_old_exports(0);
+    raise exception 'RLS FAIL [cleanup old exports]: 0 days accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- unlock attempts
+  -- ---------------------------------------------------------------------------
+  insert into public.book_unlock_attempts (book_id, ip_hash, created_at) values
+    (cl_bk3, 'rls-cleanup-ip-old',    now() - interval '400 days'),
+    (cl_bk3, 'rls-cleanup-ip-25h',    now() - interval '25 hours'),
+    (cl_bk3, 'rls-cleanup-ip-recent', now() - interval '23 hours');
+  n := public.cleanup_unlock_attempts(8760);
+  if n < 1 or exists (select 1 from public.book_unlock_attempts where ip_hash = 'rls-cleanup-ip-old')
+     or not exists (select 1 from public.book_unlock_attempts where ip_hash = 'rls-cleanup-ip-25h') then
+    raise exception 'RLS FAIL [cleanup unlock attempts]: 1-year sweep wrong';
+  end if;
+  n := public.cleanup_unlock_attempts(24);
+  if n < 1 or exists (select 1 from public.book_unlock_attempts where ip_hash = 'rls-cleanup-ip-25h')
+     or not exists (select 1 from public.book_unlock_attempts where ip_hash = 'rls-cleanup-ip-recent') then
+    raise exception 'RLS FAIL [cleanup unlock attempts]: 24 h sweep wrong';
+  end if;
+  begin
+    perform public.cleanup_unlock_attempts(23);
+    raise exception 'RLS FAIL [cleanup unlock attempts]: window shorter than the 24 h rate limit accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- stale agent runs: idle + no live lease → failed 'stale'; book status settled
+  -- ---------------------------------------------------------------------------
+  insert into public.books (user_id, title, ai_status) values (uid_a, 'RLS reap 1', 'planning') returning id into cl_rb1;
+  insert into public.books (user_id, title, ai_status, doc) values
+    (uid_a, 'RLS reap 2', 'captioning', '{"pages":[{"n":1}]}') returning id into cl_rb2;
+  insert into public.books (user_id, title, ai_status) values (uid_a, 'RLS reap 3', 'analyzing') returning id into cl_rb3;
+  insert into public.books (user_id, title, ai_status) values (uid_a, 'RLS reap 4', 'analyzing') returning id into cl_rb4;
+  insert into public.books (user_id, title) values (uid_a, 'RLS reap 5') returning id into cl_rb5;
+  insert into public.agent_runs (book_id, user_id, trigger, mode, state, updated_at, started_at)
+  values (cl_rb1, uid_a, 'build', 'live', 'curating', now() - interval '2 hours', now() - interval '3 hours')
+  returning id into cl_r1;
+  insert into public.agent_runs (book_id, user_id, trigger, mode, state, cursor, lease_until, lease_token, updated_at, started_at)
+  values (cl_rb2, uid_a, 'rebuild', 'live', 'captioning', '{"prevBookStatus":"done"}', now() - interval '90 minutes',
+          gen_random_uuid(), now() - interval '2 hours', now() - interval '3 hours')
+  returning id into cl_r2;
+  insert into public.agent_runs (book_id, user_id, trigger, mode, state, lease_until, lease_token, updated_at, started_at)
+  values (cl_rb3, uid_a, 'build', 'live', 'storytelling', now() + interval '1 minute', gen_random_uuid(),
+          now() - interval '2 hours', now() - interval '3 hours')
+  returning id into cl_r3;
+  insert into public.agent_runs (book_id, user_id, trigger, mode, state, updated_at, started_at)
+  values (cl_rb4, uid_a, 'build', 'live', 'curating', now() - interval '10 minutes', now() - interval '3 hours')
+  returning id into cl_r4;
+  insert into public.agent_runs (book_id, user_id, trigger, mode, state, updated_at, started_at)
+  values (cl_rb5, uid_a, 'rewrite', 'live', 'rewriting', now() - interval '2 hours', now() - interval '2 hours')
+  returning id into cl_r5;
+  insert into public.agent_runs (book_id, user_id, trigger, mode, state, ai_status, updated_at, started_at, finished_at)
+  values (cl_rb5, uid_a, 'build', 'live', 'done', 'ok', now() - interval '5 hours', now() - interval '5 hours', now() - interval '5 hours')
+  returning id into cl_r6;
+
+  n := public.reap_stale_agent_runs(1);
+  if n < 3
+     or (select count(*) from public.agent_runs
+          where id in (cl_r1, cl_r2, cl_r5) and state = 'failed' and ai_status = 'failed' and error_code = 'stale'
+            and finished_at is not null and lease_token is null and lease_until is null) <> 3 then
+    raise exception 'RLS FAIL [cleanup reaper]: stale runs not failed (n = %)', n;
+  end if;
+  if not exists (select 1 from public.agent_runs where id = cl_r1 and progress ->> 'phase' = 'failed') then
+    raise exception 'RLS FAIL [cleanup reaper]: progress.phase not failed';
+  end if;
+  if not exists (select 1 from public.agent_runs where id = cl_r3 and state = 'storytelling' and lease_token is not null)
+     or not exists (select 1 from public.agent_runs where id = cl_r4 and state = 'curating')
+     or not exists (select 1 from public.agent_runs where id = cl_r6 and state = 'done' and error_code is null) then
+    raise exception 'RLS FAIL [cleanup reaper]: a live-lease / active / finished run was reaped';
+  end if;
+  if not exists (select 1 from public.books where id = cl_rb1 and ai_status = 'failed')
+     or not exists (select 1 from public.books where id = cl_rb2 and ai_status = 'done')
+     or not exists (select 1 from public.books where id = cl_rb3 and ai_status = 'analyzing')
+     or not exists (select 1 from public.books where id = cl_rb5 and ai_status = 'idle') then
+    raise exception 'RLS FAIL [cleanup reaper]: book ai_status not settled as expected';
+  end if;
+  begin
+    perform public.reap_stale_agent_runs(0);
+    raise exception 'RLS FAIL [cleanup reaper]: 0 hours accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- admin_ai_spend_daily: Asia/Dubai days, filled, newest first
+  -- ---------------------------------------------------------------------------
+  cl_day := (now() at time zone 'Asia/Dubai')::date;
+  select * into r from public.admin_ai_spend_daily(2) as s where s.day = cl_day;
+  cl_usd := r.usd; cl_n1 := r.runs; cl_n2 := r.failed; cl_n3 := r.null_book_runs;
+  cl_usd2 := r.build_usd; cl_usd3 := r.rewrite_usd;
+  select s.usd into cl_usd4 from public.admin_ai_spend_daily(2) as s where s.day = cl_day - 1;
+  insert into public.agent_runs (book_id, user_id, trigger, mode, state, total_cost_usd, started_at, finished_at) values
+    (cl_rb5, uid_a, 'build',   'live', 'failed', 1.25, (cl_day::timestamp at time zone 'Asia/Dubai') + interval '1 second', now()),
+    (null,   uid_a, 'rewrite', 'live', 'done',   0.5,  (cl_day::timestamp at time zone 'Asia/Dubai') + interval '2 seconds', now()),
+    (null,   uid_a, 'build',   'live', 'done',   2.0,  (cl_day::timestamp at time zone 'Asia/Dubai') - interval '1 second', now());
+  select count(*), min(s.day), max(s.day) into n, cl_day2, cl_day3 from public.admin_ai_spend_daily(2) as s;
+  if n <> 2 or cl_day2 <> cl_day - 1 or cl_day3 <> cl_day
+     or (select s.day from public.admin_ai_spend_daily(2) as s limit 1) <> cl_day then
+    raise exception 'RLS FAIL [cleanup ai spend]: expected 2 days, newest first';
+  end if;
+  select * into r from public.admin_ai_spend_daily(2) as s where s.day = cl_day;
+  if r.usd - cl_usd <> 1.75 or r.runs - cl_n1 <> 2 or r.failed - cl_n2 <> 1 or r.null_book_runs - cl_n3 <> 1
+     or r.build_usd - cl_usd2 <> 1.25 or r.rewrite_usd - cl_usd3 <> 0.5 then
+    raise exception 'RLS FAIL [cleanup ai spend]: today''s totals wrong (%)', row_to_json(r);
+  end if;
+  select s.usd into cl_usd from public.admin_ai_spend_daily(2) as s where s.day = cl_day - 1;
+  if cl_usd - cl_usd4 <> 2.0 then
+    raise exception 'RLS FAIL [cleanup ai spend]: a run 1 s before Dubai midnight not counted on the previous day';
+  end if;
+  begin
+    perform public.admin_ai_spend_daily(0);
+    raise exception 'RLS FAIL [cleanup ai spend]: 0 days accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  reset role;
   checks := checks + 1;
 
   -- ---------------------------------------------------------------------------

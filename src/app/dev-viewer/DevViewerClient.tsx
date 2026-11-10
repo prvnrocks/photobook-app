@@ -6,8 +6,18 @@ import { useMemo } from "react";
 import { ViewerShell } from "@/components/viewer/ViewerShell";
 import { devViewerDoc, devViewerPhotos } from "@/lib/viewer/dev-fixture";
 
-export function DevViewerClient({ paid, lang }: { paid: boolean; lang: "en" | "ar" }) {
-  const doc = useMemo(() => devViewerDoc({ lang }), [lang]);
+export function DevViewerClient({
+  paid,
+  lang,
+  pages,
+  background,
+}: {
+  paid: boolean;
+  lang: "en" | "ar";
+  pages: number;
+  background: string;
+}) {
+  const doc = useMemo(() => devViewerDoc({ lang, pages, background }), [lang, pages, background]);
   const photos = useMemo(() => devViewerPhotos(), []);
   const shareUrl = "https://example.com/b/dev-viewer";
   return (
