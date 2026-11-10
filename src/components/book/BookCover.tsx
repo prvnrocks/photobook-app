@@ -2,7 +2,7 @@
 // Rendered through <BookPage page="cover"> in editor, viewer and print; can also be used directly.
 
 import type { ReactNode } from "react";
-import { coverRenderModel, type RenderPhotos } from "@/lib/book/render";
+import { backgroundColor, coverRenderModel, type RenderPhotos } from "@/lib/book/render";
 import type { BookDoc } from "@/lib/book/types";
 import { Box, PageFrame, PhotoSlot, type BookRenderMode } from "./PageParts";
 
@@ -25,7 +25,7 @@ export function BookCover({ doc, mode, photos, captionLang, renderSlotOverlay, r
   const m = coverRenderModel(doc, photos, captionLang, { bleed: mode === "print" });
   return (
     <PageFrame
-      background={doc.style.background}
+      background={backgroundColor(doc.style.background)}
       mode={mode}
       className={className}
       data={{ "data-page": "cover", "data-layout": m.layoutId }}

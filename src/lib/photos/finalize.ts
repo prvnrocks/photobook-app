@@ -21,6 +21,7 @@ import "server-only";
 import { autolayout, type AutoPhoto } from "@/lib/autolayout";
 import { limitsFor } from "@/lib/ai/limits";
 import { CAPTION_LANGS, OCCASIONS, type CaptionLang, type Occasion } from "@/lib/book/options";
+import { serializeDoc } from "@/lib/book/doc-version";
 import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import type { BookDoc } from "@/lib/book/types";
 import { getMyBook, writeDocIfEmpty, type MyBook } from "@/lib/db/books";
@@ -287,7 +288,7 @@ export async function finalizeBook(
     } else {
       wroteDoc = await db.writeDocIfEmpty(
         book.id,
-        doc as unknown as Json,
+        serializeDoc(doc) as unknown as Json,
         doc.pages.length,
         book.updated_at,
       );

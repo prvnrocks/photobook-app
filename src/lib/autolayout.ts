@@ -141,7 +141,7 @@ export function autolayout(photos: AutoPhoto[], opts: AutolayoutOptions): BookDo
 
   const coverPhoto = pickCover(kept);
   const doc: BookDoc = {
-    version: 1,
+    version: 2,
     format: "A5_PORTRAIT",
     occasion: opts.occasion,
     cover: {
@@ -152,7 +152,11 @@ export function autolayout(photos: AutoPhoto[], opts: AutolayoutOptions): BookDo
     },
     chapters,
     pages,
-    style: { background: "#FFFFFF", font: opts.captionLang === "ar" ? "Cairo" : "Playfair" },
+    style: {
+      background: { kind: "color", hex: "#FFFFFF" },
+      designStyle: "classic",
+      font: opts.captionLang === "ar" ? "Cairo" : "Playfair",
+    },
     meta: ruleMeta(opts),
   };
 

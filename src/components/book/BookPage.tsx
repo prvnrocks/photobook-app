@@ -5,6 +5,8 @@
 
 import type { ReactNode } from "react";
 import {
+  backgroundColor,
+  effectiveBackground,
   CAPTION_FONT_SIZE_CQW,
   CAPTION_LINE_HEIGHT,
   pageRenderModel,
@@ -63,7 +65,7 @@ export function BookPage(props: BookPageProps) {
 
   const m = pageRenderModel(doc, page, photos, captionLang, { bleed: mode === "print" });
   if (!m) {
-    return <PageFrame background={doc.style.background} mode={mode} className={className} data={{ "data-page": "missing" }} />;
+    return <PageFrame background={backgroundColor(doc.style.background)} mode={mode} className={className} data={{ "data-page": "missing" }} />;
   }
 
   const c = m.caption;
@@ -71,7 +73,7 @@ export function BookPage(props: BookPageProps) {
 
   return (
     <PageFrame
-      background={doc.style.background}
+      background={backgroundColor(effectiveBackground(doc, doc.pages[page]))}
       mode={mode}
       className={className}
       data={{ "data-page": String(page), "data-page-id": m.pageId, "data-layout": m.layoutId }}

@@ -1,9 +1,15 @@
 // Zod schemas for the book document (`books.doc`) — the single source of truth rendered by
 // editor, flipbook viewer and PDF. See docs/PLAN.md → "Book document format".
 // Pure (no server-only): used by client editor, API routes and the AI pipeline.
+//
+// Two stored versions (M10, D-062): v1 (M1–M9: A5 portrait, hex background) and v2 (formats,
+// Background union, design style, page backgrounds). parseBookDoc accepts both and ALWAYS returns
+// v2 (src/lib/book/doc-version.ts upgrades v1 1:1); writers go through serializeDoc, which writes
+// v1 whenever the doc uses no v2-only feature, so existing books stay byte-identical.
 
 import { z } from "zod";
 import { LIMITS } from "@/lib/ai/limits";
+import { BACKGROUND_VEIL_MAX, BACKGROUND_VEIL_MIN, TEXTURE_IDS } from "@/lib/design/backgrounds";
 import { getLayout } from "@/lib/layouts";
 import { codePointLength, hasLoneSurrogate } from "@/lib/text/clip";
 import { BOOK_TITLE_MAX_CODE_POINTS, CAPTION_LANGS, OCCASIONS, TONES } from "./options";
@@ -69,16 +75,88 @@ export const CoverSchema = z.object({
   subtitle: text(120),
 });
 
+export const HexColorSchema = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
+
+// --- Backgrounds (v2) ----------------------------------------------------------------------------
+// The texture ids and veil range come from src/lib/design/backgrounds.ts (catalogue + rendering
+// helpers); the zod schema — and the `Background` type inferred from it — live here. Strict:
+// an unknown key inside a background rejects the doc (never silently dropped).
+
+export const ColorBackgroundSchema = z.strictObject({ kind: z.literal("color"), hex: HexColorSchema });
+export const TextureBackgroundSchema = z.strictObject({
+  kind: z.literal("texture"),
+  textureId: z.enum(TEXTURE_IDS),
+  /** Optional #RRGGBB multiplied over the texture. */
+  tint: HexColorSchema.optional(),
+});
+export const PhotoBackgroundSchema = z.strictObject({
+  kind: z.literal("photo"),
+  /** photos.id (uuid) of one of the book's photos. */
+  photoId: z.uuid(),
+  /** Veil opacity over the photo (faded photo look; no blur — D-062 / plan decision 10). */
+  veil: z.number().min(BACKGROUND_VEIL_MIN).max(BACKGROUND_VEIL_MAX),
+  veilColor: HexColorSchema,
+});
+
+export const BackgroundSchema = z.discriminatedUnion("kind", [
+  ColorBackgroundSchema,
+  TextureBackgroundSchema,
+  PhotoBackgroundSchema,
+]);
+
+/** Who chose a page background: AI never overwrites a "user" background. Required. */
+export const BackgroundSourceSchema = z.enum(["ai", "user"]);
+const withSource = { source: BackgroundSourceSchema };
+export const PageBackgroundSchema = z.discriminatedUnion("kind", [
+  ColorBackgroundSchema.extend(withSource),
+  TextureBackgroundSchema.extend(withSource),
+  PhotoBackgroundSchema.extend(withSource),
+]);
+
+export const BOOK_FORMATS = ["A5_PORTRAIT", "A5_LANDSCAPE"] as const;
+export const BookFormatSchema = z.enum(BOOK_FORMATS);
+export const DESIGN_STYLES = ["classic", "modern", "geometric", "scrapbook"] as const;
+export const DesignStyleSchema = z.enum(DESIGN_STYLES);
+export const DEFAULT_DESIGN_STYLE = "classic" satisfies (typeof DESIGN_STYLES)[number];
+
+/** Slots per page: v1 docs keep the M1–M9 cap; v2 allows dense grids (M10b). */
+export const MAX_SLOTS_V1 = 8;
+export const MAX_SLOTS_V2 = 12;
+
+// --- Page + style, v1 (stored by M1–M9) ----------------------------------------------------------
+
+export const PageSchemaV1 = z.object({
+  id: IdSchema,
+  chapterId: IdSchema.nullable(),
+  layout: IdSchema,
+  slots: z.array(SlotSchema).max(MAX_SLOTS_V1),
+  caption: CaptionSchema.nullable(),
+});
+
+export const StyleSchemaV1 = z.object({
+  background: HexColorSchema,
+  font: FontSchema,
+});
+
+// --- Page + style, v2 (in-memory shape everywhere) -----------------------------------------------
+
 export const PageSchema = z.object({
   id: IdSchema,
   chapterId: IdSchema.nullable(),
   layout: IdSchema,
-  slots: z.array(SlotSchema).max(8),
+  slots: z.array(SlotSchema).max(MAX_SLOTS_V2),
   caption: CaptionSchema.nullable(),
+  /** Page override of style.background; absent/null = the book default. */
+  background: PageBackgroundSchema.nullable().optional(),
+  /** Half of a spread layout (M10b, plan decision 2). Accepted now, not used yet. */
+  side: z.enum(["left", "right"]).optional(),
 });
 
 export const StyleSchema = z.object({
-  background: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  /** Book default background. */
+  background: BackgroundSchema,
+  /** Absent = "classic". */
+  designStyle: DesignStyleSchema.optional(),
   font: FontSchema,
 });
 
@@ -105,9 +183,22 @@ export const DocMetaSchema = z
   })
   .strict();
 
-export const BookDocSchema = z.object({
+/** The stored M1–M9 shape. Only used to read old rows and by serializeDoc's v1 output. */
+export const BookDocV1Schema = z.object({
   version: z.literal(1),
   format: z.literal("A5_PORTRAIT"),
+  occasion: OccasionSchema,
+  cover: CoverSchema,
+  chapters: z.array(ChapterSchema).max(100),
+  pages: z.array(PageSchemaV1).max(LIMITS.paid.maxPages),
+  style: StyleSchemaV1,
+  meta: DocMetaSchema.optional(),
+});
+
+/** v2 — what parseBookDoc returns and every renderer/editor/AI step works on. */
+export const BookDocSchema = z.object({
+  version: z.literal(2),
+  format: BookFormatSchema,
   occasion: OccasionSchema,
   cover: CoverSchema,
   chapters: z.array(ChapterSchema).max(100),
@@ -141,14 +232,49 @@ export type ParseResult =
   | { ok: true; doc: z.infer<typeof BookDocSchema> }
   | { ok: false; issues: string[] };
 
-/** Shape check only. Issues contain paths + zod codes, never field values. */
+/**
+ * Shape check only. Accepts a stored v1 or v2 doc and ALWAYS returns v2 (v1 is upgraded 1:1, see
+ * upgradeDocV1). `version` picks the schema; anything else (missing, 3, …) is checked against v2
+ * so the issue list names the version. Issues contain paths + zod codes, never field values.
+ */
 export function parseBookDoc(input: unknown): ParseResult {
+  const version = input !== null && typeof input === "object" ? (input as { version?: unknown }).version : undefined;
+  if (version === 1) {
+    const r = BookDocV1Schema.safeParse(input);
+    if (r.success) return { ok: true, doc: upgradeV1(r.data) };
+    return { ok: false, issues: zodIssues(r.error) };
+  }
   const r = BookDocSchema.safeParse(input);
   if (r.success) return { ok: true, doc: r.data };
-  return {
-    ok: false,
-    issues: r.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.code}`),
+  return { ok: false, issues: zodIssues(r.error) };
+}
+
+function zodIssues(error: z.ZodError): string[] {
+  return error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.code}`);
+}
+
+/**
+ * v1 → v2, 1:1 (re-exported as upgradeDocV1 from doc-version.ts). Lives here so parseBookDoc has
+ * no import cycle. Only copies known keys: the result must serialize back to the same v1 JSON.
+ */
+export function upgradeV1(v1: z.infer<typeof BookDocV1Schema>): z.infer<typeof BookDocSchema> {
+  const doc: z.infer<typeof BookDocSchema> = {
+    version: 2,
+    format: v1.format,
+    occasion: v1.occasion,
+    cover: { ...v1.cover },
+    chapters: v1.chapters.map((c) => ({ ...c })),
+    pages: v1.pages.map((p) => ({
+      id: p.id,
+      chapterId: p.chapterId,
+      layout: p.layout,
+      slots: p.slots.map((s) => ({ photoId: s.photoId, crop: { ...s.crop } })),
+      caption: p.caption === null ? null : { ...p.caption },
+    })),
+    style: { background: { kind: "color", hex: v1.style.background }, designStyle: DEFAULT_DESIGN_STYLE, font: v1.style.font },
   };
+  if (v1.meta !== undefined) doc.meta = { ...v1.meta };
+  return doc;
 }
 
 export interface ValidateOptions {
@@ -160,7 +286,8 @@ export interface ValidateOptions {
 /**
  * Semantic checks on a shape-valid doc: layouts exist and match role, slot count == photoCount,
  * photos exist and are used at most once in pages (the cover photo may appear once more),
- * page count ≤ maxPages, chapter/page ids unique, chapterIds exist.
+ * page count ≤ maxPages, chapter/page ids unique, chapterIds exist, photo backgrounds (book
+ * default and page overrides) use a known photo — a background photo may also be on a page.
  * Returns [] when valid. Issue strings contain indices and layout ids only — no user data.
  */
 export function validateBookDoc(
@@ -174,6 +301,10 @@ export function validateBookDoc(
   else if (coverLayout.role !== "cover") issues.push(`cover: layout "${coverLayout.id}" is not a cover layout`);
   if (doc.cover.photoId !== null && !photoIds.has(doc.cover.photoId)) {
     issues.push("cover: unknown photo");
+  }
+
+  if (doc.style.background.kind === "photo" && !photoIds.has(doc.style.background.photoId)) {
+    issues.push("style.background: unknown photo");
   }
 
   if (doc.pages.length > maxPages) {
@@ -195,6 +326,9 @@ export function validateBookDoc(
 
     if (page.chapterId !== null && !chapterIds.has(page.chapterId)) {
       issues.push(`${at}: unknown chapter`);
+    }
+    if (page.background?.kind === "photo" && !photoIds.has(page.background.photoId)) {
+      issues.push(`${at}.background: unknown photo`);
     }
 
     const layout = getLayout(page.layout);

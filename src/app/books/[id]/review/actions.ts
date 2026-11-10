@@ -8,6 +8,7 @@ import { getCurrentUser } from "@/lib/auth/current-user";
 import { CAPTION_LANGS, OCCASIONS, type CaptionLang, type Occasion } from "@/lib/book/options";
 import { relayoutDoc, type RelayoutPhoto } from "@/lib/book/relayout";
 import { isEmptyDoc, isReplaceableDoc } from "@/lib/book/replaceable";
+import { serializeDoc } from "@/lib/book/doc-version";
 import { parseBookDoc } from "@/lib/book/schema";
 import type { BookDoc } from "@/lib/book/types";
 import { getActiveRunForBook } from "@/lib/db/agent-runs";
@@ -84,7 +85,7 @@ export async function updateAlbumAction(bookId: string): Promise<UpdateAlbumResu
       // guard "relayout" (D-031): user captions don't block Update album — relayoutDoc keeps them.
       const write = await writeDocIfReplaceable(
         book.id,
-        doc as unknown as Json,
+        serializeDoc(doc) as unknown as Json,
         doc.pages.length,
         { updatedAt: book.updated_at },
         { guard: "relayout" },

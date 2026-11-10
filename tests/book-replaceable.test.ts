@@ -37,7 +37,8 @@ describe("BookDocSchema meta", () => {
   it("M2-shaped doc without meta still parses (meta stays absent)", () => {
     const doc = parsed(m2Doc());
     expect(doc.meta).toBeUndefined();
-    expect(doc.version).toBe(1);
+    // Stored as v1; parseBookDoc returns the upgraded v2 doc (M10a).
+    expect(doc.version).toBe(2);
   });
 
   it("meta round-trips through parseBookDoc", () => {

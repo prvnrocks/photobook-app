@@ -35,7 +35,7 @@ const page = (id: string, chapterId: string | null, layout: string, photoIds: st
 
 function aiDoc(): BookDoc {
   return {
-    version: 1,
+    version: 2,
     format: "A5_PORTRAIT",
     occasion: "travel",
     cover: { layout: "cover", photoId: "a1", title: "Our UAE Weekend", subtitle: "Sun, sand and family" },
@@ -49,7 +49,7 @@ function aiDoc(): BookDoc {
       page("p3", "c1", "two-horizontal", ["a4", "a5"]),
       page("p4", "c2", "three-mixed", ["b1", "b2", "b3"]),
     ],
-    style: { background: "#FFFFFF", font: "Playfair" },
+    style: { background: { kind: "color", hex: "#FFFFFF" }, designStyle: "classic", font: "Playfair" },
     meta: { generator: "ai", generatorVersion: 2, runId: RUN, userEdited: false },
   };
 }

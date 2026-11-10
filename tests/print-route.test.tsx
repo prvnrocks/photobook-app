@@ -56,13 +56,13 @@ function docPage(i: number): DocPage {
 
 function makeDoc(pageCount: number): BookDoc {
   return {
-    version: 1,
+    version: 2,
     format: "A5_PORTRAIT",
     occasion: "wedding",
     cover: { layout: "cover", photoId: pid(0), title: "Sara & Omar", subtitle: "Abu Dhabi" },
     chapters: [],
     pages: Array.from({ length: pageCount }, (_, i) => docPage(i)),
-    style: { background: "#F5EFE6", font: "Playfair" },
+    style: { background: { kind: "color", hex: "#F5EFE6" }, designStyle: "classic", font: "Playfair" },
   };
 }
 

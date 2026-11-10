@@ -2,6 +2,7 @@
 // the book document + layout data. Pure (no React, no DOM) so editor, flipbook viewer and print
 // produce identical output and the maths is unit-testable. Components only map this to markup.
 
+import { textureById } from "@/lib/design/backgrounds";
 import { getLayout } from "@/lib/layouts";
 import { captionTextAttrs, isMainlyArabic } from "@/lib/review/ui";
 import { cropToStyle, DEFAULT_CROP, type CropStyle } from "./crop";
@@ -16,7 +17,7 @@ import {
 } from "./fonts";
 import { bleedRect } from "./bleed";
 import { slotSizeMm } from "./resolution";
-import type { BookDoc, Caption, Crop, Rect } from "./types";
+import type { Background, BookDoc, BookPage, Caption, Crop, Rect } from "./types";
 
 /** A photo as the renderer needs it: a signed URL (web copy) + the stored pixel size. */
 export interface RenderPhoto {
@@ -79,6 +80,28 @@ export interface CoverRenderModel {
   textRect: Rect | null;
   title: RenderText & { sizeCqw: number };
   subtitle: RenderText;
+}
+
+/**
+ * Plain CSS colour for a background (doc v2 `Background`). Colour → its hex, exactly the string a
+ * v1 doc stored, so colour-only books render byte-identically. Texture → the texture's base colour,
+ * photo → the veil colour: placeholders until texture/photo layers are rendered (M10a A6), and
+ * the colour under those layers afterwards. Unknown texture → white.
+ */
+export function backgroundColor(bg: Background): string {
+  switch (bg.kind) {
+    case "color":
+      return bg.hex;
+    case "texture":
+      return textureById(bg.textureId)?.baseHex ?? "#FFFFFF";
+    case "photo":
+      return bg.veilColor;
+  }
+}
+
+/** The background a page shows: its own override (`page.background`), else the book default. */
+export function effectiveBackground(doc: Pick<BookDoc, "style">, page?: Pick<BookPage, "background"> | null): Background {
+  return page?.background ?? doc.style.background;
 }
 
 /** Page caption type size (cqw = % of page width) and line height — shared by the static caption

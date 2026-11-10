@@ -18,6 +18,7 @@
 import { type NextRequest } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { serializeDoc } from "@/lib/book/doc-version";
 import { validateEditorDoc } from "@/lib/book/validate-editor-doc";
 import { isSameOrigin } from "@/lib/auth/same-origin";
 import { getMyBook, saveDocIfRev } from "@/lib/db/books";
@@ -77,7 +78,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const saved = await saveDocIfRev(
       book.id,
       user.id,
-      result.doc as unknown as Json,
+      serializeDoc(result.doc) as unknown as Json,
       result.pageCount,
       baseRev,
       result.title === null ? {} : { title: result.title },

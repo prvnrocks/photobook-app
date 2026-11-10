@@ -82,7 +82,8 @@ export function momentIdsOfChapters(doc: Pick<BookDoc, "chapters">): Map<string,
 }
 
 function isDoc(x: BookDoc | AlbumPlan): x is BookDoc {
-  return (x as BookDoc).version === 1 && Array.isArray((x as BookDoc).pages);
+  // In-memory docs are v2 (parseBookDoc upgrades v1); an AlbumPlan has `moments`, never `pages`.
+  return (x as BookDoc).version === 2 && Array.isArray((x as BookDoc).pages);
 }
 
 function momentsOf(src: BookDoc | AlbumPlan): SourceMoment[] {

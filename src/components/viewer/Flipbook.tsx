@@ -35,6 +35,7 @@ import {
   type Ref,
 } from "react";
 import { BookPage, type RenderPhotos } from "@/components/book/BookPage";
+import { backgroundColor } from "@/lib/book/render";
 import type { BookDoc } from "@/lib/book/types";
 import { fitBook, PAGE_RATIO_H, PAGE_RATIO_W, SPREAD_MEDIA_QUERY } from "@/lib/viewer/fit";
 import { flipLayout, flipPageKind, startIndexFor, type FlipLayout } from "@/lib/viewer/pages";
@@ -137,7 +138,7 @@ function WindowedPage({ index }: { index: number }) {
   const kind = flipPageKind(ctx.layout, index).kind;
   if (kind === "end") return <>{ctx.endPage}</>;
   if (kind === "filler") {
-    return <div className="aspect-[148/210] w-full" style={{ background: ctx.doc.style.background }} data-filler="true" />;
+    return <div className="aspect-[148/210] w-full" style={{ background: backgroundColor(ctx.doc.style.background) }} data-filler="true" />;
   }
   const inWin = inPhotoWindow(ctx.win, index);
   return (

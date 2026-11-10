@@ -59,7 +59,7 @@ const ROWS = [row("a1", "2026-10-12T10:00:00"), row("a2", "2026-10-12T11:00:00")
 
 function aiDoc(userEdited = false): BookDoc {
   return {
-    version: 1,
+    version: 2,
     format: "A5_PORTRAIT",
     occasion: "travel",
     cover: { layout: "cover", photoId: "a1", title: "Weekend", subtitle: "" },
@@ -77,7 +77,7 @@ function aiDoc(userEdited = false): BookDoc {
         caption: null,
       },
     ],
-    style: { background: "#FFFFFF", font: "Playfair" },
+    style: { background: { kind: "color", hex: "#FFFFFF" }, designStyle: "classic", font: "Playfair" },
     meta: { generator: "ai", generatorVersion: 2, runId: RUN, userEdited },
   };
 }

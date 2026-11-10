@@ -64,13 +64,13 @@ function setup(baseRev = 1) {
 
 function mk(title: string): BookDoc {
   return {
-    version: 1,
+    version: 2,
     format: "A5_PORTRAIT",
     occasion: "travel",
     cover: { layout: "cover", photoId: null, title, subtitle: "" },
     chapters: [],
     pages: [],
-    style: { background: "#FFFFFF", font: "Playfair" },
+    style: { background: { kind: "color", hex: "#FFFFFF" }, designStyle: "classic", font: "Playfair" },
   };
 }
 

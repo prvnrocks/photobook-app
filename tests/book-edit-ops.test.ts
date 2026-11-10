@@ -34,7 +34,7 @@ const pg = (id: string, chapterId: string | null, layout: string, ids: (string |
 
 function base(): BookDoc {
   return {
-    version: 1,
+    version: 2,
     format: "A5_PORTRAIT",
     occasion: "travel",
     cover: { layout: "cover", photoId: "ph1", title: "Weekend", subtitle: "Abu Dhabi" },
@@ -50,7 +50,7 @@ function base(): BookDoc {
       pg("p4", "c2", "four-grid", ["ph7", "ph8", "ph9", "ph10"]),
       pg("p5", "c3", "full-page", ["ph11"]),
     ],
-    style: { background: "#FFFFFF", font: "Playfair" },
+    style: { background: { kind: "color", hex: "#FFFFFF" }, designStyle: "classic", font: "Playfair" },
     meta: { generator: "ai", generatorVersion: 2, runId: null, userEdited: false },
   };
 }

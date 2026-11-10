@@ -346,7 +346,7 @@ describe("autolayout — cover & style", () => {
     expect(autolayout([], { ...OPTS, title: "Sara & Omar" }).cover.title).toBe("Sara & Omar");
     expect(autolayout([], { ...OPTS, title: "   " }).cover.title).toBe("Our Travels");
     expect(autolayout([], { ...OPTS, occasion: "wedding" }).cover.title).toBe("Our Wedding");
-    expect(autolayout([], OPTS).style).toEqual({ background: "#FFFFFF", font: "Playfair" });
+    expect(autolayout([], OPTS).style).toEqual({ background: { kind: "color", hex: "#FFFFFF" }, designStyle: "classic", font: "Playfair" });
     expect(autolayout([], { ...OPTS, captionLang: "ar" }).style.font).toBe("Cairo");
   });
 

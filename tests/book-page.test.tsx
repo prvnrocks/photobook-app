@@ -27,13 +27,13 @@ function page(id: string, layout: string, photoIds: (string | null)[], caption: 
 
 function makeDoc(pages: DocPage[], cover?: Partial<BookDoc["cover"]>): BookDoc {
   return {
-    version: 1,
+    version: 2,
     format: "A5_PORTRAIT",
     occasion: "wedding",
     cover: { layout: "cover", photoId: "p1", title: "Sara & Omar", subtitle: "Abu Dhabi · 2026", ...cover },
     chapters: [],
     pages,
-    style: { background: "#FFFFFF", font: "Playfair" },
+    style: { background: { kind: "color", hex: "#FFFFFF" }, designStyle: "classic", font: "Playfair" },
   };
 }
 

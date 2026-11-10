@@ -2,9 +2,12 @@
 // Every input is ALSO written to fixtures/m9/inputs.json and compared, so an accidental change to
 // these builders shows up as a reviewable diff instead of silently moving every golden.
 // Docs are v1 (`version: 1`, A5_PORTRAIT) exactly as M9 stores them — M10 must render them the same.
+// M10a A1: the *V1 builders return that stored JSON (inputs.json); baseDoc/representativeDoc
+// return it upgraded to the in-memory v2 doc (upgradeDocV1, what parseBookDoc yields) for rendering.
 
+import { upgradeDocV1 } from "@/lib/book/doc-version";
 import type { RenderPhotos } from "@/lib/book/render";
-import type { BookDoc, BookPage as DocPage, Caption, Crop } from "@/lib/book/types";
+import type { BookDoc, BookDocV1, BookPageV1 as DocPage, Caption, Crop } from "@/lib/book/types";
 import type { PlanPhoto } from "@/lib/pdf/image-plan";
 
 export const AR_CAPTION = "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى";
@@ -53,7 +56,15 @@ export function caption(text: string, font: string, align: Caption["align"] = "c
   return { text, font, align, source };
 }
 
-export function baseDoc(pages: DocPage[], over: { background?: string; cover?: Partial<BookDoc["cover"]>; font?: string } = {}): BookDoc {
+type BaseDocOverrides = { background?: string; cover?: Partial<BookDoc["cover"]>; font?: string };
+
+/** In-memory (v2) doc of baseDocV1 — what the renderer gets after parseBookDoc. */
+export function baseDoc(pages: DocPage[], over: BaseDocOverrides = {}): BookDoc {
+  return upgradeDocV1(baseDocV1(pages, over));
+}
+
+/** The stored M9 (v1) JSON. */
+export function baseDocV1(pages: DocPage[], over: BaseDocOverrides = {}): BookDocV1 {
   return {
     version: 1,
     format: "A5_PORTRAIT",
@@ -75,6 +86,10 @@ export function baseDoc(pages: DocPage[], over: { background?: string; cover?: P
  * mixed captions in every font, a non-white background.
  */
 export function representativeDoc(): BookDoc {
+  return upgradeDocV1(representativeDocV1());
+}
+
+export function representativeDocV1(): BookDocV1 {
   const pages: DocPage[] = [
     { id: "pg-1", chapterId: "ch-1", layout: "full-page", slots: [{ photoId: "p-portrait", crop: CROP_DEFAULT }], caption: null },
     {
@@ -128,5 +143,5 @@ export function representativeDoc(): BookDoc {
       caption: null,
     },
   ];
-  return baseDoc(pages, { background: "#F5EFE6" });
+  return baseDocV1(pages, { background: "#F5EFE6" });
 }

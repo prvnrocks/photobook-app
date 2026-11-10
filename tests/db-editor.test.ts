@@ -274,7 +274,7 @@ describe("getEditorData", () => {
   it("doc: parsable → parsed doc, docError null", async () => {
     const d = await getEditorData(B);
     expect(d!.docError).toBeNull();
-    expect(d!.doc).toMatchObject({ version: 1, pages: [{ id: "pg1" }] });
+    expect(d!.doc).toMatchObject({ version: 2, pages: [{ id: "pg1" }] }); // stored v1, upgraded on read
   });
 
   it("doc: empty → null/empty, unparsable → null/invalid", async () => {

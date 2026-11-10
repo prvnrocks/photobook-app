@@ -61,6 +61,7 @@ import {
   type Tone,
 } from "@/lib/book/options";
 import { docOrigin, isAiReplaceableDoc, isEmptyDoc } from "@/lib/book/replaceable";
+import { serializeDoc } from "@/lib/book/doc-version";
 import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import type { BookDoc } from "@/lib/book/types";
 import * as agentRunsDb from "@/lib/db/agent-runs";
@@ -623,6 +624,8 @@ function progressOf(cursor: RunCursor, phase: RunState): RunProgress {
 }
 
 const toJson = (v: unknown) => v as Json;
+/** A doc as stored (v1 when it uses no v2 feature — serializeDoc, M10 D-062). */
+const docJson = (doc: BookDoc) => serializeDoc(doc) as unknown as Json;
 
 // ---------------------------------------------------------------------------------------------
 // Row → domain helpers
@@ -954,7 +957,7 @@ async function startRuleRun(input: StartInput, book: BookForRun, deps: Orchestra
     if (issues.length) throw new OrchestratorError("rule_album_invalid");
     const fresh = await deps.getBookForRun(book.id);
     if (!fresh) throw new OrchestratorError("not_found");
-    const w = await deps.writeDocIfReplaceable(book.id, toJson(doc), doc.pages.length, { updatedAt: fresh.updated_at });
+    const w = await deps.writeDocIfReplaceable(book.id, docJson(doc), doc.pages.length, { updatedAt: fresh.updated_at });
     const errorCode = w.ok ? null : w.reason;
     if (w.ok) await deps.setBookAiStatus(book.id, "idle");
     const saved = await deps.checkpointRun(runId, token, {
@@ -2150,7 +2153,7 @@ async function validateAndSave(c: Tick): Promise<AdvanceResult> {
   await save(c); // lease check right before the doc write
   const fresh = await c.deps.getBookForRun(c.book.id);
   const w: WriteDocResult = fresh
-    ? await c.deps.writeDocIfReplaceable(c.book.id, toJson(doc), doc.pages.length, { updatedAt: fresh.updated_at })
+    ? await c.deps.writeDocIfReplaceable(c.book.id, docJson(doc), doc.pages.length, { updatedAt: fresh.updated_at })
     : { ok: false, reason: "not_found" };
 
   if (!w.ok && w.reason === "conflict" && c.cursor.writeConflicts < MAX_WRITE_CONFLICTS) {
@@ -2251,7 +2254,7 @@ async function crash(
         const photos = (await deps.listPhotosForCuration(bookId)).map(toCurationPhoto);
         const doc = ruleDoc(photos, book, run.id);
         if (docIssues(doc, photos, book).length === 0) {
-          await deps.writeDocIfReplaceable(bookId, toJson(doc), doc.pages.length, { updatedAt: book.updated_at });
+          await deps.writeDocIfReplaceable(bookId, docJson(doc), doc.pages.length, { updatedAt: book.updated_at });
         }
       } else if (book) {
         status = cursor ? cursor.prevBookStatus : restorableStatus(book.ai_status);

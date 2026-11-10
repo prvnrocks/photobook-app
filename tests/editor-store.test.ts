@@ -26,7 +26,7 @@ const pg = (id: string, layout: string, ids: (string | null)[], caption: BookPag
 
 function base(): BookDoc {
   return {
-    version: 1,
+    version: 2,
     format: "A5_PORTRAIT",
     occasion: "travel",
     cover: { layout: "cover", photoId: "ph1", title: "Weekend", subtitle: "Abu Dhabi" },
@@ -36,7 +36,7 @@ function base(): BookDoc {
       pg("p2", "two-vertical", ["ph2", "ph3"]),
       pg("p3", "full-page", ["ph4"]),
     ],
-    style: { background: "#FFFFFF", font: "Playfair" },
+    style: { background: { kind: "color", hex: "#FFFFFF" }, designStyle: "classic", font: "Playfair" },
   };
 }
 

@@ -30,7 +30,7 @@ const ph = (id: string, takenAt: string, status: "kept" | "dropped" = "kept") =>
 
 function doc(): BookDoc {
   return {
-    version: 1,
+    version: 2,
     format: "A5_PORTRAIT",
     occasion: "travel",
     cover: { layout: "cover", photoId: "a1", title: "Trip", subtitle: "" },
@@ -47,7 +47,7 @@ function doc(): BookDoc {
         caption: { text: "My words", font: "Playfair", align: "center", source: "user" },
       },
     ],
-    style: { background: "#FFFFFF", font: "Playfair" },
+    style: { background: { kind: "color", hex: "#FFFFFF" }, designStyle: "classic", font: "Playfair" },
     meta: { generator: "ai", generatorVersion: 2, runId: null, userEdited: false },
   };
 }

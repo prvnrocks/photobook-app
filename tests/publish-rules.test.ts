@@ -8,7 +8,7 @@ const DAY = 86_400_000;
 
 function doc(pages: number): BookDoc {
   return {
-    version: 1,
+    version: 2,
     format: "A5_PORTRAIT",
     occasion: "family",
     cover: { layout: "cover", photoId: null, title: "T", subtitle: "" },
@@ -20,7 +20,7 @@ function doc(pages: number): BookDoc {
       slots: [{ photoId: `p${i}`, crop: { x: 0.5, y: 0.5, zoom: 1 } }],
       caption: null,
     })),
-    style: { background: "#FFFFFF", font: "Playfair" },
+    style: { background: { kind: "color", hex: "#FFFFFF" }, designStyle: "classic", font: "Playfair" },
   };
 }
 
@@ -93,7 +93,7 @@ describe("canPublish", () => {
     expect(canPublish({ ...base, doc: doc(0), maxPages: free })).toEqual({ ok: false, reason: "empty" });
   });
 
-  it.each([null, {}, "doc", { ...doc(1), version: 2 }, { ...doc(1), meta: { generator: "ai", extra: 1 } }])(
+  it.each([null, {}, "doc", { ...doc(1), version: 3 }, { ...doc(1), meta: { generator: "ai", extra: 1 } }])(
     "invalid doc %# → invalid_doc",
     (d) => {
       expect(canPublish({ ...base, doc: d, maxPages: free })).toEqual({ ok: false, reason: "invalid_doc" });

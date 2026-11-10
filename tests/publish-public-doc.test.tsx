@@ -116,7 +116,8 @@ describe("toPublicDoc", () => {
     const doc = fullDoc();
     const pub = toPublicDoc(doc);
     expect(pub.cover).toEqual(doc.cover);
-    expect(pub.style).toEqual(doc.style);
+    // Snapshot stays v1 until M10a A4: the colour background is stored as its hex.
+    expect(pub.style).toEqual({ background: doc.style.background.kind === "color" ? doc.style.background.hex : null, font: doc.style.font });
     expect(pub.chapters).toEqual([
       { id: "c1", title: "The henna night", dateLabel: "March 2026" },
       { id: "c2", title: "ليلة العمر", dateLabel: "March 2026" },

@@ -14,9 +14,11 @@ import {
   ChapterSchema,
   CoverSchema,
   CropSchema,
+  DEFAULT_DESIGN_STYLE,
   PageSchema,
-  StyleSchema,
+  StyleSchemaV1,
 } from "@/lib/book/schema";
+import { backgroundColor } from "@/lib/book/render";
 import { CAPTION_LANGS, type CaptionLang } from "@/lib/book/options";
 import type { BookDoc } from "@/lib/book/types";
 import { LIMITS } from "@/lib/ai/limits";
@@ -42,7 +44,7 @@ export const PublicBookDocSchema = z
     cover: CoverSchema.strict(),
     chapters: z.array(PublicChapterSchema).max(100),
     pages: z.array(PublicPageSchema).max(LIMITS.paid.maxPages),
-    style: StyleSchema.strict(),
+    style: StyleSchemaV1.strict(),
     /** Optional: absent in snapshots published before the M6 review fix. */
     captionLang: z.enum(CAPTION_LANGS).optional(),
   })
@@ -77,7 +79,9 @@ export function toPublicDoc(doc: BookDoc, opts: ToPublicDocOptions = {}): Public
       })),
       caption: p.caption ? { text: p.caption.text, font: p.caption.font, align: p.caption.align } : null,
     })),
-    style: { background: doc.style.background, font: doc.style.font },
+    // TODO(M10a A4): v1/v2 snapshot union. Until then the snapshot stays v1: a non-colour
+    // background degrades to its base colour and page backgrounds are not published.
+    style: { background: backgroundColor(doc.style.background), font: doc.style.font },
   };
   if (opts.captionLang === "en" || opts.captionLang === "ar") out.captionLang = opts.captionLang;
   return out;
@@ -94,12 +98,13 @@ export function parsePublicDoc(input: unknown): PublicDocParse {
 /**
  * Adapter for the shared renderer, whose props are typed as the full BookDoc. Fills fields the
  * renderer never reads with neutral values (caption source "user", null place,
- * occasion "other", no meta). Render-only — never save the result as a book doc.
+ * occasion "other", no meta). Returns the in-memory v2 doc (v1 snapshot upgraded: colour
+ * background, classic style). Render-only — never save the result as a book doc.
  */
 export function publicDocToRenderDoc(pub: PublicBookDoc): BookDoc {
   return {
-    version: 1,
-    format: "A5_PORTRAIT",
+    version: 2,
+    format: pub.format,
     occasion: "other",
     cover: { ...pub.cover },
     chapters: pub.chapters.map((c) => ({ id: c.id, title: c.title, dateLabel: c.dateLabel, place: null })),
@@ -110,7 +115,7 @@ export function publicDocToRenderDoc(pub: PublicBookDoc): BookDoc {
       slots: p.slots.map((s) => ({ photoId: s.photoId, crop: { ...s.crop } })),
       caption: p.caption ? { ...p.caption, source: "user" } : null,
     })),
-    style: { ...pub.style },
+    style: { background: { kind: "color", hex: pub.style.background }, designStyle: DEFAULT_DESIGN_STYLE, font: pub.style.font },
   };
 }
 

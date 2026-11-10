@@ -51,8 +51,10 @@ import {
   MIXED_CAPTION,
   PHOTO_DIMS,
   representativeDoc,
+  representativeDocV1,
   webPhotos,
 } from "./m9-inputs";
+import { serializeDoc } from "@/lib/book/doc-version";
 
 const PREFIX = "m9";
 const MODES: readonly BookRenderMode[] = ["edit", "view", "print"];
@@ -423,7 +425,8 @@ describe("golden: public doc snapshot", () => {
         notAnObject: parsePublicDoc("doc").ok,
         null: parsePublicDoc(null).ok,
       },
-      renderDoc: publicDocToRenderDoc(pubEn),
+      // M10a: the adapter returns the in-memory v2 doc; its stored form is the frozen v1 JSON.
+      renderDoc: serializeDoc(publicDocToRenderDoc(pubEn)),
       photoIds: publicPhotoIds(pubEn),
     };
     golden(file, goldenJson(out));
@@ -562,7 +565,7 @@ describe("golden: frozen inputs", () => {
         photoDims: PHOTO_DIMS,
         webPhotos: webPhotos(),
         printPhotos: printRenderPhotos(PHOTO_DIMS),
-        representativeDoc: representativeDoc(),
+        representativeDoc: representativeDocV1(),
         // One compact line per case keeps this file small and still diffable.
         pageCases: Object.fromEntries(
           PAGE_LAYOUTS.map((l) => [l.id, Object.fromEntries(pageCases(l.id).map(({ name, ...c }) => [name, JSON.stringify(c)]))]),

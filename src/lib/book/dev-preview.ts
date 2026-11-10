@@ -45,12 +45,12 @@ export function devPreviewDoc(): BookDoc {
       : null,
   }));
   return {
-    version: 1,
+    version: 2,
     format: "A5_PORTRAIT",
     occasion: "wedding",
     cover: { layout: "cover", photoId: "d0", title: "Sara & Omar", subtitle: "Abu Dhabi · 2026" },
     chapters: [],
     pages,
-    style: { background: "#FFFFFF", font: "Playfair" },
+    style: { background: { kind: "color", hex: "#FFFFFF" }, designStyle: "classic", font: "Playfair" },
   };
 }

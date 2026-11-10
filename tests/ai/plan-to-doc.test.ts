@@ -83,7 +83,7 @@ describe("planToDoc — valid plan", () => {
   });
 
   it("Arabic book → Cairo font; English → Playfair", () => {
-    expect(okDoc(fixturePlan(), { book: storyBook({ captionLang: "ar" }) }).style).toEqual({ background: "#FFFFFF", font: "Cairo" });
+    expect(okDoc(fixturePlan(), { book: storyBook({ captionLang: "ar" }) }).style).toEqual({ background: { kind: "color", hex: "#FFFFFF" }, designStyle: "classic", font: "Cairo" });
     expect(okDoc().style.font).toBe("Playfair");
   });
 });

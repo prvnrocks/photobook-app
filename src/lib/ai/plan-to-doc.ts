@@ -156,7 +156,7 @@ export function planToDoc(plan: AlbumPlan, opts: PlanToDocOptions): PlanToDocRes
 
   const userTitle = book.title?.trim() ?? "";
   const doc: BookDoc = {
-    version: 1,
+    version: 2,
     format: "A5_PORTRAIT",
     occasion: book.occasion,
     cover: {
@@ -167,7 +167,11 @@ export function planToDoc(plan: AlbumPlan, opts: PlanToDocOptions): PlanToDocRes
     },
     chapters,
     pages,
-    style: { background: "#FFFFFF", font: book.captionLang === "ar" ? "Cairo" : "Playfair" },
+    style: {
+      background: { kind: "color", hex: "#FFFFFF" },
+      designStyle: "classic",
+      font: book.captionLang === "ar" ? "Cairo" : "Playfair",
+    },
     meta: { generator: "ai", generatorVersion, runId, userEdited: false },
   };
 

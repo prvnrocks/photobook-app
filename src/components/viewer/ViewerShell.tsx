@@ -9,6 +9,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Ellipsis, List, Share2 } from "lucide-react";
 import type { RenderPhotos } from "@/components/book/BookPage";
 import { Watermark } from "@/components/book/Watermark";
+import { backgroundColor } from "@/lib/book/render";
 import type { BookDoc } from "@/lib/book/types";
 import { chapterForPage, labelFontStyle } from "@/lib/viewer/chapters";
 import { endCardModel } from "@/lib/viewer/end-card";
@@ -64,7 +65,7 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
   // Paid end card (D-054): snapshot title in the cover font on the page background; Replay flips
   // back to the cover, Share opens the share sheet. Callbacks are stable (ref + state setter).
   const endModel = useMemo(
-    () => (isPaid ? endCardModel({ title, styleFont: doc.style.font, background: doc.style.background }) : undefined),
+    () => (isPaid ? endCardModel({ title, styleFont: doc.style.font, background: backgroundColor(doc.style.background) }) : undefined),
     [isPaid, title, doc.style.font, doc.style.background],
   );
   const replay = useCallback(() => api.current?.goTo(0), []);

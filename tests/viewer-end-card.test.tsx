@@ -74,6 +74,6 @@ describe("dev fixture page count", () => {
     expect(devViewerDoc().pages).toHaveLength(12);
     expect(devViewerBackground("f5efe6")).toBe("#F5EFE6");
     expect(devViewerBackground("red")).toBe("#FFFFFF");
-    expect(devViewerDoc({ background: "#F5EFE6" }).style.background).toBe("#F5EFE6");
+    expect(devViewerDoc({ background: "#F5EFE6" }).style.background).toEqual({ kind: "color", hex: "#F5EFE6" });
   });
 });

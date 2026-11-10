@@ -13,13 +13,13 @@ function page(id: string, layout: string, photoIds: (string | null)[], zoom = 1)
 
 function doc(pages: BookPage[], coverPhotoId: string | null = null): BookDoc {
   return {
-    version: 1,
+    version: 2,
     format: "A5_PORTRAIT",
     occasion: "other",
     cover: { layout: "cover", photoId: coverPhotoId, title: "T", subtitle: "" },
     chapters: [],
     pages,
-    style: { background: "#ffffff", font: "Inter" },
+    style: { background: { kind: "color", hex: "#ffffff" }, designStyle: "classic", font: "Inter" },
   } as BookDoc;
 }
 

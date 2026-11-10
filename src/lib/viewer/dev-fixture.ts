@@ -80,7 +80,7 @@ export function devViewerDoc(opts: { lang?: "en" | "ar"; pages?: number; backgro
     };
   });
   return {
-    version: 1,
+    version: 2,
     format: "A5_PORTRAIT",
     occasion: "travel",
     cover: {
@@ -91,6 +91,6 @@ export function devViewerDoc(opts: { lang?: "en" | "ar"; pages?: number; backgro
     },
     chapters: CHAPTERS,
     pages,
-    style: { background: opts.background ?? "#FFFFFF", font: "Playfair" },
+    style: { background: { kind: "color", hex: opts.background ?? "#FFFFFF" }, designStyle: "classic", font: "Playfair" },
   };
 }
