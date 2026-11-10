@@ -147,7 +147,7 @@ planted bad caption in tests; a second book reflects the user's earlier tone/len
 - [x] Watermark if unpaid + "Made with <App> — create yours" footer (growth loop)
 - [x] Expired page, WhatsApp / copy / native share, OG image via `next/og`, optional password
 **Done when:** a WhatsApp link previews nicely and flips smoothly on another phone.
-> M6 (2026-11-10): built + tested (2477 unit, 22 e2e, live publish-auth 8/1 skip), reviewed + re-review APPROVED, PGlite rls_check 106 ✓. NOT deployed: needs BOOK_ACCESS_SECRET in Vercel → code → `db push` (1100). "Done when" (WhatsApp preview + flip on another phone) is NEEDS-HUMAN after deploy.
+> M6 (2026-11-10): built + tested (2477 unit, 22 e2e, live publish-auth 8/1 skip), reviewed + re-review APPROVED, PGlite rls_check 106 ✓. Deployed 2026-11-10 (main 86114f7, migration 1100 live). "Done when" (WhatsApp preview + flip on another phone) is NEEDS-HUMAN after deploy.
 
 ## Milestone 7 — Payments (1 day)
 - [ ] "Upgrade this book — AED 39" → Stripe Checkout (`aed`, Apple Pay / Google Pay)

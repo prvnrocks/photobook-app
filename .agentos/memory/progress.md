@@ -81,3 +81,8 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - LEFT (NEEDS-HUMAN): "Done when" — WhatsApp preview + smooth flip on another phone; iPhone battery with idle pageflip rAF loop.
 - Optional NICE: normalise IPv4 text before bucketing (unlock.ts ~688); drop unused `admin` param in getPublishedBookRow. NEXT: deploy M6, then Milestone 7 (Stripe).
 - (2026-11-10 later) BOOK_ACCESS_SECRET added to .env.local (generated locally; Vercel still needs its own). Live publish-auth on a prod build vs live Supabase: 9/9 pass incl. e (password + rate limit) and g (unpublish). Waiting on user: Vercel env → approve merge/deploy.
+
+## 2026-11-10 — Milestone 6 — deployed
+- main = 86114f7 (merge of m6-publish-viewer), live on https://photobook-app-alpha.vercel.app. BOOK_ACCESS_SECRET set in Vercel (user). Migration 1100 present in prod (clear_unlock_attempt RPC answers).
+- Prod probes OK: /b/<unknown> 404 + X-Robots-Tag noindex, dev-viewer/dev-publish 404, /books/<id>/publish → login, generic OG PNG 200.
+- LEFT (NEEDS-HUMAN): rls_check.sql in Supabase SQL Editor → expect "RLS OK — all 106 checks passed"; "Done when" phone check (WhatsApp preview + flip on another phone; iPhone battery with idle flipbook). NEXT: Milestone 7 (Stripe).
