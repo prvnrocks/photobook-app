@@ -23,6 +23,17 @@ npm run lint && npm run typecheck && npm test   # lint, types, Vitest
 npx playwright test                             # smoke tests
 ```
 
+## Deploy
+
+- **Launching or redeploying production:** follow [`docs/LAUNCH.md`](docs/LAUNCH.md) — the ordered
+  checklist (accounts and plans, domain, env vars per environment, migrations + `rls_check`, content,
+  payments, final phone checks, rollback levers).
+- **Operating production** (refunds, comps, cleanup cron, PDF failures, deleting users, rotating secrets):
+  [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
+- Order that matters: database migrations (`npx supabase db push`, from your own Terminal) and
+  `supabase/tests/rls_check.sql` before deploying code that needs them; Vercel **Pro** before live
+  Stripe keys.
+
 ## Deploy notes (Vercel)
 
 - **PDF export function budget.** `/api/books/[id]/pdf` renders in `after()` for up to 300 s
@@ -51,4 +62,6 @@ npx playwright test                             # smoke tests
 
 - [`docs/PLAN.md`](docs/PLAN.md): milestones and the book document format
 - [`docs/AI-AGENTS.md`](docs/AI-AGENTS.md): the in-product AI agent pipeline
+- [`docs/LAUNCH.md`](docs/LAUNCH.md): launch checklist and env-var table
+- [`docs/RUNBOOK.md`](docs/RUNBOOK.md): production runbook
 - [`CLAUDE.md`](CLAUDE.md): product decisions, stack and architecture rules

@@ -10,7 +10,7 @@ import { AccountDeletedNotice } from "@/components/settings/AccountDeletedNotice
 import { buttonVariants } from "@/components/ui/button";
 import { APP_NAME } from "@/lib/brand";
 import { CTA_HREF, CTA_LABEL, HERO_CLAIM, HERO_SUBCOPY, LANDING_DESCRIPTION, LANDING_TITLE } from "@/lib/marketing/copy";
-import { hasDemoVideo } from "@/lib/marketing/demo";
+import { getDemoVideo } from "@/lib/marketing/demo";
 import { EXAMPLE_BOOKS } from "@/lib/marketing/examples";
 import { cn } from "@/lib/utils";
 
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 };
 
 export default function LandingPage() {
-  const showDemo = hasDemoVideo();
+  const demo = getDemoVideo();
   return (
     <main className="flex flex-col">
       <div className="px-4 sm:px-6">
@@ -58,7 +58,7 @@ export default function LandingPage() {
       </section>
 
       <div className="mx-auto flex w-full max-w-5xl min-w-0 flex-col gap-16 px-4 pt-6 pb-16 sm:px-6">
-        {showDemo ? <DemoVideo /> : null}
+        {demo ? <DemoVideo video={demo} /> : null}
         <HowItWorks />
         <ExampleBooks books={EXAMPLE_BOOKS} />
         <Pricing />
