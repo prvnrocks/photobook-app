@@ -2,6 +2,7 @@
 // from src/lib/ai or src/lib/db (those are server-only); values are mirrored here as strings.
 
 import { docOrigin, hasUserCaptions } from "@/lib/book/replaceable";
+import { AI_BREAK_COPY } from "@/lib/runs/stage-copy";
 
 /** Photo row as the review UI needs it (subset of db ReviewPhoto, never AI descriptions). */
 export type ReviewTilePhoto = {
@@ -191,6 +192,8 @@ export const REBUILD_MESSAGES = {
   limitDaily: "You've reached today's AI limit. Please try again tomorrow.",
   limitPhotos: "This book has more photos than AI can check on this plan.",
   limitRate: "Your album was just rebuilt. Please wait a few seconds and try again.",
+  /** D-059: global daily AI budget used up (same copy as the build screen). */
+  aiBreak: AI_BREAK_COPY,
   signedOut: "Please sign in again.",
   notFound: "That book wasn't found.",
   generic: "Something went wrong. Please try again.",
@@ -219,6 +222,7 @@ export function rebuildOutcome(status: number, body: unknown): RebuildOutcome {
     if (b.limit === "rebuilds") return { kind: "error", message: REBUILD_MESSAGES.limitRebuilds };
     if (b.limit === "analysed_photos") return { kind: "error", message: REBUILD_MESSAGES.limitPhotos };
     if (b.limit === "rate") return { kind: "error", message: REBUILD_MESSAGES.limitRate };
+    if (b.limit === "budget_exhausted") return { kind: "error", message: REBUILD_MESSAGES.aiBreak };
     return { kind: "error", message: REBUILD_MESSAGES.limitDaily };
   }
   if (status === 401) return { kind: "error", message: REBUILD_MESSAGES.signedOut };

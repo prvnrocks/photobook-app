@@ -345,10 +345,12 @@ export type Database = {
         Row: {
           amount: number
           book_id: string | null
+          comped_by: string | null
           created_at: string
           currency: string
           id: string
           livemode: boolean | null
+          note: string | null
           paid_at: string | null
           refunded_at: string | null
           status: string
@@ -360,10 +362,12 @@ export type Database = {
         Insert: {
           amount: number
           book_id?: string | null
+          comped_by?: string | null
           created_at?: string
           currency?: string
           id?: string
           livemode?: boolean | null
+          note?: string | null
           paid_at?: string | null
           refunded_at?: string | null
           status?: string
@@ -375,10 +379,12 @@ export type Database = {
         Update: {
           amount?: number
           book_id?: string | null
+          comped_by?: string | null
           created_at?: string
           currency?: string
           id?: string
           livemode?: boolean | null
+          note?: string | null
           paid_at?: string | null
           refunded_at?: string | null
           status?: string
@@ -626,6 +632,10 @@ export type Database = {
         Args: { p_book: string; p_ip_hash: string }
         Returns: boolean
       }
+      comp_book: {
+        Args: { p_admin: string; p_book: string; p_reason: string }
+        Returns: string
+      }
       create_agent_run_capped: {
         Args: {
           p_book_id: string
@@ -661,6 +671,10 @@ export type Database = {
           p_user: string
         }
         Returns: Json
+      }
+      delete_book_guarded: {
+        Args: { p_book: string; p_user: string }
+        Returns: string
       }
       fail_export: {
         Args: { p_code: string; p_export: string; p_token: string }

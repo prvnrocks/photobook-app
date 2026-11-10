@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { withAnalyticsFlash } from "@/lib/analytics/flash";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { CAPTION_LANGS, OCCASIONS, TONES } from "@/lib/book/options";
 import { createBook } from "@/lib/db/books";
@@ -75,7 +76,8 @@ export async function createBookAction(
     return { ok: false, error: MSG_CREATE_FAILED };
   }
 
-  redirect(`/books/${id}/upload`);
+  // analytics (M9 T14): one-shot ?_ev=book_created only when PostHog is configured.
+  redirect(withAnalyticsFlash(`/books/${id}/upload`, "book_created"));
 }
 
 /** Deletes one photo (files + row) of the current user's book. */

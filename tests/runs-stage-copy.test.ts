@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isIosDevice } from "@/lib/device";
 import type { RunProgress } from "@/lib/runs/client";
-import { limitCopy, newerSnapshot, stageCopy } from "@/lib/runs/stage-copy";
+import { AI_BREAK_COPY, limitCopy, newerSnapshot, stageCopy } from "@/lib/runs/stage-copy";
 
 const p = (over: Partial<RunProgress> = {}): RunProgress => ({
   phase: "curating",
@@ -138,6 +138,9 @@ describe("limitCopy", () => {
     expect(limitCopy("rebuilds", false, 3)).toBe("No AI rebuilds left for this book.");
     expect(limitCopy("analysed_photos", false, 3)).toMatch(/more photos/);
     expect(limitCopy("rate", false, 3)).toMatch(/wait a few seconds/);
+    // D-059: global daily budget used up — same copy on free and paid.
+    expect(limitCopy("budget_exhausted", false, 3)).toBe("AI is taking a break — try again later.");
+    expect(limitCopy("budget_exhausted", true, 20)).toBe(AI_BREAK_COPY);
   });
 });
 

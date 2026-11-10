@@ -1769,11 +1769,12 @@ describe("migrations: Milestone 7 payments (1200)", () => {
       g[1].trim(),
     );
     expect(grants).toEqual(["service_role"]);
-    // 1200 + the re-assert in 1300; every grant across all migrations goes to service_role only
-    expect(matchesAll(new RegExp(`grant execute on function ${esc(fn)}\\b`))).toHaveLength(2);
+    // 1200 + the re-assert in 1300 (+ 1700 for fulfil); every grant across all migrations goes to service_role only
+    const expected = fn === FULFIL ? 3 : 2;
+    expect(matchesAll(new RegExp(`grant execute on function ${esc(fn)}\\b`))).toHaveLength(expected);
     expect(
       matchesAll(new RegExp(`grant execute on function ${esc(fn)}\\s*\\([^)]*\\)\\s+to\\s+([a-z_, ]+?)\\s*;`)).map((g) => g[1].trim()),
-    ).toEqual(["service_role", "service_role"]);
+    ).toEqual(Array(expected).fill("service_role"));
     expect(flat.indexOf(`revoke all on function ${fn}`)).toBeLessThan(flat.indexOf(`grant execute on function ${fn}`));
   });
 
@@ -1871,10 +1872,11 @@ describe("migrations: Milestone 7 payments review (1300)", () => {
     expect(sql).not.toMatch(/\b(grant|revoke)\s+[a-z_\s,()]+\s+on\s+(?:table\s+)?(public|private)\./);
   });
 
-  it.each([FULFIL, RECORD])("%s: same signature, SECURITY INVOKER, search_path '', returns text, latest definition", (fn) => {
+  it.each([FULFIL, RECORD])("%s: same signature, SECURITY INVOKER, search_path '', returns text (record: latest definition)", (fn) => {
     const f = fns.find((x) => x.name === fn);
     expect(f, `${fn} missing`).toBeDefined();
-    expect(latestFunction(fn)!.body).toBe(f!.body);
+    // fulfill_book_checkout is replaced again in 1700 (pinned by that suite)
+    if (fn === RECORD) expect(latestFunction(fn)!.body).toBe(f!.body);
     expect(ws(f!.header)).toMatch(/\) returns text language plpgsql volatile security invoker set search_path = '' ?$/);
     expect(f!.header).not.toMatch(/security\s+definer/);
     const sig = SIG[fn as keyof typeof SIG];
@@ -2254,10 +2256,9 @@ describe("migrations: Milestone 9 cleanup (1600, D-055 / D-056 / D-057 / D-059, 
   };
   const PROTECTED = "o.status in ('pending', 'paid', 'needs_review', 'disputed')";
 
-  it("exists right after 1500 and is the latest migration; additive only", () => {
+  it("exists right after 1500; additive only", () => {
     expect(m, `${name} missing`).toBeDefined();
     expect(files.indexOf(name)).toBe(files.indexOf("20261113001500_exports_review.sql") + 1);
-    expect(files.at(-1)).toBe(name);
     expect(sql).not.toMatch(/\bdrop\s+(table|function|constraint|policy|trigger|index|column)\b/);
     expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
     expect(sql).not.toMatch(/\bcreate\s+policy\b/);
@@ -2427,7 +2428,7 @@ describe("migrations: Milestone 9 cleanup (1600, D-055 / D-056 / D-057 / D-059, 
     expect(body).toContain("r.started_at >= (g.d::timestamp at time zone 'asia/dubai')");
   });
 
-  it("rls_check.sql covers 1600 and counts 162 checks", () => {
+  it("rls_check.sql covers 1600", () => {
     const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
     expect(rls).toContain(name);
     for (const tag of [
@@ -2448,7 +2449,7 @@ describe("migrations: Milestone 9 cleanup (1600, D-055 / D-056 / D-057 / D-059, 
     ]) {
       expect(rls).toContain(`RLS FAIL [${tag}]`);
     }
-    expect(rls).toContain("RLS OK — all 162 checks passed");
+    // the total check count is pinned by the latest milestone suite (1700)
   });
 
   it("database.types.ts: warning columns, email_reminders, the 11 RPCs (hand-edited)", () => {
@@ -2458,5 +2459,145 @@ describe("migrations: Milestone 9 cleanup (1600, D-055 / D-056 / D-057 / D-059, 
     for (const n of Object.keys(SIG)) expect(types).toContain(`      ${n.slice("public.".length)}: {`);
     expect(types).toMatch(/cleanup_delete_abandoned_drafts: \{\s*Args: \{ p_days: number; p_limit: number; p_notice_days: number \}/);
     expect(types).toMatch(/cleanup_pending_uploads: \{[\s\S]*?paths: string\[\]/);
+  });
+});
+
+describe("migrations: Milestone 9 payments hardening (1700, D-045 / D-061)", () => {
+  const name = "20261114001700_payments_hardening.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const ws = (s: string) => s.replace(/\s+/g, " ");
+  const flat = ws(sql);
+  const fns = matchesAll(/create\s+(?:or\s+replace\s+)?function\s+([\w.]+)\s*\(([\s\S]*?)\bas\s+\$\$([\s\S]*?)\$\$/, sql).map(
+    (x) => ({ name: x[1], header: x[2], body: x[3] }),
+  );
+  const fn = (n: string) => fns.find((x) => x.name === n);
+  const FULFIL = "public.fulfill_book_checkout";
+  const COMP = "public.comp_book";
+  const DEL = "public.delete_book_guarded";
+  const SIG = {
+    [FULFIL]: "(text, text, text, text, uuid, uuid, integer, text, boolean)",
+    [COMP]: "(uuid, uuid, text)",
+    [DEL]: "(uuid, uuid)",
+  } as const;
+
+  it("exists right after 1600 and is the latest migration; only drops+re-adds the status check", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files.indexOf(name)).toBe(files.indexOf("20261114001600_cleanup.sql") + 1);
+    expect(files.at(-1)).toBe(name);
+    expect(matchesAll(/\bdrop\b/, sql)).toHaveLength(1);
+    expect(flat).toContain("alter table public.orders drop constraint orders_status_check;");
+    expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
+    expect(sql).not.toMatch(/\bcreate\s+(policy|table|trigger)\b/);
+    expect(sql).not.toMatch(/\b(grant|revoke)\s+[a-z_\s,()]+\s+on\s+(?:table\s+)?(public|private)\./);
+    expect(sql).not.toMatch(/security\s+definer/);
+    expect(fns.map((f) => f.name).sort()).toEqual([COMP, DEL, FULFIL].sort());
+  });
+
+  it("orders: note (≤ 200, no control chars), comped_by, status 'comped', comp shape", () => {
+    expect(flat).toContain("alter table public.orders add column note text, add column comped_by uuid;");
+    expect(flat).toContain(
+      "add constraint orders_note_check check ( note is null or (char_length(note) between 1 and 200 and note !~ '[[:cntrl:]]') );",
+    );
+    expect(flat).toContain(
+      "add constraint orders_status_check check ( status in ('pending', 'paid', 'failed', 'expired', 'refunded', 'disputed', 'needs_review', 'comped') );",
+    );
+    expect(flat).toContain(
+      "add constraint orders_comp_shape check ( status <> 'comped' or (comped_by is not null and amount = 0 and stripe_session_id is null and stripe_payment_intent_id is null) );",
+    );
+    // owner still only SELECTs orders
+    const acl = effectiveTablePrivileges();
+    expect(sorted(acl["public.orders"]?.authenticated)).toEqual(["select"]);
+  });
+
+  it.each([FULFIL, COMP, DEL])("%s: INVOKER, search_path '', returns text, latest definition, service_role only", (n) => {
+    const f = fn(n);
+    expect(f, n).toBeDefined();
+    expect(latestFunction(n)!.body).toBe(f!.body);
+    expect(ws(f!.header)).toMatch(/\) returns text language plpgsql volatile security invoker set search_path = '' ?$/);
+    const sig = SIG[n as keyof typeof SIG];
+    expect(flat).toContain(`revoke all on function ${n}${sig} from public, anon, authenticated;`);
+    const grants = matchesAll(new RegExp(`grant execute on function ${esc(n)}\\s*\\([^)]*\\)\\s+to\\s+([a-z_, ]+?)\\s*;`), sql).map((g) =>
+      g[1].trim(),
+    );
+    expect(grants).toEqual(["service_role"]);
+    expect(flat.indexOf(`revoke all on function ${n}`)).toBeLessThan(flat.indexOf(`grant execute on function ${n}`));
+    expect(ws(f!.body)).toContain("raise exception 'invalid_argument' using errcode = '22023';");
+  });
+
+  it("fulfill_book_checkout: needs_review / comped count as money held by another session; replays flag once", () => {
+    const body = ws(fn(FULFIL)!.body);
+    expect(ws(fn(FULFIL)!.header).trim()).toMatch(
+      /^p_event_id text, p_event_type text, p_session_id text, p_payment_intent text, p_book_id uuid, p_user_id uuid, p_amount integer, p_currency text, p_livemode boolean \)/,
+    );
+    expect(body.indexOf("on conflict (id) do nothing returning id into v_inserted;")).toBeLessThan(body.indexOf("insert into public.orders"));
+    expect(body.indexOf("select o.status into v_prev from public.orders as o where o.stripe_session_id = p_session_id for update;")).toBeLessThan(
+      body.indexOf("insert into public.orders"),
+    );
+    expect(body).toContain("o2.stripe_session_id is distinct from p_session_id and o2.status in ('paid', 'disputed', 'needs_review', 'comped')");
+    expect(body).toContain("o3.stripe_session_id is distinct from p_session_id and o3.status = 'needs_review'");
+    expect(body).toContain("if v_taken and coalesce(v_prev, '') not in ('paid', 'disputed', 'refunded') then return 'already_paid_other_session';");
+    expect(body).toContain("if v_review then return 'fulfilled_after_review_order'; end if;");
+    expect(body).toContain("if not (v_was_paid and v_max_pages = 100 and v_expires is null) then update public.books as b");
+    expect(body).toContain("set status = case when o.status in ('refunded', 'disputed') then o.status else 'paid' end");
+    for (const r of ["fulfilled", "fulfilled_after_review_order", "already_paid", "already_paid_other_session", "book_missing", "duplicate"]) {
+      expect(body).toContain(`return '${r}';`);
+    }
+  });
+
+  it("comp_book: validates, locks the book, one comped order, entitlement; three results", () => {
+    const body = ws(fn(COMP)!.body);
+    expect(ws(fn(COMP)!.header).trim()).toMatch(/^p_book uuid, p_admin uuid, p_reason text \)/);
+    expect(body).toContain("v_reason text := btrim(p_reason);");
+    expect(body).toContain("char_length(v_reason) not between 1 and 200 or v_reason ~ '[[:cntrl:]]'");
+    expect(body).toContain("not exists (select 1 from public.profiles as pr where pr.id = p_admin)");
+    expect(body).toContain("from public.books as b where b.id = p_book for update;");
+    expect(body).toContain("(v_owner, p_book, 'digital', 0, 'aed', 'comped', null, null, now(), false, v_reason, p_admin);");
+    expect(body).toContain("set is_paid = true, max_pages = 100, expires_at = null where b.id = p_book;");
+    expect(body.indexOf("return 'already_paid';")).toBeLessThan(body.indexOf("insert into public.orders"));
+    for (const r of ["comped", "already_paid", "not_found"]) expect(body).toContain(`return '${r}';`);
+  });
+
+  it("delete_book_guarded: owner-scoped lock, protection re-check in a separate statement, then delete", () => {
+    const body = ws(fn(DEL)!.body);
+    expect(ws(fn(DEL)!.header).trim()).toMatch(/^p_book uuid, p_user uuid \)/);
+    const lock = body.indexOf("from public.books as b where b.id = p_book and b.user_id = p_user for update;");
+    const check = body.indexOf("o.status in ('pending', 'paid', 'needs_review', 'disputed', 'comped')) into v_protected;");
+    const del = body.indexOf("delete from public.books as b where b.id = v_book and b.user_id = p_user;");
+    expect(lock).toBeGreaterThan(0);
+    expect(check).toBeGreaterThan(lock);
+    expect(body).toContain("if v_paid or v_protected then return 'protected'; end if;");
+    expect(del).toBeGreaterThan(body.indexOf("return 'protected';"));
+    for (const r of ["deleted", "not_found", "protected"]) expect(body).toContain(`return '${r}';`);
+  });
+
+  it("only the webhook RPC and comp_book set books.is_paid among public functions (D-045 / D-061)", () => {
+    const setters = [...new Set(functions.filter((f) => /set\s+is_paid\s*=\s*true/.test(f.body)).map((f) => f.name))].sort();
+    expect(setters).toEqual([COMP, FULFIL].sort());
+  });
+
+  it("rls_check.sql covers 1700 and counts 169 checks", () => {
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain(name);
+    for (const tag of [
+      "comp grants",
+      "comp",
+      "comp args",
+      "double payment review",
+      "double payment comp",
+      "delete guarded grants",
+      "delete guarded",
+    ]) {
+      expect(rls).toContain(`RLS FAIL [${tag}]`);
+    }
+    expect(rls).toContain("RLS OK — all 169 checks passed");
+  });
+
+  it("database.types.ts: orders note / comped_by, comp_book, delete_book_guarded (hand-edited)", () => {
+    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
+    expect(types.match(/comped_by\??: string \| null/g)).toHaveLength(3);
+    expect(types.match(/\bnote\??: string \| null/g)).toHaveLength(3);
+    expect(types).toMatch(/comp_book: \{\s*Args: \{ p_admin: string; p_book: string; p_reason: string \}\s*Returns: string/);
+    expect(types).toMatch(/delete_book_guarded: \{\s*Args: \{ p_book: string; p_user: string \}\s*Returns: string/);
   });
 });

@@ -308,7 +308,10 @@ describe("headers + robots", () => {
     expect(map).toEqual({ "X-Robots-Tag": "noindex, nofollow", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
   });
   it("robots.txt disallows /print/ only", () => {
-    expect(robots()).toEqual({ rules: [{ userAgent: "*", disallow: "/print/" }] });
+    const r = robots();
+    expect(r.rules).toEqual([{ userAgent: "*", disallow: "/print/" }]);
+    // M9 T11: robots also points at the sitemap (/, /privacy, /terms).
+    expect(String(r.sitemap ?? "")).toMatch(/(^$|\/sitemap\.xml$)/);
   });
 });
 

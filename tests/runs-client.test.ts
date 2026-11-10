@@ -78,6 +78,7 @@ describe("startRun", () => {
     [429, { error: "limit", limit: "daily_builds" }, { kind: "limit", limit: "daily_builds" }],
     [429, { error: "limit", limit: "rebuilds" }, { kind: "limit", limit: "rebuilds" }],
     [429, { error: "limit", limit: "rate" }, { kind: "limit", limit: "rate" }],
+    [429, { error: "limit", limit: "budget_exhausted" }, { kind: "limit", limit: "budget_exhausted" }],
     [429, { error: "limit", limit: "weird" }, { kind: "limit", limit: "daily_builds" }],
     [400, { error: "invalid_body" }, { kind: "invalid" }],
     [401, { error: "unauthenticated" }, { kind: "signed_out" }],

@@ -1,6 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "fluid": true,
+  "crons": [
+    {
+      "path": "/api/cron/cleanup",
+      "schedule": "0 1 * * *"
+    }
+  ],
   "functions": {
     "src/app/api/books/*/pdf/route.ts": {
       "maxDuration": 300

@@ -9,6 +9,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useWakeLock, useWarnOnLeave } from "@/components/upload/use-keep-awake";
 import { useThrottledValue } from "@/components/upload/use-throttled-value";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { track } from "@/lib/analytics/client";
+import { msBucket } from "@/lib/analytics/events";
 import {
   advanceRun,
   getRun,
@@ -86,6 +88,18 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
     setSnap((cur) => newerSnapshot(cur, next));
   }, []);
 
+  // analytics (M9 T14): time on this screen, bucketed; sent once per visit.
+  const [mountedAt] = useState(() => Date.now());
+  const sentRef = useRef(false);
+  const trackDone = useCallback(
+    (mode: "ai" | "rules", outcome: "ok" | "failed") => {
+      if (sentRef.current) return;
+      sentRef.current = true;
+      track("ai_build_done", { mode, outcome, ms_bucket: msBucket(Date.now() - mountedAt) });
+    },
+    [mountedAt],
+  );
+
   const goToReview = useCallback(() => {
     setStatus({ kind: "leaving" });
     router.replace(reviewHref);
@@ -103,8 +117,14 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
         startRef.current = null;
         switch (out.kind) {
           case "started":
-            if (out.state === "done") return goToReview(); // rule mode: album written already
-            if (out.state === "failed") return setStatus({ kind: "error", error: "run_failed" });
+            if (out.state === "done") {
+              trackDone("rules", "ok");
+              return goToReview(); // rule mode: album written already
+            }
+            if (out.state === "failed") {
+              trackDone("ai", "failed");
+              return setStatus({ kind: "error", error: "run_failed" });
+            }
             runId = out.runId;
             break;
           case "already_running":
@@ -156,8 +176,10 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
         if (res.kind === "done") {
           if (res.tick.state === "failed") {
             runIdRef.current = null;
+            trackDone("ai", "failed");
             return setStatus({ kind: "error", error: "run_failed" });
           }
+          trackDone("ai", "ok");
           return goToReview();
         }
         if (res.error === "not_found") runIdRef.current = null; // "Try again" starts a new run
@@ -166,7 +188,7 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
         clearInterval(poll);
       }
     },
-    [bookId, trigger, goToReview, report, waker],
+    [bookId, trigger, goToReview, report, waker, trackDone],
   );
 
   const begin = useCallback(() => {

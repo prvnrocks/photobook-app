@@ -11,7 +11,9 @@
 //   (200) — retrying would never make them valid. They are NOT fulfilled. If Stripe reports such a
 //   session as PAID: console.error paid_but_invalid + order → 'needs_review' (manual refund/fulfil;
 //   the upgrade action then refuses a new checkout for the book).
-// - fulfil → already_paid_other_session: console.error double_payment (refund the extra payment).
+// - fulfil → already_paid_other_session / fulfilled_after_review_order (1700: another session's order
+//   for the book is paid / disputed / needs_review / comped): console.error double_payment (refund the
+//   extra payment by hand — docs/RUNBOOK.md). fulfilled_after_review_order still granted the book.
 // - Refunds (full only) / disputes are recorded on the order; is_paid is never revoked (decision).
 //   order_missing on a refund/dispute → console.error (money moved on an order we don't know).
 // - Logs: event id, event type, session id, result / reason codes only. Never emails, metadata,
@@ -113,10 +115,14 @@ async function handleSessionPaid(event: Stripe.Event, session: Stripe.Checkout.S
   if (result === "already_paid_other_session") {
     // The book was already paid through another session: this is a second charge → refund it.
     logLine("error", event, "double_payment", session.id, r.paymentIntentId);
+  } else if (result === "fulfilled_after_review_order") {
+    // Fulfilled now, but another session's payment for this book sits in needs_review (money taken,
+    // never fulfilled): the user paid twice → refund one of them (ids only).
+    logLine("error", event, "double_payment:review_order", session.id, r.paymentIntentId);
   } else {
     logLine(result === "book_missing" ? "warn" : "info", event, result, session.id);
   }
-  if (result === "fulfilled") {
+  if (result === "fulfilled" || result === "fulfilled_after_review_order") {
     try {
       revalidatePath("/dashboard");
       revalidatePath(`/books/${r.bookId}/publish`);

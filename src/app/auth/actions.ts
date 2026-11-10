@@ -8,6 +8,7 @@ import {
   normalizeOtpCode,
   type AuthFormState,
 } from "@/lib/auth/form-state";
+import { authFlash, withAnalyticsFlash, type AnalyticsFlash } from "@/lib/analytics/flash";
 import { getSiteUrl, MISSING_APP_URL_ERROR, safeNextPath } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/server";
 
@@ -101,18 +102,21 @@ export async function verifyEmailCode(
 
   const next = safeNextPath(field(formData, "next"));
 
+  let flash: AnalyticsFlash;
   try {
     const supabase = await createClient();
-    const { error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
+    const { data, error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
     if (error) {
       if (isRateLimited(error)) return { ok: false, error: MSG_RATE_LIMIT, email };
       return { ok: false, error: MSG_BAD_CODE, email };
     }
+    flash = authFlash(data.user, "email");
   } catch {
     return { ok: false, error: MSG_GENERIC, email };
   }
 
-  redirect(next);
+  // analytics (M9 T14): one-shot ?_ev= code only when PostHog is configured.
+  redirect(withAnalyticsFlash(next, flash));
 }
 
 /** Starts Google OAuth. Form field: optional `next`. Redirects to Google. */

@@ -7,16 +7,26 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
- * already_paid_other_session (migration 1300): the book was already paid and ANOTHER session's order
- * for it is paid / disputed — the user has paid twice (the webhook logs `double_payment`).
+ * already_paid_other_session (1300, widened in 1700): the book was already paid, this session's payment
+ * is new, and ANOTHER session's order for it is paid / disputed / needs_review / comped — the user has
+ * paid twice (the webhook logs `double_payment`). Replays of an already-recorded payment → already_paid.
+ * fulfilled_after_review_order (1700): the book was flipped to paid now, but another session's order
+ * is needs_review (money taken, never fulfilled) — also a double payment; entitlement is granted.
  */
-export type FulfillResult = "fulfilled" | "already_paid" | "already_paid_other_session" | "book_missing" | "duplicate";
+export type FulfillResult =
+  | "fulfilled"
+  | "fulfilled_after_review_order"
+  | "already_paid"
+  | "already_paid_other_session"
+  | "book_missing"
+  | "duplicate";
 export type OrderEventResult = "updated" | "unchanged" | "order_missing" | "duplicate";
 /** needs_review (1300): Stripe says paid but the session failed validation — never fulfilled. */
 export type OrderEventStatus = "expired" | "failed" | "refunded" | "disputed" | "needs_review";
 
 const FULFILL_RESULTS: readonly FulfillResult[] = [
   "fulfilled",
+  "fulfilled_after_review_order",
   "already_paid",
   "already_paid_other_session",
   "book_missing",

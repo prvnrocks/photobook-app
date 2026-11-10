@@ -202,6 +202,9 @@ describe("rebuildOutcome (T11 shapes)", () => {
     expect(rebuildOutcome(429, { error: "limit", limit: "daily_builds" })).toEqual({ kind: "error", message: REBUILD_MESSAGES.limitDaily });
     expect(rebuildOutcome(429, { error: "limit", limit: "analysed_photos" })).toEqual({ kind: "error", message: REBUILD_MESSAGES.limitPhotos });
     expect(rebuildOutcome(429, { error: "limit", limit: "rate" })).toEqual({ kind: "error", message: REBUILD_MESSAGES.limitRate });
+    // D-059: global daily AI budget used up → "try again later" (the rule album stays).
+    expect(rebuildOutcome(429, { error: "limit", limit: "budget_exhausted" })).toEqual({ kind: "error", message: REBUILD_MESSAGES.aiBreak });
+    expect(REBUILD_MESSAGES.aiBreak).toBe("AI is taking a break — try again later.");
   });
   it("other statuses and junk bodies", () => {
     expect(rebuildOutcome(401, null)).toEqual({ kind: "error", message: REBUILD_MESSAGES.signedOut });

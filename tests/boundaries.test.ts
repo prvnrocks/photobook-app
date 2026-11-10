@@ -34,6 +34,7 @@ describe("server/client boundaries", () => {
     "src/lib/ai/transport-live.ts",
     "src/lib/ai/transport-factory.ts",
     "src/lib/ai/orchestrator.ts",
+    "src/lib/ai/budget.ts",
     "src/lib/stripe.ts",
     "src/lib/photos/finalize.ts",
     "src/lib/publish/password.ts",

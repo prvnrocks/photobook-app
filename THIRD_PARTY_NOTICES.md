@@ -20,6 +20,11 @@ Photobook ships the following third-party code to browsers. This file must be ke
 ## zod — MIT
 - Source: https://github.com/colinhacks/zod
 
+## posthog-js (1.447.7) — Apache-2.0 AND MIT
+- Source: https://github.com/PostHog/posthog-js
+- Only when `NEXT_PUBLIC_POSTHOG_KEY` is set: the slim, no-external build is lazily loaded for
+  cookieless, allow-listed product analytics (M9 T14, D-058). Not modified.
+
 ## Other runtime dependencies
 Next.js, React, @supabase/*, @base-ui/react, lucide-react, class-variance-authority, cn, tw-animate-css —
 all MIT or similarly permissive; see each package's `LICENSE` in `node_modules/`.

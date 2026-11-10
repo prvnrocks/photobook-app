@@ -59,7 +59,10 @@ export function stageCopy(state: RunState, progress: RunProgress | null): StageC
   }
 }
 
-export type LimitKind = "daily_builds" | "rebuilds" | "analysed_photos" | "rate";
+export type LimitKind = "daily_builds" | "rebuilds" | "analysed_photos" | "rate" | "budget_exhausted";
+
+/** D-059 copy when the global daily AI budget is used up (build, rebuild and ✨ rewrite). */
+export const AI_BREAK_COPY = "AI is taking a break — try again later.";
 
 /** Copy for a 429 from POST /api/ai/runs. The rule album still exists in every case. */
 export function limitCopy(limit: LimitKind, isPaid: boolean, dailyCap: number): string {
@@ -74,6 +77,8 @@ export function limitCopy(limit: LimitKind, isPaid: boolean, dailyCap: number): 
       return "This book has more photos than AI can look at on your plan.";
     case "rate":
       return "Your album was just built. Please wait a few seconds and try again.";
+    case "budget_exhausted":
+      return AI_BREAK_COPY;
   }
 }
 

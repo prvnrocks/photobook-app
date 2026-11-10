@@ -7,22 +7,34 @@ test.describe("landing page at 375px", () => {
     await page.goto("/");
   });
 
-  test("renders hero, title, CTA link to /login and footer", async ({ page }) => {
-    await expect(page).toHaveTitle("Photobook");
+  test("renders hero, CTA and all sections", async ({ page }) => {
+    await expect(page).toHaveTitle(/^Photobook — /);
     await expect(page.getByTestId("hero-heading")).toBeVisible();
-    await expect(page.getByTestId("hero-heading")).toHaveText(
-      "Turn your photos into a beautiful book",
-    );
-    const cta = page.getByRole("link", { name: "Create your book" });
+    await expect(page.getByTestId("hero-heading")).toContainText("AI builds your album");
+    const cta = page.getByTestId("cta-create");
     await expect(cta).toBeVisible();
-    await expect(cta).toHaveAttribute("href", "/login");
-    await expect(page.getByText("Coming soon")).toHaveCount(0);
+    await expect(cta).toHaveText("Start your book");
+    await expect(cta).toHaveAttribute("href", "/login?next=%2Fbooks%2Fnew");
+    for (const id of ["section-hero", "section-how", "section-pricing", "section-faq", "site-footer"]) {
+      await expect(page.getByTestId(id)).toBeAttached();
+    }
+    await expect(page.getByTestId("section-examples")).toHaveCount(0);
+    await expect(page.getByTestId("plan-paid-price")).toHaveText("AED 39");
     await expect(page.getByText("Made in Abu Dhabi")).toBeVisible();
   });
 
-  test("has no horizontal overflow", async ({ page }) => {
-    const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
-    expect(scrollWidth).toBeLessThanOrEqual(375);
+  test("has no horizontal overflow (FAQ open too)", async ({ page }) => {
+    const width = () => page.evaluate(() => document.documentElement.scrollWidth);
+    expect(await width()).toBeLessThanOrEqual(375);
+    await page.evaluate(() => document.querySelectorAll("details").forEach((d) => (d.open = true)));
+    expect(await width()).toBeLessThanOrEqual(375);
+  });
+
+  test("FAQ opens without JS frameworks (native details)", async ({ page }) => {
+    const faq = page.getByTestId("faq-after_30_days");
+    await faq.locator("summary").click();
+    await expect(faq).toHaveAttribute("open", "");
+    await expect(faq).toContainText("deleted");
   });
 
   test("Arabic caption renders RTL in Cairo", async ({ page }) => {
@@ -38,9 +50,43 @@ test.describe("landing page at 375px", () => {
     expect(style.fontFamily).toMatch(/cairo/i);
   });
 
-  test("English caption renders LTR with dir=auto", async ({ page }) => {
-    const en = page.getByText("Golden hour on the Corniche, just the two of us.");
-    await expect(en).toHaveAttribute("dir", "auto");
-    expect(await en.evaluate((el) => getComputedStyle(el).direction)).toBe("ltr");
+  test("footer links open Privacy and Terms", async ({ page }) => {
+    await page.getByTestId("footer-privacy").click();
+    await expect(page).toHaveURL(/\/privacy$/);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Privacy Policy");
+    await expect(page.getByTestId("legal-draft-note")).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+
+    await page.getByTestId("footer-terms").click();
+    await expect(page).toHaveURL(/\/terms$/);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Terms of Service");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+  });
+});
+
+test.describe("SEO routes", () => {
+  test("OG image route returns a PNG", async ({ page, request }) => {
+    await page.goto("/");
+    const og = await page.locator('meta[property="og:image"]').first().getAttribute("content");
+    expect(og).toBeTruthy();
+    const res = await request.get(new URL(og!).pathname + new URL(og!).search);
+    expect(res.status()).toBe(200);
+    expect(res.headers()["content-type"]).toContain("image/png");
+    const body = await res.body();
+    expect(body.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+  });
+
+  test("sitemap lists only public pages", async ({ request }) => {
+    const xml = await (await request.get("/sitemap.xml")).text();
+    expect(xml).toContain("/privacy</loc>");
+    expect(xml).toContain("/terms</loc>");
+    expect(xml).not.toContain("/b/");
+  });
+
+  test("login page links to Terms and Privacy", async ({ page }) => {
+    await page.goto("/login");
+    const legal = page.getByTestId("login-legal");
+    await expect(legal.getByRole("link", { name: "Terms" })).toHaveAttribute("href", "/terms");
+    await expect(legal.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/privacy");
   });
 });

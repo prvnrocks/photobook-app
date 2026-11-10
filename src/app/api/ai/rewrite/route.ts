@@ -22,6 +22,8 @@
 //   404 { error: 'not_found' }      409 { error: 'already_running' }
 //   429 { error: 'limit', remaining: 0 }   — per-book cap of successful rewrites
 //   429 { error: 'daily_limit' }           — per-user 24 h ceiling over all rewrite runs
+//   429 { error: 'budget_exhausted' }      — D-059 global daily AI budget used up (live mode only):
+//                                            no run row, no model call, nothing counted
 //   502 { error: <RewriteErrorCode>, retryable }  — not counted; run finished 'failed'
 //   503 { error: 'ai_off' }         — AI mode off / no transport
 //   503 { error: 'ai_unavailable' } — the rewrite RPC doesn't exist yet (code deployed before
@@ -32,6 +34,7 @@
 import { type NextRequest } from "next/server";
 import { resolveAiMode } from "@/lib/ai/client";
 import { rewriteCaption } from "@/lib/ai/agents/rewriter";
+import { isAiBudgetExhausted } from "@/lib/ai/budget";
 import { limitsFor } from "@/lib/ai/limits";
 import { sanitizeMemory } from "@/lib/ai/memory";
 import { analysisOf } from "@/lib/ai/orchestrator";
@@ -92,6 +95,8 @@ export async function POST(request: NextRequest) {
     const mode = resolveAiMode();
     const transport = mode === "off" ? null : getTransport(mode);
     if (mode === "off" || !transport) return json({ error: "ai_off" }, 503);
+    // D-059: checked before any run is created (never throws; a failed spend query fails open).
+    if (mode === "live" && (await isAiBudgetExhausted())) return json({ error: "budget_exhausted" }, 429);
 
     // Server-side context (never from the client).
     const savedDoc = parseBookDoc(book.doc);

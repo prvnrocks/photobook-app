@@ -66,6 +66,13 @@ describe("rewrite route ↔ UI parity", () => {
     expect(sessionBlockFor(rewriteResponseState(503, { error: "ai_off" }, "rewrite").kind)).toBe("off");
   });
 
+  it("D-059: 429 budget_exhausted → aiBreak ('try again later'), not a session block", () => {
+    const st = rewriteResponseState(429, { error: "budget_exhausted" }, "rewrite");
+    expect(st.kind).toBe("aiBreak");
+    expect(sessionBlockFor(st.kind)).toBeNull(); // each refused try is free (no run row)
+    expect(REWRITE_FAILURE_COPY.aiBreak).toBe("AI is taking a break — try again later");
+  });
+
   it("'Shorter' is disabled client-side for captions of ≤ 3 words", () => {
     expect(canShorten("")).toBe(false);
     expect(canShorten("Sunset")).toBe(false);
@@ -87,6 +94,7 @@ describe("rewrite route ↔ UI parity", () => {
       [503, null, "unavailable"],
       [429, { error: "limit", remaining: 0 }, "limit"],
       [429, { error: "daily_limit" }, "dailyLimit"],
+      [429, { error: "budget_exhausted" }, "aiBreak"],
       [400, { error: "too_short" }, "tooShort"],
       [409, { error: "already_running" }, "busy"],
       [401, { error: "unauthenticated" }, "signedOut"],
@@ -107,6 +115,7 @@ describe("rewrite route ↔ UI parity", () => {
       "unavailable",
       "limit",
       "dailyLimit",
+      "aiBreak",
       "tooShort",
       "busy",
       "retry",

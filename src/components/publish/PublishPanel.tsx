@@ -18,6 +18,7 @@ import type {
   UnpublishBookResult,
 } from "@/app/books/[id]/publish/actions";
 import { UpgradeButtonView } from "@/components/upgrade/UpgradeButton";
+import { track } from "@/lib/analytics/client";
 import type { PdfTransport } from "@/lib/pdf/ui";
 import { ShareButtons } from "@/components/viewer/ShareButtons";
 import {
@@ -98,6 +99,13 @@ export function PublishPanelView({
     }
     setBusy(null);
     if (r.ok) {
+      // analytics (M9 T14): flags + page count only.
+      track("published", {
+        is_paid: state.isPaid,
+        has_password: state.hasPassword,
+        pages: state.pageCount,
+        first: state.publishedAt === null,
+      });
       setMessage({ tone: "ok", text: state.published ? "Changes published" : "Your book is live" });
       refresh();
     } else {

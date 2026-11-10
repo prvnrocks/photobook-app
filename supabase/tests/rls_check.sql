@@ -41,7 +41,12 @@
 --      kept on claim-only updates, owner-writable profiles.email_reminders,
 --      service-role-only retention RPCs: expired books / abandoned drafts /
 --      pending uploads / orphan objects / old exports / unlock attempts /
---      stale runs / warning claims / AI spend by Dubai day).
+--      stale runs / warning claims / AI spend by Dubai day)
+--      and 20261114001700_payments_hardening.sql (orders note / comped_by /
+--      status 'comped', comp_book service-role only, fulfil treats
+--      needs_review / comped orders of other sessions as money already taken,
+--      delete_book_guarded service-role only, refuses paid / order-protected
+--      books).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -50,7 +55,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 162 checks passed
+--       RLS OK — all 169 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -198,6 +203,19 @@ declare
   cl_n1       integer;
   cl_n2       integer;
   cl_n3       integer;
+  ph_comp     uuid;
+  ph_comp2    uuid;
+  ph_rev      uuid;
+  ph_sess     text;
+  ph_sess2    text;
+  dg_free     uuid;
+  dg_paid     uuid;
+  dg_pend     uuid;
+  dg_comp     uuid;
+  dg_rev      uuid;
+  dg_disp     uuid;
+  dg_b        uuid;
+  dg_ord      uuid;
   r          record;
   a2_created timestamptz;
   n          integer;
@@ -1971,7 +1989,9 @@ begin
   -- entitlement leaves the books row untouched (same ctid); a drifted row is repaired
   v_txt := public.fulfill_book_checkout('evt_test_rls_' || md5(random()::text), 'checkout.session.async_payment_succeeded',
                                         sess_3, 'pi_test_rls_' || md5(random()::text), book_pay2, uid_a, 3900, 'aed', false);
-  if v_txt is distinct from 'fulfilled'
+  -- (1700: book_pay2's other session is also needs_review — money taken twice →
+  --  'fulfilled_after_review_order'; was 'fulfilled' under 1300)
+  if v_txt is distinct from 'fulfilled_after_review_order'
      or not exists (select 1 from public.orders where stripe_session_id = sess_3 and status = 'paid') then
     raise exception 'RLS FAIL [fulfil no-op]: needs_review session not fulfilled by a valid event (%)', v_txt;
   end if;
@@ -3083,6 +3103,266 @@ begin
   exception when invalid_parameter_value then null;
   end;
   reset role;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- 1700 (M9 T7): comp_book (D-061, admin-only comped entitlement) and double
+  -- payments that involve needs_review / comped orders.
+  -- ---------------------------------------------------------------------------
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  insert into public.books (user_id, title, slug, published_at, expires_at)
+  values (uid_a, 'RLS comp', 'rls-check-comp-' || substr(md5(random()::text), 1, 12), now(),
+          now() + interval '30 days')
+  returning id into ph_comp;
+
+  if has_function_privilege('anon', 'public.comp_book(uuid, uuid, text)', 'execute')
+     or has_function_privilege('authenticated', 'public.comp_book(uuid, uuid, text)', 'execute')
+     or has_function_privilege('public', 'public.comp_book(uuid, uuid, text)', 'execute')
+     or not has_function_privilege('service_role', 'public.comp_book(uuid, uuid, text)', 'execute')
+     or (select count(*) from pg_proc as p
+          where p.oid = 'public.comp_book(uuid, uuid, text)'::regprocedure
+            and not p.prosecdef
+            and p.proconfig @> array['search_path=""']) <> 1 then
+    raise exception 'RLS FAIL [comp grants]: comp_book EXECUTE not service-role only, DEFINER, or search_path not fixed';
+  end if;
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  begin
+    perform public.comp_book(ph_comp, uid_a, 'self comp');
+    raise exception 'RLS FAIL [comp grants]: authenticated could execute comp_book';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  if (select is_paid from public.books where id = ph_comp)
+     or exists (select 1 from public.orders where book_id = ph_comp) then
+    raise exception 'RLS FAIL [comp grants]: refused comp_book still changed the book / wrote an order';
+  end if;
+  checks := checks + 1;
+
+  -- service role: one 'comped' order (owner, amount 0, note, comped_by) + entitlement
+  set local role service_role;
+  v_txt := public.comp_book(ph_comp, uid_b, '  demo book  ');
+  if v_txt is distinct from 'comped' then
+    raise exception 'RLS FAIL [comp]: comp_book returned %', v_txt;
+  end if;
+  select count(*) into n from public.orders where book_id = ph_comp;
+  select * into r from public.orders where book_id = ph_comp;
+  if n <> 1 or r.status <> 'comped' or r.amount <> 0 or r.currency <> 'aed' or r.type <> 'digital'
+     or r.user_id is distinct from uid_a or r.comped_by is distinct from uid_b or r.note is distinct from 'demo book'
+     or r.stripe_session_id is not null or r.stripe_payment_intent_id is not null
+     or r.livemode is distinct from false or r.paid_at is null then
+    raise exception 'RLS FAIL [comp]: expected exactly one comped order, got % rows: %', n, row_to_json(r);
+  end if;
+  select is_paid, max_pages, expires_at into r from public.books where id = ph_comp;
+  if not r.is_paid or r.max_pages <> 100 or r.expires_at is not null then
+    raise exception 'RLS FAIL [comp]: entitlement not set: %', row_to_json(r);
+  end if;
+  if public.comp_book(ph_comp, uid_b, 'again') is distinct from 'already_paid'
+     or (select count(*) from public.orders where book_id = ph_comp) <> 1
+     or public.comp_book(gen_random_uuid(), uid_b, 'nope') is distinct from 'not_found' then
+    raise exception 'RLS FAIL [comp]: repeat comp not already_paid / wrote a 2nd order, or missing book not not_found';
+  end if;
+  reset role;
+  -- the owner sees the comped order (orders_select_own) but cannot touch it
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  if (select count(*) from public.orders where book_id = ph_comp and status = 'comped') <> 1 then
+    raise exception 'RLS FAIL [comp]: owner cannot read the comped order';
+  end if;
+  begin
+    update public.orders set note = 'x' where book_id = ph_comp;
+    raise exception 'RLS FAIL [comp]: authenticated could update a comped order';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  checks := checks + 1;
+
+  -- comp_book argument checks (22023) and the orders note / comp-shape constraints
+  insert into public.books (user_id, title) values (uid_a, 'RLS comp 2') returning id into ph_comp2;
+  set local role service_role;
+  begin
+    perform public.comp_book(ph_comp2, uid_b, null);
+    raise exception 'RLS FAIL [comp args]: null reason accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.comp_book(ph_comp2, uid_b, '   ');
+    raise exception 'RLS FAIL [comp args]: blank reason accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.comp_book(ph_comp2, uid_b, 'demo' || chr(10) || 'x');
+    raise exception 'RLS FAIL [comp args]: control character in reason accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.comp_book(ph_comp2, uid_b, repeat('a', 201));
+    raise exception 'RLS FAIL [comp args]: 201-char reason accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.comp_book(ph_comp2, gen_random_uuid(), 'demo');
+    raise exception 'RLS FAIL [comp args]: admin without a profile accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.comp_book(null, uid_b, 'demo');
+    raise exception 'RLS FAIL [comp args]: null book accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  reset role;
+  if (select is_paid from public.books where id = ph_comp2)
+     or exists (select 1 from public.orders where book_id = ph_comp2) then
+    raise exception 'RLS FAIL [comp args]: a rejected comp changed the book / wrote an order';
+  end if;
+  begin
+    insert into public.orders (user_id, book_id, type, amount, status, comped_by)
+    values (uid_a, ph_comp2, 'digital', 3900, 'comped', uid_b);
+    raise exception 'RLS FAIL [comp args]: comped order with a non-zero amount accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.orders (user_id, book_id, type, amount, status)
+    values (uid_a, ph_comp2, 'digital', 0, 'comped');
+    raise exception 'RLS FAIL [comp args]: comped order without comped_by accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.orders (user_id, book_id, type, amount, status, note)
+    values (uid_a, ph_comp2, 'digital', 0, 'expired', repeat('a', 201));
+    raise exception 'RLS FAIL [comp args]: 201-char order note accepted';
+  exception when check_violation then null;
+  end;
+  checks := checks + 1;
+
+  -- needs_review on another session + a new valid paid session on an UNPAID book:
+  -- fulfilled, but flagged ('fulfilled_after_review_order'); the replay is plain
+  -- already_paid (flagged once); the reviewed session's later valid event on the
+  -- now-paid book is a double payment ('already_paid_other_session')
+  insert into public.books (user_id, title) values (uid_a, 'RLS review dbl') returning id into ph_rev;
+  ph_sess  := 'cs_test_rls_rev_' || md5(random()::text);
+  ph_sess2 := 'cs_test_rls_rev2_' || md5(random()::text);
+  insert into public.orders (user_id, book_id, type, amount, status, stripe_session_id)
+  values (uid_a, ph_rev, 'digital', 3900, 'needs_review', ph_sess);
+  set local role service_role;
+  v_txt := public.fulfill_book_checkout('evt_test_rls_' || md5(random()::text), 'checkout.session.completed',
+                                        ph_sess2, null, ph_rev, uid_a, 3900, 'aed', false);
+  if v_txt is distinct from 'fulfilled_after_review_order'
+     or not (select is_paid from public.books where id = ph_rev)
+     or not exists (select 1 from public.orders where stripe_session_id = ph_sess2 and status = 'paid') then
+    raise exception 'RLS FAIL [double payment review]: unpaid book + needs_review order returned % / not fulfilled', v_txt;
+  end if;
+  v_txt := public.fulfill_book_checkout('evt_test_rls_' || md5(random()::text), 'checkout.session.async_payment_succeeded',
+                                        ph_sess2, null, ph_rev, uid_a, 3900, 'aed', false);
+  if v_txt is distinct from 'already_paid' then
+    raise exception 'RLS FAIL [double payment review]: replay of the flagged session re-flagged (%)', v_txt;
+  end if;
+  v_txt := public.fulfill_book_checkout('evt_test_rls_' || md5(random()::text), 'checkout.session.async_payment_succeeded',
+                                        ph_sess, null, ph_rev, uid_a, 3900, 'aed', false);
+  if v_txt is distinct from 'already_paid_other_session'
+     or not exists (select 1 from public.orders where stripe_session_id = ph_sess and status = 'paid') then
+    raise exception 'RLS FAIL [double payment review]: reviewed session on a paid book returned %', v_txt;
+  end if;
+  reset role;
+  checks := checks + 1;
+
+  -- a paid session on a comped book is a double payment; its replay is not re-flagged;
+  -- the comped order is untouched
+  set local role service_role;
+  ph_sess := 'cs_test_rls_comp_' || md5(random()::text);
+  v_txt := public.fulfill_book_checkout('evt_test_rls_' || md5(random()::text), 'checkout.session.completed',
+                                        ph_sess, null, ph_comp, uid_a, 3900, 'aed', false);
+  if v_txt is distinct from 'already_paid_other_session' then
+    raise exception 'RLS FAIL [double payment comp]: paid session on a comped book returned %', v_txt;
+  end if;
+  v_txt := public.fulfill_book_checkout('evt_test_rls_' || md5(random()::text), 'checkout.session.async_payment_succeeded',
+                                        ph_sess, null, ph_comp, uid_a, 3900, 'aed', false);
+  if v_txt is distinct from 'already_paid'
+     or (select count(*) from public.orders where book_id = ph_comp and status = 'comped') <> 1 then
+    raise exception 'RLS FAIL [double payment comp]: replay re-flagged (%) or comped order changed', v_txt;
+  end if;
+  reset role;
+  checks := checks + 1;
+
+  -- delete_book_guarded (1700, for T6): service-role only; deletes an unprotected own
+  -- book (orders keep their row, book_id null); refuses paid books and books with a
+  -- pending / needs_review / disputed / comped order; another user's book → not_found
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  insert into public.books (user_id, title) values (uid_a, 'RLS del free') returning id into dg_free;
+  insert into public.books (user_id, title) values (uid_a, 'RLS del paid') returning id into dg_paid;
+  update public.books set is_paid = true where id = dg_paid;
+  insert into public.books (user_id, title) values (uid_a, 'RLS del pending') returning id into dg_pend;
+  insert into public.books (user_id, title) values (uid_a, 'RLS del comped') returning id into dg_comp;
+  insert into public.books (user_id, title) values (uid_a, 'RLS del review') returning id into dg_rev;
+  insert into public.books (user_id, title) values (uid_a, 'RLS del disputed') returning id into dg_disp;
+  insert into public.books (user_id, title) values (uid_b, 'RLS del B') returning id into dg_b;
+  insert into public.orders (user_id, book_id, type, amount, status, stripe_session_id)
+  values (uid_a, dg_free, 'digital', 3900, 'expired', 'cs_test_rls_dg_' || md5(random()::text))
+  returning id into dg_ord;
+  insert into public.orders (user_id, book_id, type, amount, status, stripe_session_id) values
+    (uid_a, dg_pend, 'digital', 3900, 'pending',      'cs_test_rls_dg_' || md5(random()::text)),
+    (uid_a, dg_rev,  'digital', 3900, 'needs_review', 'cs_test_rls_dg_' || md5(random()::text)),
+    (uid_a, dg_disp, 'digital', 3900, 'disputed',     'cs_test_rls_dg_' || md5(random()::text));
+  -- a comped order on an UNPAID book (e.g. a half-reverted comp) still protects it
+  insert into public.orders (user_id, book_id, type, amount, status, comped_by, note)
+  values (uid_a, dg_comp, 'digital', 0, 'comped', uid_b, 'rls check');
+
+  if has_function_privilege('anon', 'public.delete_book_guarded(uuid, uuid)', 'execute')
+     or has_function_privilege('authenticated', 'public.delete_book_guarded(uuid, uuid)', 'execute')
+     or has_function_privilege('public', 'public.delete_book_guarded(uuid, uuid)', 'execute')
+     or not has_function_privilege('service_role', 'public.delete_book_guarded(uuid, uuid)', 'execute')
+     or (select count(*) from pg_proc as p
+          where p.oid = 'public.delete_book_guarded(uuid, uuid)'::regprocedure
+            and not p.prosecdef
+            and p.proconfig @> array['search_path=""']) <> 1 then
+    raise exception 'RLS FAIL [delete guarded grants]: EXECUTE not service-role only, DEFINER, or search_path not fixed';
+  end if;
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  begin
+    perform public.delete_book_guarded(dg_free, uid_a);
+    raise exception 'RLS FAIL [delete guarded grants]: authenticated could execute delete_book_guarded';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  if not exists (select 1 from public.books where id = dg_free) then
+    raise exception 'RLS FAIL [delete guarded grants]: refused call still deleted the book';
+  end if;
+  checks := checks + 1;
+
+  set local role service_role;
+  if public.delete_book_guarded(dg_paid, uid_a) is distinct from 'protected'
+     or public.delete_book_guarded(dg_pend, uid_a) is distinct from 'protected'
+     or public.delete_book_guarded(dg_comp, uid_a) is distinct from 'protected'
+     or public.delete_book_guarded(dg_rev, uid_a) is distinct from 'protected'
+     or public.delete_book_guarded(dg_disp, uid_a) is distinct from 'protected' then
+    raise exception 'RLS FAIL [delete guarded]: a paid / order-protected book was not refused';
+  end if;
+  if public.delete_book_guarded(dg_b, uid_a) is distinct from 'not_found'
+     or public.delete_book_guarded(gen_random_uuid(), uid_a) is distinct from 'not_found' then
+    raise exception 'RLS FAIL [delete guarded]: another user''s / missing book not not_found';
+  end if;
+  begin
+    perform public.delete_book_guarded(null, uid_a);
+    raise exception 'RLS FAIL [delete guarded]: null book accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  v_txt := public.delete_book_guarded(dg_free, uid_a);
+  reset role;
+  if v_txt is distinct from 'deleted'
+     or exists (select 1 from public.books where id = dg_free)
+     or (select count(*) from public.books where id in (dg_paid, dg_pend, dg_comp, dg_rev, dg_disp, dg_b)) <> 6
+     or not exists (select 1 from public.orders where id = dg_ord and book_id is null and status = 'expired') then
+    raise exception 'RLS FAIL [delete guarded]: unprotected own book not deleted (%), others touched, or order row lost', v_txt;
+  end if;
   checks := checks + 1;
 
   -- ---------------------------------------------------------------------------

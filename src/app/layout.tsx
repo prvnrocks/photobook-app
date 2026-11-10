@@ -1,6 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Cairo, Inter, Playfair_Display, Tajawal } from "next/font/google";
 import "./globals.css";
+// --- analytics (M9 T14, D-058) ---
+import { Analytics } from "@/components/analytics/Analytics";
+import { analyticsEnabled } from "@/lib/analytics/flash";
+// --- end analytics ---
 
 const inter = Inter({
   variable: "--font-inter",
@@ -50,7 +54,11 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${cairo.variable} ${tajawal.variable} ${playfair.variable}`}
     >
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        {children}
+        {/* analytics (M9 T14): renders nothing; no-op without NEXT_PUBLIC_POSTHOG_KEY */}
+        {analyticsEnabled() ? <Analytics /> : null}
+      </body>
     </html>
   );
 }

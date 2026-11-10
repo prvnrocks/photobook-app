@@ -57,3 +57,37 @@ export type Limits = (typeof LIMITS)[keyof typeof LIMITS];
 export function limitsFor(isPaid: boolean): Limits {
   return isPaid ? LIMITS.paid : LIMITS.free;
 }
+
+// ---------------------------------------------------------------------------------------------
+// D-059: AI daily budget breaker (all users, all books)
+
+/**
+ * Global USD ceiling per Asia/Dubai calendar day, from env AI_DAILY_BUDGET_USD (server only).
+ * Compared against today's sum of agent_runs.total_cost_usd (admin_ai_spend_daily(1)).
+ *
+ * - unset / empty / not a finite number / negative → `null` = NO budget (unlimited). An invalid
+ *   value deliberately fails open: a typo must never switch AI off for everyone.
+ * - `0` → every new live AI run and ✨ rewrite is refused (a kill switch).
+ * - otherwise the value in USD, e.g. `10` at launch.
+ *
+ * Pure: pass `env` in tests. Never call from client code (process.env is empty there anyway).
+ */
+export function readDailyBudgetUsd(env: Record<string, string | undefined> = process.env): number | null {
+  const raw = env.AI_DAILY_BUDGET_USD;
+  if (typeof raw !== "string") return null;
+  const s = raw.trim();
+  // Plain decimal only ("10", "12.5") — no hex / exponent / "Infinity" surprises from Number().
+  if (!/^\d+(\.\d+)?$/.test(s)) return null;
+  const n = Number(s);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/**
+ * Has today's spend reached the budget? `null` budget → never. Reaching it counts (spend ≥
+ * budget), so a budget of 0 refuses everything. A non-finite / negative spend is treated as 0.
+ */
+export function isOverDailyBudget(spendUsd: number, budgetUsd: number | null): boolean {
+  if (budgetUsd === null || !Number.isFinite(budgetUsd) || budgetUsd < 0) return false;
+  const spend = Number.isFinite(spendUsd) && spendUsd > 0 ? spendUsd : 0;
+  return spend >= budgetUsd;
+}

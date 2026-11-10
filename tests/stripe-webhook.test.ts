@@ -269,6 +269,34 @@ describe("POST /api/stripe/webhook — checkout sessions", () => {
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 
+  it("fulfilled_after_review_order (1700) → 200 + error double_payment (ids only) + revalidate like fulfilled", async () => {
+    mocks.rpc.mockResolvedValue({ data: "fulfilled_after_review_order", error: null });
+    const res = await post("checkout.session.async_payment_succeeded", session(), "evt_rev_1");
+    expect(res.status).toBe(200);
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      "fulfill_book_checkout",
+      expect.objectContaining({ p_event_id: "evt_rev_1", p_session_id: "cs_test_123", p_book_id: BOOK }),
+    );
+    const errors = vi.mocked(console.error).mock.calls.map((c) => String(c[0]));
+    expect(errors).toEqual([
+      "[stripe-webhook] checkout.session.async_payment_succeeded double_payment:review_order evt=evt_rev_1 cs=cs_test_123 pi=pi_test_123",
+    ]);
+    for (const line of logs) {
+      expect(line).not.toContain(BOOK);
+      expect(line).not.toContain(USER);
+      expect(line).not.toContain(EMAIL);
+      expect(line).not.toContain("3900");
+    }
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/dashboard");
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/books/${BOOK}/publish`);
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/books/${BOOK}/edit`);
+  });
+
+  it("an unknown fulfil result → 500 (bad_result; Stripe retries)", async () => {
+    mocks.rpc.mockResolvedValue({ data: "comped", error: null });
+    expect((await post("checkout.session.completed", session())).status).toBe(500);
+  });
+
   it("non-upgrade kind → ignored 200", async () => {
     const res = await post("checkout.session.completed", session({ metadata: { kind: "something_else" } }));
     expect(res.status).toBe(200);

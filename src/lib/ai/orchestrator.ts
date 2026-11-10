@@ -86,6 +86,7 @@ import { captionWriterMaxTokens, writeCaptions, type WriteCaptionsResult } from 
 import { critiqueBook, criticMaxTokens } from "./agents/critic";
 import { MAX_RETRY_ISSUES, planAlbum } from "./agents/storyteller";
 import { buildBatches } from "./batches";
+import { isAiBudgetExhausted } from "./budget";
 import { buildCaptionContext, checkBookCaptions, CAPTION_ISSUE_CODES, type CaptionCheckContext, type CaptionIssue } from "./caption-check";
 import {
   applyCaptions,
@@ -214,6 +215,11 @@ export interface OrchestratorDeps {
   stepLogger(runId: string): StepLogger;
   /** USD spent by the run so far (sum of its agent_steps) — D-035 run budget. */
   getRunCostUsd(runId: string): Promise<number>;
+  /**
+   * D-059 daily budget breaker: true = today's (Asia/Dubai) AI spend reached AI_DAILY_BUDGET_USD.
+   * Checked before a LIVE run is created. Must never throw (fails open). Missing → never over.
+   */
+  isOverDailyAiBudget?: () => Promise<boolean>;
   /** Optional override of cursorByteLimit() (tests). */
   maxCursorBytes?: () => number;
   // memory (D-032)
@@ -249,6 +255,7 @@ export function defaultDeps(): OrchestratorDeps {
     stepLogger: agentRunsDb.stepLogger,
     // Re-sums agent_steps into agent_runs.total_* (idempotent) and returns the total.
     getRunCostUsd: async (runId) => (await agentRunsDb.syncRunTotals(runId)).costUsd,
+    isOverDailyAiBudget: () => isAiBudgetExhausted(),
     getUserMemory: async (userId) => (await getUserMemoryAdmin(userId))?.prefs ?? null,
     resolveMode: () => resolveAiMode(),
     transportFor: (mode) => getTransport(mode),
@@ -262,7 +269,8 @@ export function defaultDeps(): OrchestratorDeps {
 
 export type StartInput = { bookId: string; userId: string; trigger: "build" | "rebuild" };
 
-export type StartLimit = "daily_builds" | "rebuilds" | "analysed_photos";
+/** 'budget_exhausted' (D-059): the global daily AI budget is used up — no run was created. */
+export type StartLimit = "daily_builds" | "rebuilds" | "analysed_photos" | "budget_exhausted";
 
 export type StartResult =
   | { ok: true; runId: string; mode: RunMode; state: RunState }
@@ -869,6 +877,11 @@ export async function startRun(input: StartInput, deps: OrchestratorDeps = defau
   // The route derives the trigger server-side; defensively, a "build" on a book whose album the
   // AI already made (or that already had a finished live AI run) counts as a rebuild.
   const trigger = await effectiveTrigger(input.trigger, book, aiMode, deps);
+  // D-059: over the global daily budget → no run row, no model call, nothing counted. The book
+  // keeps its rule album (written at finalize, D-016). Replay costs nothing and is never refused.
+  if (aiMode === "live" && (await overDailyBudget(deps))) {
+    return { ok: false, error: "limit", limit: "budget_exhausted" };
+  }
   const limits = limitsFor(book.is_paid === true);
   const created = await deps.createRunCapped({
     bookId: book.id,
@@ -886,6 +899,16 @@ export async function startRun(input: StartInput, deps: OrchestratorDeps = defau
   }
   // No cursor yet: the first tick builds it from the photos as they are then (state 'queued').
   return { ok: true, runId: created.id, mode: aiMode, state: "queued" };
+}
+
+/** Never throws: a failing check fails open (budget.ts already logs the code). */
+async function overDailyBudget(deps: OrchestratorDeps): Promise<boolean> {
+  if (!deps.isOverDailyAiBudget) return false;
+  try {
+    return (await deps.isOverDailyAiBudget()) === true;
+  } catch {
+    return false;
+  }
 }
 
 async function effectiveTrigger(
