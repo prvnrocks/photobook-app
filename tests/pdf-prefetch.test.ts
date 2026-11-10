@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   chunkPhotoSchedule,
   createLimiter,
@@ -6,7 +6,10 @@ import {
   PRINT_ENCODE_CONCURRENCY_MAX,
   PRINT_ENCODE_CONCURRENCY_MIN,
   PRINT_IMAGE_IN_FLIGHT,
+  PRINT_IMAGE_IN_FLIGHT_LOW_MEMORY,
+  functionMemoryMb,
   printEncodeConcurrency,
+  printImageInFlight,
   startPrefetch,
 } from "@/lib/pdf/prefetch";
 import { chunkRanges } from "@/lib/pdf/rules";
@@ -19,19 +22,31 @@ function doc(cover: string | null, pages: (string | null)[][]) {
 }
 
 describe("concurrency", () => {
-  it("encodes: one per vCPU, at least 2, at most 4", () => {
-    expect(printEncodeConcurrency(1)).toBe(2);
-    expect(printEncodeConcurrency(2)).toBe(2);
-    expect(printEncodeConcurrency(3)).toBe(3);
-    expect(printEncodeConcurrency(8)).toBe(4);
-    expect(printEncodeConcurrency(64)).toBe(PRINT_ENCODE_CONCURRENCY_MAX);
+  const BIG = 8192; // MB
+  it("encodes: one per vCPU, 1..4 (big function)", () => {
+    expect(printEncodeConcurrency(1, BIG)).toBe(1);
+    expect(printEncodeConcurrency(2, BIG)).toBe(2);
+    expect(printEncodeConcurrency(3, BIG)).toBe(3);
+    expect(printEncodeConcurrency(8, BIG)).toBe(4);
+    expect(printEncodeConcurrency(64, BIG)).toBe(PRINT_ENCODE_CONCURRENCY_MAX);
+  });
+
+  it("Hobby sizing (2 GB / 1 vCPU): 1 encode, never more than 2 on ≤ 2 GB; 8 originals in flight", () => {
+    expect(printEncodeConcurrency(1, 2048)).toBe(1);
+    expect(printEncodeConcurrency(8, 2048)).toBe(2);
+    expect(printEncodeConcurrency(8, 3009)).toBe(4);
+    expect(printImageInFlight(2048)).toBe(PRINT_IMAGE_IN_FLIGHT_LOW_MEMORY);
+    expect(PRINT_IMAGE_IN_FLIGHT_LOW_MEMORY).toBe(8);
+    expect(printImageInFlight(4096)).toBe(PRINT_IMAGE_IN_FLIGHT);
+    expect(functionMemoryMb({ AWS_LAMBDA_FUNCTION_MEMORY_SIZE: "2048" })).toBe(2048);
+    expect(functionMemoryMb({})).toBeGreaterThan(0);
   });
 
   it("bad cpu counts fall back to the floor", () => {
-    expect(printEncodeConcurrency(0)).toBe(PRINT_ENCODE_CONCURRENCY_MIN);
-    expect(printEncodeConcurrency(-3)).toBe(PRINT_ENCODE_CONCURRENCY_MIN);
-    expect(printEncodeConcurrency(Number.NaN)).toBe(PRINT_ENCODE_CONCURRENCY_MIN);
-    expect(printEncodeConcurrency(2.9)).toBe(2);
+    expect(printEncodeConcurrency(0, BIG)).toBe(PRINT_ENCODE_CONCURRENCY_MIN);
+    expect(printEncodeConcurrency(-3, BIG)).toBe(PRINT_ENCODE_CONCURRENCY_MIN);
+    expect(printEncodeConcurrency(Number.NaN, BIG)).toBe(PRINT_ENCODE_CONCURRENCY_MIN);
+    expect(printEncodeConcurrency(2.9, BIG)).toBe(2);
   });
 
   it("default reads this machine and stays in bounds; in-flight limit is I/O-sized", () => {
@@ -198,5 +213,20 @@ describe("startPrefetch", () => {
     const { calls, target } = fakeTarget();
     startPrefetch(target, { uses: [], releaseAfter: [] }).chunkDone(0);
     expect(calls).toEqual([]);
+  });
+});
+
+describe("startPrefetch stop() (S2)", () => {
+  it("after stop, chunkDone neither releases nor queues", () => {
+    const prefetch = vi.fn();
+    const release = vi.fn();
+    const schedule = { uses: [["a"], ["b"], ["c"]], releaseAfter: [["a"], ["b"], ["c"]] };
+    const c = startPrefetch({ prefetch, release }, schedule, 2);
+    expect(prefetch).toHaveBeenCalledTimes(2);
+    c.stop();
+    c.stop();
+    c.chunkDone(0);
+    expect(prefetch).toHaveBeenCalledTimes(2);
+    expect(release).not.toHaveBeenCalled();
   });
 });

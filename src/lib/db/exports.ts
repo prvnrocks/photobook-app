@@ -1,5 +1,5 @@
 import "server-only";
-// public.exports queries + RPC wrappers (M8, migration 1400, D-047 / D-051).
+// public.exports queries + RPC wrappers (M8, migrations 1400 + 1500, D-047 / D-051).
 //
 // Everything here uses the secret-key admin client: clients have no write privileges on exports
 // and may only SELECT the status columns (OWNER_EXPORT_COLUMNS). Owner-facing reads therefore
@@ -13,7 +13,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/lib/supabase/database.types";
 import { isUuid } from "@/lib/uuid";
 
-export type ExportStatus = "queued" | "rendering" | "ready" | "failed";
+/**
+ * superseded (1500): a former ready row whose PDF object was removed (a newer export of the book is
+ * ready) or found missing. Rows are never deleted by the app — the daily cap counts them.
+ */
+export type ExportStatus = "queued" | "rendering" | "ready" | "failed" | "superseded";
 export type ExportCaptionLang = "en" | "ar";
 
 /** Columns granted to `authenticated` in 1400 — owner reads must stay within this list. */
@@ -50,6 +54,8 @@ export interface CreateExportJobArgs {
   /** books.doc as saved (a JSON object). */
   doc: Json;
   captionLang: ExportCaptionLang;
+  /** rules.PDF_RENDERER_VERSION — a ready PDF is reused only for the same version (1..1000). */
+  rendererVersion: number;
   /** Jobs per user per rolling 24 h, any outcome. */
   dailyCap: number;
   /** queued / rendering jobs older than this are failed as 'stale' (60..86400). */
@@ -61,8 +67,11 @@ export type CreateExportJobResult =
   | { status: "created"; exportId: string }
   /** A ready PDF exists for this doc_rev + caption_lang — reuse it. */
   | { status: "ready"; exportId: string }
-  /** Another job for this book is in flight (maybe for an older doc_rev). */
-  | { status: "running"; exportId: string; docRev: number }
+  /**
+   * Another job for this book is in flight (maybe for an older doc_rev). claimable: queued, or
+   * rendering with an expired lease and claims left — the caller should (re-)kick runExport.
+   */
+  | { status: "running"; exportId: string; docRev: number; state: "queued" | "rendering"; claimable: boolean }
   | { status: "daily_cap" }
   | { status: "not_paid" }
   | { status: "not_found" }
@@ -74,7 +83,13 @@ const rev = z.number().int().nonnegative();
 const CreateResultSchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("created"), export_id: uuid }),
   z.object({ status: z.literal("ready"), export_id: uuid }),
-  z.object({ status: z.literal("running"), export_id: uuid, doc_rev: rev }),
+  z.object({
+    status: z.literal("running"),
+    export_id: uuid,
+    doc_rev: rev,
+    state: z.enum(["queued", "rendering"]),
+    claimable: z.boolean(),
+  }),
   z.object({ status: z.literal("daily_cap") }),
   z.object({ status: z.literal("not_paid") }),
   z.object({ status: z.literal("not_found") }),
@@ -83,7 +98,8 @@ const CreateResultSchema = z.discriminatedUnion("status", [
 
 /**
  * Atomic (per-user advisory lock) job creation: ownership + live is_paid, stale reaping, ready
- * reuse, one job in flight per book, daily cap, insert. See migration 1400 for the exact order.
+ * reuse (same renderer version), one job in flight per book, daily cap, insert. See migration 1500
+ * for the exact order.
  */
 export async function createExportJob(args: CreateExportJobArgs): Promise<CreateExportJobResult> {
   if (!isUuid(args.bookId) || !isUuid(args.userId)) return { status: "not_found" };
@@ -93,6 +109,7 @@ export async function createExportJob(args: CreateExportJobArgs): Promise<Create
     p_doc_rev: args.docRev,
     p_doc: args.doc,
     p_caption_lang: args.captionLang,
+    p_renderer_version: Math.floor(args.rendererVersion),
     p_daily_cap: Math.floor(args.dailyCap),
     p_stale_seconds: Math.floor(args.staleSeconds),
   });
@@ -105,7 +122,7 @@ export async function createExportJob(args: CreateExportJobArgs): Promise<Create
     case "ready":
       return { status: r.status, exportId: r.export_id };
     case "running":
-      return { status: "running", exportId: r.export_id, docRev: r.doc_rev };
+      return { status: "running", exportId: r.export_id, docRev: r.doc_rev, state: r.state, claimable: r.claimable };
     case "stale_rev":
       return { status: "stale_rev", docRev: r.doc_rev };
     default:
@@ -196,7 +213,7 @@ type OwnerRow = {
   finished_at: string | null;
 };
 
-const STATUSES: readonly ExportStatus[] = ["queued", "rendering", "ready", "failed"];
+const STATUSES: readonly ExportStatus[] = ["queued", "rendering", "ready", "failed", "superseded"];
 
 function toOwnerExport(row: OwnerRow): OwnerExport {
   if (!(STATUSES as readonly string[]).includes(row.status)) throw new ExportsQueryError("read", "bad_status");
@@ -306,22 +323,31 @@ export async function listOlderReadyExports(bookId: string, keepId: string): Pro
     .map((r) => ({ id: r.id, path: r.path }));
 }
 
+export type SupersedeReason = "superseded" | "missing_file";
+
 /**
- * Deletes export rows of the book (after their PDFs were removed from Storage). Only ready / failed
- * rows — never a job in flight. Returns the number of rows deleted.
+ * Marks READY rows of the book superseded (supersede_exports, 1500): path cleared, purged_at set,
+ * error_code = reason. Call after their PDFs were removed from Storage ("superseded") or when the
+ * object turned out to be missing ("missing_file"). Rows are never deleted here: the daily cap
+ * counts every row of the rolling 24 h (M8 review S1). Deleting old rows is M9's cron job only.
+ * Returns the number of rows changed.
  */
-export async function deleteExportRows(bookId: string, exportIds: readonly string[]): Promise<number> {
+export async function supersedeExports(
+  bookId: string,
+  userId: string,
+  exportIds: readonly string[],
+  reason: SupersedeReason,
+): Promise<number> {
   const ids = exportIds.filter(isUuid);
-  if (!isUuid(bookId) || ids.length === 0) return 0;
-  const { data, error } = await createAdminClient()
-    .from("exports")
-    .delete()
-    .eq("book_id", bookId)
-    .in("id", ids)
-    .in("status", ["ready", "failed"])
-    .select("id");
-  if (error) throw new ExportsQueryError("delete", error.code);
-  return (data ?? []).length;
+  if (!isUuid(bookId) || !isUuid(userId) || ids.length === 0) return 0;
+  const { data, error } = await createAdminClient().rpc("supersede_exports", {
+    p_book: bookId,
+    p_user: userId,
+    p_ids: ids,
+    p_reason: reason,
+  });
+  if (error) throw new ExportsQueryError("supersede", error.code);
+  return typeof data === "number" ? data : 0;
 }
 
 // ---------------------------------------------------------------------------

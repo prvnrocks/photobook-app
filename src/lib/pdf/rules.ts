@@ -16,6 +16,34 @@ export const EXPORT_STALE_SECONDS = 360;
 export const SIGNED_URL_TTL_SECONDS = 600;
 /** D-048: lifetime of a print-route token (verify rejects anything > 10 min out). */
 export const PRINT_TOKEN_TTL_SECONDS = 300;
+/**
+ * N1 (M8 review): version of the PDF renderer output. Bump whenever a change makes earlier PDFs
+ * look different (fonts, encoder, layout maths): create_export_job reuses a ready PDF only when
+ * its renderer_version matches. 1 = pre-review rows (migration 1500 default); 2 = static print
+ * fonts (no Type3) + baseline JPEG encoder.
+ */
+export const PDF_RENDERER_VERSION = 2;
+/** Size fallback (M8 T12): when the merged PDF exceeds the 50 MB bucket limit, re-render once
+ * with every print image planned at this dpi and encoded at this JPEG quality. */
+export const SIZE_FALLBACK_DPI = 250;
+export const SIZE_FALLBACK_JPEG_QUALITY = 70;
+/**
+ * Function budget of /api/books/[id]/pdf in seconds — the ONE constant the render deadline and
+ * lease derive from. Must equal `maxDuration` in that route file and in vercel.json (tests assert
+ * it; Next needs the route's value as a literal).
+ *
+ * Plan: Vercel HOBBY with Fluid compute (vercel.json "fluid": true). Vercel docs, "Configuring
+ * Maximum Duration for Vercel Functions" (as of 2026): with Fluid compute Hobby defaults to and
+ * caps at 300 s (Pro: default 300 s, max 800 s); without Fluid, Hobby caps at 60 s. Hobby memory is
+ * fixed at 2 GB / 1 vCPU and cannot be configured.
+ * If Fluid compute is ever off on Hobby: set 60 here, in the route and in vercel.json (deadline
+ * then 30 s — only small books fit).
+ * Pro later: keep 300 (or up to 800), and set Function CPU "Performance" (4 GB / 2 vCPU) in the
+ * dashboard (with Fluid, memory is a project setting, not vercel.json).
+ */
+export const PDF_MAX_DURATION_SECONDS = 300;
+/** Render deadline inside one invocation: maxDuration minus 30 s for the response, fail record and browser close. */
+export const PDF_DEADLINE_MS = (PDF_MAX_DURATION_SECONDS - 30) * 1000;
 /** D-052: sheets per Chromium render chunk. */
 export const CHUNK_SHEETS = 20;
 /** Highest valid sheet index: cover + the paid page cap. */

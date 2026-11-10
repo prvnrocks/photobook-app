@@ -4,13 +4,15 @@
 //   200 { status: 'ready', exportId, url, filename, bytes, pageCount }  ready PDF for the current
 //       doc_rev + caption_lang (fresh 10-min signed URL, Content-Disposition attachment=filename)
 //   202 { status: 'queued' | 'rendering', exportId }                     created / already running
+//       (a queued job, or a rendering one whose lease expired, is re-kicked — re-POST to nudge)
 //   401 unauthenticated | 403 forbidden (cross-site) | 404 not_found | 402 not_paid
 //   409 invalid_doc | empty | page_limit | conflict (doc saved twice during the request)
 //   429 daily_cap | 503 unavailable (BOOK_ACCESS_SECRET / Chromium / app URL not configured)
 //   500 server_error
-// GET ?exportId=<uuid> — poll:
+// GET ?exportId=<uuid> — poll (kept for compatibility; the client polls the lightweight
+//   /api/books/[id]/pdf/status route, which answers the same but never re-kicks):
 //   200 { status: 'queued' | 'rendering' } | { status: 'ready', exportId, url, filename, bytes,
-//       pageCount } | { status: 'failed', error: <code> }
+//       pageCount } | { status: 'failed', error: <code> }  ('superseded' / 'missing_file': re-POST)
 //   401 | 404 (not the caller's export of this book) | 500
 // Rendering runs after the response via after() (same invocation, bounded by maxDuration).
 // All responses no-store. Logs carry error codes only.
@@ -23,7 +25,11 @@ import { isUuid } from "@/lib/uuid";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-/** Render budget for after() (job deadline is 270 s). Requires Vercel Pro (Hobby caps at 60 s). */
+/**
+ * = rules.PDF_MAX_DURATION_SECONDS (Next needs a literal here; tests assert they match, and
+ * vercel.json's value too). Job deadline = this − 30 s. 300 s is the Hobby maximum WITH Fluid
+ * compute (vercel.json "fluid": true); Hobby without Fluid caps at 60 s.
+ */
 export const maxDuration = 300;
 // TODO(NEEDS-HUMAN): set `preferredRegion` to the Supabase project's region (Vercel defaults to
 // iad1) — every print image is downloaded from Storage, so co-locating cuts render time.

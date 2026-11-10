@@ -6,14 +6,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-const download = vi.fn<(path: string) => Promise<{ data: Blob | null; error: unknown }>>();
+const download = vi.fn<(path: string, params?: { signal?: AbortSignal }) => Promise<{ data: Blob | null; error: unknown }>>();
 vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => ({ storage: { from: () => ({ download: (p: string) => download(p) }) } }),
+  createAdminClient: () => ({
+    storage: { from: () => ({ download: (p: string, _o?: unknown, params?: { signal?: AbortSignal }) => download(p, params) }) },
+  }),
 }));
 
-import { PRINT_IMAGE_IN_FLIGHT } from "@/lib/pdf/prefetch";
+import { printImageInFlight } from "@/lib/pdf/prefetch";
 import {
   createPrintImageLoader,
+  downloadOriginal,
+  PRINT_DOWNLOAD_ATTEMPTS,
+  PRINT_DOWNLOAD_TIMEOUT_MS,
   encodePrintImage,
   loadPrintImage,
   PRINT_JPEG_OPTIONS,
@@ -53,7 +58,7 @@ describe("encodePrintImage / loadPrintImage", () => {
   it("rotates upright, strips EXIF/GPS, resizes to the target", async () => {
     download.mockResolvedValue({ data: blob(ORIENT6), error: null });
     const out = await loadPrintImage({ id: "p", original_path: "u/b/p-original.jpg" }, { width: 150, height: 200 });
-    expect(download).toHaveBeenCalledWith("u/b/p-original.jpg");
+    expect(download).toHaveBeenCalledWith("u/b/p-original.jpg", { signal: expect.any(AbortSignal) });
     const meta = await sharp(out).metadata();
     expect(meta.format).toBe("jpeg");
     expect([meta.width, meta.height]).toEqual([150, 200]); // portrait after rotation
@@ -139,6 +144,79 @@ describe("encodePrintImage / loadPrintImage", () => {
   });
 });
 
+describe("downloads: per-attempt timeout, one retry, abort (T12 follow-up / S2)", () => {
+  const ok = () => ({ data: blob(ORIENT6), error: null });
+  const hang = (_p: string, params?: { signal?: AbortSignal }) =>
+    new Promise<{ data: Blob | null; error: unknown }>((resolve) => {
+      // like storage-js: an aborted fetch resolves with an error
+      params?.signal?.addEventListener("abort", () => resolve({ data: null, error: { message: "aborted" } }));
+    });
+
+  it("defaults: 30 s per attempt, 2 attempts", () => {
+    expect(PRINT_DOWNLOAD_TIMEOUT_MS).toBe(30_000);
+    expect(PRINT_DOWNLOAD_ATTEMPTS).toBe(2);
+  });
+
+  it("a stalled download times out and the retry succeeds", async () => {
+    download.mockImplementationOnce(hang).mockResolvedValueOnce(ok());
+    const out = await downloadOriginal("u/b/p-original.jpg", { timeoutMs: 20 });
+    expect(out.byteLength).toBe(ORIENT6.byteLength);
+    expect(download).toHaveBeenCalledTimes(2);
+  });
+
+  it("two stalled attempts → download_failed (no path in the message)", async () => {
+    download.mockImplementation(hang);
+    const e = await downloadOriginal("u/b/secret-original.jpg", { timeoutMs: 15 }).catch((x) => x);
+    expect(e).toMatchObject({ code: "download_failed" });
+    expect(e.message).not.toContain("secret");
+    expect(download).toHaveBeenCalledTimes(2);
+  });
+
+  it("an oversized object (decode_failed) is not retried", async () => {
+    download.mockResolvedValue({ data: { size: 41 * 1024 * 1024 } as Blob, error: null });
+    await expect(downloadOriginal("u/b/p-original.jpg")).rejects.toMatchObject({ code: "decode_failed" });
+    expect(download).toHaveBeenCalledTimes(1);
+  });
+
+  it("the export signal aborts an in-flight download and skips the retry", async () => {
+    download.mockImplementation(hang);
+    const ac = new AbortController();
+    const p = downloadOriginal("u/b/p-original.jpg", { signal: ac.signal, timeoutMs: 60_000 });
+    setTimeout(() => ac.abort(), 10);
+    await expect(p).rejects.toMatchObject({ code: "aborted" });
+    expect(download).toHaveBeenCalledTimes(1);
+  });
+
+  it("loader: after abort, get() rejects 'aborted' and queued loads never download", async () => {
+    const plan = new Map(["a", "b", "c"].map((id) => [id, { width: 30, height: 40 }]));
+    const photos = ["a", "b", "c"].map((id) => ({ id, original_path: `u/b/${id}-original.jpg` }));
+    download.mockImplementation(hang);
+    const ac = new AbortController();
+    const loader = createPrintImageLoader(plan, photos, { concurrency: 1, signal: ac.signal });
+    const a = loader.get("a");
+    const b = loader.get("b"); // queued behind a
+    await vi.waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+    ac.abort();
+    await expect(a).rejects.toMatchObject({ code: "aborted" });
+    await expect(b).rejects.toMatchObject({ code: "aborted" });
+    await expect(loader.get("c")).rejects.toMatchObject({ code: "aborted" });
+    expect(download).toHaveBeenCalledTimes(1);
+  });
+
+  it("quality option: the size fallback encodes smaller (q70 < q80)", async () => {
+    download.mockResolvedValue(ok());
+    const plan = new Map([["a", { width: 300, height: 400 }]]);
+    const photos = [{ id: "a", original_path: "u/b/a-original.jpg" }];
+    const q80 = await createPrintImageLoader(plan, photos).get("a");
+    const q70 = await createPrintImageLoader(plan, photos, { quality: 70 }).get("a");
+    expect(q70.byteLength).toBeLessThan(q80.byteLength);
+    const raw = await sharp(ORIENT6).resize(300, 400).png().toBuffer();
+    expect((await encodePrintImage(raw, { width: 300, height: 400 }, 70)).byteLength).toBeLessThan(
+      (await encodePrintImage(raw, { width: 300, height: 400 })).byteLength,
+    );
+  });
+});
+
 describe("createPrintImageLoader", () => {
   const plan = new Map([
     ["a", { width: 30, height: 40 }],
@@ -171,6 +249,7 @@ describe("createPrintImageLoader", () => {
     const loader = createPrintImageLoader(plan, photos);
     await expect(loader.get("zzz")).rejects.toMatchObject({ code: "unknown_photo" });
     download.mockResolvedValueOnce({ data: null, error: { message: "x" } });
+    download.mockResolvedValueOnce({ data: null, error: { message: "x" } }); // the retry fails too
     await expect(loader.get("a")).rejects.toMatchObject({ code: "download_failed" });
     download.mockResolvedValueOnce({ data: blob(ORIENT6), error: null });
     expect((await sharp(await loader.get("a")).metadata()).height).toBe(40);
@@ -229,6 +308,7 @@ describe("createPrintImageLoader", () => {
 
   it("a failed prefetch is counted, not cached, and retried by the next get()", async () => {
     download.mockResolvedValueOnce({ data: null, error: { message: "x" } });
+    download.mockResolvedValueOnce({ data: null, error: { message: "x" } }); // the retry fails too
     download.mockResolvedValueOnce({ data: blob(ORIENT6), error: null });
     const loader = createPrintImageLoader(plan, photos);
     loader.prefetch(["a"]);
@@ -237,7 +317,7 @@ describe("createPrintImageLoader", () => {
     expect(loader.stats()).toMatchObject({ produced: 1, failed: 1 });
   });
 
-  it("default: up to PRINT_IMAGE_IN_FLIGHT downloads at once", async () => {
+  it("default: up to printImageInFlight() downloads at once", async () => {
     let active = 0;
     let peak = 0;
     download.mockImplementation(async () => {
@@ -251,7 +331,7 @@ describe("createPrintImageLoader", () => {
     const loader = createPrintImageLoader(many, [...many.keys()].map((id) => ({ id, original_path: `u/b/${id}-original.jpg` })));
     loader.prefetch(many.keys());
     await Promise.all([...many.keys()].map((id) => loader.get(id)));
-    expect(peak).toBe(PRINT_IMAGE_IN_FLIGHT);
+    expect(peak).toBe(printImageInFlight());
   });
 
   it("encodes are limited separately from downloads", async () => {

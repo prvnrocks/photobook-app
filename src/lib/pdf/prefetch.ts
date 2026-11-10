@@ -10,7 +10,7 @@
 // RENDER_PARALLEL_CHUNKS) a photo released by a later chunk that an earlier, still-rendering chunk
 // has not requested yet is simply reloaded.
 
-import { availableParallelism } from "node:os";
+import { availableParallelism, totalmem } from "node:os";
 import type { SheetRange } from "./rules";
 import { printPhotoIds, printSheetTargets } from "./print-doc";
 
@@ -24,19 +24,49 @@ export const PREFETCH_WINDOW_CHUNKS = 2;
  * encoded — phone JPEGs are typically 2–6 MB (≤ 72 MB for 12), the upload cap 20 MB (≤ 240 MB).
  */
 export const PRINT_IMAGE_IN_FLIGHT = 12;
-/** Bounds for parallel sharp encodes (CPU): one per vCPU, 2..4. */
-export const PRINT_ENCODE_CONCURRENCY_MIN = 2;
+/**
+ * Print copies in flight on a small function (≤ LOW_MEMORY_MB, e.g. Vercel Hobby 2 GB / 1 vCPU):
+ * each in-flight photo holds its downloaded original (≤ 20 MB upload cap) until encoded, so 8 →
+ * ≤ 160 MB of originals worst case (typical phone JPEGs 2–6 MB → ≤ 48 MB), next to Chromium's
+ * ~1 GB peak on a 20-sheet chunk.
+ */
+export const PRINT_IMAGE_IN_FLIGHT_LOW_MEMORY = 8;
+/** Function memory at or below which the low-memory limits apply. */
+export const LOW_MEMORY_MB = 2048;
+/** Bounds for parallel sharp encodes (CPU): one per vCPU, 1..4; at most 2 on a low-memory function. */
+export const PRINT_ENCODE_CONCURRENCY_MIN = 1;
 export const PRINT_ENCODE_CONCURRENCY_MAX = 4;
+export const PRINT_ENCODE_CONCURRENCY_LOW_MEMORY_MAX = 2;
 
 /**
- * Parallel sharp encodes for this machine (nested inside the in-flight limit). Vercel functions
- * have 1–2 vCPUs (Standard) up to 4 (Performance); libvips also threads within one image, so
- * more encodes than vCPUs only adds memory. Floor 2 keeps one encode running while another
- * finishes its last write.
+ * Memory available to this function in MB: AWS_LAMBDA_FUNCTION_MEMORY_SIZE (set on Vercel's
+ * Lambda-based functions — os.totalmem() can report the host), else os.totalmem().
  */
-export function printEncodeConcurrency(cpus: number = safeParallelism()): number {
+export function functionMemoryMb(env: Record<string, string | undefined> = process.env): number {
+  const fromEnv = Number(env.AWS_LAMBDA_FUNCTION_MEMORY_SIZE);
+  if (Number.isFinite(fromEnv) && fromEnv > 0) return fromEnv;
+  try {
+    return Math.floor(totalmem() / (1024 * 1024));
+  } catch {
+    return LOW_MEMORY_MB;
+  }
+}
+
+/** Print copies in flight: PRINT_IMAGE_IN_FLIGHT, or PRINT_IMAGE_IN_FLIGHT_LOW_MEMORY on ≤ 2 GB. */
+export function printImageInFlight(memoryMb: number = functionMemoryMb()): number {
+  return Number.isFinite(memoryMb) && memoryMb <= LOW_MEMORY_MB ? PRINT_IMAGE_IN_FLIGHT_LOW_MEMORY : PRINT_IMAGE_IN_FLIGHT;
+}
+
+/**
+ * Parallel sharp encodes for this machine (nested inside the in-flight limit): one per vCPU
+ * (libvips also threads within one image, so more encodes than vCPUs only adds memory), 1..4,
+ * and at most 2 on a ≤ 2 GB function. Vercel Hobby (1 vCPU / 2 GB) → 1; Pro "Performance"
+ * (2 vCPU / 4 GB) → 2.
+ */
+export function printEncodeConcurrency(cpus: number = safeParallelism(), memoryMb: number = functionMemoryMb()): number {
   const n = Number.isFinite(cpus) ? Math.floor(cpus) : 0;
-  return Math.min(PRINT_ENCODE_CONCURRENCY_MAX, Math.max(PRINT_ENCODE_CONCURRENCY_MIN, n));
+  const max = Number.isFinite(memoryMb) && memoryMb <= LOW_MEMORY_MB ? PRINT_ENCODE_CONCURRENCY_LOW_MEMORY_MAX : PRINT_ENCODE_CONCURRENCY_MAX;
+  return Math.min(max, Math.max(PRINT_ENCODE_CONCURRENCY_MIN, n));
 }
 
 function safeParallelism(): number {
@@ -108,6 +138,8 @@ export interface PrefetchTarget {
 export interface PrefetchController {
   /** Call when chunk k has rendered (any order): releases its last-use photos, queues the next chunk. */
   chunkDone(k: number): void;
+  /** Deadline / failure: queue nothing more (chunkDone becomes a no-op). Idempotent. */
+  stop(): void;
 }
 
 /**
@@ -128,12 +160,16 @@ export function startPrefetch(
   };
   while (next < Math.min(w, total)) queued();
   const done = new Set<number>();
+  let stopped = false;
   return {
     chunkDone(k: number) {
-      if (!Number.isSafeInteger(k) || k < 0 || k >= total || done.has(k)) return;
+      if (stopped || !Number.isSafeInteger(k) || k < 0 || k >= total || done.has(k)) return;
       done.add(k);
       target.release(schedule.releaseAfter[k] ?? []);
       if (next < total) queued();
+    },
+    stop() {
+      stopped = true;
     },
   };
 }

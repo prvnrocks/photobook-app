@@ -16,6 +16,9 @@ import {
   PDF_SIGNED_URL_TTL_SECONDS,
   PDF_TIMEOUT_COPY,
   pdfApiPath,
+  pdfStatusPath,
+  PDF_REKICK_MAX,
+  PDF_REKICK_QUEUED_MS,
   pdfButtonLabel,
   pdfErrorCopy,
   pdfReadyDetail,
@@ -123,6 +126,7 @@ describe("parsing helpers", () => {
   it("API paths", () => {
     expect(pdfApiPath(BOOK)).toBe(`/api/books/${BOOK}/pdf`);
     expect(pdfApiPath(BOOK, "e 1")).toBe(`/api/books/${BOOK}/pdf?exportId=e%201`);
+    expect(pdfStatusPath(BOOK, "e 1")).toBe(`/api/books/${BOOK}/pdf/status?exportId=e%201`);
   });
 
   it("only Supabase Storage URLs (https, configured origin) or same-origin download URLs", () => {
@@ -227,7 +231,8 @@ describe("controller", () => {
     await vi.advanceTimersByTimeAsync(PDF_POLL_MS - 1);
     expect(t.calls).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(1);
-    expect(t.calls[1]).toEqual({ method: "GET", url: `/api/books/${BOOK}/pdf?exportId=e1` });
+    // polls the lightweight status route (no renderer in that function)
+    expect(t.calls[1]).toEqual({ method: "GET", url: `/api/books/${BOOK}/pdf/status?exportId=e1` });
     expect(t.c.getState()).toMatchObject({ kind: "preparing", status: "queued" });
 
     await vi.advanceTimersByTimeAsync(PDF_POLL_MS);
@@ -267,7 +272,6 @@ describe("controller", () => {
   });
 
   it.each([
-    "missing_file",
     "stale",
     "render_timeout",
     "too_large",
@@ -285,6 +289,53 @@ describe("controller", () => {
     await t.c.start();
     await vi.advanceTimersByTimeAsync(PDF_POLL_MS);
     expect(pdfStatusCopy(t.c.getState())).toBe("We couldn't make your PDF — try again");
+  });
+
+  it.each(["superseded", "missing_file"])("failed (%s) → re-POSTs once for the current PDF → ready", async (code) => {
+    const t = setup([queued(), ok({ status: "failed", error: code }), ok(READY)]);
+    await t.c.start();
+    await vi.advanceTimersByTimeAsync(PDF_POLL_MS);
+    expect(t.calls.map((c) => c.method)).toEqual(["POST", "GET", "POST"]);
+    expect(t.navigate).toHaveBeenCalledWith(URL_);
+    expect(t.c.getState().kind).toBe("ready");
+  });
+
+  it("superseded twice → error (only one re-POST)", async () => {
+    const t = setup([queued(), ok({ status: "failed", error: "superseded" }), queued(), ok({ status: "failed", error: "superseded" })]);
+    await t.c.start();
+    await vi.advanceTimersByTimeAsync(PDF_POLL_MS * 3);
+    expect(t.calls.map((c) => c.method)).toEqual(["POST", "GET", "POST", "GET"]);
+    expect(t.c.getState()).toEqual({ kind: "error", code: "failed", detail: "superseded" });
+  });
+
+  it("stuck in queued for 20 s → re-POST (POST kicks the job); at most PDF_REKICK_MAX times", async () => {
+    expect(PDF_REKICK_QUEUED_MS).toBe(20_000);
+    const t = setup([queued(), ...Array.from({ length: 400 }, () => () => (t.calls.at(-1)!.method === "POST" ? queued() : ok({ status: "queued" })))]);
+    await t.c.start();
+    await vi.advanceTimersByTimeAsync(PDF_REKICK_QUEUED_MS - PDF_POLL_MS);
+    expect(t.calls.filter((c) => c.method === "POST")).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(PDF_POLL_MS);
+    const posts = t.calls.filter((c) => c.method === "POST");
+    expect(posts).toHaveLength(2);
+    expect(posts[1].url).toBe(`/api/books/${BOOK}/pdf`);
+    expect(t.c.getState()).toMatchObject({ kind: "preparing", exportId: "e1", status: "queued" });
+    await vi.advanceTimersByTimeAsync(PDF_REKICK_QUEUED_MS * 10);
+    expect(t.calls.filter((c) => c.method === "POST")).toHaveLength(1 + PDF_REKICK_MAX);
+  });
+
+  it("rendering never re-POSTs (the job is alive)", async () => {
+    const t = setup([queued("rendering"), ...Array.from({ length: 40 }, () => ok({ status: "rendering" }))]);
+    await t.c.start();
+    await vi.advanceTimersByTimeAsync(PDF_POLL_MS * 30);
+    expect(t.calls.filter((c) => c.method === "POST")).toHaveLength(1);
+  });
+
+  it("a re-POST that finds the PDF ready navigates", async () => {
+    const t = setup([queued(), ...Array.from({ length: 10 }, () => ok({ status: "queued" })), ok(READY)]);
+    await t.c.start();
+    await vi.advanceTimersByTimeAsync(PDF_REKICK_QUEUED_MS);
+    expect(t.calls.at(-1)?.method).toBe("POST");
+    expect(t.navigate).toHaveBeenCalledWith(URL_);
   });
 
   it("429 daily cap → copy, no navigation, no polling", async () => {

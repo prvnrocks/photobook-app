@@ -7,12 +7,16 @@ vi.mock("server-only", () => ({}));
 const h = vi.hoisted(() => ({
   getExportForRender: vi.fn(),
   listPrintPhotoDims: vi.fn(),
+  headers: new Map<string, string>(),
 }));
 
 class NotFoundSignal extends Error {}
 
 vi.mock("@/lib/db/exports", () => ({ getExportForRender: h.getExportForRender }));
 vi.mock("@/lib/db/print", () => ({ listPrintPhotoDims: h.listPrintPhotoDims }));
+vi.mock("next/headers", () => ({
+  headers: async () => ({ get: (k: string) => h.headers.get(k.toLowerCase()) ?? null }),
+}));
 vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new NotFoundSignal("NEXT_NOT_FOUND");
@@ -26,6 +30,7 @@ import type { BookDoc, BookPage as DocPage } from "@/lib/book/types";
 import { PRINT_ASSET_ORIGIN, printAssetUrl } from "@/lib/pdf/print-assets";
 import { printPhotoIds, printRenderPhotos, printSheetTargets } from "@/lib/pdf/print-doc";
 import { printTokenExpiry, signPrintToken, type PrintGrant } from "@/lib/pdf/print-token";
+import { PRINT_TOKEN_HEADER, readPrintToken } from "@/lib/pdf/print-token-source";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { BookPage } from "@/components/book/BookPage";
@@ -75,10 +80,14 @@ function exportRow(over: Record<string, unknown> = {}) {
   return { id: EXPORT, bookId: BOOK, userId: pid(999), docRev: 7, doc: makeDoc(45), captionLang: "en", status: "rendering", ...over };
 }
 
-async function render(bookId: string, tok: unknown): Promise<string> {
+/** Tokens go in the x-print-token header like the renderer sends them (N6); arrays / `via: "query"` use ?token=. */
+async function render(bookId: string, tok: unknown, via: "header" | "query" = "header"): Promise<string> {
+  h.headers.clear();
+  const inHeader = via === "header" && typeof tok === "string";
+  if (inHeader) h.headers.set("x-print-token", tok);
   const el = await PrintPage({
     params: Promise.resolve({ bookId }),
-    searchParams: Promise.resolve(tok === undefined ? {} : { token: tok as string }),
+    searchParams: Promise.resolve(tok === undefined || inHeader ? {} : { token: tok as string }),
   });
   expect(isValidElement(el)).toBe(true);
   return renderToStaticMarkup(el as ReactElement);
@@ -101,6 +110,33 @@ beforeEach(() => {
   h.listPrintPhotoDims.mockReset().mockImplementation(async (_book: string, ids: string[]) =>
     ids.map((id) => ({ id, width: 3000, height: 4000 })),
   );
+});
+
+describe("/print/[bookId] token source (N6)", () => {
+  it("reads the x-print-token header", async () => {
+    expect(sheetCount(await render(BOOK, token()))).toBe(20);
+  });
+
+  it("?token= works only outside production; a production build ignores it", async () => {
+    expect(sheetCount(await render(BOOK, token(), "query"))).toBe(20);
+    h.getExportForRender.mockClear();
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      await expect(render(BOOK, token(), "query")).rejects.toBeInstanceOf(NotFoundSignal);
+      expect(h.getExportForRender).not.toHaveBeenCalled();
+      expect(sheetCount(await render(BOOK, token()))).toBe(20);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("readPrintToken: header first, query fallback only outside production", () => {
+    expect(readPrintToken("h", "q", "production")).toBe("h");
+    expect(readPrintToken(null, "q", "production")).toBeUndefined();
+    expect(readPrintToken("", "q", "development")).toBe("q");
+    expect(readPrintToken(null, ["a", "b"], "development")).toBeUndefined();
+    expect(PRINT_TOKEN_HEADER).toBe("x-print-token");
+  });
 });
 
 describe("/print/[bookId] gate", () => {

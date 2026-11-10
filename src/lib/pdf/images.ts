@@ -12,7 +12,7 @@ import sharp from "sharp";
 import { PHOTOS_BUCKET } from "@/lib/db/photos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { PrintImagePlan, PrintImageTarget } from "./image-plan";
-import { createLimiter, PRINT_IMAGE_IN_FLIGHT, printEncodeConcurrency } from "./prefetch";
+import { createLimiter, printEncodeConcurrency, printImageInFlight } from "./prefetch";
 
 /** Decoding limit: originals are ≤ 100 MP (upload rejects larger, lessons 2026-11-08). */
 export const PRINT_INPUT_PIXEL_LIMIT = 100_000_000;
@@ -37,7 +37,13 @@ export const PRINT_JPEG_OPTIONS = {
   chromaSubsampling: "4:2:0",
 } as const;
 
-export type PrintImageErrorCode = "download_failed" | "decode_failed" | "unknown_photo";
+/** Per-download budget (M8 T12 follow-up): a stalled Storage download must not eat the job deadline. */
+export const PRINT_DOWNLOAD_TIMEOUT_MS = 30_000;
+/** Download attempts per photo (first try + one retry) before download_failed. */
+export const PRINT_DOWNLOAD_ATTEMPTS = 2;
+
+/** aborted: the export's deadline signal fired (runExport records render_timeout, not this). */
+export type PrintImageErrorCode = "download_failed" | "decode_failed" | "unknown_photo" | "aborted";
 
 export class PrintImageError extends Error {
   readonly code: PrintImageErrorCode;
@@ -55,11 +61,19 @@ export interface PrintPhotoSource {
   original_path: string | null;
 }
 
-async function downloadOriginal(path: string | null): Promise<Buffer> {
-  if (!path) throw new PrintImageError("download_failed");
+export interface DownloadOptions {
+  /** The export's abort signal (deadline): stops the download and skips the retry. */
+  signal?: AbortSignal;
+  /** Per-attempt budget (default PRINT_DOWNLOAD_TIMEOUT_MS). */
+  timeoutMs?: number;
+  /** Attempts (default PRINT_DOWNLOAD_ATTEMPTS). */
+  attempts?: number;
+}
+
+async function downloadOnce(path: string, signal: AbortSignal): Promise<Buffer> {
   let data: Blob | null;
   try {
-    const res = await createAdminClient().storage.from(PHOTOS_BUCKET).download(path);
+    const res = await createAdminClient().storage.from(PHOTOS_BUCKET).download(path, undefined, { signal });
     if (res.error || !res.data) throw new PrintImageError("download_failed");
     data = res.data;
   } catch {
@@ -76,11 +90,39 @@ async function downloadOriginal(path: string | null): Promise<Buffer> {
 }
 
 /**
+ * Downloads an original with a per-attempt timeout (AbortSignal: fetch + body) and one retry.
+ * decode_failed (oversized object) is not retried; an aborted export → 'aborted', no retry.
+ */
+export async function downloadOriginal(path: string | null, opts: DownloadOptions = {}): Promise<Buffer> {
+  if (!path) throw new PrintImageError("download_failed");
+  const timeoutMs = opts.timeoutMs && opts.timeoutMs > 0 ? opts.timeoutMs : PRINT_DOWNLOAD_TIMEOUT_MS;
+  const attempts = Math.max(1, Math.floor(opts.attempts ?? PRINT_DOWNLOAD_ATTEMPTS));
+  let last: PrintImageError = new PrintImageError("download_failed");
+  for (let i = 0; i < attempts; i++) {
+    if (opts.signal?.aborted) throw new PrintImageError("aborted");
+    const timeout = AbortSignal.timeout(timeoutMs);
+    const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
+    try {
+      return await downloadOnce(path, signal);
+    } catch (e) {
+      last = e instanceof PrintImageError ? e : new PrintImageError("download_failed");
+      if (opts.signal?.aborted) throw new PrintImageError("aborted");
+      if (last.code !== "download_failed") throw last;
+    }
+  }
+  throw last;
+}
+
+/**
  * Original bytes → print JPEG fitting inside `target` (display-oriented). If the decoded upright
  * orientation disagrees with the target's (stale/wrong stored dims), the target box is swapped so
  * a portrait photo is never squeezed into a landscape box.
  */
-export async function encodePrintImage(input: Buffer, target: PrintImageTarget): Promise<Buffer> {
+export async function encodePrintImage(
+  input: Buffer,
+  target: PrintImageTarget,
+  quality: number = PRINT_JPEG_QUALITY,
+): Promise<Buffer> {
   try {
     const meta = await sharp(input, { limitInputPixels: PRINT_INPUT_PIXEL_LIMIT, failOn: "error" }).metadata();
     const upright = meta.autoOrient ?? { width: meta.width, height: meta.height };
@@ -93,7 +135,7 @@ export async function encodePrintImage(input: Buffer, target: PrintImageTarget):
       .flatten({ background: "#ffffff" })
       .resize({ width, height, fit: "inside", withoutEnlargement: true })
       .toColourspace("srgb")
-      .jpeg(PRINT_JPEG_OPTIONS)
+      .jpeg(quality === PRINT_JPEG_QUALITY ? PRINT_JPEG_OPTIONS : { ...PRINT_JPEG_OPTIONS, quality })
       .toBuffer();
   } catch {
     throw new PrintImageError("decode_failed");
@@ -103,20 +145,33 @@ export async function encodePrintImage(input: Buffer, target: PrintImageTarget):
 type Limit = <T>(fn: () => Promise<T>) => Promise<T>;
 const unlimited: Limit = (fn) => fn();
 
+export interface LoadPrintImageOptions {
+  timing?: PrintImageTiming;
+  encodeLimit?: Limit;
+  /** The export's abort signal: no new download / encode starts once it fired. */
+  signal?: AbortSignal;
+  /** JPEG quality (default PRINT_JPEG_QUALITY; the size fallback uses less). */
+  quality?: number;
+  /** Per-download options (timeout / attempts) — tests. */
+  download?: Omit<DownloadOptions, "signal">;
+}
+
 /** Download + encode one photo's print copy (the encode optionally behind a CPU limiter). */
 export async function loadPrintImage(
   photo: PrintPhotoSource,
   target: PrintImageTarget,
-  timing?: PrintImageTiming,
-  encodeLimit: Limit = unlimited,
+  opts: LoadPrintImageOptions = {},
 ): Promise<Buffer> {
+  const { timing, encodeLimit = unlimited, signal } = opts;
+  if (signal?.aborted) throw new PrintImageError("aborted");
   const t0 = Date.now();
-  const input = await downloadOriginal(photo.original_path);
+  const input = await downloadOriginal(photo.original_path, { ...opts.download, signal });
   if (timing) timing.downloadMs += Date.now() - t0;
   return encodeLimit(async () => {
+    if (signal?.aborted) throw new PrintImageError("aborted");
     const t1 = Date.now();
     try {
-      return await encodePrintImage(input, target);
+      return await encodePrintImage(input, target, opts.quality);
     } finally {
       if (timing) timing.encodeMs += Date.now() - t1; // excludes waiting for an encode slot
     }
@@ -153,19 +208,30 @@ export interface PrintImageLoader {
 
 /**
  * Loader over a plan: at most `concurrency` photos in flight (download → encode; default
- * PRINT_IMAGE_IN_FLIGHT — memory: each holds its original of ≤ 20 MB until encoded) and at most
+ * printImageInFlight(): 12, or 8 on a ≤ 2 GB function — memory: each holds its original of ≤ 20 MB until encoded) and at most
  * `encodeConcurrency` sharp encodes among them (default printEncodeConcurrency(), CPU-bound).
  * Each photo is processed once per export unless released.
  */
+export interface PrintImageLoaderOptions {
+  concurrency?: number;
+  encodeConcurrency?: number;
+  /** The export's abort signal: once fired, get() rejects ('aborted') and queued loads never start. */
+  signal?: AbortSignal;
+  /** JPEG quality for every copy (default PRINT_JPEG_QUALITY). */
+  quality?: number;
+  /** Per-download options (timeout / attempts) — tests. */
+  download?: Omit<DownloadOptions, "signal">;
+}
+
 export function createPrintImageLoader(
   plan: PrintImagePlan,
   photos: Iterable<PrintPhotoSource>,
-  opts: { concurrency?: number; encodeConcurrency?: number } = {},
+  opts: PrintImageLoaderOptions = {},
 ): Required<PrintImageLoader> {
   const sources = new Map<string, PrintPhotoSource>();
   for (const p of photos) sources.set(p.id, p);
   const pos = (v: number | undefined): v is number => typeof v === "number" && Number.isFinite(v) && v >= 1;
-  const inFlight = createLimiter(pos(opts.concurrency) ? opts.concurrency : PRINT_IMAGE_IN_FLIGHT);
+  const inFlight = createLimiter(pos(opts.concurrency) ? opts.concurrency : printImageInFlight());
   const encodeLimit = createLimiter(pos(opts.encodeConcurrency) ? opts.encodeConcurrency : printEncodeConcurrency());
   const cache = new Map<string, Promise<Buffer>>();
   /** Fulfilled, unreleased copies: photoId → byte size. */
@@ -189,8 +255,17 @@ export function createPrintImageLoader(
     if (hit) return hit;
     const target = plan.get(photoId);
     const source = sources.get(photoId);
+    if (opts.signal?.aborted) return Promise.reject(new PrintImageError("aborted"));
     if (!target || !source) return Promise.reject(new PrintImageError("unknown_photo"));
-    const p = inFlight(() => loadPrintImage(source, target, timing, encodeLimit));
+    const p = inFlight(() =>
+      loadPrintImage(source, target, {
+        timing,
+        encodeLimit,
+        signal: opts.signal,
+        quality: opts.quality,
+        download: opts.download,
+      }),
+    );
     cache.set(photoId, p);
     p.then(
       (buf) => {

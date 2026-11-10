@@ -49,7 +49,7 @@ import {
   ExportsQueryError,
   claimExport,
   createExportJob,
-  deleteExportRows,
+  supersedeExports,
   exportObjectPath,
   failExport,
   finishExport,
@@ -70,6 +70,7 @@ const createArgs = {
   docRev: 7,
   doc: { pages: [] },
   captionLang: "en" as const,
+  rendererVersion: 2,
   dailyCap: 20,
   staleSeconds: 600,
 };
@@ -93,6 +94,7 @@ describe("createExportJob", () => {
           p_doc_rev: 7,
           p_doc: { pages: [] },
           p_caption_lang: "en",
+          p_renderer_version: 2,
           p_daily_cap: 20,
           p_stale_seconds: 600,
         },
@@ -102,7 +104,14 @@ describe("createExportJob", () => {
 
   it.each([
     [{ status: "ready", export_id: E }, { status: "ready", exportId: E }],
-    [{ status: "running", export_id: E, doc_rev: 6 }, { status: "running", exportId: E, docRev: 6 }],
+    [
+      { status: "running", export_id: E, doc_rev: 6, state: "rendering", claimable: true },
+      { status: "running", exportId: E, docRev: 6, state: "rendering", claimable: true },
+    ],
+    [
+      { status: "running", export_id: E, doc_rev: 6, state: "queued", claimable: false },
+      { status: "running", exportId: E, docRev: 6, state: "queued", claimable: false },
+    ],
     [{ status: "stale_rev", doc_rev: 8 }, { status: "stale_rev", docRev: 8 }],
     [{ status: "daily_cap" }, { status: "daily_cap" }],
     [{ status: "not_paid" }, { status: "not_paid" }],
@@ -116,6 +125,8 @@ describe("createExportJob", () => {
     [{ status: "created" }],
     [{ status: "created", export_id: "nope" }],
     [{ status: "running", export_id: E }],
+    [{ status: "running", export_id: E, doc_rev: 6, state: "ready", claimable: true }],
+    [{ status: "running", export_id: E, doc_rev: 6, state: "queued" }],
     [{ status: "weird" }],
     ["created"],
     [null],
@@ -288,20 +299,18 @@ describe("reads", () => {
     await expect(listOlderReadyExports("x", E)).resolves.toEqual([]);
   });
 
-  it("deleteExportRows only deletes finished rows of the book", async () => {
-    fake.state.results.push({ data: [{ id: E }], error: null });
-    await expect(deleteExportRows(B, [E, "junk"])).resolves.toBe(1);
-    expect(fake.state.chains[0]).toEqual({
-      table: "exports",
-      op: "delete",
-      calls: [
-        ["eq", "book_id", B],
-        ["in", "id", [E]],
-        ["in", "status", ["ready", "failed"]],
-        ["select", "id"],
-      ],
-    });
-    await expect(deleteExportRows(B, ["junk"])).resolves.toBe(0);
-    expect(fake.state.chains).toHaveLength(1);
+  it("supersedeExports marks rows via supersede_exports (never deletes); bad ids → no call", async () => {
+    fake.state.results.push({ data: 1, error: null });
+    await expect(supersedeExports(B, U, [E, "junk"], "superseded")).resolves.toBe(1);
+    expect(fake.state.rpcs).toEqual([
+      { fn: "supersede_exports", args: { p_book: B, p_user: U, p_ids: [E], p_reason: "superseded" } },
+    ]);
+    await expect(supersedeExports(B, U, ["junk"], "missing_file")).resolves.toBe(0);
+    await expect(supersedeExports("x", U, [E], "missing_file")).resolves.toBe(0);
+    await expect(supersedeExports(B, "x", [E], "missing_file")).resolves.toBe(0);
+    expect(fake.state.rpcs).toHaveLength(1);
+    expect(fake.state.chains).toHaveLength(0);
+    fake.state.results.push({ data: null, error: { code: "42501", message: `secret ${B}` } });
+    await expect(supersedeExports(B, U, [E], "missing_file")).rejects.toMatchObject({ message: "exports: supersede failed (42501)" });
   });
 });

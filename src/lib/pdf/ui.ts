@@ -5,10 +5,14 @@
 //   POST /api/books/{id}/pdf → 200 {status:'ready', exportId, url, filename, bytes, pageCount}
 //                            | 202 {status:'queued'|'rendering', exportId}
 //                            | {error} with 401/402/403/404/409/429/503/500
-//   GET  /api/books/{id}/pdf?exportId=… → {status:'queued'|'rendering'} | {status:'ready', …}
-//                                        | {status:'failed', error}
+//   GET  /api/books/{id}/pdf/status?exportId=… (lightweight, M8 review S3)
+//        → {status:'queued'|'rendering'} | {status:'ready', …} | {status:'failed', error}
 //
-// Flow: start → POST; 202 → poll GET every 2 s (paused while the tab is hidden; after ~5 min of
+// Flow: start → POST; 202 → poll the status route every 2 s. The status route never re-kicks:
+// when a job stays 'queued' for PDF_REKICK_QUEUED_MS the controller re-POSTs (POST joins the job
+// and schedules it again; at most PDF_REKICK_MAX times), and a 'failed' answer with error
+// 'superseded' / 'missing_file' (a newer PDF replaced this one / the file is gone) re-POSTs once.
+// Otherwise: (paused while the tab is hidden; after ~5 min of
 // still-pending answers → 'timeout'); ready → navigate(url) once (location.assign — iOS-safe) and
 // keep a "Download again" link until the signed URL is about to expire, then back to idle.
 
@@ -21,6 +25,12 @@ export const PDF_POLL_MS = 2_000;
 export const PDF_POLL_CAP_MS = 5 * 60_000;
 /** Consecutive failed polls (network / 5xx) tolerated before giving up. */
 export const PDF_POLL_MAX_FAILURES = 3;
+/** A job still 'queued' this long after it was first seen queued is re-POSTed (its kick died). */
+export const PDF_REKICK_QUEUED_MS = 20_000;
+/** Re-POSTs per run (queued re-kicks + one superseded/missing_file retry share the budget). */
+export const PDF_REKICK_MAX = 3;
+/** Failed codes meaning "this export's PDF is gone, ask POST for the current one". */
+export const PDF_REPOST_ERRORS: readonly string[] = ["superseded", "missing_file"];
 /** The signed URL lives PDF_SIGNED_URL_TTL_SECONDS; hide "Download again" a little before that. */
 export const PDF_LINK_VALID_MS = (PDF_SIGNED_URL_TTL_SECONDS - 30) * 1_000;
 
@@ -159,6 +169,11 @@ export const fetchPdfTransport: PdfTransport = async (method, url) => {
   }
   return { status: res.status, body };
 };
+
+/** Lightweight poll route (no renderer in its function). */
+export function pdfStatusPath(bookId: string, exportId: string): string {
+  return `/api/books/${encodeURIComponent(bookId)}/pdf/status?exportId=${encodeURIComponent(exportId)}`;
+}
 
 export function pdfApiPath(bookId: string, exportId?: string): string {
   const base = `/api/books/${encodeURIComponent(bookId)}/pdf`;
@@ -327,6 +342,9 @@ export function createPdfDownloadController(deps: PdfControllerDeps): PdfControl
   let unsubscribeVisible: (() => void) | null = null;
   let deadline = 0;
   let failures = 0;
+  /** When the current export was first seen 'queued' (null = not queued). */
+  let queuedSince: number | null = null;
+  let reposts = 0;
 
   const set = (s: PdfUiState) => {
     if (disposed) return;
@@ -385,7 +403,7 @@ export function createPdfDownloadController(deps: PdfControllerDeps): PdfControl
     }
     let r: PdfHttpResult | null;
     try {
-      r = await transport("GET", pdfApiPath(deps.bookId, exportId));
+      r = await transport("GET", pdfStatusPath(deps.bookId, exportId));
     } catch {
       r = null;
     }
@@ -396,9 +414,26 @@ export function createPdfDownloadController(deps: PdfControllerDeps): PdfControl
       const info = parseReady(r.body);
       if (info) return ready(info, g);
       const b = obj(r.body);
-      if (b?.status === "failed") return fail("failed", typeof b.error === "string" ? b.error : undefined);
+      if (b?.status === "failed") {
+        const code = typeof b.error === "string" ? b.error : undefined;
+        if (code && PDF_REPOST_ERRORS.includes(code) && reposts < PDF_REKICK_MAX) {
+          reposts = PDF_REKICK_MAX; // once: a second superseded answer is final
+          return repost(g);
+        }
+        return fail("failed", code);
+      }
       const pending = pendingStatus(r.body);
       if (!pending) return fail("server_error");
+      if (pending === "queued") {
+        queuedSince ??= now();
+        if (now() - queuedSince >= PDF_REKICK_QUEUED_MS && reposts < PDF_REKICK_MAX && now() < deadline) {
+          reposts += 1;
+          queuedSince = now();
+          return repost(g);
+        }
+      } else {
+        queuedSince = null;
+      }
       if (now() >= deadline) {
         clearTimer();
         stopVisible();
@@ -424,6 +459,42 @@ export function createPdfDownloadController(deps: PdfControllerDeps): PdfControl
     schedulePoll(exportId, g);
   };
 
+  /** A POST answer (start or re-POST): ready → download, 202 → (keep) polling, else error. */
+  const handlePost = (r: PdfHttpResult, g: number): void => {
+    if (r.status >= 200 && r.status < 300) {
+      const info = parseReady(r.body);
+      if (info) return ready(info, g);
+      const pending = pendingStatus(r.body);
+      const exportId = obj(r.body)?.exportId;
+      if (pending && typeof exportId === "string" && exportId.length > 0) {
+        if (state.kind !== "preparing" || state.exportId !== exportId) queuedSince = null;
+        if (pending === "queued") queuedSince ??= now();
+        set({ kind: "preparing", exportId, status: pending, paused: false });
+        return schedulePoll(exportId, g);
+      }
+      return fail("server_error");
+    }
+    fail(errorCodeFor(r.status, r.body));
+  };
+
+  /** Re-POST mid-poll (kick a stuck queued job / fetch the current PDF). Network errors count as poll failures. */
+  async function repost(g: number): Promise<void> {
+    let r: PdfHttpResult | null;
+    try {
+      r = await transport("POST", pdfApiPath(deps.bookId));
+    } catch {
+      r = null;
+    }
+    if (disposed || g !== gen) return;
+    if (!r) {
+      failures += 1;
+      if (failures >= PDF_POLL_MAX_FAILURES) return fail("network");
+      if (state.kind === "preparing") return schedulePoll(state.exportId, g);
+      return fail("network");
+    }
+    handlePost(r, g);
+  }
+
   return {
     getState: () => state,
 
@@ -433,6 +504,8 @@ export function createPdfDownloadController(deps: PdfControllerDeps): PdfControl
       stopVisible();
       const g = ++gen;
       failures = 0;
+      queuedSince = null;
+      reposts = 0;
       set({ kind: "starting" });
       try {
         await deps.beforeStart?.();
@@ -453,20 +526,8 @@ export function createPdfDownloadController(deps: PdfControllerDeps): PdfControl
         if (!(r.status === 409 && errorCodeFor(r.status, r.body) === "conflict")) break;
       }
       if (!r) return;
-
-      if (r.status >= 200 && r.status < 300) {
-        const info = parseReady(r.body);
-        if (info) return ready(info, g);
-        const pending = pendingStatus(r.body);
-        const exportId = obj(r.body)?.exportId;
-        if (pending && typeof exportId === "string" && exportId.length > 0) {
-          deadline = now() + PDF_POLL_CAP_MS;
-          set({ kind: "preparing", exportId, status: pending, paused: false });
-          return schedulePoll(exportId, g);
-        }
-        return fail("server_error");
-      }
-      fail(errorCodeFor(r.status, r.body));
+      deadline = now() + PDF_POLL_CAP_MS;
+      handlePost(r, g);
     },
 
     dispose() {

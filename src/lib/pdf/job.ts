@@ -4,9 +4,20 @@ import "server-only";
 //   requestExport  — POST: owner + live is_paid + canExport → create_export_job (atomic: reuse a
 //                    ready PDF of this doc_rev + caption_lang, join the book's in-flight job, daily
 //                    cap, insert). New/queued jobs are handed to `schedule` (the route uses after()).
-//   getExportState — GET: the owner's job status; ready → fresh signed URL.
-//   runExport      — claim lease → render (Chromium, print route) → merge → upload → finish →
-//                    delete older ready PDFs of the book. Any failure → fail_export with a code.
+//   getExportState — GET: the owner's job status; ready → fresh signed URL (status.ts — no
+//                    renderer imports, shared with the lightweight /pdf/status route).
+//   runExport      — claim lease → render (Chromium, print route) → merge (→ one size-fallback
+//                    re-render when > 50 MB) → upload → finish → supersede older ready PDFs of
+//                    the book (objects removed, rows KEPT as 'superseded' — the daily cap counts
+//                    rows, M8 review S1). Any failure → fail_export with a code.
+//
+// Deadline (S2): runExport owns an AbortController fired at EXPORT_DEADLINE_MS. The signal goes
+// into the image loader (downloads abort, nothing new starts), the prefetch controller (stops
+// queueing) and renderBook (checked between chunks; tabs + browser closed on abort).
+//
+// Re-kick (N3): a job whose after() callback died stays queued, and a job whose invocation was
+// killed stays 'rendering' with an expired lease. create_export_job reports both as running +
+// claimable, and POST schedules runExport again (claim_export allows ≤ 3 claims in total).
 //
 // Ownership: requestExport / getExportState read the book with the user's session (RLS) and pass
 // the user id into every admin query; runExport only works on a row create_export_job inserted
@@ -23,7 +34,6 @@ import { getMyBook } from "@/lib/db/books";
 import {
   claimExport,
   createExportJob,
-  deleteExportRows,
   EXPORT_MAX_BYTES,
   exportObjectPath,
   failExport,
@@ -33,20 +43,21 @@ import {
   listOlderReadyExports,
   removeExportObjects,
   signExportUrl,
+  supersedeExports,
   uploadExportPdf,
-  type ExportCaptionLang,
 } from "@/lib/db/exports";
 import { listPrintPhotoSources } from "@/lib/db/print";
 import { parseBookDoc } from "@/lib/book/schema";
 import type { BookDoc } from "@/lib/book/types";
+import type { PrintPhotoSourceRow } from "@/lib/db/print";
 import { getAccessSecret } from "@/lib/publish/access-cookie";
 import type { Json } from "@/lib/supabase/database.types";
 import { isUuid } from "@/lib/uuid";
 import { chromeConfigured } from "./browser";
 import { isPdfRenderError } from "./errors";
 import { mergePdfs } from "./finalize";
-import { planPrintImages } from "./image-plan";
-import { createPrintImageLoader, PrintImageError } from "./images";
+import { planPrintImages, type PlanOptions } from "./image-plan";
+import { createPrintImageLoader, PRINT_JPEG_QUALITY, PrintImageError } from "./images";
 import { chunkPhotoSchedule, PREFETCH_WINDOW_CHUNKS, startPrefetch } from "./prefetch";
 import { printPhotoIds, type PrintSheetTarget } from "./print-doc";
 import { renderBook, type RenderTimings } from "./render-pdf";
@@ -56,16 +67,31 @@ import {
   CHUNK_SHEETS,
   EXPORT_DAILY_CAP,
   EXPORT_STALE_SECONDS,
-  pdfFilename,
+  PDF_DEADLINE_MS,
+  PDF_MAX_DURATION_SECONDS,
+  PDF_RENDERER_VERSION,
   SIGNED_URL_TTL_SECONDS,
+  SIZE_FALLBACK_DPI,
+  SIZE_FALLBACK_JPEG_QUALITY,
 } from "./rules";
+import {
+  captionLangOf,
+  filenameFor,
+  getExportState,
+  markMissingFile,
+  QUEUED_KICK_AFTER_MS,
+  type ExportStateResult,
+  type PendingExport,
+  type ReadyExport,
+} from "./status";
 
-/** claim_export lease; the route's maxDuration is 300 s, so a killed invocation frees it soon after. */
-export const EXPORT_LEASE_SECONDS = 300;
-/** Overall render budget inside one invocation (maxDuration 300 s minus response + cleanup). */
-export const EXPORT_DEADLINE_MS = 270_000;
-/** A queued job older than this is re-kicked by GET polls (its after() callback likely died). */
-export const QUEUED_KICK_AFTER_MS = 10_000;
+export { getExportState, QUEUED_KICK_AFTER_MS };
+export type { ExportStateResult, PendingExport, ReadyExport };
+
+/** claim_export lease = the function budget, so a killed invocation frees it right after. */
+export const EXPORT_LEASE_SECONDS = PDF_MAX_DURATION_SECONDS;
+/** Overall render budget inside one invocation (rules.PDF_DEADLINE_MS = maxDuration − 30 s). */
+export const EXPORT_DEADLINE_MS = PDF_DEADLINE_MS;
 
 type Env = Record<string, string | undefined>;
 
@@ -100,20 +126,6 @@ export function exportAvailable(env: Env = process.env, platform: string = proce
 // ---------------------------------------------------------------------------
 // POST
 
-export interface ReadyExport {
-  status: "ready";
-  exportId: string;
-  url: string;
-  filename: string;
-  bytes: number;
-  pageCount: number;
-}
-
-export interface PendingExport {
-  status: "queued" | "rendering";
-  exportId: string;
-}
-
 export type RequestExportError =
   | "not_found"
   | "not_paid"
@@ -135,17 +147,10 @@ export interface RequestExportOptions {
   env?: Env;
 }
 
-function captionLangOf(v: unknown): ExportCaptionLang {
-  return v === "ar" ? "ar" : "en";
-}
-
-function filenameFor(title: string | null | undefined, doc?: BookDoc | null): string {
-  return pdfFilename(title || doc?.cover.title || "");
-}
-
 /**
  * POST flow. Retries once on stale_rev (doc saved between read and create) and once when a
- * "ready" row's PDF is missing from Storage (that row is deleted, then a new job is created).
+ * "ready" row's PDF is missing from Storage (that row is marked superseded/missing_file — never
+ * deleted, so it still counts towards the daily cap — then a new job is created).
  */
 export async function requestExport(
   bookId: string,
@@ -170,6 +175,7 @@ export async function requestExport(
       docRev: book.doc_rev,
       doc: book.doc as Json,
       captionLang: captionLangOf(book.caption_lang),
+      rendererVersion: PDF_RENDERER_VERSION,
       dailyCap: EXPORT_DAILY_CAP,
       staleSeconds: EXPORT_STALE_SECONDS,
     });
@@ -187,13 +193,11 @@ export async function requestExport(
         opts.schedule(res.exportId);
         return { ok: true, httpStatus: 202, body: { status: "queued", exportId: res.exportId } };
       case "running": {
-        // create_export_job reaps rendering rows with an expired lease, so a "rendering" row here
-        // is live. A queued row may have lost its after() callback — claim is atomic, so kicking
-        // it again is harmless.
-        const own = await getExportForOwner(res.exportId, userId);
-        const status = own?.status === "queued" ? "queued" : "rendering";
-        if (status === "queued") opts.schedule(res.exportId);
-        return { ok: true, httpStatus: 202, body: { status, exportId: res.exportId } };
+        // claimable = queued (its after() callback may have died) or rendering with an expired
+        // lease and claims left (the invocation was killed) — N3: kick it again. claim_export is
+        // atomic, so a duplicate kick of a job that is in fact running is a no-op.
+        if (res.claimable) opts.schedule(res.exportId);
+        return { ok: true, httpStatus: 202, body: { status: res.state, exportId: res.exportId } };
       }
       case "ready": {
         const own = await getExportForOwner(res.exportId, userId);
@@ -216,56 +220,14 @@ export async function requestExport(
             },
           };
         }
-        // The row says ready but the PDF is gone (manual cleanup / partial failure): drop the
-        // row so create_export_job can make a new job, then try once more.
+        // The row says ready but the PDF is gone (manual cleanup / partial failure): mark the row
+        // (it stays — the daily cap counts it) so create_export_job can make a new job, then try
+        // once more.
         if (missingRetried) return { ok: false, error: "unavailable" };
         missingRetried = true;
-        console.info(`[pdf-export] missing_file ${res.exportId}`);
-        await deleteExportRows(bookId, [res.exportId]);
+        await markMissingFile(bookId, userId, res.exportId);
         continue;
       }
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// GET
-
-export type ExportStateResult =
-  | { found: false }
-  | { found: true; body: ReadyExport | { status: "queued" | "rendering" } | { status: "failed"; error: string } };
-
-export async function getExportState(
-  bookId: string,
-  userId: string,
-  exportId: string,
-  opts: { schedule?: (exportId: string) => void; now?: Date } = {},
-): Promise<ExportStateResult> {
-  if (!isUuid(bookId) || !isUuid(userId) || !isUuid(exportId)) return { found: false };
-  const own = await getExportForOwner(exportId, userId);
-  if (!own || own.bookId.toLowerCase() !== bookId.toLowerCase()) return { found: false };
-
-  switch (own.status) {
-    case "queued": {
-      const age = (opts.now ?? new Date()).getTime() - Date.parse(own.createdAt);
-      if (opts.schedule && Number.isFinite(age) && age >= QUEUED_KICK_AFTER_MS) opts.schedule(own.id);
-      return { found: true, body: { status: "queued" } };
-    }
-    case "rendering":
-      return { found: true, body: { status: "rendering" } };
-    case "failed":
-      return { found: true, body: { status: "failed", error: own.errorCode ?? "error" } };
-    case "ready": {
-      const book = await getMyBook(bookId); // RLS read: title for the filename, ownership again
-      if (!book) return { found: false };
-      const parsed = parseBookDoc(book.doc);
-      const filename = filenameFor(book.title, parsed.ok ? parsed.doc : null);
-      const url = await signExportUrl(exportObjectPath(userId, own.bookId, own.id), SIGNED_URL_TTL_SECONDS, filename);
-      if (!url) return { found: true, body: { status: "failed", error: "missing_file" } };
-      return {
-        found: true,
-        body: { status: "ready", exportId: own.id, url, filename, bytes: own.bytes ?? 0, pageCount: own.pageCount ?? 0 },
-      };
     }
   }
 }
@@ -314,6 +276,8 @@ export interface RunExportOptions {
   encodeConcurrency?: number;
   /** Chunks rendered at once (default RENDER_PARALLEL_CHUNKS). */
   parallelChunks?: number;
+  /** After the deadline fired: max wait for the aborted work to unwind (default ABORT_SETTLE_MS). */
+  abortSettleMs?: number;
 }
 
 /** Phase timings for the `timing` log line (ms unless noted). */
@@ -328,6 +292,8 @@ interface ExportTimings {
   merge: number;
   upload: number;
   finish: number;
+  /** 1 when the size fallback re-render ran (the phase timings above are then of that pass). */
+  sizeFallback?: number;
 }
 
 export function formatTimingLog(
@@ -349,7 +315,8 @@ export function formatTimingLog(
     `[pdf-export] timing ${exportId} load=${n(t.load)} plan=${n(t.plan)} images_ready=${n(t.images)} launch=${n(t.renderer.launchMs)} ` +
     `render=${n(t.render)} chunks=${t.renderer.chunkMs.map(n).join("/") || "-"} merge=${n(t.merge)} upload=${n(t.upload)} finish=${n(t.finish)} ` +
     `imgs=${n(extra.images)} produced=${n(extra.produced)} failed=${n(extra.failed)} peak_kb=${n(extra.peakKb)} ` +
-    `dl_sum=${n(extra.downloadMs)} enc_sum=${n(extra.encodeMs)} conc=${extra.concurrency ?? "auto"} enc_conc=${extra.encodeConcurrency ?? "auto"}`
+    `dl_sum=${n(extra.downloadMs)} enc_sum=${n(extra.encodeMs)} conc=${extra.concurrency ?? "auto"} enc_conc=${extra.encodeConcurrency ?? "auto"} ` +
+    `size_fallback=${t.sizeFallback ? 1 : 0}`
   );
 }
 
@@ -366,15 +333,119 @@ interface ImageLogStats {
   encodeMs: number;
 }
 
+/** Image settings of one render pass: the default, then (once) the size fallback. */
+interface RenderPass {
+  plan: PlanOptions;
+  quality: number;
+}
+
+const DEFAULT_PASS: RenderPass = { plan: {}, quality: PRINT_JPEG_QUALITY };
+/** M8 T12 follow-up: a 100-page noisy book exceeded the 50 MB bucket limit at 300 dpi / q80. */
+export const SIZE_FALLBACK_PASS: RenderPass = {
+  plan: { dpi: SIZE_FALLBACK_DPI },
+  quality: SIZE_FALLBACK_JPEG_QUALITY,
+};
+
+interface RenderContext {
+  exportId: string;
+  bookId: string;
+  userId: string;
+  docRev: number;
+  doc: BookDoc;
+  photos: PrintPhotoSourceRow[];
+  origin: string;
+  signal: AbortSignal;
+  opts: RunExportOptions;
+  timings: ExportTimings;
+  imageStats: ImageLogStats;
+}
+
+function throwIfAborted(signal: AbortSignal): void {
+  if (signal.aborted) throw new ExportJobError("render_timeout");
+}
+
+/** One pass: plan → loader (+ prefetch) → Chromium chunks → merged PDF. */
+async function renderPass(ctx: RenderContext, pass: RenderPass): Promise<{ bytes: Uint8Array; pageCount: number }> {
+  const { doc, opts, timings, imageStats, signal } = ctx;
+  const render = opts.render ?? renderBook;
+  const tPlan = Date.now();
+  const plan = planPrintImages(doc, ctx.photos, pass.plan);
+  // Originals are downloaded again for a second pass: the loader only keeps encoded copies,
+  // and keeping every original of a 100-page book in memory would cost up to ~2 GB.
+  const loader = createPrintImageLoader(plan, ctx.photos, {
+    ...(opts.imageConcurrency ? { concurrency: opts.imageConcurrency } : {}),
+    ...(opts.encodeConcurrency ? { encodeConcurrency: opts.encodeConcurrency } : {}),
+    ...(pass.quality !== PRINT_JPEG_QUALITY ? { quality: pass.quality } : {}),
+    signal,
+  });
+  const sheetCount = doc.pages.length + 1;
+  const tPlanned = Date.now();
+  timings.plan = tPlanned - tPlan;
+  timings.images = -1;
+
+  // Prefetch: start producing the first window's print copies now, in parallel with the browser
+  // launch inside render(); later chunks are queued as earlier ones finish.
+  let onChunkDone: ((k: number) => void) | undefined;
+  let stopPrefetch: (() => void) | undefined;
+  if (opts.prefetch !== false) {
+    const schedule = chunkPhotoSchedule(doc, chunkRanges(sheetCount, CHUNK_SHEETS), (id) => plan.has(id));
+    const controller = startPrefetch(loader, schedule, PREFETCH_WINDOW_CHUNKS);
+    // Promises taken now (cache hits on what prefetch queued) — never get() after a release.
+    const firstWindow = schedule.uses.slice(0, PREFETCH_WINDOW_CHUNKS).flat();
+    void Promise.allSettled(firstWindow.map((id) => loader.get(id))).then(() => {
+      timings.images = Date.now() - tPlanned;
+    });
+    onChunkDone = (k) => controller.chunkDone(k);
+    stopPrefetch = () => controller.stop();
+  }
+  // Deadline: queue nothing more (the loader itself rejects new work once the signal fired).
+  if (stopPrefetch) signal.addEventListener("abort", stopPrefetch, { once: true });
+
+  try {
+    const tRender = Date.now();
+    const chunks = await render({
+      origin: ctx.origin,
+      bookId: ctx.bookId,
+      exportId: ctx.exportId,
+      docRev: ctx.docRev,
+      sheetCount,
+      loader,
+      onChunkDone,
+      timings: timings.renderer,
+      signal,
+      ...(opts.parallelChunks ? { parallelChunks: opts.parallelChunks } : {}),
+    });
+    timings.render = Date.now() - tRender;
+    const stats = loader.stats?.();
+    if (stats) {
+      imageStats.images = plan.size;
+      imageStats.produced = stats.produced;
+      imageStats.failed = stats.failed;
+      imageStats.peakKb = stats.peakHeldBytes / 1024;
+      imageStats.downloadMs = stats.downloadMs;
+      imageStats.encodeMs = stats.encodeMs;
+    }
+    throwIfAborted(signal);
+    const tMerge = Date.now();
+    const merged = await mergePdfs(chunks, { title: doc.cover.title });
+    timings.merge = Date.now() - tMerge;
+    return merged;
+  } finally {
+    if (stopPrefetch) {
+      signal.removeEventListener("abort", stopPrefetch);
+      stopPrefetch();
+    }
+  }
+}
+
 async function renderAndStore(
   exportId: string,
   token: string,
-  state: { aborted: boolean },
+  signal: AbortSignal,
   opts: RunExportOptions,
   timings: ExportTimings,
   imageStats: ImageLogStats,
 ): Promise<"ready" | "lease_lost"> {
-  const render = opts.render ?? renderBook;
   const tStart = Date.now();
   const exp = await getExportForRender(exportId);
   if (!exp || exp.status !== "rendering") throw new ExportJobError("not_found");
@@ -389,59 +460,36 @@ async function renderAndStore(
   // Ownership: the row was inserted by create_export_job for the verified owner; photos are
   // loaded for that book AND that user only (admin client bypasses RLS).
   const photos = await listPrintPhotoSources(exp.bookId, exp.userId, printPhotoIds(doc, allSheets(doc)));
-  const tLoaded = Date.now();
-  timings.load = tLoaded - tStart;
-  const plan = planPrintImages(doc, photos);
-  const loader = createPrintImageLoader(plan, photos, {
-    ...(opts.imageConcurrency ? { concurrency: opts.imageConcurrency } : {}),
-    ...(opts.encodeConcurrency ? { encodeConcurrency: opts.encodeConcurrency } : {}),
-  });
-  const sheetCount = doc.pages.length + 1;
-  const tPlanned = Date.now();
-  timings.plan = tPlanned - tLoaded;
+  timings.load = Date.now() - tStart;
+  throwIfAborted(signal);
 
-  // Prefetch: start producing the first window's print copies now, in parallel with the browser
-  // launch inside render(); later chunks are queued as earlier ones finish.
-  let onChunkDone: ((k: number) => void) | undefined;
-  if (opts.prefetch !== false) {
-    const schedule = chunkPhotoSchedule(doc, chunkRanges(sheetCount, CHUNK_SHEETS), (id) => plan.has(id));
-    const controller = startPrefetch(loader, schedule, PREFETCH_WINDOW_CHUNKS);
-    // Promises taken now (cache hits on what prefetch queued) — never get() after a release.
-    const firstWindow = schedule.uses.slice(0, PREFETCH_WINDOW_CHUNKS).flat();
-    void Promise.allSettled(firstWindow.map((id) => loader.get(id))).then(() => {
-      timings.images = Date.now() - tPlanned;
-    });
-    onChunkDone = (k) => controller.chunkDone(k);
-  }
-
-  const tRender = Date.now();
-  const chunks = await render({
-    origin,
-    bookId: exp.bookId,
+  const ctx: RenderContext = {
     exportId: exp.id,
+    bookId: exp.bookId,
+    userId: exp.userId,
     docRev: exp.docRev,
-    sheetCount,
-    loader,
-    onChunkDone,
-    timings: timings.renderer,
-    ...(opts.parallelChunks ? { parallelChunks: opts.parallelChunks } : {}),
-  });
-  timings.render = Date.now() - tRender;
-  const stats = loader.stats?.();
-  if (stats) {
-    imageStats.images = plan.size;
-    imageStats.produced = stats.produced;
-    imageStats.failed = stats.failed;
-    imageStats.peakKb = stats.peakHeldBytes / 1024;
-    imageStats.downloadMs = stats.downloadMs;
-    imageStats.encodeMs = stats.encodeMs;
+    doc,
+    photos,
+    origin,
+    signal,
+    opts,
+    timings,
+    imageStats,
+  };
+  let merged = await renderPass(ctx, DEFAULT_PASS);
+  throwIfAborted(signal);
+  if (merged.bytes.byteLength > EXPORT_MAX_BYTES) {
+    // Size fallback: every image at SIZE_FALLBACK_DPI / quality SIZE_FALLBACK_JPEG_QUALITY, once.
+    console.info(`[pdf-export] size_fallback ${exportId} (${Math.round(merged.bytes.byteLength / 1024)} KB)`);
+    timings.sizeFallback = 1;
+    timings.renderer.launchMs = -1;
+    timings.renderer.chunkMs.length = 0;
+    timings.render = -1;
+    timings.merge = -1;
+    merged = await renderPass(ctx, SIZE_FALLBACK_PASS);
+    throwIfAborted(signal);
+    if (merged.bytes.byteLength > EXPORT_MAX_BYTES) throw new ExportJobError("too_large");
   }
-  if (state.aborted) throw new ExportJobError("render_timeout");
-  const tMerge = Date.now();
-  const merged = await mergePdfs(chunks, { title: doc.cover.title });
-  timings.merge = Date.now() - tMerge;
-  if (merged.bytes.byteLength > EXPORT_MAX_BYTES) throw new ExportJobError("too_large");
-  if (state.aborted) throw new ExportJobError("render_timeout");
 
   const path = exportObjectPath(exp.userId, exp.bookId, exp.id);
   const tUpload = Date.now();
@@ -473,14 +521,18 @@ async function renderAndStore(
     return "lease_lost";
   }
 
-  // D-051: keep only the latest PDF of the book. Best effort — a leftover is harmless.
+  // D-051: keep only the latest PDF of the book. Objects are removed, rows are KEPT (status
+  // 'superseded') so the daily cap still counts them (M8 review S1). Best effort: a leftover ready
+  // row whose object is gone is marked missing_file by the next request that finds it.
   try {
     const older = await listOlderReadyExports(exp.bookId, exp.id);
     if (older.length > 0) {
       await removeExportObjects(older.map((o) => o.path));
-      await deleteExportRows(
+      await supersedeExports(
         exp.bookId,
+        exp.userId,
         older.map((o) => o.id),
+        "superseded",
       );
     }
   } catch (err) {
@@ -507,6 +559,11 @@ function codeOf(err: unknown): string {
 /**
  * Renders one export job end to end. Never throws: failures are recorded with fail_export and
  * logged as codes. Returns the outcome (for tests / logs).
+ *
+ * The deadline aborts the work for real (S2): the AbortSignal stops downloads, prefetch and the
+ * renderer (browser closed). runExport still answers as soon as the deadline fires, and waits
+ * briefly (ABORT_SETTLE_MS) for the aborted work to unwind before recording the failure, so the
+ * browser is gone before the invocation ends.
  */
 export async function runExport(
   exportId: string,
@@ -523,11 +580,11 @@ export async function runExport(
   if (!token) return "not_claimed";
 
   const started = Date.now();
-  const state = { aborted: false };
+  const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
-      state.aborted = true;
+      controller.abort();
       reject(new ExportJobError("render_timeout"));
     }, opts.deadlineMs ?? EXPORT_DEADLINE_MS);
   });
@@ -550,8 +607,8 @@ export async function runExport(
         encodeConcurrency: opts.encodeConcurrency ?? null,
       }),
     );
-  const work = renderAndStore(exportId, token, state, opts, timings, imageStats);
-  work.catch(() => undefined); // after a timeout the abandoned work may still reject
+  const work = renderAndStore(exportId, token, controller.signal, opts, timings, imageStats);
+  work.catch(() => undefined); // after a timeout the aborted work rejects too
 
   try {
     const outcome = await Promise.race([work, deadline]);
@@ -561,6 +618,7 @@ export async function runExport(
   } catch (err) {
     const code = failureCode(err);
     console.error(`[pdf-export] failed ${exportId} (${code})`);
+    if (controller.signal.aborted) await settle(work, opts.abortSettleMs ?? ABORT_SETTLE_MS);
     logTimings();
     try {
       await failExport(exportId, token, code);
@@ -570,5 +628,23 @@ export async function runExport(
     return "failed";
   } finally {
     clearTimeout(timer);
+    if (!controller.signal.aborted) controller.abort(); // stop any stray loads after a failure
   }
+}
+
+/** After an abort, how long runExport waits for the work (browser close) to unwind. */
+export const ABORT_SETTLE_MS = 10_000;
+
+async function settle(work: Promise<unknown>, ms: number): Promise<void> {
+  let t: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    work.then(
+      () => undefined,
+      () => undefined,
+    ),
+    new Promise<void>((r) => {
+      t = setTimeout(r, ms);
+    }),
+  ]);
+  clearTimeout(t);
 }

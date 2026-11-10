@@ -176,7 +176,9 @@ describe.skipIf(!CHROME)("PDF render with real Chromium", () => {
         return;
       }
       if (m) {
-        const grant = verifyPrintToken(url.searchParams.get("token"), { bookId: m[1], nowSec: Date.now() / 1000 });
+        // N6: the token arrives only in the x-print-token header, never in the URL
+        const header = req.headers["x-print-token"];
+        const grant = url.search === "" ? verifyPrintToken(typeof header === "string" ? header : undefined, { bookId: m[1], nowSec: Date.now() / 1000 }) : null;
         if (grant && grant.exportId === EXPORT && grant.docRev === 7) {
           res
             .writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" })
@@ -258,6 +260,9 @@ describe.skipIf(!CHROME)("PDF render with real Chromium", () => {
     const printHits = hits.filter((h) => h.path === `/print/${BOOK}`);
     expect(printHits).toHaveLength(2);
     for (const h of printHits) expect(h.headers["x-vercel-protection-bypass"]).toBe("bypass-123");
+    for (const h of printHits) expect(typeof h.headers["x-print-token"]).toBe("string");
+    // sub-resources of the app origin never carry the token
+    for (const h of hits.filter((x) => x.path !== `/print/${BOOK}`)) expect(h.headers["x-print-token"]).toBeUndefined();
     expect(trackerHits).toEqual([]);
   }, 90_000);
 

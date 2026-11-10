@@ -280,6 +280,8 @@ export type Database = {
           lease_until: string | null
           page_count: number | null
           path: string | null
+          purged_at: string | null
+          renderer_version: number
           status: string
           user_id: string
         }
@@ -298,6 +300,8 @@ export type Database = {
           lease_until?: string | null
           page_count?: number | null
           path?: string | null
+          purged_at?: string | null
+          renderer_version?: number
           status?: string
           user_id: string
         }
@@ -316,6 +320,8 @@ export type Database = {
           lease_until?: string | null
           page_count?: number | null
           path?: string | null
+          purged_at?: string | null
+          renderer_version?: number
           status?: string
           user_id?: string
         }
@@ -559,6 +565,7 @@ export type Database = {
           p_daily_cap: number
           p_doc: Json
           p_doc_rev: number
+          p_renderer_version: number
           p_stale_seconds: number
           p_user: string
         }
@@ -637,6 +644,10 @@ export type Database = {
       }
       reserve_geocode_calls: {
         Args: { p_book_id: string; p_daily_cap: number; p_want: number }
+        Returns: number
+      }
+      supersede_exports: {
+        Args: { p_book: string; p_ids: string[]; p_reason: string; p_user: string }
         Returns: number
       }
       try_book_unlock: {

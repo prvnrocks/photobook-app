@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   createExportJob: vi.fn(),
   getExportForOwner: vi.fn(),
   signExportUrl: vi.fn(),
-  deleteExportRows: vi.fn(),
+  supersedeExports: vi.fn(),
   after: vi.fn(),
   runExport: vi.fn(),
 }));
@@ -37,7 +37,7 @@ vi.mock("@/lib/db/exports", async (orig) => {
     createExportJob: mocks.createExportJob,
     getExportForOwner: mocks.getExportForOwner,
     signExportUrl: mocks.signExportUrl,
-    deleteExportRows: mocks.deleteExportRows,
+    supersedeExports: mocks.supersedeExports,
     claimExport: vi.fn(),
     failExport: vi.fn(),
     finishExport: vi.fn(),
@@ -51,6 +51,7 @@ vi.mock("@/lib/pdf/render-pdf", () => ({ renderBook: vi.fn() }));
 vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: mocks.after }));
 
 const route = await import("@/app/api/books/[id]/pdf/route");
+const statusRoute = await import("@/app/api/books/[id]/pdf/status/route");
 const job = await import("@/lib/pdf/job");
 
 const crop = { x: 0.5, y: 0.5, zoom: 1 };
@@ -125,14 +126,14 @@ beforeEach(() => {
 
   mocks.user = { id: USER };
   mocks.book = { id: BOOK, title: "Summer 2026", is_paid: true, max_pages: 100, doc_rev: 3, caption_lang: "en", doc: doc() };
-  for (const m of [mocks.getMyBook, mocks.createExportJob, mocks.getExportForOwner, mocks.signExportUrl, mocks.deleteExportRows, mocks.after]) {
+  for (const m of [mocks.getMyBook, mocks.createExportJob, mocks.getExportForOwner, mocks.signExportUrl, mocks.supersedeExports, mocks.after]) {
     m.mockReset();
   }
   mocks.getMyBook.mockImplementation(async () => mocks.book);
   mocks.createExportJob.mockResolvedValue({ status: "created", exportId: EXP });
   mocks.getExportForOwner.mockResolvedValue(ownerExport());
   mocks.signExportUrl.mockResolvedValue(SIGNED);
-  mocks.deleteExportRows.mockResolvedValue(1);
+  mocks.supersedeExports.mockResolvedValue(1);
 
   logs = [];
   vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => void logs.push(a.join(" ")));
@@ -246,6 +247,7 @@ describe("POST /api/books/[id]/pdf", () => {
       docRev: 3,
       doc: mocks.book!.doc,
       captionLang: "ar",
+      rendererVersion: 2,
       dailyCap: 20,
       staleSeconds: 360,
     });
@@ -277,7 +279,7 @@ describe("POST /api/books/[id]/pdf", () => {
     expect(mocks.after).not.toHaveBeenCalled();
   });
 
-  it("ready but the PDF is missing from Storage → row deleted, a new job is created", async () => {
+  it("ready but the PDF is missing from Storage → row marked missing_file (never deleted), a new job is created", async () => {
     mocks.createExportJob
       .mockResolvedValueOnce({ status: "ready", exportId: EXP })
       .mockResolvedValueOnce({ status: "created", exportId: EXP2 });
@@ -286,13 +288,12 @@ describe("POST /api/books/[id]/pdf", () => {
     const res = await post();
     expect(res.status).toBe(202);
     expect(await body(res)).toEqual({ status: "queued", exportId: EXP2 });
-    expect(mocks.deleteExportRows).toHaveBeenCalledWith(BOOK, [EXP]);
+    expect(mocks.supersedeExports).toHaveBeenCalledWith(BOOK, USER, [EXP], "missing_file");
     expect(mocks.after).toHaveBeenCalledTimes(1);
   });
 
-  it("running (rendering) → 202 rendering, nothing scheduled", async () => {
-    mocks.createExportJob.mockResolvedValue({ status: "running", exportId: EXP, docRev: 3 });
-    mocks.getExportForOwner.mockResolvedValue(ownerExport({ status: "rendering" }));
+  it("running (rendering, live lease) → 202 rendering, nothing scheduled", async () => {
+    mocks.createExportJob.mockResolvedValue({ status: "running", exportId: EXP, docRev: 3, state: "rendering", claimable: false });
     const res = await post();
     expect(res.status).toBe(202);
     expect(await body(res)).toEqual({ status: "rendering", exportId: EXP });
@@ -300,11 +301,17 @@ describe("POST /api/books/[id]/pdf", () => {
   });
 
   it("running but still queued → 202 queued and re-kicked (claim is atomic)", async () => {
-    mocks.createExportJob.mockResolvedValue({ status: "running", exportId: EXP, docRev: 2 });
-    mocks.getExportForOwner.mockResolvedValue(ownerExport({ status: "queued" }));
+    mocks.createExportJob.mockResolvedValue({ status: "running", exportId: EXP, docRev: 2, state: "queued", claimable: true });
     const res = await post();
     expect(res.status).toBe(202);
     expect(await body(res)).toEqual({ status: "queued", exportId: EXP });
+    expect(mocks.after).toHaveBeenCalledTimes(1);
+  });
+
+  it("N3: rendering with an expired lease (claimable) → 202 rendering and re-kicked", async () => {
+    mocks.createExportJob.mockResolvedValue({ status: "running", exportId: EXP, docRev: 3, state: "rendering", claimable: true });
+    const res = await post();
+    expect(await body(res)).toEqual({ status: "rendering", exportId: EXP });
     expect(mocks.after).toHaveBeenCalledTimes(1);
   });
 
@@ -405,15 +412,74 @@ describe("GET /api/books/[id]/pdf?exportId=", () => {
     expect((await body(await get())).filename).toBe("photobook.pdf");
   });
 
-  it("ready but the object is gone → failed missing_file", async () => {
+  it("ready but the object is gone → failed missing_file, row marked (not deleted)", async () => {
     mocks.getExportForOwner.mockResolvedValue(ownerExport({ status: "ready", bytes: 1, pageCount: 3 }));
     mocks.signExportUrl.mockResolvedValue(null);
+    expect(await body(await get())).toEqual({ status: "failed", error: "missing_file" });
+    expect(mocks.supersedeExports).toHaveBeenCalledWith(BOOK, USER, [EXP], "missing_file");
+  });
+
+  it("superseded → failed superseded / missing_file (client re-POSTs)", async () => {
+    mocks.getExportForOwner.mockResolvedValue(ownerExport({ status: "superseded", errorCode: "superseded" }));
+    expect(await body(await get())).toEqual({ status: "failed", error: "superseded" });
+    mocks.getExportForOwner.mockResolvedValue(ownerExport({ status: "superseded", errorCode: "missing_file" }));
     expect(await body(await get())).toEqual({ status: "failed", error: "missing_file" });
   });
 
   it("failed → { status: 'failed', error: code }", async () => {
     mocks.getExportForOwner.mockResolvedValue(ownerExport({ status: "failed", errorCode: "render_timeout" }));
     expect(await body(await get())).toEqual({ status: "failed", error: "render_timeout" });
+  });
+});
+
+describe("GET /api/books/[id]/pdf/status?exportId= (lightweight poll)", () => {
+  function sget(exportId: string = EXP, id = BOOK) {
+    return statusRoute.GET(
+      new NextRequest(`http://localhost:3000/api/books/${id}/pdf/status?exportId=${exportId}`, {
+        headers: { host: "localhost:3000" },
+      }),
+      ctx(id),
+    );
+  }
+
+  it("is a nodejs dynamic route without the render budget", () => {
+    expect(statusRoute.runtime).toBe("nodejs");
+    expect(statusRoute.dynamic).toBe("force-dynamic");
+    expect("maxDuration" in statusRoute).toBe(false);
+    expect(Object.keys(statusRoute).sort()).toEqual(["GET", "dynamic", "runtime"]);
+  });
+
+  it("401 / 404 like the heavy route", async () => {
+    mocks.user = null;
+    expect((await sget()).status).toBe(401);
+    mocks.user = { id: USER };
+    expect((await sget("nope")).status).toBe(404);
+    mocks.getExportForOwner.mockResolvedValue(null);
+    expect((await sget()).status).toBe(404);
+    mocks.getExportForOwner.mockResolvedValue(ownerExport({ bookId: P(77) }));
+    expect((await sget()).status).toBe(404);
+  });
+
+  it("queued (even old) → queued, never re-kicks", async () => {
+    mocks.getExportForOwner.mockResolvedValue(ownerExport({ createdAt: new Date(Date.now() - 600_000).toISOString() }));
+    const res = await sget();
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(await body(res)).toEqual({ status: "queued" });
+    expect(mocks.after).not.toHaveBeenCalled();
+  });
+
+  it("ready → signed URL; failed → code", async () => {
+    mocks.getExportForOwner.mockResolvedValue(ownerExport({ status: "ready", bytes: 999, pageCount: 3 }));
+    expect(await body(await sget())).toMatchObject({ status: "ready", url: SIGNED, filename: "summer-2026.pdf" });
+    mocks.getExportForOwner.mockResolvedValue(ownerExport({ status: "failed", errorCode: "too_large" }));
+    expect(await body(await sget())).toEqual({ status: "failed", error: "too_large" });
+  });
+
+  it("500 with a code-only log when the DB throws", async () => {
+    mocks.getExportForOwner.mockRejectedValue(Object.assign(new Error(`secret ${USER}`), { code: "PGRST301" }));
+    const res = await sget();
+    expect(res.status).toBe(500);
+    expect(logs.join("\n")).not.toContain(USER);
   });
 });
 

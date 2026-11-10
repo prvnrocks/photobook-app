@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
   failExport: vi.fn(),
   listOlderReadyExports: vi.fn(),
   removeExportObjects: vi.fn(),
-  deleteExportRows: vi.fn(),
+  supersedeExports: vi.fn(),
   listPrintPhotoSources: vi.fn(),
   renderBook: vi.fn(),
   mergePdfs: vi.fn(),
@@ -46,7 +46,7 @@ vi.mock("@/lib/db/exports", async (orig) => {
     failExport: mocks.failExport,
     listOlderReadyExports: mocks.listOlderReadyExports,
     removeExportObjects: mocks.removeExportObjects,
-    deleteExportRows: mocks.deleteExportRows,
+    supersedeExports: mocks.supersedeExports,
   };
 });
 vi.mock("@/lib/pdf/render-pdf", () => ({ renderBook: mocks.renderBook }));
@@ -116,7 +116,7 @@ beforeEach(() => {
   mocks.failExport.mockResolvedValue(true);
   mocks.listOlderReadyExports.mockResolvedValue([{ id: OLD, path: `${USER}/${BOOK}/${OLD}.pdf` }]);
   mocks.removeExportObjects.mockResolvedValue(undefined);
-  mocks.deleteExportRows.mockResolvedValue(1);
+  mocks.supersedeExports.mockResolvedValue(1);
 
   logs = [];
   vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => void logs.push(a.join(" ")));
@@ -160,8 +160,10 @@ describe("runExport", () => {
       loader: LOADER,
     });
     expect(Object.keys(renderOpts).sort()).toEqual(
-      ["bookId", "docRev", "exportId", "loader", "onChunkDone", "origin", "sheetCount", "timings"].sort(),
+      ["bookId", "docRev", "exportId", "loader", "onChunkDone", "origin", "sheetCount", "signal", "timings"].sort(),
     );
+    expect(renderOpts.signal).toBeInstanceOf(AbortSignal);
+    expect(mocks.createPrintImageLoader.mock.calls[0][2].signal).toBe(renderOpts.signal);
     // prefetch on by default: all three photos queued (one chunk), released after it renders
     expect(renderOpts.onChunkDone).toBeTypeOf("function");
     expect(LOADER.prefetch).toHaveBeenCalledWith([P(9), P(1), P(2)]);
@@ -170,7 +172,9 @@ describe("runExport", () => {
     expect(mocks.finishExport).toHaveBeenCalledWith({ exportId: EXP, token: TOKEN, path: PATH, bytes: 4, pageCount: 3 });
     expect(mocks.listOlderReadyExports).toHaveBeenCalledWith(BOOK, EXP);
     expect(mocks.removeExportObjects).toHaveBeenCalledWith([`${USER}/${BOOK}/${OLD}.pdf`]);
-    expect(mocks.deleteExportRows).toHaveBeenCalledWith(BOOK, [OLD]);
+    // S1: older rows are kept as superseded (never deleted), after their objects were removed
+    expect(mocks.supersedeExports).toHaveBeenCalledWith(BOOK, USER, [OLD], "superseded");
+    expect(mocks.removeExportObjects.mock.invocationCallOrder[0]).toBeLessThan(mocks.supersedeExports.mock.invocationCallOrder[0]);
     expect(mocks.failExport).not.toHaveBeenCalled();
     // the upload happened before finish
     expect(mocks.uploadExportPdf.mock.invocationCallOrder[0]).toBeLessThan(mocks.finishExport.mock.invocationCallOrder[0]);
@@ -196,7 +200,7 @@ describe("runExport", () => {
     expect(await runExport(EXP)).toBe("lease_lost");
     expect(mocks.removeExportObjects).toHaveBeenCalledWith([PATH]);
     expect(mocks.listOlderReadyExports).not.toHaveBeenCalled();
-    expect(mocks.deleteExportRows).not.toHaveBeenCalled();
+    expect(mocks.supersedeExports).not.toHaveBeenCalled();
     expect(mocks.failExport).not.toHaveBeenCalled();
   });
 
@@ -226,13 +230,6 @@ describe("runExport", () => {
     mocks.mergePdfs.mockRejectedValue(new PdfRenderError("merge_failed"));
     await runExport(EXP);
     expect(mocks.failExport).toHaveBeenCalledWith(EXP, TOKEN, "merge_failed");
-  });
-
-  it("> 50 MB → too_large, nothing uploaded", async () => {
-    mocks.mergePdfs.mockResolvedValue({ bytes: new Uint8Array(50 * 1024 * 1024 + 1), pageCount: 3 });
-    expect(await runExport(EXP)).toBe("failed");
-    expect(mocks.failExport).toHaveBeenCalledWith(EXP, TOKEN, "too_large");
-    expect(mocks.uploadExportPdf).not.toHaveBeenCalled();
   });
 
   it("upload error → upload_failed", async () => {
@@ -265,17 +262,80 @@ describe("runExport", () => {
   it("overall deadline → render_timeout, and the late render never uploads", async () => {
     let finishRender: (v: Buffer[]) => void = () => undefined;
     mocks.renderBook.mockReturnValue(new Promise<Buffer[]>((r) => (finishRender = r)));
-    expect(await runExport(EXP, { deadlineMs: 20 })).toBe("failed");
+    expect(await runExport(EXP, { deadlineMs: 20, abortSettleMs: 5 })).toBe("failed");
     expect(mocks.failExport).toHaveBeenCalledWith(EXP, TOKEN, "render_timeout");
     finishRender([Buffer.from("late")]);
     await new Promise((r) => setTimeout(r, 10));
     expect(mocks.uploadExportPdf).not.toHaveBeenCalled();
   });
 
+  it("S2: the deadline aborts the signal given to the renderer and loader; runExport waits for the render to unwind", async () => {
+    let seen: AbortSignal | undefined;
+    let unwound = false;
+    mocks.renderBook.mockImplementation(
+      (opts: { signal: AbortSignal }) =>
+        new Promise<Buffer[]>((_, reject) => {
+          seen = opts.signal;
+          opts.signal.addEventListener("abort", () =>
+            setTimeout(() => {
+              unwound = true; // e.g. browser closed
+              reject(new PdfRenderError("render_timeout"));
+            }, 5),
+          );
+        }),
+    );
+    expect(await runExport(EXP, { deadlineMs: 20 })).toBe("failed");
+    expect(seen?.aborted).toBe(true);
+    expect(unwound).toBe(true); // failure recorded only after the aborted render settled
+    expect(mocks.failExport).toHaveBeenCalledTimes(1);
+    expect(mocks.failExport).toHaveBeenCalledWith(EXP, TOKEN, "render_timeout");
+    expect(mocks.uploadExportPdf).not.toHaveBeenCalled();
+  });
+
+  it("S2: a render that ignores the abort is not waited for beyond abortSettleMs", async () => {
+    mocks.renderBook.mockReturnValue(new Promise<Buffer[]>(() => undefined));
+    const t0 = Date.now();
+    expect(await runExport(EXP, { deadlineMs: 10, abortSettleMs: 30 })).toBe("failed");
+    expect(Date.now() - t0).toBeLessThan(2_000);
+  });
+
+  it("S2: a successful job aborts its signal afterwards (stray loads stop)", async () => {
+    expect(await runExport(EXP)).toBe("ready");
+    expect(mocks.renderBook.mock.calls[0][0].signal.aborted).toBe(true);
+  });
+
+  it("size fallback: > 50 MB → re-plans at 250 dpi, re-encodes at q70, re-renders once → ready (ids-only log)", async () => {
+    mocks.mergePdfs
+      .mockResolvedValueOnce({ bytes: new Uint8Array(50 * 1024 * 1024 + 1), pageCount: 3 })
+      .mockResolvedValueOnce({ bytes: PDF, pageCount: 3 });
+    expect(await runExport(EXP)).toBe("ready");
+    expect(mocks.renderBook).toHaveBeenCalledTimes(2);
+    expect(mocks.createPrintImageLoader).toHaveBeenCalledTimes(2);
+    const [plan1, , opts1] = mocks.createPrintImageLoader.mock.calls[0];
+    const [plan2, , opts2] = mocks.createPrintImageLoader.mock.calls[1];
+    expect(opts1.quality).toBeUndefined();
+    expect(opts2.quality).toBe(70);
+    for (const id of plan1.keys()) {
+      expect(plan2.get(id).width).toBeLessThan(plan1.get(id).width); // 250 dpi < 300 dpi
+    }
+    expect(mocks.uploadExportPdf).toHaveBeenCalledWith(PATH, PDF);
+    expect(logs.join("\n")).toContain(`size_fallback ${EXP} (51200 KB)`);
+    expect(logs.find((l) => l.includes(`timing ${EXP}`))).toContain("size_fallback=1");
+    expectNoPii();
+  });
+
+  it("size fallback still > 50 MB → too_large after exactly one re-render", async () => {
+    mocks.mergePdfs.mockResolvedValue({ bytes: new Uint8Array(50 * 1024 * 1024 + 1), pageCount: 3 });
+    expect(await runExport(EXP)).toBe("failed");
+    expect(mocks.renderBook).toHaveBeenCalledTimes(2);
+    expect(mocks.failExport).toHaveBeenCalledWith(EXP, TOKEN, "too_large");
+    expect(mocks.uploadExportPdf).not.toHaveBeenCalled();
+  });
+
   it("older-PDF cleanup failure is logged but the export stays ready", async () => {
     mocks.removeExportObjects.mockRejectedValue(Object.assign(new Error("x"), { code: "500" }));
     expect(await runExport(EXP)).toBe("ready");
-    expect(mocks.deleteExportRows).not.toHaveBeenCalled();
+    expect(mocks.supersedeExports).not.toHaveBeenCalled();
     expect(mocks.failExport).not.toHaveBeenCalled();
     expect(logs.join("\n")).toContain(`cleanup_failed ${EXP} (500)`);
   });
@@ -344,7 +404,7 @@ describe("runExport prefetch + timing logs", () => {
 
   it("encodeConcurrency is passed to the loader", async () => {
     expect(await runExport(EXP, { encodeConcurrency: 1 })).toBe("ready");
-    expect(mocks.createPrintImageLoader.mock.calls[0][2]).toEqual({ encodeConcurrency: 1 });
+    expect(mocks.createPrintImageLoader.mock.calls[0][2]).toEqual({ encodeConcurrency: 1, signal: expect.any(AbortSignal) });
     expect(logs.join("\n")).toMatch(/conc=auto enc_conc=1/);
   });
 
@@ -353,7 +413,7 @@ describe("runExport prefetch + timing logs", () => {
     mocks.createPrintImageLoader.mockReturnValue(loader);
     expect(await runExport(EXP, { prefetch: false, imageConcurrency: 3, parallelChunks: 2 })).toBe("ready");
     expect(loader.prefetch).not.toHaveBeenCalled();
-    expect(mocks.createPrintImageLoader.mock.calls[0][2]).toEqual({ concurrency: 3 });
+    expect(mocks.createPrintImageLoader.mock.calls[0][2]).toEqual({ concurrency: 3, signal: expect.any(AbortSignal) });
     expect(logs.join("\n")).toMatch(/enc_conc=auto/);
     const opts = mocks.renderBook.mock.calls[0][0];
     expect(opts.onChunkDone).toBeUndefined();
