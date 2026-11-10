@@ -17,7 +17,8 @@ Read `docs/PLAN.md` for milestones. Work on ONE milestone at a time, tick its ch
 - Mobile-first: most users arrive from WhatsApp on a phone. Every screen must work at 375px wide.
 - Language: English UI. Captions may be Arabic → use `dir="auto"` on all caption text and load Arabic
   fonts (Cairo, Tajawal). Arabic must render correctly in viewer AND PDF.
-- Book format v1: portrait A5-ratio pages (148×210 mm), single size.
+- Formats: A5 portrait 148×210 mm and A5 landscape 210×148 mm, chosen per book (M10, user-approved 2026-11-10).
+  Spread layouts are stored as page pairs and count as 2 pages toward the 20/100 limits.
 - **AI is core**: AI filters photos (drops screenshots, blurry, duplicates), groups them into moments using
   metadata (date, GPS place) + what's in the photos, builds the album, and writes quotes/captions.
   **AI drafts, the user decides**: every AI choice is visible and editable; user edits are never overwritten.
