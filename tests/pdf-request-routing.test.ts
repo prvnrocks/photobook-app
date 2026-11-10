@@ -25,6 +25,19 @@ describe("classifyRequest", () => {
     expect(classifyRequest("http://localhost:3000/print/x", "http://localhost:3000")).toBe("same_origin");
   });
 
+  it("continues same-origin design assets (/design/textures) and nothing more (M10 A5)", () => {
+    expect(classifyRequest(`${APP}/design/textures/x.jpg`, APP)).toBe("same_origin");
+    expect(classifyRequest(`${APP}/design/textures/paper-cream.jpg`, APP)).toBe("same_origin");
+    expect(classifyRequest("http://localhost:3000/design/textures/kraft.jpg", "http://localhost:3000")).toBe(
+      "same_origin",
+    );
+    // Same path on any other origin (incl. the print-asset origin's id-only paths) is unchanged.
+    expect(classifyRequest("https://cdn.example/design/textures/x.jpg", APP)).toBe("block");
+    expect(classifyRequest(`${PRINT_ASSET_ORIGIN}/design/textures/x.jpg`, APP)).toBe("asset");
+    expect(assetPhotoId(`${PRINT_ASSET_ORIGIN}/design/textures/x.jpg`)).toBeNull();
+    expect(assetPhotoId(`${APP}/design/textures/x.jpg`)).toBeNull();
+  });
+
   it("blocks other origins, ports, schemes and subdomains", () => {
     expect(classifyRequest("https://fonts.googleapis.com/css2?family=Cairo", APP)).toBe("block");
     expect(classifyRequest("https://fonts.gstatic.com/s/cairo.woff2", APP)).toBe("block");

@@ -1,0 +1,123 @@
+{
+  "generator": "scripts/gen-textures.mjs",
+  "license": "CC0-1.0",
+  "sharp": "0.35.5",
+  "vips": "8.18.7",
+  "tilePx": 512,
+  "tileMm": 40,
+  "washPrintDpi": 150,
+  "files": [
+    {
+      "name": "paper-cream.webp",
+      "width": 512,
+      "height": 512,
+      "bytes": 55784,
+      "sha256": "6909bd367259ff0290ac758778ad0b794b53bef1f15d869dbf546704c71a3289"
+    },
+    {
+      "name": "paper-cream.jpg",
+      "width": 512,
+      "height": 512,
+      "bytes": 62880,
+      "sha256": "e9486f1b5286539899f662dc080dabb7f71409ec4dea617501f98273623ad5b3"
+    },
+    {
+      "name": "paper-white.webp",
+      "width": 512,
+      "height": 512,
+      "bytes": 57588,
+      "sha256": "951b960ad0467c479e9c33fdfe04ea882cb10105def2939ddeb714e74d0b0f44"
+    },
+    {
+      "name": "paper-white.jpg",
+      "width": 512,
+      "height": 512,
+      "bytes": 58767,
+      "sha256": "797e7b1090c3f8dc5fd4f0d1f829b260ffec220231330bed972ca16f3886bdec"
+    },
+    {
+      "name": "linen.webp",
+      "width": 512,
+      "height": 512,
+      "bytes": 21574,
+      "sha256": "e7d1ed498227a78bd3bce4b5b782733275c3c0dbbede335abd6309a243b77999"
+    },
+    {
+      "name": "linen.jpg",
+      "width": 512,
+      "height": 512,
+      "bytes": 59861,
+      "sha256": "607fd01982796feed2f409991c0c35968ee0513a09a98157862b488758a390e1"
+    },
+    {
+      "name": "kraft.webp",
+      "width": 512,
+      "height": 512,
+      "bytes": 82018,
+      "sha256": "a8648e530c03682ab66699955aec9383a99786f444e7f61c209f101f83d3085d"
+    },
+    {
+      "name": "kraft.jpg",
+      "width": 512,
+      "height": 512,
+      "bytes": 94624,
+      "sha256": "90506a4fc4ab4988e41103330f58b79db8c0b2c95b8d0c669da90a3f23715b26"
+    },
+    {
+      "name": "watercolour-blush-portrait.jpg",
+      "width": 910,
+      "height": 1276,
+      "bytes": 129555,
+      "sha256": "40d5e19c14e0c6a7fa85bee15efe6df42169763ac2ae1dfff80fdc81705bc5f5"
+    },
+    {
+      "name": "watercolour-blush-portrait.webp",
+      "width": 856,
+      "height": 1200,
+      "bytes": 67894,
+      "sha256": "e2bee68202a9c87a11d182e777b9733f9d5c24f237fab0823d26bb30f30c74e5"
+    },
+    {
+      "name": "watercolour-blush-landscape.jpg",
+      "width": 1276,
+      "height": 910,
+      "bytes": 129588,
+      "sha256": "c193df000bdc22dd43e7d63d7a8e487117c725ad74f32a5dc7aeaa7f428c68de"
+    },
+    {
+      "name": "watercolour-blush-landscape.webp",
+      "width": 1200,
+      "height": 856,
+      "bytes": 63830,
+      "sha256": "61e5609340383d48cb09db8be1980ab875834515749aa206e40203a812001e97"
+    },
+    {
+      "name": "watercolour-sky-portrait.jpg",
+      "width": 910,
+      "height": 1276,
+      "bytes": 134452,
+      "sha256": "3a5c3497e5d8aea753c990ac7732abcb885c59dcfe3f9c607ad1bd0aaef309c5"
+    },
+    {
+      "name": "watercolour-sky-portrait.webp",
+      "width": 856,
+      "height": 1200,
+      "bytes": 72396,
+      "sha256": "a86b6bf988cb72fb4c323d8eda6b625d5538691bdb29c17ade0119101175b97a"
+    },
+    {
+      "name": "watercolour-sky-landscape.jpg",
+      "width": 1276,
+      "height": 910,
+      "bytes": 134252,
+      "sha256": "85f82d829041b99bf61fdbe4335bcb1838d58b22bb45df6c8c0be73ef0dc6cd8"
+    },
+    {
+      "name": "watercolour-sky-landscape.webp",
+      "width": 1200,
+      "height": 856,
+      "bytes": 75268,
+      "sha256": "49565266100bc2899588655753730ea4a5b2644bd7bef6825a20c256e173c8d1"
+    }
+  ]
+}
