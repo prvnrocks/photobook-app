@@ -708,3 +708,201 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
     await expect(page).toHaveURL(/save=offline/);
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// M10a A9: facing-pages editor. ≥ md shows the open book (cover alone, then pages [1,2], [3,4],
+// … like the flipbook); phones keep one page + a read-only "View spread" sheet.
+// ---------------------------------------------------------------------------------------------
+
+test.describe("facing pages (/dev-editor)", () => {
+  test.beforeAll(async ({ request }) => {
+    const res = await request.get(`/dev-editor`);
+    test.skip(res.status() === 404, "/dev-editor is dev-only (404 under next start)");
+  });
+
+  const errors: string[] = [];
+  test.beforeEach(async ({ page }) => {
+    errors.length = 0;
+    page.on("pageerror", (e) => errors.push(String(e)));
+    await page.addInitScript(() => {
+      document.addEventListener("DOMContentLoaded", () => {
+        const st = document.createElement("style");
+        st.textContent = "nextjs-portal{display:none!important}";
+        document.head.appendChild(st);
+      });
+    });
+  });
+  test.afterEach(() => {
+    expect(errors, "no page errors").toEqual([]);
+  });
+
+  const carousel = (page: Page) => page.getByTestId("page-carousel");
+  const cur = (page: Page) => page.locator('[data-testid="carousel-item"][aria-hidden="false"]');
+  const counter = (page: Page) => page.getByTestId("page-counter");
+  const side = (page: Page, s: "left" | "right") => cur(page).locator(`[data-testid="spread-page"][data-side="${s}"]`);
+  const overflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+
+  /** The current slide rests flush with the carousel's left edge. */
+  async function settle(page: Page) {
+    await expect
+      .poll(
+        async () => {
+          const c = (await carousel(page).boundingBox())?.x ?? 0;
+          const x1 = (await cur(page).boundingBox())?.x ?? 999;
+          await page.waitForTimeout(100);
+          const x2 = (await cur(page).boundingBox())?.x ?? 999;
+          return Math.abs(x1 - x2) < 1 && Math.abs(x2 - c) < 2;
+        },
+        { timeout: 5_000 },
+      )
+      .toBe(true);
+  }
+
+  async function openSpread(page: Page, query = "") {
+    await page.goto(`/dev-editor${query}`);
+    await expect(page.getByTestId("editor-shell")).toBeVisible();
+    await expect(carousel(page)).toHaveAttribute("data-mode", "spread");
+    await expect(counter(page)).toContainText("Cover");
+    await settle(page);
+  }
+
+  test.describe("at 1024 × 768", () => {
+    test.use({ viewport: { width: 1024, height: 768 } });
+
+    test("cover alone, then two pages side by side; arrows + keys move by spread", async ({ page }) => {
+      await openSpread(page);
+      await expect(cur(page).getByTestId("editor-spread")).toHaveAttribute("data-kind", "cover");
+      await expect(cur(page).getByTestId("spread-page")).toHaveCount(0);
+      await expect(page.getByTestId("view-spread")).toHaveCount(0);
+
+      await page.getByTestId("carousel-next").click();
+      await expect(counter(page)).toHaveText("1–2 / 6");
+      await settle(page);
+      const l = (await side(page, "left").boundingBox())!;
+      const r = (await side(page, "right").boundingBox())!;
+      expect(Math.abs(l.y - r.y)).toBeLessThan(1);
+      expect(Math.abs(l.x + l.width - r.x)).toBeLessThan(1); // touching at the fold
+      expect(Math.abs(l.width - r.width)).toBeLessThan(1);
+      const c = (await carousel(page).boundingBox())!;
+      expect(l.x).toBeGreaterThanOrEqual(c.x);
+      expect(r.x + r.width).toBeLessThanOrEqual(c.x + c.width + 1);
+      await expect(cur(page).getByTestId("spread-fold")).toHaveCount(1);
+      await expect(side(page, "left")).toHaveAttribute("data-active", "true");
+
+      await page.getByTestId("carousel-next").click();
+      await expect(counter(page)).toHaveText("3–4 / 6");
+      await page.keyboard.press("ArrowRight");
+      await expect(counter(page)).toHaveText("5–6 / 6");
+      await expect(page.getByTestId("carousel-next")).toBeDisabled();
+      await page.keyboard.press("ArrowLeft");
+      await expect(counter(page)).toHaveText("3–4 / 6");
+      await page.getByTestId("carousel-prev").click();
+      await page.getByTestId("carousel-prev").click();
+      await expect(counter(page)).toContainText("Cover");
+      await settle(page);
+      await expect(cur(page).getByTestId("editor-spread")).toHaveAttribute("data-kind", "cover");
+      // Strip groups thumbnails like the book opens.
+      await expect(page.getByTestId("page-strip")).toHaveAttribute("data-mode", "spread");
+      await expect(page.getByTestId("strip-spread")).toHaveCount(4);
+      expect(await overflow(page)).toBeLessThanOrEqual(0);
+    });
+
+    test("tap the right page's caption → the edit lands on the right page", async ({ page }) => {
+      await openSpread(page);
+      await page.getByTestId("carousel-next").click();
+      await expect(counter(page)).toHaveText("1–2 / 6");
+      await settle(page);
+      const left = side(page, "left");
+      const right = side(page, "right");
+      await expect(right).toHaveAttribute("data-page-idx", "1");
+      const leftBefore = await left.innerHTML();
+
+      // A slot tap on the right page makes it current (tools act on it)…
+      await right.locator('[data-slot-index="0"] [data-testid="slot-target"]').click();
+      await expect(right).toHaveAttribute("data-active", "true");
+      await expect(left).toHaveAttribute("data-active", "false");
+      await page.getByTestId("editor-tool-dev-panel").click();
+      await expect(page.getByTestId("editor-panel-dev-panel")).toContainText("Page: 1 · selection: slot");
+      await page.getByTestId("editor-panel-close").click();
+
+      // …and so does a caption tap.
+      await right.getByTestId("caption-target").click();
+      const input = page.getByTestId("caption-input");
+      await expect(input).toBeVisible();
+      await input.fill("Right-hand page caption");
+      await expect(right.getByTestId("page-caption")).toHaveText("Right-hand page caption");
+      await expect(page.getByTestId("save-status")).toHaveAttribute("data-state", "saved", { timeout: 10_000 });
+      expect(await left.innerHTML()).toBe(leftBefore);
+      await expect(counter(page)).toHaveText("1–2 / 6");
+
+      // Tapping the left page moves "current" back (the selection there drops).
+      await page.getByTestId("editor-panel-close").click();
+      await left.locator('[data-slot-index="0"] [data-testid="slot-target"]').click();
+      await expect(left).toHaveAttribute("data-active", "true");
+      await page.getByTestId("editor-tool-dev-panel").click();
+      await expect(page.getByTestId("editor-panel-dev-panel")).toContainText("Page: 0 · selection: slot");
+    });
+
+    test("strip tap on a right-hand page shows its spread with that page current", async ({ page }) => {
+      await openSpread(page);
+      await page.getByTestId("page-strip").getByRole("button", { name: "Page 4", exact: true }).click();
+      await expect(counter(page)).toHaveText("3–4 / 6");
+      await settle(page);
+      await expect(side(page, "right")).toHaveAttribute("data-active", "true");
+    });
+  });
+
+  test.describe("at 1280 × 800 (landscape book)", () => {
+    test.use({ viewport: { width: 1280, height: 800 } });
+
+    test("two landscape pages side by side, fitted to width", async ({ page }) => {
+      await openSpread(page, "?format=landscape");
+      await page.getByTestId("carousel-next").click();
+      await expect(counter(page)).toHaveText("1–2 / 6");
+      await settle(page);
+      const spread = (await cur(page).getByTestId("editor-spread").boundingBox())!;
+      const c = (await carousel(page).boundingBox())!;
+      expect(spread.width / spread.height).toBeGreaterThan(2.7); // 420 / 148 ≈ 2.84
+      expect(spread.x).toBeGreaterThanOrEqual(c.x);
+      expect(spread.x + spread.width).toBeLessThanOrEqual(c.x + c.width + 1);
+      expect(await overflow(page)).toBeLessThanOrEqual(0);
+    });
+  });
+
+  test.describe("at 375 px", () => {
+    test.use({ viewport: { width: W, height: 812 }, hasTouch: true, isMobile: true });
+
+    test("single page + View spread sheet: shows the current spread, swipes, jumps to a page", async ({ page }) => {
+      await page.goto(`/dev-editor`);
+      await expect(page.getByTestId("editor-shell")).toBeVisible();
+      await expect(carousel(page)).toHaveAttribute("data-mode", "single");
+      await expect(page.getByTestId("editor-spread")).toHaveCount(0);
+      await page.getByTestId("carousel-next").click();
+      await page.getByTestId("carousel-next").click();
+      await page.getByTestId("carousel-next").click();
+      await expect(counter(page)).toHaveText("3 / 6");
+      await settle(page);
+
+      await page.getByTestId("view-spread").click();
+      const sheet = page.getByTestId("spread-preview");
+      await expect(sheet).toBeVisible();
+      await expect(page.getByTestId("spread-preview-counter")).toHaveText("3–4 / 6");
+      const shownItem = sheet.locator('[data-testid="spread-preview-item"][aria-hidden="false"]');
+      await expect(shownItem.getByTestId("spread-preview-page")).toHaveCount(2);
+      expect(await overflow(page)).toBeLessThanOrEqual(0);
+
+      await page.getByTestId("spread-preview-next").click();
+      await expect(page.getByTestId("spread-preview-counter")).toHaveText("5–6 / 6");
+      await page.getByTestId("spread-preview-prev").click();
+      await page.getByTestId("spread-preview-prev").click();
+      await expect(page.getByTestId("spread-preview-counter")).toHaveText("1–2 / 6");
+      // Tap the right-hand page → editor jumps to it, sheet closes.
+      await expect(shownItem).toHaveAttribute("data-spread", "1");
+      await shownItem.locator('[data-testid="spread-preview-page"][data-page-idx="1"]').click();
+      await expect(sheet).toHaveCount(0);
+      await expect(counter(page)).toHaveText("2 / 6");
+      await settle(page);
+      expect(await overflow(page)).toBeLessThanOrEqual(0);
+    });
+  });
+});

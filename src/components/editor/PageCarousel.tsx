@@ -9,16 +9,33 @@
 // (T14 bug 2). Prev/next always step from the store's index (the target), never from the
 // in-progress scroll position. A touch/wheel/key by the user hands control back to the scroll.
 // Only items within WINDOW of the current one render a <BookPage>; the rest are empty boxes.
+//
+// Facing pages (M10a A9, ctx.spread — ≥ md): items are open spreads instead (src/lib/editor/
+// spreads.ts: item 0 = cover alone, item k = pages 2(k-1) + 2(k-1)+1, same pairing as the
+// flipbook). Swipe/arrows move by spread and land on its left page; tapping a page makes it the
+// current page (what page tools act on). Phones keep one page + a read-only "View spread" sheet.
 
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pageAspectStyle } from "@/lib/book/format-style";
+import {
+  editorSpreads,
+  spreadAriaLabel,
+  spreadCounterLabel,
+  spreadOfPosition,
+  spreadToPosition,
+  stepSpread,
+} from "@/lib/editor/spreads";
 import { itemToPosition, positionToItem } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
 import { useEditor } from "./editor-context";
 import { EditablePage } from "./EditablePage";
+import { EditorSpreadView } from "./EditorSpread";
+import { SpreadPreviewSheet } from "./SpreadPreviewSheet";
 
 const WINDOW = 2;
+/** Spread mode: spreads (two pages each) within this many of the current one render pages. */
+const SPREAD_WINDOW = 1;
 
 /** "Cover" for the cover, else "3 / 20" (1-based page of total pages). Exported for tests. */
 export function pageCounterLabel(item: number, pageCount: number): string {
@@ -26,10 +43,17 @@ export function pageCounterLabel(item: number, pageCount: number): string {
 }
 
 export function PageCarousel() {
-  const { state, actions } = useEditor();
+  const { state, actions, spread = false } = useEditor();
   const ref = useRef<HTMLDivElement>(null);
-  const current = positionToItem(state.page);
-  const count = state.doc.pages.length + 1;
+  const pageCount = state.doc.pages.length;
+  const spreads = useMemo(() => (spread ? editorSpreads(state.doc) : null), [spread, state.doc]);
+  const current = spread ? spreadOfPosition(state.page) : positionToItem(state.page);
+  const count = spreads ? spreads.length : pageCount + 1;
+  const [preview, setPreview] = useState(false);
+  const pageCountRef = useRef(pageCount);
+  useEffect(() => {
+    pageCountRef.current = pageCount;
+  }, [pageCount]);
   /** Inline aspect-ratio for non-A5-portrait formats (undefined → the aspect-[148/210] class). */
   const aspectStyle = pageAspectStyle(state.doc.format);
   const currentRef = useRef(current);
@@ -94,7 +118,8 @@ export function PageCarousel() {
         }
         if (shown !== currentRef.current) {
           currentRef.current = shown;
-          actions.goTo(itemToPosition(shown));
+          // Spread mode: a spread is entered on its left page.
+          actions.goTo(spread ? spreadToPosition(shown, pageCountRef.current) : itemToPosition(shown));
         }
       });
     };
@@ -122,16 +147,41 @@ export function PageCarousel() {
       ro.disconnect();
       if (targetTimer.current) clearTimeout(targetTimer.current);
     };
-  }, [actions]);
+    // The carousel remounts when the mode changes (EditorShell key), so `spread` is fixed here.
+  }, [actions, spread]);
+
+  const prev = () => (spread ? actions.goTo(stepSpread(state.page, -1, pageCount)) : actions.prev());
+  const next = () => (spread ? actions.goTo(stepSpread(state.page, 1, pageCount)) : actions.next());
+  const label = spread ? spreadCounterLabel(current, pageCount) : pageCounterLabel(current, count - 1);
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-roledescription="carousel" aria-label="Book pages">
       <div
         ref={ref}
-        className="flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className={cn(
+          "flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          // A desk under the open book.
+          spread && "bg-stone-100",
+        )}
         data-testid="page-carousel"
+        data-mode={spread ? "spread" : "single"}
       >
-        {Array.from({ length: count }, (_, item) => {
+        {spreads
+          ? spreads.map((sp, item) => (
+              <div
+                key={item}
+                className="flex h-full w-full shrink-0 snap-center snap-always items-center justify-center px-6 py-4"
+                aria-roledescription="slide"
+                aria-label={spreadAriaLabel(item, pageCount)}
+                aria-hidden={item !== current}
+                inert={item !== current ? true : undefined}
+                data-testid="carousel-item"
+                data-spread={item}
+              >
+                <EditorSpreadView spread={sp} near={Math.abs(item - current) <= SPREAD_WINDOW} isCurrent={item === current} />
+              </div>
+            ))
+          : Array.from({ length: count }, (_, item) => {
           const near = Math.abs(item - current) <= WINDOW;
           const position = itemToPosition(item);
           return (
@@ -156,31 +206,45 @@ export function PageCarousel() {
           );
         })}
       </div>
-      <div className="flex shrink-0 items-center justify-center gap-2 pb-1">
+      <div className="relative flex shrink-0 items-center justify-center gap-2 pb-1">
         <button
           type="button"
-          onClick={actions.prev}
+          onClick={prev}
           disabled={current === 0}
-          aria-label="Previous page"
+          aria-label={spread ? "Previous pages" : "Previous page"}
           className="flex size-11 items-center justify-center rounded-full text-foreground disabled:opacity-30"
           data-testid="carousel-prev"
         >
           <ChevronLeft className="size-5" aria-hidden="true" />
         </button>
         <span className="min-w-24 text-center text-sm tabular-nums text-muted-foreground" aria-live="polite" data-testid="page-counter">
-          {pageCounterLabel(current, count - 1)}
+          {label}
         </span>
         <button
           type="button"
-          onClick={actions.next}
+          onClick={next}
           disabled={current >= count - 1}
-          aria-label="Next page"
+          aria-label={spread ? "Next pages" : "Next page"}
           className={cn("flex size-11 items-center justify-center rounded-full text-foreground disabled:opacity-30")}
           data-testid="carousel-next"
         >
           <ChevronRight className="size-5" aria-hidden="true" />
         </button>
+        {spread ? null : (
+          <button
+            type="button"
+            onClick={() => setPreview(true)}
+            disabled={pageCount === 0}
+            aria-label="View spread"
+            className="absolute right-1 flex h-11 items-center gap-1 rounded-full px-2 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-30"
+            data-testid="view-spread"
+          >
+            <BookOpen className="size-4" aria-hidden="true" />
+            Spread
+          </button>
+        )}
       </div>
+      {preview && !spread ? <SpreadPreviewSheet onClose={() => setPreview(false)} /> : null}
     </section>
   );
 }

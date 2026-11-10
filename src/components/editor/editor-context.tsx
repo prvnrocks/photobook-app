@@ -38,6 +38,11 @@ export interface EditorContextValue {
     blocked?: AiSessionBlock | null;
     blockSession?(kind: AiSessionBlock): void;
   };
+  /**
+   * Facing-pages editing (≥ md, M10a A9): the carousel shows open spreads and state.page is the
+   * page last tapped inside the shown spread. Absent = false (single page).
+   */
+  spread?: boolean;
   /** Id of the tool whose Panel is open, or null. */
   activeTool: string | null;
   openTool(id: string): void;

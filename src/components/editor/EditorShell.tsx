@@ -12,6 +12,7 @@ import { ArrowLeft, Redo2, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AiSessionBlock } from "@/lib/editor/caption-tools";
+import { stepSpread } from "@/lib/editor/spreads";
 import { canRedo, canUndo } from "@/lib/editor/store";
 import { httpEditorTransport, type EditorTransport } from "@/lib/editor/transport";
 import type { FinishResult } from "@/lib/editor/done";
@@ -30,6 +31,7 @@ import type { EditorTool } from "./tools/types";
 import { useAutosave } from "./useAutosave";
 import { useEditorStore } from "./useEditorStore";
 import { useBrokenImageWatcher, usePhotoUrls } from "./usePhotoUrls";
+import { useSpreadMode } from "./useSpreadMode";
 
 export type EditorShellProps = {
   data: EditorShellData;
@@ -43,6 +45,8 @@ export type EditorShellProps = {
   finish?: () => Promise<FinishResult>;
   /** isPaymentsEnabled() from the server page; false → the Upgrade sheet shows "Payments unavailable". */
   paymentsEnabled?: boolean;
+  /** Force single-page or facing-pages editing (tests / dev); default = by screen width (≥ md → spreads). */
+  layout?: "single" | "spread";
 };
 
 function isTypingTarget(t: EventTarget | null): boolean {
@@ -50,7 +54,8 @@ function isTypingTarget(t: EventTarget | null): boolean {
   return t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT";
 }
 
-export function EditorShell({ data, transport: transportProp, tools: toolsProp, backHref = "/dashboard", finish, paymentsEnabled = false }: EditorShellProps) {
+export function EditorShell({ data, transport: transportProp, tools: toolsProp, backHref = "/dashboard", finish, paymentsEnabled = false, layout }: EditorShellProps) {
+  const spread = useSpreadMode(layout);
   const [transport] = useState(() => transportProp ?? httpEditorTransport(data.book.id));
   const saveEnabled = data.canSave && data.docRev !== null;
   const { state, actions } = useEditorStore(data.doc, { readOnly: !saveEnabled });
@@ -93,11 +98,12 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
         blocked: aiBlocked,
         blockSession: setAiBlocked,
       },
+      spread,
       activeTool,
       openTool,
       closeTool,
     }),
-    [data.book, paymentsEnabled, data.aiMode, state, actions, photos, autosave.status, autosave.flush, autosave.settle, rewrites, setRewrites, aiBlocked, activeTool, openTool, closeTool],
+    [data.book, paymentsEnabled, data.aiMode, state, actions, photos, autosave.status, autosave.flush, autosave.settle, rewrites, setRewrites, aiBlocked, spread, activeTool, openTool, closeTool],
   );
 
   const registry = toolsProp ?? EDITOR_TOOLS;
@@ -119,8 +125,15 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
     if (activeTool !== null && !active) setActiveTool(null);
   }, [state.selection, registry, ctx, activeTool, active]);
 
-  // Keyboard: undo/redo, arrows to flip pages, Escape to close/deselect.
+  // Keyboard: undo/redo, arrows to flip pages (spreads on ≥ md), Escape to close/deselect.
+  const page = state.page;
+  const pageCount = state.doc.pages.length;
   useEffect(() => {
+    const step = (delta: 1 | -1) => {
+      if (spread) actions.goTo(stepSpread(page, delta, pageCount));
+      else if (delta > 0) actions.next();
+      else actions.prev();
+    };
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return;
       const mod = e.metaKey || e.ctrlKey;
@@ -136,14 +149,14 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
         if (activeTool !== null) setActiveTool(null);
         else actions.select(null);
       } else if (!mod && activeTool === null && e.key === "ArrowLeft") {
-        actions.prev();
+        step(-1);
       } else if (!mod && activeTool === null && e.key === "ArrowRight") {
-        actions.next();
+        step(1);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [actions, activeTool]);
+  }, [actions, activeTool, spread, page, pageCount]);
 
   const title = state.doc.cover.title || data.book.title || "Untitled book";
   const unpublished = hasUnpublishedChanges(data.publishedRev, autosave.rev);
@@ -198,9 +211,10 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
 
         {/* Column on mobile so a docked panel (on-page text editing) sits under the page. */}
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-          <PageStrip className="hidden w-36 shrink-0 lg:block" />
+          <PageStrip className={spread ? "hidden w-44 shrink-0 lg:block" : "hidden w-36 shrink-0 lg:block"} />
           <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <PageCarousel />
+            {/* Remount on mode change: item indexes mean pages in one mode and spreads in the other. */}
+            <PageCarousel key={spread ? "spread" : "single"} />
             <EditorToolbar tools={shown} />
           </main>
           <EditorPanelHost tool={active} />
