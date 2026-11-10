@@ -1,0 +1,25 @@
+<!-- golden: <BookPage> blank pages mode=view -->
+
+=== case: unknown-layout ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#F5EFE6;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="view" data-page="0" data-page-id="pg-x" data-layout="no-such-layout">
+</div>
+
+=== case: cover-layout-on-page ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#F5EFE6;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="view" data-page="1" data-page-id="pg-c" data-layout="cover">
+</div>
+
+=== case: out-of-range-index ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#F5EFE6;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="view" data-page="missing">
+</div>
+
+=== case: negative-index ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#F5EFE6;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="view" data-page="missing">
+</div>
+
+=== case: fractional-index ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#F5EFE6;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="view" data-page="missing">
+</div>
+
+=== case: class-name ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none extra-class" style="container-type:inline-size;background:#F5EFE6;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="view" data-page="0" data-page-id="pg-x" data-layout="no-such-layout">
+</div>

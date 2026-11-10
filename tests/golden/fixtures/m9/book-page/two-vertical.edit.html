@@ -1,0 +1,506 @@
+<!-- golden: <BookPage> layout=two-vertical mode=edit cases=39 -->
+
+=== case: photos ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+
+=== case: photos-priority ===
+<link rel="preload" as="image" href="https://img.test/web/p-portrait.jpg" fetchPriority="high"/>
+<link rel="preload" as="image" href="https://img.test/web/p-landscape.jpg" fetchPriority="high"/>
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" fetchPriority="high" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" fetchPriority="high" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+
+=== case: missing-photo ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="true">
+<div class="absolute inset-0 flex items-center justify-center border border-dashed border-neutral-400 bg-neutral-100 text-neutral-500" style="font-size:3cqw;border-width:0.4cqw" data-testid="slot-placeholder">Add photo</div>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="true">
+<div class="absolute inset-0 flex items-center justify-center border border-dashed border-neutral-400 bg-neutral-100 text-neutral-500" style="font-size:3cqw;border-width:0.4cqw" data-testid="slot-placeholder">Add photo</div>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+
+=== case: all-empty ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="true">
+<div class="absolute inset-0 flex items-center justify-center border border-dashed border-neutral-400 bg-neutral-100 text-neutral-500" style="font-size:3cqw;border-width:0.4cqw" data-testid="slot-placeholder">Add photo</div>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="true">
+<div class="absolute inset-0 flex items-center justify-center border border-dashed border-neutral-400 bg-neutral-100 text-neutral-500" style="font-size:3cqw;border-width:0.4cqw" data-testid="slot-placeholder">Add photo</div>
+</div>
+</div>
+
+=== case: unknown-pixel-size ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-nodims.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:0%;top:0%;width:100%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-nodims.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:0%;top:0%;width:100%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+
+=== case: low-res-photo ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-tiny.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.3909490886235%;top:0%;width:316.781898177247%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-tiny.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.3909490886235%;top:0%;width:316.781898177247%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+
+=== case: background-F5EFE6 ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#F5EFE6;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+
+=== case: background-1F2937 ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#1F2937;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+
+=== case: edit-overlays ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+<span data-test-overlay="0">overlay 0</span>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="true">
+<div class="absolute inset-0 flex items-center justify-center border border-dashed border-neutral-400 bg-neutral-100 text-neutral-500" style="font-size:3cqw;border-width:0.4cqw" data-testid="slot-placeholder">Add photo</div>
+<span data-test-overlay="1">overlay 1</span>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<pre data-test-caption-model="">{&quot;cap&quot;:{&quot;text&quot;:&quot;First light over the water, and nobody wanted to leave.&quot;,&quot;font&quot;:&quot;Playfair&quot;,&quot;align&quot;:&quot;center&quot;,&quot;source&quot;:&quot;ai&quot;},&quot;model&quot;:{&quot;rect&quot;:{&quot;x&quot;:5,&quot;y&quot;:84,&quot;w&quot;:90,&quot;h&quot;:10},&quot;caption&quot;:{&quot;text&quot;:&quot;First light over the water, and nobody wanted to leave.&quot;,&quot;font&quot;:&quot;Playfair&quot;,&quot;align&quot;:&quot;center&quot;,&quot;source&quot;:&quot;ai&quot;},&quot;text&quot;:&quot;First light over the water, and nobody wanted to leave.&quot;,&quot;align&quot;:&quot;center&quot;,&quot;fontFamily&quot;:&quot;var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif&quot;}}</pre>
+</div>
+</div>
+
+=== case: short-slots-array ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="true">
+<div class="absolute inset-0 flex items-center justify-center border border-dashed border-neutral-400 bg-neutral-100 text-neutral-500" style="font-size:3cqw;border-width:0.4cqw" data-testid="slot-placeholder">Add photo</div>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="true">
+<div class="absolute inset-0 flex items-center justify-center border border-dashed border-neutral-400 bg-neutral-100 text-neutral-500" style="font-size:3cqw;border-width:0.4cqw" data-testid="slot-placeholder">Add photo</div>
+</div>
+</div>
+
+=== case: crop-zoom1-topleft ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:0%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:0%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+
+=== case: crop-zoom1-bottomright ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-78.18981772470147%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-216.78189817724694%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+
+=== case: crop-zoom2-center ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-128.18981772470147%;top:-50%;width:356.37963544940294%;height:200%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-266.78189817724694%;top:-50%;width:633.5637963544939%;height:200%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+
+=== case: crop-zoom2.5-focal-0.2-0.8 ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:-150%;width:445.4745443117536%;height:250%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:-150%;width:791.9547454431173%;height:250%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+
+=== case: crop-zoom4-focal-0.9-0.1 ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-591.4833438089253%;top:0%;width:712.7592708988059%;height:400%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-1090.414833438089%;top:0%;width:1267.1275927089878%;height:400%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+
+=== case: caption-none ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+</div>
+
+=== case: caption-none-edit-overlays ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+<span data-test-overlay="0">overlay 0</span>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+<span data-test-overlay="1">overlay 1</span>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<pre data-test-caption-model="">{&quot;cap&quot;:null,&quot;model&quot;:{&quot;rect&quot;:{&quot;x&quot;:5,&quot;y&quot;:84,&quot;w&quot;:90,&quot;h&quot;:10},&quot;caption&quot;:null,&quot;text&quot;:&quot;&quot;,&quot;align&quot;:&quot;center&quot;,&quot;fontFamily&quot;:&quot;var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif&quot;}}</pre>
+</div>
+</div>
+
+=== case: caption-none-lang-ar-edit-overlays ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+<span data-test-overlay="0">overlay 0</span>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+<span data-test-overlay="1">overlay 1</span>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<pre data-test-caption-model="">{&quot;cap&quot;:null,&quot;model&quot;:{&quot;rect&quot;:{&quot;x&quot;:5,&quot;y&quot;:84,&quot;w&quot;:90,&quot;h&quot;:10},&quot;caption&quot;:null,&quot;text&quot;:&quot;&quot;,&quot;align&quot;:&quot;center&quot;,&quot;fontFamily&quot;:&quot;var(--font-cairo), var(--font-tajawal), sans-serif&quot;}}</pre>
+</div>
+</div>
+
+=== case: caption-empty-text ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+</div>
+
+=== case: caption-en ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+
+=== case: caption-ar ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى</p>
+</div>
+</div>
+
+=== case: caption-ar-in-en-book ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى</p>
+</div>
+</div>
+
+=== case: caption-ar-latin-font ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى</p>
+</div>
+</div>
+
+=== case: caption-mixed ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-tajawal), var(--font-cairo), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">Eid في أبوظبي 2026</p>
+</div>
+</div>
+
+=== case: caption-digits-only-lang-ar ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">2026 · 12/02</p>
+</div>
+</div>
+
+=== case: caption-multiline ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-inter), var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">Line one
+Line two
+Line three</p>
+</div>
+</div>
+
+=== case: caption-html-chars ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-inter), var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">Tom &amp; &quot;Jerry&quot; &lt;3 &#x27;ok&#x27;</p>
+</div>
+</div>
+
+=== case: caption-align-left ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-inter), var(--font-cairo), var(--font-tajawal), sans-serif;text-align:left;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+
+=== case: caption-align-right ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-tajawal), var(--font-cairo), sans-serif;text-align:right;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى</p>
+</div>
+</div>
+
+=== case: font-Inter-en ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-inter), var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+
+=== case: font-Inter-ar ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-inter), var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى</p>
+</div>
+</div>
+
+=== case: font-Playfair-en ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+
+=== case: font-Playfair-ar ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى</p>
+</div>
+</div>
+
+=== case: font-Cairo-en ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+
+=== case: font-Cairo-ar ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى</p>
+</div>
+</div>
+
+=== case: font-Tajawal-en ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-tajawal), var(--font-cairo), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+
+=== case: font-Tajawal-ar ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-tajawal), var(--font-cairo), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى</p>
+</div>
+</div>
+
+=== case: font-Comic-Sans-en ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+
+=== case: font-Comic-Sans-ar ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-two-vertical" data-layout="two-vertical">
+<div class="absolute overflow-hidden" style="left:5%;top:8%;width:43%;height:72%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-39.094908862350735%;top:0%;width:178.18981772470147%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:52%;top:8%;width:43%;height:72%" data-slot-index="1" data-slot-empty="false">
+<img src="https://img.test/web/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-108.39094908862347%;top:0%;width:316.78189817724694%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:84%;width:90%;height:10%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى</p>
+</div>
+</div>

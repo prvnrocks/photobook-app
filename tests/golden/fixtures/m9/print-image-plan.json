@@ -1,0 +1,326 @@
+{
+  "default": [
+    [
+      "p-nodims",
+      {
+        "width": 3000,
+        "height": 3000
+      }
+    ],
+    [
+      "p-portrait",
+      {
+        "width": 2250,
+        "height": 3000
+      }
+    ],
+    [
+      "p-tiny",
+      {
+        "width": 400,
+        "height": 300
+      }
+    ],
+    [
+      "p-landscape",
+      {
+        "width": 3000,
+        "height": 2250
+      }
+    ],
+    [
+      "p-pano",
+      {
+        "width": 3000,
+        "height": 750
+      }
+    ],
+    [
+      "p-square",
+      {
+        "width": 1573,
+        "height": 1573
+      }
+    ]
+  ],
+  "dpi150": [
+    [
+      "p-nodims",
+      {
+        "width": 3000,
+        "height": 3000
+      }
+    ],
+    [
+      "p-portrait",
+      {
+        "width": 1154,
+        "height": 1538
+      }
+    ],
+    [
+      "p-tiny",
+      {
+        "width": 400,
+        "height": 300
+      }
+    ],
+    [
+      "p-landscape",
+      {
+        "width": 2381,
+        "height": 1786
+      }
+    ],
+    [
+      "p-pano",
+      {
+        "width": 3000,
+        "height": 750
+      }
+    ],
+    [
+      "p-square",
+      {
+        "width": 787,
+        "height": 787
+      }
+    ]
+  ],
+  "bleed0": [
+    [
+      "p-nodims",
+      {
+        "width": 3000,
+        "height": 3000
+      }
+    ],
+    [
+      "p-portrait",
+      {
+        "width": 2250,
+        "height": 3000
+      }
+    ],
+    [
+      "p-tiny",
+      {
+        "width": 400,
+        "height": 300
+      }
+    ],
+    [
+      "p-landscape",
+      {
+        "width": 3000,
+        "height": 2250
+      }
+    ],
+    [
+      "p-pano",
+      {
+        "width": 3000,
+        "height": 750
+      }
+    ],
+    [
+      "p-square",
+      {
+        "width": 1573,
+        "height": 1573
+      }
+    ]
+  ],
+  "bleed5": [
+    [
+      "p-nodims",
+      {
+        "width": 3000,
+        "height": 3000
+      }
+    ],
+    [
+      "p-portrait",
+      {
+        "width": 2250,
+        "height": 3000
+      }
+    ],
+    [
+      "p-tiny",
+      {
+        "width": 400,
+        "height": 300
+      }
+    ],
+    [
+      "p-landscape",
+      {
+        "width": 3000,
+        "height": 2250
+      }
+    ],
+    [
+      "p-pano",
+      {
+        "width": 3000,
+        "height": 750
+      }
+    ],
+    [
+      "p-square",
+      {
+        "width": 1573,
+        "height": 1573
+      }
+    ]
+  ],
+  "maxLongEdge1000": [
+    [
+      "p-nodims",
+      {
+        "width": 1000,
+        "height": 1000
+      }
+    ],
+    [
+      "p-portrait",
+      {
+        "width": 750,
+        "height": 1000
+      }
+    ],
+    [
+      "p-tiny",
+      {
+        "width": 400,
+        "height": 300
+      }
+    ],
+    [
+      "p-landscape",
+      {
+        "width": 1000,
+        "height": 750
+      }
+    ],
+    [
+      "p-pano",
+      {
+        "width": 1000,
+        "height": 250
+      }
+    ],
+    [
+      "p-square",
+      {
+        "width": 1000,
+        "height": 1000
+      }
+    ]
+  ],
+  "invalidOpts": [
+    [
+      "p-nodims",
+      {
+        "width": 3000,
+        "height": 3000
+      }
+    ],
+    [
+      "p-portrait",
+      {
+        "width": 2250,
+        "height": 3000
+      }
+    ],
+    [
+      "p-tiny",
+      {
+        "width": 400,
+        "height": 300
+      }
+    ],
+    [
+      "p-landscape",
+      {
+        "width": 3000,
+        "height": 2250
+      }
+    ],
+    [
+      "p-pano",
+      {
+        "width": 3000,
+        "height": 750
+      }
+    ],
+    [
+      "p-square",
+      {
+        "width": 1573,
+        "height": 1573
+      }
+    ]
+  ],
+  "subsetPhotos": [
+    [
+      "p-portrait",
+      {
+        "width": 2250,
+        "height": 3000
+      }
+    ],
+    [
+      "p-landscape",
+      {
+        "width": 3000,
+        "height": 2250
+      }
+    ]
+  ],
+  "noCoverPhoto": [
+    [
+      "p-nodims",
+      {
+        "width": 3000,
+        "height": 3000
+      }
+    ],
+    [
+      "p-portrait",
+      {
+        "width": 2250,
+        "height": 3000
+      }
+    ],
+    [
+      "p-tiny",
+      {
+        "width": 400,
+        "height": 300
+      }
+    ],
+    [
+      "p-landscape",
+      {
+        "width": 3000,
+        "height": 2250
+      }
+    ],
+    [
+      "p-pano",
+      {
+        "width": 3000,
+        "height": 750
+      }
+    ],
+    [
+      "p-square",
+      {
+        "width": 1573,
+        "height": 1573
+      }
+    ]
+  ]
+}

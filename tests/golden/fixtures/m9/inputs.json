@@ -1,0 +1,564 @@
+{
+  "photoDims": [
+    {
+      "id": "p-portrait",
+      "width": 3000,
+      "height": 4000
+    },
+    {
+      "id": "p-landscape",
+      "width": 4000,
+      "height": 3000
+    },
+    {
+      "id": "p-square",
+      "width": 2000,
+      "height": 2000
+    },
+    {
+      "id": "p-pano",
+      "width": 6000,
+      "height": 1500
+    },
+    {
+      "id": "p-tiny",
+      "width": 400,
+      "height": 300
+    },
+    {
+      "id": "p-nodims",
+      "width": null,
+      "height": null
+    }
+  ],
+  "webPhotos": {
+    "p-portrait": {
+      "url": "https://img.test/web/p-portrait.jpg",
+      "width": 3000,
+      "height": 4000
+    },
+    "p-landscape": {
+      "url": "https://img.test/web/p-landscape.jpg",
+      "width": 4000,
+      "height": 3000
+    },
+    "p-square": {
+      "url": "https://img.test/web/p-square.jpg",
+      "width": 2000,
+      "height": 2000
+    },
+    "p-pano": {
+      "url": "https://img.test/web/p-pano.jpg",
+      "width": 6000,
+      "height": 1500
+    },
+    "p-tiny": {
+      "url": "https://img.test/web/p-tiny.jpg",
+      "width": 400,
+      "height": 300
+    },
+    "p-nodims": {
+      "url": "https://img.test/web/p-nodims.jpg",
+      "width": null,
+      "height": null
+    }
+  },
+  "printPhotos": {
+    "p-portrait": {
+      "url": "https://print-assets.invalid/p-portrait.jpg",
+      "width": 3000,
+      "height": 4000
+    },
+    "p-landscape": {
+      "url": "https://print-assets.invalid/p-landscape.jpg",
+      "width": 4000,
+      "height": 3000
+    },
+    "p-square": {
+      "url": "https://print-assets.invalid/p-square.jpg",
+      "width": 2000,
+      "height": 2000
+    },
+    "p-pano": {
+      "url": "https://print-assets.invalid/p-pano.jpg",
+      "width": 6000,
+      "height": 1500
+    },
+    "p-tiny": {
+      "url": "https://print-assets.invalid/p-tiny.jpg",
+      "width": 400,
+      "height": 300
+    },
+    "p-nodims": {
+      "url": "https://print-assets.invalid/p-nodims.jpg",
+      "width": null,
+      "height": null
+    }
+  },
+  "representativeDoc": {
+    "version": 1,
+    "format": "A5_PORTRAIT",
+    "occasion": "wedding",
+    "cover": {
+      "layout": "cover",
+      "photoId": "p-portrait",
+      "title": "Sara & Omar",
+      "subtitle": "Abu Dhabi · 2026"
+    },
+    "chapters": [
+      {
+        "id": "ch-1",
+        "title": "Arrival",
+        "dateLabel": "12 Feb",
+        "place": "Abu Dhabi"
+      },
+      {
+        "id": "ch-2",
+        "title": "عشاء العائلة",
+        "dateLabel": "13 Feb",
+        "place": null
+      }
+    ],
+    "pages": [
+      {
+        "id": "pg-1",
+        "chapterId": "ch-1",
+        "layout": "full-page",
+        "slots": [
+          {
+            "photoId": "p-portrait",
+            "crop": {
+              "x": 0.5,
+              "y": 0.5,
+              "zoom": 1
+            }
+          }
+        ],
+        "caption": null
+      },
+      {
+        "id": "pg-2",
+        "chapterId": "ch-1",
+        "layout": "one-portrait",
+        "slots": [
+          {
+            "photoId": "p-tiny",
+            "crop": {
+              "x": 0.3,
+              "y": 0.6,
+              "zoom": 1.5
+            }
+          }
+        ],
+        "caption": {
+          "text": "First light over the water, and nobody wanted to leave.",
+          "font": "Playfair",
+          "align": "center",
+          "source": "ai"
+        }
+      },
+      {
+        "id": "pg-3",
+        "chapterId": "ch-1",
+        "layout": "two-vertical",
+        "slots": [
+          {
+            "photoId": "p-landscape",
+            "crop": {
+              "x": 0.1,
+              "y": 0.9,
+              "zoom": 2
+            }
+          },
+          {
+            "photoId": "p-deleted",
+            "crop": {
+              "x": 0.5,
+              "y": 0.5,
+              "zoom": 1
+            }
+          }
+        ],
+        "caption": {
+          "text": "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى",
+          "font": "Cairo",
+          "align": "right",
+          "source": "user"
+        }
+      },
+      {
+        "id": "pg-4",
+        "chapterId": "ch-2",
+        "layout": "two-horizontal",
+        "slots": [
+          {
+            "photoId": "p-pano",
+            "crop": {
+              "x": 0.5,
+              "y": 0.5,
+              "zoom": 4
+            }
+          },
+          {
+            "photoId": null,
+            "crop": {
+              "x": 0.5,
+              "y": 0.5,
+              "zoom": 1
+            }
+          }
+        ],
+        "caption": {
+          "text": "Eid في أبوظبي 2026",
+          "font": "Tajawal",
+          "align": "left",
+          "source": "auto"
+        }
+      },
+      {
+        "id": "pg-5",
+        "chapterId": "ch-2",
+        "layout": "three-mixed",
+        "slots": [
+          {
+            "photoId": "p-square",
+            "crop": {
+              "x": 0.5,
+              "y": 0.5,
+              "zoom": 1
+            }
+          },
+          {
+            "photoId": "p-nodims",
+            "crop": {
+              "x": 0.7,
+              "y": 0.2,
+              "zoom": 1.2
+            }
+          },
+          {
+            "photoId": "p-portrait",
+            "crop": {
+              "x": 0,
+              "y": 1,
+              "zoom": 3
+            }
+          }
+        ],
+        "caption": {
+          "text": "Inter caption, left aligned",
+          "font": "Inter",
+          "align": "left",
+          "source": "user"
+        }
+      },
+      {
+        "id": "pg-6",
+        "chapterId": null,
+        "layout": "four-grid",
+        "slots": [
+          {
+            "photoId": "p-landscape",
+            "crop": {
+              "x": 0.5,
+              "y": 0.5,
+              "zoom": 1
+            }
+          },
+          {
+            "photoId": "p-square",
+            "crop": {
+              "x": 1,
+              "y": 0,
+              "zoom": 1
+            }
+          },
+          {
+            "photoId": "p-tiny",
+            "crop": {
+              "x": 0.5,
+              "y": 0.5,
+              "zoom": 1
+            }
+          },
+          {
+            "photoId": "p-pano",
+            "crop": {
+              "x": 0.5,
+              "y": 0.5,
+              "zoom": 1
+            }
+          }
+        ],
+        "caption": null
+      }
+    ],
+    "style": {
+      "background": "#F5EFE6",
+      "font": "Playfair"
+    },
+    "meta": {
+      "generator": "ai",
+      "generatorVersion": 1,
+      "runId": "00000000-0000-4000-8000-000000000001",
+      "userEdited": true
+    }
+  },
+  "pageCases": {
+    "full-page": {
+      "photos": "{\"page\":{\"id\":\"pg-full-page\",\"chapterId\":\"ch-1\",\"layout\":\"full-page\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null}}",
+      "photos-priority": "{\"page\":{\"id\":\"pg-full-page\",\"chapterId\":\"ch-1\",\"layout\":\"full-page\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null},\"priority\":true}",
+      "missing-photo": "{\"page\":{\"id\":\"pg-full-page\",\"chapterId\":\"ch-1\",\"layout\":\"full-page\",\"slots\":[{\"photoId\":\"p-deleted\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null}}",
+      "all-empty": "{\"page\":{\"id\":\"pg-full-page\",\"chapterId\":\"ch-1\",\"layout\":\"full-page\",\"slots\":[{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null}}",
+      "unknown-pixel-size": "{\"page\":{\"id\":\"pg-full-page\",\"chapterId\":\"ch-1\",\"layout\":\"full-page\",\"slots\":[{\"photoId\":\"p-nodims\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null}}",
+      "low-res-photo": "{\"page\":{\"id\":\"pg-full-page\",\"chapterId\":\"ch-1\",\"layout\":\"full-page\",\"slots\":[{\"photoId\":\"p-tiny\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null}}",
+      "background-F5EFE6": "{\"page\":{\"id\":\"pg-full-page\",\"chapterId\":\"ch-1\",\"layout\":\"full-page\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null},\"background\":\"#F5EFE6\"}",
+      "background-1F2937": "{\"page\":{\"id\":\"pg-full-page\",\"chapterId\":\"ch-1\",\"layout\":\"full-page\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null},\"background\":\"#1F2937\"}",
+      "edit-overlays": "{\"page\":{\"id\":\"pg-full-page\",\"chapterId\":\"ch-1\",\"layout\":\"full-page\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null},\"overlays\":true}",
+      "short-slots-array": "{\"page\":{\"id\":\"pg-full-page\",\"chapterId\":\"ch-1\",\"layout\":\"full-page\",\"slots\":[],\"caption\":null}}",
+      "crop-zoom1-topleft": "{\"page\":{\"id\":\"pg-full-page\",\"chapterId\":\"ch-1\",\"layout\":\"full-page\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0,\"y\":0,\"zoom\":1}}],\"caption\":null}}",
+      "crop-zoom1-bottomright": "{\"page\":{\"id\":\"pg-full-page\",\"chapterId\":\"ch-1\",\"layout\":\"full-page\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":1,\"y\":1,\"zoom\":1}}],\"caption\":null}}",
+      "crop-zoom2-center": "{\"page\":{\"id\":\"pg-full-page\",\"chapterId\":\"ch-1\",\"layout\":\"full-page\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":2}}],\"caption\":null}}",
+      "crop-zoom2.5-focal-0.2-0.8": "{\"page\":{\"id\":\"pg-full-page\",\"chapterId\":\"ch-1\",\"layout\":\"full-page\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.2,\"y\":0.8,\"zoom\":2.5}}],\"caption\":null}}",
+      "crop-zoom4-focal-0.9-0.1": "{\"page\":{\"id\":\"pg-full-page\",\"chapterId\":\"ch-1\",\"layout\":\"full-page\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.9,\"y\":0.1,\"zoom\":4}}],\"caption\":null}}"
+    },
+    "one-portrait": {
+      "photos": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "photos-priority": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"priority\":true}",
+      "missing-photo": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-deleted\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "all-empty": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null}}",
+      "unknown-pixel-size": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-nodims\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "low-res-photo": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-tiny\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "background-F5EFE6": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"background\":\"#F5EFE6\"}",
+      "background-1F2937": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"background\":\"#1F2937\"}",
+      "edit-overlays": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"overlays\":true}",
+      "short-slots-array": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[],\"caption\":null}}",
+      "crop-zoom1-topleft": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0,\"y\":0,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom1-bottomright": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":1,\"y\":1,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom2-center": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":2}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom2.5-focal-0.2-0.8": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.2,\"y\":0.8,\"zoom\":2.5}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom4-focal-0.9-0.1": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.9,\"y\":0.1,\"zoom\":4}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-none": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null}}",
+      "caption-none-edit-overlays": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null},\"overlays\":true}",
+      "caption-none-lang-ar-edit-overlays": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null},\"captionLang\":\"ar\",\"overlays\":true}",
+      "caption-empty-text": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-en": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-ar": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"user\"}},\"captionLang\":\"ar\"}",
+      "caption-ar-in-en-book": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"en\"}",
+      "caption-ar-latin-font": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "caption-mixed": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"Eid في أبوظبي 2026\",\"font\":\"Tajawal\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "caption-digits-only-lang-ar": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"2026 · 12/02\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "caption-multiline": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"Line one\\nLine two\\nLine three\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-html-chars": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"Tom & \\\"Jerry\\\" <3 'ok'\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-align-left": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Inter\",\"align\":\"left\",\"source\":\"ai\"}}}",
+      "caption-align-right": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Tajawal\",\"align\":\"right\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Inter-en": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Inter-ar": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Playfair-en": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Playfair-ar": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Cairo-en": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Cairo-ar": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Tajawal-en": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Tajawal\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Tajawal-ar": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Tajawal\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Comic-Sans-en": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Comic Sans\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Comic-Sans-ar": "{\"page\":{\"id\":\"pg-one-portrait\",\"chapterId\":\"ch-1\",\"layout\":\"one-portrait\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Comic Sans\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}"
+    },
+    "two-vertical": {
+      "photos": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "photos-priority": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"priority\":true}",
+      "missing-photo": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-deleted\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "all-empty": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null}}",
+      "unknown-pixel-size": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-nodims\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-nodims\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "low-res-photo": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-tiny\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-tiny\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "background-F5EFE6": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"background\":\"#F5EFE6\"}",
+      "background-1F2937": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"background\":\"#1F2937\"}",
+      "edit-overlays": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"overlays\":true}",
+      "short-slots-array": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[],\"caption\":null}}",
+      "crop-zoom1-topleft": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0,\"y\":0,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0,\"y\":0,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom1-bottomright": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":1,\"y\":1,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":1,\"y\":1,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom2-center": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":2}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":2}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom2.5-focal-0.2-0.8": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.2,\"y\":0.8,\"zoom\":2.5}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.2,\"y\":0.8,\"zoom\":2.5}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom4-focal-0.9-0.1": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.9,\"y\":0.1,\"zoom\":4}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.9,\"y\":0.1,\"zoom\":4}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-none": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null}}",
+      "caption-none-edit-overlays": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null},\"overlays\":true}",
+      "caption-none-lang-ar-edit-overlays": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null},\"captionLang\":\"ar\",\"overlays\":true}",
+      "caption-empty-text": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-en": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-ar": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"user\"}},\"captionLang\":\"ar\"}",
+      "caption-ar-in-en-book": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"en\"}",
+      "caption-ar-latin-font": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "caption-mixed": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"Eid في أبوظبي 2026\",\"font\":\"Tajawal\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "caption-digits-only-lang-ar": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"2026 · 12/02\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "caption-multiline": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"Line one\\nLine two\\nLine three\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-html-chars": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"Tom & \\\"Jerry\\\" <3 'ok'\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-align-left": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Inter\",\"align\":\"left\",\"source\":\"ai\"}}}",
+      "caption-align-right": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Tajawal\",\"align\":\"right\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Inter-en": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Inter-ar": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Playfair-en": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Playfair-ar": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Cairo-en": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Cairo-ar": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Tajawal-en": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Tajawal\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Tajawal-ar": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Tajawal\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Comic-Sans-en": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Comic Sans\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Comic-Sans-ar": "{\"page\":{\"id\":\"pg-two-vertical\",\"chapterId\":\"ch-1\",\"layout\":\"two-vertical\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Comic Sans\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}"
+    },
+    "two-horizontal": {
+      "photos": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "photos-priority": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"priority\":true}",
+      "missing-photo": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-deleted\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "all-empty": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null}}",
+      "unknown-pixel-size": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-nodims\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-nodims\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "low-res-photo": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-tiny\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-tiny\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "background-F5EFE6": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"background\":\"#F5EFE6\"}",
+      "background-1F2937": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"background\":\"#1F2937\"}",
+      "edit-overlays": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"overlays\":true}",
+      "short-slots-array": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[],\"caption\":null}}",
+      "crop-zoom1-topleft": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0,\"y\":0,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0,\"y\":0,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom1-bottomright": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":1,\"y\":1,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":1,\"y\":1,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom2-center": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":2}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":2}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom2.5-focal-0.2-0.8": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.2,\"y\":0.8,\"zoom\":2.5}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.2,\"y\":0.8,\"zoom\":2.5}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom4-focal-0.9-0.1": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.9,\"y\":0.1,\"zoom\":4}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.9,\"y\":0.1,\"zoom\":4}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-none": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null}}",
+      "caption-none-edit-overlays": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null},\"overlays\":true}",
+      "caption-none-lang-ar-edit-overlays": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null},\"captionLang\":\"ar\",\"overlays\":true}",
+      "caption-empty-text": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-en": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-ar": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"user\"}},\"captionLang\":\"ar\"}",
+      "caption-ar-in-en-book": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"en\"}",
+      "caption-ar-latin-font": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "caption-mixed": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"Eid في أبوظبي 2026\",\"font\":\"Tajawal\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "caption-digits-only-lang-ar": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"2026 · 12/02\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "caption-multiline": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"Line one\\nLine two\\nLine three\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-html-chars": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"Tom & \\\"Jerry\\\" <3 'ok'\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-align-left": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Inter\",\"align\":\"left\",\"source\":\"ai\"}}}",
+      "caption-align-right": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Tajawal\",\"align\":\"right\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Inter-en": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Inter-ar": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Playfair-en": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Playfair-ar": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Cairo-en": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Cairo-ar": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Tajawal-en": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Tajawal\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Tajawal-ar": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Tajawal\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Comic-Sans-en": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Comic Sans\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Comic-Sans-ar": "{\"page\":{\"id\":\"pg-two-horizontal\",\"chapterId\":\"ch-1\",\"layout\":\"two-horizontal\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Comic Sans\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}"
+    },
+    "three-mixed": {
+      "photos": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "photos-priority": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"priority\":true}",
+      "missing-photo": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-deleted\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "all-empty": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null}}",
+      "unknown-pixel-size": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-nodims\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-nodims\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-nodims\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "low-res-photo": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-tiny\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-tiny\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-tiny\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "background-F5EFE6": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"background\":\"#F5EFE6\"}",
+      "background-1F2937": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"background\":\"#1F2937\"}",
+      "edit-overlays": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"overlays\":true}",
+      "short-slots-array": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[],\"caption\":null}}",
+      "crop-zoom1-topleft": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0,\"y\":0,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0,\"y\":0,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0,\"y\":0,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom1-bottomright": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":1,\"y\":1,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":1,\"y\":1,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":1,\"y\":1,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom2-center": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":2}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":2}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":2}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom2.5-focal-0.2-0.8": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.2,\"y\":0.8,\"zoom\":2.5}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.2,\"y\":0.8,\"zoom\":2.5}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.2,\"y\":0.8,\"zoom\":2.5}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom4-focal-0.9-0.1": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.9,\"y\":0.1,\"zoom\":4}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.9,\"y\":0.1,\"zoom\":4}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.9,\"y\":0.1,\"zoom\":4}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-none": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null}}",
+      "caption-none-edit-overlays": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null},\"overlays\":true}",
+      "caption-none-lang-ar-edit-overlays": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null},\"captionLang\":\"ar\",\"overlays\":true}",
+      "caption-empty-text": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-en": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-ar": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"user\"}},\"captionLang\":\"ar\"}",
+      "caption-ar-in-en-book": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"en\"}",
+      "caption-ar-latin-font": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "caption-mixed": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"Eid في أبوظبي 2026\",\"font\":\"Tajawal\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "caption-digits-only-lang-ar": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"2026 · 12/02\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "caption-multiline": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"Line one\\nLine two\\nLine three\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-html-chars": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"Tom & \\\"Jerry\\\" <3 'ok'\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-align-left": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Inter\",\"align\":\"left\",\"source\":\"ai\"}}}",
+      "caption-align-right": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Tajawal\",\"align\":\"right\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Inter-en": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Inter-ar": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Playfair-en": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Playfair-ar": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Cairo-en": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Cairo-ar": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Tajawal-en": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Tajawal\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Tajawal-ar": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Tajawal\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Comic-Sans-en": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Comic Sans\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Comic-Sans-ar": "{\"page\":{\"id\":\"pg-three-mixed\",\"chapterId\":\"ch-1\",\"layout\":\"three-mixed\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Comic Sans\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}"
+    },
+    "four-grid": {
+      "photos": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "photos-priority": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"priority\":true}",
+      "missing-photo": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-deleted\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "all-empty": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null}}",
+      "unknown-pixel-size": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-nodims\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-nodims\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-nodims\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-nodims\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "low-res-photo": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-tiny\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-tiny\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-tiny\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-tiny\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "background-F5EFE6": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"background\":\"#F5EFE6\"}",
+      "background-1F2937": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"background\":\"#1F2937\"}",
+      "edit-overlays": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":null,\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"overlays\":true}",
+      "short-slots-array": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[],\"caption\":null}}",
+      "crop-zoom1-topleft": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0,\"y\":0,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0,\"y\":0,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0,\"y\":0,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0,\"y\":0,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom1-bottomright": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":1,\"y\":1,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":1,\"y\":1,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":1,\"y\":1,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":1,\"y\":1,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom2-center": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":2}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":2}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":2}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":2}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom2.5-focal-0.2-0.8": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.2,\"y\":0.8,\"zoom\":2.5}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.2,\"y\":0.8,\"zoom\":2.5}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.2,\"y\":0.8,\"zoom\":2.5}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.2,\"y\":0.8,\"zoom\":2.5}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "crop-zoom4-focal-0.9-0.1": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.9,\"y\":0.1,\"zoom\":4}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.9,\"y\":0.1,\"zoom\":4}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.9,\"y\":0.1,\"zoom\":4}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.9,\"y\":0.1,\"zoom\":4}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-none": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null}}",
+      "caption-none-edit-overlays": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null},\"overlays\":true}",
+      "caption-none-lang-ar-edit-overlays": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":null},\"captionLang\":\"ar\",\"overlays\":true}",
+      "caption-empty-text": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-en": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-ar": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"user\"}},\"captionLang\":\"ar\"}",
+      "caption-ar-in-en-book": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"en\"}",
+      "caption-ar-latin-font": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "caption-mixed": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"Eid في أبوظبي 2026\",\"font\":\"Tajawal\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "caption-digits-only-lang-ar": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"2026 · 12/02\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "caption-multiline": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"Line one\\nLine two\\nLine three\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-html-chars": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"Tom & \\\"Jerry\\\" <3 'ok'\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "caption-align-left": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Inter\",\"align\":\"left\",\"source\":\"ai\"}}}",
+      "caption-align-right": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Tajawal\",\"align\":\"right\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Inter-en": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Inter-ar": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Inter\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Playfair-en": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Playfair-ar": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Playfair\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Cairo-en": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Cairo-ar": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Cairo\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Tajawal-en": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Tajawal\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Tajawal-ar": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Tajawal\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}",
+      "font-Comic-Sans-en": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"First light over the water, and nobody wanted to leave.\",\"font\":\"Comic Sans\",\"align\":\"center\",\"source\":\"ai\"}}}",
+      "font-Comic-Sans-ar": "{\"page\":{\"id\":\"pg-four-grid\",\"chapterId\":\"ch-1\",\"layout\":\"four-grid\",\"slots\":[{\"photoId\":\"p-portrait\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-landscape\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-square\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}},{\"photoId\":\"p-pano\",\"crop\":{\"x\":0.5,\"y\":0.5,\"zoom\":1}}],\"caption\":{\"text\":\"أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى\",\"font\":\"Comic Sans\",\"align\":\"center\",\"source\":\"ai\"}},\"captionLang\":\"ar\"}"
+    }
+  },
+  "coverCases": {
+    "en-title-subtitle": "{}",
+    "en-priority": "{\"priority\":true}",
+    "ar-title-subtitle": "{\"cover\":{\"title\":\"زفاف سارة وعمر\",\"subtitle\":\"أبوظبي · ٢٠٢٦\"},\"captionLang\":\"ar\"}",
+    "ar-title-in-en-book": "{\"cover\":{\"title\":\"زفاف سارة وعمر\",\"subtitle\":\"أبوظبي · ٢٠٢٦\"},\"captionLang\":\"en\"}",
+    "ar-title-en-subtitle": "{\"cover\":{\"title\":\"زفاف سارة وعمر\",\"subtitle\":\"Abu Dhabi · 2026\"}}",
+    "en-title-ar-subtitle": "{\"cover\":{\"title\":\"Sara & Omar\",\"subtitle\":\"أبوظبي · ٢٠٢٦\"}}",
+    "title-only": "{\"cover\":{\"subtitle\":\"\"}}",
+    "subtitle-only": "{\"cover\":{\"title\":\"\"}}",
+    "no-text": "{\"cover\":{\"title\":\"\",\"subtitle\":\"\"}}",
+    "title-25-chars": "{\"cover\":{\"title\":\"Abcdefghij Klmnopqrst Uvw\"}}",
+    "title-49-chars": "{\"cover\":{\"title\":\"A very long title for a family trip that went fro\"}}",
+    "title-long": "{\"cover\":{\"title\":\"A very long title for a family trip that went from Abu Dhabi to Al Ain and back again in one weekend of sun\"}}",
+    "missing-photo": "{\"cover\":{\"photoId\":\"p-deleted\"}}",
+    "null-photo": "{\"cover\":{\"photoId\":null}}",
+    "landscape-photo": "{\"cover\":{\"photoId\":\"p-pano\"}}",
+    "unknown-pixel-size": "{\"cover\":{\"photoId\":\"p-nodims\"}}",
+    "unknown-cover-layout": "{\"cover\":{\"layout\":\"no-such-cover\"}}",
+    "page-layout-as-cover": "{\"cover\":{\"layout\":\"full-page\"}}",
+    "background-F5EFE6": "{\"background\":\"#F5EFE6\"}",
+    "edit-overlays": "{\"overlays\":true}",
+    "edit-overlays-no-text": "{\"cover\":{\"title\":\"\",\"subtitle\":\"\"},\"overlays\":true}",
+    "style-font-Inter-en": "{\"font\":\"Inter\"}",
+    "style-font-Inter-ar": "{\"font\":\"Inter\",\"cover\":{\"title\":\"زفاف سارة وعمر\",\"subtitle\":\"أبوظبي · ٢٠٢٦\"},\"captionLang\":\"ar\"}",
+    "style-font-Playfair-en": "{\"font\":\"Playfair\"}",
+    "style-font-Playfair-ar": "{\"font\":\"Playfair\",\"cover\":{\"title\":\"زفاف سارة وعمر\",\"subtitle\":\"أبوظبي · ٢٠٢٦\"},\"captionLang\":\"ar\"}",
+    "style-font-Cairo-en": "{\"font\":\"Cairo\"}",
+    "style-font-Cairo-ar": "{\"font\":\"Cairo\",\"cover\":{\"title\":\"زفاف سارة وعمر\",\"subtitle\":\"أبوظبي · ٢٠٢٦\"},\"captionLang\":\"ar\"}",
+    "style-font-Tajawal-en": "{\"font\":\"Tajawal\"}",
+    "style-font-Tajawal-ar": "{\"font\":\"Tajawal\",\"cover\":{\"title\":\"زفاف سارة وعمر\",\"subtitle\":\"أبوظبي · ٢٠٢٦\"},\"captionLang\":\"ar\"}",
+    "style-font-Comic-Sans-en": "{\"font\":\"Comic Sans\"}",
+    "style-font-Comic-Sans-ar": "{\"font\":\"Comic Sans\",\"cover\":{\"title\":\"زفاف سارة وعمر\",\"subtitle\":\"أبوظبي · ٢٠٢٦\"},\"captionLang\":\"ar\"}"
+  }
+}

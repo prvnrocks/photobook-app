@@ -1,0 +1,182 @@
+{
+  "targets": [
+    {
+      "pageCount": "6",
+      "from": "0",
+      "to": "6",
+      "targets": [
+        "cover",
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "photoIds": [
+        "p-portrait",
+        "p-tiny",
+        "p-landscape",
+        "p-deleted",
+        "p-pano",
+        "p-square",
+        "p-nodims"
+      ]
+    },
+    {
+      "pageCount": "6",
+      "from": "0",
+      "to": "0",
+      "targets": [
+        "cover"
+      ],
+      "photoIds": [
+        "p-portrait"
+      ]
+    },
+    {
+      "pageCount": "6",
+      "from": "1",
+      "to": "1",
+      "targets": [
+        0
+      ],
+      "photoIds": [
+        "p-portrait"
+      ]
+    },
+    {
+      "pageCount": "6",
+      "from": "2",
+      "to": "4",
+      "targets": [
+        1,
+        2,
+        3
+      ],
+      "photoIds": [
+        "p-tiny",
+        "p-landscape",
+        "p-deleted",
+        "p-pano"
+      ]
+    },
+    {
+      "pageCount": "6",
+      "from": "6",
+      "to": "6",
+      "targets": [
+        5
+      ],
+      "photoIds": [
+        "p-landscape",
+        "p-square",
+        "p-tiny",
+        "p-pano"
+      ]
+    },
+    {
+      "pageCount": "6",
+      "from": "0",
+      "to": "7",
+      "targets": null,
+      "photoIds": null
+    },
+    {
+      "pageCount": "6",
+      "from": "3",
+      "to": "2",
+      "targets": null,
+      "photoIds": null
+    },
+    {
+      "pageCount": "6",
+      "from": "-1",
+      "to": "2",
+      "targets": null,
+      "photoIds": null
+    },
+    {
+      "pageCount": "6",
+      "from": "0.5",
+      "to": "2",
+      "targets": null,
+      "photoIds": null
+    },
+    {
+      "pageCount": "0",
+      "from": "0",
+      "to": "0",
+      "targets": [
+        "cover"
+      ],
+      "photoIds": [
+        "p-portrait"
+      ]
+    },
+    {
+      "pageCount": "-1",
+      "from": "0",
+      "to": "0",
+      "targets": null,
+      "photoIds": null
+    },
+    {
+      "pageCount": "NaN",
+      "from": "0",
+      "to": "0",
+      "targets": null,
+      "photoIds": null
+    }
+  ],
+  "photoIdsOutOfRangeTarget": [
+    "p-portrait"
+  ],
+  "renderPhotos": {
+    "p-portrait": {
+      "url": "https://print-assets.invalid/p-portrait.jpg",
+      "width": 3000,
+      "height": 4000
+    },
+    "p-landscape": {
+      "url": "https://print-assets.invalid/p-landscape.jpg",
+      "width": 4000,
+      "height": 3000
+    },
+    "p-square": {
+      "url": "https://print-assets.invalid/p-square.jpg",
+      "width": 2000,
+      "height": 2000
+    },
+    "p-pano": {
+      "url": "https://print-assets.invalid/p-pano.jpg",
+      "width": 6000,
+      "height": 1500
+    },
+    "p-tiny": {
+      "url": "https://print-assets.invalid/p-tiny.jpg",
+      "width": 400,
+      "height": 300
+    },
+    "p-nodims": {
+      "url": "https://print-assets.invalid/p-nodims.jpg",
+      "width": null,
+      "height": null
+    },
+    "p-float-dims": {
+      "url": "https://print-assets.invalid/p-float-dims.jpg",
+      "width": null,
+      "height": 20
+    },
+    "p-zero-dims": {
+      "url": "https://print-assets.invalid/p-zero-dims.jpg",
+      "width": null,
+      "height": null
+    },
+    "id with space/ü": {
+      "url": "https://print-assets.invalid/id%20with%20space%2F%C3%BC.jpg",
+      "width": 100,
+      "height": 100
+    }
+  }
+}

@@ -1,0 +1,998 @@
+{
+  "layouts": [
+    {
+      "layout": "cover",
+      "role": "cover",
+      "caption": {
+        "x": 8,
+        "y": 78,
+        "w": 84,
+        "h": 16
+      },
+      "slots": [
+        {
+          "index": 0,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 100,
+            "h": 74
+          },
+          "bleed": {
+            "pct": {
+              "x": -2.027027027027027,
+              "y": -1.4285714285714286,
+              "w": 104.05405405405406,
+              "h": 75.42857142857143
+            },
+            "sheetMm": {
+              "x": 0,
+              "y": 0,
+              "w": 154,
+              "h": 158.4
+            },
+            "edges": {
+              "left": true,
+              "top": true,
+              "right": true,
+              "bottom": false
+            }
+          },
+          "bleed0": {
+            "pct": {
+              "x": 0,
+              "y": 0,
+              "w": 100,
+              "h": 74
+            },
+            "sheetMm": {
+              "x": 0,
+              "y": 0,
+              "w": 148,
+              "h": 155.4
+            },
+            "edges": {
+              "left": true,
+              "top": true,
+              "right": true,
+              "bottom": false
+            }
+          },
+          "printSlotSizeMm": {
+            "w": 154,
+            "h": 158.4
+          },
+          "printSlotSizeMmById": {
+            "w": 154,
+            "h": 158.4
+          },
+          "slotSizeMm": {
+            "w": 148,
+            "h": 155.4
+          },
+          "layoutSlotMm": {
+            "w": 148,
+            "h": 155.4
+          }
+        }
+      ]
+    },
+    {
+      "layout": "full-page",
+      "role": "page",
+      "caption": null,
+      "slots": [
+        {
+          "index": 0,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 100,
+            "h": 100
+          },
+          "bleed": {
+            "pct": {
+              "x": -2.027027027027027,
+              "y": -1.4285714285714286,
+              "w": 104.05405405405406,
+              "h": 102.85714285714285
+            },
+            "sheetMm": {
+              "x": 0,
+              "y": 0,
+              "w": 154,
+              "h": 216
+            },
+            "edges": {
+              "left": true,
+              "top": true,
+              "right": true,
+              "bottom": true
+            }
+          },
+          "bleed0": {
+            "pct": {
+              "x": 0,
+              "y": 0,
+              "w": 100,
+              "h": 100
+            },
+            "sheetMm": {
+              "x": 0,
+              "y": 0,
+              "w": 148,
+              "h": 210
+            },
+            "edges": {
+              "left": true,
+              "top": true,
+              "right": true,
+              "bottom": true
+            }
+          },
+          "printSlotSizeMm": {
+            "w": 154,
+            "h": 216
+          },
+          "printSlotSizeMmById": {
+            "w": 154,
+            "h": 216
+          },
+          "slotSizeMm": {
+            "w": 148,
+            "h": 210
+          },
+          "layoutSlotMm": {
+            "w": 148,
+            "h": 210
+          }
+        }
+      ]
+    },
+    {
+      "layout": "one-portrait",
+      "role": "page",
+      "caption": {
+        "x": 10,
+        "y": 83,
+        "w": 80,
+        "h": 10
+      },
+      "slots": [
+        {
+          "index": 0,
+          "rect": {
+            "x": 10,
+            "y": 7,
+            "w": 80,
+            "h": 72
+          },
+          "bleed": {
+            "pct": {
+              "x": 10,
+              "y": 7,
+              "w": 80,
+              "h": 72
+            },
+            "sheetMm": {
+              "x": 17.8,
+              "y": 17.700000000000003,
+              "w": 118.4,
+              "h": 151.2
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "bleed0": {
+            "pct": {
+              "x": 10,
+              "y": 7,
+              "w": 80,
+              "h": 72
+            },
+            "sheetMm": {
+              "x": 14.8,
+              "y": 14.700000000000001,
+              "w": 118.4,
+              "h": 151.2
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "printSlotSizeMm": {
+            "w": 118.4,
+            "h": 151.2
+          },
+          "printSlotSizeMmById": {
+            "w": 118.4,
+            "h": 151.2
+          },
+          "slotSizeMm": {
+            "w": 118.4,
+            "h": 151.2
+          },
+          "layoutSlotMm": {
+            "w": 118.4,
+            "h": 151.2
+          }
+        }
+      ]
+    },
+    {
+      "layout": "two-vertical",
+      "role": "page",
+      "caption": {
+        "x": 5,
+        "y": 84,
+        "w": 90,
+        "h": 10
+      },
+      "slots": [
+        {
+          "index": 0,
+          "rect": {
+            "x": 5,
+            "y": 8,
+            "w": 43,
+            "h": 72
+          },
+          "bleed": {
+            "pct": {
+              "x": 5,
+              "y": 8,
+              "w": 43,
+              "h": 72
+            },
+            "sheetMm": {
+              "x": 10.4,
+              "y": 19.8,
+              "w": 63.64,
+              "h": 151.2
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "bleed0": {
+            "pct": {
+              "x": 5,
+              "y": 8,
+              "w": 43,
+              "h": 72
+            },
+            "sheetMm": {
+              "x": 7.4,
+              "y": 16.8,
+              "w": 63.64,
+              "h": 151.2
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "printSlotSizeMm": {
+            "w": 63.64,
+            "h": 151.2
+          },
+          "printSlotSizeMmById": {
+            "w": 63.64,
+            "h": 151.2
+          },
+          "slotSizeMm": {
+            "w": 63.64,
+            "h": 151.2
+          },
+          "layoutSlotMm": {
+            "w": 63.64,
+            "h": 151.2
+          }
+        },
+        {
+          "index": 1,
+          "rect": {
+            "x": 52,
+            "y": 8,
+            "w": 43,
+            "h": 72
+          },
+          "bleed": {
+            "pct": {
+              "x": 52,
+              "y": 8,
+              "w": 43,
+              "h": 72
+            },
+            "sheetMm": {
+              "x": 79.96000000000001,
+              "y": 19.8,
+              "w": 63.64,
+              "h": 151.2
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "bleed0": {
+            "pct": {
+              "x": 52,
+              "y": 8,
+              "w": 43,
+              "h": 72
+            },
+            "sheetMm": {
+              "x": 76.96000000000001,
+              "y": 16.8,
+              "w": 63.64,
+              "h": 151.2
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "printSlotSizeMm": {
+            "w": 63.64,
+            "h": 151.2
+          },
+          "printSlotSizeMmById": {
+            "w": 63.64,
+            "h": 151.2
+          },
+          "slotSizeMm": {
+            "w": 63.64,
+            "h": 151.2
+          },
+          "layoutSlotMm": {
+            "w": 63.64,
+            "h": 151.2
+          }
+        }
+      ]
+    },
+    {
+      "layout": "two-horizontal",
+      "role": "page",
+      "caption": {
+        "x": 5,
+        "y": 88,
+        "w": 90,
+        "h": 7
+      },
+      "slots": [
+        {
+          "index": 0,
+          "rect": {
+            "x": 5,
+            "y": 5,
+            "w": 90,
+            "h": 39
+          },
+          "bleed": {
+            "pct": {
+              "x": 5,
+              "y": 5,
+              "w": 90,
+              "h": 39
+            },
+            "sheetMm": {
+              "x": 10.4,
+              "y": 13.5,
+              "w": 133.20000000000002,
+              "h": 81.9
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "bleed0": {
+            "pct": {
+              "x": 5,
+              "y": 5,
+              "w": 90,
+              "h": 39
+            },
+            "sheetMm": {
+              "x": 7.4,
+              "y": 10.5,
+              "w": 133.20000000000002,
+              "h": 81.9
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "printSlotSizeMm": {
+            "w": 133.20000000000002,
+            "h": 81.9
+          },
+          "printSlotSizeMmById": {
+            "w": 133.20000000000002,
+            "h": 81.9
+          },
+          "slotSizeMm": {
+            "w": 133.20000000000002,
+            "h": 81.9
+          },
+          "layoutSlotMm": {
+            "w": 133.20000000000002,
+            "h": 81.9
+          }
+        },
+        {
+          "index": 1,
+          "rect": {
+            "x": 5,
+            "y": 46,
+            "w": 90,
+            "h": 39
+          },
+          "bleed": {
+            "pct": {
+              "x": 5,
+              "y": 46,
+              "w": 90,
+              "h": 39
+            },
+            "sheetMm": {
+              "x": 10.4,
+              "y": 99.60000000000001,
+              "w": 133.20000000000002,
+              "h": 81.9
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "bleed0": {
+            "pct": {
+              "x": 5,
+              "y": 46,
+              "w": 90,
+              "h": 39
+            },
+            "sheetMm": {
+              "x": 7.4,
+              "y": 96.60000000000001,
+              "w": 133.20000000000002,
+              "h": 81.9
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "printSlotSizeMm": {
+            "w": 133.20000000000002,
+            "h": 81.9
+          },
+          "printSlotSizeMmById": {
+            "w": 133.20000000000002,
+            "h": 81.9
+          },
+          "slotSizeMm": {
+            "w": 133.20000000000002,
+            "h": 81.9
+          },
+          "layoutSlotMm": {
+            "w": 133.20000000000002,
+            "h": 81.9
+          }
+        }
+      ]
+    },
+    {
+      "layout": "three-mixed",
+      "role": "page",
+      "caption": {
+        "x": 5,
+        "y": 88,
+        "w": 90,
+        "h": 7
+      },
+      "slots": [
+        {
+          "index": 0,
+          "rect": {
+            "x": 5,
+            "y": 5,
+            "w": 90,
+            "h": 40
+          },
+          "bleed": {
+            "pct": {
+              "x": 5,
+              "y": 5,
+              "w": 90,
+              "h": 40
+            },
+            "sheetMm": {
+              "x": 10.4,
+              "y": 13.5,
+              "w": 133.20000000000002,
+              "h": 84
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "bleed0": {
+            "pct": {
+              "x": 5,
+              "y": 5,
+              "w": 90,
+              "h": 40
+            },
+            "sheetMm": {
+              "x": 7.4,
+              "y": 10.5,
+              "w": 133.20000000000002,
+              "h": 84
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "printSlotSizeMm": {
+            "w": 133.20000000000002,
+            "h": 84
+          },
+          "printSlotSizeMmById": {
+            "w": 133.20000000000002,
+            "h": 84
+          },
+          "slotSizeMm": {
+            "w": 133.20000000000002,
+            "h": 84
+          },
+          "layoutSlotMm": {
+            "w": 133.20000000000002,
+            "h": 84
+          }
+        },
+        {
+          "index": 1,
+          "rect": {
+            "x": 5,
+            "y": 47,
+            "w": 44,
+            "h": 38
+          },
+          "bleed": {
+            "pct": {
+              "x": 5,
+              "y": 47,
+              "w": 44,
+              "h": 38
+            },
+            "sheetMm": {
+              "x": 10.4,
+              "y": 101.69999999999999,
+              "w": 65.12,
+              "h": 79.8
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "bleed0": {
+            "pct": {
+              "x": 5,
+              "y": 47,
+              "w": 44,
+              "h": 38
+            },
+            "sheetMm": {
+              "x": 7.4,
+              "y": 98.69999999999999,
+              "w": 65.12,
+              "h": 79.8
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "printSlotSizeMm": {
+            "w": 65.12,
+            "h": 79.8
+          },
+          "printSlotSizeMmById": {
+            "w": 65.12,
+            "h": 79.8
+          },
+          "slotSizeMm": {
+            "w": 65.12,
+            "h": 79.8
+          },
+          "layoutSlotMm": {
+            "w": 65.12,
+            "h": 79.8
+          }
+        },
+        {
+          "index": 2,
+          "rect": {
+            "x": 51,
+            "y": 47,
+            "w": 44,
+            "h": 38
+          },
+          "bleed": {
+            "pct": {
+              "x": 51,
+              "y": 47,
+              "w": 44,
+              "h": 38
+            },
+            "sheetMm": {
+              "x": 78.48,
+              "y": 101.69999999999999,
+              "w": 65.12,
+              "h": 79.8
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "bleed0": {
+            "pct": {
+              "x": 51,
+              "y": 47,
+              "w": 44,
+              "h": 38
+            },
+            "sheetMm": {
+              "x": 75.48,
+              "y": 98.69999999999999,
+              "w": 65.12,
+              "h": 79.8
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "printSlotSizeMm": {
+            "w": 65.12,
+            "h": 79.8
+          },
+          "printSlotSizeMmById": {
+            "w": 65.12,
+            "h": 79.8
+          },
+          "slotSizeMm": {
+            "w": 65.12,
+            "h": 79.8
+          },
+          "layoutSlotMm": {
+            "w": 65.12,
+            "h": 79.8
+          }
+        }
+      ]
+    },
+    {
+      "layout": "four-grid",
+      "role": "page",
+      "caption": {
+        "x": 5,
+        "y": 88,
+        "w": 90,
+        "h": 7
+      },
+      "slots": [
+        {
+          "index": 0,
+          "rect": {
+            "x": 5,
+            "y": 5,
+            "w": 44,
+            "h": 39
+          },
+          "bleed": {
+            "pct": {
+              "x": 5,
+              "y": 5,
+              "w": 44,
+              "h": 39
+            },
+            "sheetMm": {
+              "x": 10.4,
+              "y": 13.5,
+              "w": 65.12,
+              "h": 81.9
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "bleed0": {
+            "pct": {
+              "x": 5,
+              "y": 5,
+              "w": 44,
+              "h": 39
+            },
+            "sheetMm": {
+              "x": 7.4,
+              "y": 10.5,
+              "w": 65.12,
+              "h": 81.9
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "printSlotSizeMm": {
+            "w": 65.12,
+            "h": 81.9
+          },
+          "printSlotSizeMmById": {
+            "w": 65.12,
+            "h": 81.9
+          },
+          "slotSizeMm": {
+            "w": 65.12,
+            "h": 81.9
+          },
+          "layoutSlotMm": {
+            "w": 65.12,
+            "h": 81.9
+          }
+        },
+        {
+          "index": 1,
+          "rect": {
+            "x": 51,
+            "y": 5,
+            "w": 44,
+            "h": 39
+          },
+          "bleed": {
+            "pct": {
+              "x": 51,
+              "y": 5,
+              "w": 44,
+              "h": 39
+            },
+            "sheetMm": {
+              "x": 78.48,
+              "y": 13.5,
+              "w": 65.12,
+              "h": 81.9
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "bleed0": {
+            "pct": {
+              "x": 51,
+              "y": 5,
+              "w": 44,
+              "h": 39
+            },
+            "sheetMm": {
+              "x": 75.48,
+              "y": 10.5,
+              "w": 65.12,
+              "h": 81.9
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "printSlotSizeMm": {
+            "w": 65.12,
+            "h": 81.9
+          },
+          "printSlotSizeMmById": {
+            "w": 65.12,
+            "h": 81.9
+          },
+          "slotSizeMm": {
+            "w": 65.12,
+            "h": 81.9
+          },
+          "layoutSlotMm": {
+            "w": 65.12,
+            "h": 81.9
+          }
+        },
+        {
+          "index": 2,
+          "rect": {
+            "x": 5,
+            "y": 46,
+            "w": 44,
+            "h": 39
+          },
+          "bleed": {
+            "pct": {
+              "x": 5,
+              "y": 46,
+              "w": 44,
+              "h": 39
+            },
+            "sheetMm": {
+              "x": 10.4,
+              "y": 99.60000000000001,
+              "w": 65.12,
+              "h": 81.9
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "bleed0": {
+            "pct": {
+              "x": 5,
+              "y": 46,
+              "w": 44,
+              "h": 39
+            },
+            "sheetMm": {
+              "x": 7.4,
+              "y": 96.60000000000001,
+              "w": 65.12,
+              "h": 81.9
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "printSlotSizeMm": {
+            "w": 65.12,
+            "h": 81.9
+          },
+          "printSlotSizeMmById": {
+            "w": 65.12,
+            "h": 81.9
+          },
+          "slotSizeMm": {
+            "w": 65.12,
+            "h": 81.9
+          },
+          "layoutSlotMm": {
+            "w": 65.12,
+            "h": 81.9
+          }
+        },
+        {
+          "index": 3,
+          "rect": {
+            "x": 51,
+            "y": 46,
+            "w": 44,
+            "h": 39
+          },
+          "bleed": {
+            "pct": {
+              "x": 51,
+              "y": 46,
+              "w": 44,
+              "h": 39
+            },
+            "sheetMm": {
+              "x": 78.48,
+              "y": 99.60000000000001,
+              "w": 65.12,
+              "h": 81.9
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "bleed0": {
+            "pct": {
+              "x": 51,
+              "y": 46,
+              "w": 44,
+              "h": 39
+            },
+            "sheetMm": {
+              "x": 75.48,
+              "y": 96.60000000000001,
+              "w": 65.12,
+              "h": 81.9
+            },
+            "edges": {
+              "left": false,
+              "top": false,
+              "right": false,
+              "bottom": false
+            }
+          },
+          "printSlotSizeMm": {
+            "w": 65.12,
+            "h": 81.9
+          },
+          "printSlotSizeMmById": {
+            "w": 65.12,
+            "h": 81.9
+          },
+          "slotSizeMm": {
+            "w": 65.12,
+            "h": 81.9
+          },
+          "layoutSlotMm": {
+            "w": 65.12,
+            "h": 81.9
+          }
+        }
+      ]
+    }
+  ],
+  "unknown": {
+    "printSlotSizeMm": null,
+    "outOfRange": null,
+    "layoutSlotMm": null
+  }
+}

@@ -1,0 +1,1227 @@
+{
+  "cover": {
+    "screen": {
+      "kind": "cover",
+      "layoutId": "cover",
+      "knownLayout": true,
+      "slot": {
+        "index": 0,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 100,
+          "h": 74
+        },
+        "photoId": "p-portrait",
+        "photo": {
+          "url": "https://img.test/web/p-portrait.jpg",
+          "style": {
+            "width": 100,
+            "height": 126.98412698412697,
+            "left": 0,
+            "top": -13.492063492063487
+          }
+        }
+      },
+      "textRect": {
+        "x": 8,
+        "y": 78,
+        "w": 84,
+        "h": 16
+      },
+      "title": {
+        "text": "Sara & Omar",
+        "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif",
+        "sizeCqw": 7
+      },
+      "subtitle": {
+        "text": "Abu Dhabi · 2026",
+        "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif"
+      }
+    },
+    "bleed": {
+      "kind": "cover",
+      "layoutId": "cover",
+      "knownLayout": true,
+      "slot": {
+        "index": 0,
+        "rect": {
+          "x": -2.027027027027027,
+          "y": -1.4285714285714286,
+          "w": 104.05405405405406,
+          "h": 75.42857142857143
+        },
+        "photoId": "p-portrait",
+        "photo": {
+          "url": "https://img.test/web/p-portrait.jpg",
+          "style": {
+            "width": 100,
+            "height": 129.62962962962962,
+            "left": 0,
+            "top": -14.81481481481481
+          }
+        }
+      },
+      "textRect": {
+        "x": 8,
+        "y": 78,
+        "w": 84,
+        "h": 16
+      },
+      "title": {
+        "text": "Sara & Omar",
+        "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif",
+        "sizeCqw": 7
+      },
+      "subtitle": {
+        "text": "Abu Dhabi · 2026",
+        "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif"
+      }
+    },
+    "arBook": {
+      "kind": "cover",
+      "layoutId": "cover",
+      "knownLayout": true,
+      "slot": {
+        "index": 0,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 100,
+          "h": 74
+        },
+        "photoId": "p-portrait",
+        "photo": {
+          "url": "https://img.test/web/p-portrait.jpg",
+          "style": {
+            "width": 100,
+            "height": 126.98412698412697,
+            "left": 0,
+            "top": -13.492063492063487
+          }
+        }
+      },
+      "textRect": {
+        "x": 8,
+        "y": 78,
+        "w": 84,
+        "h": 16
+      },
+      "title": {
+        "text": "Sara & Omar",
+        "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif",
+        "sizeCqw": 7
+      },
+      "subtitle": {
+        "text": "Abu Dhabi · 2026",
+        "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif"
+      }
+    }
+  },
+  "pages": [
+    {
+      "index": 0,
+      "screen": {
+        "kind": "page",
+        "pageId": "pg-1",
+        "layoutId": "full-page",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 100,
+              "h": 100
+            },
+            "photoId": "p-portrait",
+            "photo": {
+              "url": "https://img.test/web/p-portrait.jpg",
+              "style": {
+                "width": 106.41891891891892,
+                "height": 100,
+                "left": -3.2094594594594597,
+                "top": 0
+              }
+            }
+          }
+        ],
+        "caption": null
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "pg-1",
+        "layoutId": "full-page",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": -2.027027027027027,
+              "y": -1.4285714285714286,
+              "w": 104.05405405405406,
+              "h": 102.85714285714285
+            },
+            "photoId": "p-portrait",
+            "photo": {
+              "url": "https://img.test/web/p-portrait.jpg",
+              "style": {
+                "width": 105.19480519480517,
+                "height": 100,
+                "left": -2.597402597402585,
+                "top": 0
+              }
+            }
+          }
+        ],
+        "caption": null
+      },
+      "arBook": {
+        "kind": "page",
+        "pageId": "pg-1",
+        "layoutId": "full-page",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 100,
+              "h": 100
+            },
+            "photoId": "p-portrait",
+            "photo": {
+              "url": "https://img.test/web/p-portrait.jpg",
+              "style": {
+                "width": 106.41891891891892,
+                "height": 100,
+                "left": -3.2094594594594597,
+                "top": 0
+              }
+            }
+          }
+        ],
+        "caption": null
+      }
+    },
+    {
+      "index": 1,
+      "screen": {
+        "kind": "page",
+        "pageId": "pg-2",
+        "layoutId": "one-portrait",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 10,
+              "y": 7,
+              "w": 80,
+              "h": 72
+            },
+            "photoId": "p-tiny",
+            "photo": {
+              "url": "https://img.test/web/p-tiny.jpg",
+              "style": {
+                "width": 255.4054054054054,
+                "height": 150.00000000000003,
+                "left": -26.621621621621614,
+                "top": -40.000000000000014
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 10,
+            "y": 83,
+            "w": 80,
+            "h": 10
+          },
+          "caption": {
+            "text": "First light over the water, and nobody wanted to leave.",
+            "font": "Playfair",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "First light over the water, and nobody wanted to leave.",
+          "align": "center",
+          "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif"
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "pg-2",
+        "layoutId": "one-portrait",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 10,
+              "y": 7,
+              "w": 80,
+              "h": 72
+            },
+            "photoId": "p-tiny",
+            "photo": {
+              "url": "https://img.test/web/p-tiny.jpg",
+              "style": {
+                "width": 255.4054054054054,
+                "height": 150.00000000000003,
+                "left": -26.621621621621614,
+                "top": -40.000000000000014
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 10,
+            "y": 83,
+            "w": 80,
+            "h": 10
+          },
+          "caption": {
+            "text": "First light over the water, and nobody wanted to leave.",
+            "font": "Playfair",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "First light over the water, and nobody wanted to leave.",
+          "align": "center",
+          "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif"
+        }
+      },
+      "arBook": {
+        "kind": "page",
+        "pageId": "pg-2",
+        "layoutId": "one-portrait",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 10,
+              "y": 7,
+              "w": 80,
+              "h": 72
+            },
+            "photoId": "p-tiny",
+            "photo": {
+              "url": "https://img.test/web/p-tiny.jpg",
+              "style": {
+                "width": 255.4054054054054,
+                "height": 150.00000000000003,
+                "left": -26.621621621621614,
+                "top": -40.000000000000014
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 10,
+            "y": 83,
+            "w": 80,
+            "h": 10
+          },
+          "caption": {
+            "text": "First light over the water, and nobody wanted to leave.",
+            "font": "Playfair",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "First light over the water, and nobody wanted to leave.",
+          "align": "center",
+          "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif"
+        }
+      }
+    },
+    {
+      "index": 2,
+      "screen": {
+        "kind": "page",
+        "pageId": "pg-3",
+        "layoutId": "two-vertical",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 5,
+              "y": 8,
+              "w": 43,
+              "h": 72
+            },
+            "photoId": "p-landscape",
+            "photo": {
+              "url": "https://img.test/web/p-landscape.jpg",
+              "style": {
+                "width": 633.5637963544939,
+                "height": 200,
+                "left": -13.356379635449393,
+                "top": -100
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 52,
+              "y": 8,
+              "w": 43,
+              "h": 72
+            },
+            "photoId": "p-deleted",
+            "photo": null
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 5,
+            "y": 84,
+            "w": 90,
+            "h": 10
+          },
+          "caption": {
+            "text": "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى",
+            "font": "Cairo",
+            "align": "right",
+            "source": "user"
+          },
+          "text": "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى",
+          "lang": "ar",
+          "align": "right",
+          "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif"
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "pg-3",
+        "layoutId": "two-vertical",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 5,
+              "y": 8,
+              "w": 43,
+              "h": 72
+            },
+            "photoId": "p-landscape",
+            "photo": {
+              "url": "https://img.test/web/p-landscape.jpg",
+              "style": {
+                "width": 633.5637963544939,
+                "height": 200,
+                "left": -13.356379635449393,
+                "top": -100
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 52,
+              "y": 8,
+              "w": 43,
+              "h": 72
+            },
+            "photoId": "p-deleted",
+            "photo": null
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 5,
+            "y": 84,
+            "w": 90,
+            "h": 10
+          },
+          "caption": {
+            "text": "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى",
+            "font": "Cairo",
+            "align": "right",
+            "source": "user"
+          },
+          "text": "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى",
+          "lang": "ar",
+          "align": "right",
+          "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif"
+        }
+      },
+      "arBook": {
+        "kind": "page",
+        "pageId": "pg-3",
+        "layoutId": "two-vertical",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 5,
+              "y": 8,
+              "w": 43,
+              "h": 72
+            },
+            "photoId": "p-landscape",
+            "photo": {
+              "url": "https://img.test/web/p-landscape.jpg",
+              "style": {
+                "width": 633.5637963544939,
+                "height": 200,
+                "left": -13.356379635449393,
+                "top": -100
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 52,
+              "y": 8,
+              "w": 43,
+              "h": 72
+            },
+            "photoId": "p-deleted",
+            "photo": null
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 5,
+            "y": 84,
+            "w": 90,
+            "h": 10
+          },
+          "caption": {
+            "text": "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى",
+            "font": "Cairo",
+            "align": "right",
+            "source": "user"
+          },
+          "text": "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى",
+          "lang": "ar",
+          "align": "right",
+          "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif"
+        }
+      }
+    },
+    {
+      "index": 3,
+      "screen": {
+        "kind": "page",
+        "pageId": "pg-4",
+        "layoutId": "two-horizontal",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 5,
+              "y": 5,
+              "w": 90,
+              "h": 39
+            },
+            "photoId": "p-pano",
+            "photo": {
+              "url": "https://img.test/web/p-pano.jpg",
+              "style": {
+                "width": 983.7837837837836,
+                "height": 400,
+                "left": -441.8918918918918,
+                "top": -150
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 5,
+              "y": 46,
+              "w": 90,
+              "h": 39
+            },
+            "photoId": null,
+            "photo": null
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 5,
+            "y": 88,
+            "w": 90,
+            "h": 7
+          },
+          "caption": {
+            "text": "Eid في أبوظبي 2026",
+            "font": "Tajawal",
+            "align": "left",
+            "source": "auto"
+          },
+          "text": "Eid في أبوظبي 2026",
+          "lang": "ar",
+          "align": "left",
+          "fontFamily": "var(--font-tajawal), var(--font-cairo), sans-serif"
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "pg-4",
+        "layoutId": "two-horizontal",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 5,
+              "y": 5,
+              "w": 90,
+              "h": 39
+            },
+            "photoId": "p-pano",
+            "photo": {
+              "url": "https://img.test/web/p-pano.jpg",
+              "style": {
+                "width": 983.7837837837836,
+                "height": 400,
+                "left": -441.8918918918918,
+                "top": -150
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 5,
+              "y": 46,
+              "w": 90,
+              "h": 39
+            },
+            "photoId": null,
+            "photo": null
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 5,
+            "y": 88,
+            "w": 90,
+            "h": 7
+          },
+          "caption": {
+            "text": "Eid في أبوظبي 2026",
+            "font": "Tajawal",
+            "align": "left",
+            "source": "auto"
+          },
+          "text": "Eid في أبوظبي 2026",
+          "lang": "ar",
+          "align": "left",
+          "fontFamily": "var(--font-tajawal), var(--font-cairo), sans-serif"
+        }
+      },
+      "arBook": {
+        "kind": "page",
+        "pageId": "pg-4",
+        "layoutId": "two-horizontal",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 5,
+              "y": 5,
+              "w": 90,
+              "h": 39
+            },
+            "photoId": "p-pano",
+            "photo": {
+              "url": "https://img.test/web/p-pano.jpg",
+              "style": {
+                "width": 983.7837837837836,
+                "height": 400,
+                "left": -441.8918918918918,
+                "top": -150
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 5,
+              "y": 46,
+              "w": 90,
+              "h": 39
+            },
+            "photoId": null,
+            "photo": null
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 5,
+            "y": 88,
+            "w": 90,
+            "h": 7
+          },
+          "caption": {
+            "text": "Eid في أبوظبي 2026",
+            "font": "Tajawal",
+            "align": "left",
+            "source": "auto"
+          },
+          "text": "Eid في أبوظبي 2026",
+          "lang": "ar",
+          "align": "left",
+          "fontFamily": "var(--font-tajawal), var(--font-cairo), sans-serif"
+        }
+      }
+    },
+    {
+      "index": 4,
+      "screen": {
+        "kind": "page",
+        "pageId": "pg-5",
+        "layoutId": "three-mixed",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 5,
+              "y": 5,
+              "w": 90,
+              "h": 40
+            },
+            "photoId": "p-square",
+            "photo": {
+              "url": "https://img.test/web/p-square.jpg",
+              "style": {
+                "width": 100,
+                "height": 158.57142857142858,
+                "left": 0,
+                "top": -29.285714285714292
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 5,
+              "y": 47,
+              "w": 44,
+              "h": 38
+            },
+            "photoId": "p-nodims",
+            "photo": {
+              "url": "https://img.test/web/p-nodims.jpg",
+              "style": {
+                "width": 100,
+                "height": 100,
+                "left": 0,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 51,
+              "y": 47,
+              "w": 44,
+              "h": 38
+            },
+            "photoId": "p-portrait",
+            "photo": {
+              "url": "https://img.test/web/p-portrait.jpg",
+              "style": {
+                "width": 300.00000000000006,
+                "height": 326.41604010025065,
+                "left": 0,
+                "top": -226.41604010025065
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 5,
+            "y": 88,
+            "w": 90,
+            "h": 7
+          },
+          "caption": {
+            "text": "Inter caption, left aligned",
+            "font": "Inter",
+            "align": "left",
+            "source": "user"
+          },
+          "text": "Inter caption, left aligned",
+          "align": "left",
+          "fontFamily": "var(--font-inter), var(--font-cairo), var(--font-tajawal), sans-serif"
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "pg-5",
+        "layoutId": "three-mixed",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 5,
+              "y": 5,
+              "w": 90,
+              "h": 40
+            },
+            "photoId": "p-square",
+            "photo": {
+              "url": "https://img.test/web/p-square.jpg",
+              "style": {
+                "width": 100,
+                "height": 158.57142857142858,
+                "left": 0,
+                "top": -29.285714285714292
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 5,
+              "y": 47,
+              "w": 44,
+              "h": 38
+            },
+            "photoId": "p-nodims",
+            "photo": {
+              "url": "https://img.test/web/p-nodims.jpg",
+              "style": {
+                "width": 100,
+                "height": 100,
+                "left": 0,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 51,
+              "y": 47,
+              "w": 44,
+              "h": 38
+            },
+            "photoId": "p-portrait",
+            "photo": {
+              "url": "https://img.test/web/p-portrait.jpg",
+              "style": {
+                "width": 300.00000000000006,
+                "height": 326.41604010025065,
+                "left": 0,
+                "top": -226.41604010025065
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 5,
+            "y": 88,
+            "w": 90,
+            "h": 7
+          },
+          "caption": {
+            "text": "Inter caption, left aligned",
+            "font": "Inter",
+            "align": "left",
+            "source": "user"
+          },
+          "text": "Inter caption, left aligned",
+          "align": "left",
+          "fontFamily": "var(--font-inter), var(--font-cairo), var(--font-tajawal), sans-serif"
+        }
+      },
+      "arBook": {
+        "kind": "page",
+        "pageId": "pg-5",
+        "layoutId": "three-mixed",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 5,
+              "y": 5,
+              "w": 90,
+              "h": 40
+            },
+            "photoId": "p-square",
+            "photo": {
+              "url": "https://img.test/web/p-square.jpg",
+              "style": {
+                "width": 100,
+                "height": 158.57142857142858,
+                "left": 0,
+                "top": -29.285714285714292
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 5,
+              "y": 47,
+              "w": 44,
+              "h": 38
+            },
+            "photoId": "p-nodims",
+            "photo": {
+              "url": "https://img.test/web/p-nodims.jpg",
+              "style": {
+                "width": 100,
+                "height": 100,
+                "left": 0,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 51,
+              "y": 47,
+              "w": 44,
+              "h": 38
+            },
+            "photoId": "p-portrait",
+            "photo": {
+              "url": "https://img.test/web/p-portrait.jpg",
+              "style": {
+                "width": 300.00000000000006,
+                "height": 326.41604010025065,
+                "left": 0,
+                "top": -226.41604010025065
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 5,
+            "y": 88,
+            "w": 90,
+            "h": 7
+          },
+          "caption": {
+            "text": "Inter caption, left aligned",
+            "font": "Inter",
+            "align": "left",
+            "source": "user"
+          },
+          "text": "Inter caption, left aligned",
+          "align": "left",
+          "fontFamily": "var(--font-inter), var(--font-cairo), var(--font-tajawal), sans-serif"
+        }
+      }
+    },
+    {
+      "index": 5,
+      "screen": {
+        "kind": "page",
+        "pageId": "pg-6",
+        "layoutId": "four-grid",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 5,
+              "y": 5,
+              "w": 44,
+              "h": 39
+            },
+            "photoId": "p-landscape",
+            "photo": {
+              "url": "https://img.test/web/p-landscape.jpg",
+              "style": {
+                "width": 167.6904176904177,
+                "height": 100,
+                "left": -33.845208845208845,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 51,
+              "y": 5,
+              "w": 44,
+              "h": 39
+            },
+            "photoId": "p-square",
+            "photo": {
+              "url": "https://img.test/web/p-square.jpg",
+              "style": {
+                "width": 125.76781326781328,
+                "height": 100,
+                "left": -25.76781326781328,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 5,
+              "y": 46,
+              "w": 44,
+              "h": 39
+            },
+            "photoId": "p-tiny",
+            "photo": {
+              "url": "https://img.test/web/p-tiny.jpg",
+              "style": {
+                "width": 167.6904176904177,
+                "height": 100,
+                "left": -33.845208845208845,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 3,
+            "rect": {
+              "x": 51,
+              "y": 46,
+              "w": 44,
+              "h": 39
+            },
+            "photoId": "p-pano",
+            "photo": {
+              "url": "https://img.test/web/p-pano.jpg",
+              "style": {
+                "width": 503.0712530712531,
+                "height": 100,
+                "left": -201.53562653562656,
+                "top": 0
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 5,
+            "y": 88,
+            "w": 90,
+            "h": 7
+          },
+          "caption": null,
+          "text": "",
+          "align": "center",
+          "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif"
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "pg-6",
+        "layoutId": "four-grid",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 5,
+              "y": 5,
+              "w": 44,
+              "h": 39
+            },
+            "photoId": "p-landscape",
+            "photo": {
+              "url": "https://img.test/web/p-landscape.jpg",
+              "style": {
+                "width": 167.6904176904177,
+                "height": 100,
+                "left": -33.845208845208845,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 51,
+              "y": 5,
+              "w": 44,
+              "h": 39
+            },
+            "photoId": "p-square",
+            "photo": {
+              "url": "https://img.test/web/p-square.jpg",
+              "style": {
+                "width": 125.76781326781328,
+                "height": 100,
+                "left": -25.76781326781328,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 5,
+              "y": 46,
+              "w": 44,
+              "h": 39
+            },
+            "photoId": "p-tiny",
+            "photo": {
+              "url": "https://img.test/web/p-tiny.jpg",
+              "style": {
+                "width": 167.6904176904177,
+                "height": 100,
+                "left": -33.845208845208845,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 3,
+            "rect": {
+              "x": 51,
+              "y": 46,
+              "w": 44,
+              "h": 39
+            },
+            "photoId": "p-pano",
+            "photo": {
+              "url": "https://img.test/web/p-pano.jpg",
+              "style": {
+                "width": 503.0712530712531,
+                "height": 100,
+                "left": -201.53562653562656,
+                "top": 0
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 5,
+            "y": 88,
+            "w": 90,
+            "h": 7
+          },
+          "caption": null,
+          "text": "",
+          "align": "center",
+          "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif"
+        }
+      },
+      "arBook": {
+        "kind": "page",
+        "pageId": "pg-6",
+        "layoutId": "four-grid",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 5,
+              "y": 5,
+              "w": 44,
+              "h": 39
+            },
+            "photoId": "p-landscape",
+            "photo": {
+              "url": "https://img.test/web/p-landscape.jpg",
+              "style": {
+                "width": 167.6904176904177,
+                "height": 100,
+                "left": -33.845208845208845,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 51,
+              "y": 5,
+              "w": 44,
+              "h": 39
+            },
+            "photoId": "p-square",
+            "photo": {
+              "url": "https://img.test/web/p-square.jpg",
+              "style": {
+                "width": 125.76781326781328,
+                "height": 100,
+                "left": -25.76781326781328,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 5,
+              "y": 46,
+              "w": 44,
+              "h": 39
+            },
+            "photoId": "p-tiny",
+            "photo": {
+              "url": "https://img.test/web/p-tiny.jpg",
+              "style": {
+                "width": 167.6904176904177,
+                "height": 100,
+                "left": -33.845208845208845,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 3,
+            "rect": {
+              "x": 51,
+              "y": 46,
+              "w": 44,
+              "h": 39
+            },
+            "photoId": "p-pano",
+            "photo": {
+              "url": "https://img.test/web/p-pano.jpg",
+              "style": {
+                "width": 503.0712530712531,
+                "height": 100,
+                "left": -201.53562653562656,
+                "top": 0
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 5,
+            "y": 88,
+            "w": 90,
+            "h": 7
+          },
+          "caption": null,
+          "text": "",
+          "align": "center",
+          "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,108 @@
+<!-- golden: <BookPage> layout=full-page mode=edit cases=15 -->
+
+=== case: photos ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-full-page" data-layout="full-page">
+<div class="absolute overflow-hidden" style="left:0%;top:0%;width:100%;height:100%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-3.2094594594594597%;top:0%;width:106.41891891891892%;height:100%;max-width:none"/>
+</div>
+</div>
+
+=== case: photos-priority ===
+<link rel="preload" as="image" href="https://img.test/web/p-portrait.jpg" fetchPriority="high"/>
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-full-page" data-layout="full-page">
+<div class="absolute overflow-hidden" style="left:0%;top:0%;width:100%;height:100%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" fetchPriority="high" class="pointer-events-none absolute block" style="left:-3.2094594594594597%;top:0%;width:106.41891891891892%;height:100%;max-width:none"/>
+</div>
+</div>
+
+=== case: missing-photo ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-full-page" data-layout="full-page">
+<div class="absolute overflow-hidden" style="left:0%;top:0%;width:100%;height:100%" data-slot-index="0" data-slot-empty="true">
+<div class="absolute inset-0 flex items-center justify-center border border-dashed border-neutral-400 bg-neutral-100 text-neutral-500" style="font-size:3cqw;border-width:0.4cqw" data-testid="slot-placeholder">Add photo</div>
+</div>
+</div>
+
+=== case: all-empty ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-full-page" data-layout="full-page">
+<div class="absolute overflow-hidden" style="left:0%;top:0%;width:100%;height:100%" data-slot-index="0" data-slot-empty="true">
+<div class="absolute inset-0 flex items-center justify-center border border-dashed border-neutral-400 bg-neutral-100 text-neutral-500" style="font-size:3cqw;border-width:0.4cqw" data-testid="slot-placeholder">Add photo</div>
+</div>
+</div>
+
+=== case: unknown-pixel-size ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-full-page" data-layout="full-page">
+<div class="absolute overflow-hidden" style="left:0%;top:0%;width:100%;height:100%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-nodims.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:0%;top:0%;width:100%;height:100%;max-width:none"/>
+</div>
+</div>
+
+=== case: low-res-photo ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-full-page" data-layout="full-page">
+<div class="absolute overflow-hidden" style="left:0%;top:0%;width:100%;height:100%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-tiny.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-44.5945945945946%;top:0%;width:189.1891891891892%;height:100%;max-width:none"/>
+</div>
+</div>
+
+=== case: background-F5EFE6 ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#F5EFE6;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-full-page" data-layout="full-page">
+<div class="absolute overflow-hidden" style="left:0%;top:0%;width:100%;height:100%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-3.2094594594594597%;top:0%;width:106.41891891891892%;height:100%;max-width:none"/>
+</div>
+</div>
+
+=== case: background-1F2937 ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#1F2937;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-full-page" data-layout="full-page">
+<div class="absolute overflow-hidden" style="left:0%;top:0%;width:100%;height:100%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-3.2094594594594597%;top:0%;width:106.41891891891892%;height:100%;max-width:none"/>
+</div>
+</div>
+
+=== case: edit-overlays ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-full-page" data-layout="full-page">
+<div class="absolute overflow-hidden" style="left:0%;top:0%;width:100%;height:100%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-3.2094594594594597%;top:0%;width:106.41891891891892%;height:100%;max-width:none"/>
+<span data-test-overlay="0">overlay 0</span>
+</div>
+</div>
+
+=== case: short-slots-array ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-full-page" data-layout="full-page">
+<div class="absolute overflow-hidden" style="left:0%;top:0%;width:100%;height:100%" data-slot-index="0" data-slot-empty="true">
+<div class="absolute inset-0 flex items-center justify-center border border-dashed border-neutral-400 bg-neutral-100 text-neutral-500" style="font-size:3cqw;border-width:0.4cqw" data-testid="slot-placeholder">Add photo</div>
+</div>
+</div>
+
+=== case: crop-zoom1-topleft ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-full-page" data-layout="full-page">
+<div class="absolute overflow-hidden" style="left:0%;top:0%;width:100%;height:100%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:0%;top:0%;width:106.41891891891892%;height:100%;max-width:none"/>
+</div>
+</div>
+
+=== case: crop-zoom1-bottomright ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-full-page" data-layout="full-page">
+<div class="absolute overflow-hidden" style="left:0%;top:0%;width:100%;height:100%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-6.418918918918919%;top:0%;width:106.41891891891892%;height:100%;max-width:none"/>
+</div>
+</div>
+
+=== case: crop-zoom2-center ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-full-page" data-layout="full-page">
+<div class="absolute overflow-hidden" style="left:0%;top:0%;width:100%;height:100%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-56.41891891891892%;top:-50%;width:212.83783783783784%;height:200%;max-width:none"/>
+</div>
+</div>
+
+=== case: crop-zoom2.5-focal-0.2-0.8 ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-full-page" data-layout="full-page">
+<div class="absolute overflow-hidden" style="left:0%;top:0%;width:100%;height:100%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-3.2094594594594597%;top:-150%;width:266.0472972972973%;height:250%;max-width:none"/>
+</div>
+</div>
+
+=== case: crop-zoom4-focal-0.9-0.1 ===
+<div class="relative aspect-[148/210] w-full overflow-hidden select-none " style="container-type:inline-size;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="edit" data-page="0" data-page-id="pg-full-page" data-layout="full-page">
+<div class="absolute overflow-hidden" style="left:0%;top:0%;width:100%;height:100%" data-slot-index="0" data-slot-empty="false">
+<img src="https://img.test/web/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="lazy" class="pointer-events-none absolute block" style="left:-325.6756756756757%;top:0%;width:425.6756756756757%;height:400%;max-width:none"/>
+</div>
+</div>

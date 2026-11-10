@@ -1,0 +1,782 @@
+<!-- golden: <BookPage> layout=three-mixed mode=print cases=39 -->
+
+=== case: photos ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: photos-priority ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg" fetchPriority="high"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg" fetchPriority="high"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg" fetchPriority="high"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" fetchPriority="high" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" fetchPriority="high" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" fetchPriority="high" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: missing-photo ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="true">
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="true">
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: all-empty ===
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="true">
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="true">
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="true">
+</div>
+</div>
+</div>
+
+=== case: unknown-pixel-size ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-nodims.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-nodims.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:0%;width:100%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-nodims.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:0%;width:100%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-nodims.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:0%;width:100%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: low-res-photo ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-tiny.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-tiny.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-9.464285714285715%;width:100%;height:118.92857142857143%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-tiny.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.695331695331703%;top:-1.4210854715202004e-14%;width:163.3906633906634%;height:100.00000000000003%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-tiny.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.695331695331703%;top:-1.4210854715202004e-14%;width:163.3906633906634%;height:100.00000000000003%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: background-F5EFE6 ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#F5EFE6;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: background-1F2937 ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#1F2937;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: edit-overlays ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="true">
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: short-slots-array ===
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="true">
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="true">
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="true">
+</div>
+</div>
+</div>
+
+=== case: crop-zoom1-topleft ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:0%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: crop-zoom1-bottomright ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-111.42857142857147%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-63.39066339066338%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-22.54299754299754%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: crop-zoom2-center ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-50%;top:-161.42857142857147%;width:200%;height:422.85714285714295%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-113.39066339066338%;top:-50%;width:326.78132678132675%;height:200%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-72.54299754299754%;top:-50%;width:245.08599508599508%;height:200%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: crop-zoom2.5-focal-0.2-0.8 ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-372.85714285714295%;width:250%;height:528.5714285714287%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.695331695331703%;top:-150%;width:408.4766584766585%;height:250%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.271498771498756%;top:-149.99999999999994%;width:306.35749385749375%;height:249.99999999999994%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: crop-zoom4-focal-0.9-0.1 ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-300%;top:-34.5714285714286%;width:400%;height:845.7142857142859%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-538.2063882063882%;top:0%;width:653.5626535626535%;height:400%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-390.17199017199016%;top:0%;width:490.17199017199016%;height:400%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: caption-none ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+</div>
+</div>
+
+=== case: caption-none-edit-overlays ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+</div>
+</div>
+
+=== case: caption-none-lang-ar-edit-overlays ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+</div>
+</div>
+
+=== case: caption-empty-text ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+</div>
+</div>
+
+=== case: caption-en ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: caption-ar ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى</p>
+</div>
+</div>
+</div>
+
+=== case: caption-ar-in-en-book ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى</p>
+</div>
+</div>
+</div>
+
+=== case: caption-ar-latin-font ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى</p>
+</div>
+</div>
+</div>
+
+=== case: caption-mixed ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-tajawal), var(--font-cairo), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">Eid في أبوظبي 2026</p>
+</div>
+</div>
+</div>
+
+=== case: caption-digits-only-lang-ar ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">2026 · 12/02</p>
+</div>
+</div>
+</div>
+
+=== case: caption-multiline ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-inter), var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">Line one
+Line two
+Line three</p>
+</div>
+</div>
+</div>
+
+=== case: caption-html-chars ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-inter), var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">Tom &amp; &quot;Jerry&quot; &lt;3 &#x27;ok&#x27;</p>
+</div>
+</div>
+</div>
+
+=== case: caption-align-left ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-inter), var(--font-cairo), var(--font-tajawal), sans-serif;text-align:left;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: caption-align-right ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-tajawal), var(--font-cairo), sans-serif;text-align:right;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى</p>
+</div>
+</div>
+</div>
+
+=== case: font-Inter-en ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-inter), var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: font-Inter-ar ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-inter), var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى</p>
+</div>
+</div>
+</div>
+
+=== case: font-Playfair-en ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: font-Playfair-ar ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى</p>
+</div>
+</div>
+</div>
+
+=== case: font-Cairo-en ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: font-Cairo-ar ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى</p>
+</div>
+</div>
+</div>
+
+=== case: font-Tajawal-en ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-tajawal), var(--font-cairo), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: font-Tajawal-ar ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-tajawal), var(--font-cairo), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى</p>
+</div>
+</div>
+</div>
+
+=== case: font-Comic-Sans-en ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">First light over the water, and nobody wanted to leave.</p>
+</div>
+</div>
+</div>
+
+=== case: font-Comic-Sans-ar ===
+<link rel="preload" as="image" href="https://print-assets.invalid/p-portrait.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-landscape.jpg"/>
+<link rel="preload" as="image" href="https://print-assets.invalid/p-square.jpg"/>
+<div class="relative shrink-0 overflow-hidden select-none " style="width:154mm;height:216mm;background:#FFFFFF;print-color-adjust:exact;-webkit-print-color-adjust:exact" data-mode="print" data-print-sheet="true" data-page="0" data-page-id="pg-three-mixed" data-layout="three-mixed">
+<div class="absolute" style="left:3mm;top:3mm;width:148mm;height:210mm;container-type:inline-size" data-print-trim="true">
+<div class="absolute overflow-hidden" style="left:5%;top:5%;width:90%;height:40%" data-slot-index="0" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-portrait.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:0%;top:-55.71428571428574%;width:100%;height:211.42857142857147%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:5%;top:47%;width:44%;height:38%" data-slot-index="1" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-landscape.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-31.69533169533169%;top:0%;width:163.39066339066338%;height:100%;max-width:none"/>
+</div>
+<div class="absolute overflow-hidden" style="left:51%;top:47%;width:44%;height:38%" data-slot-index="2" data-slot-empty="false">
+<img src="https://print-assets.invalid/p-square.jpg" alt="" draggable="false" decoding="async" loading="eager" class="pointer-events-none absolute block" style="left:-11.27149877149877%;top:0%;width:122.54299754299754%;height:100%;max-width:none"/>
+</div>
+<div class="absolute flex flex-col justify-center overflow-hidden" style="left:5%;top:88%;width:90%;height:7%" data-caption-area="true">
+<p dir="auto" lang="ar" class="w-full whitespace-pre-line break-words text-neutral-800" style="font-family:var(--font-cairo), var(--font-tajawal), sans-serif;text-align:center;font-size:2.6cqw;line-height:1.25" data-testid="page-caption">أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى</p>
+</div>
+</div>
+</div>
