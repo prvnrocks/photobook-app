@@ -84,7 +84,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
       actions,
       photos,
       readOnly: state.readOnly,
-      save: { status: autosave.status, flush: autosave.flush },
+      save: { status: autosave.status, flush: autosave.flush, settle: autosave.settle },
       ai: {
         mode: data.aiMode,
         rewritesUsed: rewrites.used,
@@ -97,7 +97,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
       openTool,
       closeTool,
     }),
-    [data.book, paymentsEnabled, data.aiMode, state, actions, photos, autosave.status, autosave.flush, rewrites, setRewrites, aiBlocked, activeTool, openTool, closeTool],
+    [data.book, paymentsEnabled, data.aiMode, state, actions, photos, autosave.status, autosave.flush, autosave.settle, rewrites, setRewrites, aiBlocked, activeTool, openTool, closeTool],
   );
 
   const registry = toolsProp ?? EDITOR_TOOLS;

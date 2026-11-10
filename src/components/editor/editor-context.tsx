@@ -22,7 +22,12 @@ export interface EditorContextValue {
   photos: EditorPhotos;
   /** state.readOnly (no saving / conflict / signed out). Tools that edit must not run. */
   readOnly: boolean;
-  save: { status: SaveState; flush(): void };
+  save: {
+    status: SaveState;
+    flush(): void;
+    /** Send pending saves and wait for them (useAutosave().settle) — e.g. before a PDF export. */
+    settle?(): Promise<SaveState>;
+  };
   ai: {
     mode: EditorAiMode;
     rewritesUsed: number;

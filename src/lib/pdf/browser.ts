@@ -31,6 +31,11 @@ export function isServerlessRuntime(env: Record<string, string | undefined> = pr
   return platform === "linux" && Boolean(env.VERCEL || env.AWS_LAMBDA_FUNCTION_NAME);
 }
 
+/** Cheap pre-check (no launch): the serverless binary applies, or PDF_CHROME_PATH is set. */
+export function chromeConfigured(env: Record<string, string | undefined> = process.env, platform: string = process.platform): boolean {
+  return isServerlessRuntime(env, platform) || Boolean(env.PDF_CHROME_PATH?.trim());
+}
+
 /** Launch options for this runtime; throws PdfRenderError('chrome_unavailable'). */
 export async function browserLaunchOptions(
   env: Record<string, string | undefined> = process.env,

@@ -383,6 +383,41 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
     await expect(page.getByTestId("upgrade-sheet")).toHaveCount(0);
   });
 
+  test("paid book: PDF tool (no Upgrade) → sheet → saves first, then downloads (API mocked)", async ({ page }) => {
+    const calls: string[] = [];
+    await page.route("**/api/books/*/pdf**", (route) => {
+      calls.push(route.request().method());
+      return route.request().method() === "POST"
+        ? route.fulfill({ status: 202, json: { status: "rendering", exportId: "e9" } })
+        : route.fulfill({
+            json: { status: "ready", exportId: "e9", url: "/__pdf-mock/book.pdf", filename: "book.pdf", bytes: 1_200_000, pageCount: 7 },
+          });
+    });
+    await page.route("**/__pdf-mock/**", (route) =>
+      route.fulfill({ headers: { "content-type": "application/pdf", "content-disposition": 'attachment; filename="book.pdf"' }, body: "%PDF-1.7\n" }),
+    );
+    await open(page, "?paid=1");
+    await expect(page.getByTestId("editor-tool-upgrade")).toHaveCount(0);
+    const tool = page.getByTestId("editor-tool-pdf");
+    await expect(tool).toBeVisible();
+    await tool.click();
+    await expect(page.getByTestId("pdf-panel")).toBeVisible();
+    const btn = page.getByTestId("pdf-download");
+    expect((await btn.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await expectNoOverflow(page, "pdf sheet");
+    const download = page.waitForEvent("download");
+    await btn.click();
+    await expect(page.getByTestId("pdf-status")).toHaveAttribute("data-state", "ready", { timeout: 15_000 });
+    expect((await download).suggestedFilename()).toBe("book.pdf");
+    await expect(page.getByTestId("pdf-ready-detail")).toHaveText("1.1 MB · 7 pages");
+    await expect(page.getByTestId("editor-shell")).toBeVisible();
+    await expectNoOverflow(page, "pdf ready");
+    expect(calls).toEqual(["POST", "GET"]);
+    // Free book: no PDF tool.
+    await open(page);
+    await expect(page.getByTestId("editor-tool-pdf")).toHaveCount(0);
+  });
+
   test("?upgrade=cancelled: floating 'Payment cancelled' notice, param removed, dismissible", async ({ page }) => {
     await page.goto("/dev-editor?upgrade=cancelled");
     await expect(page.getByTestId("editor-shell")).toBeVisible();

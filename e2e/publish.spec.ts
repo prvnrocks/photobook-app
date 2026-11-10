@@ -210,3 +210,89 @@ test("signed out: /books/<uuid>/publish redirects to login", async ({ page }) =>
   await expect(page).toHaveURL(/\/login(\?|$)/);
   expect(decodeURIComponent(page.url())).toContain(`/books/${id}/publish`);
 });
+
+// M8 T8: "Download PDF" on paid books. The PDF API is route-mocked (202 → polling → ready); the
+// "signed URL" is a same-origin path answered as an attachment, so Chromium downloads it.
+const PDF_MOCK_URL = "/__pdf-mock/sara-and-omar.pdf";
+
+async function mockPdfApi(page: Page, gets: Array<Record<string, unknown>>, post: { status: number; body: Record<string, unknown> } = { status: 202, body: { status: "queued", exportId: "e1" } }) {
+  const calls: string[] = [];
+  await page.route("**/api/books/*/pdf**", async (route) => {
+    const req = route.request();
+    calls.push(`${req.method()} ${new URL(req.url()).search}`);
+    if (req.method() === "POST") return route.fulfill({ status: post.status, json: post.body });
+    const next = gets.shift() ?? { status: "rendering" };
+    return route.fulfill({ status: 200, json: next });
+  });
+  await page.route("**/__pdf-mock/**", (route) =>
+    route.fulfill({
+      status: 200,
+      headers: { "content-type": "application/pdf", "content-disposition": 'attachment; filename="sara-and-omar.pdf"' },
+      body: "%PDF-1.7\n%%EOF\n",
+    }),
+  );
+  return calls;
+}
+
+const READY_BODY = { status: "ready", exportId: "e1", url: PDF_MOCK_URL, filename: "sara-and-omar.pdf", bytes: 2_516_582, pageCount: 41 };
+
+test("PDF (paid): Download PDF → preparing → polls → ready downloads + 'Download again'; fits 375 px", async ({ page }) => {
+  const calls = await mockPdfApi(page, [{ status: "queued" }, { status: "rendering" }, READY_BODY]);
+  for (const s of ["draft-paid", "live-paid"]) {
+    await open(page, s);
+    await expect(page.getByTestId("publish-pdf")).toBeVisible();
+    await noHorizontalOverflow(page);
+  }
+  const btn = page.getByTestId("pdf-download");
+  await expect(btn).toHaveText("Download PDF");
+  const box = (await btn.boundingBox())!;
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  expect(box.x + box.width).toBeLessThanOrEqual(VIEWPORT.width);
+
+  const download = page.waitForEvent("download");
+  await btn.click();
+  const status = page.getByTestId("pdf-status");
+  await expect(status).toHaveAttribute("data-state", /starting|preparing/);
+  await expect(status).toContainText("Preparing your PDF… this can take up to a minute");
+  await expect(btn).toBeDisabled();
+  await noHorizontalOverflow(page);
+
+  await expect(status).toHaveAttribute("data-state", "ready", { timeout: 15_000 });
+  expect((await download).suggestedFilename()).toBe("sara-and-omar.pdf");
+  await expect(status).toContainText("Your PDF is ready");
+  await expect(page.getByTestId("pdf-ready-detail")).toHaveText("2.4 MB · 41 pages");
+  const again = page.getByTestId("pdf-download-again");
+  await expect(again).toHaveAttribute("href", PDF_MOCK_URL);
+  expect((await again.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await expect(page).toHaveURL(/\/dev-publish\?state=live-paid/); // the page stays
+  await noHorizontalOverflow(page);
+  expect(calls).toEqual(["POST ", "GET ?exportId=e1", "GET ?exportId=e1", "GET ?exportId=e1"]);
+});
+
+test("PDF (paid): failed job and daily cap show copy and allow a retry", async ({ page }) => {
+  await mockPdfApi(page, [{ status: "failed", error: "render_timeout" }]);
+  await open(page, "draft-paid");
+  await page.getByTestId("pdf-download").click();
+  const status = page.getByTestId("pdf-status");
+  await expect(status).toHaveAttribute("data-state", "error", { timeout: 10_000 });
+  await expect(status).toContainText("We couldn't make your PDF — try again");
+  await expect(page.getByTestId("pdf-download")).toHaveText("Try again");
+  await expect(page.getByTestId("pdf-download")).toBeEnabled();
+  await noHorizontalOverflow(page);
+
+  await page.unrouteAll({ behavior: "wait" });
+  await mockPdfApi(page, [], { status: 429, body: { error: "daily_cap" } });
+  await page.getByTestId("pdf-download").click();
+  await expect(status).toHaveAttribute("data-code", "daily_cap");
+  await expect(status).toContainText("You've made a lot of PDFs today — try again tomorrow");
+});
+
+test("PDF (free): no download button — upgrade only", async ({ page }) => {
+  for (const s of ["draft", "live", "expired"]) {
+    await open(page, s);
+    await expect(page.getByTestId("pdf-download")).toHaveCount(0);
+    await expect(page.getByTestId("publish-pdf")).toHaveCount(0);
+  }
+  await open(page, "draft");
+  await expectUpgradeState(page, "publish-upgrade");
+});

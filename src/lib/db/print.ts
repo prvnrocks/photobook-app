@@ -46,3 +46,42 @@ export async function listPrintPhotoDims(bookId: string, ids: readonly string[])
   }
   return out;
 }
+
+export interface PrintPhotoSourceRow {
+  id: string;
+  width: number | null;
+  height: number | null;
+  /** {user}/{book}/{photo}-original.{ext} — server only, never logged or returned to clients. */
+  original_path: string;
+}
+
+/**
+ * Renderer input for the PDF job (M8 T7): size + original path of the book's ready photos among
+ * `ids`. Admin client, so it filters by book AND owner (the export row's user_id) itself.
+ */
+export async function listPrintPhotoSources(
+  bookId: string,
+  userId: string,
+  ids: readonly string[],
+): Promise<PrintPhotoSourceRow[]> {
+  if (!isUuid(bookId) || !isUuid(userId)) return [];
+  const wanted = [...new Set(ids.filter(isUuid).map((id) => id.toLowerCase()))];
+  if (wanted.length === 0) return [];
+  const admin = createAdminClient();
+  const out: PrintPhotoSourceRow[] = [];
+  for (let i = 0; i < wanted.length; i += ID_CHUNK) {
+    const { data, error } = await admin
+      .from("photos")
+      .select("id, width, height, original_path")
+      .eq("book_id", bookId)
+      .eq("user_id", userId)
+      .eq("upload_state", "ready")
+      .not("original_path", "is", null)
+      .in("id", wanted.slice(i, i + ID_CHUNK));
+    if (error) throw new PrintQueryError("list photo sources", error.code);
+    for (const r of (data ?? []) as { id: string; width: number | null; height: number | null; original_path: string | null }[]) {
+      if (r.original_path) out.push({ id: r.id, width: r.width, height: r.height, original_path: r.original_path });
+    }
+  }
+  return out;
+}

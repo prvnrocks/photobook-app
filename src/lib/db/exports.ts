@@ -323,3 +323,76 @@ export async function deleteExportRows(bookId: string, exportIds: readonly strin
   if (error) throw new ExportsQueryError("delete", error.code);
   return (data ?? []).length;
 }
+
+// ---------------------------------------------------------------------------
+// Storage (bucket `exports`, private, 50 MB, application/pdf — migration 0200). Admin client:
+// clients may only read their own folder. Callers pass paths built by exportObjectPath from ids
+// they verified; errors carry the storage status code only (never the path).
+
+export const EXPORTS_BUCKET = "exports";
+/** Bucket file_size_limit (0200): 52428800 bytes. */
+export const EXPORT_MAX_BYTES = 50 * 1024 * 1024;
+const REMOVE_BATCH = 100;
+
+export class ExportStorageError extends Error {
+  readonly code: string;
+  constructor(op: string, code: string | undefined) {
+    const safe = (code ?? "unknown").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) || "unknown";
+    super(`exports storage: ${op} failed (${safe})`);
+    this.name = "ExportStorageError";
+    this.code = safe;
+  }
+}
+
+function storageCode(error: unknown): string {
+  if (error && typeof error === "object" && "statusCode" in error && typeof error.statusCode === "string") {
+    return error.statusCode;
+  }
+  return "storage";
+}
+
+function isNotFound(error: unknown): boolean {
+  if (storageCode(error) === "404") return true;
+  const msg = error && typeof error === "object" && "message" in error ? String(error.message) : "";
+  return /not[ _]?found/i.test(msg);
+}
+
+/**
+ * Uploads a finished PDF (upsert false). A leftover object at the same path (an earlier attempt
+ * of the same job that died between upload and finish) is removed and the upload retried once.
+ */
+export async function uploadExportPdf(path: string, bytes: Uint8Array): Promise<void> {
+  const bucket = createAdminClient().storage.from(EXPORTS_BUCKET);
+  const opts = { contentType: "application/pdf", upsert: false, cacheControl: "0" };
+  let { error } = await bucket.upload(path, bytes, opts);
+  if (error && storageCode(error) === "409") {
+    const removed = await bucket.remove([path]);
+    if (removed.error) throw new ExportStorageError("upload", storageCode(removed.error));
+    ({ error } = await bucket.upload(path, bytes, opts));
+  }
+  if (error) throw new ExportStorageError("upload", storageCode(error));
+}
+
+/** Removes objects from the exports bucket (missing objects are not an error). */
+export async function removeExportObjects(paths: readonly string[]): Promise<void> {
+  const bucket = createAdminClient().storage.from(EXPORTS_BUCKET);
+  for (let i = 0; i < paths.length; i += REMOVE_BATCH) {
+    const { error } = await bucket.remove(paths.slice(i, i + REMOVE_BATCH));
+    if (error) throw new ExportStorageError("remove", storageCode(error));
+  }
+}
+
+/**
+ * Signed download URL (Content-Disposition attachment; filename=`filename`). Signing checks the
+ * object exists: returns null when it is missing, throws on other storage errors.
+ */
+export async function signExportUrl(path: string, ttlSeconds: number, filename: string): Promise<string | null> {
+  const { data, error } = await createAdminClient()
+    .storage.from(EXPORTS_BUCKET)
+    .createSignedUrl(path, Math.floor(ttlSeconds), { download: filename });
+  if (error) {
+    if (isNotFound(error)) return null;
+    throw new ExportStorageError("sign", storageCode(error));
+  }
+  return data?.signedUrl ?? null;
+}

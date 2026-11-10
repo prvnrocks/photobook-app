@@ -323,7 +323,7 @@ describe("print image boundaries (M8 T4)", () => {
 // --- M8 T6 additions ---------------------------------------------------------
 
 describe("PDF renderer boundaries (M8 T6)", () => {
-  it.each(["src/lib/pdf/browser.ts", "src/lib/pdf/render-pdf.ts"])('%s starts with import "server-only"', (file) => {
+  it.each(["src/lib/pdf/browser.ts", "src/lib/pdf/render-pdf.ts", "src/lib/pdf/job.ts"])('%s starts with import "server-only"', (file) => {
     const first = readFileSync(join(ROOT, file), "utf8")
       .split(/\r?\n/)
       .find((l) => l.trim() !== "");
