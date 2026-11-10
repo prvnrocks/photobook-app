@@ -108,3 +108,7 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - Decisions: stay on Vercel Hobby + Supabase for now (D-053); AWS Lambda PDF worker is the fallback if Hobby limits bite.
 - DEPLOY (NEEDS-HUMAN): merge → confirm Fluid compute ON + PDF function max duration 300 s in Vercel → set function region near Supabase → phone test: paid 40-page book PDF on production (check timing log `[pdf-export] timing`). Pro before real payments (Hobby non-commercial).
 - Backlog: orphan export PDFs on book/user delete (M9 cron: exports bucket {user}/{book}/*; delete superseded/failed rows after 30 d); emoji in captions render as boxes in PDF; 100-page noisy books may hit 50 MB even after fallback. NEXT: deploy M8, then Milestone 9 (clean-up, polish, launch).
+
+## 2026-11-10 — Milestone 8 — deployed
+- main = 952b737 live; Vercel accepted vercel.json (fluid + maxDuration 300) on Hobby. Prod probes OK: status route 401 anon, POST /pdf 403 cross-origin / 401 anon, /print 404 (no/garbage token) with noindex + no-store, robots Disallow /print/, /dev-print 404.
+- LEFT (NEEDS-HUMAN): phone test of a real paid 40-page PDF on production (timing on Hobby 1 vCPU; read `[pdf-export] timing` in Vercel logs), function region near Supabase, Pro before real payments; M7 real Stripe test payment; M6 phone check; VAT. NEXT: Milestone 9.

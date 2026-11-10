@@ -161,7 +161,7 @@ planted bad caption in tests; a second book reflects the user's earlier tone/len
 - [x] `/api/books/[id]/pdf` (paid only): Puppeteer + `@sparticuz/chromium` → `exports` bucket → signed URL
 - [x] Check Arabic quotes shape correctly; if Vercel limits hit → move this endpoint to a small worker (Railway/Fly.io)
 **Done when:** a paid 40-page book downloads as a crisp PDF in < 60 s.
-> M8 (2026-11-10): built + reviewed (APPROVED). Live vs prod DB: 40-page paid book → 41-page PDF in 15.8 s locally (Type0 fonts, 300 dpi, 3 mm bleed, Arabic shaped, no EXIF). Migrations 1400 + 1500 applied (rls_check 146). NOT deployed. On Vercel Hobby (Fluid, 300 s, 2 GB/1 vCPU) the timing is NEEDS-HUMAN; Pro before real payments.
+> M8 (2026-11-10): built + reviewed (APPROVED). Live vs prod DB: 40-page paid book → 41-page PDF in 15.8 s locally (Type0 fonts, 300 dpi, 3 mm bleed, Arabic shaped, no EXIF). Migrations 1400 + 1500 applied (rls_check 146). Deployed 2026-11-10 (main 952b737). On Vercel Hobby (Fluid, 300 s, 2 GB/1 vCPU) the timing is NEEDS-HUMAN; Pro before real payments.
 
 ## Milestone 9 — Clean-up, polish, launch (1–2 days)
 - [ ] Daily cron: delete unpaid books + photos 30 days after publish; abandoned drafts after 45 days; orphan uploads after 7 days
