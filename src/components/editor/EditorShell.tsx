@@ -16,8 +16,10 @@ import { canRedo, canUndo } from "@/lib/editor/store";
 import { httpEditorTransport, type EditorTransport } from "@/lib/editor/transport";
 import type { FinishResult } from "@/lib/editor/done";
 import type { EditorShellData } from "@/lib/editor/types";
+import { hasUnpublishedChanges } from "@/lib/publish/ui";
 import { EditorContext, type EditorContextValue } from "./editor-context";
 import { EditorDoneButton } from "./EditorDoneButton";
+import { EditorPublishChip } from "./EditorPublishChip";
 import { EditorToastHost } from "./EditorToast";
 import { EditorPanelHost, EditorToolbar } from "./EditorToolbar";
 import { PageCarousel } from "./PageCarousel";
@@ -141,6 +143,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
   }, [actions, activeTool]);
 
   const title = state.doc.cover.title || data.book.title || "Untitled book";
+  const unpublished = hasUnpublishedChanges(data.publishedRev, autosave.rev);
 
   return (
     <EditorContext.Provider value={ctx}>
@@ -158,7 +161,12 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
             <h1 dir="auto" className="truncate text-sm font-semibold" data-testid="editor-title">
               {title}
             </h1>
-            <SaveStatus status={autosave.status} />
+            {/* 375 px: no room for both — the chip replaces "Saved ✓" only while everything is saved. */}
+            {unpublished && (autosave.status.kind === "saved" || autosave.status.kind === "idle") ? (
+              <EditorPublishChip bookId={data.book.id} settle={autosave.settle} />
+            ) : (
+              <SaveStatus status={autosave.status} />
+            )}
           </div>
           <button
             type="button"

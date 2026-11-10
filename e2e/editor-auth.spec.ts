@@ -332,7 +332,7 @@ test("c. after 0900: save 200 + rev bump + persisted; 409 stale; 422 page_limit;
   await expect(page.getByTestId("book-card")).toHaveAttribute("href", `/books/${bookId}/edit`);
 });
 
-test("d. after 0900: edit the cover title in the UI → Saved ✓ → DB + Done → dashboard", async () => {
+test("d. after 0900: edit the cover title in the UI → Saved ✓ → DB + Done → publish screen", async () => {
   test.skip(docRevSupported !== true, "migration 0900 not applied yet");
   await page.goto(`/books/${bookId}/edit`);
   await expect(page.getByTestId("editor-shell")).toBeVisible();
@@ -346,5 +346,6 @@ test("d. after 0900: edit the cover title in the UI → Saved ✓ → DB + Done 
   await expect.poll(async () => (await bookRow()).title, { timeout: 10_000 }).toBe("عطلتنا");
   await page.getByTestId("editor-panel-close").click();
   await page.getByTestId("editor-done").click();
-  await expect(page).toHaveURL(/\/dashboard$/, { timeout: 30_000 });
+  // M6 (D-040): Done opens the publish step.
+  await expect(page).toHaveURL(new RegExp(`/books/${bookId}/publish$`), { timeout: 30_000 });
 });

@@ -75,6 +75,11 @@ export type EditorData = {
   docError: "empty" | "invalid" | null;
   /** books.doc_rev; null = migration 0900 not applied → editor must be read-only. */
   docRev: number | null;
+  /**
+   * books.published_rev: doc_rev of the live snapshot (D-039), null = not published (or
+   * migration 1000 not applied yet). Header "Publish changes" when the saved rev is higher.
+   */
+  publishedRev: number | null;
   canSave: boolean;
   aiMode: AiMode;
   /** Successful (ai_status 'ok') rewrite runs of this book (D-037 (6)). */
@@ -175,6 +180,23 @@ async function activeBuildRun(
   return data?.id ?? null;
 }
 
+/**
+ * books.published_rev (migration 1000; published_doc and published_rev are set together, so
+ * non-null = published). Tolerates the column not existing yet (deploy before migration) → null.
+ */
+async function loadPublishedRev(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  bookId: string,
+): Promise<number | null> {
+  const { data, error } = await supabase.from("books").select("published_rev").eq("id", bookId).maybeSingle();
+  if (error) {
+    if ((error.code === "42703" || error.code === "PGRST204") && error.message?.includes("published_rev")) return null;
+    throw new EditorQueryError("load publish state", error.code);
+  }
+  const rev = (data as { published_rev?: unknown } | null)?.published_rev;
+  return typeof rev === "number" && Number.isSafeInteger(rev) ? rev : null;
+}
+
 function isEmptyObject(v: unknown): boolean {
   return !!v && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 0;
 }
@@ -189,10 +211,11 @@ export async function getEditorData(bookId: string): Promise<EditorData | null> 
   if (!book) return null;
 
   const supabase = await createClient();
-  const [rows, rewritesUsed, activeBuildRunId] = await Promise.all([
+  const [rows, rewritesUsed, activeBuildRunId, publishedRev] = await Promise.all([
     listReadyPhotoRows(supabase, book.id),
     getRewritesUsed(book.id, supabase),
     activeBuildRun(supabase, book.id),
+    loadPublishedRev(supabase, book.id),
   ]);
   const signed = await signRows(supabase, rows);
 
@@ -229,6 +252,7 @@ export async function getEditorData(bookId: string): Promise<EditorData | null> 
     doc,
     docError,
     docRev: book.doc_rev,
+    publishedRev,
     canSave: book.doc_rev !== null,
     aiMode: resolveAiMode(),
     rewritesUsed,

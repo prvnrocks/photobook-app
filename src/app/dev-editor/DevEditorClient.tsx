@@ -54,12 +54,17 @@ export function DevEditorClient({
   mode,
   ai = "off",
   pages = null,
+  published = false,
 }: {
   mode: DevSaveMode;
   ai?: DevAiMode;
   pages?: number | null;
+  published?: boolean;
 }) {
-  const [data] = useState(() => withDevPagesData(devEditorData(mode, ai), pages));
+  const [data] = useState(() => {
+    const d = withDevPagesData(devEditorData(mode, ai), pages);
+    return published ? { ...d, publishedRev: d.docRev } : d;
+  });
   const [transport] = useState(() => devTransport(mode));
   return <EditorShell data={data} transport={transport} tools={TOOLS} backHref="/dev-editor" />;
 }

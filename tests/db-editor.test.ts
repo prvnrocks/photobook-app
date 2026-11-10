@@ -4,7 +4,7 @@ vi.mock("server-only", () => ({}));
 
 // M5 Task 4: getEditorData / getPhotoUrls (src/lib/db/editor.ts).
 
-type Result = { data: unknown; error: { code?: string } | null; count?: number | null };
+type Result = { data: unknown; error: { code?: string; message?: string } | null; count?: number | null };
 
 const fake = vi.hoisted(() => {
   const state = {
@@ -130,6 +130,17 @@ function photosChain() {
 }
 
 describe("getEditorData", () => {
+  it("publishedRev: books.published_rev, null when unpublished or before migration 1000 (M6 T8)", async () => {
+    queue("books", { data: { published_rev: 3 }, error: null });
+    expect((await getEditorData(B))!.publishedRev).toBe(3);
+    queue("books", { data: { published_rev: null }, error: null });
+    expect((await getEditorData(B))!.publishedRev).toBeNull();
+    queue("books", { data: null, error: { code: "42703", message: "column books.published_rev does not exist" } });
+    expect((await getEditorData(B))!.publishedRev).toBeNull();
+    queue("books", { data: null, error: { code: "42501", message: "denied" } });
+    await expect(getEditorData(B)).rejects.toThrow();
+  });
+
   it("returns null for a malformed id, a missing / foreign book (RLS) — without other queries", async () => {
     expect(await getEditorData("nope")).toBeNull();
     fake.state.book = null;
