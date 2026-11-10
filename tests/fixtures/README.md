@@ -27,3 +27,12 @@ Synthetic images for dHash / blur tests are generated in code (`tests/helpers/sy
 | `photo-orient6.jpg` | 400x300 stored pixels (red band on the stored top edge), EXIF copied from `exif-gps.jpg` (Orientation 6, fake date/GPS) → displays 300x400, ~13 KB |
 | `photo-orient6.heic` | `sips -s format heic` of the above; has EXIF Orientation 6 **and** an `irot` box (like iPhone files), ~10 KB |
 | `screenshot.png` | 390x844 flat UI-like PNG, no EXIF, ~7 KB |
+
+## OG image fixtures
+
+`node tests/fixtures/make-og-cover.mjs` (macOS, `sips`) for `tests/viewer-og.test.tsx`:
+
+| File | Contents |
+| --- | --- |
+| `og-cover.jpg` | 1600x1067 synthetic "photo" (gradient, soft blobs, fine texture + grain), JPEG q80, ~350 KB — web-copy sized; worst case for the PNG size budget |
+| `og-cover-smooth.jpg` | Same scene without texture/grain, ~85 KB — fits at full 1200x630 |
