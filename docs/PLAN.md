@@ -170,7 +170,7 @@ planted bad caption in tests; a second book reflects the user's earlier tone/len
 - [x] Legal pages (mention AI processing), analytics (PostHog), errors (Sentry), AI spend dashboard (sum of `agent_runs.total_cost_usd` per day)
 - [x] Playwright smoke: login → upload → AI build → edit caption → publish → view → pay (test mode)
 - [ ] Stripe live mode when licence is ready → 🚀 launch
-> M9 (2026-11-10): built + reviewed (APPROVED); launch smoke 7/7 live. Landing page built (pricing, FAQ, how it works) — demo video + 3 example books wait for the seed/record scripts (NEEDS-HUMAN photos). Migrations 1600–1800 in prod. NOT deployed. Launch checklist: docs/LAUNCH.md; operations: docs/RUNBOOK.md.
+> M9 (2026-11-10): built + reviewed (APPROVED); launch smoke 7/7 live. Landing page built (pricing, FAQ, how it works) — demo video + 3 example books wait for the seed/record scripts (NEEDS-HUMAN photos). Migrations 1600–1800 in prod. Deployed 2026-11-10 (main e7cf172); cron inactive until CRON_SECRET is set. Launch checklist: docs/LAUNCH.md; operations: docs/RUNBOOK.md.
 
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
