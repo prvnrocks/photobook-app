@@ -9,6 +9,8 @@
 //     emails -> [email], UUIDs -> :id, JWTs and long base64url runs -> [token], then truncated
 //   - extra / tags / custom contexts / breadcrumb + span data: keys that look like user text
 //     (caption, title, text, doc, prompt, output, name, ...) are dropped, the rest scrubbed
+//   - Postgres error text: everything after "Failing row contains", "Key (" or "DETAIL:" is cut
+//     (those carry row values — titles, captions, emails — review N1)
 //   - console breadcrumb arguments, stack-frame local variables and response contexts are dropped
 
 import type { Breadcrumb, Event, Exception } from "@sentry/nextjs";
@@ -102,6 +104,20 @@ const JWT_RE = /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]*)?/g;
 const DOTTED_TOKEN_RE = /\b[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b/g;
 const LONG_TOKEN_RE = /(?<![A-Za-z0-9_+-])(?=[A-Za-z_+-]*\d)[A-Za-z0-9_+-]{24,}={0,2}/g;
 
+/** Postgres error fragments followed by row values; the rest of the string is replaced. */
+export const PG_ROW_VALUE_MARKERS = ["Failing row contains", "Key (", "DETAIL:"] as const;
+export const PG_REDACTED = "[redacted]";
+
+/** Cut a string right after the first Postgres row-value marker. Idempotent. */
+function cutPgRowValues(s: string): string {
+  let cut = -1;
+  for (const m of PG_ROW_VALUE_MARKERS) {
+    const i = s.indexOf(m);
+    if (i !== -1 && (cut === -1 || i + m.length < cut)) cut = i + m.length;
+  }
+  return cut === -1 ? s : `${s.slice(0, cut)} ${PG_REDACTED}`;
+}
+
 function stripUrlQuery(url: string): string {
   const cut = url.search(/[?#]/);
   return cut === -1 ? url : url.slice(0, cut);
@@ -109,7 +125,7 @@ function stripUrlQuery(url: string): string {
 
 /** Apply every string rule. Idempotent. */
 export function scrubString(input: string, max = MAX_STRING): string {
-  let s = input
+  let s = cutPgRowValues(input)
     .replace(ABSOLUTE_URL_RE, (u) => stripUrlQuery(u))
     .replace(RELATIVE_QUERY_RE, "$1")
     .replace(BOOK_SLUG_RE, "/b/:slug")

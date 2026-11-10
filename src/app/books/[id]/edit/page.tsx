@@ -6,6 +6,7 @@ import { EditorShell } from "@/components/editor/EditorShell";
 import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
 import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { touchWarnedDraft } from "@/lib/db/draft-activity";
 import { getEditorData } from "@/lib/db/editor";
 import { editorRedirect, toEditorShellData } from "@/lib/editor/page-data";
 import { isPaymentsEnabled } from "@/lib/stripe";
@@ -26,6 +27,8 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
 
   const data = await getEditorData(id);
   if (!data) notFound();
+  // Owner opened a warned draft: counts as activity (review S3). Never throws.
+  await touchWarnedDraft(data.book.id, user.id);
 
   const to = editorRedirect(data);
   if (to) redirect(to);

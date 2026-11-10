@@ -46,7 +46,11 @@
 --      status 'comped', comp_book service-role only, fulfil treats
 --      needs_review / comped orders of other sessions as money already taken,
 --      delete_book_guarded service-role only, refuses paid / order-protected
---      books).
+--      books)
+--      and 20261114001800_warning_confirm.sql (server-only warning claim
+--      columns, claim ≠ sent: confirm_warning / release_warning service-role
+--      only, a claim without confirm never makes a draft deletable and is
+--      reclaimable after 1 hour).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -55,7 +59,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 169 checks passed
+--       RLS OK — all 173 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -209,6 +213,10 @@ declare
   ph_sess     text;
   ph_sess2    text;
   dg_free     uuid;
+  wc_d        uuid;
+  wc_fresh    uuid;
+  wc_e        uuid;
+  wc_g        uuid;
   dg_paid     uuid;
   dg_pend     uuid;
   dg_comp     uuid;
@@ -2501,6 +2509,7 @@ begin
     'public.claim_expiry_warnings(integer, integer)',
     'public.claim_draft_warnings(integer, integer, integer)',
     'public.release_warning(uuid, text)',
+    'public.confirm_warning(uuid, text)',
     'public.admin_ai_spend_daily(integer)',
     'private.auth_user_email(uuid)'
   ] loop
@@ -2865,7 +2874,8 @@ begin
     raise exception 'RLS FAIL [cleanup draft warnings]: second claim returned %', cl_ids;
   end if;
   if (select count(*) from public.books where id in (cl_d_wstale, cl_d_unw)
-        and draft_warning_sent_at > now() - interval '1 minute'
+        and draft_warning_claimed_at > now() - interval '1 minute'
+        and (draft_warning_sent_at is null or draft_warning_sent_at < now() - interval '7000 days')
         and updated_at < now() - interval '7300 days') <> 2 then
     raise exception 'RLS FAIL [cleanup draft warnings]: claims not recorded, or they bumped updated_at';
   end if;
@@ -2937,8 +2947,9 @@ begin
   if cl_ids is distinct from array[cl_w1] then
     raise exception 'RLS FAIL [cleanup expiry warnings]: expected only the live free book, got %', cl_ids;
   end if;
-  if not exists (select 1 from public.books where id = cl_w1 and expiry_warning_sent_at is not null) then
-    raise exception 'RLS FAIL [cleanup expiry warnings]: claim not recorded';
+  if not exists (select 1 from public.books where id = cl_w1
+                   and expiry_warning_claimed_at is not null and expiry_warning_sent_at is null) then
+    raise exception 'RLS FAIL [cleanup expiry warnings]: claim not recorded (or marked sent at claim time)';
   end if;
   select count(*) into n from public.claim_expiry_warnings(1000, 3) as w where w.book_id = cl_w1;
   if n <> 0 then raise exception 'RLS FAIL [cleanup expiry warnings]: book claimed twice'; end if;
@@ -3363,6 +3374,146 @@ begin
      or not exists (select 1 from public.orders where id = dg_ord and book_id is null and status = 'expired') then
     raise exception 'RLS FAIL [delete guarded]: unprotected own book not deleted (%), others touched, or order row lost', v_txt;
   end if;
+  checks := checks + 1;
+
+  -- ===========================================================================
+  -- 1800 warning claim / confirm (review B1): claim ≠ sent
+  -- ===========================================================================
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+
+  -- confirm_warning is service-role only
+  if has_function_privilege('anon', 'public.confirm_warning(uuid, text)', 'execute')
+     or has_function_privilege('authenticated', 'public.confirm_warning(uuid, text)', 'execute')
+     or not has_function_privilege('service_role', 'public.confirm_warning(uuid, text)', 'execute') then
+    raise exception 'RLS FAIL [warning confirm grants]: confirm_warning EXECUTE wrong';
+  end if;
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  begin
+    perform public.confirm_warning(gen_random_uuid(), 'draft');
+    raise exception 'RLS FAIL [warning confirm grants]: authenticated could execute confirm_warning';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  checks := checks + 1;
+
+  -- claim columns are server-only; claim-only updates keep updated_at
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  insert into public.books (user_id, title, expiry_warning_claimed_at, draft_warning_claimed_at)
+  values (uid_a, 'RLS claim guard', now(), now())
+  returning id, expiry_warning_claimed_at, draft_warning_claimed_at into r;
+  wc_g := r.id;
+  if r.expiry_warning_claimed_at is not null or r.draft_warning_claimed_at is not null then
+    raise exception 'RLS FAIL [warning claim guard]: owner set claim columns on insert';
+  end if;
+  reset role;
+  update public.books set expiry_warning_claimed_at = now() - interval '1 day',
+                          draft_warning_claimed_at  = now() - interval '1 day'
+   where id = wc_g;
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  update public.books set expiry_warning_claimed_at = null, draft_warning_claimed_at = null where id = wc_g;
+  reset role;
+  if not exists (select 1 from public.books where id = wc_g
+                   and expiry_warning_claimed_at < now() - interval '23 hours'
+                   and draft_warning_claimed_at  < now() - interval '23 hours') then
+    raise exception 'RLS FAIL [warning claim guard]: owner changed claim columns';
+  end if;
+  insert into public.books (user_id, title, updated_at)
+  values (uid_a, 'RLS claim updated_at', now() - interval '50 days') returning id into wc_g;
+  set local role service_role;
+  update public.books set draft_warning_claimed_at = now(), expiry_warning_claimed_at = now() where id = wc_g;
+  update public.books set draft_warning_sent_at = draft_warning_claimed_at, draft_warning_claimed_at = null where id = wc_g;
+  update public.books set draft_warning_claimed_at = null, expiry_warning_claimed_at = null where id = wc_g;
+  reset role;
+  if not exists (select 1 from public.books where id = wc_g and updated_at < now() - interval '49 days') then
+    raise exception 'RLS FAIL [warning claim guard]: a claim-only update bumped updated_at';
+  end if;
+  checks := checks + 1;
+
+  -- crash simulation: a claim that was never confirmed never makes a draft deletable,
+  -- and is reclaimable only once it is older than 1 hour
+  insert into public.books (user_id, title, updated_at) values
+    (uid_a, 'RLS claim crashed', now() - interval '7310 days') returning id into wc_d;
+  insert into public.books (user_id, title, updated_at) values
+    (uid_a, 'RLS claim fresh', now() - interval '7310 days') returning id into wc_fresh;
+  insert into public.photos (user_id, book_id, fingerprint, created_at) values
+    (uid_a, wc_d, 'rls-claim-crashed-' || wc_d, now() - interval '7310 days'),
+    (uid_a, wc_fresh, 'rls-claim-fresh-' || wc_fresh, now() - interval '7310 days');
+  select array_agg(w.book_id order by w.book_id) into cl_ids
+    from public.claim_draft_warnings(1000, 7300, 7310) as w where w.book_id in (wc_d, wc_fresh);
+  if cl_ids is distinct from (select array_agg(x order by x) from unnest(array[wc_d, wc_fresh]) as x)
+     or exists (select 1 from public.books where id in (wc_d, wc_fresh) and draft_warning_sent_at is not null) then
+    raise exception 'RLS FAIL [warning crash]: claim did not claim both drafts, or it set sent_at (%)', cl_ids;
+  end if;
+  -- the run "dies": wc_d's claim is 8 days old, wc_fresh's 30 minutes
+  update public.books set draft_warning_claimed_at = now() - interval '8 days' where id = wc_d;
+  update public.books set draft_warning_claimed_at = now() - interval '30 minutes' where id = wc_fresh;
+  select array_agg(d.book_id) into cl_ids
+    from public.cleanup_delete_abandoned_drafts(1000, 7300, 7) as d where d.book_id in (wc_d, wc_fresh);
+  if cl_ids is not null or (select count(*) from public.books where id in (wc_d, wc_fresh)) <> 2 then
+    raise exception 'RLS FAIL [warning crash]: a claimed-but-unconfirmed draft was deleted (%)', cl_ids;
+  end if;
+  select array_agg(w.book_id) into cl_ids
+    from public.claim_draft_warnings(1000, 7300, 7310) as w where w.book_id in (wc_d, wc_fresh);
+  if cl_ids is distinct from array[wc_d]
+     or not exists (select 1 from public.books where id = wc_d and draft_warning_claimed_at > now() - interval '1 minute') then
+    raise exception 'RLS FAIL [warning crash]: stale claim not reclaimed / fresh claim reclaimed (%)', cl_ids;
+  end if;
+  checks := checks + 1;
+
+  -- confirm: sent_at := claimed_at, claim cleared, once; release clears only the claim
+  update public.books set draft_warning_claimed_at = now() - interval '8 days' where id = wc_d;
+  select draft_warning_claimed_at into cl_ts from public.books where id = wc_d;
+  set local role service_role;
+  if not public.confirm_warning(wc_d, 'draft') or public.confirm_warning(wc_d, 'draft') then
+    raise exception 'RLS FAIL [warning confirm]: confirm_warning result wrong';
+  end if;
+  reset role;
+  if not exists (select 1 from public.books where id = wc_d
+                   and draft_warning_sent_at = cl_ts and draft_warning_claimed_at is null
+                   and updated_at < now() - interval '7300 days') then
+    raise exception 'RLS FAIL [warning confirm]: confirm did not move the claim to sent_at (or bumped updated_at)';
+  end if;
+  select array_agg(d.book_id) into cl_ids
+    from public.cleanup_delete_abandoned_drafts(1000, 7300, 7) as d where d.book_id in (wc_d, wc_fresh);
+  if cl_ids is distinct from array[wc_d] then
+    raise exception 'RLS FAIL [warning confirm]: confirmed draft (sent ≥ notice days ago) not deletable (%)', cl_ids;
+  end if;
+  set local role service_role;
+  if not public.release_warning(wc_fresh, 'draft') or public.release_warning(wc_fresh, 'draft')
+     or public.confirm_warning(wc_fresh, 'draft') then
+    raise exception 'RLS FAIL [warning confirm]: release / confirm-after-release result wrong';
+  end if;
+  reset role;
+  if exists (select 1 from public.books where id = wc_fresh
+               and (draft_warning_claimed_at is not null or draft_warning_sent_at is not null)) then
+    raise exception 'RLS FAIL [warning confirm]: release left a claim or set sent_at';
+  end if;
+  -- expiry kind: claim → confirm
+  insert into public.books (user_id, title, published_at, expires_at) values
+    (uid_a, 'RLS claim expiry', now() - interval '28 days', now() + interval '1 day') returning id into wc_e;
+  select count(*) into n from public.claim_expiry_warnings(1000, 3) as w where w.book_id = wc_e;
+  set local role service_role;
+  if n <> 1 or not public.confirm_warning(wc_e, 'expiry') then
+    raise exception 'RLS FAIL [warning confirm]: expiry claim / confirm failed (%)', n;
+  end if;
+  reset role;
+  select count(*) into n from public.claim_expiry_warnings(1000, 3) as w where w.book_id = wc_e;
+  if n <> 0 or not exists (select 1 from public.books where id = wc_e
+                             and expiry_warning_sent_at is not null and expiry_warning_claimed_at is null) then
+    raise exception 'RLS FAIL [warning confirm]: confirmed expiry warning not sent / claimed again';
+  end if;
+  begin
+    perform public.confirm_warning(wc_e, 'bogus');
+    raise exception 'RLS FAIL [warning confirm]: unknown kind accepted';
+  exception when invalid_parameter_value then null;
+  end;
   checks := checks + 1;
 
   -- ---------------------------------------------------------------------------

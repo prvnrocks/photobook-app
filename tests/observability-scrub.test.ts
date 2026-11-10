@@ -22,6 +22,27 @@ function json(v: unknown) {
 }
 
 describe("scrubString", () => {
+  it("cuts Postgres row values after 'Failing row contains' (review N1)", () => {
+    const msg =
+      'new row for relation "books" violates check constraint "books_title_check" Failing row contains (abc, My secret trip to Sir Bani Yas, x@y.com).';
+    expect(scrubString(msg)).toBe(
+      'new row for relation "books" violates check constraint "books_title_check" Failing row contains [redacted]',
+    );
+  });
+
+  it("cuts after 'Key (' and 'DETAIL:' — whichever comes first", () => {
+    expect(scrubString('duplicate key value violates unique constraint "x" Key (title)=(Eid at Teta’s) already exists.')).toBe(
+      'duplicate key value violates unique constraint "x" Key ( [redacted]',
+    );
+    expect(scrubString("insert failed DETAIL: Key (email)=(a@b.co) is not present")).toBe("insert failed DETAIL: [redacted]");
+  });
+
+  it("the Postgres cut is idempotent and leaves other strings alone", () => {
+    const once = scrubString("boom Failing row contains (secret)");
+    expect(scrubString(once)).toBe(once);
+    expect(scrubString("Keyboard (Esc) pressed")).toBe("Keyboard (Esc) pressed");
+  });
+
   it("strips query strings from absolute signed URLs", () => {
     expect(scrubString(`failed to load ${SIGNED_URL} (403)`)).toBe(
       "failed to load https://abc.supabase.co/storage/v1/object/sign/photos/u/1.jpg (403)",

@@ -8,7 +8,8 @@ Conventions: `<domain>` = the production domain (e.g. `photobook.ae`), `<prod>` 
 `:user` = your Supabase user uuid. Vercel env changes only take effect after a **redeploy**.
 
 Order that matters (from the M6–M9 deploy notes): **database migrations before the M9 code** (1600 + 1700
-must be in production before the delete-book / delete-account code runs), **`BOOK_ACCESS_SECRET` before any
+must be in production before the delete-book / delete-account code runs; **1800 goes the other way: deploy the
+M9 review code first, then push 1800** — the new code also works without it), **`BOOK_ACCESS_SECRET` before any
 code that signs cookies/tokens**, **Vercel Pro before live Stripe keys** (D-053: Hobby is non-commercial).
 
 ---
@@ -158,11 +159,12 @@ Preview origin (e.g. the branch alias of a `staging` branch) that is also in the
 ## 4. Database
 
 - [ ] Run in **your own Terminal** (needs a TTY; CLI pinned to 2.x): `npx supabase link` to the prod project,
-      then `npx supabase db push`. All migrations through **`20261114001700_payments_hardening.sql`** must be
+      then `npx supabase db push`. All migrations through **`20261114001800_warning_confirm.sql`** must be
       applied — check with `npx supabase migration list --linked` (local and remote columns identical).
-      Apply **before** deploying the M9 code.
+      Apply 1600 + 1700 **before** deploying the M9 code; apply **1800 after** the code that calls
+      `confirm_warning` is live (old code + 1800 would re-send warnings daily — safe, but noisy).
 - [ ] Supabase → SQL Editor → paste the whole of `supabase/tests/rls_check.sql` → Run. Expected: an error panel
-      starting with **`RLS OK — all 169 checks passed`** (raised on purpose; it rolls everything back). Anything
+      starting with **`RLS OK — all 173 checks passed`** (raised on purpose; it rolls everything back). Anything
       else (`RLS FAIL [...]`, permission denied) is a blocker.
 - [ ] Verify `private.auth_user_email` works (the warning emails depend on it; needs `postgres` to read
       `auth.users`):

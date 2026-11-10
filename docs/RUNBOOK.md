@@ -87,6 +87,22 @@ Pages beyond 20 stay in the doc, but the editor and publish flow enforce the fre
 
 ---
 
+### 1.6 Stuck `pending` order (blocks "Delete account" / per-book delete; Checkout shows "already in progress")
+A `pending` order normally becomes `expired` / `paid` within 31 min via the webhook. If one is still pending
+hours later, the `checkout.session.expired` event was lost or failed.
+1. Find it: `select id, book_id, user_id, stripe_session_id, created_at from public.orders where status = 'pending' and created_at < now() - interval '2 hours';`
+2. Paste the `cs_…` into the Stripe Dashboard. **Only continue if Stripe shows the session as Expired** (no
+   payment). If it shows Complete / paid, don't touch the row: resend the event (Stripe → Webhooks → event →
+   Resend) and follow 1.2 if it lands in `needs_review`.
+3. Mark it expired:
+   ```sql
+   begin;
+   update public.orders
+      set status = 'expired', note = 'Manually expired: Stripe session expired, webhook missed'
+    where id = ':order' and status = 'pending';   -- expect UPDATE 1
+   commit;
+   ```
+
 ## 2. Comped books (D-061)
 
 ### 2.1 Comp a demo or goodwill book
@@ -142,6 +158,50 @@ orphans_exports, old_exports, unlock_attempts, stale_runs`.
   If `partial=1` shows up several days in a row, run the cron a few times by hand (it's safe; every sweep is
   idempotent).
 
+### 3.1 Pause ALL deletions (incident, bad deploy, suspected wrong rule)
+Remove `CRON_SECRET` from the Vercel Production env and redeploy. The route then answers **503** and logs
+`[cleanup] CRON_SECRET missing` — no sweep runs (no warnings, no deletions, no orphan sweep). Changing the
+value is **not** a pause: Vercel Cron always sends the current env value, so the next run is authorised again.
+To resume: set a new value (`openssl rand -base64 32`), redeploy. The backlog is picked up over the next runs.
+Per-book deletes and account deletes by users are not affected (they don't use the cron).
+
+### 3.2 Warning emails (`[email] warnings …`, before the `warnings` sweep line)
+`[email] warnings expiry_sent=N expiry_failed=N draft_sent=N draft_failed=N [deferred=N] [codes=…] [legacy=1] [release_fail=N] [partial=1]`
+- How it works (migration 1800): a claim sets `*_warning_claimed_at`; only a successful send + `confirm_warning`
+  sets `*_warning_sent_at`. Draft deletion requires `draft_warning_sent_at` (≥ 7 days old, after the last
+  activity), so a crashed run can never get a draft deleted without an email. Claims older than 1 hour are
+  taken again by the next run. Opening a warned draft (editor / review page) bumps `updated_at` and clears
+  `draft_warning_sent_at` — a fresh warning is needed before any deletion.
+- `deferred=N`: the warnings budget (100 s, and never later than 25 s before the cron deadline) ran out; those
+  claims were released and go out tomorrow.
+- `codes=confirm_<code>:N`: the email went out but the confirm failed. The book stays claimed and is re-sent by
+  a later run (same day: deduped by Resend's idempotency key; next day: a duplicate email, rare).
+- `legacy=1`: the database doesn't have 1800 yet (`confirm_warning` missing) — claim = sent, as in 1600.
+  Push 1800.
+- `codes=quota:N` / `rejected:N`: Resend daily quota / bad address or sender — check the Resend dashboard.
+- **Incident: "a draft was deleted / is about to be deleted but the owner says no email arrived"**
+  1. Pause deletions (3.1) if more books could be affected.
+  2. Look at the claim state:
+     ```sql
+     select id, updated_at, draft_warning_claimed_at, draft_warning_sent_at,
+            expiry_warning_claimed_at, expiry_warning_sent_at
+       from public.books where user_id = ':user' and published_at is null;
+     -- claimed but never confirmed (stuck > 1 h — should be 0 outside a cron run):
+     select count(*) from public.books
+      where (draft_warning_claimed_at < now() - interval '1 hour')
+         or (expiry_warning_claimed_at < now() - interval '1 hour');
+     ```
+     `draft_warning_sent_at` set ⇒ our side sent it (check Resend → Emails for delivery/bounce by date).
+     Only `claimed_at` set ⇒ never confirmed: it will be re-sent, the draft is safe.
+  3. To give a draft a fresh full notice period (e.g. the email bounced), clear its warning — this keeps the
+     idle clock but requires a new, confirmed warning (≥ 7 days) before deletion:
+     ```sql
+     begin;
+     update public.books set draft_warning_sent_at = null, draft_warning_claimed_at = null where id = ':book';
+     commit;
+     ```
+  4. A deleted draft can't be restored (rows and Storage are gone; Supabase PITR only if your plan has it).
+
 ## 4. PDF export failures (`[pdf-export]`)
 - `[pdf-export] failed <exportId> (<code>)`, codes from `src/lib/pdf/errors.ts`:
   - `chrome_unavailable`: Chromium didn't start. On Vercel, check `@sparticuz/chromium` and the memory setting. Locally, set `PDF_CHROME_PATH`.
@@ -189,8 +249,9 @@ Change the value in Vercel (Production + Preview), redeploy, then revoke the old
 | `STRIPE_SECRET_KEY` | Stripe → Developers → API keys → roll | open Checkout sessions keep working |
 | `STRIPE_WEBHOOK_SECRET` | Stripe → Webhooks → endpoint → Roll secret (old one stays valid for the overlap you choose) | while they differ, events fail with a 400 and Stripe retries them |
 | `ANTHROPIC_API_KEY` | Anthropic Console → new key → deploy → delete old | AI falls back to the rule-based album if the key is bad |
-| `CRON_SECRET` | any random value (`openssl rand -base64 32`) | the next cron run uses the new value |
-| `BOOK_ACCESS_SECRET` | `openssl rand -base64 32` | signs every viewer out of locked books; in-flight PDF tokens fail once |
+| `CRON_SECRET` | any random value (`openssl rand -base64 32`) | the next cron run uses the new value (removing it pauses the cron, see 3.1) |
+| `BOOK_ACCESS_SECRET` | `openssl rand -base64 32` | signs every viewer out of locked books (access cookies); in-flight PDF print tokens fail once; **every unsubscribe link in already-sent warning emails stops working** (the page shows "link invalid or expired" — users can still turn reminders off in Settings). Avoid rotating it in the days after a warning run unless it leaked. |
+| `RESEND_API_KEY` | Resend → API Keys → create (sending access, your domain) → deploy → delete the old key | none if the new key works; a bad key makes the warnings run log `codes=rejected:N` (nothing is marked sent; tomorrow retries). Supabase Auth SMTP uses its own key — rotate it under Supabase → Auth → SMTP separately |
 | `MAPBOX_TOKEN`, `SENTRY_*`, `VERCEL_AUTOMATION_BYPASS_SECRET` | the provider's dashboard | none |
 
 After rotating: send a test webhook (Stripe → Webhooks → Send test event; it should show 200), open a locked

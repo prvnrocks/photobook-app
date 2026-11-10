@@ -2285,8 +2285,7 @@ describe("migrations: Milestone 9 cleanup (1600, D-055 / D-056 / D-057 / D-059, 
     expect(ws(upd!.text)).toContain("using (id = (select auth.uid())) with check (id = (select auth.uid()))");
   });
 
-  it("protect_book_columns (latest = 1600) guards both warning columns; still INVOKER with current_user check", () => {
-    expect(latestFunction("private.protect_book_columns")!.body).toBe(fn("private.protect_book_columns")!.body);
+  it("protect_book_columns (1600; 1800 extends it) guards both warning columns; still INVOKER with current_user check", () => {
     const f = fn("private.protect_book_columns")!;
     expect(f.header).not.toMatch(/security\s+definer/);
     expect(f.header).toMatch(/set\s+search_path\s*=\s*''/);
@@ -2298,7 +2297,8 @@ describe("migrations: Milestone 9 cleanup (1600, D-055 / D-056 / D-057 / D-059, 
     expect(upd).toContain("new.expiry_warning_sent_at := old.expiry_warning_sent_at;");
     expect(upd).toContain("new.draft_warning_sent_at := old.draft_warning_sent_at;");
     // everything the 1000 guard froze is still frozen
-    const prev = ws(functions.filter((x) => x.name === "private.protect_book_columns").at(-2)!.body);
+    const all = functions.filter((x) => x.name === "private.protect_book_columns");
+    const prev = ws(all[all.findIndex((x) => x.body === f.body) - 1]!.body);
     for (const a of prev.match(/new\.\w+ := [^;]+;/g)!) expect(body, a).toContain(a);
     expect(flat).toContain("revoke all on function private.protect_book_columns() from public, anon, authenticated;");
   });
@@ -2481,10 +2481,9 @@ describe("migrations: Milestone 9 payments hardening (1700, D-045 / D-061)", () 
     [DEL]: "(uuid, uuid)",
   } as const;
 
-  it("exists right after 1600 and is the latest migration; only drops+re-adds the status check", () => {
+  it("exists right after 1600; only drops+re-adds the status check", () => {
     expect(m, `${name} missing`).toBeDefined();
     expect(files.indexOf(name)).toBe(files.indexOf("20261114001600_cleanup.sql") + 1);
-    expect(files.at(-1)).toBe(name);
     expect(matchesAll(/\bdrop\b/, sql)).toHaveLength(1);
     expect(flat).toContain("alter table public.orders drop constraint orders_status_check;");
     expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
@@ -2576,7 +2575,7 @@ describe("migrations: Milestone 9 payments hardening (1700, D-045 / D-061)", () 
     expect(setters).toEqual([COMP, FULFIL].sort());
   });
 
-  it("rls_check.sql covers 1700 and counts 169 checks", () => {
+  it("rls_check.sql covers 1700", () => {
     const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
     expect(rls).toContain(name);
     for (const tag of [
@@ -2590,7 +2589,7 @@ describe("migrations: Milestone 9 payments hardening (1700, D-045 / D-061)", () 
     ]) {
       expect(rls).toContain(`RLS FAIL [${tag}]`);
     }
-    expect(rls).toContain("RLS OK — all 169 checks passed");
+    // the total check count is pinned by the latest milestone suite (1800)
   });
 
   it("database.types.ts: orders note / comped_by, comp_book, delete_book_guarded (hand-edited)", () => {
@@ -2599,5 +2598,138 @@ describe("migrations: Milestone 9 payments hardening (1700, D-045 / D-061)", () 
     expect(types.match(/\bnote\??: string \| null/g)).toHaveLength(3);
     expect(types).toMatch(/comp_book: \{\s*Args: \{ p_admin: string; p_book: string; p_reason: string \}\s*Returns: string/);
     expect(types).toMatch(/delete_book_guarded: \{\s*Args: \{ p_book: string; p_user: string \}\s*Returns: string/);
+  });
+});
+
+describe("migrations: Milestone 9 review B1 warning claim / confirm (1800, D-057 amended)", () => {
+  const name = "20261114001800_warning_confirm.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const ws = (s: string) => s.replace(/\s+/g, " ");
+  const flat = ws(sql);
+  const fns = matchesAll(/create\s+(?:or\s+replace\s+)?function\s+([\w.]+)\s*\(([\s\S]*?)\bas\s+\$\$([\s\S]*?)\$\$/, sql).map(
+    (x) => ({ name: x[1], header: x[2], body: x[3] }),
+  );
+  const fn = (n: string) => fns.find((x) => x.name === n);
+  const SIG = {
+    "public.claim_expiry_warnings": "(integer, integer)",
+    "public.claim_draft_warnings": "(integer, integer, integer)",
+    "public.confirm_warning": "(uuid, text)",
+    "public.release_warning": "(uuid, text)",
+  } as const;
+  const STALE = "now() - interval '1 hour'";
+
+  it("exists right after 1700, is the latest migration, additive only", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files.indexOf(name)).toBe(files.indexOf("20261114001700_payments_hardening.sql") + 1);
+    expect(files.at(-1)).toBe(name);
+    expect(sql).not.toMatch(/\bdrop\b/);
+    expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
+    expect(sql).not.toMatch(/\bcreate\s+(policy|table|trigger)\b/);
+    expect(sql).not.toMatch(/\b(grant|revoke)\s+[a-z_\s,()]+\s+on\s+(?:table\s+)?(public|private)\./);
+    expect(sql).not.toMatch(/security\s+definer/);
+    expect(fns.map((f) => f.name).sort()).toEqual(
+      [...Object.keys(SIG), "private.protect_book_columns", "private.set_book_updated_at"].sort(),
+    );
+  });
+
+  it("adds the two claim columns", () => {
+    expect(flat).toContain(
+      "alter table public.books add column expiry_warning_claimed_at timestamptz, add column draft_warning_claimed_at timestamptz;",
+    );
+  });
+
+  it("protect_book_columns (latest = 1800) keeps every 1600 assignment and guards both claim columns", () => {
+    const f = fn("private.protect_book_columns")!;
+    expect(latestFunction("private.protect_book_columns")!.body).toBe(f.body);
+    expect(f.header).not.toMatch(/security\s+definer/);
+    expect(f.header).toMatch(/set\s+search_path\s*=\s*''/);
+    const body = ws(f.body);
+    expect(body).toContain("if current_user in ('postgres', 'service_role', 'supabase_admin') then return new; end if;");
+    const all = functions.filter((x) => x.name === "private.protect_book_columns");
+    const prev = ws(all.at(-2)!.body);
+    for (const a of prev.match(/new\.\w+ := [^;]+;/g)!) expect(body, a).toContain(a);
+    const [ins, upd] = body.split("elsif tg_op = 'update' then");
+    expect(ins).toContain("new.expiry_warning_claimed_at := null;");
+    expect(ins).toContain("new.draft_warning_claimed_at := null;");
+    expect(upd).toContain("new.expiry_warning_claimed_at := old.expiry_warning_claimed_at;");
+    expect(upd).toContain("new.draft_warning_claimed_at := old.draft_warning_claimed_at;");
+    expect(flat).toContain("revoke all on function private.protect_book_columns() from public, anon, authenticated;");
+  });
+
+  it("set_book_updated_at (latest = 1800) keeps updated_at on any warning-column-only update (4 columns)", () => {
+    const f = fn("private.set_book_updated_at")!;
+    expect(latestFunction("private.set_book_updated_at")!.body).toBe(f.body);
+    expect(f.header).toMatch(/security\s+invoker/);
+    const body = ws(f.body);
+    for (const c of ["expiry_warning_sent_at", "draft_warning_sent_at", "expiry_warning_claimed_at", "draft_warning_claimed_at"]) {
+      expect(body).toContain(`new.${c} is distinct from old.${c}`);
+    }
+    const arr = "array['expiry_warning_sent_at', 'draft_warning_sent_at', 'expiry_warning_claimed_at', 'draft_warning_claimed_at', 'updated_at']";
+    expect(body).toContain(`(to_jsonb(new) - ${arr}) = (to_jsonb(old) - ${arr})`);
+  });
+
+  it.each(Object.entries(SIG))("%s: latest, INVOKER, search_path '', service_role only", (n, sig) => {
+    const f = fn(n);
+    expect(f, n).toBeDefined();
+    expect(latestFunction(n)!.body).toBe(f!.body);
+    expect(f!.header).toMatch(/security\s+invoker/);
+    expect(f!.header).toMatch(/set\s+search_path\s*=\s*''/);
+    expect(flat).toContain(`revoke all on function ${n}${sig} from public, anon, authenticated;`);
+    expect(flat).toContain(`grant execute on function ${n}${sig} to service_role;`);
+    expect(ws(f!.body)).toContain("raise exception 'invalid_argument' using errcode = '22023'");
+  });
+
+  it("claims set claimed_at only (never sent_at) and treat claims older than 1 h as stale", () => {
+    const exp = ws(fn("public.claim_expiry_warnings")!.body);
+    const dr = ws(fn("public.claim_draft_warnings")!.body);
+    expect(exp).toContain("set expiry_warning_claimed_at = now() from c");
+    expect(dr).toContain("set draft_warning_claimed_at = now() from c");
+    for (const body of [exp, dr]) {
+      expect(body).not.toMatch(/set\s+\w*_sent_at\s*=/);
+      expect(body).toContain("limit p_limit for update of b skip locked");
+      expect(body).toContain("o.status in ('pending', 'paid', 'needs_review', 'disputed')");
+    }
+    expect(exp.match(new RegExp(esc(`(b.expiry_warning_claimed_at is null or b.expiry_warning_claimed_at < ${STALE})`), "g"))).toHaveLength(2);
+    expect(dr.match(new RegExp(esc(`(b.draft_warning_claimed_at is null or b.draft_warning_claimed_at < ${STALE})`), "g"))).toHaveLength(2);
+    expect(exp).toContain("b.expiry_warning_sent_at is null");
+    expect(dr).toContain("(b.draft_warning_sent_at is null or b.draft_warning_sent_at < c.last_at)");
+  });
+
+  it("confirm moves the claim to sent_at; release clears only the claim", () => {
+    const conf = ws(fn("public.confirm_warning")!.body);
+    expect(conf).toContain(
+      "set expiry_warning_sent_at = b.expiry_warning_claimed_at, expiry_warning_claimed_at = null where b.id = p_book and b.expiry_warning_claimed_at is not null;",
+    );
+    expect(conf).toContain(
+      "set draft_warning_sent_at = b.draft_warning_claimed_at, draft_warning_claimed_at = null where b.id = p_book and b.draft_warning_claimed_at is not null;",
+    );
+    const rel = ws(fn("public.release_warning")!.body);
+    expect(rel).toContain("set expiry_warning_claimed_at = null where b.id = p_book and b.expiry_warning_claimed_at is not null;");
+    expect(rel).toContain("set draft_warning_claimed_at = null where b.id = p_book and b.draft_warning_claimed_at is not null;");
+    expect(rel).not.toContain("_sent_at");
+  });
+
+  it("draft deletion still requires a CONFIRMED warning (cleanup_delete_abandoned_drafts unchanged since 1600)", () => {
+    const f = latestFunction("public.cleanup_delete_abandoned_drafts")!;
+    expect(ws(f.body)).toContain(
+      "b.draft_warning_sent_at >= a.last_at and b.draft_warning_sent_at <= now() - make_interval(days => p_notice_days)",
+    );
+    expect(f.body).not.toContain("claimed_at");
+  });
+
+  it("rls_check.sql covers 1800 and counts 173 checks", () => {
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain(name);
+    for (const tag of ["warning confirm grants", "warning claim guard", "warning crash", "warning confirm"]) {
+      expect(rls).toContain(`RLS FAIL [${tag}]`);
+    }
+    expect(rls).toContain("RLS OK — all 173 checks passed");
+  });
+
+  it("database.types.ts: claim columns + confirm_warning (hand-edited)", () => {
+    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
+    expect(types).toMatch(/books: \{\s*Row: \{[\s\S]*?draft_warning_claimed_at: string \| null[\s\S]*?expiry_warning_claimed_at: string \| null[\s\S]*?\}\s*Insert:/);
+    expect(types).toMatch(/confirm_warning: \{\s*Args: \{ p_book: string; p_kind: string \}\s*Returns: boolean/);
   });
 });
