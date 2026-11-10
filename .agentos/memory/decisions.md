@@ -187,3 +187,16 @@ Format: `## D-NNN — title (YYYY-MM-DD)` → **Decision**, **Why**, **Alternati
 
 ## D-062 — Book doc v2, backgrounds, print rules (2026-11-10)
 **Decision:** Doc v2 adds format (A5 portrait | A5 landscape), style.background (colour | texture{id,tint?} | photo{id, veil 0.5–0.9, veilColor}), designStyle, page.background (+ source ai|user), page.side, ≤ 12 slots. parseBookDoc upgrades v1 on read; serializeDoc writes v1 whenever no v2 feature is used (existing books byte-identical; M9 rollback safe for them — v2 books (textures/photo backgrounds/landscape) show "invalid/unavailable" on M9 and must not be rolled back past). Text ink: catalogue swatches use declared ink, other hex keep M9 dark (colorInk). Print: CSS `filter` banned (rasterises photos + text); shadows via box-shadow; textures via background-repeat (embedded once). "Whole book" background clears page overrides (one undo step + toast). **Privacy:** a user may pick any ready photo of the book (kept or AI-dropped) as a background; it then becomes public on publish and appears in the PDF — acceptable because only an explicit user pick can do it; AI background suggestions (M10c) must use kept photos only.
+
+## D-063 — Book format + design style are fixed at creation (2026-11-11)
+Decision: format (A5 portrait/landscape) and design style are chosen on the New book form, stored in books.format / books.design_style (migration 1900, insert-only for users), and are the server's authority for doc.format / doc.style.designStyle; the editor shows them read-only. User-approved.
+Why: changing shape/style needs a full relayout; Restyle is deferred (user decision M10 planning).
+Alternatives rejected: editable in editor (relayout every page, risk of losing user edits).
+
+## D-064 — Spread reflow rule (2026-11-11)
+Decision: a spread starts on a left page (even index, after the cover). It moves and deletes as one unit (delete asks to confirm, removes 2 pages). If a single-page add/delete pushes a later spread onto a right page, it splits into its single-page twin layouts, keeping all photos and user captions, with an Undo toast. Never insert blank filler pages. User-approved.
+Why: keeps limits honest (spread = 2 pages), no empty pages, no blocked actions.
+Alternatives rejected: insert blank page (wastes 20/100 limit), block the action (frustrating).
+
+## D-065 — M10b style + font scope (2026-11-11)
+Decision: New book form offers Modern (default for every occasion via DEFAULT_STYLE_BY_OCCASION) and Classic; Geometric/Scrapbook arrive in M10c. New OFL fonts offered as caption font pairs (Cormorant+Amiri, Bebas Neue+Lalezar, Great Vibes+Aref Ruqaa); any new font name is a v2 feature. M10a fonts/textures signed off "as is" by the user.
