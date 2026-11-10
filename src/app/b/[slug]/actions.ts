@@ -1,17 +1,19 @@
 "use server";
 // Password unlock for /b/[slug] (D-040). Order: validate input → secret configured → resolve the
 // book → rate limit (try_book_unlock records the attempt BEFORE verifying) → scrypt verify →
-// set the per-book access cookie. A well-formed slug without a locked book still runs scrypt on a
-// dummy hash and answers wrong_password, so both paths look the same. Responses are codes only;
-// passwords and ips are never logged (the ip is only used as an HMAC input).
+// clear that attempt (only failures count, migration 1100) → set the per-book access cookie.
+// A well-formed slug without a live, unexpired, password-protected book answers wrong_password
+// immediately (no scrypt — nothing to protect, and it can't be used to burn CPU). Responses are
+// codes only; passwords and ips are never logged (the ip is only used as an HMAC input).
 
 import { cookies, headers } from "next/headers";
 import { z } from "zod";
-import { getUnlockTarget, recordUnlockAttempt } from "@/lib/db/public-books";
+import { clearUnlockAttempt, getUnlockTarget, recordUnlockAttempt } from "@/lib/db/public-books";
+import { errorCodeOf } from "@/lib/http/json";
 import { accessCookieName, accessCookieOptions, accessExpiry, getAccessSecret, signAccess } from "@/lib/publish/access-cookie";
 import { passwordFingerprint, verifyPassword } from "@/lib/publish/password";
 import { isValidSlug } from "@/lib/publish/slug";
-import { clientIpFromForwardedFor, getDummyPasswordHash, hashIp } from "@/lib/publish/unlock";
+import { clientIpFromForwardedFor, hashIp } from "@/lib/publish/unlock";
 import {
   UNLOCK_BOOK_LIMIT,
   UNLOCK_IP_LIMIT,
@@ -38,13 +40,10 @@ export async function unlockBookAction(slug: string, input: FormData | string): 
 
   try {
     const target = await getUnlockTarget(slug);
-    if (!target) {
-      await verifyPassword(password, await getDummyPasswordHash());
-      return { ok: false, error: "wrong_password" };
-    }
+    if (!target) return { ok: false, error: "wrong_password" };
 
-    const ip = clientIpFromForwardedFor((await headers()).get("x-forwarded-for"));
-    const allowed = await recordUnlockAttempt(target.bookId, hashIp(ip, secret), {
+    const ipHash = hashIp(clientIpFromForwardedFor((await headers()).get("x-forwarded-for")), secret);
+    const allowed = await recordUnlockAttempt(target.bookId, ipHash, {
       ipLimit: UNLOCK_IP_LIMIT,
       bookLimit: UNLOCK_BOOK_LIMIT,
       windowSeconds: UNLOCK_WINDOW_SECONDS,
@@ -52,6 +51,13 @@ export async function unlockBookAction(slug: string, input: FormData | string): 
     if (!allowed) return { ok: false, error: "rate_limited" };
 
     if (!(await verifyPassword(password, target.passwordHash))) return { ok: false, error: "wrong_password" };
+
+    // Best effort: a failed clear only means this success keeps counting as an attempt.
+    try {
+      await clearUnlockAttempt(target.bookId, ipHash);
+    } catch (err) {
+      console.error(`[unlock] clear attempt failed (${errorCodeOf(err)})`);
+    }
 
     const token = signAccess(
       { bookId: target.bookId, fingerprint: passwordFingerprint(target.passwordHash), exp: accessExpiry(Date.now()) },

@@ -5,8 +5,9 @@
 // window/DOM on import. Flip index 0 = cover, i >= 1 = doc.pages[i - 1].
 //
 // Engine quirks handled here (see FlipPage.tsx for the StrictMode ref one):
-// - react-pageflip never destroys its PageFlip: we strip its window listeners and stop its
-//   per-frame drawing when a book instance unmounts (spread change, route change).
+// - react-pageflip never destroys its PageFlip: when a book instance unmounts (spread change,
+//   route change) we strip its listeners, stop its per-frame drawing and drop the engine's
+//   references to pages/elements so the detached DOM can be GC'd (retirePageFlip).
 // - page-flip only re-measures on window "resize"; the stage is measured with ResizeObserver
 //   and we call update() after our own size change.
 // - Orientation is decided by us (viewport >= 768 px = spread), not by page-flip's minWidth
@@ -153,16 +154,93 @@ function WindowedPage({ index }: { index: number }) {
   );
 }
 
-/** Stop a PageFlip instance react-pageflip leaves running: window listeners + rAF drawing. */
+const noop = () => {};
+
+/** Null every own field of an engine object, except `keep` (best effort, never throws). */
+function dropFields(obj: unknown, keep: readonly string[] = []) {
+  if (!obj || typeof obj !== "object") return;
+  const rec = obj as Record<string, unknown>;
+  for (const k of Object.keys(rec)) {
+    if (keep.includes(k)) continue;
+    try {
+      const v = rec[k];
+      if (Array.isArray(v)) v.length = 0;
+      else if (v instanceof Map || v instanceof Set) v.clear();
+      rec[k] = null;
+    } catch {
+      // read-only / frozen field: skip
+    }
+  }
+}
+
+/**
+ * Retire a PageFlip instance react-pageflip leaves running (it has no destroy). page-flip 2.0.7
+ * internals (node_modules/page-flip/src): Render.start() runs `requestAnimationFrame(loop)`
+ * forever and the loop closure holds the Render, which holds the app (PageFlip) → UI (block,
+ * wrapper, distElement), PageCollection (Page objects → page elements → <img>s) and its own
+ * element / items / shadow divs. The loop can't be stopped, so we:
+ *   1. remove event callbacks + window/element listeners (UI.removeHandlers);
+ *   2. make every frame a no-op (own `drawFrame`, `animation = null`);
+ *   3. drop every reference the engine objects hold — PageCollection pages/spreads, Render page
+ *      refs + elements, UI elements + touch state (pending swipe timer sees touchPoint null),
+ *      Flip controller, PageFlip fields — so the rAF loop retains only an empty Render shell and
+ *      the detached DOM + images can be garbage-collected;
+ *   4. replace the public methods with inert own methods: a parent effect from the same commit
+ *      may still call update()/flip() on this instance before it learns it is gone.
+ */
 function retirePageFlip(pf: PageFlipInstance) {
+  let index = 0;
+  let count = 0;
+  try {
+    index = pf.getCurrentPageIndex();
+    count = pf.getPageCount();
+  } catch {
+    // keep zeros
+  }
   try {
     for (const ev of ["flip", "changeOrientation", "changeState", "init", "update"]) pf.off(ev);
-    (pf.getUI() as { removeHandlers?: () => void } | null)?.removeHandlers?.();
-    // page-flip's requestAnimationFrame loop never ends; make each remaining frame a no-op.
-    const render = pf.getRender() as { drawFrame?: () => void } | null;
-    if (render) render.drawFrame = () => {};
+    const ui = pf.getUI() as { removeHandlers?: () => void } | null;
+    ui?.removeHandlers?.();
+    const render = pf.getRender() as { drawFrame?: () => void; animation?: unknown } | null;
+    if (render) {
+      render.drawFrame = noop;
+      render.animation = null;
+    }
+    const engine = pf as unknown as {
+      getPageCollection?: () => unknown;
+      getFlipController?: () => unknown;
+    };
+    const pages = engine.getPageCollection?.();
+    const flip = engine.getFlipController?.();
+    dropFields(pages);
+    dropFields(flip);
+    dropFields(ui);
+    // Render.render() reads `animation` and writes `timer` every frame, then calls drawFrame.
+    dropFields(render, ["animation", "timer", "drawFrame"]);
+    dropFields(pf);
   } catch {
-    // Engine internals changed: leaking listeners is better than crashing an unmount.
+    // Engine internals changed: leaking memory is better than crashing an unmount.
+  }
+  try {
+    const inert: Partial<PageFlipInstance> & Record<string, unknown> = {
+      flipNext: noop,
+      flipPrev: noop,
+      flip: noop,
+      turnToPage: noop,
+      update: noop,
+      off: noop,
+      on: noop,
+      clear: noop,
+      getCurrentPageIndex: () => index,
+      getPageCount: () => count,
+      getUI: () => null,
+      getRender: () => null,
+      getPageCollection: () => null,
+      getFlipController: () => null,
+    };
+    Object.assign(pf, inert);
+  } catch {
+    // ignore
   }
 }
 

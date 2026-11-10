@@ -185,24 +185,26 @@ describe("listMyBooks publish fields (M6 T8)", () => {
     photos: [{ count: 4 }],
   };
 
-  it("selects published_rev (not published_doc) and maps it to `published`", async () => {
-    fake.state.results.push({ data: [{ ...row, published_rev: 2 }, { ...row, id: "x", published_rev: null }], error: null });
+  it("`published` = live snapshot exists (published_doc->version), not published_at/slug (M6 S1)", async () => {
+    fake.state.results.push({
+      // Unpublished books keep published_at + slug (D-039) — only `live` decides.
+      data: [{ ...row, live: 1 }, { ...row, id: "x", live: null }, { ...row, id: "y" }],
+      error: null,
+    });
     const books = await listMyBooks();
-    expect(books.map((b) => b.published)).toEqual([true, false]);
+    expect(books.map((b) => b.published)).toEqual([true, false, false]);
     expect(books[0]).toMatchObject({ slug: "trip-abc", expires_at: "2026-12-12T08:00:00Z", photo_count: 4, user_edited: true });
+    expect(books[1]).not.toHaveProperty("live");
     const cols = String(fake.state.chains[0].calls.find((c) => c[0] === "select")?.[1]);
-    expect(cols).toContain("published_rev");
-    expect(cols).not.toContain("published_doc");
+    expect(cols).toContain("live:published_doc->version");
+    // Never loads the snapshot itself.
+    expect(cols).not.toMatch(/published_doc(?!->)/);
   });
 
-  it("retries without published_rev before migration 1000", async () => {
-    fake.state.results.push(
-      { data: null, error: { code: "42703", message: "column books.published_rev does not exist" } },
-      { data: [row], error: null },
-    );
-    const books = await listMyBooks();
-    expect(books[0].published).toBe(false);
-    expect(fake.state.chains).toHaveLength(2);
+  it("no pre-1000 retry: a missing column throws after a single query", async () => {
+    fake.state.results.push({ data: null, error: { code: "42703", message: "column books.published_doc does not exist" } });
+    await expect(listMyBooks()).rejects.toBeInstanceOf(BooksQueryError);
+    expect(fake.state.chains).toHaveLength(1);
   });
 
   it("other errors throw", async () => {

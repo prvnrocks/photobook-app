@@ -76,8 +76,8 @@ export type EditorData = {
   /** books.doc_rev; null = migration 0900 not applied → editor must be read-only. */
   docRev: number | null;
   /**
-   * books.published_rev: doc_rev of the live snapshot (D-039), null = not published (or
-   * migration 1000 not applied yet). Header "Publish changes" when the saved rev is higher.
+   * books.published_rev: doc_rev of the live snapshot (D-039), null = no live snapshot (never
+   * published or unpublished). Header "Publish changes" when the saved rev is higher.
    */
   publishedRev: number | null;
   canSave: boolean;
@@ -181,19 +181,23 @@ async function activeBuildRun(
 }
 
 /**
- * books.published_rev (migration 1000; published_doc and published_rev are set together, so
- * non-null = published). Tolerates the column not existing yet (deploy before migration) → null.
+ * books.published_rev, but only while a live snapshot exists (D-039): unpublish clears
+ * published_doc and keeps published_rev, so `live:published_doc->version` decides. null = not
+ * published → no "Publish changes" chip.
  */
 async function loadPublishedRev(
   supabase: Awaited<ReturnType<typeof createClient>>,
   bookId: string,
 ): Promise<number | null> {
-  const { data, error } = await supabase.from("books").select("published_rev").eq("id", bookId).maybeSingle();
-  if (error) {
-    if ((error.code === "42703" || error.code === "PGRST204") && error.message?.includes("published_rev")) return null;
-    throw new EditorQueryError("load publish state", error.code);
-  }
-  const rev = (data as { published_rev?: unknown } | null)?.published_rev;
+  const { data, error } = await supabase
+    .from("books")
+    .select("published_rev, live:published_doc->version")
+    .eq("id", bookId)
+    .maybeSingle();
+  if (error) throw new EditorQueryError("load publish state", error.code);
+  const row = data as { published_rev?: unknown; live?: unknown } | null;
+  if (!row || row.live === null || row.live === undefined) return null;
+  const rev = row.published_rev;
   return typeof rev === "number" && Number.isSafeInteger(rev) ? rev : null;
 }
 

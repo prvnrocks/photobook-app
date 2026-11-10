@@ -15,6 +15,7 @@ import "server-only";
 // built field by field; the internal bookId is returned beside it, never inside it.
 //
 // Errors carry only the operation and a Postgres/Storage code.
+import { APP_NAME } from "@/lib/brand";
 import type { CaptionLang } from "@/lib/book/options";
 import type { RenderPhoto } from "@/lib/book/render";
 import { PHOTOS_BUCKET } from "@/lib/db/photos";
@@ -77,7 +78,9 @@ export type ViewerState = "ok" | "expired" | "locked" | "not_found" | "unavailab
 
 /**
  * Client-safe viewer payload. `title` is null unless state is "ok" (password / expired books show
- * no title, D-040). `doc` + `photos` are filled only for "ok". "unavailable" = live book whose
+ * no title, D-040); for "ok" it comes from the SNAPSHOT only (cover title, else APP_NAME) — never
+ * the live books.title (D-039). `captionLang` likewise comes from the snapshot when it has one
+ * (older snapshots fall back to the live column). `doc` + `photos` are filled only for "ok". "unavailable" = live book whose
  * snapshot fails the strict public schema (render an "unavailable" message, never the raw doc).
  */
 export type ViewerBook = {
@@ -101,6 +104,16 @@ export type ViewerBookResult = { bookId: string | null; book: ViewerBook };
 
 function captionLangOf(v: string | null | undefined): CaptionLang {
   return v === "ar" ? "ar" : "en";
+}
+
+/** Viewer title from the published snapshot only (D-039): cover title, else the app name. */
+export function snapshotTitle(doc: PublicBookDoc): string {
+  return doc.cover.title.trim() || APP_NAME;
+}
+
+/** Caption language frozen in the snapshot; live column only for snapshots published before it. */
+function snapshotCaptionLang(doc: PublicBookDoc, row: PublishedBookRow): CaptionLang {
+  return doc.captionLang ?? captionLangOf(row.caption_lang);
 }
 
 function emptyBook(state: ViewerState, row: PublishedBookRow | null): ViewerBook {
@@ -232,7 +245,8 @@ export async function getViewerBook(slug: string, opts: ViewerOptions = {}): Pro
     bookId,
     book: {
       ...emptyBook("ok", row),
-      title: row.title ?? null,
+      title: snapshotTitle(doc),
+      captionLang: snapshotCaptionLang(doc, row),
       pageCount: doc.pages.length,
       doc,
       photos,
@@ -242,7 +256,8 @@ export async function getViewerBook(slug: string, opts: ViewerOptions = {}): Pro
 
 export type OgData = {
   state: ViewerState;
-  /** Null unless "ok" and no password (D-040). */
+  /** Null unless "ok" and no password (D-040). Snapshot cover title only (D-039); null when the
+   * cover title is empty — buildBookMetadata then uses APP_NAME. */
   title: string | null;
   /** Signed web URL of the cover (or first) photo; null unless "ok" and no password. */
   coverUrl: string | null;
@@ -279,8 +294,9 @@ export async function getOgData(slug: string): Promise<OgData> {
     const signed = await signPublicPhotos(admin, row.id, [firstId]);
     coverUrl = signed[firstId.toLowerCase()]?.url ?? signed[firstId]?.url ?? null;
   }
+  // Snapshot only (D-039): never the live books.title / caption_lang.
   const coverTitle = doc.cover.title.trim();
-  return { ...base("ok", row), title: coverTitle || row.title || null, coverUrl };
+  return { ...base("ok", row), title: coverTitle || null, coverUrl, captionLang: snapshotCaptionLang(doc, row) };
 }
 
 /** True when the signed-in user owns the book (for the expired page's "Upgrade" CTA). Never throws. */
@@ -307,6 +323,24 @@ export async function getUnlockTarget(slug: string): Promise<{ bookId: string; p
   const prot = await loadProtected(admin, row.id, slug);
   if (!prot || prot.passwordHash === null) return null;
   return { bookId: row.id, passwordHash: prot.passwordHash };
+}
+
+/** PostgREST "function not found" / Postgres undefined_function: migration 1100 not applied yet. */
+const MISSING_FUNCTION_CODES = new Set(["PGRST202", "42883"]);
+
+/**
+ * clear_unlock_attempt (migration 1100): after a SUCCESSFUL verify, delete the attempt row
+ * try_book_unlock just recorded so only failures count toward the limits. Returns "cleared" /
+ * "none", or "missing" when the RPC doesn't exist yet (deploy before 1100 — ignored). Other
+ * errors throw PublicBooksQueryError (the caller treats them as best effort).
+ */
+export async function clearUnlockAttempt(bookId: string, ipHash: string): Promise<"cleared" | "none" | "missing"> {
+  const { data, error } = await createAdminClient().rpc("clear_unlock_attempt", { p_book: bookId, p_ip_hash: ipHash });
+  if (error) {
+    if (error.code && MISSING_FUNCTION_CODES.has(error.code)) return "missing";
+    throw new PublicBooksQueryError("clear unlock attempt", error.code);
+  }
+  return data === true ? "cleared" : "none";
 }
 
 /** try_book_unlock: atomic check + record of one attempt. false = rate limited. */

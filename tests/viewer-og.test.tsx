@@ -63,8 +63,11 @@ describe("buildBookMetadata", () => {
     expect(og.type).toBe("website");
     expect(og.url).toBe(`${SITE}/b/${SLUG}`);
     expect(og.title).toBe("Summer in Abu Dhabi");
-    const [img] = og.images as { url: string; width: number; height: number; alt: string }[];
-    expect(img).toMatchObject({ url: `${SITE}/b/${SLUG}/og?v=3-0`, width: 1200, height: 630 });
+    const [img] = og.images as { url: string; type?: string; width?: number; height?: number; alt: string }[];
+    expect(img).toMatchObject({ url: `${SITE}/b/${SLUG}/og?v=3-0`, type: "image/png" });
+    // The renderer may step down below 1200×630 — never declare a size that might be wrong (N1).
+    expect(img).not.toHaveProperty("width");
+    expect(img).not.toHaveProperty("height");
     expect(new URL(img.url).origin).toBe(SITE);
     expect(img.alt).toContain("Summer in Abu Dhabi");
     const tw = m.twitter as Record<string, unknown>;
@@ -162,7 +165,7 @@ describe("GET /b/[slug]/og", () => {
     const { res, body } = await get();
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/png");
-    expect(res.headers.get("cache-control")).toBe("public, s-maxage=86400, stale-while-revalidate=604800");
+    expect(res.headers.get("cache-control")).toBe("public, s-maxage=3600, stale-while-revalidate=600");
     expect(pngSize(body)).toEqual({ width: 1200, height: 630 });
     expect(body.byteLength).toBeLessThan(600 * 1024);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -172,7 +175,7 @@ describe("GET /b/[slug]/og", () => {
   it("ok (textured photo): steps down in size, keeps 1.91:1 and stays under 600 KB", { timeout: 60_000 }, async () => {
     getOgData.mockResolvedValue(okData());
     const { res, body } = await get();
-    expect(res.headers.get("cache-control")).toContain("s-maxage=86400");
+    expect(res.headers.get("cache-control")).toContain("s-maxage=3600");
     const { width, height } = pngSize(body);
     expect([1200, 800, 600]).toContain(width);
     expect(width / height).toBeCloseTo(1200 / 630, 1);
@@ -190,7 +193,7 @@ describe("GET /b/[slug]/og", () => {
   it("Arabic title: renders photo + brand without throwing or fetching fonts", { timeout: 30_000 }, async () => {
     getOgData.mockResolvedValue(okData({ title: "عيد في البيت" }));
     const { res, body } = await get();
-    expect(res.headers.get("cache-control")).toContain("s-maxage=86400");
+    expect(res.headers.get("cache-control")).toContain("s-maxage=3600");
     expect(pngSize(body).width / pngSize(body).height).toBeCloseTo(1200 / 630, 1);
     // Only the cover was fetched — no Google Fonts request for Arabic glyphs.
     expect(fetchMock).toHaveBeenCalledTimes(1);

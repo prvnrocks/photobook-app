@@ -20,7 +20,9 @@
 --      and 20261111001000_publish.sql (published_doc snapshot columns +
 --      checks, server-only publish columns / password_hash,
 --      book_unlock_attempts + try_book_unlock rate limit, get_published_book
---      reads the snapshot and is service-role only).
+--      reads the snapshot and is service-role only)
+--      and 20261111001100_unlock_tuning.sql (clear_unlock_attempt: a successful
+--      unlock removes its own attempt row; service-role only).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -29,7 +31,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 103 checks passed
+--       RLS OK — all 106 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -85,6 +87,7 @@ declare
   ip_1       text;
   ip_2       text;
   ip_3       text;
+  ip_4       text;
   slug_pub   text := 'rls-check-pub-'   || substr(md5(random()::text), 1, 12);
   slug_unpub text := 'rls-check-unpub-' || substr(md5(random()::text), 1, 12);
   r          record;
@@ -1496,6 +1499,97 @@ begin
   begin
     perform public.try_book_unlock(book_e, ip_3, 5, 5, 0);
     raise exception 'RLS FAIL [unlock args]: window 0 accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- 1100 (M6 review S2): clear_unlock_attempt — service-role only; a successful
+  -- unlock deletes the newest attempt row of its (book, ip) pair, so only failures
+  -- count toward the limits.
+  -- ---------------------------------------------------------------------------
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  if has_function_privilege('anon', 'public.clear_unlock_attempt(uuid, text)', 'execute')
+     or has_function_privilege('authenticated', 'public.clear_unlock_attempt(uuid, text)', 'execute')
+     or has_function_privilege('public', 'public.clear_unlock_attempt(uuid, text)', 'execute')
+     or not has_function_privilege('service_role', 'public.clear_unlock_attempt(uuid, text)', 'execute')
+     or not exists (select 1 from pg_proc as p
+                     where p.oid = 'public.clear_unlock_attempt(uuid, text)'::regprocedure
+                       and not p.prosecdef
+                       and p.proconfig @> array['search_path=""']) then
+    raise exception 'RLS FAIL [clear_unlock_attempt grants]: EXECUTE not service-role only, DEFINER, or search_path not fixed';
+  end if;
+  set local role anon;
+  perform set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
+  begin
+    perform public.clear_unlock_attempt(book_a, ip_1);
+    raise exception 'RLS FAIL [anon clear_unlock_attempt]: anon could execute it';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  begin
+    perform public.clear_unlock_attempt(book_a, ip_1);
+    raise exception 'RLS FAIL [authenticated clear_unlock_attempt]: the owner could execute it';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  checks := checks + 1;
+
+  -- behaviour: deletes exactly one (the newest) row of the pair; other pairs untouched
+  set local role service_role;
+  ip_4 := 'rls-check-ip5-' || md5(random()::text);
+  delete from public.book_unlock_attempts where book_id = book_e;
+  insert into public.book_unlock_attempts (book_id, ip_hash, created_at)
+  values (book_e, ip_4, now() - interval '10 minutes'),
+         (book_e, ip_4, now() - interval '1 minute'),
+         (book_e, ip_3, now()),
+         (book_a, ip_4, now());
+  if not public.clear_unlock_attempt(book_e, ip_4) then
+    raise exception 'RLS FAIL [clear_unlock_attempt]: returned false with rows present';
+  end if;
+  select count(*) into n from public.book_unlock_attempts where book_id = book_e and ip_hash = ip_4;
+  if n <> 1 then raise exception 'RLS FAIL [clear_unlock_attempt]: % rows of the pair left (expected 1)', n; end if;
+  if not exists (select 1 from public.book_unlock_attempts
+                  where book_id = book_e and ip_hash = ip_4 and created_at < now() - interval '5 minutes') then
+    raise exception 'RLS FAIL [clear_unlock_attempt]: did not delete the newest row of the pair';
+  end if;
+  select count(*) into n from public.book_unlock_attempts
+   where (book_id = book_e and ip_hash = ip_3) or (book_id = book_a and ip_hash = ip_4);
+  if n <> 2 then raise exception 'RLS FAIL [clear_unlock_attempt]: touched another pair (% of 2 left)', n; end if;
+  -- rows older than 1 hour are never cleared; no row → false
+  update public.book_unlock_attempts set created_at = now() - interval '2 hours'
+   where book_id = book_e and ip_hash = ip_4;
+  if public.clear_unlock_attempt(book_e, ip_4) then
+    raise exception 'RLS FAIL [clear_unlock_attempt]: cleared a row older than 1 hour';
+  end if;
+  if public.clear_unlock_attempt(book_e, 'rls-check-ip6-' || md5(random()::text)) then
+    raise exception 'RLS FAIL [clear_unlock_attempt]: returned true for an unknown pair';
+  end if;
+  checks := checks + 1;
+
+  -- success flow: attempt → clear keeps the book under its limit (only failures count)
+  delete from public.book_unlock_attempts where book_id = book_e;
+  for k in 1..5 loop
+    if not public.try_book_unlock(book_e, ip_4, 100, 2, 60) then
+      raise exception 'RLS FAIL [clear_unlock_attempt flow]: successful attempt % refused', k;
+    end if;
+    perform public.clear_unlock_attempt(book_e, ip_4);
+  end loop;
+  select count(*) into n from public.book_unlock_attempts where book_id = book_e;
+  if n <> 0 then raise exception 'RLS FAIL [clear_unlock_attempt flow]: % attempts left after cleared successes', n; end if;
+  begin
+    perform public.clear_unlock_attempt(book_e, '');
+    raise exception 'RLS FAIL [clear_unlock_attempt args]: empty ip hash accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.clear_unlock_attempt(null, ip_4);
+    raise exception 'RLS FAIL [clear_unlock_attempt args]: null book accepted';
   exception when invalid_parameter_value then null;
   end;
   checks := checks + 1;

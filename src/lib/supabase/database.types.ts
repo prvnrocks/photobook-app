@@ -455,6 +455,10 @@ export type Database = {
         Args: { p_book_id: string; p_min_interval_seconds: number }
         Returns: number
       }
+      clear_unlock_attempt: {
+        Args: { p_book: string; p_ip_hash: string }
+        Returns: boolean
+      }
       create_agent_run_capped: {
         Args: {
           p_book_id: string

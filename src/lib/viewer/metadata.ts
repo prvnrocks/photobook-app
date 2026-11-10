@@ -12,6 +12,7 @@ import { APP_NAME } from "@/lib/brand";
 import type { OgData } from "@/lib/db/public-books";
 import { isValidSlug } from "@/lib/publish/slug";
 
+/** Full OG render size (1.91:1). The renderer may step down; metadata declares no size (N1). */
 export const OG_IMAGE_WIDTH = 1200;
 export const OG_IMAGE_HEIGHT = 630;
 
@@ -65,10 +66,11 @@ export function buildBookMetadata(slug: string, og: BookMetadataInput): Metadata
   }
 
   const pageUrl = `${siteUrl}/b/${slug}`;
+  // No width/height (T10 N1): the renderer steps down to 800×420 / 600×315 to stay under the
+  // WhatsApp size limit, so a fixed 1200×630 would be wrong; crawlers read the size from the PNG.
   const image = {
     url: `${siteUrl}${ogImagePath(slug, og)}`,
-    width: OG_IMAGE_WIDTH,
-    height: OG_IMAGE_HEIGHT,
+    type: "image/png",
     alt: og.state === "ok" && og.title?.trim() ? `${og.title.trim()} — ${APP_NAME}` : APP_NAME,
   };
   return {

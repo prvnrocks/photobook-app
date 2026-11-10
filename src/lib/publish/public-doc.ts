@@ -4,6 +4,9 @@
 // coarse human label like "March 2025" the owner shares as part of the album). Dropped: `meta`
 // (generator, runId, userEdited), caption `source` (who wrote it), chapter `place` (GPS-derived),
 // `occasion`, and any unknown keys — objects are rebuilt field by field, never spread.
+// `captionLang` (optional, added in the M6 review): the book's caption language frozen at publish
+// time, so the viewer never reads the live books.caption_lang (D-039). Snapshots published before
+// it existed simply lack the key and still parse; the viewer then falls back to the live column.
 
 import { z } from "zod";
 import {
@@ -14,6 +17,7 @@ import {
   PageSchema,
   StyleSchema,
 } from "@/lib/book/schema";
+import { CAPTION_LANGS, type CaptionLang } from "@/lib/book/options";
 import type { BookDoc } from "@/lib/book/types";
 import { LIMITS } from "@/lib/ai/limits";
 
@@ -39,14 +43,21 @@ export const PublicBookDocSchema = z
     chapters: z.array(PublicChapterSchema).max(100),
     pages: z.array(PublicPageSchema).max(LIMITS.paid.maxPages),
     style: StyleSchema.strict(),
+    /** Optional: absent in snapshots published before the M6 review fix. */
+    captionLang: z.enum(CAPTION_LANGS).optional(),
   })
   .strict();
 
 export type PublicBookDoc = z.infer<typeof PublicBookDocSchema>;
 
+export type ToPublicDocOptions = {
+  /** books.caption_lang at publish time; stored in the snapshot when given. */
+  captionLang?: CaptionLang | null;
+};
+
 /** Public copy of a (parsed) book doc. */
-export function toPublicDoc(doc: BookDoc): PublicBookDoc {
-  return {
+export function toPublicDoc(doc: BookDoc, opts: ToPublicDocOptions = {}): PublicBookDoc {
+  const out: PublicBookDoc = {
     version: 1,
     format: "A5_PORTRAIT",
     cover: {
@@ -68,6 +79,8 @@ export function toPublicDoc(doc: BookDoc): PublicBookDoc {
     })),
     style: { background: doc.style.background, font: doc.style.font },
   };
+  if (opts.captionLang === "en" || opts.captionLang === "ar") out.captionLang = opts.captionLang;
+  return out;
 }
 
 export type PublicDocParse = { ok: true; doc: PublicBookDoc } | { ok: false };

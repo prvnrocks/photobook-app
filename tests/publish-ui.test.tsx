@@ -99,6 +99,14 @@ describe("copy mapping", () => {
     expect(passwordErrorCopy("invalid_chars")).toMatch(/characters we can't use/);
     expect(passwordErrorCopy("invalid_password")).toBe(passwordErrorCopy("invalid_chars"));
     expect(passwordErrorCopy("failed")).toMatch(/Try again/);
+    expect(passwordErrorCopy("unavailable")).toBe("Passwords aren't available right now — try again later");
+  });
+
+  it("free notice never implies a free (watermarked) PDF — D-002: free = no PDF (T10 N5)", () => {
+    expect(FREE_NOTICE_COPY).toBe(
+      "Free link works for 30 days after you publish · Upgrade for a permanent link, no watermark and PDF download",
+    );
+    expect(FREE_NOTICE_COPY).not.toMatch(/watermark-free PDF|free PDF/i);
     expect(unpublishErrorCopy("failed")).toMatch(/unpublish/i);
   });
 

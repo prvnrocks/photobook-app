@@ -30,8 +30,11 @@ export const COVER_FETCH_TIMEOUT_MS = 5_000;
 export const COVER_MAX_BYTES = 4 * 1024 * 1024;
 export const OG_TITLE_MAX_CHARS = 60;
 
-/** Full cache for real previews; short for generic cards so a transient failure doesn't stick. */
-export const OG_CACHE_CONTROL = "public, s-maxage=86400, stale-while-revalidate=604800";
+/**
+ * Real previews: 1 h (+10 min SWR) so an unpublish / password change stops serving the old cover
+ * within ~70 min (T10 S5). Generic cards: short, so a transient failure doesn't stick.
+ */
+export const OG_CACHE_CONTROL = "public, s-maxage=3600, stale-while-revalidate=600";
 export const OG_GENERIC_CACHE_CONTROL = "public, s-maxage=300, stale-while-revalidate=3600";
 
 // Noto Sans "latin" subset as bundled by @vercel/og (Basic Latin, Latin-1, œ/Œ/ı, punctuation, €, ™).

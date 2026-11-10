@@ -130,15 +130,29 @@ function photosChain() {
 }
 
 describe("getEditorData", () => {
-  it("publishedRev: books.published_rev, null when unpublished or before migration 1000 (M6 T8)", async () => {
-    queue("books", { data: { published_rev: 3 }, error: null });
+  it("publishedRev: books.published_rev only while a live snapshot exists (M6 S1)", async () => {
+    queue("books", { data: { published_rev: 3, live: 1 }, error: null });
     expect((await getEditorData(B))!.publishedRev).toBe(3);
-    queue("books", { data: { published_rev: null }, error: null });
+    // Unpublished: published_doc cleared, published_rev kept → no chip.
+    queue("books", { data: { published_rev: 3, live: null }, error: null });
     expect((await getEditorData(B))!.publishedRev).toBeNull();
+    queue("books", { data: { published_rev: null, live: null }, error: null });
+    expect((await getEditorData(B))!.publishedRev).toBeNull();
+    // No pre-1000 fallback any more: a missing column is an error like any other.
     queue("books", { data: null, error: { code: "42703", message: "column books.published_rev does not exist" } });
-    expect((await getEditorData(B))!.publishedRev).toBeNull();
+    await expect(getEditorData(B)).rejects.toThrow();
     queue("books", { data: null, error: { code: "42501", message: "denied" } });
     await expect(getEditorData(B)).rejects.toThrow();
+  });
+
+  it("publishedRev query reads the snapshot as a cheap JSON path, not the whole doc", async () => {
+    queue("books", { data: { published_rev: 2, live: 1 }, error: null });
+    await getEditorData(B);
+    const sel = fake.state.chains
+      .filter((c) => c.table === "books")
+      .flatMap((c) => c.calls.filter((x) => x[0] === "select").map((x) => String(x[1])))
+      .find((cols) => cols.includes("published_rev"));
+    expect(sel).toContain("live:published_doc->version");
   });
 
   it("returns null for a malformed id, a missing / foreign book (RLS) — without other queries", async () => {

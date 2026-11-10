@@ -14,7 +14,13 @@ export type UnlockErrorCode =
 
 export type UnlockResult = { ok: true } | { ok: false; error: UnlockErrorCode };
 
-/** Rate limits passed to try_book_unlock: per ip (any book) within the window; per book per hour. */
+/**
+ * Rate limits passed to try_book_unlock: per ip bucket (any book) within the window; per book per
+ * hour. Successful unlocks clear their own attempt (clear_unlock_attempt, migration 1100), so these
+ * effectively count FAILED attempts only — a wedding group on one wifi / CGNAT who know the password
+ * never trip them. (Before 1100 is applied, successes still count.)
+ */
 export const UNLOCK_IP_LIMIT = 10;
-export const UNLOCK_BOOK_LIMIT = 100;
+/** Failed attempts per book per hour, across all ips. */
+export const UNLOCK_BOOK_LIMIT = 30;
 export const UNLOCK_WINDOW_SECONDS = 900;

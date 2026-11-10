@@ -65,7 +65,9 @@ export default async function PublicBookPage({ params }: Params) {
     case "ok": {
       if (!book.doc) return <BookUnavailable />;
       const doc = publicDocToRenderDoc(book.doc);
-      const title = book.title?.trim() || doc.cover.title.trim() || APP_NAME;
+      // Snapshot only (D-039): getViewerBook derives the title from the published cover title
+      // (else APP_NAME) and captionLang from the snapshot — never the live books row.
+      const title = book.title?.trim() || APP_NAME;
       // Password books: share text carries no title (D-040).
       const shareTitle = book.hasPassword ? `A photobook on ${APP_NAME}` : title;
       return (

@@ -487,7 +487,7 @@ test("c. anonymous phone: flipbook, watermark + footer, private data absent, OG 
     console.log(`[c] og bytes=${body.length}`);
     expect(body.length).toBeLessThan(600 * 1024);
     expect(body.subarray(1, 4).toString("latin1")).toBe("PNG");
-    expect(png.headers()["cache-control"]).toContain("s-maxage=86400");
+    expect(png.headers()["cache-control"]).toContain("s-maxage=3600");
 
     // One signed web image: downloadable anonymously, no GPS / no EXIF location.
     const img = await anon.request.get(imgs[0].src);
@@ -542,13 +542,11 @@ test("d. edit a caption → viewer keeps the old snapshot → Publish changes �
   }
 });
 
-test("d2. KNOWN BUG (T4a/T6): an unpublished cover-title edit leaks into the live viewer header", async ({ browser }) => {
+test("d2. an unpublished cover-title edit does not leak into the live viewer header (D-039)", async ({ browser }) => {
   needMigrations();
   test.skip(!slug, "needs test b");
-  // D-039: viewers see only the snapshot. /b/[slug] renders `book.title` = books.title (live column,
-  // synced by every editor save) before the snapshot's cover title, so an unpublished title edit
-  // shows up immediately. Expected to fail until fixed — then drop test.fail().
-  test.fail();
+  // D-039: viewers see only the snapshot. books.title (live column, synced by every editor save)
+  // changes immediately; the viewer title must keep the published cover title (M6 review B1).
   const before = await bookRow();
   const doc = structuredClone(before.doc) as { cover: { title: string } };
   doc.cover.title = NEW_TITLE;
@@ -705,4 +703,14 @@ test("g. unpublish → /b/slug 404 for everyone, OG falls back to the generic ca
   }
   const owner = await page.request.get(`/b/${slug}`, { maxRedirects: 0 });
   expect(owner.status()).toBe(404);
+
+  // Dashboard (S1): published_rev / published_at / slug survive unpublish, but "published"
+  // means a live snapshot exists → chip "Draft" and no Share link on this book's card.
+  await page.goto("/dashboard");
+  const card = page
+    .getByTestId("book-list")
+    .locator("li")
+    .filter({ has: page.locator(`a[data-testid="book-card"][href*="${bookId}"]`) });
+  await expect(card.getByTestId("book-publish-chip")).toHaveText("Draft");
+  await expect(card.getByTestId("book-share")).toHaveCount(0);
 });

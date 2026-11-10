@@ -16,7 +16,11 @@ export type BookListItem = Pick<
   Tables<"books">,
   "id" | "title" | "updated_at" | "page_count" | "published_at" | "is_paid" | "ai_status" | "slug" | "expires_at"
 > & {
-  /** Live snapshot exists (published_rev is not null ⇔ published_doc is not null — set together, 1000). */
+  /**
+   * Live snapshot exists (published_doc is not null, read as `published_doc->version`). Unpublish
+   * clears only published_doc (published_rev / slug / published_at survive), so this — not
+   * published_rev or published_at — is what "published" means.
+   */
   published: boolean;
   /** Upload-finished photos (upload_state = 'ready'); routes empty books to upload vs build. */
   photo_count: number;
@@ -72,27 +76,23 @@ export async function listMyBooks(): Promise<BookListItem[]> {
   if (!user) return [];
 
   const supabase = await createClient();
-  const run = (columns: string) =>
-    supabase
-      .from("books")
-      .select(columns)
-      .eq("user_id", user.id)
-      .eq("photos.upload_state", "ready")
-      .order("updated_at", { ascending: false });
-
-  let { data, error } = await run(`${BOOK_LIST_COLUMNS}, published_rev`);
-  // Deploy-order tolerance (1000): before published_rev exists nothing can be published.
-  if (error && isMissingColumnError(error, "published_rev")) ({ data, error } = await run(BOOK_LIST_COLUMNS));
+  const { data, error } = await supabase
+    .from("books")
+    .select(BOOK_LIST_COLUMNS)
+    .eq("user_id", user.id)
+    .eq("photos.upload_state", "ready")
+    .order("updated_at", { ascending: false });
   if (error) throw new BooksQueryError("list books", error.code);
   return ((data ?? []) as unknown as BookListRow[]).map(toBookListItem);
 }
 
 const BOOK_LIST_COLUMNS =
-  "id, title, updated_at, page_count, published_at, is_paid, ai_status, slug, expires_at, user_edited:doc->meta->userEdited, photos(count)";
+  "id, title, updated_at, page_count, published_at, is_paid, ai_status, slug, expires_at, user_edited:doc->meta->userEdited, live:published_doc->version, photos(count)";
 
 type BookListRow = Omit<BookListItem, "photo_count" | "user_edited" | "published"> & {
   user_edited: unknown;
-  published_rev?: number | null;
+  /** published_doc->version: null/absent when there is no live snapshot. */
+  live: unknown;
   photos: { count: number }[] | null;
 };
 
@@ -108,7 +108,7 @@ function toBookListItem(row: BookListRow): BookListItem {
     ai_status: row.ai_status,
     slug: row.slug,
     expires_at: row.expires_at,
-    published: typeof row.published_rev === "number",
+    published: row.live !== null && row.live !== undefined,
     photo_count: typeof count === "number" && Number.isFinite(count) ? count : 0,
     user_edited: row.user_edited === true,
   };

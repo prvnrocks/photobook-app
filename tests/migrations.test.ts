@@ -1516,10 +1516,15 @@ describe("migrations: Milestone 6 publish (1000, D-039 / D-040)", () => {
       for (const s of ["delete from", "select count(*)", "insert into"]) expect(ip, s).toBeLessThan(body.indexOf(s));
     });
 
-    it("advisory key spaces 4 and 5 are used nowhere else", () => {
+    it("advisory key spaces 4 and 5 are used only by the unlock RPCs (try_book_unlock + 1100 clear_unlock_attempt)", () => {
       const spaces = matchesAll(/hashtextextended\s*\([^,]+,\s*(\d+)\s*\)/).map((x) => x[1]);
-      expect(spaces.filter((k) => k === "4")).toHaveLength(1);
-      expect(spaces.filter((k) => k === "5")).toHaveLength(1);
+      expect(spaces.filter((k) => k === "4")).toHaveLength(2);
+      expect(spaces.filter((k) => k === "5")).toHaveLength(2);
+      const unlockSql = migrations
+        .filter((x) => x.name === name || x.name === "20261111001100_unlock_tuning.sql")
+        .map((x) => x.sql)
+        .join("\n");
+      expect(matchesAll(/hashtextextended\s*\([^,]+,\s*[45]\s*\)/, unlockSql)).toHaveLength(4);
     });
 
     it("housekeeping deletes this book's and this ip's rows older than greatest(window, 1 h)", () => {
@@ -1607,5 +1612,85 @@ describe("migrations: Milestone 6 publish (1000, D-039 / D-040)", () => {
       /try_book_unlock: \{\s*Args: \{\s*p_book: string\s*p_book_limit: number\s*p_ip_hash: string\s*p_ip_limit: number\s*p_window_s: number\s*\}\s*Returns: boolean/,
     );
     expect(types).toMatch(/get_published_book: \{[\s\S]*?published_rev: number[\s\S]*?\}\[\]/);
+  });
+});
+
+describe("migrations: M6 review S2 unlock tuning (1100)", () => {
+  const name = "20261111001100_unlock_tuning.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const ws = (s: string) => s.replace(/\s+/g, " ");
+  const flat = ws(sql);
+  const FN = "public.clear_unlock_attempt";
+  const f = matchesAll(/create\s+(?:or\s+replace\s+)?function\s+([\w.]+)\s*\(([\s\S]*?)\bas\s+\$\$([\s\S]*?)\$\$/, sql)
+    .map((x) => ({ name: x[1], header: x[2], body: x[3] }))
+    .find((x) => x.name === FN);
+  const body = ws(f?.body ?? "");
+
+  it("exists, sorts right after 1000 and does not touch the applied 1000 objects", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files.indexOf(name)).toBe(files.indexOf("20261111001000_publish.sql") + 1);
+    expect(sql).not.toMatch(/\bdrop\b/);
+    expect(sql).not.toMatch(/\b(create|alter)\s+(policy|table)\b/);
+    expect(sql).not.toMatch(/row\s+level\s+security/);
+    expect(sql).not.toMatch(/function\s+public\.(try_book_unlock|get_published_book)\b/);
+    expect(sql).not.toMatch(/\b(grant|revoke)\s+[a-z_\s,()]+\s+on\s+(?:table\s+)?public\./);
+  });
+
+  it("clear_unlock_attempt(p_book uuid, p_ip_hash text) returns boolean; INVOKER, search_path '', latest definition", () => {
+    expect(f).toBeDefined();
+    expect(latestFunction(FN)!.body).toBe(f!.body);
+    expect(ws(f!.header).trim()).toMatch(
+      /^p_book uuid, p_ip_hash text \) returns boolean language plpgsql volatile security invoker set search_path = ''$/,
+    );
+    expect(f!.header).not.toMatch(/security\s+definer/);
+  });
+
+  it("rejects null book / null or empty ip hash with 22023", () => {
+    expect(body).toContain(
+      "if p_book is null or p_ip_hash is null or char_length(p_ip_hash) = 0 then raise exception 'invalid_argument' using errcode = '22023';",
+    );
+  });
+
+  it("takes the same advisory locks as try_book_unlock (book 4, then ip 5) before deleting", () => {
+    const book = body.indexOf("perform pg_advisory_xact_lock(hashtextextended(p_book::text, 4));");
+    const ip = body.indexOf("perform pg_advisory_xact_lock(hashtextextended(p_ip_hash, 5));");
+    expect(book).toBeGreaterThanOrEqual(0);
+    expect(ip).toBeGreaterThan(book);
+    expect(ip).toBeLessThan(body.indexOf("delete from"));
+  });
+
+  it("deletes only the newest row of the (book, ip) pair from the last hour and reports it", () => {
+    expect(body).toContain(
+      "delete from public.book_unlock_attempts as a where a.id = ( select x.id from public.book_unlock_attempts as x where x.book_id = p_book and x.ip_hash = p_ip_hash and x.created_at > now() - interval '1 hour' order by x.created_at desc, x.id desc limit 1 );",
+    );
+    expect(matchesAll(/delete from/, body)).toHaveLength(1);
+    expect(body).toContain("get diagnostics v_n = row_count; return v_n > 0;");
+    expect(body).not.toMatch(/insert into|update public/);
+  });
+
+  it("EXECUTE revoked from public/anon/authenticated, granted to service_role only", () => {
+    expect(flat).toContain(`revoke all on function ${FN}(uuid, text) from public, anon, authenticated;`);
+    const grants = matchesAll(new RegExp(`grant execute on function ${esc(FN)}\\s*\\([^)]*\\)\\s+to\\s+([a-z_, ]+?)\\s*;`), sql).map((g) =>
+      g[1].trim(),
+    );
+    expect(grants).toEqual(["service_role"]);
+    expect(matchesAll(new RegExp(`grant execute on function ${esc(FN)}\\b`))).toHaveLength(1);
+    expect(flat.indexOf(`revoke all on function ${FN}`)).toBeLessThan(flat.indexOf(`grant execute on function ${FN}`));
+  });
+
+  it("rls_check.sql covers clear_unlock_attempt (grants + behaviour) and counts 106 checks", () => {
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain("20261111001100_unlock_tuning.sql");
+    expect(rls).toContain("RLS FAIL [clear_unlock_attempt grants]");
+    expect(rls).toContain("RLS FAIL [anon clear_unlock_attempt]");
+    expect(rls).toContain("RLS FAIL [authenticated clear_unlock_attempt]");
+    expect(rls).toContain("RLS FAIL [clear_unlock_attempt flow]");
+    expect(rls).toContain("RLS OK — all 106 checks passed");
+  });
+
+  it("database.types.ts declares clear_unlock_attempt (hand-edited)", () => {
+    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
+    expect(types).toMatch(/clear_unlock_attempt: \{\s*Args: \{ p_book: string; p_ip_hash: string \}\s*Returns: boolean/);
   });
 });

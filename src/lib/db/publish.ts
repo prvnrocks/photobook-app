@@ -25,6 +25,8 @@ export class PublishQueryError extends Error {
 export type PublishRow = {
   id: string;
   title: string | null;
+  /** Frozen into the public snapshot at publish (D-039). */
+  caption_lang: string | null;
   doc: Json;
   doc_rev: number;
   max_pages: number;
@@ -40,7 +42,7 @@ export type PublishRow = {
 };
 
 const PUBLISH_COLUMNS =
-  "id, title, doc, doc_rev, max_pages, is_paid, slug, published_at, expires_at, published_rev, last_published_at, live_version:published_doc->version, password_hash";
+  "id, title, caption_lang, doc, doc_rev, max_pages, is_paid, slug, published_at, expires_at, published_rev, last_published_at, live_version:published_doc->version, password_hash";
 
 type RawPublishRow = Omit<PublishRow, "live" | "hasPassword"> & {
   live_version: unknown;
@@ -62,6 +64,7 @@ export async function getPublishRow(bookId: string, ownerId: string): Promise<Pu
   return {
     id: raw.id,
     title: raw.title,
+    caption_lang: raw.caption_lang ?? null,
     doc: raw.doc,
     doc_rev: raw.doc_rev,
     max_pages: raw.max_pages,

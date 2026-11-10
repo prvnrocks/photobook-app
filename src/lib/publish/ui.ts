@@ -11,7 +11,16 @@ export type PublishBlock = "invalid_doc" | "empty" | "page_limit" | "expired";
 export type PublishError = "signed_out" | "not_found" | PublishBlock | "conflict" | "failed";
 
 /** Mirrors SetPasswordErrorCode in the publish actions. */
-export type PasswordError = "signed_out" | "not_found" | "invalid_password" | "too_short" | "too_long" | "invalid_chars" | "failed";
+export type PasswordError =
+  | "signed_out"
+  | "not_found"
+  | "invalid_password"
+  | "too_short"
+  | "too_long"
+  | "invalid_chars"
+  /** Server can't issue access cookies (BOOK_ACCESS_SECRET missing) — setting a password would lock viewers out. */
+  | "unavailable"
+  | "failed";
 
 /** Same bounds as src/lib/publish/password.ts (server-only); the server re-validates. */
 export const PASSWORD_MIN = 4;
@@ -19,7 +28,10 @@ export const PASSWORD_MAX = 64;
 
 export const EXPIRED_COPY = "This free link has expired — Upgrade to bring it back";
 export const CONFLICT_COPY = "Something changed — try again";
-export const FREE_NOTICE_COPY = `Free link works for 30 days after you publish · no watermark-free PDF`;
+/** D-002: free = watermark, 30-day link and NO PDF at all — don't imply a (watermarked) free PDF. */
+export const FREE_NOTICE_COPY =
+  "Free link works for 30 days after you publish · Upgrade for a permanent link, no watermark and PDF download";
+export const PASSWORD_UNAVAILABLE_COPY = "Passwords aren't available right now — try again later";
 
 /** Why Publish / Publish changes is disabled (getPublishState().canPublishReason). */
 export function blockReasonCopy(reason: PublishBlock, maxPages: number = LIMITS.free.maxPages): string {
@@ -69,6 +81,8 @@ export function passwordErrorCopy(code: PasswordError): string {
       return publishErrorCopy("signed_out");
     case "not_found":
       return publishErrorCopy("not_found");
+    case "unavailable":
+      return PASSWORD_UNAVAILABLE_COPY;
     case "failed":
       return "Couldn't save the password. Try again.";
   }

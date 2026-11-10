@@ -20,6 +20,7 @@ import {
 } from "@/lib/db/publish";
 import { errorCodeOf } from "@/lib/http/json";
 import { hashPassword, validatePasswordInput } from "@/lib/publish/password";
+import { getAccessSecret } from "@/lib/publish/access-cookie";
 import { toPublicDoc } from "@/lib/publish/public-doc";
 import { canPublish, isExpired, nextExpiry, type PublishBlockReason } from "@/lib/publish/rules";
 import { makeSlug } from "@/lib/publish/slug";
@@ -49,6 +50,8 @@ export type SetPasswordErrorCode =
   | "too_short"
   | "too_long"
   | "invalid_chars"
+  /** BOOK_ACCESS_SECRET is not configured: a password could never be unlocked, so none is set. */
+  | "unavailable"
   | "failed";
 
 export type SetBookPasswordResult = { ok: true; hasPassword: boolean } | { ok: false; error: SetPasswordErrorCode };
@@ -142,7 +145,9 @@ export async function publishBookAction(bookId: string): Promise<PublishBookResu
       ? null
       : (row.expires_at ?? nextExpiry({ isPaid: false, existingExpiresAt: null, now }));
     const publishedAt = row.published_at ?? nowIso;
-    const publishedDoc = toPublicDoc(check.doc) as unknown as Json;
+    // caption_lang is frozen into the snapshot so the viewer never reads the live column (D-039).
+    const captionLang = row.caption_lang === "ar" ? "ar" : "en";
+    const publishedDoc = toPublicDoc(check.doc, { captionLang }) as unknown as Json;
     const read = {
       docRev: row.doc_rev,
       isPaid: row.is_paid,
@@ -218,6 +223,9 @@ export async function setBookPasswordAction(bookId: string, password: string | n
 
   let hash: string | null = null;
   if (password !== null) {
+    // Without the access secret no viewer could ever unlock the book — refuse before hashing.
+    // (Removing a password with `null` still works.)
+    if (!getAccessSecret()) return { ok: false, error: "unavailable" };
     const v = validatePasswordInput(password);
     if (!v.ok) return { ok: false, error: v.reason === "not_string" ? "invalid_password" : v.reason };
     try {
