@@ -13,6 +13,9 @@
 //   heuristic; switching remounts the book at the same page.
 // - Children are static (keyed by page count) and read doc/photos/current page from context:
 //   react-pageflip moves page nodes into its own wrapper, so React must never insert/remove them.
+// - Viewer extras (optional): `endPage` is appended as the last flip page (back cover, shown alone:
+//   see src/lib/viewer/pages.ts for the even-count filler) and `pageOverlay` (watermark) is drawn
+//   over the cover and every book page.
 
 import HTMLFlipBook from "react-pageflip";
 import {
@@ -27,11 +30,13 @@ import {
   useRef,
   useState,
   type ComponentProps,
+  type ReactNode,
   type Ref,
 } from "react";
 import { BookPage, type RenderPhotos } from "@/components/book/BookPage";
 import type { BookDoc } from "@/lib/book/types";
 import { fitBook, PAGE_RATIO_H, PAGE_RATIO_W, SPREAD_MEDIA_QUERY } from "@/lib/viewer/fit";
+import { flipLayout, flipPageKind, startIndexFor, type FlipLayout } from "@/lib/viewer/pages";
 import { inPhotoWindow, photoWindow, spreadStart, type PhotoWindow } from "@/lib/viewer/window";
 import { FlipPage } from "./FlipPage";
 
@@ -45,6 +50,8 @@ export interface FlipbookApi {
 export interface FlipbookReadyInfo {
   pageCount: number;
   spread: boolean;
+  /** Flip-index layout of this instance (cover, pages, filler, end card). */
+  layout: FlipLayout;
 }
 
 export type FlipbookProps = {
@@ -60,6 +67,10 @@ export type FlipbookProps = {
   onReady?: (info: FlipbookReadyInfo) => void;
   /** Imperative controls for viewer chrome (prev/next buttons, contents sheet). */
   apiRef?: Ref<FlipbookApi | null>;
+  /** Appended as the last page (back cover, shown alone). Must not need hooks/state from the parent. */
+  endPage?: ReactNode;
+  /** Drawn over the cover and every book page (e.g. the free-book watermark). */
+  pageOverlay?: ReactNode;
   className?: string;
 };
 
@@ -83,7 +94,15 @@ interface FlipEvent {
 
 const EMPTY_PHOTOS: RenderPhotos = Object.freeze({});
 
-type PagesCtx = { doc: BookDoc; photos: RenderPhotos; captionLang?: string; win: PhotoWindow };
+type PagesCtx = {
+  doc: BookDoc;
+  photos: RenderPhotos;
+  captionLang?: string;
+  win: PhotoWindow;
+  layout: FlipLayout;
+  endPage: ReactNode;
+  pageOverlay: ReactNode;
+};
 const PagesContext = createContext<PagesCtx | null>(null);
 
 const PageBody = memo(function PageBody({
@@ -114,15 +133,23 @@ const PageBody = memo(function PageBody({
 function WindowedPage({ index }: { index: number }) {
   const ctx = useContext(PagesContext);
   if (!ctx) return null;
+  const kind = flipPageKind(ctx.layout, index).kind;
+  if (kind === "end") return <>{ctx.endPage}</>;
+  if (kind === "filler") {
+    return <div className="aspect-[148/210] w-full" style={{ background: ctx.doc.style.background }} data-filler="true" />;
+  }
   const inWin = inPhotoWindow(ctx.win, index);
   return (
-    <PageBody
-      doc={ctx.doc}
-      index={index}
-      photos={inWin ? ctx.photos : EMPTY_PHOTOS}
-      captionLang={ctx.captionLang}
-      priority={ctx.win.priority.includes(index)}
-    />
+    <>
+      <PageBody
+        doc={ctx.doc}
+        index={index}
+        photos={inWin ? ctx.photos : EMPTY_PHOTOS}
+        captionLang={ctx.captionLang}
+        priority={ctx.win.priority.includes(index)}
+      />
+      {ctx.pageOverlay}
+    </>
   );
 }
 
@@ -269,16 +296,33 @@ function BookInstance({ pageCount, spread, startPage, onInstance, onFlipIndex }:
   );
 }
 
-export function Flipbook({ doc, photos, captionLang, currentPage, onFlip, onReady, apiRef, className }: FlipbookProps) {
-  const pageCount = doc.pages.length + 1;
+export function Flipbook({
+  doc,
+  photos,
+  captionLang,
+  currentPage,
+  onFlip,
+  onReady,
+  apiRef,
+  endPage,
+  pageOverlay,
+  className,
+}: FlipbookProps) {
   const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null);
   const avail = useElementSize(stageEl);
   const spread = useSpread();
+  const hasEnd = endPage !== undefined && endPage !== null;
+  const layout = useMemo(
+    () => flipLayout(doc.pages.length, { endCard: hasEnd, spread: spread ?? false }),
+    [doc.pages.length, hasEnd, spread],
+  );
+  const pageCount = layout.count;
   const box = useMemo(() => (avail && spread !== null ? fitBook(avail, spread) : null), [avail, spread]);
 
   const clamp = useCallback((i: number) => Math.min(Math.max(Math.trunc(i) || 0, 0), pageCount - 1), [pageCount]);
   const [current, setCurrent] = useState(() => clamp(currentPage ?? 0));
   const [instance, setInstance] = useState<PageFlipInstance | null>(null);
+  const currentRef = useRef(current);
 
   const cbRef = useRef({ onFlip, onReady });
   useLayoutEffect(() => {
@@ -288,11 +332,20 @@ export function Flipbook({ doc, photos, captionLang, currentPage, onFlip, onRead
   const onInstance = useCallback(
     (pf: PageFlipInstance | null) => {
       setInstance(pf);
-      if (pf && spread !== null) cbRef.current.onReady?.({ pageCount: pf.getPageCount(), spread });
+      if (!pf || spread === null) return;
+      cbRef.current.onReady?.({ pageCount: pf.getPageCount(), spread, layout });
+      // A remount (spread switch) may start elsewhere (e.g. end card index moved): resync.
+      const shown = pf.getCurrentPageIndex();
+      if (shown !== currentRef.current) {
+        currentRef.current = shown;
+        setCurrent(shown);
+        cbRef.current.onFlip?.(shown);
+      }
     },
-    [spread],
+    [spread, layout],
   );
   const onFlipIndex = useCallback((i: number) => {
+    currentRef.current = i;
     setCurrent(i);
     cbRef.current.onFlip?.(i);
   }, []);
@@ -344,7 +397,10 @@ export function Flipbook({ doc, photos, captionLang, currentPage, onFlip, onRead
     () => photoWindow({ current, count: pageCount, spread: spread ?? false }),
     [current, pageCount, spread],
   );
-  const ctx = useMemo<PagesCtx>(() => ({ doc, photos, captionLang, win }), [doc, photos, captionLang, win]);
+  const ctx = useMemo<PagesCtx>(
+    () => ({ doc, photos, captionLang, win, layout, endPage, pageOverlay }),
+    [doc, photos, captionLang, win, layout, endPage, pageOverlay],
+  );
 
   return (
     <div
@@ -362,7 +418,7 @@ export function Flipbook({ doc, photos, captionLang, currentPage, onFlip, onRead
               key={`${pageCount}:${spread ? "spread" : "single"}`}
               pageCount={pageCount}
               spread={spread}
-              startPage={current}
+              startPage={startIndexFor(layout, current)}
               onInstance={onInstance}
               onFlipIndex={onFlipIndex}
             />
