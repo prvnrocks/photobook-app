@@ -906,3 +906,167 @@ test.describe("facing pages (/dev-editor)", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// M10a A8: Background tool on /dev-editor?bg=1 (uuid background photos: …f5 kept, …f4 AI-dropped;
+// the stub save runs the real validateEditorDoc and exposes the stored JSON as
+// window.__devEditorLastSave). Screenshots: E2E_SHOTS=<dir>.
+// ---------------------------------------------------------------------------------------------
+
+test.describe("backgrounds at 375 px (/dev-editor?bg=1)", () => {
+  test.use({ viewport: { width: W, height: 812 }, hasTouch: true, isMobile: true });
+
+  test.beforeAll(async ({ request }) => {
+    const res = await request.get(`/dev-editor`);
+    test.skip(res.status() === 404, "/dev-editor is dev-only (404 under next start)");
+  });
+
+  const errors: string[] = [];
+  test.beforeEach(async ({ page }) => {
+    errors.length = 0;
+    page.on("pageerror", (e) => errors.push(String(e)));
+    await page.addInitScript(() => {
+      document.addEventListener("DOMContentLoaded", () => {
+        const st = document.createElement("style");
+        st.textContent = "nextjs-portal{display:none!important}";
+        document.head.appendChild(st);
+      });
+    });
+  });
+  test.afterEach(() => {
+    expect(errors, "no page errors").toEqual([]);
+  });
+
+  const DROPPED_UUID = "00000000-0000-4000-8000-0000000000f4";
+  const NAVY_RGB = "rgb(30, 42, 71)";
+  const cur = (page: Page) => page.locator('[data-testid="carousel-item"][aria-hidden="false"]');
+  const counter = (page: Page) => page.getByTestId("page-counter");
+  const panel = (page: Page) => page.getByTestId("editor-panel-background");
+  const overflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  /**
+   * Background colour of every page frame. The carousel only mounts pages near the current one;
+   * the page strip (hidden below lg, still rendered) has the cover + every page.
+   */
+  const frameColours = (page: Page, scope: "strip" | "carousel" = "strip") =>
+    page.$$eval(
+      scope === "strip" ? '[data-testid="page-strip"] [data-page]' : '[data-testid="carousel-item"] [data-page]',
+      (els) => els.map((e) => getComputedStyle(e).backgroundColor),
+    );
+  const lastSave = (page: Page) =>
+    page.evaluate(() => (window as unknown as { __devEditorLastSave?: { rev: number; stored: Record<string, unknown> } }).__devEditorLastSave ?? null);
+  async function shot(page: Page, name: string) {
+    const dir = process.env.E2E_SHOTS;
+    if (dir) await page.screenshot({ path: `${dir}/${name}.png` });
+  }
+  async function settle(page: Page) {
+    await expect
+      .poll(
+        async () => {
+          const x1 = (await cur(page).boundingBox())?.x ?? 999;
+          await page.waitForTimeout(100);
+          const x2 = (await cur(page).boundingBox())?.x ?? 999;
+          return Math.abs(x1 - x2) < 1 && Math.abs(x2) < 2;
+        },
+        { timeout: 5_000 },
+      )
+      .toBe(true);
+  }
+  async function waitSaved(page: Page) {
+    await expect(page.getByTestId("save-status")).toHaveAttribute("data-state", "saved", { timeout: 10_000 });
+  }
+
+  test("paper for this page, navy for the whole book, faded photo, reset, undo — autosaved as doc v2", async ({ page }) => {
+    await page.goto(`/dev-editor?bg=1`);
+    await expect(page.getByTestId("editor-shell")).toBeVisible();
+    await expect(counter(page)).toContainText("Cover");
+    await settle(page);
+
+    // Cover: only "Whole book".
+    await page.getByTestId("editor-tool-background").click();
+    await expect(panel(page)).toBeVisible();
+    await expect(page.getByTestId("bg-scope-page")).toBeDisabled();
+    await expect(page.getByTestId("bg-scope-book")).toHaveAttribute("aria-checked", "true");
+    await expect(page.getByTestId("bg-cover-note")).toBeVisible();
+    await page.getByTestId("editor-panel-close").click();
+
+    // Page 2 (one photo + caption) → Paper → Linen, this page only. The panel docks under the page.
+    await page.getByTestId("carousel-next").click();
+    await page.getByTestId("carousel-next").click();
+    await expect(counter(page)).toHaveText("2 / 6");
+    await settle(page);
+    await page.getByTestId("editor-tool-background").click();
+    await expect(panel(page)).toHaveAttribute("data-docked", "true");
+    await expect(page.getByTestId("bg-scope-page")).toHaveAttribute("aria-checked", "true");
+    // The page stays in view above the panel (live preview).
+    const pageBox = (await cur(page).locator('[data-testid="editor-page"]').boundingBox())!;
+    const panelBox = (await panel(page).boundingBox())!;
+    expect(pageBox.y + pageBox.height).toBeLessThanOrEqual(panelBox.y + 1);
+    await page.getByTestId("bg-tab-texture").click();
+    expect(await overflow(page), "paper tab overflow").toBeLessThanOrEqual(0);
+    await page.getByTestId("bg-texture-linen").click();
+    await expect(page.getByTestId("bg-texture-linen")).toHaveAttribute("aria-checked", "true");
+    await expect(cur(page).locator('[data-bg="texture"][data-bg-texture="linen"]')).toHaveCount(1);
+    const carouselLinen = page.locator('[data-testid="carousel-item"] [data-bg-texture="linen"]');
+    await expect(carouselLinen).toHaveCount(1); // no other page
+    await expect(page.getByTestId("bg-reset")).toBeVisible();
+    await shot(page, "375-paper-linen");
+    await waitSaved(page);
+    let saved = await lastSave(page);
+    expect(saved?.stored.version).toBe(2);
+    expect((saved?.stored.pages as { background?: unknown }[])[1].background).toEqual({ kind: "texture", textureId: "linen", source: "user" });
+
+    // Whole book → navy: every page navy (the linen override is replaced), captions white.
+    await page.getByTestId("bg-scope-book").click();
+    await expect(page.getByTestId("bg-replace-note")).toContainText("1 page");
+    await page.getByTestId("bg-tab-color").click();
+    expect(await overflow(page), "colour tab overflow").toBeLessThanOrEqual(0);
+    await page.getByTestId("bg-colour-navy").click();
+    await expect(page.getByTestId("bg-colour-navy")).toHaveAttribute("aria-checked", "true");
+    await expect(page.locator('[data-bg-texture="linen"]')).toHaveCount(0); // carousel + page strip
+    await expect(page.getByTestId("editor-toast")).toContainText("Whole book updated");
+    const colours = await frameColours(page);
+    expect(colours.length).toBeGreaterThanOrEqual(7); // cover + 6 pages
+    expect(new Set(colours)).toEqual(new Set([NAVY_RGB]));
+    expect(new Set(await frameColours(page, "carousel"))).toEqual(new Set([NAVY_RGB]));
+    const captions = page.locator('[data-testid="page-caption"]');
+    expect(await captions.count()).toBeGreaterThan(0);
+    for (const c of await captions.all()) await expect(c).toHaveClass(/\btext-white\b/);
+    await shot(page, "375-whole-book-navy");
+
+    // This page → Photo (an AI-dropped photo is fine as a background) → fade 0.8.
+    await page.getByTestId("bg-scope-page").click();
+    await page.getByTestId("bg-tab-photo").click();
+    expect(await overflow(page), "photo tab overflow").toBeLessThanOrEqual(0);
+    await expect(page.getByTestId("bg-fade")).toBeDisabled();
+    await page.locator(`[data-testid="bg-photo"][data-photo-id="${DROPPED_UUID}"]`).click();
+    await expect(cur(page).locator('[data-bg="photo"]')).toHaveCount(1);
+    await page.getByTestId("bg-fade").fill("0.8");
+    await expect(page.getByTestId("bg-fade-value")).toHaveText("80%");
+    await expect(cur(page).locator('[data-bg="veil"]')).toHaveAttribute("style", /rgba\(255, 255, 255, 0\.8\)/);
+    await shot(page, "375-photo-fade");
+    await waitSaved(page);
+    saved = await lastSave(page);
+    expect(saved?.stored.version).toBe(2);
+    expect(saved?.stored.style).toMatchObject({ background: { kind: "color", hex: "#1E2A47" } });
+    expect((saved?.stored.pages as { background?: unknown }[])[1].background).toEqual({
+      kind: "photo",
+      photoId: DROPPED_UUID,
+      veil: 0.8,
+      veilColor: "#FFFFFF",
+      source: "user",
+    });
+
+    // Reset → back to the book's navy; undo brings the faded photo back.
+    await page.getByTestId("bg-reset").click();
+    await expect(cur(page).locator('[data-bg="veil"]')).toHaveCount(0);
+    await expect(page.getByTestId("bg-reset")).toHaveCount(0);
+    expect(new Set(await frameColours(page, "carousel"))).toEqual(new Set([NAVY_RGB]));
+    await page.getByTestId("editor-panel-close").click();
+    await page.getByTestId("editor-undo").click();
+    await expect(cur(page).locator('[data-bg="veil"]')).toHaveAttribute("style", /rgba\(255, 255, 255, 0\.8\)/);
+    await waitSaved(page);
+    saved = await lastSave(page);
+    expect((saved?.stored.pages as { background?: { veil?: number } }[])[1].background?.veil).toBe(0.8);
+    expect(await overflow(page)).toBeLessThanOrEqual(0);
+  });
+});

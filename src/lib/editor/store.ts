@@ -246,4 +246,5 @@ export const EDIT_ERROR_COPY: Record<EditOpErrorCode, string> = {
   unknown_chapter: "That chapter no longer exists.",
   no_caption_area: "This layout has no room for a caption. Pick a layout with a caption first.",
   page_limit: "You've reached the page limit for this book.",
+  invalid_background: "That background isn't available.",
 };

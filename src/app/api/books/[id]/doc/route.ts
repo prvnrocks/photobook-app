@@ -3,7 +3,9 @@
 // Never trusts the client: the doc is re-validated against the book's own upload-ready photos
 // and books.max_pages from the DB; meta origin fields come from the saved doc and
 // meta.userEdited is forced true; the cover title is synced to books.title (D-037 (7));
-// dropped photos placed in the doc become kept with user_override (D-037 (4)).
+// dropped photos placed in the doc become kept with user_override (D-037 (4)). Photo
+// backgrounds may use any upload-ready photo of the book (kept or dropped) and are not
+// "placed": they never mark a dropped photo kept (M10a A8, validate-editor-doc.ts).
 // Responses (all no-store):
 //   200 { rev, savedAt }
 //   400 { error: 'invalid_body' }                        — not JSON / bad shape / bad baseRev

@@ -21,7 +21,8 @@ import { clipCodePoints, clipText, stripLoneSurrogates } from "@/lib/text/clip";
 import { clampCrop, DEFAULT_CROP } from "./crop";
 import { defaultCaptionFont, type CaptionFont } from "./fonts";
 import { BOOK_TITLE_MAX_CODE_POINTS } from "./options";
-import type { BookDoc, BookPage, Caption, Chapter, Crop, Layout, Slot } from "./types";
+import { BackgroundSchema } from "./schema";
+import type { Background, BookDoc, BookPage, Caption, Chapter, Crop, Layout, PageBackground, Slot } from "./types";
 
 export type EditOpErrorCode =
   | "page_out_of_range"
@@ -30,7 +31,8 @@ export type EditOpErrorCode =
   | "not_a_page_layout"
   | "unknown_chapter"
   | "no_caption_area"
-  | "page_limit";
+  | "page_limit"
+  | "invalid_background";
 
 export class EditOpError extends Error {
   readonly code: EditOpErrorCode;
@@ -364,4 +366,88 @@ export function setChapterTitle(doc: BookDoc, chapterId: string, title: string):
   const chapters: Chapter[] = doc.chapters.slice();
   chapters[idx] = { ...chapters[idx], title: clean };
   return { ...doc, chapters };
+}
+
+// ---- backgrounds (M10a A8) -----------------------------------------------------------------------
+//
+// A page shows page.background when set, else the book default style.background (the cover always
+// shows the book default). Every background the editor writes is a user choice: page overrides get
+// source "user" so AI suggestions (M10c, source "ai") never replace them. Photo backgrounds don't
+// "place" a photo: they may use any photo of the book, also one that is on a page or AI-dropped
+// (the server checks ownership; validate-editor-doc.ts).
+
+/** A schema-valid copy of `bg` with known keys only; throws "invalid_background" otherwise. */
+function cleanBackground(bg: Background): Background {
+  const r = BackgroundSchema.safeParse(bg);
+  if (!r.success) throw new EditOpError("invalid_background");
+  return r.data;
+}
+
+/** Same background (ignores `source`). */
+export function sameBackground(a: Background | PageBackground | null | undefined, b: Background | PageBackground | null | undefined): boolean {
+  if (!a || !b) return !a && !b;
+  switch (a.kind) {
+    case "color":
+      return b.kind === "color" && a.hex.toUpperCase() === b.hex.toUpperCase();
+    case "texture":
+      return b.kind === "texture" && a.textureId === b.textureId && (a.tint ?? null)?.toUpperCase() === (b.tint ?? null)?.toUpperCase();
+    case "photo":
+      return b.kind === "photo" && a.photoId === b.photoId && a.veil === b.veil && a.veilColor.toUpperCase() === b.veilColor.toUpperCase();
+  }
+}
+
+/**
+ * Give one page its own background, chosen by the user (source "user"). Setting the same
+ * background again on a page that already has it as a user choice is a no-op; on an AI-suggested
+ * one it turns the suggestion into the user's choice (source "user").
+ */
+export function setPageBackground(doc: BookDoc, pageIdx: number, bg: Background): BookDoc {
+  const page = pageAt(doc, pageIdx);
+  const clean = cleanBackground(bg);
+  if (page.background && page.background.source === "user" && sameBackground(page.background, clean)) return doc;
+  const background = { ...clean, source: "user" } as PageBackground;
+  return withPage(doc, pageIdx, { ...page, background });
+}
+
+/**
+ * Remove a page's own background, so it shows the book default again. No override (absent or
+ * null) → no-op.
+ * The key is removed (not set to null), so a book without other v2 features is stored as v1 again.
+ */
+export function resetPageBackground(doc: BookDoc, pageIdx: number): BookDoc {
+  const page = pageAt(doc, pageIdx);
+  if (page.background === undefined || page.background === null) return doc;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- drop the key
+  const { background: _drop, ...rest } = page;
+  return withPage(doc, pageIdx, rest);
+}
+
+export interface SetBookBackgroundOptions {
+  /**
+   * Keep pages' own backgrounds (default false). "Whole book" in the editor means every page, so
+   * by default every page override (user or AI) is removed — one undo step brings them back.
+   */
+  keepPageOverrides?: boolean;
+}
+
+/** Set the book default background (cover + every page without an override). */
+export function setBookBackground(doc: BookDoc, bg: Background, opts: SetBookBackgroundOptions = {}): BookDoc {
+  const clean = cleanBackground(bg);
+  const sameDefault = sameBackground(doc.style.background, clean);
+  const clearPages = opts.keepPageOverrides !== true && doc.pages.some((p) => p.background != null);
+  if (sameDefault && !clearPages) return doc;
+  const style = sameDefault ? doc.style : { ...doc.style, background: clean };
+  if (!clearPages) return { ...doc, style };
+  const pages = doc.pages.map((p) => {
+    if (p.background == null) return p;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- drop the key
+    const { background: _drop, ...rest } = p;
+    return rest;
+  });
+  return { ...doc, style, pages };
+}
+
+/** Number of pages with their own background (shown by "Whole book" before it replaces them). */
+export function pageBackgroundOverrideCount(doc: BookDoc): number {
+  return doc.pages.filter((p) => p.background !== undefined && p.background !== null).length;
 }

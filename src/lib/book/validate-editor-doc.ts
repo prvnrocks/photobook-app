@@ -3,6 +3,14 @@
 // currently saved doc), never from the client.
 //
 // Results carry stable codes only — never text from the doc.
+//
+// Backgrounds (M10a A8): the schema already rejects unknown texture ids, a veil outside
+// BACKGROUND_VEIL_MIN..MAX, a non-uuid photo id and unknown keys (strict objects) → invalid_doc.
+// A photo background (book default or page override) must be one of the book's upload-ready
+// photos, kept OR dropped: a background does not "place" a photo, so an AI-dropped photo may be
+// used as a faded background without being restored, and the same photo may also sit in a slot.
+// Another book's photo → foreign_photo. Background photos are NOT in placedPhotoIds, so saving
+// never marks a dropped photo kept just because it is a background.
 
 import { clipCodePoints } from "@/lib/text/clip";
 import { isCaptionFont } from "./fonts";
@@ -34,7 +42,7 @@ export type EditorDocResult =
       pageCount: number;
       /** Trimmed cover title clipped to 120 code points; null when empty (keep books.title). */
       title: string | null;
-      /** Every photo id placed in the doc (cover + slots), deduplicated. */
+      /** Every photo id placed in the doc (cover + slots), deduplicated. Background photos are not placed. */
       placedPhotoIds: string[];
     }
   | { ok: false; code: EditorDocErrorCode };
@@ -101,6 +109,12 @@ export function validateEditorDoc(input: unknown, ctx: EditorDocContext): Editor
       onPages.add(slot.photoId);
       placed.add(slot.photoId);
     }
+  }
+
+  // Background photos: any upload-ready photo of this book (kept or dropped); not "placed".
+  const bgPhotos = [doc.style.background, ...doc.pages.map((p) => p.background)];
+  for (const bg of bgPhotos) {
+    if (bg?.kind === "photo" && !ctx.photoIds.has(bg.photoId)) return { ok: false, code: "foreign_photo" };
   }
 
   // Caption fonts: must be an editor font, unless the page keeps its already-saved font.

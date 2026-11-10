@@ -1,7 +1,9 @@
 // Fixture data + stub transport for the dev-only /dev-editor route (404 in production).
 // No user data: placeholder SVG photos from src/lib/book/dev-preview.ts.
 
-import { devPreviewDoc, devPreviewPhotos } from "@/lib/book/dev-preview";
+import { DEV_BG_PHOTO_UUID, devPreviewDoc, devPreviewPhotos } from "@/lib/book/dev-preview";
+import { serializeDoc } from "@/lib/book/doc-version";
+import { validateEditorDoc } from "@/lib/book/validate-editor-doc";
 import type { SaveOutcome } from "./autosave";
 import type { EditorTransport } from "./transport";
 import type { EditorShellData } from "./types";
@@ -48,12 +50,47 @@ export function devEditorData(mode: DevSaveMode, ai: DevAiMode = "off"): EditorS
   };
 }
 
+/** uuid of a second AI-dropped fixture photo (alias of d14's image), for `?bg=1`. */
+export const DEV_DROPPED_BG_PHOTO_UUID = "00000000-0000-4000-8000-0000000000f4";
+
+/**
+ * `?bg=1` (M10a A8): photo backgrounds need uuid photo ids (schema), the d* fixture ids aren't —
+ * add two uuid photos: DEV_BG_PHOTO_UUID (kept, d15's image) and DEV_DROPPED_BG_PHOTO_UUID
+ * (AI-dropped, d14's image). Not placed in the doc.
+ */
+export function withDevBackgroundPhotos(data: EditorShellData): EditorShellData {
+  const byId = new Map(data.photos.map((p) => [p.id, p]));
+  const alias = (id: string, of: string, status: "kept" | "dropped") => {
+    const src = byId.get(of);
+    return src ? [{ ...src, id, status }] : [];
+  };
+  return {
+    ...data,
+    photos: [...data.photos, ...alias(DEV_BG_PHOTO_UUID, "d15", "kept"), ...alias(DEV_DROPPED_BG_PHOTO_UUID, "d14", "dropped")],
+  };
+}
+
+/** What the last stub save would have stored (dev-only, read by e2e as window.__devEditorLastSave). */
+export interface DevLastSave {
+  rev: number;
+  /** serializeDoc(validated doc) — the JSON the real route writes to books.doc. */
+  stored: unknown;
+}
+
+export interface DevTransportOptions {
+  /**
+   * Run the real save validator (validateEditorDoc, as PUT /api/books/[id]/doc does) on every
+   * "ok" save; a rejection becomes the route's 422 outcome. Photo ids = the fixture's photos.
+   */
+  validate?: { photoIds: ReadonlySet<string>; maxPages: number; savedDoc: unknown };
+}
+
 /** Stub save: ~400 ms, then the outcome for `mode` (ok bumps the rev). */
-export function devTransport(mode: DevSaveMode): EditorTransport {
+export function devTransport(mode: DevSaveMode, opts: DevTransportOptions = {}): EditorTransport {
   let rev = 1;
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
   return {
-    async save(): Promise<SaveOutcome> {
+    async save(doc): Promise<SaveOutcome> {
       await wait(400);
       switch (mode) {
         case "conflict":
@@ -64,9 +101,18 @@ export function devTransport(mode: DevSaveMode): EditorTransport {
           return { kind: "retry", reason: "network" };
         case "invalid":
           return { kind: "invalid", code: "page_limit" };
-        default:
+        default: {
+          if (opts.validate) {
+            const r = validateEditorDoc(doc, opts.validate);
+            if (!r.ok) return { kind: "invalid", code: r.code };
+            rev += 1;
+            const last: DevLastSave = { rev, stored: serializeDoc(r.doc) };
+            (globalThis as { __devEditorLastSave?: DevLastSave }).__devEditorLastSave = last;
+            return { kind: "ok", rev, savedAt: new Date().toISOString() };
+          }
           rev += 1;
           return { kind: "ok", rev, savedAt: new Date().toISOString() };
+        }
       }
     },
     async photoUrls() {

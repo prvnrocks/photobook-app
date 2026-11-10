@@ -91,7 +91,7 @@ export function panelDocksOnMobile(selection: EditorContextValue["state"]["selec
 
 /**
  * Panel of the active tool: bottom sheet on mobile (with a tap-to-close backdrop) — or docked
- * under the page for on-page text (see panelDocksOnMobile) — right-hand side panel on desktop
+ * under the page for on-page text (see panelDocksOnMobile) or a tool with dockOnMobile — right-hand side panel on desktop
  * (lg). Rendered by EditorShell, whose panel row is a column on mobile.
  */
 export function EditorPanelHost({ tool }: { tool: EditorTool | null }) {
@@ -99,7 +99,7 @@ export function EditorPanelHost({ tool }: { tool: EditorTool | null }) {
   if (!tool || !tool.Panel) return null;
   const Panel = tool.Panel;
   const title = tool.panelTitle ?? tool.label;
-  const docked = panelDocksOnMobile(ctx.state.selection);
+  const docked = tool.dockOnMobile === true || panelDocksOnMobile(ctx.state.selection);
   return (
     <>
       {docked ? null : (

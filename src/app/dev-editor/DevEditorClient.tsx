@@ -11,7 +11,7 @@ import type { EditorTool } from "@/components/editor/tools/types";
 import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
 import { replacePhoto, setCover } from "@/lib/book/edit-ops";
 import type { BookFormat } from "@/lib/book/types";
-import { devEditorData, devTransport, type DevAiMode, type DevSaveMode } from "@/lib/editor/dev-fixture";
+import { devEditorData, devTransport, withDevBackgroundPhotos, type DevAiMode, type DevSaveMode } from "@/lib/editor/dev-fixture";
 import { withDevPagesData } from "@/lib/editor/dev-pages-fixture";
 
 const DEV_TOOLS: EditorTool[] = [
@@ -60,6 +60,7 @@ export function DevEditorClient({
   paid = false,
   format = "A5_PORTRAIT",
   paymentsEnabled = false,
+  bg = false,
 }: {
   mode: DevSaveMode;
   ai?: DevAiMode;
@@ -68,14 +69,22 @@ export function DevEditorClient({
   paid?: boolean;
   format?: BookFormat;
   paymentsEnabled?: boolean;
+  /** `?bg=1`: uuid background photos + the real save validator in the stub transport (M10a A8). */
+  bg?: boolean;
 }) {
   const [data] = useState(() => {
-    const fixture = withDevPagesData(devEditorData(mode, ai), pages);
+    const raw = withDevPagesData(devEditorData(mode, ai), pages);
+    const fixture = bg ? withDevBackgroundPhotos(raw) : raw;
     const base = format === fixture.doc.format ? fixture : { ...fixture, doc: { ...fixture.doc, format } };
     const d = paid ? { ...base, book: { ...base.book, isPaid: true, maxPages: 100 } } : base;
     return published ? { ...d, publishedRev: d.docRev } : d;
   });
-  const [transport] = useState(() => devTransport(mode));
+  const [transport] = useState(() =>
+    devTransport(
+      mode,
+      bg ? { validate: { photoIds: new Set(data.photos.map((p) => p.id)), maxPages: data.book.maxPages, savedDoc: data.doc } } : {},
+    ),
+  );
   return (
     <>
       <EditorShell data={data} transport={transport} tools={TOOLS} backHref="/dev-editor" paymentsEnabled={paymentsEnabled} />

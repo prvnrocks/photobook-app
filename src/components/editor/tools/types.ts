@@ -39,6 +39,11 @@ export interface EditorTool {
   Panel?: ComponentType<EditorPanelProps>;
   /** Panel heading (defaults to label). */
   panelTitle?: string;
+  /**
+   * Mobile: dock the panel under the page (no backdrop) instead of a bottom sheet over it, so the
+   * page stays visible while the tool previews its edits live (e.g. Background).
+   */
+  dockOnMobile?: boolean;
   /** Open the Panel as soon as the selection enters one of `scopes` (e.g. caption editor on caption tap). */
   openOnSelect?: boolean;
 }
