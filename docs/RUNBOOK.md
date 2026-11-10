@@ -177,6 +177,9 @@ Per-book deletes and account deletes by users are not affected (they don't use t
 - `codes=confirm_<code>:N`: the email went out but the confirm failed. The book stays claimed and is re-sent by
   a later run (same day: deduped by Resend's idempotency key; next day: a duplicate email, rare).
 - `legacy=1`: the database doesn't have 1800 yet (`confirm_warning` missing) — claim = sent, as in 1600.
+- Old code + 1800 (wrong deploy order): new claims are never confirmed, so warnings are re-sent daily and
+  newly warned drafts are never deleted. Drafts whose `draft_warning_sent_at` was already set under 1600 can
+  still be deleted as before — only new warnings stop deletions.
   Push 1800.
 - `codes=quota:N` / `rejected:N`: Resend daily quota / bad address or sender — check the Resend dashboard.
 - **Incident: "a draft was deleted / is about to be deleted but the owner says no email arrived"**
