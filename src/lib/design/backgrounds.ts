@@ -4,8 +4,10 @@
 // public/design/LICENSE.md) and served same-origin from /design/textures/ — the print renderer
 // only allows the app's own origin (src/lib/pdf/request-routing.ts).
 //
-// The Background type lives HERE; the doc schema (src/lib/book/schema.ts, task A1) builds its
-// zod schema against it and imports the constants (veil range, id lists) from this module.
+// The doc schema (src/lib/book/schema.ts) imports the constants (veil range, texture ids) from this
+// module; the Background types come from that schema (re-exported below).
+
+import type { Background } from "@/lib/book/types";
 
 export type Orientation = "portrait" | "landscape";
 export type Ink = "dark" | "light";
@@ -20,29 +22,13 @@ export const BACKGROUND_VEIL_MAX = 0.9;
 export const DEFAULT_BACKGROUND_VEIL = 0.75;
 export const DEFAULT_VEIL_COLOR = "#FFFFFF";
 
-export type ColorBackground = {
-  kind: "color";
-  /** #RRGGBB. Usually a BACKGROUND_SWATCHES hex, but any colour is valid (v1 docs, AI picks). */
-  hex: string;
-};
-
-export type TextureBackground = {
-  kind: "texture";
-  textureId: TextureId;
-  /** Optional #RRGGBB multiplied over the texture (e.g. tinted paper). */
-  tint?: string;
-};
-
-export type PhotoBackground = {
-  kind: "photo";
-  photoId: string;
-  /** Opacity of the veil laid over the photo, BACKGROUND_VEIL_MIN..MAX (faded photo look). */
-  veil: number;
-  /** #RRGGBB colour of the veil. */
-  veilColor: string;
-};
-
-export type Background = ColorBackground | TextureBackground | PhotoBackground;
+// The union's TS types are inferred from the zod schema in src/lib/book/schema.ts (one source);
+// re-exported here so catalogue users can import them from lib/design. Type-only: no runtime cycle
+// (schema.ts imports this module's constants).
+export type { Background };
+export type ColorBackground = Extract<Background, { kind: "color" }>;
+export type TextureBackground = Extract<Background, { kind: "texture" }>;
+export type PhotoBackground = Extract<Background, { kind: "photo" }>;
 
 export const DEFAULT_BACKGROUND: ColorBackground = { kind: "color", hex: "#FFFFFF" };
 

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { BookPage } from "@/components/book/BookPage";
@@ -11,6 +13,7 @@ import {
   toPublicDoc,
   type PublicBookDoc,
 } from "@/lib/publish/public-doc";
+import { representativeDoc } from "./golden/m9-inputs";
 
 const crop = (x = 0.5, y = 0.5, zoom = 1) => ({ x, y, zoom });
 
@@ -116,8 +119,9 @@ describe("toPublicDoc", () => {
     const doc = fullDoc();
     const pub = toPublicDoc(doc);
     expect(pub.cover).toEqual(doc.cover);
-    // Snapshot stays v1 until M10a A4: the colour background is stored as its hex.
-    expect(pub.style).toEqual({ background: doc.style.background.kind === "color" ? doc.style.background.hex : null, font: doc.style.font });
+    // No v2 feature → v1 snapshot: the colour background is stored as its hex.
+    expect(pub.version).toBe(1);
+    expect(pub.style).toEqual({ background: "#FAF7F2", font: doc.style.font });
     expect(pub.chapters).toEqual([
       { id: "c1", title: "The henna night", dateLabel: "March 2026" },
       { id: "c2", title: "ليلة العمر", dateLabel: "March 2026" },
@@ -181,5 +185,165 @@ describe("publicPhotoIds", () => {
     pub.cover.photoId = null;
     pub.pages = [pub.pages[1]];
     expect(publicPhotoIds(pub)).toEqual(["p3"]);
+  });
+});
+
+// ---------------------------------------------------------------- M10a A4: v1 | v2 snapshots
+
+const PH_BG = "33333333-3333-4333-8333-333333333333";
+const PH_PAGE_BG = "44444444-4444-4444-8444-444444444444";
+
+/** Landscape doc with a texture book background and photo / texture / colour page backgrounds. */
+function v2Doc(): BookDoc {
+  const base = fullDoc();
+  return {
+    ...base,
+    format: "A5_LANDSCAPE",
+    style: { background: { kind: "texture", textureId: "linen", tint: "#F5EEDC" }, designStyle: "modern", font: "Playfair" },
+    pages: base.pages.map((p, i) =>
+      i === 0
+        ? { ...p, background: { kind: "photo", photoId: PH_PAGE_BG, veil: 0.75, veilColor: "#FFFFFF", source: "user" } }
+        : i === 1
+          ? { ...p, background: { kind: "texture", textureId: "kraft", source: "ai" }, side: "left" }
+          : i === 2
+            ? { ...p, background: { kind: "color", hex: "#1E2A47", source: "ai" }, side: "right" }
+            : p,
+    ),
+  };
+}
+
+/** Strip every page-background `source` (the only thing the public doc drops from a render doc). */
+function withoutBgSource(doc: BookDoc): unknown {
+  const c = JSON.parse(JSON.stringify(doc)) as { pages: { background?: Record<string, unknown> }[] };
+  for (const p of c.pages) if (p.background) delete p.background.source;
+  return c;
+}
+
+describe("v2 snapshot", () => {
+  it("landscape + texture + photo backgrounds: toPublicDoc → JSON → parse → render doc equals the source", () => {
+    const doc = v2Doc();
+    expect(parseBookDoc(doc).ok).toBe(true);
+    const pub = toPublicDoc(doc, { captionLang: "ar" });
+    expect(pub.version).toBe(2);
+    const parsed = parsePublicDoc(JSON.parse(JSON.stringify(pub)));
+    expect(parsed).toEqual({ ok: true, doc: pub });
+    if (!parsed.ok) return;
+    const render = publicDocToRenderDoc(parsed.doc);
+    expect(parseBookDoc(render).ok).toBe(true);
+    const expected: BookDoc = {
+      ...doc,
+      occasion: "other",
+      chapters: doc.chapters.map((c) => ({ ...c, place: null })),
+      pages: doc.pages.map((p) => ({ ...p, caption: p.caption ? { ...p.caption, source: "user" } : null })),
+    };
+    delete expected.meta;
+    expect("meta" in render).toBe(false);
+    expect(withoutBgSource(render)).toEqual(withoutBgSource(expected));
+    // Page-background source is filled with the neutral "user" (render-only).
+    expect(render.pages.slice(0, 3).map((p) => p.background?.source)).toEqual(["user", "user", "user"]);
+  });
+
+  it("drops page-background source, meta, place, occasion; keeps format, style and side", () => {
+    const pub = toPublicDoc(v2Doc());
+    if (pub.version !== 2) throw new Error("expected v2");
+    const keys = keysDeep(pub);
+    for (const k of ["meta", "source", "place", "occasion", "runId"]) expect(keys.has(k), k).toBe(false);
+    expect(pub.format).toBe("A5_LANDSCAPE");
+    expect(pub.style).toEqual({ background: { kind: "texture", textureId: "linen", tint: "#F5EEDC" }, designStyle: "modern", font: "Playfair" });
+    expect(pub.pages.map((p) => [p.background ?? null, p.side ?? null])).toEqual([
+      [{ kind: "photo", photoId: PH_PAGE_BG, veil: 0.75, veilColor: "#FFFFFF" }, null],
+      [{ kind: "texture", textureId: "kraft" }, "left"],
+      [{ kind: "color", hex: "#1E2A47" }, "right"],
+      [null, null],
+    ]);
+    expect("background" in pub.pages[3]).toBe(false);
+    expect("side" in pub.pages[3]).toBe(false);
+  });
+
+  it("renders identical markup to the source doc", () => {
+    const doc = v2Doc();
+    const render = publicDocToRenderDoc(toPublicDoc(doc));
+    const ph: RenderPhotos = { ...photos, [PH_BG]: photos.p1, [PH_PAGE_BG]: photos.p2 };
+    for (const page of ["cover" as const, ...doc.pages.map((_, i) => i)]) {
+      for (const mode of ["view", "print"] as const) {
+        const a = renderToStaticMarkup(<BookPage doc={doc} page={page} mode={mode} photos={ph} />);
+        expect(renderToStaticMarkup(<BookPage doc={render} page={page} mode={mode} photos={ph} />)).toBe(a);
+      }
+    }
+  });
+
+  it("a single v2 feature (page background only) switches the snapshot to v2", () => {
+    const doc = fullDoc();
+    doc.pages[2] = { ...doc.pages[2], background: { kind: "color", hex: "#000000", source: "user" } };
+    expect(toPublicDoc(doc).version).toBe(2);
+    // An explicit null page background is "none": stays v1.
+    const plain = fullDoc();
+    plain.pages[2] = { ...plain.pages[2], background: null };
+    expect(toPublicDoc(plain)).toEqual(toPublicDoc(fullDoc()));
+  });
+
+  it("strict: rejects unknown keys anywhere, a page-background source and a v1 snapshot with v2 keys", () => {
+    const pub = toPublicDoc(v2Doc());
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- free-form JSON mutation in a test
+    const mutate = (f: (d: any) => void) => {
+      const c = JSON.parse(JSON.stringify(pub));
+      f(c);
+      return parsePublicDoc(c).ok;
+    };
+    expect(mutate(() => {})).toBe(true);
+    expect(mutate((d) => (d.meta = {}))).toBe(false);
+    expect(mutate((d) => (d.occasion = "wedding"))).toBe(false);
+    expect(mutate((d) => (d.pages[0].background.source = "user"))).toBe(false);
+    expect(mutate((d) => (d.pages[0].background.extra = 1))).toBe(false);
+    expect(mutate((d) => (d.pages[0].extra = 1))).toBe(false);
+    expect(mutate((d) => (d.pages[0].background = null))).toBe(false);
+    expect(mutate((d) => (d.style.extra = 1))).toBe(false);
+    expect(mutate((d) => (d.style.background.extra = 1))).toBe(false);
+    expect(mutate((d) => delete d.style.designStyle)).toBe(false);
+    expect(mutate((d) => (d.style.background = { kind: "texture", textureId: "nope" }))).toBe(false);
+    expect(mutate((d) => (d.style.background = { kind: "photo", photoId: "not-a-uuid", veil: 0.7, veilColor: "#FFFFFF" }))).toBe(false);
+    expect(mutate((d) => (d.format = "A4"))).toBe(false);
+    expect(mutate((d) => (d.version = 3))).toBe(false);
+    // v1 snapshot shape must not carry v2 keys.
+    const v1 = JSON.parse(JSON.stringify(toPublicDoc(fullDoc())));
+    expect(parsePublicDoc(v1).ok).toBe(true);
+    expect(parsePublicDoc({ ...v1, format: "A5_LANDSCAPE" }).ok).toBe(false);
+    expect(parsePublicDoc({ ...v1, style: { ...v1.style, designStyle: "classic" } }).ok).toBe(false);
+    expect(parsePublicDoc({ ...v1, pages: [{ ...v1.pages[0], side: "left" }] }).ok).toBe(false);
+  });
+
+  it("publicPhotoIds includes background photos (book default + page) after content photos", () => {
+    const doc = v2Doc();
+    doc.style.background = { kind: "photo", photoId: PH_BG, veil: 0.6, veilColor: "#F5EEDC" };
+    // A background photo that is also on a page is listed once.
+    doc.pages[3] = { ...doc.pages[3], background: { kind: "photo", photoId: PH_PAGE_BG, veil: 0.9, veilColor: "#000000", source: "ai" } };
+    const ids = publicPhotoIds(toPublicDoc(doc));
+    expect(ids).toEqual(["p1", "p2", "p3", "p4", "p5", "p6", "p2x", PH_BG, PH_PAGE_BG]);
+    expect(ids[0]).toBe("p1");
+  });
+
+  it("is a deep copy for v2 too", () => {
+    const doc = v2Doc();
+    const pub = toPublicDoc(doc);
+    if (pub.version !== 2 || pub.style.background.kind !== "texture" || pub.pages[0].background?.kind !== "photo") {
+      throw new Error("unexpected shape");
+    }
+    pub.style.background.tint = "#000000";
+    pub.pages[0].background.veil = 0.5;
+    expect(doc.style.background).toEqual({ kind: "texture", textureId: "linen", tint: "#F5EEDC" });
+    expect(doc.pages[0].background).toMatchObject({ veil: 0.75 });
+  });
+});
+
+describe("v1 path unchanged", () => {
+  it("republishing a v1 book writes the byte-identical frozen M9 snapshot", () => {
+    const fixture = JSON.parse(readFileSync(join(__dirname, "golden", "fixtures", "m9", "public-doc.json"), "utf8"));
+    const doc = representativeDoc();
+    const cases = { en: { captionLang: "en" as const }, ar: { captionLang: "ar" as const }, none: {}, null: { captionLang: null } };
+    for (const [key, opts] of Object.entries(cases)) {
+      expect(JSON.stringify(toPublicDoc(doc, opts)), key).toBe(JSON.stringify(fixture.publicDoc[key]));
+      const parsed = parsePublicDoc(JSON.parse(JSON.stringify(fixture.publicDoc[key])));
+      expect(parsed.ok, key).toBe(true);
+    }
   });
 });

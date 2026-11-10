@@ -5,16 +5,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { Background as DesignBackground } from "@/lib/design/backgrounds";
 import { serializeDoc, upgradeDocV1, usesV2Features } from "@/lib/book/doc-version";
 import { MAX_SLOTS_V1, MAX_SLOTS_V2, parseBookDoc, validateBookDoc } from "@/lib/book/schema";
-import type { Background, BookDoc, BookDocV1, BookPageV1 } from "@/lib/book/types";
+import type { BookDoc, BookDocV1, BookPageV1 } from "@/lib/book/types";
 import { parsePublicDoc } from "@/lib/publish/public-doc";
 import { baseDocV1, representativeDocV1 } from "./golden/m9-inputs";
-
-// The doc-level Background type (zod, schema.ts) and the catalogue's (lib/design) must stay one type.
-type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
-const backgroundTypesMatch: Same<Background, DesignBackground> = true;
 
 const FIXTURES = join(__dirname, "golden", "fixtures", "m9");
 const readFixture = (name: string): Record<string, unknown> => JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));
@@ -70,12 +65,6 @@ function v2Doc(): BookDoc {
     ),
   };
 }
-
-describe("types", () => {
-  it("doc Background type equals lib/design's Background", () => {
-    expect(backgroundTypesMatch).toBe(true);
-  });
-});
 
 describe("v1 → upgrade → serializeDoc round trip (golden fixtures)", () => {
   const docs = goldenV1Docs();
