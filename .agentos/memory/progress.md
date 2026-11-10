@@ -80,3 +80,4 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - DEPLOY ORDER: set BOOK_ACCESS_SECRET in Vercel (Production + Preview) and .env.local → merge/deploy code → user runs `npx supabase db push` (1100; safe either order, unlock still works without it) → run rls_check on prod (106) → run live publish-auth incl. e + g.
 - LEFT (NEEDS-HUMAN): "Done when" — WhatsApp preview + smooth flip on another phone; iPhone battery with idle pageflip rAF loop.
 - Optional NICE: normalise IPv4 text before bucketing (unlock.ts ~688); drop unused `admin` param in getPublishedBookRow. NEXT: deploy M6, then Milestone 7 (Stripe).
+- (2026-11-10 later) BOOK_ACCESS_SECRET added to .env.local (generated locally; Vercel still needs its own). Live publish-auth on a prod build vs live Supabase: 9/9 pass incl. e (password + rate limit) and g (unpublish). Waiting on user: Vercel env → approve merge/deploy.
