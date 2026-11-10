@@ -124,6 +124,35 @@ export function clampFade(v: number, min: number = FADE_MIN): number {
   return Math.round(Math.min(FADE_MAX, Math.max(min, snapped)) * 100) / 100;
 }
 
+/** Fade slider state (M10b A4): range minimum, thumb position and the value to announce. */
+export interface FadeSliderState {
+  min: number;
+  value: number;
+  /** "50%" for the stored fade; null without a photo background (the label shows a dash). */
+  valueText: string | null;
+}
+
+/**
+ * Fade slider for a photo background. It shows the STORED fade — a light veil saved at 50 %
+ * (before the N4 minimum, or by the AI) reads 50 % and sits at 50 %, exactly as the page renders
+ * it — so the range reaches down to the stored value. New changes still respect fadeMin (nextFade).
+ */
+export function fadeSlider(photo: { veil: number; veilColor: string } | null): FadeSliderState {
+  if (!photo) return { min: FADE_MIN, value: DEFAULT_BACKGROUND_VEIL, valueText: null };
+  const value = Number.isFinite(photo.veil) ? Math.min(FADE_MAX, Math.max(FADE_MIN, photo.veil)) : DEFAULT_BACKGROUND_VEIL;
+  // Stay on the FADE_MIN + k·FADE_STEP grid so the slider's steps don't shift.
+  const onGrid = Math.round((FADE_MIN + Math.floor((value - FADE_MIN) / FADE_STEP + 1e-9) * FADE_STEP) * 100) / 100;
+  return { min: Math.min(fadeMin(photo.veilColor), onGrid), value, valueText: fadeLabel(photo.veil) };
+}
+
+/**
+ * Fade to store when the user moves the slider to `raw`: snapped and raised to the veil colour's
+ * minimum (N4) — a stored light 50 % veil stays until changed, then jumps to 60 %.
+ */
+export function nextFade(raw: number, veilColor: string): number {
+  return clampFade(raw, fadeMin(veilColor));
+}
+
 /** A photo background for `photoId`, keeping fade + veil colour of the current photo background. */
 export function photoBackground(photoId: string, current: Background): Background {
   return current.kind === "photo"

@@ -9,7 +9,8 @@ Conventions: `<domain>` = the production domain (e.g. `photobook.ae`), `<prod>` 
 
 Order that matters (from the M6–M9 deploy notes): **database migrations before the M9 code** (1600 + 1700
 must be in production before the delete-book / delete-account code runs; **1800 goes the other way: deploy the
-M9 review code first, then push 1800** — the new code also works without it), **`BOOK_ACCESS_SECRET` before any
+M9 review code first, then push 1800** — the new code also works without it; **1900 (M10b) is additive: push
+1900 first, then deploy the M10b code**), **`BOOK_ACCESS_SECRET` before any
 code that signs cookies/tokens**, **Vercel Pro before live Stripe keys** (D-053: Hobby is non-commercial).
 
 ---
@@ -159,15 +160,20 @@ Preview origin (e.g. the branch alias of a `staging` branch) that is also in the
 ## 4. Database
 
 - [ ] Run in **your own Terminal** (needs a TTY; CLI pinned to 2.x): `npx supabase link` to the prod project,
-      then `npx supabase db push`. All migrations through **`20261114001800_warning_confirm.sql`** must be
+      then `npx supabase db push`. All migrations through **`20261114001800_warning_confirm.sql`** (M9; **`20261115001900_design.sql`** for M10b) must be
       applied — check with `npx supabase migration list --linked` (local and remote columns identical).
       Apply 1600 + 1700 **before** deploying the M9 code; apply **1800 after** the code that calls
       `confirm_warning` is live (old code + 1800 would re-send warnings daily — safe, but noisy).
       Do it the **same day**, ideally before the next 01:00 UTC cron: until 1800 is applied the code runs in
       legacy mode (claim = sent), where a crash mid-send could still let a draft be deleted without its email.
 - [ ] After the first cron run following 1800, check the `[email] warnings` log line no longer shows `legacy=1`.
+- [ ] **M10b: push `20261115001900_design.sql` BEFORE deploying the M10b code** (migration first, then code).
+      It adds `books.format` / `books.design_style` (owner-settable on insert only, D-063), server-only
+      `photos.color`, and backfills format / style from each book's doc without touching doc, doc_rev or
+      updated_at. The M10a code never names the new columns, so it keeps working after 1900; the M10b code
+      inserts / reads them and fails without it. Rolling the code back to M10a later needs no DB change.
 - [ ] Supabase → SQL Editor → paste the whole of `supabase/tests/rls_check.sql` → Run. Expected: an error panel
-      starting with **`RLS OK — all 173 checks passed`** (raised on purpose; it rolls everything back). Anything
+      starting with **`RLS OK — all 175 checks passed`** (173 before 1900) (raised on purpose; it rolls everything back). Anything
       else (`RLS FAIL [...]`, permission denied) is a blocker.
 - [ ] Verify `private.auth_user_email` works (the warning emails depend on it; needs `postgres` to read
       `auth.users`):

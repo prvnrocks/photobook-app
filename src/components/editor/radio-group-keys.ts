@@ -1,11 +1,22 @@
 // DOM glue for ARIA radio groups (M10a N5): put onKeyDown={onRadioGroupKeyDown} on the element
 // with role="radiogroup" and give each radio tabIndex from rovingTabStop (src/lib/editor/roving.ts).
 // Arrow keys / Home / End move focus to the next enabled radio of THIS group and select it.
+// Manual activation (onRadioGroupKeyDownFocusOnly): arrows only move focus; Enter / Space (the
+// button's own click) selects — for groups where each selection is an expensive edit (M10b A4).
 
 import type { KeyboardEvent } from "react";
 import { nextRadioIndex } from "@/lib/editor/roving";
 
 export function onRadioGroupKeyDown(e: KeyboardEvent<HTMLElement>): void {
+  moveRadioFocus(e, true);
+}
+
+/** Arrow keys move focus only; Enter / Space on the focused radio selects it. */
+export function onRadioGroupKeyDownFocusOnly(e: KeyboardEvent<HTMLElement>): void {
+  moveRadioFocus(e, false);
+}
+
+function moveRadioFocus(e: KeyboardEvent<HTMLElement>, select: boolean): void {
   if (e.altKey || e.ctrlKey || e.metaKey) return;
   const group = e.currentTarget;
   const radios = Array.from(group.querySelectorAll<HTMLButtonElement>('[role="radio"]')).filter(
@@ -19,5 +30,5 @@ export function onRadioGroupKeyDown(e: KeyboardEvent<HTMLElement>): void {
   e.stopPropagation();
   const target = radios[to];
   target.focus();
-  if (target.getAttribute("aria-checked") !== "true") target.click();
+  if (select && target.getAttribute("aria-checked") !== "true") target.click();
 }

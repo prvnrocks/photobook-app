@@ -2619,10 +2619,9 @@ describe("migrations: Milestone 9 review B1 warning claim / confirm (1800, D-057
   } as const;
   const STALE = "now() - interval '1 hour'";
 
-  it("exists right after 1700, is the latest migration, additive only", () => {
+  it("exists right after 1700, additive only", () => {
     expect(m, `${name} missing`).toBeDefined();
     expect(files.indexOf(name)).toBe(files.indexOf("20261114001700_payments_hardening.sql") + 1);
-    expect(files.at(-1)).toBe(name);
     expect(sql).not.toMatch(/\bdrop\b/);
     expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
     expect(sql).not.toMatch(/\bcreate\s+(policy|table|trigger)\b/);
@@ -2639,15 +2638,14 @@ describe("migrations: Milestone 9 review B1 warning claim / confirm (1800, D-057
     );
   });
 
-  it("protect_book_columns (latest = 1800) keeps every 1600 assignment and guards both claim columns", () => {
+  it("protect_book_columns (1800, superseded by 1900) keeps every 1600 assignment and guards both claim columns", () => {
     const f = fn("private.protect_book_columns")!;
-    expect(latestFunction("private.protect_book_columns")!.body).toBe(f.body);
     expect(f.header).not.toMatch(/security\s+definer/);
     expect(f.header).toMatch(/set\s+search_path\s*=\s*''/);
     const body = ws(f.body);
     expect(body).toContain("if current_user in ('postgres', 'service_role', 'supabase_admin') then return new; end if;");
     const all = functions.filter((x) => x.name === "private.protect_book_columns");
-    const prev = ws(all.at(-2)!.body);
+    const prev = ws(all[all.findIndex((x) => x.body === f.body) - 1]!.body);
     for (const a of prev.match(/new\.\w+ := [^;]+;/g)!) expect(body, a).toContain(a);
     const [ins, upd] = body.split("elsif tg_op = 'update' then");
     expect(ins).toContain("new.expiry_warning_claimed_at := null;");
@@ -2718,18 +2716,125 @@ describe("migrations: Milestone 9 review B1 warning claim / confirm (1800, D-057
     expect(f.body).not.toContain("claimed_at");
   });
 
-  it("rls_check.sql covers 1800 and counts 173 checks", () => {
+  it("rls_check.sql covers 1800 (173 checks then; 1900 → 175)", () => {
     const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
     expect(rls).toContain(name);
     for (const tag of ["warning confirm grants", "warning claim guard", "warning crash", "warning confirm"]) {
       expect(rls).toContain(`RLS FAIL [${tag}]`);
     }
-    expect(rls).toContain("RLS OK — all 173 checks passed");
   });
 
   it("database.types.ts: claim columns + confirm_warning (hand-edited)", () => {
     const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
     expect(types).toMatch(/books: \{\s*Row: \{[\s\S]*?draft_warning_claimed_at: string \| null[\s\S]*?expiry_warning_claimed_at: string \| null[\s\S]*?\}\s*Insert:/);
     expect(types).toMatch(/confirm_warning: \{\s*Args: \{ p_book: string; p_kind: string \}\s*Returns: boolean/);
+  });
+});
+
+describe("migrations: Milestone 10b design columns (1900, D-063)", () => {
+  const name = "20261115001900_design.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const ws = (s: string) => s.replace(/\s+/g, " ");
+  const flat = ws(sql);
+  const fns = matchesAll(/create\s+(?:or\s+replace\s+)?function\s+([\w.]+)\s*\(([\s\S]*?)\bas\s+\$\$([\s\S]*?)\$\$/, sql).map(
+    (x) => ({ name: x[1], header: x[2], body: x[3] }),
+  );
+  const fn = (n: string) => fns.find((x) => x.name === n);
+  const prevOf = (n: string, body: string) => {
+    const defs = functions.filter((x) => x.name === n);
+    return ws(defs[defs.findIndex((x) => x.body === body) - 1]!.body);
+  };
+  const raw = m ? readFileSync(join(MIGRATIONS_DIR, name), "utf8") : "";
+
+  it("exists right after 1800, is the latest migration, additive only, migration-first header", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files.indexOf(name)).toBe(files.indexOf("20261114001800_warning_confirm.sql") + 1);
+    expect(files.at(-1)).toBe(name);
+    expect(sql).not.toMatch(/\bdrop\b/);
+    expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
+    expect(sql).not.toMatch(/\bcreate\s+(policy|table|trigger)\b/);
+    expect(sql).not.toMatch(/\b(grant|revoke)\s+[a-z_\s,()]+\s+on\s+(?:table\s+)?(public|private)\./);
+    expect(sql).not.toMatch(/security\s+definer/);
+    expect(fns.map((f) => f.name).sort()).toEqual(["private.protect_book_columns", "private.protect_photo_columns"]);
+    expect(raw).toContain("additive: apply BEFORE code");
+  });
+
+  it("adds books.format / design_style (not null, defaults, enum checks) and photos.color (#RRGGBB)", () => {
+    expect(flat).toContain(
+      "alter table public.books add column format text not null default 'a5_portrait', add column design_style text not null default 'classic';",
+    );
+    expect(flat).toContain("check (format in ('a5_portrait', 'a5_landscape'))");
+    expect(flat).toContain("check (design_style in ('classic', 'modern', 'geometric', 'scrapbook'))");
+    expect(flat).toContain("alter table public.photos add column color text;");
+    expect(flat).toContain("check (color is null or color ~ '^#[0-9a-fa-f]{6}$')");
+  });
+
+  it("the SQL enums match src/lib/book/schema.ts BOOK_FORMATS / DESIGN_STYLES", () => {
+    const schema = readFileSync(join(process.cwd(), "src", "lib", "book", "schema.ts"), "utf8");
+    const list = (re: RegExp) => [...re.exec(schema)![1]!.matchAll(/"([^"]+)"/g)].map((x) => x[1]!.toLowerCase());
+    const formats = list(/BOOK_FORMATS = \[([^\]]*)\]/);
+    const styles = list(/DESIGN_STYLES = \[([^\]]*)\]/);
+    expect(flat).toContain(`check (format in (${formats.map((x) => `'${x}'`).join(", ")}))`);
+    expect(flat).toContain(`check (design_style in (${styles.map((x) => `'${x}'`).join(", ")}))`);
+  });
+
+  it("protect_book_columns (latest = 1900) keeps every 1800 assignment; format / design_style insert-only", () => {
+    const f = fn("private.protect_book_columns")!;
+    expect(latestFunction("private.protect_book_columns")!.body).toBe(f.body);
+    expect(f.header).not.toMatch(/security\s+definer/);
+    expect(f.header).toMatch(/set\s+search_path\s*=\s*''/);
+    const body = ws(f.body);
+    expect(body).toContain("if current_user in ('postgres', 'service_role', 'supabase_admin') then return new; end if;");
+    for (const a of prevOf("private.protect_book_columns", f.body).match(/new\.\w+ := [^;]+;/g)!) expect(body, a).toContain(a);
+    const [ins, upd] = body.split("elsif tg_op = 'update' then");
+    expect(ins).not.toMatch(/new\.(format|design_style) :=/);
+    expect(upd).toContain("new.format := old.format;");
+    expect(upd).toContain("new.design_style := old.design_style;");
+    expect(flat).toContain("revoke all on function private.protect_book_columns() from public, anon, authenticated;");
+  });
+
+  it("protect_photo_columns (latest = 1900) keeps every 0500 assignment; color server-only", () => {
+    const f = fn("private.protect_photo_columns")!;
+    expect(latestFunction("private.protect_photo_columns")!.body).toBe(f.body);
+    expect(f.header).toMatch(/security\s+invoker/);
+    expect(f.header).toMatch(/set\s+search_path\s*=\s*''/);
+    const body = ws(f.body);
+    const prev = prevOf("private.protect_photo_columns", f.body);
+    for (const a of prev.match(/new\.\w+ := [^;]+;/g)!) expect(body, a).toContain(a);
+    expect(body).toContain("raise exception 'photo_files_missing' using errcode = '23514'");
+    const [ins, upd] = body.split("elsif tg_op = 'update' then");
+    expect(ins).toContain("new.color := null;");
+    expect(upd).toContain("new.color := old.color;");
+    expect(flat).toContain("revoke all on function private.protect_photo_columns() from public, anon, authenticated;");
+  });
+
+  it("backfills from doc without writing doc, with books_set_updated_at off only around the update", () => {
+    const off = flat.indexOf("alter table public.books disable trigger books_set_updated_at;");
+    const upd = flat.indexOf("update public.books as b set format = coalesce(v.doc_format, b.format), design_style = coalesce(v.doc_style, b.design_style)");
+    const on = flat.indexOf("alter table public.books enable trigger books_set_updated_at;");
+    expect(off).toBeGreaterThan(0);
+    expect(upd).toBeGreaterThan(off);
+    expect(on).toBeGreaterThan(upd);
+    expect(matchesAll(/disable\s+trigger/, sql)).toHaveLength(1);
+    expect(matchesAll(/enable\s+trigger/, sql)).toHaveLength(1);
+    expect(flat).not.toMatch(/set[^;]*\bdoc\s*=/);
+    expect(flat).toContain("when x.doc ->> 'format' in ('a5_portrait', 'a5_landscape')");
+    expect(flat).toContain("when x.doc -> 'style' ->> 'designstyle' in ('classic', 'modern', 'geometric', 'scrapbook')");
+  });
+
+  it("rls_check.sql covers 1900 and counts 175 checks", () => {
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain(name);
+    for (const tag of ["design backfill", "design insert", "design update", "photo color"]) {
+      expect(rls).toContain(`RLS FAIL [${tag}]`);
+    }
+    expect(rls).toContain("RLS OK — all 175 checks passed");
+  });
+
+  it("database.types.ts: books.format / design_style + photos.color (hand-edited)", () => {
+    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
+    expect(types).toMatch(/books: \{\s*Row: \{[\s\S]*?design_style: string\n[\s\S]*?format: string\n[\s\S]*?\}\s*Insert: \{[\s\S]*?design_style\?: string[\s\S]*?format\?: string/);
+    expect(types).toMatch(/photos: \{\s*Row: \{[\s\S]*?color: string \| null[\s\S]*?\}\s*Insert:/);
   });
 });

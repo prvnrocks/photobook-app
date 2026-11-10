@@ -283,7 +283,9 @@ describe("schema strictness", () => {
 describe("validateBookDoc on v2", () => {
   // One photo per slot, all known: a doc validateBookDoc accepts, with v2 backgrounds on top.
   function validV2(): { doc: BookDoc; photoIds: Set<string> } {
-    const doc = v2Doc();
+    // Portrait: the shipping catalogue has only A5 portrait layouts so far (M10b: a layout's
+    // format must match doc.format). Backgrounds + modern style still make it a v2 doc.
+    const doc: BookDoc = { ...v2Doc(), format: "A5_PORTRAIT" };
     const photoIds = new Set<string>([PHOTO_A]);
     let n = 0;
     const pages = doc.pages
@@ -303,6 +305,14 @@ describe("validateBookDoc on v2", () => {
   it("a valid v2 doc with backgrounds has no issues", () => {
     const { doc, photoIds } = validV2();
     expect(validateBookDoc(doc, { photoIds, maxPages: 100 })).toEqual([]);
+  });
+
+  it("flags layouts whose format differs from the book's (M10b)", () => {
+    const { doc, photoIds } = validV2();
+    const issues = validateBookDoc({ ...doc, format: "A5_LANDSCAPE" }, { photoIds, maxPages: 100 });
+    expect(issues[0]).toBe('cover: layout "cover" is for A5_PORTRAIT, book is A5_LANDSCAPE');
+    expect(issues).toContain(`pages[0]: layout "${doc.pages[0].layout}" is for A5_PORTRAIT, book is A5_LANDSCAPE`);
+    expect(issues).toHaveLength(1 + doc.pages.length);
   });
 
   it("flags unknown background photos (page override and book default)", () => {

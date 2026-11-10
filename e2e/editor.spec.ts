@@ -1307,4 +1307,125 @@ test.describe("backgrounds at 375 px (/dev-editor?bg=1)", () => {
     await expect(page.getByTestId("bg-scope-book")).toBeFocused();
     await expect(page.getByTestId("bg-scope-book")).toHaveAttribute("aria-checked", "true");
   });
+
+  // ---- M10b A4: picker polish ---------------------------------------------------------------
+
+  test("fade slider shows a stored light 50 % veil as 50 %; the first change goes to the 60 % minimum", async ({ page }) => {
+    await page.goto(`/dev-editor?bg=1&bgveil=light50`);
+    await expect(page.getByTestId("editor-shell")).toBeVisible();
+    await settle(page);
+    await page.getByTestId("carousel-next").click();
+    await expect(counter(page)).toHaveText("1 / 6");
+    await settle(page);
+    // The page renders the stored 0.5 veil.
+    await expect(cur(page).locator('[data-bg="veil"]').first()).toHaveCSS("background-color", "rgba(255, 255, 255, 0.5)");
+    await page.getByTestId("editor-tool-background").click();
+    await expect(page.getByTestId("bg-panel-photo")).toBeVisible();
+    const fade = page.getByTestId("bg-fade");
+    await expect(page.getByTestId("bg-fade-value")).toHaveText("50%");
+    await expect(fade).toHaveValue("0.5");
+    await expect(fade).toHaveAttribute("min", "0.5");
+    await expect(fade).toHaveAttribute("aria-valuetext", "50%");
+    await shot(page, "375-fade-stored-50");
+    // A new change respects the light-veil minimum (N4): one step up lands on 60 %.
+    await fade.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByTestId("bg-fade-value")).toHaveText("60%");
+    await expect(fade).toHaveValue("0.6");
+    await expect(fade).toHaveAttribute("min", "0.6");
+    await expect(counter(page)).toHaveText("1 / 6");
+    await expect(cur(page).locator('[data-bg="veil"]').first()).toHaveCSS("background-color", "rgba(255, 255, 255, 0.6)");
+    await waitSaved(page);
+    const saved = await lastSave(page);
+    expect((saved?.stored.pages as { background?: { veil?: number } }[])[0].background).toMatchObject({ kind: "photo", veil: 0.6, veilColor: "#FFFFFF" });
+    expect(await overflow(page)).toBeLessThanOrEqual(0);
+  });
+
+  test("Whole-book photo grid: arrow keys move focus only, Enter applies once (one undo step)", async ({ page }) => {
+    await page.goto(`/dev-editor?bg=1`);
+    await expect(page.getByTestId("editor-shell")).toBeVisible();
+    await settle(page);
+    await page.getByTestId("carousel-next").click();
+    await page.getByTestId("carousel-next").click();
+    await expect(counter(page)).toHaveText("2 / 6");
+    await settle(page);
+    await page.getByTestId("editor-tool-background").click();
+    await page.getByTestId("bg-tab-texture").click();
+    await page.getByTestId("bg-texture-linen").click();
+    await expect(page.locator('[data-testid="page-strip"] [data-bg-texture="linen"]')).toHaveCount(1);
+    await waitSaved(page);
+    const coloursBefore = await frameColours(page);
+
+    await page.getByTestId("bg-scope-book").click();
+    await page.getByTestId("bg-tab-photo").click();
+    const grid = page.getByTestId("bg-photos");
+    await expect(grid).toHaveAttribute("data-keys", "focus");
+    const kept = grid.locator(`[data-photo-id="${KEPT_UUID}"]`);
+    const dropped = grid.locator(`[data-photo-id="${DROPPED_UUID}"]`);
+    await kept.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(dropped).toBeFocused();
+    await page.keyboard.press("ArrowLeft");
+    await expect(kept).toBeFocused();
+    await page.keyboard.press("ArrowRight");
+    await expect(dropped).toBeFocused();
+    // Nothing applied: no photo checked, no toast, the book and the linen page unchanged.
+    await expect(grid.locator('[aria-checked="true"]')).toHaveCount(0);
+    await expect(page.getByTestId("editor-toast")).toHaveCount(0);
+    await expect(page.locator('[data-testid="page-strip"] [data-bg="photo"], [data-testid="page-strip"] [data-bg="veil"]')).toHaveCount(0);
+    expect(await frameColours(page)).toEqual(coloursBefore);
+    await expect(counter(page)).toHaveText("2 / 6");
+
+    // Enter applies the focused photo to the whole book: one edit, the warning toast.
+    await page.keyboard.press("Enter");
+    await expect(dropped).toHaveAttribute("aria-checked", "true");
+    await expect(page.getByTestId("editor-toast")).toContainText("1 page lost");
+    await expect(page.locator('[data-testid="page-strip"] [data-bg-texture="linen"]')).toHaveCount(0);
+    await waitSaved(page);
+    const saved = await lastSave(page);
+    expect(saved?.stored.style).toMatchObject({ background: { kind: "photo", photoId: DROPPED_UUID } });
+
+    // A single undo restores the book colour and the linen page.
+    await page.getByTestId("editor-undo").click();
+    await expect(page.locator('[data-testid="page-strip"] [data-bg-texture="linen"]')).toHaveCount(1);
+    await expect(grid.locator('[aria-checked="true"]')).toHaveCount(0);
+    expect(await frameColours(page)).toEqual(coloursBefore);
+  });
+
+  test("toast follows the panel when it changes size after the toast appeared", async ({ page }) => {
+    await page.goto(`/dev-editor?bg=1`);
+    await expect(page.getByTestId("editor-shell")).toBeVisible();
+    await settle(page);
+    await page.getByTestId("carousel-next").click();
+    await expect(counter(page)).toHaveText("1 / 6");
+    await settle(page);
+    await page.getByTestId("editor-tool-background").click();
+    await page.getByTestId("bg-tab-texture").click();
+    await page.getByTestId("bg-texture-linen").click();
+    await page.getByTestId("bg-scope-book").click();
+    await page.getByTestId("bg-tab-color").click();
+    await page.getByTestId("bg-colour-navy").click();
+    const toast = page.getByTestId("editor-toast");
+    await expect(toast).toContainText("1 page lost");
+    await expect(page.getByTestId("editor-toast-host")).toHaveAttribute("data-above-panel", "true");
+    const above = async () => {
+      const t = (await toast.boundingBox())!;
+      const p = (await panel(page).boundingBox())!;
+      return t.y + t.height <= p.y + 1 && p.y - (t.y + t.height) < 24;
+    };
+    await expect.poll(above).toBe(true);
+    // The panel shrinks while the toast shows (no window resize): the toast moves down with it.
+    const topBefore = (await panel(page).boundingBox())!.y;
+    await panel(page).evaluate((el) => {
+      (el as HTMLElement).style.maxHeight = "160px";
+    });
+    await expect.poll(async () => (await panel(page).boundingBox())!.y - topBefore).toBeGreaterThan(40);
+    await expect.poll(above).toBe(true);
+    // Closing the panel → default spot; reopening the tool → above the new panel again.
+    await page.getByTestId("editor-panel-close").click();
+    await expect(page.getByTestId("editor-toast-host")).toHaveAttribute("data-above-panel", "false");
+    await page.getByTestId("editor-tool-background").click();
+    await expect(page.getByTestId("editor-toast-host")).toHaveAttribute("data-above-panel", "true");
+    await expect.poll(above).toBe(true);
+  });
 });

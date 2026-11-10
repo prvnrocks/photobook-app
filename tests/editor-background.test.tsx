@@ -26,6 +26,8 @@ import {
   clampFade,
   currentBackground,
   fadeMin,
+  fadeSlider,
+  nextFade,
   initialTab,
   isSuggested,
   keepsPageOverrides,
@@ -522,5 +524,43 @@ describe("picker keyboard + screen reader (N5)", () => {
     expect(trapFocusIndex(-1, 3, false)).toBe(0);
     expect(trapFocusIndex(-1, 3, true)).toBe(2);
     expect(trapFocusIndex(0, 0, false)).toBe(-1);
+  });
+});
+
+describe("fade slider shows the stored fade (M10b A4)", () => {
+  it("a stored light 50 % veil reads 50 % and sits at 50 %; new changes still start at 60 %", () => {
+    const stored = { veil: 0.5, veilColor: "#FFFFFF" };
+    expect(fadeSlider(stored)).toEqual({ min: 0.5, value: 0.5, valueText: "50%" });
+    expect(fadeSlider({ veil: 0.55, veilColor: "#F5EEDC" })).toEqual({ min: 0.55, value: 0.55, valueText: "55%" });
+    // Off-grid stored value: min stays on the 0.5 + k·0.05 grid.
+    expect(fadeSlider({ veil: 0.52, veilColor: "#FFFFFF" })).toEqual({ min: 0.5, value: 0.52, valueText: "52%" });
+    // At / above the minimum nothing changes.
+    expect(fadeSlider({ veil: 0.8, veilColor: "#FFFFFF" })).toEqual({ min: 0.6, value: 0.8, valueText: "80%" });
+    expect(fadeSlider({ veil: 0.5, veilColor: "#1E2A47" })).toEqual({ min: 0.5, value: 0.5, valueText: "50%" });
+    expect(fadeSlider(null)).toEqual({ min: 0.5, value: 0.75, valueText: null });
+    // Moving the slider: light veils never go below 60 %, dark ones keep 50 %.
+    expect(nextFade(0.55, "#FFFFFF")).toBe(0.6);
+    expect(nextFade(0.5, "#FFFFFF")).toBe(0.6);
+    expect(nextFade(0.7, "#FFFFFF")).toBe(0.7);
+    expect(nextFade(0.55, "#1E2A47")).toBe(0.55);
+    expect(nextFade(0.95, "#1E2A47")).toBe(0.9);
+  });
+
+  it("renders the stored value (label, thumb, aria-valuetext), not the clamped 60 %", () => {
+    const h = html({ tab: "photo", current: { ...PHOTO, veil: 0.5, veilColor: "#FFFFFF" } });
+    expect(h).toMatch(/data-testid="bg-fade-value">50%</);
+    expect(h).toMatch(/type="range" min="0.5" max="0.9" step="0.05" aria-valuetext="50%"[^>]*value="0.5"/);
+    expect(h).not.toContain("60%");
+    // No photo: a dash, no aria-valuetext.
+    const none = html({ tab: "photo", current: NAVY });
+    expect(none).toMatch(/data-testid="bg-fade-value">—</);
+    expect(none).not.toMatch(/type="range"[^>]*aria-valuetext=/);
+  });
+});
+
+describe("Whole-book photo grid keyboard (M10b A4)", () => {
+  it("Whole book: arrows move focus only (data-keys=focus); This page keeps select-on-arrow", () => {
+    expect(html({ tab: "photo", scope: "book", current: PHOTO })).toMatch(/data-testid="bg-photos" data-keys="focus"/);
+    expect(html({ tab: "photo", scope: "page", current: PHOTO })).toMatch(/data-testid="bg-photos" data-keys="select"/);
   });
 });

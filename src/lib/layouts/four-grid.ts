@@ -5,6 +5,8 @@ export const fourGrid: Layout = {
   id: "four-grid",
   name: "4 photo grid",
   role: "page",
+  style: "classic",
+  format: "A5_PORTRAIT",
   photoCount: 4,
   prefers: ["any", "any", "any", "any"],
   slots: [

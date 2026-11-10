@@ -197,6 +197,7 @@ export type Database = {
           ai_status: string
           caption_lang: string
           created_at: string
+          design_style: string
           doc: Json
           doc_rev: number
           draft_warning_claimed_at: string | null
@@ -204,6 +205,7 @@ export type Database = {
           expires_at: string | null
           expiry_warning_claimed_at: string | null
           expiry_warning_sent_at: string | null
+          format: string
           id: string
           is_paid: boolean
           last_published_at: string | null
@@ -224,6 +226,7 @@ export type Database = {
           ai_status?: string
           caption_lang?: string
           created_at?: string
+          design_style?: string
           doc?: Json
           doc_rev?: number
           draft_warning_claimed_at?: string | null
@@ -231,6 +234,7 @@ export type Database = {
           expires_at?: string | null
           expiry_warning_claimed_at?: string | null
           expiry_warning_sent_at?: string | null
+          format?: string
           id?: string
           is_paid?: boolean
           last_published_at?: string | null
@@ -251,6 +255,7 @@ export type Database = {
           ai_status?: string
           caption_lang?: string
           created_at?: string
+          design_style?: string
           doc?: Json
           doc_rev?: number
           draft_warning_claimed_at?: string | null
@@ -258,6 +263,7 @@ export type Database = {
           expires_at?: string | null
           expiry_warning_claimed_at?: string | null
           expiry_warning_sent_at?: string | null
+          format?: string
           id?: string
           is_paid?: boolean
           last_published_at?: string | null
@@ -415,6 +421,7 @@ export type Database = {
           blur_score: number | null
           book_id: string
           camera: string | null
+          color: string | null
           created_at: string
           date_source: string | null
           drop_reason: string | null
@@ -444,6 +451,7 @@ export type Database = {
           blur_score?: number | null
           book_id: string
           camera?: string | null
+          color?: string | null
           created_at?: string
           date_source?: string | null
           drop_reason?: string | null
@@ -473,6 +481,7 @@ export type Database = {
           blur_score?: number | null
           book_id?: string
           camera?: string | null
+          color?: string | null
           created_at?: string
           date_source?: string | null
           drop_reason?: string | null

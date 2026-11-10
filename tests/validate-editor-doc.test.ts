@@ -247,15 +247,20 @@ describe("validateEditorDoc — title + meta", () => {
 });
 
 describe("validateEditorDoc — pinned until M10b: format, designStyle, page sides (review S2)", () => {
-  it("unchanged values pass (saved v2 landscape / modern / sides are kept as they are)", () => {
-    const saved: BookDoc = {
-      ...devPreviewDoc(),
-      format: "A5_LANDSCAPE",
-      style: { ...devPreviewDoc().style, designStyle: "modern" },
-      pages: devPreviewDoc().pages.map((p, i) => (i === 0 ? { ...p, side: "left" as const } : p)),
-    };
+  it("unchanged values pass (saved v2 modern style is kept as it is)", () => {
+    const saved: BookDoc = { ...devPreviewDoc(), style: { ...devPreviewDoc().style, designStyle: "modern" } };
     expect(validateEditorDoc(saved, ctx({ savedDoc: saved })).ok).toBe(true);
     expect(validateEditorDoc(devPreviewDoc(), ctx()).ok).toBe(true);
+  });
+
+  it("M10b A2: unchanged but structurally invalid → invalid_doc (portrait layouts in a landscape book, side on a single page)", () => {
+    const landscape: BookDoc = { ...devPreviewDoc(), format: "A5_LANDSCAPE" };
+    expect(validateEditorDoc(landscape, ctx({ savedDoc: landscape }))).toEqual({ ok: false, code: "invalid_doc" });
+    const sided: BookDoc = {
+      ...devPreviewDoc(),
+      pages: devPreviewDoc().pages.map((p, i) => (i === 0 ? { ...p, side: "left" as const } : p)),
+    };
+    expect(validateEditorDoc(sided, ctx({ savedDoc: sided }))).toEqual({ ok: false, code: "invalid_doc" });
   });
 
   it("changing format → invalid_doc", () => {

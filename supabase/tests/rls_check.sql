@@ -1,5 +1,5 @@
 -- =============================================================================
--- supabase/tests/rls_check.sql — live RLS / trigger / storage check (Milestones 1–9)
+-- supabase/tests/rls_check.sql — live RLS / trigger / storage check (Milestones 1–10)
 --
 -- HOW TO RUN
 --   1. Apply the migrations first (`npm run db:push`) — including
@@ -50,7 +50,11 @@
 --      and 20261114001800_warning_confirm.sql (server-only warning claim
 --      columns, claim ≠ sent: confirm_warning / release_warning service-role
 --      only, a claim without confirm never makes a draft deletable and is
---      reclaimable after 1 hour).
+--      reclaimable after 1 hour)
+--      and 20261115001900_design.sql (books.format / books.design_style:
+--      owner may set them on insert, enum checks, never on update; server-only
+--      photos.color with a #RRGGBB check; backfill from doc matches the live
+--      data).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -59,7 +63,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 173 checks passed
+--       RLS OK — all 175 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -224,6 +228,8 @@ declare
   dg_disp     uuid;
   dg_b        uuid;
   dg_ord      uuid;
+  ds_b        uuid;
+  ds_p        uuid;
   r          record;
   a2_created timestamptz;
   n          integer;
@@ -3514,6 +3520,109 @@ begin
     raise exception 'RLS FAIL [warning confirm]: unknown kind accepted';
   exception when invalid_parameter_value then null;
   end;
+  checks := checks + 1;
+
+  -- ===========================================================================
+  -- 1900 design: books.format / design_style insert-only (D-063), photos.color
+  -- server-only
+  -- ===========================================================================
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+
+  -- the live backfill: no book whose doc names a valid format / designStyle disagrees with
+  -- its columns (1900 copied them; afterwards the columns are the authority, D-063)
+  select count(*) into n from public.books
+   where (doc ->> 'format' in ('A5_PORTRAIT', 'A5_LANDSCAPE') and doc ->> 'format' <> format)
+      or (doc -> 'style' ->> 'designStyle' in ('classic', 'modern', 'geometric', 'scrapbook')
+          and doc -> 'style' ->> 'designStyle' <> design_style);
+  if n <> 0 then
+    raise exception 'RLS FAIL [design backfill]: % books whose doc format / designStyle differs from the columns', n;
+  end if;
+
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  -- defaults
+  insert into public.books (user_id, title) values (uid_a, 'RLS design default')
+  returning format, design_style into r;
+  if r.format is distinct from 'A5_PORTRAIT' or r.design_style is distinct from 'classic' then
+    raise exception 'RLS FAIL [design insert]: defaults are % / %', r.format, r.design_style;
+  end if;
+  -- owner chooses both on insert
+  insert into public.books (user_id, title, format, design_style)
+  values (uid_a, 'RLS design landscape', 'A5_LANDSCAPE', 'modern')
+  returning id, format, design_style into r;
+  ds_b := r.id;
+  if r.format is distinct from 'A5_LANDSCAPE' or r.design_style is distinct from 'modern' then
+    raise exception 'RLS FAIL [design insert]: owner could not set format / design_style on insert';
+  end if;
+  -- enums enforced
+  begin
+    insert into public.books (user_id, title, format) values (uid_a, 'RLS design bad', 'A4_PORTRAIT');
+    raise exception 'RLS FAIL [design insert]: unknown format accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.books (user_id, title, design_style) values (uid_a, 'RLS design bad', 'baroque');
+    raise exception 'RLS FAIL [design insert]: unknown design_style accepted';
+  exception when check_violation then null;
+  end;
+  -- never on update (kept silently, like the other server-only columns), other columns still editable
+  update public.books set format = 'A5_PORTRAIT', design_style = 'classic', title = 'RLS design edited'
+   where id = ds_b;
+  reset role;
+  if not exists (select 1 from public.books where id = ds_b and format = 'A5_LANDSCAPE'
+                   and design_style = 'modern' and title = 'RLS design edited') then
+    raise exception 'RLS FAIL [design update]: owner changed format / design_style (or title edit lost)';
+  end if;
+  -- B cannot see / touch A's book at all
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_b, 'role', 'authenticated')::text, true);
+  update public.books set title = 'RLS design B' where id = ds_b;
+  get diagnostics n = row_count;
+  reset role;
+  if n <> 0 then
+    raise exception 'RLS FAIL [design update]: B updated A''s book';
+  end if;
+  -- service role (A6 relayout / backfill paths) may still write them
+  set local role service_role;
+  update public.books set design_style = 'classic' where id = ds_b;
+  reset role;
+  if not exists (select 1 from public.books where id = ds_b and design_style = 'classic') then
+    raise exception 'RLS FAIL [design update]: service role could not write design_style';
+  end if;
+  checks := checks + 1;
+
+  -- photos.color: server-only, #RRGGBB
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  insert into public.photos (user_id, book_id, fingerprint, color)
+  values (uid_a, ds_b, 'rls-check-fp-design-color', '#112233')
+  returning id, color into r;
+  ds_p := r.id;
+  if r.color is not null then
+    raise exception 'RLS FAIL [photo color]: owner set color on insert';
+  end if;
+  reset role;
+  update public.photos set color = '#A1b2C3' where id = ds_p;
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  update public.photos set color = '#000000' where id = ds_p;
+  update public.photos set color = null where id = ds_p;
+  reset role;
+  if not exists (select 1 from public.photos where id = ds_p and color = '#A1b2C3') then
+    raise exception 'RLS FAIL [photo color]: owner changed color';
+  end if;
+  foreach v_txt in array array['#12345', '#1234567', '112233', '#GGHHII', 'red'] loop
+    begin
+      update public.photos set color = v_txt where id = ds_p;
+      raise exception 'RLS FAIL [photo color]: malformed color % accepted', v_txt;
+    exception when check_violation then null;
+    end;
+  end loop;
   checks := checks + 1;
 
   -- ---------------------------------------------------------------------------

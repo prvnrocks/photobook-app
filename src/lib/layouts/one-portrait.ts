@@ -5,6 +5,8 @@ export const onePortrait: Layout = {
   id: "one-portrait",
   name: "1 photo with caption",
   role: "page",
+  style: "classic",
+  format: "A5_PORTRAIT",
   photoCount: 1,
   prefers: ["portrait"],
   slots: [{ x: 10, y: 7, w: 80, h: 72 }],

@@ -7,12 +7,13 @@ import "server-only";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { serializeDoc } from "@/lib/book/doc-version";
 import { isAiReplaceableDoc, isReplaceableDoc } from "@/lib/book/replaceable";
-import { parseBookDoc } from "@/lib/book/schema";
+import { BookFormatSchema, DesignStyleSchema, parseBookDoc } from "@/lib/book/schema";
 import { stripPhotoFromDoc } from "@/lib/book/strip-photos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Json, Tables } from "@/lib/supabase/database.types";
 import type { CaptionLang, Occasion, Tone } from "@/lib/book/options";
+import type { BookFormat, DesignStyle } from "@/lib/book/types";
 import { isUuid } from "@/lib/uuid";
 
 export type BookListItem = Pick<
@@ -66,6 +67,13 @@ export type CreateBookInput = {
   occasion: Occasion;
   tone: Tone;
   captionLang: CaptionLang;
+  /**
+   * D-063: fixed at creation (books.format, migration 1900, insert-only for users). Omitted →
+   * the column default 'A5_PORTRAIT'. The New book form sends it from A12 on.
+   */
+  format?: BookFormat;
+  /** D-063: fixed at creation (books.design_style). Omitted → the column default 'classic'. */
+  designStyle?: DesignStyle;
 };
 
 export class BooksQueryError extends Error {
@@ -129,12 +137,21 @@ function toBookListItem(row: BookListRow): BookListItem {
 
 /**
  * Creates a book owned by the current user. Input must already be validated
- * (src/app/books/actions.ts). Only user-editable columns are sent; the
+ * (src/app/books/actions.ts); format / designStyle are re-checked against the enums
+ * (BooksQueryError "invalid_format" / "invalid_design_style"). Only user-editable columns are sent; the
  * protected columns (is_paid, max_pages, expires_at, slug, published_at) are
  * left to their defaults and forced by the books guard trigger anyway (D-011).
  * Throws BooksQueryError("create book", "unauthenticated") when signed out.
  */
 export async function createBook(input: CreateBookInput): Promise<{ id: string }> {
+  // Runtime check too: the enums are also DB check constraints, but a typed error beats a 23514.
+  if (input.format !== undefined && !BookFormatSchema.safeParse(input.format).success) {
+    throw new BooksQueryError("create book", "invalid_format");
+  }
+  if (input.designStyle !== undefined && !DesignStyleSchema.safeParse(input.designStyle).success) {
+    throw new BooksQueryError("create book", "invalid_design_style");
+  }
+
   const user = await getCurrentUser();
   if (!user) throw new BooksQueryError("create book", "unauthenticated");
 
@@ -147,6 +164,10 @@ export async function createBook(input: CreateBookInput): Promise<{ id: string }
       occasion: input.occasion,
       tone: input.tone,
       caption_lang: input.captionLang,
+      // Only sent when chosen, so callers that omit them work with or without 1900 applied
+      // (rollback-safe); the column defaults are the same portrait / classic.
+      ...(input.format !== undefined ? { format: input.format } : {}),
+      ...(input.designStyle !== undefined ? { design_style: input.designStyle } : {}),
     })
     .select("id")
     .single();

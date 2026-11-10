@@ -19,8 +19,10 @@
 // doc's values (absent saved doc → A5_PORTRAIT / classic / no side; a page the saved doc doesn't
 // have → no side). The editor has no UI for them yet, so a change can only come from a crafted
 // request → invalid_doc.
-// TODO(M10b): books.format / books.design_style (migration 1900) own format and style; validate
+// TODO(M10b A6/A7): books.format / books.design_style (migration 1900) own format and style; validate
 // against those columns instead of the saved doc, and let spread layouts set `side`.
+// Since M10b A2 validateBookDoc (below) also rejects layouts of another format than doc.format,
+// misaligned / half spreads and `side` on single-page layouts (src/lib/book/spreads.ts).
 
 import { BACKGROUND_SWATCHES } from "@/lib/design/backgrounds";
 import { clipCodePoints } from "@/lib/text/clip";

@@ -5,7 +5,9 @@
 // overrides, one undo step). Every tap is an edit op, so the page previews it live, autosave and
 // undo follow. The cover only has the book background. Fade / veil colour changes of the
 // existing book photo keep page overrides (keepsPageOverrides); other "Whole book" changes
-// replace them with a warning + Undo toast. Radio groups: one tab stop, arrow keys (N5). Caption ink follows the background in
+// replace them with a warning + Undo toast. Radio groups: one tab stop, arrow keys (N5); the
+// "Whole book" photo grid is manual activation (arrows move focus, Enter / Space applies — one
+// edit, not one per keypress; M10b A4). The fade slider shows the stored fade. Caption ink follows the background in
 // <BookPage> (render.ts resolveBackground) — nothing to do here.
 // Pure helpers + copy: src/lib/editor/background-picker.ts.
 
@@ -25,15 +27,13 @@ import {
   BACKGROUND_TABS,
   backgroundPageIdx,
   backgroundPhotoCandidates,
-  clampFade,
   currentBackground,
   FADE_MAX,
-  FADE_MIN,
   FADE_STEP,
-  fadeLabel,
-  fadeMin,
+  fadeSlider,
   initialTab,
   isSuggested,
+  nextFade,
   pageOverride,
   photoBackground,
   planBookBackground,
@@ -48,7 +48,7 @@ import { rovingTabStop } from "@/lib/editor/roving";
 import type { EditorShellPhoto } from "@/lib/editor/types";
 import { cn } from "@/lib/utils";
 import { showEditorToast } from "../EditorToast";
-import { onRadioGroupKeyDown } from "../radio-group-keys";
+import { onRadioGroupKeyDown, onRadioGroupKeyDownFocusOnly } from "../radio-group-keys";
 import type { EditorPanelProps, EditorTool } from "./types";
 
 let sessionSeq = 0;
@@ -377,14 +377,16 @@ function PaperTab({ current, disabled, onApply }: BackgroundPickerViewProps) {
   );
 }
 
-function PhotoTab({ current, photos, disabled, onApply, onFade }: BackgroundPickerViewProps) {
+function PhotoTab({ scope, current, photos, disabled, onApply, onFade }: BackgroundPickerViewProps) {
   const id = useId();
   const photo = current.kind === "photo" ? current : null;
   const photoStop = rovingTabStop(photos.map((p) => ({ checked: photo?.photoId === p.id })));
   const veilStop = rovingTabStop(VEIL_SWATCHES.map((s) => ({ checked: photo !== null && sameHex(photo.veilColor, s.hex) })));
-  // Light veils (dark text) start at 60 % so captions stay readable (N4).
-  const minFade = photo ? fadeMin(photo.veilColor) : FADE_MIN;
-  const fade = photo ? Math.max(photo.veil, minFade) : 0.75;
+  // Light veils (dark text) start at 60 % for new changes (N4); a stored lower fade still shows as is.
+  const slider = fadeSlider(photo);
+  // Whole book: every pick rewrites the book (and may replace page backgrounds) — arrows only
+  // move focus, Enter / Space applies.
+  const photoKeys = scope === "book" ? onRadioGroupKeyDownFocusOnly : onRadioGroupKeyDown;
   return (
     <div className="flex flex-col gap-3">
       {photos.length === 0 ? (
@@ -392,7 +394,7 @@ function PhotoTab({ current, photos, disabled, onApply, onFade }: BackgroundPick
           No photos yet.
         </p>
       ) : (
-        <div role="radiogroup" aria-label="Background photo" onKeyDown={onRadioGroupKeyDown} className="grid max-h-56 grid-cols-4 gap-2 overflow-y-auto p-1 sm:grid-cols-5" data-testid="bg-photos">
+        <div role="radiogroup" aria-label="Background photo" onKeyDown={photoKeys} className="grid max-h-56 grid-cols-4 gap-2 overflow-y-auto p-1 sm:grid-cols-5" data-testid="bg-photos" data-keys={scope === "book" ? "focus" : "select"}>
           {photos.map((p, i) => {
             const selected = photo?.photoId === p.id;
             const src = p.thumbUrl ?? p.webUrl;
@@ -434,18 +436,18 @@ function PhotoTab({ current, photos, disabled, onApply, onFade }: BackgroundPick
               Fade
             </label>
             <span className="text-muted-foreground tabular-nums" data-testid="bg-fade-value">
-              {photo ? fadeLabel(photo.veil) : "—"}
+              {slider.valueText ?? "—"}
             </span>
           </div>
           <input
             id={`${id}-fade`}
             type="range"
-            min={minFade}
+            min={slider.min}
             max={FADE_MAX}
             step={FADE_STEP}
-            value={fade}
-            aria-valuetext={fadeLabel(fade)}
-            onChange={(e) => photo && onFade({ ...photo, veil: clampFade(Number(e.target.value), minFade) })}
+            value={slider.value}
+            aria-valuetext={slider.valueText ?? undefined}
+            onChange={(e) => photo && onFade({ ...photo, veil: nextFade(Number(e.target.value), photo.veilColor) })}
             className="h-11 w-full accent-primary disabled:opacity-40"
             data-testid="bg-fade"
           />

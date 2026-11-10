@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { EndCard } from "@/components/viewer/EndCard";
 import { APP_NAME } from "@/lib/brand";
 import { devViewerBackground, devViewerDoc, devViewerPageCount } from "@/lib/viewer/dev-fixture";
-import { endCardModel, hexLuminance } from "@/lib/viewer/end-card";
+import { endCardInk, endCardModel, hexLuminance } from "@/lib/viewer/end-card";
+import { resolveBackground } from "@/lib/book/render";
 import { BACKGROUND_SWATCHES, inkFor, multiplyHex, textureById } from "@/lib/design/backgrounds";
 import type { Background } from "@/lib/book/types";
 
@@ -42,10 +43,34 @@ describe("endCardModel (D-054)", () => {
       expect(endCardModel({ title: "x", styleFont: "Inter", background: bg }).dark, s.id).toBe(inkFor(bg) === "light");
       expect(endCardModel({ title: "x", styleFont: "Inter", background: s.hex }).dark, s.id).toBe(inkFor(s.hex) === "light");
     }
-    // Mid-tone where the old 0.18-luminance cut disagreed with the pages' contrast rule.
+  });
+  it("ink = resolveBackground().ink, also for off-catalogue colours (M10b A4)", () => {
+    // Off-catalogue mid-tone: inkFor says light, but the pages keep dark captions (colorInk,
+    // frozen by the goldens) — the card follows the pages, not inkFor.
     expect(hexLuminance("#7C7C7C")).toBeGreaterThan(0.18);
     expect(inkFor("#7C7C7C")).toBe("light");
-    expect(endCardModel({ title: "x", styleFont: "Inter", background: "#7C7C7C" }).dark).toBe(true);
+    for (const hex of ["#7C7C7C", "#1F2937", "#000000", "#123456"]) {
+      const bg: Background = { kind: "color", hex };
+      const pages = resolveBackground({ style: { ...devViewerDoc().style, background: bg } }).ink;
+      expect(pages, hex).toBe("dark");
+      expect(endCardModel({ title: "x", styleFont: "Inter", background: bg }).dark, hex).toBe(false);
+      expect(endCardModel({ title: "x", styleFont: "Inter", background: hex }).dark, hex).toBe(false);
+    }
+    // Lower-case catalogue hex still matches its swatch.
+    expect(endCardModel({ title: "x", styleFont: "Inter", background: "#1e2a47" }).dark).toBe(true);
+    // Every background kind: card ink == page ink.
+    const bgs: Background[] = [
+      ...BACKGROUND_SWATCHES.map((s): Background => ({ kind: "color", hex: s.hex })),
+      { kind: "texture", textureId: "linen" },
+      { kind: "texture", textureId: "linen", tint: "#CAD6C1" },
+      { kind: "photo", photoId: "11111111-1111-4111-8111-111111111111", veil: 0.7, veilColor: "#1E2A47" },
+      { kind: "photo", photoId: "11111111-1111-4111-8111-111111111111", veil: 0.5, veilColor: "#F5EEDC" },
+    ];
+    for (const bg of bgs) {
+      const pages = resolveBackground({ style: { ...devViewerDoc().style, background: bg } }).ink;
+      expect(endCardInk(bg), JSON.stringify(bg)).toBe(pages);
+      expect(endCardModel({ title: "x", styleFont: "Inter", background: bg }).dark).toBe(pages === "light");
+    }
   });
   it("paper and photo backgrounds: plain card colour + the pages' ink", () => {
     const linen = textureById("linen")!;

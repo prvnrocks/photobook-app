@@ -5,6 +5,8 @@ export const threeMixed: Layout = {
   id: "three-mixed",
   name: "1 wide + 2 tall",
   role: "page",
+  style: "classic",
+  format: "A5_PORTRAIT",
   photoCount: 3,
   prefers: ["landscape", "portrait", "portrait"],
   slots: [

@@ -30,6 +30,8 @@ const LANDSCAPE_FIXTURE: Layout = {
   id: "test-landscape-two",
   name: "Test landscape two",
   role: "page",
+  style: "classic",
+  format: "A5_LANDSCAPE",
   photoCount: 3,
   prefers: ["landscape", "portrait", "any"],
   slots: [

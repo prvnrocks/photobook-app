@@ -5,6 +5,8 @@ export const twoVertical: Layout = {
   id: "two-vertical",
   name: "2 photos side by side",
   role: "page",
+  style: "classic",
+  format: "A5_PORTRAIT",
   photoCount: 2,
   prefers: ["portrait", "portrait"],
   slots: [

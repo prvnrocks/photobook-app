@@ -5,6 +5,8 @@ export const twoHorizontal: Layout = {
   id: "two-horizontal",
   name: "2 photos stacked",
   role: "page",
+  style: "classic",
+  format: "A5_PORTRAIT",
   photoCount: 2,
   prefers: ["landscape", "landscape"],
   slots: [

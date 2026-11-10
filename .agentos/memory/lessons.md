@@ -87,3 +87,6 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-10, validation) When one field widens its allowed id set (backgrounds may use dropped photos), give validators a separate id set for that field — otherwise the narrowest caller (Update album) rejects valid docs.
 - (2026-11-10, react) For screen-width modes use a null server snapshot and render both layouts behind CSS breakpoints so phones keep real SSR content and desktop never flashes.
 - (2026-11-10, e2e) Gate on a pinned scratch copy (parallel fix waves change the working tree); server actions without UI callers can be invoked via Next-Action using server-reference-manifest.json.
+- (2026-11-11, supabase) Backfill UPDATE on books bumps updated_at (draft idle clock) — disable books_set_updated_at around it in the same transaction; prove with db:dry-run --seed/--seed-before.
+- (2026-11-11, e2e) Pin a scratch copy with `git archive HEAD | tar -x` + only your changed files (symlink node_modules/.env.local) so parallel builders' WIP is excluded.
+- (2026-11-11, testing) Test-only catalogue entries: vi.mock("@/lib/layouts", async (orig) => withTestSpreads(await orig())) from tests/fixtures/test-spread-layouts.ts.

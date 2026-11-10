@@ -70,6 +70,17 @@ export function withDevBackgroundPhotos(data: EditorShellData): EditorShellData 
   };
 }
 
+/**
+ * `?bg=1&bgveil=light50` (M10b A4): page 1 starts with a photo background under a WHITE veil at
+ * 50 % — below the picker's 60 % light-veil minimum (N4), as older / AI-set docs may store — so
+ * e2e can check the fade slider shows the stored value.
+ */
+export function withDevLightVeilPage(data: EditorShellData): EditorShellData {
+  if (data.doc.pages.length === 0) return data;
+  const background = { kind: "photo", photoId: DEV_BG_PHOTO_UUID, veil: 0.5, veilColor: "#FFFFFF", source: "user" } as const;
+  return { ...data, doc: { ...data.doc, pages: data.doc.pages.map((pg, i) => (i === 0 ? { ...pg, background } : pg)) } };
+}
+
 /** What the last stub save would have stored (dev-only, read by e2e as window.__devEditorLastSave). */
 export interface DevLastSave {
   rev: number;

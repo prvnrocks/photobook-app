@@ -1,12 +1,13 @@
 // Paid end card model (D-054): fonts, language and ink colour derived from the published book
 // style. Pure (no React/DOM) and unit-tested; EndCard.tsx only renders what this returns.
-// Ink comes from inkFor (M10a N3) — the same rule the pages use, so a book whose pages carry
-// white captions ends on a card with white text.
+// Ink comes from resolveBackground().ink (M10b A4) — exactly what the pages render, so a book
+// whose pages carry white captions ends on a card with white text, including off-catalogue
+// colours (colorInk keeps dark text there; inkFor alone would disagree).
 
 import { captionFontFamily } from "@/lib/book/fonts";
-import { backgroundColor, coverFont } from "@/lib/book/render";
-import type { Background } from "@/lib/book/types";
-import { inkFor, isHexColor, multiplyHex, textureById } from "@/lib/design/backgrounds";
+import { backgroundColor, coverFont, resolveBackground } from "@/lib/book/render";
+import type { Background, BookDoc } from "@/lib/book/types";
+import { isHexColor, multiplyHex, textureById, type Ink } from "@/lib/design/backgrounds";
 import { isMainlyArabic } from "@/lib/review/ui";
 
 export const END_CARD_HEADING = "The end";
@@ -21,7 +22,7 @@ export interface EndCardModel {
   headingFontFamily: string;
   /** Page background colour of the book. */
   background: string;
-  /** True when the background takes light ink (inkFor → "light"). */
+  /** True when the pages' text on this background is light (resolveBackground().ink). */
   dark: boolean;
 }
 
@@ -48,6 +49,12 @@ function cardColor(bg: Background | string): string {
   return backgroundColor(bg);
 }
 
+/** Ink the book's pages use on this book background (v1 string = a colour background). */
+export function endCardInk(bg: Background | string): Ink {
+  const background: Background = typeof bg === "string" ? { kind: "color", hex: bg } : bg;
+  return resolveBackground({ style: { background } } as Pick<BookDoc, "style">).ink;
+}
+
 /**
  * `background`: the book's style.background (v2 Background) or a plain #RRGGBB (v1). The card
  * paints one plain colour: the colour, the (tinted) paper colour, or the photo's veil colour.
@@ -62,6 +69,6 @@ export function endCardModel(input: { title: string; styleFont: string; backgrou
     titleFontFamily: captionFontFamily(coverFont(title, input.styleFont)),
     headingFontFamily: captionFontFamily(coverFont(END_CARD_HEADING, input.styleFont)),
     background: valid ? hex : "#FFFFFF",
-    dark: valid && inkFor(input.background) === "light",
+    dark: valid && endCardInk(input.background) === "light",
   };
 }

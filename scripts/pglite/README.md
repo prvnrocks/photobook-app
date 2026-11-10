@@ -9,7 +9,14 @@ npm run db:dry-run -- --until=20261111001100         # only migrations whose fil
 npm run db:dry-run -- --rls=path/to/other_check.sql  # alternate RLS script
 git show HEAD:supabase/tests/rls_check.sql | npm run db:dry-run -- --rls=-   # RLS script from stdin
 npm run db:dry-run -- --no-rls                       # migrations only
+# backfill dry run: seed rows right before a migration, then run a matching check instead of rls_check
+npm run db:dry-run -- --seed=scripts/pglite/seeds/1900_design.sql --seed-before=20261115001900 \
+  --rls=scripts/pglite/checks/1900_design.sql
 ```
+
+`--seed=<file>` runs as `postgres` immediately before the first selected migration whose filename is
+`>= --seed-before`. Seeds live in `scripts/pglite/seeds/`, their checks in `scripts/pglite/checks/`
+(same "RLS OK — all N checks passed" convention as `rls_check.sql`).
 
 Env vars `DRY_RUN_UNTIL` / `DRY_RUN_RLS` work too. Exit code 0 only when `rls_check.sql` raises its
 intentional `RLS OK — all N checks passed` exception; otherwise it prints the failing file, the line

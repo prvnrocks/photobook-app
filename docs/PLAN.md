@@ -298,15 +298,32 @@ Differences from v1:
   side, > 8 slots. Until M10b the editor save keeps `format`, `designStyle` and `side` as stored.
 - Deleting a photo clears its slots/cover and removes backgrounds using it (book default → white).
 
+### Spreads (M10b A2, D-064) — `src/lib/book/spreads.ts`
+- Pairing = editor/viewer: cover alone, then `pages[0,1]`, `[2,3]`, … A spread layout is stored as two pages:
+  `pages[2k]` = `side:"left"`, the spread layout id, ALL slots (+ caption), rects in 0–200 % x;
+  `pages[2k+1]` = `side:"right"`, same layout id, `slots: []`, `caption: null` (may carry its own background).
+  A spread counts as 2 pages. Single-page layouts never carry `side`.
+- `validateBookDoc` rejects: misaligned spread (left half on odd index), right half without left, spread with no
+  right half (e.g. last page), side on a single layout, slots/caption on a right half, layout format ≠ `doc.format`.
+- `repairSpreads(doc)` splits a misaligned spread into its `twin` single layouts (slot → half by its centre), keeping
+  every photo, crop, caption and background; a too-small twin → smallest bigger layout of the format/style.
+- v2 features also: any spread / non-classic layout, caption fonts in `src/lib/book/fonts-v2.ts`.
+
 ## Layout definition (`src/lib/layouts/two-vertical.ts`)
 ```ts
 export const twoVertical: Layout = {
   id: "two-vertical",
   name: "2 photos side by side",
-  photoCount: 2,
+  role: "page",                            // "page" | "spread" | "cover"
+  style: "classic",                        // classic | modern | geometric | scrapbook (M10b)
+  format: "A5_PORTRAIT",                   // A5_PORTRAIT | A5_LANDSCAPE — must match doc.format
+  photoCount: 2,                           // ≤ 12
   prefers: ["portrait", "portrait"],      // hint for AI + rule-based fallback
   slots: [ { x: 5, y: 8, w: 43, h: 72 }, { x: 52, y: 8, w: 43, h: 72 } ],   // % of page
   caption: { x: 5, y: 84, w: 90, h: 10 },
+  // spreads only: twin: ["left-single-id", "right-single-id"]; x in 0–200 %
+  // optional texts: [{ bind: "chapterTitle"|"dateLabel"|"pageCaption"|"coverTitle"|"coverSubtitle",
+  //                    box: {x,y,w,h}, align: "start"|"center"|"end", font: "title"|"subtitle"|"year"|"chapter"|"caption" }]  // = styles.ts TEXT_ROLES
 };
 ```
 

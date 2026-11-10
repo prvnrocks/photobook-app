@@ -11,7 +11,7 @@ import type { EditorTool } from "@/components/editor/tools/types";
 import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
 import { replacePhoto, setCover } from "@/lib/book/edit-ops";
 import type { BookFormat } from "@/lib/book/types";
-import { devEditorData, devTransport, withDevBackgroundPhotos, type DevAiMode, type DevSaveMode } from "@/lib/editor/dev-fixture";
+import { devEditorData, devTransport, withDevBackgroundPhotos, withDevLightVeilPage, type DevAiMode, type DevSaveMode } from "@/lib/editor/dev-fixture";
 import { withDevPagesData } from "@/lib/editor/dev-pages-fixture";
 
 const DEV_TOOLS: EditorTool[] = [
@@ -61,6 +61,7 @@ export function DevEditorClient({
   format = "A5_PORTRAIT",
   paymentsEnabled = false,
   bg = false,
+  lightVeil = false,
 }: {
   mode: DevSaveMode;
   ai?: DevAiMode;
@@ -71,10 +72,13 @@ export function DevEditorClient({
   paymentsEnabled?: boolean;
   /** `?bg=1`: uuid background photos + the real save validator in the stub transport (M10a A8). */
   bg?: boolean;
+  /** `?bg=1&bgveil=light50`: page 1 has a photo background under a white 50 % veil (M10b A4). */
+  lightVeil?: boolean;
 }) {
   const [data] = useState(() => {
     const raw = withDevPagesData(devEditorData(mode, ai), pages);
-    const fixture = bg ? withDevBackgroundPhotos(raw) : raw;
+    const withBg = bg ? withDevBackgroundPhotos(raw) : raw;
+    const fixture = bg && lightVeil ? withDevLightVeilPage(withBg) : withBg;
     const base = format === fixture.doc.format ? fixture : { ...fixture, doc: { ...fixture.doc, format } };
     const d = paid ? { ...base, book: { ...base.book, isPaid: true, maxPages: 100 } } : base;
     return published ? { ...d, publishedRev: d.docRev } : d;

@@ -8,6 +8,10 @@
 //   --rls=<file>       / DRY_RUN_RLS     use another rls_check file ("-" reads stdin,
 //                                        e.g. `git show HEAD:supabase/tests/rls_check.sql | npm run db:dry-run -- --rls=-`)
 //   --no-rls                             only apply migrations
+//   --seed=<file> --seed-before=<prefix> run <file> (as postgres) right before the first migration whose
+//                                        filename >= prefix — e.g. seed rows a backfill must convert:
+//                                        --seed=scripts/pglite/seeds/1900_design.sql --seed-before=20261115001900
+//                                        --rls=scripts/pglite/checks/1900_design.sql
 import { PGlite } from "@electric-sql/pglite";
 import fs from "node:fs";
 import path from "node:path";
@@ -20,13 +24,17 @@ const migrationsDir = path.join(repo, "supabase/migrations");
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
     const m = /^--([^=]+)(?:=(.*))?$/.exec(a);
-    if (!m || !["until", "rls", "no-rls"].includes(m[1])) fail(`unknown argument: ${a}`);
+    if (!m || !["until", "rls", "no-rls", "seed", "seed-before"].includes(m[1])) fail(`unknown argument: ${a}`);
     return [m[1], m[2] ?? true];
   }),
 );
 const until = args.until ?? process.env.DRY_RUN_UNTIL;
 const rlsArg = args.rls ?? process.env.DRY_RUN_RLS ?? path.join(repo, "supabase/tests/rls_check.sql");
 const skipRls = args["no-rls"] === true;
+const seedFile = args.seed;
+const seedBefore = args["seed-before"];
+if ((seedFile === undefined) !== (seedBefore === undefined)) fail("--seed and --seed-before go together");
+if (seedFile === true || seedBefore === true) fail("--seed / --seed-before need a value");
 
 function fail(msg) {
   console.error(`DRY-RUN FAIL: ${msg}`);
@@ -77,10 +85,18 @@ await apply(db, "stubs.sql", fs.readFileSync(path.join(here, "stubs.sql"), "utf8
 let files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith(".sql")).sort();
 if (until) files = files.filter((f) => f.slice(0, String(until).length) <= String(until));
 if (files.length === 0) fail("no migrations selected");
+let seeded = false;
 for (const f of files) {
+  if (seedFile && !seeded && f.slice(0, String(seedBefore).length) >= String(seedBefore)) {
+    await apply(db, `seed ${seedFile}`, fs.readFileSync(path.resolve(String(seedFile)), "utf8"));
+    console.log(`seeded ${seedFile}`);
+    seeded = true;
+  }
   await apply(db, `migration ${f}`, fs.readFileSync(path.join(migrationsDir, f), "utf8"));
   console.log(`applied ${f}`);
 }
+
+if (seedFile && !seeded) fail(`--seed-before=${seedBefore} matched no selected migration`);
 
 if (skipRls) {
   console.log(`OK — ${files.length} migrations applied (rls_check skipped)`);

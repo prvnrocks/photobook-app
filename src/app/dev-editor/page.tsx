@@ -7,6 +7,7 @@
 // `?format=landscape` makes the fixture an A5 landscape book (M10a A3; portrait layouts until M10b).
 // `?bg=1` adds uuid photos (kept + AI-dropped) for photo backgrounds and runs the real save
 // validator in the stub save; the stored JSON lands in window.__devEditorLastSave (M10a A8).
+// `?bg=1&bgveil=light50`: page 1 has a photo background under a white 50 % veil (M10b A4).
 // Upgrade sheet: enabled when the server has Stripe keys (M7 T6); `?upgrade=cancelled` → cancel notice.
 // 404s in production builds (incl. Vercel previews, which run NODE_ENV=production).
 
@@ -32,5 +33,5 @@ export default async function DevEditorPage({
   const q = params.save;
   const mode = (DEV_SAVE_MODES as readonly string[]).includes(String(q)) ? (q as DevSaveMode) : "ok";
   const ai = (DEV_AI_MODES as readonly string[]).includes(String(params.ai)) ? (params.ai as DevAiMode) : "off";
-  return <DevEditorClient mode={mode} ai={ai} pages={parseDevPages(params.pages)} published={params.published === "1"} paid={params.paid === "1"} format={parseDevFormat(params.format)} paymentsEnabled={isPaymentsEnabled()} bg={params.bg === "1"} />;
+  return <DevEditorClient mode={mode} ai={ai} pages={parseDevPages(params.pages)} published={params.published === "1"} paid={params.paid === "1"} format={parseDevFormat(params.format)} paymentsEnabled={isPaymentsEnabled()} bg={params.bg === "1"} lightVeil={params.bgveil === "light50"} />;
 }

@@ -5,6 +5,8 @@ export const cover: Layout = {
   id: "cover",
   name: "Cover",
   role: "cover",
+  style: "classic",
+  format: "A5_PORTRAIT",
   photoCount: 1,
   prefers: ["portrait"],
   slots: [{ x: 0, y: 0, w: 100, h: 74 }],

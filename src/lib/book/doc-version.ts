@@ -4,6 +4,8 @@
 // M9 code can still read them. Drop the v1 downgrade once M10c has settled.
 // Pure: used by client editor, API routes, AI pipeline and tests.
 
+import { getLayout } from "@/lib/layouts";
+import { isV2CaptionFont } from "./fonts-v2";
 import { DEFAULT_DESIGN_STYLE, MAX_SLOTS_V1, upgradeV1 } from "./schema";
 import type { BookDoc, BookDocV1, BookPageV1 } from "./types";
 
@@ -14,16 +16,31 @@ export function upgradeDocV1(v1: BookDocV1): BookDoc {
 
 /**
  * True when `doc` cannot be written as v1 without losing something: landscape format, a non-colour
- * book background, a non-classic design style, any page background or spread side, or more slots
- * on a page than v1 allows. (An explicit `page.background: null` is the same as absent.)
+ * book background, a non-classic design style, any page background or spread side, more slots
+ * on a page than v1 allows, a spread or non-classic layout (page or cover), or a v2-only caption
+ * font (fonts-v2.ts) as book font or on a page caption. (An explicit `page.background: null` is
+ * the same as absent.) Unknown layout ids are not v2 by themselves (validation rejects them).
  */
 export function usesV2Features(doc: BookDoc): boolean {
   if (doc.format !== "A5_PORTRAIT") return true;
   if (doc.style.background.kind !== "color") return true;
   if ((doc.style.designStyle ?? DEFAULT_DESIGN_STYLE) !== DEFAULT_DESIGN_STYLE) return true;
+  if (isV2CaptionFont(doc.style.font)) return true;
+  if (isV2Layout(doc.cover.layout)) return true;
   return doc.pages.some(
-    (p) => (p.background !== undefined && p.background !== null) || p.side !== undefined || p.slots.length > MAX_SLOTS_V1,
+    (p) =>
+      (p.background !== undefined && p.background !== null) ||
+      p.side !== undefined ||
+      p.slots.length > MAX_SLOTS_V1 ||
+      isV2Layout(p.layout) ||
+      (p.caption !== null && isV2CaptionFont(p.caption.font)),
   );
+}
+
+/** A known layout that M9 cannot render: a spread, a non-classic style or a non-portrait format. */
+function isV2Layout(id: string): boolean {
+  const l = getLayout(id);
+  return !!l && (l.role === "spread" || l.style !== DEFAULT_DESIGN_STYLE || l.format !== "A5_PORTRAIT");
 }
 
 /** v2 → v1. Caller must have checked !usesV2Features(doc). Copies only v1 keys, in v1 order. */

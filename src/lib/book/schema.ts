@@ -12,6 +12,7 @@ import { LIMITS } from "@/lib/ai/limits";
 import { BACKGROUND_VEIL_MAX, BACKGROUND_VEIL_MIN, TEXTURE_IDS } from "@/lib/design/backgrounds";
 import { getLayout } from "@/lib/layouts";
 import { codePointLength, hasLoneSurrogate } from "@/lib/text/clip";
+import { spreadIssues, spreadIssueText } from "./spreads";
 import { BOOK_TITLE_MAX_CODE_POINTS, CAPTION_LANGS, OCCASIONS, TONES } from "./options";
 
 export const OccasionSchema = z.enum(OCCASIONS);
@@ -217,16 +218,69 @@ export const RectSchema = z.object({
 
 export const LayoutSlotSchema = RectSchema;
 
-export const LayoutSchema = z.object({
-  id: IdSchema,
-  name: z.string().min(1),
-  /** "cover" layouts are only valid for `doc.cover`, "page" layouts only for `doc.pages`. */
-  role: z.enum(["cover", "page"]),
-  photoCount: z.number().int().min(1).max(8),
-  prefers: z.array(z.enum(["portrait", "landscape", "any"])),
-  slots: z.array(LayoutSlotSchema),
-  caption: RectSchema.nullable(),
+// --- Layout definition v2 (M10b A2) --------------------------------------------------------------
+// Layouts are pure data (src/lib/layouts). Every layout declares the book format and design style
+// it belongs to; a doc may only use layouts of its own format (validateBookDoc).
+//
+// Coordinates: rects are % of ONE trim page for "page" and "cover" layouts (0..100), and % of a
+// page width across BOTH facing pages for "spread" layouts — x runs 0..200 (0..100 = left page,
+// 100..200 = right page), y stays 0..100. Storage of spreads: see src/lib/book/spreads.ts.
+
+export const LAYOUT_ROLES = ["cover", "page", "spread"] as const;
+
+/** Data a text panel shows. Only existing doc data — panels never hold their own text. */
+export const TEXT_BINDINGS = ["chapterTitle", "dateLabel", "pageCaption", "coverTitle", "coverSubtitle"] as const;
+/**
+ * Font role of a text panel = TEXT_ROLES of src/lib/design/styles.ts (A3): the design style maps
+ * each role to a face via roleFont(style, role, …). Duplicated as a literal list (schema stays
+ * free of font imports); tests/book-spreads.test.ts asserts both lists are equal.
+ */
+export const TEXT_FONT_ROLES = ["title", "subtitle", "year", "chapter", "caption"] as const;
+
+/** Rect for layout data: x/w may reach 200 (spreads); the per-role bound is checked on the layout. */
+const LayoutRectSchema = z.object({
+  x: z.number().min(0).max(200),
+  y: z.number().min(0).max(100),
+  w: z.number().positive().max(200),
+  h: z.number().positive().max(100),
 });
+
+export const LayoutTextSchema = z.strictObject({
+  bind: z.enum(TEXT_BINDINGS),
+  box: LayoutRectSchema,
+  align: z.enum(["start", "center", "end"]),
+  font: z.enum(TEXT_FONT_ROLES),
+});
+
+export const LayoutSchema = z
+  .object({
+    id: IdSchema,
+    name: z.string().min(1),
+    /**
+     * "cover" layouts are only valid for `doc.cover`, "page" layouts for single `doc.pages`
+     * entries, "spread" layouts for a left/right page pair (spreads.ts).
+     */
+    role: z.enum(LAYOUT_ROLES),
+    style: DesignStyleSchema,
+    format: BookFormatSchema,
+    photoCount: z.number().int().min(1).max(MAX_SLOTS_V2),
+    prefers: z.array(z.enum(["portrait", "landscape", "any"])),
+    slots: z.array(LayoutRectSchema).max(MAX_SLOTS_V2),
+    caption: LayoutRectSchema.nullable(),
+    /** Spreads only (required there): the [left, right] single-page layouts it splits into (D-064). */
+    twin: z.tuple([IdSchema, IdSchema]).optional(),
+    /** Text panels bound to doc data (chapter title, date label, caption, cover title/subtitle). */
+    texts: z.array(LayoutTextSchema).max(8).optional(),
+  })
+  .superRefine((l, ctx) => {
+    const maxX = l.role === "spread" ? 200 : 100;
+    const rects = [...l.slots, ...(l.caption ? [l.caption] : []), ...(l.texts ?? []).map((t) => t.box)];
+    if (rects.some((r) => r.x + r.w > maxX + 1e-9 || r.y + r.h > 100 + 1e-9)) {
+      ctx.addIssue({ code: "custom", message: `rect outside the ${l.role} area` });
+    }
+    if (l.role === "spread" && !l.twin) ctx.addIssue({ code: "custom", message: "spread needs a twin" });
+    if (l.role !== "spread" && l.twin) ctx.addIssue({ code: "custom", message: "only spreads have a twin" });
+  });
 
 export type ParseResult =
   | { ok: true; doc: z.infer<typeof BookDocSchema> }
@@ -291,7 +345,8 @@ export interface ValidateOptions {
 }
 
 /**
- * Semantic checks on a shape-valid doc: layouts exist and match role, slot count == photoCount,
+ * Semantic checks on a shape-valid doc: layouts exist, match role and the doc's format, slot
+ * count == photoCount (a spread's right half: 0 slots, no caption), spreads aligned (spreads.ts),
  * photos exist and are used at most once in pages (the cover photo may appear once more),
  * page count ≤ maxPages, chapter/page ids unique, chapterIds exist, photo backgrounds (book
  * default and page overrides) use a known photo (backgroundPhotoIds, default photoIds) — a
@@ -307,6 +362,9 @@ export function validateBookDoc(
   const coverLayout = getLayout(doc.cover.layout);
   if (!coverLayout) issues.push(`cover: unknown layout "${safeId(doc.cover.layout)}"`);
   else if (coverLayout.role !== "cover") issues.push(`cover: layout "${coverLayout.id}" is not a cover layout`);
+  else if (coverLayout.format !== doc.format) {
+    issues.push(`cover: layout "${coverLayout.id}" is for ${coverLayout.format}, book is ${doc.format}`);
+  }
   if (doc.cover.photoId !== null && !photoIds.has(doc.cover.photoId)) {
     issues.push("cover: unknown photo");
   }
@@ -342,14 +400,19 @@ export function validateBookDoc(
     const layout = getLayout(page.layout);
     if (!layout) {
       issues.push(`${at}: unknown layout "${safeId(page.layout)}"`);
+    } else if (layout.role === "cover") {
+      issues.push(`${at}: layout "${layout.id}" is not a page layout`);
     } else {
-      if (layout.role !== "page") issues.push(`${at}: layout "${layout.id}" is not a page layout`);
-      if (page.slots.length !== layout.photoCount) {
-        issues.push(
-          `${at}: layout "${layout.id}" needs ${layout.photoCount} slots, got ${page.slots.length}`,
-        );
+      if (layout.format !== doc.format) {
+        issues.push(`${at}: layout "${layout.id}" is for ${layout.format}, book is ${doc.format}`);
       }
-      if (page.caption !== null && layout.caption === null) {
+      // A spread's right half is an empty placeholder: the left half owns slots + caption.
+      const rightHalf = layout.role === "spread" && page.side === "right";
+      const slotCount = rightHalf ? 0 : layout.photoCount;
+      if (page.slots.length !== slotCount) {
+        issues.push(`${at}: layout "${layout.id}" needs ${slotCount} slots, got ${page.slots.length}`);
+      }
+      if (page.caption !== null && (rightHalf || layout.caption === null)) {
         issues.push(`${at}: layout "${layout.id}" has no caption area`);
       }
     }
@@ -361,6 +424,9 @@ export function validateBookDoc(
       used.add(slot.photoId);
     });
   });
+
+  // Spreads (M10b, D-064): left half on an even index followed by its right half; no orphan halves.
+  for (const issue of spreadIssues(doc)) issues.push(spreadIssueText(issue, safeId));
 
   return issues;
 }

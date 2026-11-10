@@ -10,11 +10,14 @@
 // EditorShell.
 // Position: above the toolbar; while a tool panel is open on a phone (docked under the page or a
 // bottom sheet, both marked data-editor-panel) the toast sits just above the panel so it never
-// covers the panel's controls (M10a). Desktop (lg, side panel) keeps the default spot.
+// covers the panel's controls (M10a). Desktop (lg, side panel) keeps the default spot. The
+// position follows the panel while the toast shows (src/lib/editor/panel-tracker.ts: panel
+// resize, layout changes, panel mount / swap, viewport resize — M10b A4).
 
 import { X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { BookDoc } from "@/lib/book/types";
+import { browserPanelTrackerEnv, trackEditorPanel } from "@/lib/editor/panel-tracker";
 import { useEditor } from "./editor-context";
 
 export const TOAST_DURATION_MS = 6000;
@@ -87,30 +90,23 @@ export function toastBottomAbovePanel(panelTop: number | null, viewportHeight: n
 
 export function EditorToastHost() {
   const toast = useEditorToast();
-  const { state, activeTool } = useEditor();
+  const { state } = useEditor();
   const doc = state.doc;
   const seen = useRef<{ id: number; doc: BookDoc } | null>(null);
   const [bottom, setBottom] = useState<number | null>(null);
 
-  // Follow the open panel (opening/closing a tool, panel height changes, rotation).
+  // Follow the open panel while a toast shows (opening/closing/swapping a tool, panel or page
+  // height changes, rotation, keyboard).
+  const visible = toast !== null;
   useLayoutEffect(() => {
-    if (!toast) return;
-    const panel = document.querySelector<HTMLElement>("[data-editor-panel]");
-    const measure = () => {
+    if (!visible) return;
+    return trackEditorPanel(browserPanelTrackerEnv(), (panel) => {
       const side = window.matchMedia?.(SIDE_PANEL_QUERY).matches ?? false;
       const top = panel?.isConnected ? panel.getBoundingClientRect().top : null;
       const next = toastBottomAbovePanel(top, window.innerHeight, side);
       setBottom((p) => (p === next ? p : next));
-    };
-    measure();
-    const ro = panel ? new ResizeObserver(measure) : null;
-    if (panel) ro?.observe(panel);
-    window.addEventListener("resize", measure);
-    return () => {
-      ro?.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, [toast, activeTool]);
+    });
+  }, [visible]);
 
   // Snapshot the doc when a toast appears; a later doc change dismisses dismissOnEdit toasts.
   useEffect(() => {
