@@ -167,7 +167,7 @@ describe("runExport", () => {
     // prefetch on by default: all three photos queued (one chunk), released after it renders
     expect(renderOpts.onChunkDone).toBeTypeOf("function");
     expect(LOADER.prefetch).toHaveBeenCalledWith([P(9), P(1), P(2)]);
-    expect(mocks.mergePdfs).toHaveBeenCalledWith([Buffer.from("a"), Buffer.from("b")], { title: SECRET_TITLE });
+    expect(mocks.mergePdfs).toHaveBeenCalledWith([Buffer.from("a"), Buffer.from("b")], { title: SECRET_TITLE, format: "A5_PORTRAIT" });
     expect(mocks.uploadExportPdf).toHaveBeenCalledWith(PATH, PDF);
     expect(mocks.finishExport).toHaveBeenCalledWith({ exportId: EXP, token: TOKEN, path: PATH, bytes: 4, pageCount: 3 });
     expect(mocks.listOlderReadyExports).toHaveBeenCalledWith(BOOK, EXP);

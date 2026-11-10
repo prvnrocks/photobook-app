@@ -428,7 +428,7 @@ async function renderPass(ctx: RenderContext, pass: RenderPass): Promise<{ bytes
     }
     throwIfAborted(signal);
     const tMerge = Date.now();
-    const merged = await mergePdfs(chunks, { title: doc.cover.title });
+    const merged = await mergePdfs(chunks, { title: doc.cover.title, format: doc.format });
     timings.merge = Date.now() - tMerge;
     return merged;
   } finally {

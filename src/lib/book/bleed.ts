@@ -1,7 +1,8 @@
 // Print bleed maths (D-050). Pure, no React/DOM — shared by the render model (print mode) and the
 // print image plan (T4), so the PDF photo boxes and the pixel sizes we prepare always agree.
 //
-// The print sheet is the 148×210 mm trim page plus BLEED_MM on every side (154×216 mm). A photo
+// The print sheet is the trim page plus BLEED_MM on every side (portrait 148×210 → 154×216 mm,
+// landscape 210×148 → 216×154 mm; geometry in ./format.ts). A photo
 // slot whose edge lies on a trim edge (within EDGE_EPS_PCT) is extended by BLEED_MM past that
 // edge, so the photo runs off the page after trimming instead of leaving a white hairline.
 //
@@ -11,8 +12,9 @@
 // only 3 mm larger per touching side). The image plan must size print copies for the extended
 // box: use printSlotSizeMm().
 
-import { BLEED_MM, getLayout, PAGE_MM } from "@/lib/layouts";
-import type { Layout, Rect } from "./types";
+import { BLEED_MM, getLayout } from "@/lib/layouts";
+import { pageMm as formatPageMm } from "./format";
+import type { BookFormat, Layout, Rect } from "./types";
 
 /** A slot edge within this many % of a trim edge counts as touching it. */
 export const EDGE_EPS_PCT = 0.01;
@@ -23,7 +25,7 @@ export interface PageMm {
 }
 
 export interface BleedRect {
-  /** % of the TRIM page (148×210); may run past 0 / 100 into the bleed. */
+  /** % of the TRIM page (of the given page size); may run past 0 / 100 into the bleed. */
   pct: Rect;
   /** mm on the print sheet (origin = sheet top-left = trim top-left − bleed). */
   sheetMm: Rect;
@@ -35,7 +37,7 @@ export interface BleedRect {
  * Slot rect (% of the trim page) → the rect it covers on the print sheet: sides touching a trim
  * edge are pushed `bleedMm` outwards, inner sides are unchanged.
  */
-export function bleedRect(rect: Rect, pageMm: PageMm = PAGE_MM, bleedMm: number = BLEED_MM): BleedRect {
+export function bleedRect(rect: Rect, pageMm: PageMm = formatPageMm(), bleedMm: number = BLEED_MM): BleedRect {
   const edges = {
     left: rect.x <= EDGE_EPS_PCT,
     top: rect.y <= EDGE_EPS_PCT,
@@ -75,12 +77,17 @@ export function bleedRect(rect: Rect, pageMm: PageMm = PAGE_MM, bleedMm: number 
 
 /**
  * Printed size in mm of `slotIndex` of a layout (object or id), including bleed extension —
- * the box the photo must cover in the PDF. null for an unknown layout / slot.
+ * the box the photo must cover in the PDF, on a page of `format` (default portrait). null for an
+ * unknown layout / slot.
  */
-export function printSlotSizeMm(layout: Layout | string, slotIndex: number): { w: number; h: number } | null {
+export function printSlotSizeMm(
+  layout: Layout | string,
+  slotIndex: number,
+  format?: BookFormat | null,
+): { w: number; h: number } | null {
   const l = typeof layout === "string" ? getLayout(layout) : layout;
   const rect = l?.slots[slotIndex];
   if (!rect) return null;
-  const { sheetMm } = bleedRect(rect);
+  const { sheetMm } = bleedRect(rect, formatPageMm(format));
   return { w: sheetMm.w, h: sheetMm.h };
 }

@@ -16,8 +16,9 @@ import {
   type CaptionFont,
 } from "./fonts";
 import { bleedRect } from "./bleed";
+import { pageMm } from "./format";
 import { slotSizeMm } from "./resolution";
-import type { Background, BookDoc, BookPage, Caption, Crop, Rect } from "./types";
+import type { Background, BookDoc, BookFormat, BookPage, Caption, Crop, Rect } from "./types";
 
 /** A photo as the renderer needs it: a signed URL (web copy) + the stored pixel size. */
 export interface RenderPhoto {
@@ -35,6 +36,11 @@ export interface RenderOptions {
    * past 0..100 %) and the crop is computed for the extended box. Text rects never change.
    */
   bleed?: boolean;
+}
+
+/** Format-dependent inputs of a slot: page mm for bleed + crop maths (doc.format). */
+interface SlotCtx extends RenderOptions {
+  format: BookFormat;
 }
 
 export interface RenderSlot {
@@ -125,12 +131,13 @@ function renderSlot(
   photoId: string | null,
   crop: Crop,
   photos: RenderPhotos,
-  opts: RenderOptions,
+  ctx: SlotCtx,
 ): RenderSlot {
-  const rect = opts.bleed ? bleedRect(layoutRect).pct : layoutRect;
+  // Slot rects are % of the doc format's trim page, so bleed and crop use that page's mm.
+  const rect = ctx.bleed ? bleedRect(layoutRect, pageMm(ctx.format)).pct : layoutRect;
   const p = photoId !== null && Object.prototype.hasOwnProperty.call(photos, photoId) ? photos[photoId] : undefined;
   if (!p || !p.url) return { index, rect, photoId, photo: null };
-  const mm = slotSizeMm(rect);
+  const mm = slotSizeMm(rect, ctx.format);
   return {
     index,
     rect,
@@ -158,9 +165,10 @@ export function pageRenderModel(
   if (!layout || layout.role !== "page") {
     return { kind: "page", pageId: page.id, layoutId: page.layout, knownLayout: false, slots: [], caption: null };
   }
+  const ctx: SlotCtx = { ...opts, format: doc.format };
   const slots = layout.slots.map((rect, i) => {
     const s = page.slots[i];
-    return renderSlot(i, rect, s?.photoId ?? null, s?.crop ?? DEFAULT_CROP, photos, opts);
+    return renderSlot(i, rect, s?.photoId ?? null, s?.crop ?? DEFAULT_CROP, photos, ctx);
   });
   let caption: RenderCaption | null = null;
   if (layout.caption) {
@@ -216,7 +224,7 @@ export function coverRenderModel(
     kind: "cover",
     layoutId: doc.cover.layout,
     knownLayout: known,
-    slot: rect ? renderSlot(0, rect, doc.cover.photoId, DEFAULT_CROP, photos, opts) : null,
+    slot: rect ? renderSlot(0, rect, doc.cover.photoId, DEFAULT_CROP, photos, { ...opts, format: doc.format }) : null,
     textRect: known ? layout.caption : null,
     title: {
       text: title,

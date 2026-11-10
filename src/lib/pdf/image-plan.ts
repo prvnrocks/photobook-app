@@ -10,8 +10,9 @@
 
 import { bleedRect, printSlotSizeMm } from "@/lib/book/bleed";
 import { clampCrop, DEFAULT_CROP } from "@/lib/book/crop";
-import type { BookDoc, Crop, Layout, Rect } from "@/lib/book/types";
-import { BLEED_MM, getLayout, PAGE_MM } from "@/lib/layouts";
+import { pageMm } from "@/lib/book/format";
+import type { BookDoc, BookFormat, Crop, Layout, Rect } from "@/lib/book/types";
+import { BLEED_MM, getLayout } from "@/lib/layouts";
 
 const MM_PER_INCH = 25.4;
 
@@ -44,17 +45,18 @@ const finitePos = (v: unknown): v is number => typeof v === "number" && Number.i
 /**
  * Printed size (mm) of a slot rect incl. bleed extension on sides touching a trim edge. Only for
  * a non-default `bleedMm`; the plan itself uses printSlotSizeMm (T3, the renderer's own box).
+ * `rect` is % of the trim page of `format` (default portrait).
  */
-export function printBoxMm(rect: Rect, bleedMm: number = BLEED_MM): { w: number; h: number } {
-  const { sheetMm } = bleedRect(rect, PAGE_MM, bleedMm);
+export function printBoxMm(rect: Rect, bleedMm: number = BLEED_MM, format?: BookFormat | null): { w: number; h: number } {
+  const { sheetMm } = bleedRect(rect, pageMm(format), bleedMm);
   return { w: sheetMm.w, h: sheetMm.h };
 }
 
 /** Box the photo must cover in the PDF: the renderer's printSlotSizeMm for the default bleed. */
-function slotBoxMm(layout: Layout, slotIndex: number, bleedMm: number): { w: number; h: number } | null {
-  if (bleedMm === BLEED_MM) return printSlotSizeMm(layout, slotIndex);
+function slotBoxMm(layout: Layout, slotIndex: number, bleedMm: number, format: BookFormat): { w: number; h: number } | null {
+  if (bleedMm === BLEED_MM) return printSlotSizeMm(layout, slotIndex, format);
   const rect = layout.slots[slotIndex];
-  return rect ? printBoxMm(rect, bleedMm) : null;
+  return rect ? printBoxMm(rect, bleedMm, format) : null;
 }
 
 /**
@@ -109,7 +111,7 @@ function usesOf(doc: BookDoc): Use[] {
 }
 
 /**
- * Target px for every photo the doc shows. Photos the doc references but `photos` lacks are
+ * Target px for every photo the doc shows, sized for the print boxes of `doc.format`. Photos the doc references but `photos` lacks are
  * skipped (the renderer shows an empty slot). A photo with unknown size gets a
  * maxLongEdge × maxLongEdge box (resize "inside", never enlarged).
  */
@@ -133,7 +135,7 @@ export function planPrintImages(
       plan.set(photo.id, { width: maxLongEdge, height: maxLongEdge });
       continue;
     }
-    const box = slotBoxMm(use.layout, use.slotIndex, bleedMm);
+    const box = slotBoxMm(use.layout, use.slotIndex, bleedMm, doc.format);
     if (!box) continue;
     const n = neededPx(photo.width, photo.height, box.w, box.h, clampCrop(use.crop).zoom, dpi);
     const prev = need.get(photo.id);
