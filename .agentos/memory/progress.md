@@ -125,3 +125,4 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 ## 2026-11-10 — Milestone 9 — deployed
 - main = e7cf172 live. Prod probes OK: landing (hero claim) / privacy / terms / sitemap (only /, /privacy, /terms) 200; /admin/ai-spend, /dev-print, /dev-upgrade 404; /settings → login; unsubscribe bad token 400; /api/cron/cleanup 503 (CRON_SECRET not set → cron inactive, by design until set).
 - LEFT (NEEDS-HUMAN): rls_check on prod → 173; set CRON_SECRET (+ AI_DAILY_BUDGET_USD) in Vercel Production and redeploy → check first cron log + `[email] warnings` (no legacy=1); everything in docs/LAUNCH.md; MAPBOX_TOKEN invalid. NEXT: launch checklist, then M10.
+- (2026-11-10) Prod rls_check 173 OK (user) after M9 deploy.
