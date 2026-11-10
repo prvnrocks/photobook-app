@@ -149,6 +149,9 @@ describe("getMyBook (deploy-order tolerant)", () => {
     await expect(getMyBook(B)).rejects.toBeInstanceOf(BooksQueryError);
     fake.state.results.push({ data: null, error: { code: "42501", message: "permission denied" } });
     await expect(getMyBook(B)).rejects.toBeInstanceOf(BooksQueryError);
+    // A missing-column code without a message naming doc_rev is not the deploy window either.
+    fake.state.results.push({ data: null, error: { code: "PGRST204" } });
+    await expect(getMyBook(B)).rejects.toBeInstanceOf(BooksQueryError);
   });
 
   it("signed out / malformed id → null without a query", async () => {

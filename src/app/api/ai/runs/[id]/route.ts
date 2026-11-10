@@ -1,4 +1,5 @@
-// GET /api/ai/runs/[id] (D-025): progress of one of the caller's runs (RLS owner-scoped).
+// GET /api/ai/runs/[id] (D-025): progress of one of the caller's build / rebuild runs (RLS
+// owner-scoped). Rewrite runs (M5 ✨) are 404 (M5 review B1).
 // Responses (all no-store): 200 ProgressView { state, progress, aiStatus, errorCode, mode, done }
 // | 401 { error: 'unauthenticated' } | 404 { error: 'not_found' } | 500 { error: 'server_error' }.
 // Never returns the cursor, totals or step outputs.

@@ -7,7 +7,7 @@ import type { BookDoc } from "@/lib/book/types";
 import { CAPTION_LANGS, type CaptionLang } from "@/lib/book/options";
 import { codePointLength, hasLoneSurrogate } from "@/lib/text/clip";
 import { isUuid } from "@/lib/uuid";
-import { RewriteInstructionSchema, type RewriteInstruction } from "./schemas";
+import { RewriteInstructionSchema, wordCount, type RewriteInstruction } from "./schemas";
 import { translateTarget } from "./agents/rewriter";
 
 /** Caption text limit in code points (same as the doc caption limit of 200). */
@@ -29,6 +29,18 @@ export const RewriteBodySchema = z
   .strict();
 
 export type RewriteBody = z.infer<typeof RewriteBodySchema>;
+
+/** `shorter` needs at least this many words; shorter captions get 400 too_short. */
+export const MIN_WORDS_TO_SHORTEN = 4;
+
+/**
+ * True when a caption is too short to be made shorter (≤ 3 whitespace-separated words — works for
+ * English and Arabic, same count as the D-030 word check). The route rejects such `shorter`
+ * requests before creating a run, so they never burn a model call or a daily-ceiling slot.
+ */
+export function isTooShortToShorten(text: string): boolean {
+  return wordCount(text) < MIN_WORDS_TO_SHORTEN;
+}
 
 const ARABIC_LETTER = /[ؠ-ؿف-يٱ-ۓەۺ-ۼۿݐ-ݿࢠ-ࣉﭐ-ﷻﹰ-ﻼ]/g;
 const LATIN_LETTER = /[A-Za-zÀ-ɏ]/g;

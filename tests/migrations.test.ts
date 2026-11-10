@@ -924,6 +924,11 @@ describe("migrations: M3 review fixes — agent pipeline hardening (0700)", () =
     ["public.release_agent_run", "uuid, uuid"],
     ["public.create_agent_run_capped", "uuid, uuid, text, text, integer, integer, boolean"],
   ];
+  // Functions as defined in the 0700 file itself (0900 redefines claim_agent_run).
+  const own = (name: string) =>
+    matchesAll(/create\s+(?:or\s+replace\s+)?function\s+([\w.]+)\s*\(([\s\S]*?)\bas\s+\$\$([\s\S]*?)\$\$/, sql)
+      .map((x) => ({ name: x[1], header: x[2], body: x[3] }))
+      .find((f) => f.name === name);
 
   it("exists, sorts after 0600 and is the latest migration", () => {
     expect(m, "20261109000700_agent_pipeline_hardening.sql missing").toBeDefined();
@@ -954,9 +959,8 @@ describe("migrations: M3 review fixes — agent pipeline hardening (0700)", () =
     });
 
     it.each(RPCS)("%s is SECURITY INVOKER, revoked from clients, executable by service_role only", (name, sig) => {
-      const f = latestFunction(name);
+      const f = own(name);
       expect(f).toBeDefined();
-      expect(sql).toContain(f!.body);
       expect(f!.header).toMatch(/security\s+invoker/);
       expect(f!.header).not.toMatch(/security\s+definer/);
       expect(f!.header).toMatch(/set\s+search_path\s*=\s*''/);
@@ -973,7 +977,7 @@ describe("migrations: M3 review fixes — agent pipeline hardening (0700)", () =
     });
 
     it("claim returns a fresh token stored on the run, null when not claimable", () => {
-      const f = latestFunction("public.claim_agent_run")!;
+      const f = own("public.claim_agent_run")!;
       expect(f.header).toMatch(/returns\s+uuid/);
       const body = ws(f.body);
       expect(body).toContain("v_secs := least(300, greatest(5, p_lease_seconds));");
@@ -1118,7 +1122,7 @@ describe("migrations: Milestone 5 editor (0900, D-036 / D-037)", () => {
   const flat = ws(sql);
   const raw = m ? readFileSync(join(MIGRATIONS_DIR, m.name), "utf8") : "";
   const RPC = "public.create_rewrite_run_capped";
-  const RPC_ARGS = "uuid, uuid, text, integer, boolean";
+  const RPC_ARGS = "uuid, uuid, text, integer, integer, boolean";
 
   it("exists, sorts after 0800 and documents D-036 / D-037", () => {
     expect(m, `${name} missing`).toBeDefined();
@@ -1160,6 +1164,19 @@ describe("migrations: Milestone 5 editor (0900, D-036 / D-037)", () => {
       // BEFORE triggers fire alphabetically: the guard must reset a client's doc first.
       expect(ws(all)).toMatch(/create trigger books_protect_columns before insert or update on public\.books/);
       expect("books_set_doc_rev" > "books_protect_columns").toBe(true);
+    });
+
+    it("BEFORE triggers on public.books fire in the intended (alphabetical) order", () => {
+      // Every BEFORE trigger ever created on books, by name, as Postgres fires them.
+      const names = matchesAll(/create\s+trigger\s+(\w+)\s+before\s+[^;]*?\bon\s+public\.books\b/)
+        .map((x) => x[1])
+        .sort();
+      const dropped = matchesAll(/drop\s+trigger\s+(?:if\s+exists\s+)?(\w+)\s+on\s+public\.books\b/).map((x) => x[1]);
+      const live = [...new Set(names)].filter((n) => !dropped.includes(n));
+      const at = (n: string) => live.indexOf(n);
+      expect(at("books_protect_columns")).toBeGreaterThanOrEqual(0);
+      expect(at("books_set_doc_rev")).toBeGreaterThan(at("books_protect_columns"));
+      expect(at("books_set_updated_at")).toBeGreaterThan(at("books_set_doc_rev"));
     });
   });
 
@@ -1221,51 +1238,99 @@ describe("migrations: Milestone 5 editor (0900, D-036 / D-037)", () => {
     });
   });
 
+  describe("rewrite runs never look like builds (M5 review B1)", () => {
+    it("adds state 'rewriting' to agent_runs_state_check (drop + re-add)", () => {
+      expect(flat).toContain("alter table public.agent_runs drop constraint agent_runs_state_check;");
+      expect(flat).toContain(
+        "add constraint agent_runs_state_check check ( state in ('queued', 'curating', 'storytelling', 'captioning', 'critiquing', 'repairing', 'validating', 'rewriting', 'done', 'failed') );",
+      );
+      expect(flat.indexOf("drop constraint agent_runs_state_check")).toBeLessThan(flat.indexOf("add constraint agent_runs_state_check"));
+    });
+
+    it("an active rewrite run is always 'rewriting', and only rewrite runs may be", () => {
+      expect(flat).toContain(
+        "add constraint agent_runs_rewriting_state_check check ( (state = 'rewriting') = (trigger = 'rewrite' and state not in ('done', 'failed')) );",
+      );
+    });
+
+    it("claim_agent_run (latest = 0900) only leases build / rebuild runs; privileges re-stated", () => {
+      const f = latestFunction("public.claim_agent_run")!;
+      expect(sql).toContain(f.body);
+      expect(f.header).toMatch(/returns\s+uuid/);
+      expect(f.header).toMatch(/security\s+invoker/);
+      expect(f.header).toMatch(/set\s+search_path\s*=\s*''/);
+      expect(ws(f.body)).toContain(
+        "update public.agent_runs as r set lease_until = now() + make_interval(secs => v_secs), lease_token = v_token, attempts = r.attempts + 1 where r.id = p_run_id and r.trigger in ('build', 'rebuild') and r.state not in ('done', 'failed') and (r.lease_until is null or r.lease_until < now());",
+      );
+      expect(flat).toContain("revoke all on function public.claim_agent_run(uuid, integer) from public, anon, authenticated;");
+      expect(flat).toContain("grant execute on function public.claim_agent_run(uuid, integer) to service_role;");
+    });
+  });
+
   describe("create_rewrite_run_capped", () => {
     const f = latestFunction(RPC);
     const body = ws(f?.body ?? "");
 
-    it("signature (p_book, p_user, p_mode, p_cap, p_enforce) returns jsonb; INVOKER with search_path ''", () => {
+    it("signature (p_book, p_user, p_mode, p_cap, p_daily_cap, p_enforce) returns jsonb; INVOKER with search_path ''", () => {
       expect(f).toBeDefined();
-      expect(ws(f!.header).trim()).toMatch(/^p_book uuid, p_user uuid, p_mode text, p_cap integer, p_enforce boolean \) returns jsonb/);
+      expect(ws(f!.header).trim()).toMatch(
+        /^p_book uuid, p_user uuid, p_mode text, p_cap integer, p_daily_cap integer, p_enforce boolean \) returns jsonb/,
+      );
       expect(f!.header).toMatch(/security\s+invoker/);
       expect(f!.header).not.toMatch(/security\s+definer/);
       expect(f!.header).toMatch(/set\s+search_path\s*=\s*''/);
     });
 
-    it("rejects null arguments (cap only required when enforced)", () => {
+    it("rejects null arguments (caps only required when enforced)", () => {
       expect(body).toContain(
-        "if p_book is null or p_user is null or p_mode is null or p_enforce is null or (p_enforce and p_cap is null) then raise exception 'invalid_argument' using errcode = '22023';",
+        "if p_book is null or p_user is null or p_mode is null or p_enforce is null or (p_enforce and (p_cap is null or p_daily_cap is null)) then raise exception 'invalid_argument' using errcode = '22023';",
       );
     });
 
-    it("serialises per book with a transaction advisory lock before any check or insert", () => {
-      expect(body).toContain("perform pg_advisory_xact_lock(hashtextextended(p_book::text, 2));");
+    it("serialises per user with a transaction advisory lock before any check, reap or insert", () => {
+      expect(body).toContain("perform pg_advisory_xact_lock(hashtextextended(p_user::text, 3));");
       const lock = body.indexOf("pg_advisory_xact_lock");
       expect(lock).toBeLessThan(body.indexOf("select count(*)"));
+      expect(lock).toBeLessThan(body.indexOf("update public.agent_runs"));
       expect(lock).toBeLessThan(body.indexOf("insert into public.agent_runs"));
       expect(lock).toBeLessThan(body.indexOf("from public.books"));
     });
 
     it("returns not_found unless the book belongs to p_user", () => {
       expect(body).toMatch(/if not exists \( select 1 from public\.books as b where b\.id = p_book and b\.user_id = p_user \) then return jsonb_build_object\('error', 'not_found'\);/);
+      expect(body.indexOf("'not_found'")).toBeLessThan(body.indexOf("update public.agent_runs"));
     });
 
-    it("max one rewrite in flight per book (stale > 5 min ignored) → already_running", () => {
+    it("fails this book's unfinished rewrite runs older than 5 min (error_code 'stale') before counting", () => {
       expect(body).toContain(
-        "where r.book_id = p_book and r.trigger = 'rewrite' and r.state not in ('done', 'failed') and r.started_at > now() - interval '5 minutes'; if v_n > 0 then return jsonb_build_object('error', 'already_running');",
+        "update public.agent_runs as r set state = 'failed', ai_status = 'failed', error_code = 'stale', finished_at = now() where r.book_id = p_book and r.trigger = 'rewrite' and r.state not in ('done', 'failed') and r.started_at <= now() - interval '5 minutes';",
+      );
+      expect(body.indexOf("error_code = 'stale'")).toBeLessThan(body.indexOf("select count(*)"));
+    });
+
+    it("max one rewrite in flight per book → already_running", () => {
+      expect(body).toContain(
+        "where r.book_id = p_book and r.trigger = 'rewrite' and r.state not in ('done', 'failed'); if v_n > 0 then return jsonb_build_object('error', 'already_running');",
       );
     });
 
-    it("cap (only when p_enforce) counts ok rewrites + in-flight ones of the book", () => {
-      expect(body).toContain("if p_enforce then");
+    it("daily ceiling (only when p_enforce): ALL rewrite runs of the user in the last 24 h → daily_limit", () => {
       expect(body).toContain(
-        "where r.book_id = p_book and r.trigger = 'rewrite' and ( r.ai_status = 'ok' or (r.state not in ('done', 'failed') and r.started_at > now() - interval '5 minutes') ); if v_n >= p_cap then return jsonb_build_object('error', 'limit', 'limit', 'rewrites');",
+        "if p_enforce then select count(*) into v_n from public.agent_runs as r where r.user_id = p_user and r.trigger = 'rewrite' and r.started_at > now() - interval '24 hours'; if v_n >= p_daily_cap then return jsonb_build_object('error', 'daily_limit');",
       );
     });
 
-    it("inserts a 'rewrite' run and returns {id}", () => {
-      expect(body).toContain("insert into public.agent_runs (book_id, user_id, trigger, mode) values (p_book, p_user, 'rewrite', p_mode) returning id into v_id;");
+    it("per-book cap (only when p_enforce) counts ok rewrites + in-flight ones of the book", () => {
+      expect(body).toContain(
+        "where r.book_id = p_book and r.trigger = 'rewrite' and (r.ai_status = 'ok' or r.state not in ('done', 'failed')); if v_n >= p_cap then return jsonb_build_object('error', 'limit', 'limit', 'rewrites');",
+      );
+      expect(body.indexOf("'daily_limit'")).toBeLessThan(body.indexOf("'rewrites'"));
+    });
+
+    it("inserts a 'rewrite' run in state 'rewriting' (never 'queued') and returns {id}", () => {
+      expect(body).toContain(
+        "insert into public.agent_runs (book_id, user_id, trigger, mode, state) values (p_book, p_user, 'rewrite', p_mode, 'rewriting') returning id into v_id;",
+      );
       expect(body).toContain("return jsonb_build_object('id', v_id);");
     });
 
@@ -1280,6 +1345,8 @@ describe("migrations: Milestone 5 editor (0900, D-036 / D-037)", () => {
   it("database.types.ts declares books.doc_rev and the RPC args (hand-edited until types gen)", () => {
     const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
     expect(types.match(/doc_rev\??: number/g)).toHaveLength(3);
-    expect(types).toMatch(/create_rewrite_run_capped: \{\s*Args: \{\s*p_book: string\s*p_cap: number\s*p_enforce: boolean\s*p_mode: string\s*p_user: string\s*\}\s*Returns: Json/);
+    expect(types).toMatch(
+      /create_rewrite_run_capped: \{\s*Args: \{\s*p_book: string\s*p_cap: number\s*p_daily_cap: number\s*p_enforce: boolean\s*p_mode: string\s*p_user: string\s*\}\s*Returns: Json/,
+    );
   });
 });

@@ -7,6 +7,16 @@ export const LIMITS = {
     maxAnalyzedPhotos: 150,
     maxRebuilds: 2,
     maxCaptionRewrites: 20,
+    /**
+     * M5 review S1: cost ceiling for ✨ rewrites — ALL rewrite runs (any outcome: ok, failed,
+     * refused, stale) a user may start per rolling 24 h, over all their books. Needed because
+     * failed rewrites never count toward maxCaptionRewrites (D-037 #6), so without it a client
+     * could retry failing rewrites forever. ≈ 3× the per-book cap: a user can use a whole book's
+     * allowance even with many failures, but not loop. The tier is that of the book being
+     * edited (like maxLiveBuildsPerUserPerDay). Enforced in create_rewrite_run_capped → 429
+     * { error: 'daily_limit' }.
+     */
+    maxRewriteRunsPerUserPerDay: 60,
     maxPages: 20,
     /** D-026: live AI builds + rebuilds per user per rolling 24 h (all books). */
     maxLiveBuildsPerUserPerDay: 3,
@@ -25,6 +35,7 @@ export const LIMITS = {
     maxAnalyzedPhotos: 500,
     maxRebuilds: 10,
     maxCaptionRewrites: 200,
+    maxRewriteRunsPerUserPerDay: 400,
     maxPages: 100,
     maxLiveBuildsPerUserPerDay: 20,
     maxCaptionBatchesPerBuild: 10,

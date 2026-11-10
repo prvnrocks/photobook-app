@@ -202,8 +202,11 @@ class FakeDb {
       },
       createRunCapped: async (input) => {
         this.createCalls.push({ ...input });
+        // agent_runs_one_active_per_book_idx (0900): active runs except rewrite runs
         for (const r of this.runs.values()) {
-          if (r.book_id === input.bookId && r.state !== "done" && r.state !== "failed") return { error: "already_running" };
+          if (r.book_id === input.bookId && r.trigger !== "rewrite" && r.state !== "done" && r.state !== "failed") {
+            return { error: "already_running" };
+          }
         }
         if (input.enforce) {
           const since = new Date(this.now - 24 * 3_600_000).toISOString();
@@ -1625,5 +1628,86 @@ describe("orchestrator — M4 review fixes", () => {
     expect(killed).toBe(true);
     expect(skippedInserts).toBe(1);
     expect(db.steps.filter((x) => x.status === "skipped").map((x) => x.stepKey)).toEqual(["caption_writer:skipped"]);
+  });
+});
+
+describe("orchestrator — rewrite runs are never build runs (M5 review B1)", () => {
+  const RW = "99999999-9999-4999-8999-999999999999";
+  /** A ✨ rewrite run row as create_rewrite_run_capped writes it (or, worst case, an old 'queued' one). */
+  function addRewriteRun(db: FakeDb, state: string) {
+    db.runs.set(RW, {
+      id: RW,
+      book_id: BOOK,
+      user_id: USER,
+      state,
+      ai_status: null,
+      progress: {},
+      cursor: {},
+      mode: "live",
+      trigger: "rewrite",
+      attempts: 0,
+      error_code: null,
+      started_at: new Date(db.now).toISOString(),
+      finished_at: null,
+      lease_until: null,
+      lease_token: null,
+      total_cost_usd: 0,
+    } as FakeRun);
+  }
+
+  it.each(["rewriting", "queued"])("advance on a rewrite run (state %s) → notFound, never claimed, nothing run or written", async (state) => {
+    const { db, transport, deps } = setup(photos150().slice(0, 20));
+    addRewriteRun(db, state);
+    const claims: string[] = [];
+    const spied: OrchestratorDeps = {
+      ...deps,
+      claimRun: async (id, secs) => {
+        claims.push(id);
+        return deps.claimRun(id, secs);
+      },
+    };
+    expect(await orch.advance(RW, {}, spied)).toEqual({ notFound: true });
+    expect(claims).toEqual([]);
+    const run = db.run(RW);
+    expect(run).toMatchObject({ state, attempts: 0, lease_token: null, cursor: {}, trigger: "rewrite" });
+    expect(transport.calls).toHaveLength(0);
+    expect(db.steps).toHaveLength(0);
+    expect(db.writes).toEqual([]);
+    expect(db.bookStatusHistory).toEqual([]);
+  });
+
+  it("a run whose trigger turns into a rewrite between claim and tick is still refused (defence in depth)", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 20));
+    addRewriteRun(db, "rewriting");
+    let reads = 0;
+    const flipping: OrchestratorDeps = {
+      ...deps,
+      // First read (pre-claim) says build; the tick's read sees the real row.
+      getRunForTick: async (id) => {
+        const row = await deps.getRunForTick(id);
+        return row && reads++ === 0 ? { ...row, trigger: "build" } : row;
+      },
+    };
+    expect(await orch.advance(RW, {}, flipping)).toEqual({ notFound: true });
+    expect(transport.calls).toHaveLength(0);
+    expect(db.writes).toEqual([]);
+    expect(db.run(RW).lease_token).toBeNull(); // released
+  });
+
+  it("getProgress (GET /api/ai/runs/[id]) → null for a rewrite run, so the route answers 404", async () => {
+    const { db, deps } = setup(photos150().slice(0, 20));
+    addRewriteRun(db, "rewriting");
+    expect(await orch.getProgress(RW, deps)).toBeNull();
+    const s = await start(deps);
+    expect(await orch.getProgress(s.runId, deps)).toMatchObject({ state: "queued" });
+  });
+
+  it("a build started while a rewrite is in flight is a normal build and runs to the end", async () => {
+    const { db, deps } = setup(photos150().slice(0, 20));
+    addRewriteRun(db, "rewriting");
+    const s = await start(deps);
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok" });
+    expect(db.run(RW)).toMatchObject({ state: "rewriting", attempts: 0 });
   });
 });

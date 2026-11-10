@@ -189,10 +189,22 @@ describe("validateEditorDoc — fonts", () => {
     expect(validateEditorDoc(moved, ctx({ savedDoc: legacy })).ok).toBe(true);
   });
 
-  it("style.font outside the editor fonts is still accepted (T3 open gap — documented, not enforced)", () => {
-    // If this starts failing, the gap was closed on purpose: update the expectation.
+  it("style.font outside the editor fonts is invalid_font (T3 gap closed in the M5 review)", () => {
     const d = { ...devPreviewDoc(), style: { background: "#FFFFFF", font: "Comic Sans" } };
-    expect(validateEditorDoc(d, ctx()).ok).toBe(true);
+    expect(validateEditorDoc(d, ctx())).toEqual({ ok: false, code: "invalid_font" });
+    expect(validateEditorDoc(d, ctx({ savedDoc: {} }))).toEqual({ ok: false, code: "invalid_font" });
+  });
+
+  it("every editor font is accepted as style.font; a saved legacy style.font may stay", () => {
+    for (const f of ["Inter", "Playfair", "Cairo", "Tajawal"] as const) {
+      const d = { ...devPreviewDoc(), style: { background: "#FFFFFF", font: f } };
+      expect(validateEditorDoc(d, ctx()).ok).toBe(true);
+    }
+    const legacy = { ...devPreviewDoc(), style: { background: "#FFFFFF", font: "Georgia" } };
+    expect(validateEditorDoc(legacy, ctx({ savedDoc: legacy })).ok).toBe(true);
+    // Changing to a different non-editor font is still refused.
+    const other = { ...legacy, style: { background: "#FFFFFF", font: "Comic Sans" } };
+    expect(validateEditorDoc(other, ctx({ savedDoc: legacy }))).toEqual({ ok: false, code: "invalid_font" });
   });
 });
 

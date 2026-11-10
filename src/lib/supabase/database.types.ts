@@ -433,6 +433,7 @@ export type Database = {
         Args: {
           p_book: string
           p_cap: number
+          p_daily_cap: number
           p_enforce: boolean
           p_mode: string
           p_user: string

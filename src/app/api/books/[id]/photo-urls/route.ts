@@ -9,6 +9,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { isSameOrigin } from "@/lib/auth/same-origin";
 import { EDITOR_URL_TTL_SECONDS, getPhotoUrls, MAX_PHOTO_URL_IDS } from "@/lib/db/editor";
+import { readBodyWithLimit } from "@/lib/http/body";
 import { isUuid } from "@/lib/uuid";
 
 export const runtime = "nodejs";
@@ -64,10 +65,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
     if (!isUuid(id)) return fail(404, "not_found");
 
-    const declared = Number(request.headers.get("content-length") ?? "0");
-    if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return fail(413, "payload_too_large");
-    const text = await request.text();
-    if (text.length > MAX_BODY_BYTES) return fail(413, "payload_too_large");
+    // Streamed size check (M5 review S2): Content-Length first, then counted bytes, so an
+    // oversized body is never buffered whole.
+    const read = await readBodyWithLimit(request, MAX_BODY_BYTES);
+    if (!read.ok) return fail(413, "payload_too_large");
+    const text = read.text;
 
     let json: unknown = {};
     if (text.trim() !== "") {

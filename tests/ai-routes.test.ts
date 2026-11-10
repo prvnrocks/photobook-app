@@ -28,6 +28,7 @@ vi.mock("@/lib/db/agent-runs", () => ({
   getLatestRunForBook: mocks.getLatestRunForBook,
   hasFinishedLiveAiRun: mocks.hasFinishedLiveAiRun,
   getRunForOwner: mocks.getRunForOwner,
+  isBuildRunTrigger: (t: unknown) => t === "build" || t === "rebuild",
 }));
 vi.mock("@/lib/db/photos", () => ({ setUserOverride: mocks.setUserOverride }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
@@ -265,7 +266,13 @@ describe("POST /api/ai/runs/[id]/advance", () => {
     advanceRoute.POST(post(`/api/ai/runs/${id}/advance`, undefined, headers), ctx(id));
 
   beforeEach(() => {
-    mocks.getRunForOwner.mockResolvedValue({ id: RUN });
+    mocks.getRunForOwner.mockResolvedValue({ id: RUN, trigger: "build" });
+  });
+
+  it("404 for a rewrite run (M5 review B1) — never advanced", async () => {
+    mocks.getRunForOwner.mockResolvedValue({ id: RUN, trigger: "rewrite" });
+    await expectShape(await call(), 404, { error: "not_found" });
+    expect(mocks.advance).not.toHaveBeenCalled();
   });
 
   it("exports route fields only", () => {

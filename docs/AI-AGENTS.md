@@ -87,6 +87,17 @@ Replay (`rewriter-replay.ts`) answers from tone pools in the target script, actu
 The route (`/api/ai/rewrite`) owns limits: one `agent_runs` row per rewrite (trigger `rewrite`), only `ok` counts
 (D-037 #6).
 
+Rewrite runs vs build runs (M5 review B1/S1): `create_rewrite_run_capped` (0900) inserts rewrite runs in state
+`rewriting` (never `queued`; a check constraint ties `rewriting` ⇔ active rewrite), fails this book's unfinished
+rewrite runs older than 5 min (`error_code 'stale'`), and enforces max 1 in flight per book, a per-user 24 h
+ceiling over ALL rewrite runs (`limits.ts maxRewriteRunsPerUserPerDay`, free 60 / paid 400) and the per-book cap.
+`claim_agent_run` only leases `build`/`rebuild` runs; `advance()` refuses other triggers before claiming;
+every build-run lookup in `src/lib/db/agent-runs.ts` filters `trigger in (build, rebuild)` (`BUILD_RUN_TRIGGERS`).
+`finishRewriteRun` re-sums step costs into `total_cost_usd` (also for failed rewrites).
+Route errors: 200 `{text,lang,remaining}` · 400 `invalid_body` | `too_short` (`shorter` on ≤ 3 words) · 404 ·
+409 `already_running` · 429 `limit` | `daily_limit` · 502 `{error,retryable}` · 503 `ai_off` | `ai_unavailable`
+(RPC missing before 0900) · 500.
+
 ## Orchestrator (state machine)
 
 ```

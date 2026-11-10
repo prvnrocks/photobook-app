@@ -15,7 +15,8 @@
 --      and 20261109000800_cursor_size.sql (agent_runs.cursor limit 256 KB)
 --      and 20261110000900_editor.sql (server-only doc / page_count / doc_rev,
 --      doc_rev bump trigger, rewrite runs outside the one-active-run index,
---      create_rewrite_run_capped).
+--      'rewriting' state + claim_agent_run refuses rewrites,
+--      create_rewrite_run_capped with stale reaping + per-user daily ceiling).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -24,7 +25,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 90 checks passed
+--       RLS OK — all 93 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -1164,30 +1165,29 @@ begin
   checks := checks + 1;
 
   -- create_rewrite_run_capped: not executable by clients
-  if has_function_privilege('authenticated', 'public.create_rewrite_run_capped(uuid, uuid, text, integer, boolean)', 'execute')
-     or has_function_privilege('anon', 'public.create_rewrite_run_capped(uuid, uuid, text, integer, boolean)', 'execute') then
+  if has_function_privilege('authenticated', 'public.create_rewrite_run_capped(uuid, uuid, text, integer, integer, boolean)', 'execute')
+     or has_function_privilege('anon', 'public.create_rewrite_run_capped(uuid, uuid, text, integer, integer, boolean)', 'execute') then
     raise exception 'RLS FAIL [rewrite rpc grants]: a client role can execute create_rewrite_run_capped';
   end if;
   begin
-    perform public.create_rewrite_run_capped(book_e, uid_a, 'live', 100, false);
+    perform public.create_rewrite_run_capped(book_e, uid_a, 'live', 100, 100, false);
     raise exception 'RLS FAIL [rewrite rpc]: authenticated could call create_rewrite_run_capped';
   exception when insufficient_privilege then null;
   end;
   checks := checks + 1;
 
   -- rewrite runs are outside the one-active-run index (D-037 (6)); max 1 in
-  -- flight per book; only ok rewrites count toward the cap; stale (> 5 min)
-  -- unfinished rewrites neither block nor count.
+  -- flight per book; only ok rewrites count toward the cap.
   reset role;
   perform set_config('request.jwt.claims', '', true);
   insert into public.agent_runs (book_id, user_id, trigger, mode) values (book_e, uid_a, 'build', 'replay');
   set local role service_role;
-  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, true);
+  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, 100, true);
   if v_res ->> 'id' is null then
     raise exception 'RLS FAIL [rewrite run]: refused while a build run is active: %', v_res;
   end if;
   run_rw := (v_res ->> 'id')::uuid;
-  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, false);
+  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, 100, false);
   if v_res is distinct from '{"error":"already_running"}'::jsonb then
     raise exception 'RLS FAIL [rewrite run]: second in-flight rewrite returned %', v_res;
   end if;
@@ -1196,33 +1196,111 @@ begin
     raise exception 'RLS FAIL [one active run]: a second active build/rebuild run was accepted';
   exception when unique_violation then null;
   end;
-  v_res := public.create_rewrite_run_capped(book_e, uid_b, 'replay', 2, false);
+  v_res := public.create_rewrite_run_capped(book_e, uid_b, 'replay', 2, 100, false);
   if v_res is distinct from '{"error":"not_found"}'::jsonb then
     raise exception 'RLS FAIL [rewrite run]: a rewrite run for another user''s book returned %', v_res;
   end if;
   checks := checks + 1;
 
+  -- M5 review B1: a rewrite run is never 'queued' and never claimable by a build tick
+  select state, cursor into r from public.agent_runs where id = run_rw;
+  if r.state <> 'rewriting' or r.cursor <> '{}'::jsonb then
+    raise exception 'RLS FAIL [rewrite state]: rewrite run inserted as % (expected rewriting)', r.state;
+  end if;
+  if public.claim_agent_run(run_rw, 30) is not null then
+    raise exception 'RLS FAIL [rewrite claim]: claim_agent_run leased a rewrite run';
+  end if;
+  select attempts, lease_token into r from public.agent_runs where id = run_rw;
+  if r.attempts <> 0 or r.lease_token is not null then
+    raise exception 'RLS FAIL [rewrite claim]: a refused claim still touched the rewrite run';
+  end if;
+  begin
+    insert into public.agent_runs (book_id, user_id, trigger, mode, state) values (book_e, uid_a, 'rewrite', 'replay', 'queued');
+    raise exception 'RLS FAIL [rewrite state]: a queued rewrite run was accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.agent_runs (book_id, user_id, trigger, mode, state) values (book_a, uid_a, 'build', 'replay', 'rewriting');
+    raise exception 'RLS FAIL [rewrite state]: a build run in state rewriting was accepted';
+  exception when check_violation then null;
+  end;
+  checks := checks + 1;
+
   update public.agent_runs set state = 'done', ai_status = 'ok' where id = run_rw;
-  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, true);   -- 1 ok of 2
+  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, 100, true);   -- 1 ok of 2
   if v_res ->> 'id' is null then raise exception 'RLS FAIL [rewrite cap]: 1 of 2 used refused: %', v_res; end if;
   update public.agent_runs set state = 'failed', ai_status = 'failed' where id = (v_res ->> 'id')::uuid;
-  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, true);   -- failed doesn't count
+  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, 100, true);   -- failed doesn't count
   if v_res ->> 'id' is null then raise exception 'RLS FAIL [rewrite cap]: a failed rewrite counted: %', v_res; end if;
-  update public.agent_runs set started_at = now() - interval '10 minutes' where id = (v_res ->> 'id')::uuid;
-  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, true);   -- stale run doesn't block/count
+  run_rw := (v_res ->> 'id')::uuid;
+  update public.agent_runs set started_at = now() - interval '10 minutes' where id = run_rw;
+  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, 100, true);   -- stale run doesn't block/count
   if v_res ->> 'id' is null then raise exception 'RLS FAIL [rewrite cap]: a stale unfinished rewrite blocked: %', v_res; end if;
   update public.agent_runs set state = 'done', ai_status = 'ok' where id = (v_res ->> 'id')::uuid;
-  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, true);   -- 2 ok of 2
+  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, 100, true);   -- 2 ok of 2
   if v_res is distinct from '{"error":"limit","limit":"rewrites"}'::jsonb then
     raise exception 'RLS FAIL [rewrite cap]: over the cap returned %', v_res;
   end if;
-  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, false);  -- not enforced
+  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, 100, false);  -- not enforced
   if v_res ->> 'id' is null then raise exception 'RLS FAIL [rewrite cap]: p_enforce = false still capped: %', v_res; end if;
   begin
-    perform public.create_rewrite_run_capped(book_e, null, 'replay', 2, true);
+    perform public.create_rewrite_run_capped(book_e, null, 'replay', 2, 100, true);
     raise exception 'RLS FAIL [rewrite cap]: a null user id was accepted';
   exception when invalid_parameter_value then null;
   end;
+  begin
+    perform public.create_rewrite_run_capped(book_e, uid_a, 'replay', 2, null, true);
+    raise exception 'RLS FAIL [rewrite cap]: a null daily cap was accepted with p_enforce';
+  exception when invalid_parameter_value then null;
+  end;
+  checks := checks + 1;
+
+  -- M5 review B1 (c): the stale unfinished rewrite was failed by the RPC, not left active
+  select state, ai_status, error_code, finished_at into r from public.agent_runs where id = run_rw;
+  if r.state <> 'failed' or r.ai_status <> 'failed' or r.error_code <> 'stale' or r.finished_at is null then
+    raise exception 'RLS FAIL [rewrite stale]: stale rewrite run left as %/%/%', r.state, r.ai_status, r.error_code;
+  end if;
+  -- ... and only that book's: a stale rewrite of another book is left for that book's next call
+  insert into public.agent_runs (book_id, user_id, trigger, mode, state, started_at)
+  values (book_a, uid_a, 'rewrite', 'replay', 'rewriting', now() - interval '10 minutes')
+  returning id into run_rw;
+  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 100, 100, false);
+  select state into r from public.agent_runs where id = run_rw;
+  if r.state <> 'rewriting' then
+    raise exception 'RLS FAIL [rewrite stale]: a rewrite of another book was reaped (%)', r.state;
+  end if;
+  v_res := public.create_rewrite_run_capped(book_a, uid_a, 'replay', 100, 100, false);
+  select state, error_code into r from public.agent_runs where id = run_rw;
+  if v_res ->> 'id' is null or r.state <> 'failed' or r.error_code <> 'stale' then
+    raise exception 'RLS FAIL [rewrite stale]: own-book stale rewrite not failed (%, %)', r.state, v_res;
+  end if;
+  checks := checks + 1;
+
+  -- M5 review S1: per-user daily ceiling over ALL rewrite runs (any book, any outcome)
+  select count(*) into n from public.agent_runs
+   where user_id = uid_a and trigger = 'rewrite' and started_at > now() - interval '24 hours';
+  update public.agent_runs set state = 'failed', ai_status = 'failed'
+   where user_id = uid_a and trigger = 'rewrite' and state not in ('done', 'failed');
+  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 1000, n, true);
+  if v_res is distinct from '{"error":"daily_limit"}'::jsonb then
+    raise exception 'RLS FAIL [rewrite daily]: % rewrites with daily cap % returned %', n, n, v_res;
+  end if;
+  update public.agent_runs set started_at = now() - interval '25 hours'
+   where id = (select id from public.agent_runs
+                where user_id = uid_a and trigger = 'rewrite' and ai_status = 'failed'
+                order by started_at limit 1);
+  v_res := public.create_rewrite_run_capped(book_e, uid_a, 'replay', 1000, n, true);
+  if v_res ->> 'id' is null then
+    raise exception 'RLS FAIL [rewrite daily]: a run older than 24 h still counted: %', v_res;
+  end if;
+  v_res := public.create_rewrite_run_capped(book_a2, uid_a, 'replay', 1000, n, true);
+  if v_res is distinct from '{"error":"daily_limit"}'::jsonb then
+    raise exception 'RLS FAIL [rewrite daily]: the ceiling is not per user across books: %', v_res;
+  end if;
+  v_res := public.create_rewrite_run_capped(book_a2, uid_a, 'replay', 1000, n, false);
+  if v_res ->> 'id' is null then
+    raise exception 'RLS FAIL [rewrite daily]: p_enforce = false still hit the daily ceiling: %', v_res;
+  end if;
   checks := checks + 1;
 
   -- ---------------------------------------------------------------------------

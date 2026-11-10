@@ -1,6 +1,7 @@
 // POST /api/ai/rewrite (M5 Task 7). No live API calls: the real Rewriter runs on the
 // ReplayTransport (D-024); the capped-run RPC is simulated in memory with the semantics of
-// create_rewrite_run_capped (0900): in-flight → already_running; enforce && ok + in-flight >= cap → limit.
+// create_rewrite_run_capped (0900): in-flight → already_running; enforce && all runs >= dailyCap →
+// daily_limit; enforce && ok + in-flight >= cap → limit.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import type { AgentStepRecord } from "@/lib/ai/run-step";
@@ -19,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   requests: [] as AgentRequest<unknown>[],
   runs: [] as SimRun[],
   createCalls: [] as unknown[][],
+  createError: null as Error | null,
   finishCalls: [] as unknown[][],
   steps: [] as AgentStepRecord[],
   insertStepError: null as Error | null,
@@ -51,10 +53,13 @@ vi.mock("@/lib/db/agent-runs", async (orig) => {
   let n = 0;
   return {
     ...real,
-    createRewriteRun: vi.fn(async (bookId: string, userId: string, mode: string, cap: number, enforce: boolean) => {
-      mocks.createCalls.push([bookId, userId, mode, cap, enforce]);
+    createRewriteRun: vi.fn(async (input: Parameters<typeof real.createRewriteRun>[0]) => {
+      const { bookId, userId, mode, cap, dailyCap, enforce } = input;
+      mocks.createCalls.push([bookId, userId, mode, cap, enforce, dailyCap]);
+      if (mocks.createError) throw mocks.createError;
       const mine = mocks.runs.filter((r) => r.bookId === bookId);
       if (mine.some((r) => r.state === "queued")) return { error: "already_running" };
+      if (enforce && mocks.runs.length >= dailyCap) return { error: "daily_limit" };
       if (enforce && mine.filter((r) => r.aiStatus === "ok").length >= cap) return { error: "limit" };
       const id = `aaaaaaaa-aaaa-4aaa-8aaa-${String(++n).padStart(12, "0")}`;
       mocks.runs.push({ id, bookId, mode, state: "queued", aiStatus: null, errorCode: null });
@@ -146,6 +151,7 @@ beforeEach(() => {
   mocks.requests = [];
   mocks.runs = [];
   mocks.createCalls = [];
+  mocks.createError = null;
   mocks.finishCalls = [];
   mocks.steps = [];
   mocks.insertStepError = null;
@@ -240,7 +246,7 @@ describe("POST /api/ai/rewrite", () => {
     expect(r.status).toBe(200);
     expect(r.body).toEqual({ text: expect.any(String), lang: "en", remaining: 19 });
     expect(r.body.text).not.toBe(SECRET_CAPTION);
-    expect(mocks.createCalls).toEqual([[BOOK, "u1", "replay", 20, true]]);
+    expect(mocks.createCalls).toEqual([[BOOK, "u1", "replay", 20, true, 60]]);
     expect(mocks.runs).toMatchObject([{ state: "done", aiStatus: "ok", errorCode: null }]);
     expect(mocks.steps).toHaveLength(1);
     expect(mocks.steps[0]).toMatchObject({ agent: "rewriter", status: "ok" });
@@ -293,6 +299,7 @@ describe("POST /api/ai/rewrite", () => {
     for (let i = 0; i < 21; i++) last = await read(await call({ ...BODY, text: `${SECRET_CAPTION} ${"y".repeat(i + 1)}` }));
     expect(last).toEqual({ status: 200, body: expect.objectContaining({ remaining: 179 }) });
     expect(mocks.createCalls[0][3]).toBe(200);
+    expect(mocks.createCalls[0][5]).toBe(400);
   });
 
   it("failure → 502 {error, retryable}, not counted, run finished failed with the code", async () => {
@@ -331,6 +338,64 @@ describe("POST /api/ai/rewrite", () => {
     expect(mocks.runs[0]).toMatchObject({ state: "failed", errorCode: "rewrite_unusable" });
     expect(mocks.steps).toHaveLength(2);
     expectNoPrivateData();
+  });
+
+  it("oversized body is rejected by the streamed reader (Content-Length or counted bytes) → 400", async () => {
+    const big = JSON.stringify({ ...BODY, text: "a".repeat(5000) });
+    expect(await read(await call(big))).toEqual({ status: 400, body: { error: "invalid_body" } });
+    // A body without Content-Length is counted while streaming.
+    const stream = new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(new TextEncoder().encode(big));
+        c.close();
+      },
+    });
+    const req = new NextRequest("http://localhost:3000/api/ai/rewrite", {
+      method: "POST",
+      headers: { host: "localhost:3000", "content-type": "application/json", ...ORIGIN },
+      body: stream,
+      duplex: "half",
+    } as ConstructorParameters<typeof NextRequest>[1]);
+    expect(req.headers.get("content-length")).toBeNull();
+    expect(await read(await route.POST(req))).toEqual({ status: 400, body: { error: "invalid_body" } });
+    expect(mocks.createCalls).toHaveLength(0);
+  });
+
+  it.each([["Beach day"], ["يوم على الشاطئ"], ["One"], ["  Sun   and   sea  "]])(
+    "shorter on a caption of ≤ 3 words → 400 too_short, before any run or lookup (%s)",
+    async (text) => {
+      expect(await read(await call({ ...BODY, instruction: "shorter", text }))).toEqual({ status: 400, body: { error: "too_short" } });
+      expect(mocks.createCalls).toHaveLength(0);
+      expect(mocks.getMyBook).not.toHaveBeenCalled();
+      expect(mocks.requests).toHaveLength(0);
+    },
+  );
+
+  it("shorter on 4 words is allowed; other instructions on short captions are allowed", async () => {
+    expect((await read(await call({ ...BODY, instruction: "shorter", text: "Sun and sea today" }))).status).not.toBe(400);
+    expect((await read(await call({ ...BODY, instruction: "rewrite", text: "Beach day" }))).status).toBe(200);
+  });
+
+  it("daily ceiling (all rewrite runs of the user, any outcome) → 429 daily_limit, no model call", async () => {
+    for (let i = 0; i < 60; i++) {
+      mocks.runs.push({ id: `cccccccc-cccc-4ccc-8ccc-${String(i).padStart(12, "0")}`, bookId: "other", mode: "replay", state: "failed", aiStatus: "failed", errorCode: "refused" });
+    }
+    expect(await read(await call())).toEqual({ status: 429, body: { error: "daily_limit" } });
+    expect(mocks.requests).toHaveLength(0);
+    expect(mocks.finishCalls).toHaveLength(0);
+  });
+
+  it.each(["PGRST202", "42883"])("rewrite RPC missing before migration 0900 (%s) → 503 ai_unavailable, not 500", async (code) => {
+    const { AgentRunsQueryError } = await import("@/lib/db/agent-runs");
+    mocks.createError = new AgentRunsQueryError("create rewrite run", code);
+    expect(await read(await call())).toEqual({ status: 503, body: { error: "ai_unavailable" } });
+    expect(mocks.requests).toHaveLength(0);
+  });
+
+  it("any other RPC error stays 500 server_error", async () => {
+    const { AgentRunsQueryError } = await import("@/lib/db/agent-runs");
+    mocks.createError = new AgentRunsQueryError("create rewrite run", "42501");
+    expect(await read(await call())).toEqual({ status: 500, body: { error: "server_error" } });
   });
 
   it("already_running → 409", async () => {

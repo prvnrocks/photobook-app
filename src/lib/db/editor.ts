@@ -13,6 +13,7 @@ import "server-only";
 // Errors carry only the operation and a Postgres/Storage code.
 import { resolveAiMode, type AiMode } from "@/lib/ai/client";
 import { limitsFor } from "@/lib/ai/limits";
+import { BUILD_RUN_TRIGGERS, getRewritesUsed } from "@/lib/db/agent-runs";
 import { getMyBook } from "@/lib/db/books";
 import { PHOTOS_BUCKET } from "@/lib/db/photos";
 import type { CaptionLang, Occasion, Tone } from "@/lib/book/options";
@@ -157,20 +158,6 @@ async function listReadyPhotoRows(
   return data as PhotoRow[];
 }
 
-async function countOkRewrites(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  bookId: string,
-): Promise<number> {
-  const { count, error } = await supabase
-    .from("agent_runs")
-    .select("id", { count: "exact", head: true })
-    .eq("book_id", bookId)
-    .eq("trigger", "rewrite")
-    .eq("ai_status", "ok");
-  if (error) throw new EditorQueryError("count rewrites", error.code);
-  return count ?? 0;
-}
-
 async function activeBuildRun(
   supabase: Awaited<ReturnType<typeof createClient>>,
   bookId: string,
@@ -179,7 +166,7 @@ async function activeBuildRun(
     .from("agent_runs")
     .select("id")
     .eq("book_id", bookId)
-    .in("trigger", ["build", "rebuild"])
+    .in("trigger", [...BUILD_RUN_TRIGGERS])
     .not("state", "in", "(done,failed)")
     .order("started_at", { ascending: false })
     .limit(1)
@@ -204,7 +191,7 @@ export async function getEditorData(bookId: string): Promise<EditorData | null> 
   const supabase = await createClient();
   const [rows, rewritesUsed, activeBuildRunId] = await Promise.all([
     listReadyPhotoRows(supabase, book.id),
-    countOkRewrites(supabase, book.id),
+    getRewritesUsed(book.id, supabase),
     activeBuildRun(supabase, book.id),
   ]);
   const signed = await signRows(supabase, rows);

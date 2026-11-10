@@ -227,6 +227,7 @@ describe("agent runs: clearMemoryFromActiveRuns", () => {
     expect(sel.calls).toEqual([
       ["select", "id, cursor"],
       ["eq", "user_id", U],
+      ["in", "trigger", ["build", "rebuild"]],
       ["not", "state", "in", "(done,failed)"],
     ]);
     expect(upd).toMatchObject({ client: "admin", table: "agent_runs", op: "update" });

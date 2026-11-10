@@ -35,6 +35,22 @@ export type RunAiStatus = "ok" | "partial" | "failed";
 
 export const ACTIVE_RUN_EXCLUDED_STATES = ["done", "failed"] as const;
 
+/**
+ * Triggers of BUILD runs — the only runs the build machinery (orchestrator ticks, progress screen,
+ * review / build pages, run start) may ever see. Rewrite runs (M5 ✨, trigger 'rewrite') share the
+ * table but are one bounded request each: every build-run lookup filters by these triggers
+ * (M5 review B1), and claim_agent_run refuses other triggers (0900).
+ */
+export const BUILD_RUN_TRIGGERS = ["build", "rebuild"] as const;
+export type BuildRunTrigger = (typeof BUILD_RUN_TRIGGERS)[number];
+
+export function isBuildRunTrigger(trigger: unknown): trigger is BuildRunTrigger {
+  return trigger === "build" || trigger === "rebuild";
+}
+
+/** State of an in-flight rewrite run (0900): never 'queued', so it can't pass for a fresh build. */
+export const REWRITE_RUN_STATE = "rewriting";
+
 export class AgentRunsQueryError extends Error {
   readonly code: string | undefined;
 
@@ -219,6 +235,7 @@ export async function clearMemoryFromActiveRuns(userId: string): Promise<number>
     .from("agent_runs")
     .select("id, cursor")
     .eq("user_id", userId)
+    .in("trigger", [...BUILD_RUN_TRIGGERS])
     .not("state", "in", excluded);
   if (error) throw new AgentRunsQueryError("clear run memory", error.code);
 
@@ -412,7 +429,11 @@ export type OwnerRun = Pick<
 const OWNER_RUN_COLUMNS =
   "id, book_id, state, ai_status, progress, error_code, mode, trigger, started_at, finished_at";
 
-/** The run if it belongs to the signed-in user (RLS agent_runs_select_own), else null. */
+/**
+ * The BUILD run (build / rebuild) if it belongs to the signed-in user (RLS agent_runs_select_own),
+ * else null. Rewrite runs are never returned (M5 review B1): GET /api/ai/runs/[id] and /advance
+ * answer 404 for them.
+ */
 export async function getRunForOwner(runId: string): Promise<OwnerRun | null> {
   if (!isUuid(runId)) return null;
   const supabase = await createClient();
@@ -420,12 +441,17 @@ export async function getRunForOwner(runId: string): Promise<OwnerRun | null> {
     .from("agent_runs")
     .select(OWNER_RUN_COLUMNS)
     .eq("id", runId)
+    .in("trigger", [...BUILD_RUN_TRIGGERS])
     .maybeSingle();
   if (error) throw new AgentRunsQueryError("load run", error.code);
   return data;
 }
 
-/** The book's active (not done/failed) run visible to the signed-in user, or null. RLS client. */
+/**
+ * The book's active (not done/failed) BUILD run visible to the signed-in user, or null. RLS
+ * client. Rewrite runs are excluded (M5 review B1): an in-flight ✨ rewrite must not make the
+ * build page resume it, the review page show "building", or Update album answer busy.
+ */
 export async function getActiveRunForBook(bookId: string): Promise<OwnerRun | null> {
   if (!isUuid(bookId)) return null;
   const supabase = await createClient();
@@ -433,6 +459,7 @@ export async function getActiveRunForBook(bookId: string): Promise<OwnerRun | nu
     .from("agent_runs")
     .select(OWNER_RUN_COLUMNS)
     .eq("book_id", bookId)
+    .in("trigger", [...BUILD_RUN_TRIGGERS])
     .not("state", "in", `(${ACTIVE_RUN_EXCLUDED_STATES.join(",")})`)
     .order("started_at", { ascending: false })
     .limit(1)
@@ -442,6 +469,7 @@ export async function getActiveRunForBook(bookId: string): Promise<OwnerRun | nu
 }
 
 /** Everything the orchestrator needs to run a tick (incl. cursor). Admin client — check ownership first. */
+/** Admin read of any run (incl. rewrite runs) — callers must check `trigger` (isBuildRunTrigger). */
 export type RunForTick = Pick<
   Tables<"agent_runs">,
   | "id"
@@ -488,7 +516,7 @@ export async function countLiveRuns(input: {
   triggers?: RunTrigger[];
 }): Promise<number> {
   if (!isUuid(input.userId)) return 0;
-  const triggers = input.triggers ?? ["build", "rebuild"];
+  const triggers = input.triggers ?? [...BUILD_RUN_TRIGGERS];
   if (triggers.length === 0) return 0;
   const { count, error } = await createAdminClient()
     .from("agent_runs")
@@ -524,8 +552,9 @@ export async function countLiveRebuilds(bookId: string): Promise<number> {
 }
 
 /**
- * True when the book has a finished live run with ai_status ok/partial — any
- * further run is a rebuild (T16 #3: the trigger is derived server-side). Admin client.
+ * True when the book has a finished live BUILD run with ai_status ok/partial — any
+ * further run is a rebuild (T16 #3: the trigger is derived server-side). A successful
+ * ✨ rewrite (trigger 'rewrite', ai_status ok) never counts (M5 review B1). Admin client.
  */
 export async function hasFinishedLiveAiRun(bookId: string): Promise<boolean> {
   if (!isUuid(bookId)) return false;
@@ -533,6 +562,7 @@ export async function hasFinishedLiveAiRun(bookId: string): Promise<boolean> {
     .from("agent_runs")
     .select("id", { count: "exact", head: true })
     .eq("book_id", bookId)
+    .in("trigger", [...BUILD_RUN_TRIGGERS])
     .eq("mode", "live")
     .eq("state", "done")
     .in("ai_status", [...SUCCESSFUL_AI_STATUSES]);
@@ -540,7 +570,7 @@ export async function hasFinishedLiveAiRun(bookId: string): Promise<boolean> {
   return (count ?? 0) > 0;
 }
 
-/** Newest run of the book visible to the signed-in user (RLS, owner columns only), or null. */
+/** Newest BUILD run of the book visible to the signed-in user (RLS, owner columns only), or null. */
 export async function getLatestRunForBook(
   bookId: string,
 ): Promise<Pick<OwnerRun, "id" | "mode" | "state" | "started_at"> | null> {
@@ -550,6 +580,7 @@ export async function getLatestRunForBook(
     .from("agent_runs")
     .select("id, mode, state, started_at")
     .eq("book_id", bookId)
+    .in("trigger", [...BUILD_RUN_TRIGGERS])
     .order("started_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -591,31 +622,58 @@ export type CreateRewriteRunResult =
   | { id: string }
   | { error: "already_running" }
   | { error: "limit" }
+  | { error: "daily_limit" }
   | { error: "not_found" };
 
+export type CreateRewriteRunInput = {
+  bookId: string;
+  userId: string;
+  mode: Exclude<RunMode, "rule">;
+  /** Per-book cap: successful rewrites (limits.ts maxCaptionRewrites). */
+  cap: number;
+  /** Per-user rolling-24 h ceiling over ALL rewrite runs, any outcome (limits.ts maxRewriteRunsPerUserPerDay). */
+  dailyCap: number;
+  enforce: boolean;
+};
+
+/** PostgREST "function not found in the schema cache" / Postgres undefined_function. */
+const MISSING_RPC_CODES = new Set(["PGRST202", "42883"]);
+
 /**
- * Atomic per-book "check rewrite cap + insert" (create_rewrite_run_capped, 0900): an advisory
- * lock per book serialises starts.
- *   already_running: a rewrite of this book is in flight (not finished, started < 5 min ago);
- *   limit (only when `enforce`): ok rewrites + in-flight ones >= cap;
- *   not_found: the book doesn't exist or isn't the user's (defence in depth).
- * Admin client — the caller checked ownership (getMyBook) first.
+ * True when `err` says the rewrite RPC doesn't exist yet (code deployed before migration 0900):
+ * the route answers 503 ai_unavailable instead of 500.
  */
-export async function createRewriteRun(
-  bookId: string,
-  userId: string,
-  mode: Exclude<RunMode, "rule">,
-  cap: number,
-  enforce: boolean,
-): Promise<CreateRewriteRunResult> {
-  if (!isUuid(bookId) || !isUuid(userId)) throw new AgentRunsQueryError("create rewrite run", "invalid_id");
-  if (mode !== "live" && mode !== "replay") throw new AgentRunsQueryError("create rewrite run", "invalid_mode");
+export function isMissingRpcError(err: unknown): boolean {
+  return err instanceof AgentRunsQueryError && err.code !== undefined && MISSING_RPC_CODES.has(err.code);
+}
+
+/**
+ * Atomic "reap stale + check caps + insert" (create_rewrite_run_capped, 0900): an advisory lock
+ * per USER serialises starts (so the per-user ceiling holds across that user's books).
+ *   not_found: the book doesn't exist or isn't the user's (defence in depth);
+ *   (reap): this book's unfinished rewrite runs older than 5 min → failed, error_code 'stale';
+ *   already_running: a rewrite of this book is in flight;
+ *   daily_limit (only when `enforce`): rewrite runs of the user in the last 24 h, ANY outcome,
+ *     >= dailyCap — the cost ceiling for failed rewrites (they never count toward `cap`);
+ *   limit (only when `enforce`): ok rewrites + in-flight ones of the book >= cap.
+ * The run is inserted with state 'rewriting' (never 'queued'). Admin client — the caller checked
+ * ownership (getMyBook) first.
+ */
+export async function createRewriteRun(input: CreateRewriteRunInput): Promise<CreateRewriteRunResult> {
+  if (!isUuid(input.bookId) || !isUuid(input.userId)) {
+    throw new AgentRunsQueryError("create rewrite run", "invalid_id");
+  }
+  if (input.mode !== "live" && input.mode !== "replay") {
+    throw new AgentRunsQueryError("create rewrite run", "invalid_mode");
+  }
+  const cap = (n: number) => (Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0);
   const { data, error } = await createAdminClient().rpc("create_rewrite_run_capped", {
-    p_book: bookId,
-    p_user: userId,
-    p_mode: mode,
-    p_cap: Number.isFinite(cap) ? Math.max(0, Math.floor(cap)) : 0,
-    p_enforce: enforce === true,
+    p_book: input.bookId,
+    p_user: input.userId,
+    p_mode: input.mode,
+    p_cap: cap(input.cap),
+    p_daily_cap: cap(input.dailyCap),
+    p_enforce: input.enforce === true,
   });
   if (error) throw new AgentRunsQueryError("create rewrite run", error.code);
   return parseRewriteRunResult(data);
@@ -626,13 +684,17 @@ export function parseRewriteRunResult(data: unknown): CreateRewriteRunResult {
   if (data && typeof data === "object" && !Array.isArray(data)) {
     const o = data as Record<string, unknown>;
     if (typeof o.id === "string" && isUuid(o.id)) return { id: o.id };
-    if (o.error === "already_running" || o.error === "limit" || o.error === "not_found") return { error: o.error };
+    if (o.error === "already_running" || o.error === "limit" || o.error === "daily_limit" || o.error === "not_found") {
+      return { error: o.error };
+    }
   }
   throw new AgentRunsQueryError("create rewrite run", "bad_result");
 }
 
 /**
- * Finishes a rewrite run: state done (ai_status ok) or failed, error code (clipped), finished_at.
+ * Finishes a rewrite run: first re-sums its agent_steps into total_cost_usd / tokens (so failed
+ * and refused rewrites carry their cost too — M5 review S1; best effort, a failed sum never stops
+ * the finish), then state done (ai_status ok) or failed, error code (clipped), finished_at.
  * Only touches an unfinished rewrite run, so it is safe to call twice. Rewrite runs have no lease
  * (one bounded request). Returns true when a row was updated. Admin client.
  */
@@ -641,6 +703,7 @@ export async function finishRewriteRun(
   result: { ai_status: "ok" | "failed"; error_code?: string | null },
 ): Promise<boolean> {
   if (!isUuid(runId)) throw new AgentRunsQueryError("finish rewrite run", "invalid_id");
+  await syncRunTotals(runId).catch(() => undefined);
   const ok = result.ai_status === "ok";
   const errorCode = ok || !result.error_code ? null : clipText(result.error_code, RUN_ERROR_CODE_MAX, "");
   const { data, error } = await createAdminClient()
@@ -659,15 +722,19 @@ export async function finishRewriteRun(
   return (data?.length ?? 0) === 1;
 }
 
+/** The RLS server client (createClient) — getRewritesUsed may reuse a caller's instance. */
+type RlsClient = Awaited<ReturnType<typeof createClient>>;
+
 /**
  * Successful ✨ rewrites of the book (rewrite runs with ai_status ok) — the count the rewrite
- * limit uses (D-037 #6; in-flight runs are not included). RLS client: returns 0 for a book that
- * isn't the signed-in user's, so the editor loader can call it directly.
+ * limit uses (D-037 #6; in-flight runs are not included). The ONE shared count (route `remaining`
+ * and the editor loader's rewritesLeft). RLS client: returns 0 for a book that isn't the
+ * signed-in user's. Pass `client` to reuse the caller's RLS client.
  * remaining = limitsFor(is_paid).maxCaptionRewrites − getRewritesUsed(bookId).
  */
-export async function getRewritesUsed(bookId: string): Promise<number> {
+export async function getRewritesUsed(bookId: string, client?: RlsClient): Promise<number> {
   if (!isUuid(bookId)) return 0;
-  const supabase = await createClient();
+  const supabase = client ?? (await createClient());
   const { count, error } = await supabase
     .from("agent_runs")
     .select("id", { count: "exact", head: true })

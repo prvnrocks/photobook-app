@@ -967,6 +967,11 @@ export async function advance(
   deps: OrchestratorDeps = defaultDeps(),
 ): Promise<AdvanceResult> {
   const budgetMs = opts.budgetMs ?? DEFAULT_TICK_BUDGET_MS;
+  // M5 review B1: only build / rebuild runs are ever ticked. A ✨ rewrite run (trigger 'rewrite',
+  // one bounded request) shares agent_runs but is "not found" here and is NEVER claimed — claiming
+  // it would run an uncapped full build on its row. claim_agent_run (0900) refuses it as well.
+  const pre = await deps.getRunForTick(runId);
+  if (!pre || !agentRunsDb.isBuildRunTrigger(pre.trigger)) return { notFound: true };
   // Taken BEFORE the claim: our view of the lease end is never later than the DB's.
   const t0 = deps.now();
   const token = await deps.claimRun(runId, LEASE_SECONDS);
@@ -1040,7 +1045,8 @@ class CaptionsShedSignal extends Error {
 
 async function tick(runId: string, token: string, t0: number, budgetMs: number, deps: OrchestratorDeps): Promise<AdvanceResult> {
   const run = await deps.getRunForTick(runId);
-  if (!run) return { notFound: true };
+  // Defence in depth (B1): advance() already refused non-build triggers before claiming.
+  if (!run || !agentRunsDb.isBuildRunTrigger(run.trigger)) return { notFound: true };
   if (isFinished(run.state)) return finishedResult(run);
 
   let ctx: Tick | null = null;
@@ -2241,7 +2247,8 @@ async function crash(
 /** Owner-scoped (RLS) progress for GET /api/ai/runs/[id]; null when missing or not the owner's. */
 export async function getProgress(runId: string, deps: Pick<OrchestratorDeps, "getRunForOwner"> = defaultDeps()): Promise<ProgressView | null> {
   const run = await deps.getRunForOwner(runId);
-  if (!run) return null;
+  // Rewrite runs are not build progress (M5 review B1) → null → 404.
+  if (!run || !agentRunsDb.isBuildRunTrigger(run.trigger)) return null;
   const state = run.state as RunState;
   return {
     state,

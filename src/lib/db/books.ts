@@ -133,10 +133,14 @@ export async function createBook(input: CreateBookInput): Promise<{ id: string }
 
 const MY_BOOK_COLUMNS = "id, title, occasion, tone, caption_lang, is_paid, max_pages, page_count, doc, updated_at";
 
-/** Postgres undefined_column (42703) / PostgREST schema-cache miss (PGRST204). */
+/**
+ * Postgres undefined_column (42703) / PostgREST schema-cache miss (PGRST204) for `column` — the
+ * message must name the column, so an unrelated missing column (or an error without a message)
+ * is never mistaken for the pre-0900 deploy window.
+ */
 function isMissingColumnError(error: { code?: string; message?: string }, column: string): boolean {
   if (error.code !== "42703" && error.code !== "PGRST204") return false;
-  return typeof error.message !== "string" || error.message.includes(column);
+  return typeof error.message === "string" && error.message.includes(column);
 }
 
 /**

@@ -68,6 +68,13 @@ function savedCaptionFonts(savedDoc: unknown): Map<string, string> {
   return out;
 }
 
+/** style.font of the saved doc, or null. */
+function savedStyleFont(savedDoc: unknown): string | null {
+  const style = (savedDoc as { style?: unknown } | null)?.style;
+  const font = (style as { font?: unknown } | null | undefined)?.font;
+  return typeof font === "string" ? font : null;
+}
+
 export function validateEditorDoc(input: unknown, ctx: EditorDocContext): EditorDocResult {
   // Page limit first, so a free book with 21+ pages gets the specific code even when the
   // count is also above the schema's absolute maximum.
@@ -97,10 +104,17 @@ export function validateEditorDoc(input: unknown, ctx: EditorDocContext): Editor
   }
 
   // Caption fonts: must be an editor font, unless the page keeps its already-saved font.
+  // Caption `source` is not checked: a client-sent source 'ai' is harmless, because the stored
+  // doc always gets meta.userEdited = true (forcedMeta), which alone blocks every AI overwrite
+  // (isAiReplaceableDoc) — and an accepted ✨ rewrite is saved as 'user' by the editor (D-037 #1).
   const savedFonts = savedCaptionFonts(ctx.savedDoc);
   for (const page of doc.pages) {
     if (!page.caption || isCaptionFont(page.caption.font)) continue;
     if (savedFonts.get(page.id) !== page.caption.font) return { ok: false, code: "invalid_font" };
+  }
+  // Book font (style.font): same rule — an editor font, or the saved doc's unchanged style font.
+  if (!isCaptionFont(doc.style.font) && savedStyleFont(ctx.savedDoc) !== doc.style.font) {
+    return { ok: false, code: "invalid_font" };
   }
 
   // Remaining structure (layouts, slot counts, chapters, unique ids).

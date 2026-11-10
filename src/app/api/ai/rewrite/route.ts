@@ -9,14 +9,24 @@
 // client; a page missing from the saved doc → no notes), the target language, and user memory.
 // Limits (D-037 #6): one rewrite in flight per book; only successful rewrites count. The cap is
 // a product limit, so it is enforced in replay mode too (replay in production is opt-in, D-024).
+// Cost ceiling (M5 review S1): ALL rewrite runs of the user (any outcome) per rolling 24 h ≤
+// limits.ts maxRewriteRunsPerUserPerDay → 429 daily_limit. `shorter` on a caption of ≤ 3 words
+// is refused before any run is created (400 too_short) — it can't get shorter and would only
+// burn a failed call.
 //
 // Responses (all no-store):
 //   200 { text, lang, remaining }   remaining = cap − successful rewrites (null if the count failed)
-//   400 { error: 'invalid_body' }   401 { error: 'unauthenticated' }   403 { error: 'forbidden' }
+//   400 { error: 'invalid_body' } (also: body over REWRITE_MAX_BODY_BYTES)
+//   400 { error: 'too_short' }      — instruction 'shorter' on a caption of ≤ 3 words
+//   401 { error: 'unauthenticated' }   403 { error: 'forbidden' }
 //   404 { error: 'not_found' }      409 { error: 'already_running' }
-//   429 { error: 'limit', remaining: 0 }
+//   429 { error: 'limit', remaining: 0 }   — per-book cap of successful rewrites
+//   429 { error: 'daily_limit' }           — per-user 24 h ceiling over all rewrite runs
 //   502 { error: <RewriteErrorCode>, retryable }  — not counted; run finished 'failed'
-//   503 { error: 'ai_off' }         500 { error: 'server_error' }
+//   503 { error: 'ai_off' }         — AI mode off / no transport
+//   503 { error: 'ai_unavailable' } — the rewrite RPC doesn't exist yet (code deployed before
+//                                     migration 0900, PGRST202); the editor treats it like ai_off
+//   500 { error: 'server_error' }
 // Privacy (D-027): logs and agent_runs carry error codes only — never caption text, photo
 // notes, memory values or ids.
 import { type NextRequest } from "next/server";
@@ -25,17 +35,24 @@ import { rewriteCaption } from "@/lib/ai/agents/rewriter";
 import { limitsFor } from "@/lib/ai/limits";
 import { sanitizeMemory } from "@/lib/ai/memory";
 import { analysisOf } from "@/lib/ai/orchestrator";
-import { pagePhotoIds, REWRITE_MAX_BODY_BYTES, RewriteBodySchema, rewriteTargetLang } from "@/lib/ai/rewrite-request";
+import {
+  isTooShortToShorten,
+  pagePhotoIds,
+  REWRITE_MAX_BODY_BYTES,
+  RewriteBodySchema,
+  rewriteTargetLang,
+} from "@/lib/ai/rewrite-request";
 import type { UserMemory } from "@/lib/ai/schemas";
 import { getTransport } from "@/lib/ai/transport-factory";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { isSameOrigin } from "@/lib/auth/same-origin";
 import { CAPTION_LANGS, DEFAULT_TONE, OCCASIONS, TONES, type CaptionLang, type Occasion, type Tone } from "@/lib/book/options";
 import { parseBookDoc } from "@/lib/book/schema";
-import { createRewriteRun, finishRewriteRun, getRewritesUsed, stepLogger } from "@/lib/db/agent-runs";
+import { createRewriteRun, finishRewriteRun, getRewritesUsed, isMissingRpcError, stepLogger } from "@/lib/db/agent-runs";
 import { getMyBook } from "@/lib/db/books";
 import { getUserMemoryAdmin } from "@/lib/db/memory";
 import { getPhotoNotesAdmin } from "@/lib/db/photo-notes";
+import { readBodyWithLimit } from "@/lib/http/body";
 import { errorCodeOf, json } from "@/lib/http/json";
 
 export const runtime = "nodejs";
@@ -55,17 +72,19 @@ export async function POST(request: NextRequest) {
     const user = await getCurrentUser();
     if (!user) return json({ error: "unauthenticated" }, 401);
 
-    const raw = await request.text();
-    if (raw.length > REWRITE_MAX_BODY_BYTES) return json({ error: "invalid_body" }, 400);
+    // Streamed size check (M5 review S2): an oversized body is never buffered whole.
+    const read = await readBodyWithLimit(request, REWRITE_MAX_BODY_BYTES);
+    if (!read.ok) return json({ error: "invalid_body" }, 400);
     let body: unknown;
     try {
-      body = JSON.parse(raw);
+      body = JSON.parse(read.text);
     } catch {
       return json({ error: "invalid_body" }, 400);
     }
     const parsed = RewriteBodySchema.safeParse(body);
     if (!parsed.success) return json({ error: "invalid_body" }, 400);
     const { bookId, pageId, instruction, text } = parsed.data;
+    if (instruction === "shorter" && isTooShortToShorten(text)) return json({ error: "too_short" }, 400);
 
     const book = await getMyBook(bookId);
     if (!book) return json({ error: "not_found" }, 404);
@@ -81,11 +100,27 @@ export async function POST(request: NextRequest) {
     const occasion = pick<Occasion>(book.occasion, OCCASIONS, "other");
     const captionLang = pick<CaptionLang>(book.caption_lang, CAPTION_LANGS, "en");
     const [notes, memory] = await Promise.all([loadNotes(book.id, photoIds), loadMemory(user.id)]);
-    const cap = limitsFor(book.is_paid === true).maxCaptionRewrites;
+    const limits = limitsFor(book.is_paid === true);
+    const cap = limits.maxCaptionRewrites;
 
-    const created = await createRewriteRun(book.id, user.id, mode, cap, true);
+    let created: Awaited<ReturnType<typeof createRewriteRun>>;
+    try {
+      created = await createRewriteRun({
+        bookId: book.id,
+        userId: user.id,
+        mode,
+        cap,
+        dailyCap: limits.maxRewriteRunsPerUserPerDay,
+        enforce: true,
+      });
+    } catch (err) {
+      // Code deployed before migration 0900: the RPC doesn't exist yet → AI unavailable, not 500.
+      if (isMissingRpcError(err)) return json({ error: "ai_unavailable" }, 503);
+      throw err;
+    }
     if ("error" in created) {
       if (created.error === "limit") return json({ error: "limit", remaining: 0 }, 429);
+      if (created.error === "daily_limit") return json({ error: "daily_limit" }, 429);
       if (created.error === "already_running") return json({ error: "already_running" }, 409);
       return json({ error: "not_found" }, 404);
     }
@@ -168,7 +203,11 @@ async function loadMemory(userId: string): Promise<UserMemory | null> {
   }
 }
 
-/** Never throws: an unfinished run only blocks the book for 5 minutes (in-flight window). */
+/**
+ * Never throws. finishRewriteRun also re-sums the run's step costs (total_cost_usd), also for
+ * failed rewrites. An unfinished run only blocks the book for 5 minutes: the next
+ * create_rewrite_run_capped call fails it as 'stale'.
+ */
 async function finishSafely(runId: string, ok: boolean, errorCode: string | null): Promise<void> {
   try {
     await finishRewriteRun(runId, { ai_status: ok ? "ok" : "failed", error_code: ok ? null : errorCode });
