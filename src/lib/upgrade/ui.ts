@@ -25,6 +25,8 @@ export function upgradeErrorCopy(code: StartUpgradeErrorCode): string {
       return "Payments aren't available right now";
     case "unauthenticated":
       return "Please sign in again";
+    case "needs_review":
+      return "Something went wrong with an earlier payment for this book. We'll sort it out — contact support and mention this book.";
     default:
       return "Couldn't start payment — try again";
   }

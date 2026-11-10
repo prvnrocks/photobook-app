@@ -218,8 +218,15 @@ export async function POST(req: Request): Promise<Response> {
     return json({ error: "bad_signature" }, 400);
   }
 
-  if (event.livemode !== (stripeKeyMode() === "live")) {
-    // Signed with our secret but from the other mode (e.g. a test endpoint pointed at prod).
+  const keyMode = stripeKeyMode();
+  if (event.livemode && keyMode === "test") {
+    // A real (live) payment reached a deploy running test keys: we can't process it with this
+    // config, but money moved — 503 so Stripe keeps retrying (up to 3 days) while config is fixed.
+    logLine("error", event, "livemode_mismatch_live_event");
+    return json({ error: "payments_unavailable" }, 503);
+  }
+  if (!event.livemode && keyMode === "live") {
+    // Test event signed with our secret on a live deploy: no money moved — acknowledge and ignore.
     logLine("warn", event, "livemode_mismatch");
     return ok();
   }

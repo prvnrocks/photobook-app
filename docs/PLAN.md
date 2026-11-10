@@ -150,10 +150,11 @@ planted bad caption in tests; a second book reflects the user's earlier tone/len
 > M6 (2026-11-10): built + tested (2477 unit, 22 e2e, live publish-auth 8/1 skip), reviewed + re-review APPROVED, PGlite rls_check 106 ✓. Deployed 2026-11-10 (main 86114f7, migration 1100 live). "Done when" (WhatsApp preview + flip on another phone) is NEEDS-HUMAN after deploy.
 
 ## Milestone 7 — Payments (1 day)
-- [ ] "Upgrade this book — AED 39" → Stripe Checkout (`aed`, Apple Pay / Google Pay)
-- [ ] Webhook `checkout.session.completed` → `orders` row, `is_paid = true`, `expires_at = null`, `max_pages = 100`, AI limits raised
+- [x] "Upgrade this book — AED 39" → Stripe Checkout (`aed`, Apple Pay / Google Pay)
+- [x] Webhook `checkout.session.completed` → `orders` row, `is_paid = true`, `expires_at = null`, `max_pages = 100`, AI limits raised
 - [ ] Test with `stripe listen --forward-to localhost:3000/api/stripe/webhook`
 **Done when:** a test payment removes the watermark on the live link.
+> M7 (2026-11-10): built + reviewed (APPROVED). Live spec vs prod DB with signed test events 7/7 (watermark removed, 21 pages save, replay no-op, wrong amount stays free, expired link revived, refund keeps paid). Migrations 1200 + 1300 applied (rls_check 121). NOT deployed. Real Stripe test-mode payment (`stripe listen` + card 4242, Apple/Google Pay on phone) is NEEDS-HUMAN — needs a Stripe account + keys.
 
 ## Milestone 8 — PDF export (1–2 days)
 - [ ] `/print/[bookId]?token=…` renders exact A5 pages (148×210 mm + 3 mm bleed) with `original` photos

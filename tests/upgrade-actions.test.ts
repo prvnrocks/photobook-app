@@ -267,9 +267,9 @@ describe("startUpgradeCheckout — guards", () => {
 });
 
 describe("startUpgradeCheckout — needs_review", () => {
-  it("an order needing review blocks a new checkout → failed + error log, no Stripe call", async () => {
+  it("an order needing review blocks a new checkout → needs_review + error log, no Stripe call", async () => {
     pendingOrder("cs_test_review", { status: "needs_review" });
-    expect(await startUpgradeCheckout(BOOK)).toEqual({ error: "failed" });
+    expect(await startUpgradeCheckout(BOOK)).toEqual({ error: "needs_review" });
     expect(fake.state.createCalls).toHaveLength(0);
     expect(fake.state.retrieveCalls).toHaveLength(0);
     expect(errSpy.mock.calls.map((c: unknown[]) => String(c[0]))).toEqual(["[upgrade] blocked: book has an order needing review"]);

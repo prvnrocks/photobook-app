@@ -57,6 +57,10 @@ describe("runUpgradeCheckout", () => {
     ["already_paid", "This book is already upgraded"],
     ["unavailable", "Payments aren't available right now"],
     ["unauthenticated", "Please sign in again"],
+    [
+      "needs_review",
+      "Something went wrong with an earlier payment for this book. We'll sort it out — contact support and mention this book.",
+    ],
     ["not_found", "Couldn't start payment — try again"],
     ["failed", "Couldn't start payment — try again"],
   ] as const)("%s → %s", async (code, text) => {

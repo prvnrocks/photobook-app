@@ -431,14 +431,17 @@ describe("POST /api/stripe/webhook — charges", () => {
 });
 
 describe("POST /api/stripe/webhook — livemode", () => {
-  it("test key + live event → 200 + warn livemode_mismatch, nothing recorded", async () => {
+  it("test key + live event → 503 (Stripe retries) + error livemode_mismatch_live_event (ids only), nothing recorded", async () => {
     const res = await route.POST(req(eventJson("checkout.session.completed", session({ livemode: true }), "evt_live", true)));
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ received: true });
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "payments_unavailable" });
     expect(mocks.rpc).not.toHaveBeenCalled();
-    expect(vi.mocked(console.warn).mock.calls.map((c) => String(c[0]))).toEqual([
-      "[stripe-webhook] checkout.session.completed livemode_mismatch evt=evt_live",
+    expect(vi.mocked(console.error).mock.calls.map((c) => String(c[0]))).toEqual([
+      "[stripe-webhook] checkout.session.completed livemode_mismatch_live_event evt=evt_live",
     ]);
+    expect(vi.mocked(console.warn)).not.toHaveBeenCalled();
+    expect(logs.join("\n")).not.toContain(EMAIL);
+    expect(logs.join("\n")).not.toContain(BOOK);
   });
 
   it("live key + test event → 200 + warn, nothing recorded (refunds too)", async () => {
@@ -450,7 +453,8 @@ describe("POST /api/stripe/webhook — livemode", () => {
       expect((await post(type, obj)).status).toBe(200);
     }
     expect(mocks.rpc).not.toHaveBeenCalled();
-    expect(logs.filter((l) => l.includes("livemode_mismatch"))).toHaveLength(2);
+    expect(vi.mocked(console.warn).mock.calls.filter((c) => String(c[0]).includes("livemode_mismatch evt="))).toHaveLength(2);
+    expect(vi.mocked(console.error)).not.toHaveBeenCalled();
   });
 
   it("live key (sk_live_ / rk_live_) + live event → processed", async () => {

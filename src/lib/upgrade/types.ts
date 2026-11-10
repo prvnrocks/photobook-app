@@ -9,6 +9,8 @@ export const START_UPGRADE_ERROR_CODES = [
   "already_paid",
   /** Payments not configured on this deploy (no Stripe keys) → "Payments unavailable". */
   "unavailable",
+  /** An earlier payment for this book needs manual review (charged but not fulfilled) — contact support. */
+  "needs_review",
   "failed",
 ] as const;
 
