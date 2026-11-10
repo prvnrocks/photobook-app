@@ -139,3 +139,24 @@ Format: `## D-NNN — title (YYYY-MM-DD)` → **Decision**, **Why**, **Alternati
 
 ## D-046 — AED 39 is VAT-inclusive; no Stripe Tax in v1 (2026-11-10)
 **Decision:** Charge a flat AED 39, no tax line. **Why:** UAE VAT registration is mandatory only above AED 375k/yr taxable supplies; VAT can't be charged before registering. **Open:** user to confirm with an accountant; revisit at registration (Stripe Tax + automatic_tax).
+
+## D-047 — PDF renders the saved doc, snapshotted per export (2026-11-10)
+**Decision:** The PDF uses books.doc (latest saved edits), not published_doc; publishing isn't required. Each export row snapshots doc, doc_rev, caption_lang. Paid status read live. **Why:** PDF goes only to the owner (D-039/D-043 protect viewers, not owners). **Rejected:** published snapshot (owner would miss edits).
+
+## D-048 — Print route only via short-lived HMAC token in a header (2026-11-10)
+**Decision:** /print/[bookId] renders only with a 5-min token (key HMAC(BOOK_ACCESS_SECRET,"print-token-v1")) bound to export, book, doc_rev and sheet range, sent as `x-print-token` on same-origin navigation (query token only outside production); export must be 'rendering'; everything else 404; noindex/no-store/no-referrer; robots disallow. **Rejected:** session cookies in Puppeteer, long-lived tokens, token in URL (logs).
+
+## D-049 — Print images made in memory, never stored (2026-11-10)
+**Decision:** sharp copies per export: rotate, strip EXIF/GPS, sRGB, baseline JPEG q80 quantisationTable 3, sized for 300 dpi incl. bleed × zoom, ≤ original, ≤ 3000 px; served via request interception on https://print-assets.invalid; all other external requests blocked. Prefetch 2 chunks ahead, 8–12 downloads in flight, encodes per vCPU. **Rejected:** stored print derivatives (column + cleanup + backfill), mozjpeg (3–11× slower for ~15% smaller files).
+
+## D-050 — Bleed: 3 mm all sides, 154×216 mm sheets (2026-11-10)
+**Decision:** Print sheets 154×216 mm; edge slots extend 3 mm; text ≥ 4 mm inside trim (tested over all layouts); TrimBox/BleedBox set from Chromium's real MediaBox top-left; cover + pages, no back cover; never a watermark; static OFL fonts for print (Chromium turns variable fonts into Type3).
+
+## D-051 — Export jobs: async, reused, capped, never deleted (2026-11-10)
+**Decision:** POST → exports row → after() render; client polls a light status route; reuse ready PDF for same doc_rev + caption_lang + renderer_version; 1 in flight per book; 20 rows/user/rolling 24 h (older PDFs superseded — rows kept so the cap holds); 10-min signed URL; keep only latest PDF object per book; 1 render per instance under Fluid compute.
+
+## D-052 — Chromium on Vercel, chunked (2026-11-10)
+**Decision:** puppeteer-core 25.11.0 + @sparticuz/chromium 153 (function ~94 MB), 20-sheet chunks merged with pdf-lib, `__PRINT_READY__` after img.decode + fonts.ready, deadline = maxDuration − 30 s with real abort. Fallback if Vercel limits bite: same renderer on AWS Lambda (me-central-1).
+
+## D-053 — Stay on Vercel (Hobby for now) + Supabase; no AWS/MySQL move (2026-11-10)
+**Decision:** Keep Vercel + Supabase Postgres. Hobby now (Fluid compute, maxDuration 300 s, 2 GB/1 vCPU — sizing adapts by memory); PDF_MAX_DURATION_SECONDS is the single switch. **Why:** MySQL would mean rewriting RLS, ~15 PL/pgSQL RPCs, auth and storage for no user gain; full AWS saves ~$10–25/mo at launch scale for weeks of migration + ops. **Must:** upgrade to Vercel Pro before real payments (Hobby is non-commercial). **Revisit:** if Supabase costs grow → RDS Postgres (never MySQL); if PDF hits Hobby limits → Lambda worker or Pro.

@@ -369,10 +369,12 @@ test.beforeAll(async ({ browser }, info) => {
     p_doc_rev: null,
     p_doc: null,
     p_caption_lang: null,
+    p_renderer_version: null,
     p_daily_cap: null,
     p_stale_seconds: null,
   } as never);
-  // With 1400: table readable, RPC raises 22023 on null args. Without: PGRST205 / PGRST202.
+  // With 1400 + 1500 (8-arg signature): table readable, RPC raises 22023 on null args.
+  // Without: PGRST205 / PGRST202.
   exportsMigration = !t.error && rpc.error?.code === "22023";
   exportsProbe = `table=${t.error?.code ?? "ok"} rpc=${rpc.error?.code ?? "ok"}`;
   console.log(`[setup] exportsMigration=${exportsMigration} (${exportsProbe})`);
