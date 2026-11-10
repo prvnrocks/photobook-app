@@ -13,13 +13,14 @@
 import { Gem } from "lucide-react";
 import { LIMITS } from "@/lib/ai/limits";
 import { selectionKind } from "@/lib/editor/store";
+import { UPGRADE } from "@/lib/pricing";
 import type { EditorContextValue } from "./editor-context";
 import type { EditorTool } from "./tools/types";
 
 export const UPGRADE_TOOL_ID = "upgrade";
 
 /** Price copy (CLAUDE.md: AED 39 one-time per book). M7 replaces the button with Stripe Checkout. */
-export const UPGRADE_PRICE_LABEL = "AED 39";
+export const UPGRADE_PRICE_LABEL = UPGRADE.label;
 
 /** Why the sheet opened — picks the first line. */
 export type UpgradeReason = "pages" | "rewrites" | "general";
