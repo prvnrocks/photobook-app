@@ -212,10 +212,18 @@ async function putDoc(doc: unknown, baseRev: number): Promise<{ status: number; 
   );
 }
 
+/**
+ * Grows the doc to n pages with a VALID shape: each added page copies page 1's layout + caption
+ * but keeps the layout's slot count with every photoId null (empty slots are allowed; `slots: []`
+ * is invalid_doc because the slot count must equal the layout's photoCount, and reusing photos
+ * would be duplicate_photo). New page ids are unique.
+ */
 function withPages(doc: Record<string, unknown>, n: number): Record<string, unknown> {
-  const big = structuredClone(doc) as { pages: { id: string }[] };
+  type Slot = { photoId: string | null; crop: unknown };
+  const big = structuredClone(doc) as { pages: { id: string; slots: Slot[] }[] };
   const first = big.pages[0];
-  while (big.pages.length < n) big.pages.push({ ...structuredClone(first), id: `p21x${big.pages.length}`, slots: [] } as never);
+  const emptySlots = () => first.slots.map((s) => ({ ...structuredClone(s), photoId: null }));
+  while (big.pages.length < n) big.pages.push({ ...structuredClone(first), id: `p21x${big.pages.length}`, slots: emptySlots() });
   return big as unknown as Record<string, unknown>;
 }
 
@@ -450,9 +458,18 @@ test("b. publish screen: enabled 'Upgrade this book — AED 39'; dummy key → S
   expect(row.is_paid).toBe(false);
   expect(await ordersFor(bookId)).toHaveLength(0); // no pending order without a Stripe session
 
-  const big = await putDoc(withPages(row.doc, 21), row.doc_rev);
+  // The same builder at 20 pages saves on the free book, so the 21-page 422 below is the page
+  // cap and not a malformed doc (test c saves the identical 21-page shape once paid).
+  const twenty = await putDoc(withPages(row.doc, 20), row.doc_rev);
+  console.log(`[b] 20-page save status=${twenty.status} code=${String(twenty.body.error ?? "-")}`);
+  expect(twenty.status).toBe(200);
+  const afterTwenty = await bookRow();
+  expect(afterTwenty.page_count).toBe(20);
+  const big = await putDoc(withPages(afterTwenty.doc, 21), afterTwenty.doc_rev);
+  console.log(`[b] 21-page save status=${big.status} code=${String(big.body.error ?? "-")}`);
   expect(big.status).toBe(422);
   expect(big.body).toMatchObject({ error: "page_limit" });
+  expect((await bookRow()).page_count).toBe(20);
 });
 
 test("c0. (only without migration 1200) valid paid event → 500 so Stripe retries; book stays free", async () => {
@@ -508,7 +525,7 @@ test("c. signed checkout.session.completed (3900 aed) → 200; live link loses w
   await expect(page.getByTestId("publish-expiry")).toHaveText("Permanent link");
 
   const big = await putDoc(withPages(row.doc, 21), row.doc_rev);
-  console.log(`[c] 21-page save status=${big.status}`);
+  console.log(`[c] 21-page save status=${big.status} code=${String(big.body.error ?? "-")}`);
   expect(big.status).toBe(200);
   expect((await bookRow()).page_count).toBe(21);
 });
@@ -569,15 +586,29 @@ test("e. tampered signature → 400; wrong amount (3800) for a second free, expi
   expect(row.is_paid).toBe(false);
   expect(row.max_pages).toBe(20);
   expect(row.expires_at).not.toBeNull();
-  expect(await ordersFor(book2Id)).toHaveLength(0);
+  // Tolerant of review fix S1 (migration 1300, paid_but_invalid → order 'needs_review'): book 2
+  // is an admin clone with no pending order, so there is normally nothing to move (0 orders);
+  // if an order row exists it may only be needs_review — never paid/pending.
+  const orders2 = await ordersFor(book2Id);
+  console.log(`[e] book2 orders=${orders2.length} statuses=${orders2.map((o) => o.status).join(",") || "-"}`);
+  for (const o of orders2) expect(o.status).toBe("needs_review");
   expect((await anonView(browser, slug2)).expired).toBe(true);
 
-  // g (free branch): the success page never claims success for an unpaid book.
+  // g (free branch): the success page never claims success for an unpaid book. Without an order
+  // it polls ("Confirming payment…"); with a needs_review order (1300) it may show the support
+  // screen instead.
   await page.goto(`/books/${book2Id}/upgrade/success?session_id=${tampered.sessionId}`);
-  await expect(page.getByTestId("upgrade-polling")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole("heading", { name: "Confirming payment…" })).toBeVisible();
+  const polling = page.getByTestId("upgrade-polling");
+  const support = page.getByTestId("upgrade-support");
+  await expect(polling.or(support)).toBeVisible({ timeout: 30_000 });
+  const phase = (await support.count()) > 0 ? "support" : ((await polling.getAttribute("data-phase")) ?? "polling");
+  console.log(`[e] return page=${phase}`);
+  if (phase !== "support") {
+    await expect(page.getByRole("heading", { name: "Confirming payment…" })).toBeVisible();
+  }
   await page.waitForTimeout(5_000); // ≥ 2 polls
   await expect(page.getByTestId("upgrade-paid")).toHaveCount(0);
+  expect((await bookRow(book2Id)).is_paid).toBe(false);
 });
 
 test("f + g. expired free book → signed paid event → link works again; the open success page flips to 'Your book is upgraded'", async ({ browser }) => {

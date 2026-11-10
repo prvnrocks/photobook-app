@@ -122,8 +122,17 @@ describe("script events through the real webhook route", () => {
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
 
-  it("wrong amount → 200 without any RPC (acknowledged, never fulfilled)", async () => {
+  it("paid with a wrong amount → 200, never fulfilled; order flagged needs_review (M7 review S1)", async () => {
+    mocks.rpc.mockResolvedValue({ data: "updated", error: null });
     const ev = script.buildEvent({ type: "completed", bookId: BOOK, userId: USER, amount: 3800 });
+    expect(await post(ev.payload, script.signPayload(ev.payload, SECRET))).toHaveProperty("status", 200);
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    expect(mocks.rpc.mock.calls[0][0]).toBe("record_stripe_order_event");
+    expect(mocks.rpc.mock.calls[0][1]).toMatchObject({ p_event_id: ev.id, p_status: "needs_review" });
+  });
+
+  it("unpaid with a wrong amount → 200 without any RPC", async () => {
+    const ev = script.buildEvent({ type: "completed", bookId: BOOK, userId: USER, amount: 3800, paymentStatus: "unpaid" });
     expect(await post(ev.payload, script.signPayload(ev.payload, SECRET))).toHaveProperty("status", 200);
     expect(mocks.rpc).not.toHaveBeenCalled();
   });

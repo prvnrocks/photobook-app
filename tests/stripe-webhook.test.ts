@@ -43,13 +43,13 @@ function session(over: Record<string, unknown> = {}) {
   };
 }
 
-function eventJson(type: string, object: unknown, id = "evt_test_1") {
+function eventJson(type: string, object: unknown, id = "evt_test_1", livemode = false) {
   return JSON.stringify({
     id,
     object: "event",
     api_version: "2026-10-28.endive",
     created: 1_800_000_000,
-    livemode: false,
+    livemode,
     pending_webhooks: 1,
     request: { id: null, idempotency_key: null },
     type,
@@ -194,17 +194,79 @@ describe("POST /api/stripe/webhook — checkout sessions", () => {
     expect(logs.some((l) => l.includes("book_missing"))).toBe(true);
   });
 
-  it.each([
+  const INVALID: [string, Record<string, unknown>, string][] = [
     ["wrong amount", { amount_total: 100 }, "wrong_amount"],
     ["wrong currency", { currency: "usd" }, "wrong_currency"],
     ["reference mismatch", { client_reference_id: OTHER_BOOK }, "reference_mismatch"],
     ["bad user id", { metadata: { kind: "book_upgrade", book_id: BOOK, user_id: "nope" } }, "invalid_user_id"],
     ["subscription mode", { mode: "subscription" }, "not_payment_mode"],
-  ])("%s → not fulfilled, 200, reason logged", async (_n, over, reason) => {
-    const res = await post("checkout.session.completed", session(over));
+  ];
+
+  it.each(INVALID)("unpaid %s → not fulfilled, 200, reason logged (warn), nothing recorded", async (_n, over, reason) => {
+    const res = await post("checkout.session.completed", session({ ...over, payment_status: "unpaid" }));
     expect(res.status).toBe(200);
     expect(mocks.rpc).not.toHaveBeenCalled();
     expect(logs.some((l) => l.includes(`invalid:${reason}`) && l.includes("evt=evt_test_1"))).toBe(true);
+  });
+
+  it.each(INVALID)("PAID %s → never fulfilled; error paid_but_invalid + order needs_review, 200", async (_n, over, reason) => {
+    const errors: string[] = [];
+    vi.mocked(console.error).mockImplementation((...args: unknown[]) => {
+      errors.push(args.map(String).join(" "));
+      logs.push(args.map(String).join(" "));
+    });
+    mocks.rpc.mockResolvedValue({ data: "updated", error: null });
+    const res = await post("checkout.session.completed", session(over));
+    expect(res.status).toBe(200);
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    expect(mocks.rpc).toHaveBeenCalledWith("record_stripe_order_event", {
+      p_event_id: "evt_test_1",
+      p_event_type: "checkout.session.completed",
+      p_session_id: "cs_test_123",
+      p_payment_intent: "pi_test_123",
+      p_status: "needs_review",
+      p_livemode: false,
+    });
+    expect(mocks.rpc).not.toHaveBeenCalledWith("fulfill_book_checkout", expect.anything());
+    expect(errors).toEqual([
+      `[stripe-webhook] checkout.session.completed paid_but_invalid:${reason} evt=evt_test_1 cs=cs_test_123 pi=pi_test_123`,
+    ]);
+    expect(logs.some((l) => l.includes("needs_review:updated"))).toBe(true);
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("PAID async_payment_succeeded with a wrong amount → needs_review too", async () => {
+    mocks.rpc.mockResolvedValue({ data: "unchanged", error: null });
+    const res = await post("checkout.session.async_payment_succeeded", session({ amount_total: 1 }), "evt_a2");
+    expect(res.status).toBe(200);
+    expect(mocks.rpc.mock.calls).toEqual([
+      ["record_stripe_order_event", expect.objectContaining({ p_event_id: "evt_a2", p_status: "needs_review" })],
+    ]);
+    expect(logs.some((l) => l.includes("paid_but_invalid:wrong_amount"))).toBe(true);
+  });
+
+  it("PAID invalid with no order → order_missing logged at error level, still 200", async () => {
+    mocks.rpc.mockResolvedValue({ data: "order_missing", error: null });
+    const res = await post("checkout.session.completed", session({ amount_total: 1 }));
+    expect(res.status).toBe(200);
+    expect(vi.mocked(console.error).mock.calls.map((c) => String(c[0]))).toContain(
+      "[stripe-webhook] checkout.session.completed needs_review:order_missing evt=evt_test_1 cs=cs_test_123",
+    );
+  });
+
+  it("PAID invalid and the record RPC fails → 500 (Stripe retries)", async () => {
+    mocks.rpc.mockResolvedValue({ data: null, error: { code: "40001" } });
+    expect((await post("checkout.session.completed", session({ amount_total: 1 }))).status).toBe(500);
+  });
+
+  it("already_paid_other_session → 200 + error double_payment (ids only), no revalidate", async () => {
+    mocks.rpc.mockResolvedValue({ data: "already_paid_other_session", error: null });
+    const res = await post("checkout.session.completed", session());
+    expect(res.status).toBe(200);
+    expect(vi.mocked(console.error).mock.calls.map((c) => String(c[0]))).toEqual([
+      "[stripe-webhook] checkout.session.completed double_payment evt=evt_test_1 cs=cs_test_123 pi=pi_test_123",
+    ]);
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 
   it("non-upgrade kind → ignored 200", async () => {
@@ -330,6 +392,18 @@ describe("POST /api/stripe/webhook — charges", () => {
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["charge.refunded", () => charge()],
+    ["charge.dispute.created", () => ({ id: "dp_1", object: "dispute", payment_intent: "pi_test_123", livemode: false })],
+  ])("%s with order_missing → 200 + console.error (ids only)", async (type, obj) => {
+    mocks.rpc.mockResolvedValue({ data: "order_missing", error: null });
+    const res = await post(type, obj(), "evt_om");
+    expect(res.status).toBe(200);
+    expect(vi.mocked(console.error).mock.calls.map((c) => String(c[0]))).toEqual([
+      `[stripe-webhook] ${type} order_missing evt=evt_om pi=pi_test_123`,
+    ]);
+  });
+
   it("dispute → record 'disputed' by dispute.payment_intent", async () => {
     mocks.rpc.mockResolvedValue({ data: "updated", error: null });
     const dispute = {
@@ -356,6 +430,56 @@ describe("POST /api/stripe/webhook — charges", () => {
   });
 });
 
+describe("POST /api/stripe/webhook — livemode", () => {
+  it("test key + live event → 200 + warn livemode_mismatch, nothing recorded", async () => {
+    const res = await route.POST(req(eventJson("checkout.session.completed", session({ livemode: true }), "evt_live", true)));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ received: true });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(vi.mocked(console.warn).mock.calls.map((c) => String(c[0]))).toEqual([
+      "[stripe-webhook] checkout.session.completed livemode_mismatch evt=evt_live",
+    ]);
+  });
+
+  it("live key + test event → 200 + warn, nothing recorded (refunds too)", async () => {
+    vi.stubEnv("STRIPE_SECRET_KEY", "sk_live_dummy");
+    for (const [type, obj] of [
+      ["checkout.session.completed", session()],
+      ["charge.refunded", { id: "ch_1", object: "charge", amount: 1, amount_refunded: 1, payment_intent: "pi_1" }],
+    ] as const) {
+      expect((await post(type, obj)).status).toBe(200);
+    }
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(logs.filter((l) => l.includes("livemode_mismatch"))).toHaveLength(2);
+  });
+
+  it("live key (sk_live_ / rk_live_) + live event → processed", async () => {
+    mocks.rpc.mockResolvedValue({ data: "fulfilled", error: null });
+    for (const key of ["sk_live_dummy", "rk_live_dummy"]) {
+      vi.stubEnv("STRIPE_SECRET_KEY", key);
+      const res = await route.POST(req(eventJson("checkout.session.completed", session({ livemode: true }), `evt_${key}`, true)));
+      expect(res.status).toBe(200);
+    }
+    expect(mocks.rpc).toHaveBeenCalledTimes(2);
+    expect(mocks.rpc.mock.calls[0][1]).toMatchObject({ p_livemode: true });
+  });
+
+  it("Vercel Production with a test key → payments disabled → 503", async () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    const res = await post("checkout.session.completed", session());
+    expect(res.status).toBe(503);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("Vercel Production with a test key + STRIPE_ALLOW_TEST_IN_PROD=1 → processed", async () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("STRIPE_ALLOW_TEST_IN_PROD", "1");
+    mocks.rpc.mockResolvedValue({ data: "fulfilled", error: null });
+    expect((await post("checkout.session.completed", session())).status).toBe(200);
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("POST /api/stripe/webhook — other", () => {
   it("unknown event → 200, no RPC", async () => {
     const res = await post("customer.created", { id: "cus_1", object: "customer", email: EMAIL });
@@ -373,8 +497,22 @@ describe("POST /api/stripe/webhook — other", () => {
   });
 
   it("record RPC error → 500", async () => {
-    mocks.rpc.mockResolvedValue({ data: null, error: { code: "22023" } });
+    mocks.rpc.mockResolvedValue({ data: null, error: { code: "42501" } });
     expect((await post("checkout.session.expired", session())).status).toBe(500);
+  });
+
+  it.each([
+    ["fulfil", "checkout.session.completed", session()],
+    ["record", "checkout.session.expired", session()],
+  ])("%s RPC raising 22023 (invalid_argument) → 200 + error log, not retried", async (_n, type, obj) => {
+    mocks.rpc.mockResolvedValue({ data: null, error: { code: "22023", message: `bad ${BOOK}` } });
+    const res = await post(type, obj);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ received: true });
+    expect(vi.mocked(console.error).mock.calls.map((c) => String(c[0]))).toEqual([
+      `[stripe-webhook] ${type} invalid_argument evt=evt_test_1`,
+    ]);
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 
   it("unexpected RPC result → 500", async () => {

@@ -52,7 +52,7 @@ describe("upgrade poller (fake timers)", () => {
     t.poller.start();
     await vi.advanceTimersByTimeAsync(0);
     expect(t.check).toHaveBeenCalledTimes(1);
-    expect(t.last()).toBe("polling");
+    expect(t.last()).toBe("processing");
     await vi.advanceTimersByTimeAsync(1999);
     expect(t.check).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(1);
@@ -62,14 +62,30 @@ describe("upgrade poller (fake timers)", () => {
     expect(t.last()).toBe("paid");
     await vi.advanceTimersByTimeAsync(20_000);
     expect(t.check).toHaveBeenCalledTimes(3);
-    expect(t.phases).toEqual(["polling", "paid"]);
+    expect(t.phases).toEqual(["polling", "processing", "paid"]);
+  });
+
+  it("stays 'polling' while there is no order yet, 'processing' once it is pending", async () => {
+    const none: UpgradeStatusResult = { isPaid: false, orderStatus: "none" };
+    const t = setup([none, { error: "failed" }, PENDING, { error: "failed" }, PAID]);
+    t.poller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.last()).toBe("polling");
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(t.last()).toBe("polling");
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(t.last()).toBe("processing");
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(t.last()).toBe("processing"); // an error answer keeps the phase
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(t.phases).toEqual(["polling", "processing", "paid"]);
   });
 
   it("pending forever → timeout after 60 s (never paid)", async () => {
     const t = setup([PENDING]);
     t.poller.start();
     await vi.advanceTimersByTimeAsync(59_000);
-    expect(t.last()).toBe("polling");
+    expect(t.last()).toBe("processing");
     await vi.advanceTimersByTimeAsync(1_000);
     expect(t.last()).toBe("timeout");
     expect(t.phases).not.toContain("paid");
@@ -84,15 +100,27 @@ describe("upgrade poller (fake timers)", () => {
     const t = setup([PENDING, { isPaid: false, orderStatus }]);
     t.poller.start();
     await vi.advanceTimersByTimeAsync(2_000);
-    expect(t.phases).toEqual(["polling", "failed"]);
+    expect(t.phases).toEqual(["polling", "processing", "failed"]);
     await vi.advanceTimersByTimeAsync(10_000);
     expect(t.check).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["refunded", "disputed", "needs_review"] as const)("orderStatus %s (not paid) → support, polling stops", async (orderStatus) => {
+    const t = setup([PENDING, { isPaid: false, orderStatus }]);
+    t.poller.start();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(t.phases).toEqual(["polling", "processing", "support"]);
+    await vi.advanceTimersByTimeAsync(70_000);
+    expect(t.check).toHaveBeenCalledTimes(2);
+    expect(t.phases).not.toContain("timeout");
   });
 
   it("isPaid wins over a failed latest order", () => {
     expect(phaseFromStatus({ isPaid: true, orderStatus: "failed" })).toBe("paid");
     expect(phaseFromStatus({ isPaid: false, orderStatus: "none" })).toBeNull();
-    expect(phaseFromStatus({ isPaid: false, orderStatus: "refunded" })).toBeNull();
+    expect(phaseFromStatus({ isPaid: false, orderStatus: "pending" })).toBeNull();
+    expect(phaseFromStatus({ isPaid: true, orderStatus: "refunded" })).toBe("paid");
+    expect(phaseFromStatus({ isPaid: true, orderStatus: "needs_review" })).toBe("paid");
   });
 
   it("{error:'failed'} and thrown errors are retried", async () => {
@@ -112,7 +140,7 @@ describe("upgrade poller (fake timers)", () => {
     const b = setup([PENDING, { error: "not_found" }]);
     b.poller.start();
     await vi.advanceTimersByTimeAsync(10_000);
-    expect(b.phases).toEqual(["polling", "not_found"]);
+    expect(b.phases).toEqual(["polling", "processing", "not_found"]);
   });
 
   it("stop() (unmount) cancels the timer and ignores an in-flight answer", async () => {
@@ -123,7 +151,7 @@ describe("upgrade poller (fake timers)", () => {
     t.poller.stop();
     await vi.advanceTimersByTimeAsync(120_000);
     expect(t.check).toHaveBeenCalledTimes(calls);
-    expect(t.phases).toEqual(["polling"]);
+    expect(t.phases).toEqual(["polling", "processing"]);
 
     let resolve: (r: UpgradeStatusResult) => void = () => {};
     const slow = vi.fn(() => new Promise<UpgradeStatusResult>((r) => (resolve = r)));
@@ -145,13 +173,13 @@ describe("upgrade poller (fake timers)", () => {
     t.poller.setHidden(true);
     await vi.advanceTimersByTimeAsync(5 * 60_000);
     expect(t.check).toHaveBeenCalledTimes(before);
-    expect(t.last()).toBe("polling");
+    expect(t.last()).toBe("processing");
     t.poller.setHidden(false);
     await vi.advanceTimersByTimeAsync(0);
     expect(t.check).toHaveBeenCalledTimes(before + 1);
     // ~50 s of visible budget left.
     await vi.advanceTimersByTimeAsync(48_000);
-    expect(t.last()).toBe("polling");
+    expect(t.last()).toBe("processing");
     await vi.advanceTimersByTimeAsync(2_000);
     expect(t.last()).toBe("timeout");
   });
@@ -197,6 +225,25 @@ describe("upgrade status view", () => {
     expect(html).not.toContain("upgraded");
   });
 
+  it("processing (pending order) says the payment is processing, still busy, no success", () => {
+    const html = view("processing");
+    expect(html).toContain("Your payment is processing…");
+    expect(html).not.toContain("Confirming payment…");
+    expect(html).toContain('data-testid="upgrade-polling"');
+    expect(html).toContain('aria-busy="true"');
+    expect(html).not.toContain("upgraded");
+  });
+
+  it("support stops with a contact-support message and the book reference", () => {
+    const html = view("support");
+    expect(html).toContain('data-testid="upgrade-support"');
+    expect(html).toContain("Something went wrong with this payment. We&#x27;ll sort it out — contact support and mention this book.");
+    expect(html).toContain(BOOK);
+    expect(html).not.toContain("aria-busy");
+    expect(html).not.toContain("upgraded");
+    expect(html).not.toContain("@"); // no hardcoded support address
+  });
+
   it("paid lists benefits and links (live link only when published)", () => {
     const html = view("paid");
     expect(html).toContain("Your book is upgraded");
@@ -220,7 +267,10 @@ describe("upgrade status view", () => {
 
   it("timeout never claims success and offers Refresh", () => {
     const html = view("timeout");
-    expect(html).toContain("confirmation is taking longer than usual. Refresh in a minute.");
+    expect(html).toContain(
+      "We haven&#x27;t had confirmation from Stripe yet. If you completed payment, this page will update shortly — you won&#x27;t be charged twice.",
+    );
+    expect(html).not.toMatch(/payment received/i);
     expect(html).toContain('data-testid="upgrade-refresh"');
     expect(html).not.toContain("upgraded");
   });
@@ -256,6 +306,11 @@ describe("upgrade success page source", () => {
   it("redirects signed-out users to login and 404s non-owners", () => {
     expect(src).toMatch(/redirect\(loginNext\)/);
     expect(src).toMatch(/notFound\(\)/);
+  });
+
+  it("dev fixture covers every view phase", () => {
+    const fixture = readFileSync("src/app/dev-upgrade/fixture.ts", "utf8");
+    for (const state of ["processing", "support"]) expect(fixture).toContain(`"${state}"`);
   });
 
   it("dev fixture route 404s in production", () => {

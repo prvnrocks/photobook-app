@@ -13,6 +13,7 @@ import {
   findPendingOrder,
   getLatestOrderStatus,
   getUpgradeTarget,
+  hasOrderNeedingReview,
   insertPendingOrder,
   markOrderExpired,
 } from "@/lib/db/upgrade";
@@ -119,6 +120,9 @@ function idempotencyKey(bookId: string, userId: string, bucket: number, params: 
  * navigate to. Reuses the book's open session when possible (one pending order per book).
  * Errors: unauthenticated | not_found (bad id / not the owner's) | already_paid | unavailable
  * (Stripe not configured) | failed.
+ * A 'needs_review' order for the book (paid but not fulfillable, see the webhook) → 'failed' and an
+ * error log: the user was already charged, so no new Checkout is offered until support resolves it.
+ * `returnTo` may be `/b/{slug}` only for this book's own slug.
  */
 export async function startUpgradeCheckout(bookId: string, returnTo?: string): Promise<StartUpgradeCheckoutResult> {
   const user = await getCurrentUser();
@@ -132,6 +136,10 @@ export async function startUpgradeCheckout(bookId: string, returnTo?: string): P
     if (!target) return { error: "not_found" };
     if (target.isPaid) return { error: "already_paid" };
     if (!isPaymentsEnabled()) return { error: "unavailable" };
+    if (await hasOrderNeedingReview(id)) {
+      console.error("[upgrade] blocked: book has an order needing review");
+      return { error: "failed" };
+    }
 
     const origin = getSiteUrl(); // NEXT_PUBLIC_APP_URL (never request headers); throws in prod if unset
     const stripe = getStripe();
@@ -148,6 +156,7 @@ export async function startUpgradeCheckout(bookId: string, returnTo?: string): P
       email: user.email ?? null,
       origin,
       returnTo: typeof returnTo === "string" ? returnTo : null,
+      bookSlug: target.slug,
       nowSec: bucket,
     });
     const session = await stripe.checkout.sessions.create(params, {

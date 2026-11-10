@@ -9,15 +9,16 @@ import type { UpgradePollPhase } from "@/lib/upgrade/poller";
 import type { UpgradeStatusResult } from "@/lib/upgrade/types";
 import type { DevUpgradeFlow, DevUpgradeState } from "./fixture";
 
-
 const BOOK_ID = "00000000-0000-4000-8000-000000000000";
 const SLUG = "sara-and-omar-wedding-7Hq2xYp9Kd";
 
 const PHASE: Record<DevUpgradeState, UpgradePollPhase> = {
   polling: "polling",
+  processing: "processing",
   paid: "paid",
   "paid-live": "paid",
   failed: "failed",
+  support: "support",
   timeout: "timeout",
   "signed-out": "unauthenticated",
   "not-found": "not_found",
@@ -31,6 +32,7 @@ export function DevUpgradeClient({ state, flow }: { state: DevUpgradeState; flow
       calls.current += 1;
       if (flow === "paid" && calls.current >= 3) return { isPaid: true, orderStatus: "paid" };
       if (flow === "failed" && calls.current >= 3) return { isPaid: false, orderStatus: "failed" };
+      if (flow === "support" && calls.current >= 3) return { isPaid: false, orderStatus: "needs_review" };
       return { isPaid: false, orderStatus: "pending" };
     },
     [flow],

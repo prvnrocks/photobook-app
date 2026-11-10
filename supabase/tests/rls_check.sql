@@ -26,7 +26,9 @@
 --      and 20261112001200_payments.sql (orders payment columns / statuses, one
 --      pending order per book, private.stripe_events, fulfill_book_checkout +
 --      record_stripe_order_event: service-role only, idempotent per event,
---      refunds never revoke books.is_paid).
+--      refunds never revoke books.is_paid)
+--      and 20261112001300_payments_review.sql (orders status needs_review,
+--      fulfil reports already_paid_other_session and skips no-op book updates).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -35,7 +37,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 118 checks passed
+--       RLS OK — all 121 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -1836,6 +1838,83 @@ begin
     raise exception 'RLS FAIL [payments args]: status paid accepted by record_stripe_order_event';
   exception when invalid_parameter_value then null;
   end;
+  reset role;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- 1300 (M7 review): needs_review (paid but invalid session), double payment
+  -- result, no books update when the entitlement already matches.
+  -- State here: book_pay paid (sess_1 refunded); book_pay2 unpaid with sess_3
+  -- expired + one pending order; sess_2 paid with book_id null.
+  -- ---------------------------------------------------------------------------
+  set local role service_role;
+  v_txt := public.record_stripe_order_event('evt_test_rls_' || md5(random()::text), 'checkout.session.completed',
+                                            sess_3, null, 'needs_review', false);
+  if v_txt is distinct from 'updated'
+     or not exists (select 1 from public.orders where stripe_session_id = sess_3 and status = 'needs_review') then
+    raise exception 'RLS FAIL [needs_review]: expired → needs_review returned % / not stored', v_txt;
+  end if;
+  select stripe_session_id into v_txt from public.orders where book_id = book_pay2 and status = 'pending';
+  -- (separate statements: a query's subqueries don't see writes made by a function it calls)
+  v_txt := public.record_stripe_order_event('evt_test_rls_' || md5(random()::text), 'checkout.session.completed',
+                                            v_txt, null, 'needs_review', false);
+  if v_txt is distinct from 'updated'
+     or exists (select 1 from public.orders where book_id = book_pay2 and status = 'pending') then
+    raise exception 'RLS FAIL [needs_review]: pending → needs_review did not free the pending slot';
+  end if;
+  if public.record_stripe_order_event('evt_test_rls_' || md5(random()::text), 'checkout.session.completed',
+                                      sess_2, null, 'needs_review', false) is distinct from 'unchanged'
+     or not exists (select 1 from public.orders where stripe_session_id = sess_2 and status = 'paid')
+     or public.record_stripe_order_event('evt_test_rls_' || md5(random()::text), 'checkout.session.completed',
+                                         sess_1, null, 'needs_review', false) is distinct from 'unchanged' then
+    raise exception 'RLS FAIL [needs_review]: a paid / refunded order was moved to needs_review';
+  end if;
+  if (select is_paid from public.books where id = book_pay2) then
+    raise exception 'RLS FAIL [needs_review]: needs_review flipped books.is_paid';
+  end if;
+  checks := checks + 1;
+
+  -- a later valid event for the reviewed session fulfils it; a replay with matching
+  -- entitlement leaves the books row untouched (same ctid); a drifted row is repaired
+  v_txt := public.fulfill_book_checkout('evt_test_rls_' || md5(random()::text), 'checkout.session.async_payment_succeeded',
+                                        sess_3, 'pi_test_rls_' || md5(random()::text), book_pay2, uid_a, 3900, 'aed', false);
+  if v_txt is distinct from 'fulfilled'
+     or not exists (select 1 from public.orders where stripe_session_id = sess_3 and status = 'paid') then
+    raise exception 'RLS FAIL [fulfil no-op]: needs_review session not fulfilled by a valid event (%)', v_txt;
+  end if;
+  select ctid::text into v_txt from public.books where id = book_pay2;
+  if public.fulfill_book_checkout('evt_test_rls_' || md5(random()::text), 'checkout.session.completed',
+                                  sess_3, null, book_pay2, uid_a, 3900, 'aed', false) is distinct from 'already_paid' then
+    raise exception 'RLS FAIL [fulfil no-op]: already-paid replay was not already_paid';
+  end if;
+  if (select ctid::text from public.books where id = book_pay2) is distinct from v_txt then
+    raise exception 'RLS FAIL [fulfil no-op]: already-paid replay rewrote the book row';
+  end if;
+  reset role;
+  update public.books set max_pages = 50 where id = book_pay2;
+  set local role service_role;
+  v_txt := public.fulfill_book_checkout('evt_test_rls_' || md5(random()::text), 'checkout.session.completed',
+                                        sess_3, null, book_pay2, uid_a, 3900, 'aed', false);
+  if v_txt is distinct from 'already_paid'
+     or (select max_pages from public.books where id = book_pay2) <> 100 then
+    raise exception 'RLS FAIL [fulfil no-op]: drifted entitlement not re-asserted';
+  end if;
+  checks := checks + 1;
+
+  -- second paid session for a book that already has a paid order → double payment;
+  -- a refunded earlier order does not count
+  sess_2 := 'cs_test_rls_dbl_' || md5(random()::text);
+  v_txt := public.fulfill_book_checkout('evt_test_rls_' || md5(random()::text), 'checkout.session.completed',
+                                        sess_2, null, book_pay2, uid_a, 3900, 'aed', false);
+  if v_txt is distinct from 'already_paid_other_session'
+     or not exists (select 1 from public.orders where stripe_session_id = sess_2 and status = 'paid' and book_id = book_pay2) then
+    raise exception 'RLS FAIL [double payment]: second paid session returned % / order not recorded', v_txt;
+  end if;
+  v_txt := public.fulfill_book_checkout('evt_test_rls_' || md5(random()::text), 'checkout.session.completed',
+                                        'cs_test_rls_' || md5(random()::text), null, book_pay, uid_a, 3900, 'aed', false);
+  if v_txt is distinct from 'already_paid' then
+    raise exception 'RLS FAIL [double payment]: refunded earlier order counted as a second payment (%)', v_txt;
+  end if;
   reset role;
   checks := checks + 1;
 

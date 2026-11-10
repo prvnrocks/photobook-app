@@ -55,6 +55,7 @@ describe("buildCheckoutParams", () => {
     const meta = { kind: "book_upgrade", book_id: BOOK, user_id: USER };
     expect(buildCheckoutParams(input())).toEqual({
       mode: "payment",
+      adaptive_pricing: { enabled: false },
       line_items: [
         {
           quantity: 1,
@@ -88,6 +89,23 @@ describe("buildCheckoutParams", () => {
     expect(p.success_url!.startsWith(`https://photobook.example/books/${BOOK}/`)).toBe(true);
   });
 
+  it("disables Adaptive Pricing (always charged in AED)", () => {
+    expect(buildCheckoutParams(input()).adaptive_pricing).toEqual({ enabled: false });
+  });
+
+  it("accepts /b/{slug} as cancel path only for the book's own slug", () => {
+    const slug = "eid-with-teta-AbCdEfGhJk";
+    expect(buildCheckoutParams(input({ returnTo: `/b/${slug}`, bookSlug: slug })).cancel_url).toBe(
+      `https://photobook.example/b/${slug}?upgrade=cancelled`,
+    );
+    expect(buildCheckoutParams(input({ returnTo: "/b/someone-else-AbCdEfGhJk", bookSlug: slug })).cancel_url).toBe(
+      `https://photobook.example/books/${BOOK}/publish?upgrade=cancelled`,
+    );
+    expect(buildCheckoutParams(input({ returnTo: `/b/${slug}` })).cancel_url).toBe(
+      `https://photobook.example/books/${BOOK}/publish?upgrade=cancelled`,
+    );
+  });
+
   it("defaults cancel_url to publish", () => {
     expect(buildCheckoutParams(input({ returnTo: undefined })).cancel_url).toBe(
       `https://photobook.example/books/${BOOK}/publish?upgrade=cancelled`,
@@ -106,10 +124,28 @@ describe("buildCheckoutParams", () => {
 describe("safeReturnPath", () => {
   const fallback = `/books/${BOOK}/publish`;
 
-  it.each([`/books/${BOOK}/publish`, `/books/${BOOK}/edit`, "/b/eid-with-teta-AbCdEfGhJk", "/b/AbCdEfGhJk"])(
-    "allows %s",
-    (p) => expect(safeReturnPath(p, BOOK)).toBe(p),
+  it.each([`/books/${BOOK}/publish`, `/books/${BOOK}/edit`])("allows %s", (p) =>
+    expect(safeReturnPath(p, BOOK)).toBe(p),
   );
+
+  it.each(["eid-with-teta-AbCdEfGhJk", "AbCdEfGhJk"])("allows /b/%s only when it is the book's own slug", (slug) => {
+    expect(safeReturnPath(`/b/${slug}`, BOOK, slug)).toBe(`/b/${slug}`);
+    expect(safeReturnPath(`/b/${slug}`, BOOK)).toBe(fallback);
+    expect(safeReturnPath(`/b/${slug}`, BOOK, null)).toBe(fallback);
+    expect(safeReturnPath(`/b/${slug}`, BOOK, "other-slug-ZyXwVuTsRq")).toBe(fallback);
+  });
+
+  it("does not accept a case-variant of the slug or an invalid stored slug", () => {
+    expect(safeReturnPath("/b/abcdefghjk", BOOK, "AbCdEfGhJk")).toBe(fallback);
+    expect(safeReturnPath("/b/not_valid!", BOOK, "not_valid!")).toBe(fallback);
+  });
+
+  it("compares the book id case-insensitively and returns the lower-cased path", () => {
+    const upper = BOOK.toUpperCase();
+    expect(safeReturnPath(`/books/${upper}/edit`, BOOK)).toBe(`/books/${BOOK}/edit`);
+    expect(safeReturnPath(`/books/${BOOK}/publish`, upper)).toBe(`/books/${BOOK}/publish`);
+    expect(safeReturnPath("https://evil.example", upper)).toBe(fallback);
+  });
 
   it.each([
     undefined,
@@ -172,6 +208,43 @@ describe("validatePaidSession", () => {
     ["missing reference", { client_reference_id: null }, "reference_mismatch"],
   ])("rejects %s", (_name, over, reason) => {
     expect(validatePaidSession(session(over))).toEqual({ ok: false, reason });
+  });
+});
+
+describe("Adaptive Pricing (currency_conversion)", () => {
+  const converted = (cc: Partial<NonNullable<CheckoutSessionLike["currency_conversion"]>> | null, over: Partial<CheckoutSessionLike> = {}) =>
+    session({
+      currency: "usd",
+      amount_total: 1062,
+      currency_conversion:
+        cc === null
+          ? null
+          : ({ amount_subtotal: 3900, amount_total: 3900, fx_rate: "0.2723", source_currency: "aed", ...cc } as NonNullable<
+              CheckoutSessionLike["currency_conversion"]
+            >),
+      ...over,
+    });
+
+  it("accepts a session presented in another currency when the AED source is 3900 (records AED 3900)", () => {
+    expect(validatePaidSession(converted({}))).toMatchObject({ ok: true, amount: 3900, currency: "aed" });
+    expect(validatePaidSession(converted({ source_currency: "AED" }))).toMatchObject({ ok: true });
+  });
+
+  it.each<[string, Partial<NonNullable<CheckoutSessionLike["currency_conversion"]>> | null, string]>([
+    ["no conversion info", null, "wrong_currency"],
+    ["source not AED", { source_currency: "usd" }, "wrong_currency"],
+    ["source amount discounted", { amount_total: 100 }, "wrong_amount"],
+    ["source amount over", { amount_total: 39000 }, "wrong_amount"],
+  ])("rejects a converted session with %s", (_name, cc, reason) => {
+    expect(validatePaidSession(converted(cc))).toEqual({ ok: false, reason });
+  });
+
+  it("an AED session still needs amount_total 3900 even if currency_conversion is present", () => {
+    expect(validatePaidSession(converted({}, { currency: "aed", amount_total: 100 }))).toEqual({ ok: false, reason: "wrong_amount" });
+  });
+
+  it("missing currency_conversion field (undefined) on a non-AED session is wrong_currency", () => {
+    expect(validatePaidSession(session({ currency: "eur" }))).toEqual({ ok: false, reason: "wrong_currency" });
   });
 });
 

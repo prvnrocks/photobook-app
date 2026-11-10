@@ -21,7 +21,17 @@ export type StartUpgradeErrorCode = (typeof START_UPGRADE_ERROR_CODES)[number];
  */
 export type StartUpgradeCheckoutResult = { url: string } | { error: StartUpgradeErrorCode };
 
-export const ORDER_STATUSES = ["none", "pending", "paid", "failed", "expired", "refunded", "disputed"] as const;
+export const ORDER_STATUSES = [
+  "none",
+  "pending",
+  "paid",
+  "failed",
+  "expired",
+  "refunded",
+  "disputed",
+  /** Payment arrived but couldn't be fulfilled automatically (e.g. amount mismatch) — support follows up. */
+  "needs_review",
+] as const;
 
 /** Latest order for the book; 'none' when there is no order yet. */
 export type UpgradeOrderStatus = (typeof ORDER_STATUSES)[number];

@@ -266,6 +266,37 @@ describe("startUpgradeCheckout — guards", () => {
   });
 });
 
+describe("startUpgradeCheckout — needs_review", () => {
+  it("an order needing review blocks a new checkout → failed + error log, no Stripe call", async () => {
+    pendingOrder("cs_test_review", { status: "needs_review" });
+    expect(await startUpgradeCheckout(BOOK)).toEqual({ error: "failed" });
+    expect(fake.state.createCalls).toHaveLength(0);
+    expect(fake.state.retrieveCalls).toHaveLength(0);
+    expect(errSpy.mock.calls.map((c: unknown[]) => String(c[0]))).toEqual(["[upgrade] blocked: book has an order needing review"]);
+    expect(allLogs()).not.toContain(BOOK);
+  });
+
+  it("other terminal orders (expired / failed / refunded) do not block", async () => {
+    pendingOrder("cs_test_e", { status: "expired" });
+    pendingOrder("cs_test_f", { status: "failed" });
+    pendingOrder("cs_test_r", { status: "refunded" });
+    const res = await startUpgradeCheckout(BOOK);
+    expect(res).toHaveProperty("url");
+    expect(fake.state.createCalls).toHaveLength(1);
+  });
+
+  it("already paid wins over needs_review (already_paid)", async () => {
+    fake.state.books[0].is_paid = true;
+    pendingOrder("cs_test_review", { status: "needs_review" });
+    expect(await startUpgradeCheckout(BOOK)).toEqual({ error: "already_paid" });
+  });
+
+  it("getUpgradeStatus reports needs_review as the latest order status", async () => {
+    pendingOrder("cs_test_review", { status: "needs_review" });
+    expect(await getUpgradeStatus(BOOK)).toEqual({ isPaid: false, orderStatus: "needs_review" });
+  });
+});
+
 describe("startUpgradeCheckout — create", () => {
   it("creates a session with buildCheckoutParams (env origin, user email) and inserts a pending order", async () => {
     const res = await startUpgradeCheckout(BOOK);
@@ -318,6 +349,21 @@ describe("startUpgradeCheckout — create", () => {
     fake.state.orders = [];
     await startUpgradeCheckout(BOOK, "https://evil.example/phish");
     expect(fake.state.createCalls[2].params.cancel_url).toBe(`${ORIGIN}/books/${BOOK}/publish?upgrade=cancelled`);
+  });
+
+  it("/b/{slug} returnTo only for the book's own slug (another published book's slug → publish)", async () => {
+    await startUpgradeCheckout(BOOK, "/b/someone-else-aB3dEfGhJk");
+    expect(fake.state.createCalls[0].params.cancel_url).toBe(`${ORIGIN}/books/${BOOK}/publish?upgrade=cancelled`);
+
+    fake.state.orders = [];
+    fake.state.books[0].slug = null; // unpublished: no /b/ path at all
+    await startUpgradeCheckout(BOOK, "/b/summer-aB3dEfGhJk");
+    expect(fake.state.createCalls[1].params.cancel_url).toBe(`${ORIGIN}/books/${BOOK}/publish?upgrade=cancelled`);
+  });
+
+  it("upper-case book id in returnTo is accepted and normalised", async () => {
+    await startUpgradeCheckout(BOOK.toUpperCase(), `/books/${BOOK.toUpperCase()}/edit`);
+    expect(fake.state.createCalls[0].params.cancel_url).toBe(`${ORIGIN}/books/${BOOK}/edit?upgrade=cancelled`);
   });
 
   it("omits customer_email when the user has none", async () => {

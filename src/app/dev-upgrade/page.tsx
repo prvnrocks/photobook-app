@@ -1,7 +1,7 @@
 // Dev-only: the upgrade return page body with fixture phases, for 375 px checks without auth or
-// Stripe. `?state=polling|paid|paid-live|failed|timeout|signed-out|not-found` renders one phase;
-// `?flow=paid|failed|timeout` runs the real poller against a stubbed status check (paid / failed
-// after ~5 s; timeout = pending for the full 60 s).
+// Stripe. `?state=polling|processing|paid|paid-live|failed|support|timeout|signed-out|not-found` renders
+// one phase; `?flow=paid|failed|support|timeout` runs the real poller against a stubbed status check
+// (pending → paid / failed / needs_review after ~5 s; timeout = pending for the full 60 s).
 // 404s in production builds (incl. Vercel previews, which run NODE_ENV=production).
 
 import { notFound } from "next/navigation";

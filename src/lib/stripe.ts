@@ -14,9 +14,32 @@ function readEnv(name: "STRIPE_SECRET_KEY" | "STRIPE_WEBHOOK_SECRET"): string | 
   return v ? v : null;
 }
 
-/** Payments are on only when BOTH the secret key and the webhook secret are configured. */
+export type StripeKeyMode = "live" | "test";
+
+/**
+ * Mode implied by the configured secret key: `sk_live_…` / `rk_live_…` → "live", anything else
+ * (sk_test_ / rk_test_ / unset) → "test". Webhook events whose `livemode` differs are ignored.
+ */
+export function stripeKeyMode(): StripeKeyMode {
+  const key = readEnv("STRIPE_SECRET_KEY") ?? "";
+  return key.startsWith("sk_live_") || key.startsWith("rk_live_") ? "live" : "test";
+}
+
+/**
+ * Payments are on only when BOTH the secret key and the webhook secret are configured — and, on
+ * Vercel Production (VERCEL_ENV=production), only with a live key unless STRIPE_ALLOW_TEST_IN_PROD=1
+ * (so a test key in Production can't hand out paid books for test cards).
+ */
 export function isPaymentsEnabled(): boolean {
-  return readEnv("STRIPE_SECRET_KEY") !== null && readEnv("STRIPE_WEBHOOK_SECRET") !== null;
+  if (readEnv("STRIPE_SECRET_KEY") === null || readEnv("STRIPE_WEBHOOK_SECRET") === null) return false;
+  if (
+    process.env.VERCEL_ENV === "production" &&
+    stripeKeyMode() !== "live" &&
+    process.env.STRIPE_ALLOW_TEST_IN_PROD?.trim() !== "1"
+  ) {
+    return false;
+  }
+  return true;
 }
 
 /** Webhook signing secret (whsec_…), or null when unset. */

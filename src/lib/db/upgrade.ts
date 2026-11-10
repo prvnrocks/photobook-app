@@ -50,6 +50,23 @@ export async function findPendingOrder(bookId: string): Promise<PendingOrder | n
   return { id: data.id, sessionId: data.stripe_session_id, userId: data.user_id };
 }
 
+/**
+ * True when the book has an order in 'needs_review' (migration 1300): Stripe charged a session the
+ * webhook could not validate. While it exists no new Checkout is started for the book (no second
+ * charge) — support resolves it (refund → status refunded, or manual fulfil).
+ */
+export async function hasOrderNeedingReview(bookId: string): Promise<boolean> {
+  if (!isUuid(bookId)) return false;
+  const { data, error } = await createAdminClient()
+    .from("orders")
+    .select("id")
+    .eq("book_id", bookId)
+    .eq("status", "needs_review")
+    .limit(1);
+  if (error) throw new UpgradeQueryError("load review order", error.code);
+  return data.length > 0;
+}
+
 export type InsertPendingOrderInput = {
   bookId: string;
   userId: string;

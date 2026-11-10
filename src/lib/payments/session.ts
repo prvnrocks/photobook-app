@@ -22,18 +22,22 @@ export function isUuid(v: unknown): v is string {
 
 /**
  * Allow-listed, same-origin, relative return path for the Checkout cancel URL:
- * `/books/{bookId}/publish`, `/books/{bookId}/edit`, or `/b/{slug}` (owner's expired-book page).
- * Anything else (absolute URLs, `//host`, backslashes, other books, query/hash, encoded tricks)
- * falls back to `/books/{bookId}/publish`.
+ * `/books/{bookId}/publish`, `/books/{bookId}/edit` (book id compared case-insensitively, returned
+ * lower-cased), or `/b/{bookSlug}` (owner's expired-book page) — only when it is exactly THIS
+ * book's slug; without `bookSlug` no `/b/` path is accepted.
+ * Anything else (absolute URLs, `//host`, backslashes, other books / slugs, query/hash, encoded
+ * tricks) falls back to `/books/{bookId}/publish`.
  */
-export function safeReturnPath(returnTo: unknown, bookId: string): string {
-  const fallback = `/books/${bookId}/publish`;
+export function safeReturnPath(returnTo: unknown, bookId: string, bookSlug?: string | null): string {
+  const id = bookId.toLowerCase();
+  const fallback = `/books/${id}/publish`;
   if (typeof returnTo !== "string" || returnTo.length === 0 || returnTo.length > 200) return fallback;
   // Exact-match only: no scheme, no protocol-relative, no backslash, no query/hash, no encoding.
   if (!returnTo.startsWith("/") || returnTo.startsWith("//") || /[\\?#%\s]/.test(returnTo)) return fallback;
-  if (returnTo === `/books/${bookId}/publish` || returnTo === `/books/${bookId}/edit`) return returnTo;
+  const lower = returnTo.toLowerCase();
+  if (lower === `/books/${id}/publish` || lower === `/books/${id}/edit`) return lower;
   const m = /^\/b\/([^/]+)$/.exec(returnTo);
-  if (m && isValidSlug(m[1])) return returnTo;
+  if (m && typeof bookSlug === "string" && isValidSlug(bookSlug) && m[1] === bookSlug) return returnTo;
   return fallback;
 }
 
@@ -60,6 +64,8 @@ export interface BuildCheckoutInput {
   origin: string;
   /** Where the user started; filtered through safeReturnPath. */
   returnTo?: string | null;
+  /** The book's own slug (from the DB): the only `/b/{slug}` returnTo accepted. */
+  bookSlug?: string | null;
   /** Current unix time in seconds (injected for tests). */
   nowSec: number;
 }
@@ -70,11 +76,15 @@ export function buildCheckoutParams(input: BuildCheckoutInput): Stripe.Checkout.
   if (!Number.isInteger(nowSec) || nowSec <= 0) throw new Error("buildCheckoutParams: invalid nowSec");
   const origin = normalizeOrigin(input.origin);
   const metadata = { kind: UPGRADE_METADATA_KIND, book_id: bookId, user_id: userId };
-  const cancelPath = safeReturnPath(input.returnTo, bookId);
+  const cancelPath = safeReturnPath(input.returnTo, bookId, input.bookSlug);
   const trimmedEmail = typeof email === "string" ? email.trim() : "";
 
   return {
     mode: "payment",
+    // Charge exactly AED 39: Adaptive Pricing would localise the presentment currency/amount
+    // (and the dashboard default may turn it on). validateUpgradeSession still tolerates a
+    // converted session whose source is AED 3900, in case it is ever enabled account-wide.
+    adaptive_pricing: { enabled: false },
     line_items: [
       {
         quantity: 1,
@@ -96,7 +106,7 @@ export function buildCheckoutParams(input: BuildCheckoutInput): Stripe.Checkout.
 }
 
 /** The Session fields the validator reads (a full Stripe.Checkout.Session satisfies this). */
-export type CheckoutSessionLike = Pick<
+export type CheckoutSessionLike = Partial<Pick<Stripe.Checkout.Session, "currency_conversion">> & Pick<
   Stripe.Checkout.Session,
   | "id"
   | "mode"
@@ -137,6 +147,9 @@ export type ValidateResult =
 /**
  * Checks that a Session is OUR book upgrade, ignoring payment_status: payment mode, AED,
  * amount_total === 3900, metadata.kind, UUID book/user ids, client_reference_id === book_id.
+ * A session presented in another currency (Adaptive Pricing) is accepted only when
+ * currency_conversion.source_currency is 'aed' AND its source amount_total === 3900; the
+ * returned amount/currency are then the AED source values.
  * Use it to recognise pending (payment_status 'unpaid', async methods) sessions.
  *
  * amount_total (not amount_subtotal) is checked: it is what was actually charged. With no tax,
@@ -145,8 +158,13 @@ export type ValidateResult =
  */
 export function validateUpgradeSession(session: CheckoutSessionLike): ValidateResult {
   if (session.mode !== "payment") return { ok: false, reason: "not_payment_mode" };
-  if ((session.currency ?? "").toLowerCase() !== UPGRADE.currency) return { ok: false, reason: "wrong_currency" };
-  if (session.amount_total !== UPGRADE.amount) return { ok: false, reason: "wrong_amount" };
+  if ((session.currency ?? "").toLowerCase() === UPGRADE.currency) {
+    if (session.amount_total !== UPGRADE.amount) return { ok: false, reason: "wrong_amount" };
+  } else {
+    const cc = session.currency_conversion;
+    if (!cc || (cc.source_currency ?? "").toLowerCase() !== UPGRADE.currency) return { ok: false, reason: "wrong_currency" };
+    if (cc.amount_total !== UPGRADE.amount) return { ok: false, reason: "wrong_amount" };
+  }
   const md = session.metadata ?? {};
   if (md.kind !== UPGRADE_METADATA_KIND) return { ok: false, reason: "wrong_kind" };
   if (!isUuid(md.book_id)) return { ok: false, reason: "invalid_book_id" };
@@ -159,7 +177,7 @@ export function validateUpgradeSession(session: CheckoutSessionLike): ValidateRe
     userId: md.user_id.toLowerCase(),
     sessionId: session.id,
     paymentIntentId: typeof pi === "string" ? pi : (pi?.id ?? null),
-    amount: session.amount_total,
+    amount: UPGRADE.amount,
     currency: UPGRADE.currency,
     livemode: session.livemode,
     paymentStatus: session.payment_status,

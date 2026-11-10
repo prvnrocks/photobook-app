@@ -6,11 +6,22 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export type FulfillResult = "fulfilled" | "already_paid" | "book_missing" | "duplicate";
+/**
+ * already_paid_other_session (migration 1300): the book was already paid and ANOTHER session's order
+ * for it is paid / disputed — the user has paid twice (the webhook logs `double_payment`).
+ */
+export type FulfillResult = "fulfilled" | "already_paid" | "already_paid_other_session" | "book_missing" | "duplicate";
 export type OrderEventResult = "updated" | "unchanged" | "order_missing" | "duplicate";
-export type OrderEventStatus = "expired" | "failed" | "refunded" | "disputed";
+/** needs_review (1300): Stripe says paid but the session failed validation — never fulfilled. */
+export type OrderEventStatus = "expired" | "failed" | "refunded" | "disputed" | "needs_review";
 
-const FULFILL_RESULTS: readonly FulfillResult[] = ["fulfilled", "already_paid", "book_missing", "duplicate"];
+const FULFILL_RESULTS: readonly FulfillResult[] = [
+  "fulfilled",
+  "already_paid",
+  "already_paid_other_session",
+  "book_missing",
+  "duplicate",
+];
 const EVENT_RESULTS: readonly OrderEventResult[] = ["updated", "unchanged", "order_missing", "duplicate"];
 
 export class OrdersQueryError extends Error {
@@ -64,7 +75,10 @@ export interface RecordStripeOrderEventArgs {
   livemode: boolean;
 }
 
-/** Records expired / failed / refunded / disputed on the order. Never touches books (no revoke). */
+/**
+ * Records expired / failed / refunded / disputed / needs_review on the order. Never touches books
+ * (no revoke). needs_review applies only from pending / expired / failed.
+ */
 export async function recordStripeOrderEvent(args: RecordStripeOrderEventArgs): Promise<OrderEventResult> {
   const { data, error } = await createAdminClient().rpc("record_stripe_order_event", {
     p_event_id: args.eventId,

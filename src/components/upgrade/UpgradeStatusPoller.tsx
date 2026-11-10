@@ -106,11 +106,18 @@ export function UpgradeStatusView({
   const publishHref = `/books/${bookId}/publish`;
   const editHref = `/books/${bookId}/edit`;
 
-  if (phase === "polling") {
+  if (phase === "polling" || phase === "processing") {
     return (
-      <section className="flex flex-col items-center gap-4 py-10 text-center" aria-busy="true" data-testid="upgrade-polling">
+      <section
+        className="flex flex-col items-center gap-4 py-10 text-center"
+        aria-busy="true"
+        data-testid="upgrade-polling"
+        data-phase={phase}
+      >
         <Loader2 className="size-8 animate-spin text-muted-foreground" aria-hidden="true" />
-        <h1 className="text-2xl font-semibold">Confirming payment…</h1>
+        <h1 className="text-2xl font-semibold">
+          {phase === "processing" ? "Your payment is processing…" : "Confirming payment…"}
+        </h1>
         <p className="text-base text-muted-foreground" role="status">
           This usually takes a few seconds. Please keep this page open.
         </p>
@@ -177,13 +184,32 @@ export function UpgradeStatusView({
     );
   }
 
+  if (phase === "support") {
+    return (
+      <section className="flex flex-col items-center gap-4 py-10 text-center" data-testid="upgrade-support">
+        <AlertCircle className="size-10 text-destructive" aria-hidden="true" />
+        <h1 className="text-2xl font-semibold">We need to check this payment</h1>
+        <p className="text-base text-muted-foreground" role="status">
+          Something went wrong with this payment. We&apos;ll sort it out — contact support and mention this book.
+        </p>
+        <p className="break-all font-mono text-xs text-muted-foreground" data-testid="upgrade-support-ref">
+          Book reference: {bookId}
+        </p>
+        <Link href={publishHref} className={`${OUTLINE} w-full`} data-testid="upgrade-support-publish">
+          Back to publish screen
+        </Link>
+      </section>
+    );
+  }
+
   if (phase === "timeout") {
     return (
       <section className="flex flex-col items-center gap-4 py-10 text-center" data-testid="upgrade-timeout">
         <Clock className="size-10 text-muted-foreground" aria-hidden="true" />
         <h1 className="text-2xl font-semibold">Still confirming</h1>
         <p className="text-base text-muted-foreground">
-          Payment received — confirmation is taking longer than usual. Refresh in a minute.
+          We haven&apos;t had confirmation from Stripe yet. If you completed payment, this page will update
+          shortly — you won&apos;t be charged twice.
         </p>
         <button type="button" onClick={onRetry} className={`${PRIMARY} w-full`} data-testid="upgrade-refresh">
           <RotateCw className="size-4" aria-hidden="true" />
