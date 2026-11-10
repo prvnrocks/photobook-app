@@ -164,12 +164,13 @@ planted bad caption in tests; a second book reflects the user's earlier tone/len
 > M8 (2026-11-10): built + reviewed (APPROVED). Live vs prod DB: 40-page paid book → 41-page PDF in 15.8 s locally (Type0 fonts, 300 dpi, 3 mm bleed, Arabic shaped, no EXIF). Migrations 1400 + 1500 applied (rls_check 146). Deployed 2026-11-10 (main 952b737). On Vercel Hobby (Fluid, 300 s, 2 GB/1 vCPU) the timing is NEEDS-HUMAN; Pro before real payments.
 
 ## Milestone 9 — Clean-up, polish, launch (1–2 days)
-- [ ] Daily cron: delete unpaid books + photos 30 days after publish; abandoned drafts after 45 days; orphan uploads after 7 days
-- [ ] Emails (Resend): "Your book expires in 3 days"
+- [x] Daily cron: delete unpaid books + photos 30 days after publish; abandoned drafts after 45 days; orphan uploads after 7 days
+- [x] Emails (Resend): "Your book expires in 3 days"
 - [ ] Landing page: "Upload 200 photos → AI builds your album in 60 seconds" demo video, 3 example flipbooks, pricing, FAQ
-- [ ] Legal pages (mention AI processing), analytics (PostHog), errors (Sentry), AI spend dashboard (sum of `agent_runs.total_cost_usd` per day)
-- [ ] Playwright smoke: login → upload → AI build → edit caption → publish → view → pay (test mode)
+- [x] Legal pages (mention AI processing), analytics (PostHog), errors (Sentry), AI spend dashboard (sum of `agent_runs.total_cost_usd` per day)
+- [x] Playwright smoke: login → upload → AI build → edit caption → publish → view → pay (test mode)
 - [ ] Stripe live mode when licence is ready → 🚀 launch
+> M9 (2026-11-10): built + reviewed (APPROVED); launch smoke 7/7 live. Landing page built (pricing, FAQ, how it works) — demo video + 3 example books wait for the seed/record scripts (NEEDS-HUMAN photos). Migrations 1600–1800 in prod. NOT deployed. Launch checklist: docs/LAUNCH.md; operations: docs/RUNBOOK.md.
 
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
