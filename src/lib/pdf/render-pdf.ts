@@ -1,7 +1,7 @@
 import "server-only";
 // Print route → PDF chunks with headless Chromium (D-049, D-052).
 //
-// One page per chunk (≤ CHUNK_SHEETS sheets), rendered sequentially to bound memory. Network:
+// One page (tab) per chunk (≤ CHUNK_SHEETS sheets), RENDER_PARALLEL_CHUNKS at a time to bound memory. Network:
 // classifyRequest() decides every request — print images are answered in-process from the
 // PrintImageLoader (404 on failure so the print page flags __PRINT_ERROR__), the app's own origin
 // is continued (plus the Vercel protection-bypass header when configured, for Preview
@@ -12,7 +12,7 @@ import "server-only";
 // URLs (they carry print tokens) and photo ids are never put into messages.
 
 import type { Browser, HTTPRequest, Page } from "puppeteer-core";
-import { withBrowser } from "./browser";
+import { closeBrowser, launchBrowser } from "./browser";
 import { PdfRenderError } from "./errors";
 import type { PrintImageLoader } from "./images";
 import { printTokenExpiry, signPrintToken } from "./print-token";
@@ -210,7 +210,28 @@ export interface RenderBookOptions {
   browser?: Browser;
   /** Clock for token expiry (epoch ms). */
   now?: () => number;
+  /** Called after chunk k (index into chunkRanges) has rendered — prefetch release hook. */
+  onChunkDone?: (k: number) => void;
+  /** Filled with phase timings (ms) when given. */
+  timings?: RenderTimings;
+  /** Chunks rendered at once (tabs). Default RENDER_PARALLEL_CHUNKS. */
+  parallelChunks?: number;
 }
+
+export interface RenderTimings {
+  /** Browser launch (0 when the caller passed a browser). */
+  launchMs: number;
+  /** Per chunk, navigation → PDF bytes. */
+  chunkMs: number[];
+}
+
+/**
+ * One chunk at a time. Measured on a 40-page book (3 chunks, images prefetched, local 8-core):
+ * two tabs at once gave 8.7 / 9.4 s server time vs 9.8 / 8.9 s sequential — no gain — with the
+ * highest Chromium RSS peak of all variants (1.1–1.2 GB vs ~1.0 GB). On a 1–2 vCPU function
+ * the CPU-bound print/raster work would serialise anyway.
+ */
+export const RENDER_PARALLEL_CHUNKS = 1;
 
 /**
  * Renders the whole book as PDF chunks (in sheet order) — merge them with finalize.mergePdfs.
@@ -225,36 +246,70 @@ export async function renderBook(opts: RenderBookOptions): Promise<Buffer[]> {
   const bypassSecret =
     opts.bypassSecret !== undefined ? opts.bypassSecret : process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() || null;
 
-  const run = async (browser: Browser) => {
-    const chunks: Buffer[] = [];
-    for (const { from, to } of ranges) {
-      let token: string | null;
-      try {
-        token = signPrintToken({
-          exportId: opts.exportId,
-          bookId: opts.bookId,
-          docRev: opts.docRev,
-          from,
-          to,
-          exp: printTokenExpiry(now() / 1000),
-        });
-      } catch {
-        token = null; // invalid grant (bad ids / range) — a caller bug, reported as a typed code
-      }
-      if (!token) throw new PdfRenderError("token_unavailable");
-      const url = `${origin}/print/${encodeURIComponent(opts.bookId)}?token=${encodeURIComponent(token)}`;
-      chunks.push(
-        await renderChunk(browser, {
-          url,
-          origin,
-          loader: opts.loader,
-          bypassSecret,
-          timeoutMs: opts.chunkTimeoutMs ?? CHUNK_READY_TIMEOUT_MS,
-        }),
-      );
+  const signChunk = (from: number, to: number): string => {
+    let token: string | null;
+    try {
+      token = signPrintToken({
+        exportId: opts.exportId,
+        bookId: opts.bookId,
+        docRev: opts.docRev,
+        from,
+        to,
+        exp: printTokenExpiry(now() / 1000),
+      });
+    } catch {
+      token = null; // invalid grant (bad ids / range) — a caller bug, reported as a typed code
     }
+    if (!token) throw new PdfRenderError("token_unavailable");
+    return `${origin}/print/${encodeURIComponent(opts.bookId)}?token=${encodeURIComponent(token)}`;
+  };
+  const timings = opts.timings;
+  const parallel = Math.max(1, Math.min(ranges.length, Math.floor(opts.parallelChunks ?? RENDER_PARALLEL_CHUNKS) || 1));
+
+  const run = async (browser: Browser) => {
+    const chunks: Buffer[] = new Array(ranges.length);
+    let next = 0;
+    let failed = false;
+    const worker = async () => {
+      while (!failed && next < ranges.length) {
+        const k = next++;
+        const { from, to } = ranges[k];
+        const t0 = Date.now();
+        try {
+          chunks[k] = await renderChunk(browser, {
+            url: signChunk(from, to),
+            origin,
+            loader: opts.loader,
+            bypassSecret,
+            timeoutMs: opts.chunkTimeoutMs ?? CHUNK_READY_TIMEOUT_MS,
+          });
+        } catch (e) {
+          failed = true;
+          throw e;
+        }
+        if (timings) timings.chunkMs[k] = Date.now() - t0;
+        opts.onChunkDone?.(k);
+      }
+    };
+    const workers = Array.from({ length: parallel }, worker);
+    // allSettled first so no tab is still rendering when the browser closes; then surface the first error.
+    const settled = await Promise.allSettled(workers);
+    const bad = settled.find((r) => r.status === "rejected");
+    if (bad) throw (bad as PromiseRejectedResult).reason;
     return chunks;
   };
 
-  return opts.browser ? run(opts.browser) : withBrowser(run);
+  if (timings) {
+    timings.launchMs = 0;
+    timings.chunkMs = [];
+  }
+  if (opts.browser) return run(opts.browser);
+  const t0 = Date.now();
+  const browser = await launchBrowser();
+  if (timings) timings.launchMs = Date.now() - t0;
+  try {
+    return await run(browser);
+  } finally {
+    await closeBrowser(browser);
+  }
 }

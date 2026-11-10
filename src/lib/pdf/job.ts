@@ -12,7 +12,12 @@ import "server-only";
 // the user id into every admin query; runExport only works on a row create_export_job inserted
 // for the verified owner, and loads photos filtered by that row's book_id AND user_id.
 //
-// Logs: `[pdf-export] <event> <exportId> (<code>)` only — never paths, titles, captions, user ids.
+// Logs: `[pdf-export] <event> <exportId> (<code>)` and one `timing` line (ms / counts / KB) only —
+// never paths, titles, captions, photo or user ids.
+//
+// Render headroom: right after the image plan is built, print copies for the first
+// PREFETCH_WINDOW_CHUNKS chunks start downloading/encoding while Chromium launches; each rendered
+// chunk releases the copies it was the last user of and queues the next chunk's (prefetch.ts).
 
 import { getMyBook } from "@/lib/db/books";
 import {
@@ -42,9 +47,18 @@ import { isPdfRenderError } from "./errors";
 import { mergePdfs } from "./finalize";
 import { planPrintImages } from "./image-plan";
 import { createPrintImageLoader, PrintImageError } from "./images";
+import { chunkPhotoSchedule, PREFETCH_WINDOW_CHUNKS, startPrefetch } from "./prefetch";
 import { printPhotoIds, type PrintSheetTarget } from "./print-doc";
-import { renderBook } from "./render-pdf";
-import { canExport, EXPORT_DAILY_CAP, EXPORT_STALE_SECONDS, pdfFilename, SIGNED_URL_TTL_SECONDS } from "./rules";
+import { renderBook, type RenderTimings } from "./render-pdf";
+import {
+  canExport,
+  chunkRanges,
+  CHUNK_SHEETS,
+  EXPORT_DAILY_CAP,
+  EXPORT_STALE_SECONDS,
+  pdfFilename,
+  SIGNED_URL_TTL_SECONDS,
+} from "./rules";
 
 /** claim_export lease; the route's maxDuration is 300 s, so a killed invocation frees it soon after. */
 export const EXPORT_LEASE_SECONDS = 300;
@@ -292,18 +306,76 @@ export interface RunExportOptions {
   deadlineMs?: number;
   /** Test hook: renderer (default renderBook). */
   render?: typeof renderBook;
+  /** Prefetch print images ahead of Chromium (default true; false = lazy, on request). */
+  prefetch?: boolean;
+  /** Print images in flight (default PRINT_IMAGE_IN_FLIGHT). */
+  imageConcurrency?: number;
+  /** Parallel sharp encodes (default printEncodeConcurrency()). */
+  encodeConcurrency?: number;
+  /** Chunks rendered at once (default RENDER_PARALLEL_CHUNKS). */
+  parallelChunks?: number;
+}
+
+/** Phase timings for the `timing` log line (ms unless noted). */
+interface ExportTimings {
+  load: number;
+  plan: number;
+  /** Plan built → first prefetch window settled (-1: not prefetched / not reached). */
+  images: number;
+  launch: number;
+  render: number;
+  chunks: number[];
+  merge: number;
+  upload: number;
+  finish: number;
+}
+
+export function formatTimingLog(
+  exportId: string,
+  t: ExportTimings,
+  extra: {
+    images: number;
+    produced: number;
+    failed: number;
+    peakKb: number;
+    downloadMs: number;
+    encodeMs: number;
+    concurrency: number | null;
+    encodeConcurrency?: number | null;
+  },
+): string {
+  const n = (v: number) => (Number.isFinite(v) ? Math.round(v) : -1);
+  return (
+    `[pdf-export] timing ${exportId} load=${n(t.load)} plan=${n(t.plan)} images_ready=${n(t.images)} launch=${n(t.launch)} ` +
+    `render=${n(t.render)} chunks=${t.chunks.map(n).join("/") || "-"} merge=${n(t.merge)} upload=${n(t.upload)} finish=${n(t.finish)} ` +
+    `imgs=${n(extra.images)} produced=${n(extra.produced)} failed=${n(extra.failed)} peak_kb=${n(extra.peakKb)} ` +
+    `dl_sum=${n(extra.downloadMs)} enc_sum=${n(extra.encodeMs)} conc=${extra.concurrency ?? "auto"} enc_conc=${extra.encodeConcurrency ?? "auto"}`
+  );
 }
 
 function allSheets(doc: BookDoc): PrintSheetTarget[] {
   return ["cover", ...doc.pages.map((_p, i) => i)];
 }
 
+interface ImageLogStats {
+  images: number;
+  produced: number;
+  failed: number;
+  peakKb: number;
+  downloadMs: number;
+  encodeMs: number;
+}
+
 async function renderAndStore(
   exportId: string,
   token: string,
   state: { aborted: boolean },
-  render: typeof renderBook,
+  opts: RunExportOptions,
+  timings: ExportTimings,
+  imageStats: ImageLogStats,
 ): Promise<"ready" | "lease_lost"> {
+  const render = opts.render ?? renderBook;
+  const tStart = Date.now();
   const exp = await getExportForRender(exportId);
   if (!exp || exp.status !== "rendering") throw new ExportJobError("not_found");
   const parsed = parseBookDoc(exp.doc);
@@ -317,28 +389,72 @@ async function renderAndStore(
   // Ownership: the row was inserted by create_export_job for the verified owner; photos are
   // loaded for that book AND that user only (admin client bypasses RLS).
   const photos = await listPrintPhotoSources(exp.bookId, exp.userId, printPhotoIds(doc, allSheets(doc)));
+  const tLoaded = Date.now();
+  timings.load = tLoaded - tStart;
   const plan = planPrintImages(doc, photos);
-  const loader = createPrintImageLoader(plan, photos);
+  const loader = createPrintImageLoader(plan, photos, {
+    ...(opts.imageConcurrency ? { concurrency: opts.imageConcurrency } : {}),
+    ...(opts.encodeConcurrency ? { encodeConcurrency: opts.encodeConcurrency } : {}),
+  });
+  const sheetCount = doc.pages.length + 1;
+  const tPlanned = Date.now();
+  timings.plan = tPlanned - tLoaded;
 
+  // Prefetch: start producing the first window's print copies now, in parallel with the browser
+  // launch inside render(); later chunks are queued as earlier ones finish.
+  let onChunkDone: ((k: number) => void) | undefined;
+  if (opts.prefetch !== false) {
+    const schedule = chunkPhotoSchedule(doc, chunkRanges(sheetCount, CHUNK_SHEETS), (id) => plan.has(id));
+    const controller = startPrefetch(loader, schedule, PREFETCH_WINDOW_CHUNKS);
+    // Promises taken now (cache hits on what prefetch queued) — never get() after a release.
+    const firstWindow = schedule.uses.slice(0, PREFETCH_WINDOW_CHUNKS).flat();
+    void Promise.allSettled(firstWindow.map((id) => loader.get(id))).then(() => {
+      timings.images = Date.now() - tPlanned;
+    });
+    onChunkDone = (k) => controller.chunkDone(k);
+  }
+
+  const renderTimings: RenderTimings = { launchMs: 0, chunkMs: [] };
+  const tRender = Date.now();
   const chunks = await render({
     origin,
     bookId: exp.bookId,
     exportId: exp.id,
     docRev: exp.docRev,
-    sheetCount: doc.pages.length + 1,
+    sheetCount,
     loader,
+    onChunkDone,
+    timings: renderTimings,
+    ...(opts.parallelChunks ? { parallelChunks: opts.parallelChunks } : {}),
   });
+  timings.render = Date.now() - tRender;
+  timings.launch = renderTimings.launchMs;
+  timings.chunks = renderTimings.chunkMs;
+  const stats = loader.stats?.();
+  if (stats) {
+    imageStats.images = plan.size;
+    imageStats.produced = stats.produced;
+    imageStats.failed = stats.failed;
+    imageStats.peakKb = stats.peakHeldBytes / 1024;
+    imageStats.downloadMs = stats.downloadMs;
+    imageStats.encodeMs = stats.encodeMs;
+  }
   if (state.aborted) throw new ExportJobError("render_timeout");
+  const tMerge = Date.now();
   const merged = await mergePdfs(chunks, { title: doc.cover.title });
+  timings.merge = Date.now() - tMerge;
   if (merged.bytes.byteLength > EXPORT_MAX_BYTES) throw new ExportJobError("too_large");
   if (state.aborted) throw new ExportJobError("render_timeout");
 
   const path = exportObjectPath(exp.userId, exp.bookId, exp.id);
+  const tUpload = Date.now();
   try {
     await uploadExportPdf(path, merged.bytes);
   } catch {
     throw new ExportJobError("upload_failed");
   }
+  timings.upload = Date.now() - tUpload;
+  const tFinish = Date.now();
 
   let finished: boolean;
   try {
@@ -353,6 +469,7 @@ async function renderAndStore(
     await removeQuietly(exportId, path);
     throw err;
   }
+  timings.finish = Date.now() - tFinish;
   if (!finished) {
     // Lease gone (reaped / re-claimed): this object is not referenced by a ready row.
     await removeQuietly(exportId, path);
@@ -417,16 +534,28 @@ export async function runExport(
       reject(new ExportJobError("render_timeout"));
     }, opts.deadlineMs ?? EXPORT_DEADLINE_MS);
   });
-  const work = renderAndStore(exportId, token, state, opts.render ?? renderBook);
+  const timings: ExportTimings = { load: -1, plan: -1, images: -1, launch: -1, render: -1, chunks: [], merge: -1, upload: -1, finish: -1 };
+  const imageStats: ImageLogStats = { images: -1, produced: -1, failed: -1, peakKb: -1, downloadMs: -1, encodeMs: -1 };
+  const logTimings = () =>
+    console.info(
+      formatTimingLog(exportId, timings, {
+        ...imageStats,
+        concurrency: opts.imageConcurrency ?? null,
+        encodeConcurrency: opts.encodeConcurrency ?? null,
+      }),
+    );
+  const work = renderAndStore(exportId, token, state, opts, timings, imageStats);
   work.catch(() => undefined); // after a timeout the abandoned work may still reject
 
   try {
     const outcome = await Promise.race([work, deadline]);
     console.info(`[pdf-export] ${outcome} ${exportId} (${Date.now() - started} ms)`);
+    logTimings();
     return outcome;
   } catch (err) {
     const code = failureCode(err);
     console.error(`[pdf-export] failed ${exportId} (${code})`);
+    logTimings();
     try {
       await failExport(exportId, token, code);
     } catch (e) {

@@ -186,11 +186,46 @@ function obj(v: unknown): Record<string, unknown> | null {
   return typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
 }
 
-/** Only http(s) URLs (signed storage URLs) or same-origin paths are followed. */
-export function isSafeDownloadUrl(url: unknown): url is string {
-  if (typeof url !== "string" || url.length === 0) return false;
-  if (/^https?:\/\/[^\s/]/i.test(url)) return true;
-  return url.startsWith("/") && !url.startsWith("//") && !url.startsWith("/\\");
+/** Supabase origin from the public env (inlined into the client bundle); null if unset/invalid. */
+export function supabaseStorageOrigin(raw: string | undefined = process.env.NEXT_PUBLIC_SUPABASE_URL): string | null {
+  const v = raw?.trim();
+  if (!v) return null;
+  try {
+    const u = new URL(v);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+function isLoopback(host: string): boolean {
+  return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+}
+
+/**
+ * The download URL the client navigates to. Accepted: a same-origin path (`/x`, not `//x` or
+ * `/\x`), an absolute URL on this page's origin, or a Supabase Storage URL
+ * (`/storage/v1/…`) on the configured Supabase origin over https (http only when that origin
+ * is a local loopback Supabase). No credentials in the URL. Everything else is refused.
+ */
+export function isSafeDownloadUrl(
+  url: unknown,
+  opts: { storageOrigin?: string | null; pageOrigin?: string | null } = {},
+): url is string {
+  if (typeof url !== "string" || url.length === 0 || /\s/.test(url)) return false;
+  if (url.startsWith("/")) return !url.startsWith("//") && !url.startsWith("/\\");
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  if (u.username || u.password) return false;
+  const pageOrigin = opts.pageOrigin !== undefined ? opts.pageOrigin : typeof window !== "undefined" ? window.location.origin : null;
+  if (pageOrigin && u.origin === pageOrigin && (u.protocol === "https:" || u.protocol === "http:")) return true;
+  const storage = opts.storageOrigin !== undefined ? opts.storageOrigin : supabaseStorageOrigin();
+  if (!storage || u.origin !== storage || !u.pathname.startsWith("/storage/v1/")) return false;
+  return u.protocol === "https:" || (u.protocol === "http:" && isLoopback(u.hostname));
 }
 
 export function parseReady(body: unknown): PdfReadyInfo | null {

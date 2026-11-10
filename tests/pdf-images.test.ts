@@ -11,10 +11,12 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({ storage: { from: () => ({ download: (p: string) => download(p) }) } }),
 }));
 
+import { PRINT_IMAGE_IN_FLIGHT } from "@/lib/pdf/prefetch";
 import {
   createPrintImageLoader,
   encodePrintImage,
   loadPrintImage,
+  PRINT_JPEG_OPTIONS,
   PrintImageError,
 } from "@/lib/pdf/images";
 
@@ -172,5 +174,143 @@ describe("createPrintImageLoader", () => {
     await expect(loader.get("a")).rejects.toMatchObject({ code: "download_failed" });
     download.mockResolvedValueOnce({ data: blob(ORIENT6), error: null });
     expect((await sharp(await loader.get("a")).metadata()).height).toBe(40);
+  });
+
+  it("prefetch starts loads in call order without awaiting; get() then hits the same promise", async () => {
+    const order: string[] = [];
+    download.mockImplementation(async (path: string) => {
+      order.push(path.split("/")[2]);
+      return { data: blob(ORIENT6), error: null };
+    });
+    const loader = createPrintImageLoader(plan, photos, { concurrency: 1 });
+    loader.prefetch(["c", "a", "zzz"]); // unknown ids are ignored (no unhandled rejection)
+    const a = loader.get("a");
+    expect(loader.get("a")).toBe(a);
+    await Promise.all([a, loader.get("c")]);
+    expect(order).toEqual(["c-original.jpg", "a-original.jpg"]);
+    expect(download).toHaveBeenCalledTimes(2);
+    const st = loader.stats();
+    expect(st.produced).toBe(2);
+    expect(st.failed).toBe(0);
+    expect(st.heldBytes).toBeGreaterThan(0);
+    expect(st.peakHeldBytes).toBe(st.heldBytes);
+    expect(st.downloadMs).toBeGreaterThanOrEqual(0);
+    expect(st.encodeMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("release forgets copies (held bytes drop, peak kept); a later get() reloads", async () => {
+    download.mockResolvedValue({ data: blob(ORIENT6), error: null });
+    const loader = createPrintImageLoader(plan, photos, { concurrency: 2 });
+    loader.prefetch(["a", "b"]);
+    await Promise.all([loader.get("a"), loader.get("b")]);
+    const peak = loader.stats().peakHeldBytes;
+    loader.release(["a", "unknown"]);
+    const st = loader.stats();
+    expect(st.heldBytes).toBeLessThan(peak);
+    expect(st.heldBytes).toBeGreaterThan(0);
+    expect(st.peakHeldBytes).toBe(peak);
+    loader.release(["b"]);
+    expect(loader.stats().heldBytes).toBe(0);
+    await loader.get("a");
+    expect(download).toHaveBeenCalledTimes(3);
+  });
+
+  it("releasing an in-flight copy never counts it as held", async () => {
+    let resolve!: (v: { data: Blob; error: null }) => void;
+    download.mockImplementationOnce(() => new Promise((r) => (resolve = r)));
+    const loader = createPrintImageLoader(plan, photos);
+    const p = loader.get("a");
+    loader.release(["a"]);
+    await vi.waitFor(() => expect(resolve).toBeTypeOf("function"));
+    resolve({ data: blob(ORIENT6), error: null });
+    await p;
+    expect(loader.stats()).toMatchObject({ produced: 1, heldBytes: 0, peakHeldBytes: 0 });
+  });
+
+  it("a failed prefetch is counted, not cached, and retried by the next get()", async () => {
+    download.mockResolvedValueOnce({ data: null, error: { message: "x" } });
+    download.mockResolvedValueOnce({ data: blob(ORIENT6), error: null });
+    const loader = createPrintImageLoader(plan, photos);
+    loader.prefetch(["a"]);
+    await vi.waitFor(() => expect(loader.stats().failed).toBe(1));
+    expect((await sharp(await loader.get("a")).metadata()).width).toBe(30);
+    expect(loader.stats()).toMatchObject({ produced: 1, failed: 1 });
+  });
+
+  it("default: up to PRINT_IMAGE_IN_FLIGHT downloads at once", async () => {
+    let active = 0;
+    let peak = 0;
+    download.mockImplementation(async () => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise((r) => setTimeout(r, 10));
+      active--;
+      return { data: blob(ORIENT6), error: null };
+    });
+    const many = new Map(Array.from({ length: 16 }, (_, i) => [`x${i}`, { width: 30, height: 40 }]));
+    const loader = createPrintImageLoader(many, [...many.keys()].map((id) => ({ id, original_path: `u/b/${id}-original.jpg` })));
+    loader.prefetch(many.keys());
+    await Promise.all([...many.keys()].map((id) => loader.get(id)));
+    expect(peak).toBe(PRINT_IMAGE_IN_FLIGHT);
+  });
+
+  it("encodes are limited separately from downloads", async () => {
+    download.mockResolvedValue({ data: blob(ORIENT6), error: null });
+    const many = new Map(Array.from({ length: 6 }, (_, i) => [`y${i}`, { width: 30, height: 40 }]));
+    const loader = createPrintImageLoader(many, [...many.keys()].map((id) => ({ id, original_path: `u/b/${id}-original.jpg` })), {
+      concurrency: 6,
+      encodeConcurrency: 1,
+    });
+    const outs = await Promise.all([...many.keys()].map((id) => loader.get(id)));
+    expect(outs).toHaveLength(6);
+    expect(loader.stats().produced).toBe(6);
+  });
+});
+
+describe("encoder settings", () => {
+  it("baseline JPEG, quant table 3, q80, 4:2:0 — no mozjpeg trellis/progressive", async () => {
+    expect(PRINT_JPEG_OPTIONS).toMatchObject({
+      quality: 80,
+      mozjpeg: false,
+      quantisationTable: 3,
+      progressive: false,
+      trellisQuantisation: false,
+      chromaSubsampling: "4:2:0",
+    });
+    const out = await encodePrintImage(ORIENT6, { width: 300, height: 400 });
+    const meta = await sharp(out).metadata();
+    expect(meta.isProgressive).toBe(false);
+    expect(meta.chromaSubsampling).toBe("4:2:0");
+  });
+
+  it("quality stays at least that of mozjpeg q82 on a photo-like image (PSNR vs the resized source)", async () => {
+    const w = 1200;
+    const h = 900;
+    const raw = Buffer.alloc(w * h * 3);
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 3;
+        const n = (rnd() - 0.5) * 10;
+        raw[i] = (x / w) * 200 + n;
+        raw[i + 1] = (y / h) * 180 + n;
+        raw[i + 2] = 120 + 60 * Math.sin(x / 40) * Math.cos(y / 55) + n;
+      }
+    }
+    const input = await sharp(raw, { raw: { width: w, height: h, channels: 3 } }).blur(1.2).jpeg({ quality: 92 }).toBuffer();
+    const target = { width: 800, height: 600 };
+    const ref = await sharp(input).resize(target).raw().toBuffer();
+    const psnr = async (jpeg: Buffer) => {
+      const px = await sharp(jpeg).raw().toBuffer();
+      let se = 0;
+      for (let i = 0; i < px.length; i++) se += (px[i] - ref[i]) ** 2;
+      return 10 * Math.log10((255 * 255) / (se / px.length));
+    };
+    const ours = await encodePrintImage(input, target);
+    const moz = await sharp(input).resize(target).jpeg({ quality: 82, mozjpeg: true }).toBuffer();
+    expect(await psnr(ours)).toBeGreaterThanOrEqual((await psnr(moz)) - 0.05);
+    // size grows by well under the 25 % budget on photo-like content
+    expect(ours.length / moz.length).toBeLessThan(1.3);
   });
 });

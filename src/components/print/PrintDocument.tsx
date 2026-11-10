@@ -2,12 +2,15 @@
 // mode="print"> (154×216 mm incl. 3 mm bleed), one per PDF page. Used by the internal
 // /print/[bookId] route and the dev-only /dev-print fixture so both render identical markup.
 // Server component; <PrintReady> is the only client part. No app chrome, never a watermark.
+// The wrapper re-points the renderer's font variables at static font files (./print-fonts.ts):
+// variable fonts would be embedded as Type3 by Chromium.
 
 import { BookPage } from "@/components/book/BookPage";
 import type { RenderPhotos } from "@/lib/book/render";
 import type { BookDoc } from "@/lib/book/types";
 import { SHEET_MM } from "@/lib/layouts";
 import type { PrintSheetTarget } from "@/lib/pdf/print-doc";
+import { PRINT_FONT_CLASSES } from "./print-fonts";
 import { PrintReady } from "./PrintReady";
 
 /** Page box = one sheet, no margins; one sheet per page, no break after the last. */
@@ -34,7 +37,7 @@ export function PrintDocument({
   return (
     <>
       <style>{PRINT_CSS}</style>
-      <div data-print-document="">
+      <div data-print-document="" className={PRINT_FONT_CLASSES}>
         {sheets.map((t) => (
           <BookPage key={String(t)} doc={doc} page={t} mode="print" photos={photos} captionLang={captionLang} priority />
         ))}

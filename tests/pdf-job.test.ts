@@ -80,7 +80,12 @@ function doc(n = 2) {
 }
 
 const PATH = `${USER}/${BOOK}/${EXP}.pdf`;
-const LOADER = { get: vi.fn() };
+const LOADER = {
+  get: vi.fn(() => Promise.resolve(Buffer.from("jpg"))),
+  prefetch: vi.fn(),
+  release: vi.fn(),
+  stats: vi.fn(() => ({ produced: 0, failed: 0, heldBytes: 0, peakHeldBytes: 0, downloadMs: 0, encodeMs: 0 })),
+};
 const PDF = new Uint8Array([37, 80, 68, 70]);
 let logs: string[];
 const savedUrl = process.env.NEXT_PUBLIC_APP_URL;
@@ -144,7 +149,9 @@ describe("runExport", () => {
     expect([...plan.keys()].sort()).toEqual([P(1), P(2), P(9)].sort());
     expect(photos).toHaveLength(3);
 
-    expect(mocks.renderBook).toHaveBeenCalledWith({
+    expect(mocks.renderBook).toHaveBeenCalledTimes(1);
+    const renderOpts = mocks.renderBook.mock.calls[0][0];
+    expect(renderOpts).toMatchObject({
       origin: "https://app.example.ae",
       bookId: BOOK,
       exportId: EXP,
@@ -152,6 +159,12 @@ describe("runExport", () => {
       sheetCount: 3,
       loader: LOADER,
     });
+    expect(Object.keys(renderOpts).sort()).toEqual(
+      ["bookId", "docRev", "exportId", "loader", "onChunkDone", "origin", "sheetCount", "timings"].sort(),
+    );
+    // prefetch on by default: all three photos queued (one chunk), released after it renders
+    expect(renderOpts.onChunkDone).toBeTypeOf("function");
+    expect(LOADER.prefetch).toHaveBeenCalledWith([P(9), P(1), P(2)]);
     expect(mocks.mergePdfs).toHaveBeenCalledWith([Buffer.from("a"), Buffer.from("b")], { title: SECRET_TITLE });
     expect(mocks.uploadExportPdf).toHaveBeenCalledWith(PATH, PDF);
     expect(mocks.finishExport).toHaveBeenCalledWith({ exportId: EXP, token: TOKEN, path: PATH, bytes: 4, pageCount: 3 });
@@ -273,6 +286,87 @@ describe("runExport", () => {
     mocks.renderBook.mockRejectedValue(new PdfRenderError("print_failed"));
     mocks.failExport.mockRejectedValue(Object.assign(new Error("x"), { code: "57014" }));
     await expect(runExport(EXP)).resolves.toBe("failed");
+  });
+});
+
+describe("runExport prefetch + timing logs", () => {
+  function prefetchLoader() {
+    return {
+      get: vi.fn(() => Promise.resolve(Buffer.from("jpg"))),
+      prefetch: vi.fn(),
+      release: vi.fn(),
+      stats: vi.fn(() => ({ produced: 3, failed: 0, heldBytes: 0, peakHeldBytes: 3 * 1024 * 200, downloadMs: 120, encodeMs: 45 })),
+    };
+  }
+  const twoChunkDoc = () => {
+    const d = doc(25); // cover + 25 pages = 26 sheets → chunks [0..19] [20..25]
+    d.pages[24].slots[0].photoId = P(1); // P(1) also used by the second chunk
+    return d;
+  };
+
+  it("prefetches the first window right after planning, releases per chunk, logs a timing line", async () => {
+    const loader = prefetchLoader();
+    mocks.createPrintImageLoader.mockReturnValue(loader);
+    mocks.getExportForRender.mockResolvedValue({ id: EXP, bookId: BOOK, userId: USER, docRev: 7, doc: twoChunkDoc(), captionLang: "en", status: "rendering" });
+    const sources = Array.from({ length: 24 }, (_, i) => i + 1).map((n) => ({ id: P(n), width: 3000, height: 4000, original_path: `x/${n}-original.jpg` }));
+    mocks.listPrintPhotoSources.mockResolvedValue(sources);
+    mocks.renderBook.mockImplementation(async (opts: { onChunkDone?: (k: number) => void; timings?: { launchMs: number; chunkMs: number[] } }) => {
+      // prefetch was queued before the renderer (and its browser launch) started
+      expect(loader.prefetch).toHaveBeenCalledTimes(2);
+      expect(loader.release).not.toHaveBeenCalled();
+      opts.timings!.launchMs = 400;
+      opts.timings!.chunkMs = [900, 300];
+      opts.onChunkDone!(0);
+      opts.onChunkDone!(1);
+      return [Buffer.from("a"), Buffer.from("b")];
+    });
+
+    expect(await runExport(EXP)).toBe("ready");
+    const first = [...loader.prefetch.mock.calls[0][0]];
+    const second = [...loader.prefetch.mock.calls[1][0]];
+    expect(first[0]).toBe(P(9)); // cover first
+    expect(first).toHaveLength(19); // cover P(9) + pages 1..19 (P(1)..P(19)), P(9) deduplicated
+    expect(second).toEqual([P(20), P(21), P(22), P(23), P(24), P(1)]);
+    const released = loader.release.mock.calls.flatMap((c) => [...c[0]]);
+    expect(released).not.toContain(undefined);
+    // P(1) is used again in chunk 1 → released only after chunk 1
+    expect([...loader.release.mock.calls[0][0]]).not.toContain(P(1));
+    expect([...loader.release.mock.calls[1][0]]).toContain(P(1));
+    expect(new Set(released).size).toBe(sources.length);
+
+    const timing = logs.find((l) => l.includes(`timing ${EXP}`));
+    expect(timing).toBeDefined();
+    expect(timing).toMatch(/load=\d+ plan=\d+ images_ready=-?\d+ launch=400 render=\d+ chunks=900\/300 merge=\d+ upload=\d+ finish=\d+/);
+    expect(timing).toMatch(/imgs=24 produced=3 failed=0 peak_kb=600 dl_sum=120 enc_sum=45 conc=auto/);
+    expectNoPii();
+    for (const s of sources) expect(logs.join("\n")).not.toContain(s.id);
+  });
+
+  it("encodeConcurrency is passed to the loader", async () => {
+    expect(await runExport(EXP, { encodeConcurrency: 1 })).toBe("ready");
+    expect(mocks.createPrintImageLoader.mock.calls[0][2]).toEqual({ encodeConcurrency: 1 });
+    expect(logs.join("\n")).toMatch(/conc=auto enc_conc=1/);
+  });
+
+  it("prefetch: false → lazy loading (no prefetch hook); imageConcurrency / parallelChunks are passed through", async () => {
+    const loader = prefetchLoader();
+    mocks.createPrintImageLoader.mockReturnValue(loader);
+    expect(await runExport(EXP, { prefetch: false, imageConcurrency: 3, parallelChunks: 2 })).toBe("ready");
+    expect(loader.prefetch).not.toHaveBeenCalled();
+    expect(mocks.createPrintImageLoader.mock.calls[0][2]).toEqual({ concurrency: 3 });
+    expect(logs.join("\n")).toMatch(/enc_conc=auto/);
+    const opts = mocks.renderBook.mock.calls[0][0];
+    expect(opts.onChunkDone).toBeUndefined();
+    expect(opts.parallelChunks).toBe(2);
+    expect(logs.join("\n")).toMatch(new RegExp(`timing ${EXP} .*conc=3`));
+  });
+
+  it("a failed job still logs its timing line (phases not reached = -1)", async () => {
+    mocks.renderBook.mockRejectedValue(new PdfRenderError("render_timeout"));
+    expect(await runExport(EXP)).toBe("failed");
+    const timing = logs.find((l) => l.includes(`timing ${EXP}`));
+    expect(timing).toMatch(/merge=-1 upload=-1 finish=-1/);
+    expectNoPii();
   });
 });
 

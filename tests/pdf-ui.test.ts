@@ -6,6 +6,8 @@ import {
   errorCodeFor,
   formatPdfSize,
   isSafeDownloadUrl,
+  parseReady,
+  supabaseStorageOrigin,
   PDF_FREE_COPY,
   PDF_LINK_VALID_MS,
   PDF_POLL_CAP_MS,
@@ -21,6 +23,9 @@ import {
   type PdfHttpResult,
   type PdfUiState,
 } from "@/lib/pdf/ui";
+
+// Signed download URLs must be on the configured Supabase origin (N8).
+vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://x.supabase.co");
 
 const BOOK = "11111111-1111-4111-8111-111111111111";
 const URL_ = "https://x.supabase.co/storage/v1/object/sign/exports/u/b/e1.pdf?token=t&download=book.pdf";
@@ -120,14 +125,48 @@ describe("parsing helpers", () => {
     expect(pdfApiPath(BOOK, "e 1")).toBe(`/api/books/${BOOK}/pdf?exportId=e%201`);
   });
 
-  it("only http(s) or same-origin download URLs", () => {
+  it("only Supabase Storage URLs (https, configured origin) or same-origin download URLs", () => {
     expect(isSafeDownloadUrl(URL_)).toBe(true);
-    expect(isSafeDownloadUrl("http://127.0.0.1:54321/storage/x.pdf")).toBe(true);
     expect(isSafeDownloadUrl("/files/x.pdf")).toBe(true);
+    // Another origin, even https / another Supabase project / lookalike host.
+    expect(isSafeDownloadUrl("https://evil.example/storage/v1/object/sign/x.pdf")).toBe(false);
+    expect(isSafeDownloadUrl("https://y.supabase.co/storage/v1/object/sign/x.pdf")).toBe(false);
+    expect(isSafeDownloadUrl("https://x.supabase.co.evil.example/storage/v1/object/sign/x.pdf")).toBe(false);
+    expect(isSafeDownloadUrl("https://x.supabase.co:8443/storage/v1/object/sign/x.pdf")).toBe(false);
+    // Right origin, wrong scheme / path / credentials.
+    expect(isSafeDownloadUrl("http://x.supabase.co/storage/v1/object/sign/x.pdf")).toBe(false);
+    expect(isSafeDownloadUrl("https://x.supabase.co/auth/v1/authorize?x=1")).toBe(false);
+    expect(isSafeDownloadUrl("https://user:pw@x.supabase.co/storage/v1/object/sign/x.pdf")).toBe(false);
     expect(isSafeDownloadUrl("javascript:alert(1)")).toBe(false);
+    expect(isSafeDownloadUrl("data:application/pdf;base64,AAAA")).toBe(false);
     expect(isSafeDownloadUrl("//evil.example/x.pdf")).toBe(false);
+    expect(isSafeDownloadUrl("/\\evil.example/x.pdf")).toBe(false);
+    expect(isSafeDownloadUrl("/files/x.pdf\nfoo")).toBe(false);
     expect(isSafeDownloadUrl("")).toBe(false);
     expect(isSafeDownloadUrl(null)).toBe(false);
+  });
+
+  it("absolute same-origin URLs pass; no configured Supabase origin → storage URLs refused", () => {
+    expect(isSafeDownloadUrl("https://app.example/files/x.pdf", { pageOrigin: "https://app.example" })).toBe(true);
+    expect(isSafeDownloadUrl("https://other.example/files/x.pdf", { pageOrigin: "https://app.example" })).toBe(false);
+    expect(isSafeDownloadUrl(URL_, { storageOrigin: null })).toBe(false);
+    // Local Supabase (supabase start) is plain http on loopback.
+    const local = "http://127.0.0.1:54321";
+    expect(isSafeDownloadUrl(`${local}/storage/v1/object/sign/x.pdf`, { storageOrigin: local })).toBe(true);
+    expect(isSafeDownloadUrl("http://127.0.0.1:9999/storage/v1/object/sign/x.pdf", { storageOrigin: local })).toBe(false);
+  });
+
+  it("supabaseStorageOrigin reads the public env origin", () => {
+    expect(supabaseStorageOrigin()).toBe("https://x.supabase.co");
+    expect(supabaseStorageOrigin("https://x.supabase.co/some/path ")).toBe("https://x.supabase.co");
+    expect(supabaseStorageOrigin("")).toBeNull();
+    expect(supabaseStorageOrigin("not a url")).toBeNull();
+    expect(supabaseStorageOrigin("ftp://x.example")).toBeNull();
+  });
+
+  it("parseReady refuses a ready answer with a foreign URL", () => {
+    expect(parseReady(READY)?.url).toBe(URL_);
+    expect(parseReady({ ...READY, url: "https://evil.example/storage/v1/object/sign/x.pdf" })).toBeNull();
   });
 
   it("error code: body first, then HTTP status", () => {
