@@ -56,7 +56,7 @@ vi.mock("@/lib/pdf/images", async (orig) => ({
   createPrintImageLoader: mocks.createPrintImageLoader,
 }));
 
-const { runExport, failureCode, EXPORT_LEASE_SECONDS } = await import("@/lib/pdf/job");
+const { runExport, failureCode, EXPORT_LEASE_SECONDS, activeRenderId, SIZE_FALLBACK_MAX_ELAPSED } = await import("@/lib/pdf/job");
 const { PdfRenderError } = await import("@/lib/pdf/errors");
 const { PrintImageError } = await import("@/lib/pdf/images");
 
@@ -346,6 +346,85 @@ describe("runExport", () => {
     mocks.renderBook.mockRejectedValue(new PdfRenderError("print_failed"));
     mocks.failExport.mockRejectedValue(Object.assign(new Error("x"), { code: "57014" }));
     await expect(runExport(EXP)).resolves.toBe("failed");
+  });
+});
+
+describe("runExport size fallback budget (M8 re-review NICE 1)", () => {
+  it("first pass used > 45 % of the deadline → too_large at once, no second render", async () => {
+    expect(SIZE_FALLBACK_MAX_ELAPSED).toBeCloseTo(0.45);
+    mocks.renderBook.mockImplementation(
+      () => new Promise((r) => setTimeout(() => r([Buffer.from("a")]), 120)),
+    );
+    mocks.mergePdfs.mockResolvedValue({ bytes: new Uint8Array(50 * 1024 * 1024 + 1), pageCount: 3 });
+    expect(await runExport(EXP, { deadlineMs: 200 })).toBe("failed");
+    expect(mocks.renderBook).toHaveBeenCalledTimes(1);
+    expect(mocks.failExport).toHaveBeenCalledWith(EXP, TOKEN, "too_large");
+    expect(mocks.uploadExportPdf).not.toHaveBeenCalled();
+    expect(logs.join("\n")).toContain(`size_fallback_skipped ${EXP} (51200 KB)`);
+    expect(logs.join("\n")).not.toContain(`[pdf-export] size_fallback ${EXP}`);
+    expectNoPii();
+  });
+
+  it("first pass well inside the budget → the fallback still runs", async () => {
+    mocks.mergePdfs
+      .mockResolvedValueOnce({ bytes: new Uint8Array(50 * 1024 * 1024 + 1), pageCount: 3 })
+      .mockResolvedValueOnce({ bytes: PDF, pageCount: 3 });
+    expect(await runExport(EXP, { deadlineMs: 60_000 })).toBe("ready");
+    expect(mocks.renderBook).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("runExport one render per process (M8 re-review, Fluid compute)", () => {
+  const EXP2 = "55555555-5555-4555-8555-555555555555";
+
+  it("a concurrent runExport returns busy_instance without claiming; the guard is released after success", async () => {
+    let finish!: (v: Buffer[]) => void;
+    mocks.renderBook.mockReturnValueOnce(new Promise<Buffer[]>((r) => (finish = r)));
+    const first = runExport(EXP);
+    expect(activeRenderId()).toBe(EXP);
+    expect(await runExport(EXP2)).toBe("busy_instance");
+    expect(mocks.claimExport).toHaveBeenCalledTimes(1);
+    expect(mocks.claimExport).not.toHaveBeenCalledWith(EXP2, expect.anything());
+    expect(logs).toContain(`[pdf-export] busy_instance ${EXP2}`);
+    await vi.waitFor(() => expect(mocks.renderBook).toHaveBeenCalledTimes(1));
+    finish([Buffer.from("a")]);
+    expect(await first).toBe("ready");
+    expect(activeRenderId()).toBeNull();
+    // Free again: the next job is claimed and rendered.
+    expect(await runExport(EXP2)).toBe("ready");
+    expect(mocks.claimExport).toHaveBeenLastCalledWith(EXP2, EXPORT_LEASE_SECONDS);
+    expectNoPii();
+  });
+
+  it("guard released after a render error, a claim error, not_claimed, a timeout and a size-fallback failure", async () => {
+    mocks.renderBook.mockRejectedValueOnce(new PdfRenderError("print_failed"));
+    expect(await runExport(EXP)).toBe("failed");
+    expect(activeRenderId()).toBeNull();
+
+    mocks.claimExport.mockRejectedValueOnce(Object.assign(new Error("x"), { code: "57014" }));
+    expect(await runExport(EXP)).toBe("not_claimed");
+    expect(activeRenderId()).toBeNull();
+
+    mocks.claimExport.mockResolvedValueOnce(null);
+    expect(await runExport(EXP)).toBe("not_claimed");
+    expect(activeRenderId()).toBeNull();
+
+    mocks.renderBook.mockReturnValueOnce(new Promise<Buffer[]>(() => undefined));
+    expect(await runExport(EXP, { deadlineMs: 10, abortSettleMs: 10 })).toBe("failed");
+    expect(activeRenderId()).toBeNull();
+
+    mocks.mergePdfs.mockResolvedValue({ bytes: new Uint8Array(50 * 1024 * 1024 + 1), pageCount: 3 });
+    expect(await runExport(EXP)).toBe("failed");
+    expect(activeRenderId()).toBeNull();
+
+    mocks.mergePdfs.mockResolvedValue({ bytes: PDF, pageCount: 3 });
+    expect(await runExport(EXP2)).toBe("ready");
+  });
+
+  it("an invalid id is refused before the guard is taken", async () => {
+    expect(await runExport("nope")).toBe("not_claimed");
+    expect(activeRenderId()).toBeNull();
+    expect(mocks.claimExport).not.toHaveBeenCalled();
   });
 });
 

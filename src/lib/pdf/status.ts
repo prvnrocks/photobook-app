@@ -1,7 +1,7 @@
 import "server-only";
 // PDF export status (M8 review S3): the poll side of /api/books/[id]/pdf, kept free of the
 // renderer — no puppeteer, Chromium or sharp in this module's import graph
-// (tests/pdf-status-route.test.ts walks it), so the lightweight
+// (tests/pdf-deploy-config.test.ts walks it), so the lightweight
 // /api/books/[id]/pdf/status route stays a small, cheap function.
 //
 // Ownership: the export row is read with the admin client AND an explicit user_id filter

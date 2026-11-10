@@ -12,7 +12,10 @@
 // when a job stays 'queued' for PDF_REKICK_QUEUED_MS the controller re-POSTs (POST joins the job
 // and schedules it again; at most PDF_REKICK_MAX times), and a 'failed' answer with error
 // 'superseded' / 'missing_file' (a newer PDF replaced this one / the file is gone) re-POSTs once.
-// Otherwise: (paused while the tab is hidden; after ~5 min of
+// A job seen 'rendering' for PDF_REKICK_RENDERING_MS (≥ the render lease) is re-POSTed once — its
+// invocation was probably killed, and POST re-kicks a job whose lease expired — and the poll
+// window is extended by one PDF_POLL_CAP_MS for that new attempt. All re-POSTs share
+// PDF_REKICK_MAX. Otherwise: (paused while the tab is hidden; after ~5 min of
 // still-pending answers → 'timeout'); ready → navigate(url) once (location.assign — iOS-safe) and
 // keep a "Download again" link until the signed URL is about to expire, then back to idle.
 
@@ -27,6 +30,12 @@ export const PDF_POLL_CAP_MS = 5 * 60_000;
 export const PDF_POLL_MAX_FAILURES = 3;
 /** A job still 'queued' this long after it was first seen queued is re-POSTed (its kick died). */
 export const PDF_REKICK_QUEUED_MS = 20_000;
+/**
+ * A job still 'rendering' this long after it was first seen rendering is re-POSTed once: ≥ the
+ * server's render lease (rules.PDF_MAX_DURATION_SECONDS = 300 s, claimed before we first saw
+ * 'rendering'), so by then POST finds the lease expired and re-kicks the job.
+ */
+export const PDF_REKICK_RENDERING_MS = 300_000;
 /** Re-POSTs per run (queued re-kicks + one superseded/missing_file retry share the budget). */
 export const PDF_REKICK_MAX = 3;
 /** Failed codes meaning "this export's PDF is gone, ask POST for the current one". */
@@ -345,6 +354,10 @@ export function createPdfDownloadController(deps: PdfControllerDeps): PdfControl
   /** When the current export was first seen 'queued' (null = not queued). */
   let queuedSince: number | null = null;
   let reposts = 0;
+  /** When the current export was first seen 'rendering' (null = not rendering). */
+  let renderingSince: number | null = null;
+  /** The one 'rendering' re-kick of this run was used. */
+  let renderKicked = false;
 
   const set = (s: PdfUiState) => {
     if (disposed) return;
@@ -425,6 +438,7 @@ export function createPdfDownloadController(deps: PdfControllerDeps): PdfControl
       const pending = pendingStatus(r.body);
       if (!pending) return fail("server_error");
       if (pending === "queued") {
+        renderingSince = null;
         queuedSince ??= now();
         if (now() - queuedSince >= PDF_REKICK_QUEUED_MS && reposts < PDF_REKICK_MAX && now() < deadline) {
           reposts += 1;
@@ -433,6 +447,23 @@ export function createPdfDownloadController(deps: PdfControllerDeps): PdfControl
         }
       } else {
         queuedSince = null;
+        renderingSince ??= now();
+        if (!renderKicked && reposts < PDF_REKICK_MAX) {
+          if (now() - renderingSince >= PDF_REKICK_RENDERING_MS) {
+            reposts += 1;
+            renderKicked = true;
+            renderingSince = now();
+            // The re-kicked render gets its own poll window (bounded: once per run).
+            deadline = Math.max(deadline, now() + PDF_POLL_CAP_MS);
+            return repost(g);
+          }
+          // Waiting for the re-kick: keep polling past the deadline until it is due (bounded by
+          // renderingSince + PDF_REKICK_RENDERING_MS).
+          if (state.kind !== "preparing" || state.status !== pending || state.exportId !== exportId) {
+            set({ kind: "preparing", exportId, status: pending, paused: false });
+          }
+          return schedulePoll(exportId, g);
+        }
       }
       if (now() >= deadline) {
         clearTimer();
@@ -467,8 +498,12 @@ export function createPdfDownloadController(deps: PdfControllerDeps): PdfControl
       const pending = pendingStatus(r.body);
       const exportId = obj(r.body)?.exportId;
       if (pending && typeof exportId === "string" && exportId.length > 0) {
-        if (state.kind !== "preparing" || state.exportId !== exportId) queuedSince = null;
+        if (state.kind !== "preparing" || state.exportId !== exportId) {
+          queuedSince = null;
+          renderingSince = null;
+        }
         if (pending === "queued") queuedSince ??= now();
+        else renderingSince ??= now();
         set({ kind: "preparing", exportId, status: pending, paused: false });
         return schedulePoll(exportId, g);
       }
@@ -505,6 +540,8 @@ export function createPdfDownloadController(deps: PdfControllerDeps): PdfControl
       const g = ++gen;
       failures = 0;
       queuedSince = null;
+      renderingSince = null;
+      renderKicked = false;
       reposts = 0;
       set({ kind: "starting" });
       try {

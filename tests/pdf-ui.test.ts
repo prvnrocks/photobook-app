@@ -19,6 +19,7 @@ import {
   pdfStatusPath,
   PDF_REKICK_MAX,
   PDF_REKICK_QUEUED_MS,
+  PDF_REKICK_RENDERING_MS,
   pdfButtonLabel,
   pdfErrorCopy,
   pdfReadyDetail,
@@ -323,7 +324,7 @@ describe("controller", () => {
     expect(t.calls.filter((c) => c.method === "POST")).toHaveLength(1 + PDF_REKICK_MAX);
   });
 
-  it("rendering never re-POSTs (the job is alive)", async () => {
+  it("rendering does not re-POST within the lease (the job is alive)", async () => {
     const t = setup([queued("rendering"), ...Array.from({ length: 40 }, () => ok({ status: "rendering" }))]);
     await t.c.start();
     await vi.advanceTimersByTimeAsync(PDF_POLL_MS * 30);
@@ -449,7 +450,8 @@ describe("controller", () => {
   });
 
   it("still pending after ~5 min → timeout; Check again re-POSTs", async () => {
-    const pending = () => ok({ status: "rendering" });
+    // 'queued' with the re-kick budget spent: the 5-min cap applies as is.
+    const pending = () => (t.calls.at(-1)!.method === "POST" ? queued() : ok({ status: "queued" }));
     const answers = [queued(), ...Array.from({ length: 200 }, () => pending)];
     const t = setup(answers);
     await t.c.start();
@@ -459,11 +461,67 @@ describe("controller", () => {
     expect(t.c.getState()).toEqual({ kind: "timeout", exportId: "e1" });
     expect(pdfStatusCopy(t.c.getState())).toBe(PDF_TIMEOUT_COPY);
     const n = t.calls.length;
-    expect(n).toBe(1 + PDF_POLL_CAP_MS / PDF_POLL_MS);
+    expect(n).toBe(1 + PDF_POLL_CAP_MS / PDF_POLL_MS + PDF_REKICK_MAX);
     await vi.advanceTimersByTimeAsync(PDF_POLL_MS * 5);
     expect(t.calls).toHaveLength(n); // stopped
     await t.c.start();
     expect(t.calls[n]).toEqual({ method: "POST", url: `/api/books/${BOOK}/pdf` });
+  });
+
+  it("rendering for ~300 s (lease expired) → ONE re-POST, one more poll window, then timeout", async () => {
+    expect(PDF_REKICK_RENDERING_MS).toBe(300_000);
+    const pending = () => (t.calls.at(-1)!.method === "POST" ? queued("rendering") : ok({ status: "rendering" }));
+    const t = setup([queued("rendering"), ...Array.from({ length: 400 }, () => pending)]);
+    const posts = () => t.calls.filter((c) => c.method === "POST").length;
+    await t.c.start();
+    await vi.advanceTimersByTimeAsync(PDF_REKICK_RENDERING_MS - PDF_POLL_MS);
+    expect(posts()).toBe(1);
+    expect(t.c.getState()).toMatchObject({ kind: "preparing", status: "rendering" });
+    await vi.advanceTimersByTimeAsync(PDF_POLL_MS);
+    expect(posts()).toBe(2);
+    expect(t.calls.at(-1)).toEqual({ method: "POST", url: `/api/books/${BOOK}/pdf` });
+    expect(t.c.getState()).toMatchObject({ kind: "preparing", status: "rendering" });
+    // Still rendering after the re-kick: no second rendering re-POST; timeout after one more window.
+    await vi.advanceTimersByTimeAsync(PDF_POLL_CAP_MS - PDF_POLL_MS);
+    expect(t.c.getState().kind).toBe("preparing");
+    await vi.advanceTimersByTimeAsync(PDF_POLL_MS);
+    expect(t.c.getState()).toEqual({ kind: "timeout", exportId: "e1" });
+    expect(posts()).toBe(2);
+    const n = t.calls.length;
+    await vi.advanceTimersByTimeAsync(PDF_POLL_CAP_MS);
+    expect(t.calls).toHaveLength(n);
+  });
+
+  it("rendering first seen late (after queued) → keeps polling past the cap until the re-kick is due", async () => {
+    let phase: "queued" | "rendering" = "queued";
+    const pending = () => (t.calls.at(-1)!.method === "POST" ? queued(phase) : ok({ status: phase }));
+    const t = setup([queued(), ...Array.from({ length: 600 }, () => pending)]);
+    const posts = () => t.calls.filter((c) => c.method === "POST").length;
+    await t.c.start();
+    await vi.advanceTimersByTimeAsync(PDF_REKICK_QUEUED_MS); // one queued re-kick
+    expect(posts()).toBe(2);
+    phase = "rendering";
+    const seenAt = Date.now() + PDF_POLL_MS;
+    await vi.advanceTimersByTimeAsync(PDF_POLL_CAP_MS); // past the 5-min cap
+    expect(t.c.getState().kind).toBe("preparing");
+    expect(posts()).toBe(2);
+    await vi.advanceTimersByTimeAsync(seenAt + PDF_REKICK_RENDERING_MS - Date.now());
+    expect(posts()).toBe(3);
+    expect(t.c.getState()).toMatchObject({ kind: "preparing", status: "rendering" });
+  });
+
+  it("no rendering re-POST when the re-POST budget is spent", async () => {
+    let phase: "queued" | "rendering" = "queued";
+    const pending = () => (t.calls.at(-1)!.method === "POST" ? queued(phase) : ok({ status: phase }));
+    const t = setup([queued(), ...Array.from({ length: 400 }, () => pending)]);
+    const posts = () => t.calls.filter((c) => c.method === "POST").length;
+    await t.c.start();
+    await vi.advanceTimersByTimeAsync(PDF_REKICK_QUEUED_MS * PDF_REKICK_MAX);
+    expect(posts()).toBe(1 + PDF_REKICK_MAX);
+    phase = "rendering";
+    await vi.advanceTimersByTimeAsync(PDF_POLL_CAP_MS);
+    expect(t.c.getState()).toEqual({ kind: "timeout", exportId: "e1" });
+    expect(posts()).toBe(1 + PDF_REKICK_MAX);
   });
 
   it("start() while busy is a no-op", async () => {

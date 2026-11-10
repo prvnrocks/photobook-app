@@ -1,6 +1,6 @@
 // /api/books/[id]/pdf/status (M8 review S3): lightweight poll for a PDF export. Same answers as
 // GET /api/books/[id]/pdf, but this function never loads puppeteer, Chromium or sharp
-// (src/lib/pdf/status.ts; tests/pdf-status-route.test.ts walks the import graph), so polls every
+// (src/lib/pdf/status.ts; tests/pdf-deploy-config.test.ts walks the import graph), so polls every
 // 2 s stay cheap — on Vercel Hobby (1 vCPU / 2 GB per instance) they must not compete with renders.
 //
 // GET ?exportId=<uuid>

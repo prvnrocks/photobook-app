@@ -6,8 +6,9 @@ import "server-only";
 //                    cap, insert). New/queued jobs are handed to `schedule` (the route uses after()).
 //   getExportState — GET: the owner's job status; ready → fresh signed URL (status.ts — no
 //                    renderer imports, shared with the lightweight /pdf/status route).
-//   runExport      — claim lease → render (Chromium, print route) → merge (→ one size-fallback
-//                    re-render when > 50 MB) → upload → finish → supersede older ready PDFs of
+//   runExport      — one render per process (else 'busy_instance', job stays queued) → claim
+//                    lease → render (Chromium, print route) → merge (→ one size-fallback
+//                    re-render when > 50 MB and < 45 % of the deadline used) → upload → finish → supersede older ready PDFs of
 //                    the book (objects removed, rows KEPT as 'superseded' — the daily cap counts
 //                    rows, M8 review S1). Any failure → fail_export with a code.
 //
@@ -438,6 +439,12 @@ async function renderPass(ctx: RenderContext, pass: RenderPass): Promise<{ bytes
   }
 }
 
+/**
+ * The size fallback runs only while less than this fraction of the deadline has elapsed (the
+ * second pass takes about as long as the first; past ~45 % it would hit render_timeout anyway).
+ */
+export const SIZE_FALLBACK_MAX_ELAPSED = 0.45;
+
 async function renderAndStore(
   exportId: string,
   token: string,
@@ -445,6 +452,7 @@ async function renderAndStore(
   opts: RunExportOptions,
   timings: ExportTimings,
   imageStats: ImageLogStats,
+  startedAt: number,
 ): Promise<"ready" | "lease_lost"> {
   const tStart = Date.now();
   const exp = await getExportForRender(exportId);
@@ -476,11 +484,22 @@ async function renderAndStore(
     timings,
     imageStats,
   };
-  let merged = await renderPass(ctx, DEFAULT_PASS);
+  let merged: { bytes: Uint8Array; pageCount: number } | null = await renderPass(ctx, DEFAULT_PASS);
   throwIfAborted(signal);
   if (merged.bytes.byteLength > EXPORT_MAX_BYTES) {
     // Size fallback: every image at SIZE_FALLBACK_DPI / quality SIZE_FALLBACK_JPEG_QUALITY, once.
-    console.info(`[pdf-export] size_fallback ${exportId} (${Math.round(merged.bytes.byteLength / 1024)} KB)`);
+    const firstKb = Math.round(merged.bytes.byteLength / 1024);
+    // Drop the too-large PDF (> 50 MB) before the second pass, so it can be collected while the
+    // re-render holds its own chunks — two merged PDFs at once is a 2 GB-instance OOM risk.
+    merged = null;
+    // A second pass costs about as long as the first: when the first already used more than
+    // SIZE_FALLBACK_MAX_ELAPSED of the budget, it would only end in render_timeout — fail fast.
+    const budget = opts.deadlineMs ?? EXPORT_DEADLINE_MS;
+    if (Date.now() - startedAt > budget * SIZE_FALLBACK_MAX_ELAPSED) {
+      console.info(`[pdf-export] size_fallback_skipped ${exportId} (${firstKb} KB)`);
+      throw new ExportJobError("too_large");
+    }
+    console.info(`[pdf-export] size_fallback ${exportId} (${firstKb} KB)`);
     timings.sizeFallback = 1;
     timings.renderer.launchMs = -1;
     timings.renderer.chunkMs.length = 0;
@@ -556,6 +575,22 @@ function codeOf(err: unknown): string {
   return "unknown";
 }
 
+export type RunExportOutcome = "ready" | "failed" | "not_claimed" | "lease_lost" | "busy_instance";
+
+/**
+ * One render per process (M8 re-review): with Vercel Fluid compute one 2 GB / 1 vCPU instance can
+ * serve concurrent requests, and two Chromium renders in one process risk an OOM. A second
+ * runExport on a busy instance returns 'busy_instance' BEFORE claim_export, so its job stays
+ * queued; the client re-POSTs a job queued ≥ PDF_REKICK_QUEUED_MS (or the next POST) and
+ * another instance — or this one, once free — picks it up.
+ */
+let activeRender: string | null = null;
+
+/** Test hook: the export id currently rendering in this process (null = idle). */
+export function activeRenderId(): string | null {
+  return activeRender;
+}
+
 /**
  * Renders one export job end to end. Never throws: failures are recorded with fail_export and
  * logged as codes. Returns the outcome (for tests / logs).
@@ -565,11 +600,22 @@ function codeOf(err: unknown): string {
  * briefly (ABORT_SETTLE_MS) for the aborted work to unwind before recording the failure, so the
  * browser is gone before the invocation ends.
  */
-export async function runExport(
-  exportId: string,
-  opts: RunExportOptions = {},
-): Promise<"ready" | "failed" | "not_claimed" | "lease_lost"> {
+export async function runExport(exportId: string, opts: RunExportOptions = {}): Promise<RunExportOutcome> {
   if (!isUuid(exportId)) return "not_claimed";
+  if (activeRender !== null) {
+    console.info(`[pdf-export] busy_instance ${exportId}`);
+    return "busy_instance";
+  }
+  // Taken synchronously (no await between check and set) and released in finally on every path.
+  activeRender = exportId;
+  try {
+    return await runClaimedExport(exportId, opts);
+  } finally {
+    activeRender = null;
+  }
+}
+
+async function runClaimedExport(exportId: string, opts: RunExportOptions): Promise<RunExportOutcome> {
   let token: string | null;
   try {
     token = await claimExport(exportId, EXPORT_LEASE_SECONDS);
@@ -607,7 +653,7 @@ export async function runExport(
         encodeConcurrency: opts.encodeConcurrency ?? null,
       }),
     );
-  const work = renderAndStore(exportId, token, controller.signal, opts, timings, imageStats);
+  const work = renderAndStore(exportId, token, controller.signal, opts, timings, imageStats, started);
   work.catch(() => undefined); // after a timeout the aborted work rejects too
 
   try {
