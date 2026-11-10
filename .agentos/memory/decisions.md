@@ -160,3 +160,27 @@ Format: `## D-NNN — title (YYYY-MM-DD)` → **Decision**, **Why**, **Alternati
 
 ## D-053 — Stay on Vercel (Hobby for now) + Supabase; no AWS/MySQL move (2026-11-10)
 **Decision:** Keep Vercel + Supabase Postgres. Hobby now (Fluid compute, maxDuration 300 s, 2 GB/1 vCPU — sizing adapts by memory); PDF_MAX_DURATION_SECONDS is the single switch. **Why:** MySQL would mean rewriting RLS, ~15 PL/pgSQL RPCs, auth and storage for no user gain; full AWS saves ~$10–25/mo at launch scale for weeks of migration + ops. **Must:** upgrade to Vercel Pro before real payments (Hobby is non-commercial). **Revisit:** if Supabase costs grow → RDS Postgres (never MySQL); if PDF hits Hobby limits → Lambda worker or Pro.
+
+## D-054 — Paid end card (2026-11-10)
+**Decision:** Paid flipbooks end on a real page: book background, "The end", snapshot title (dir=auto), Replay + Share (text-only buttons ≥ 44 px), small "Made with" link. Free end card unchanged; phones never get a filler page. Supersedes D-040's "paid: only a small end-card link" (it read as a blank page on phones).
+
+## D-055 — Retention (2026-11-10)
+**Decision:** Free published books deleted at expires_at + 14 d (owner can still upgrade from the expired page); never-published drafts after 45 idle days (updated_at / newest photo) — only after a confirmed warning email ≥ 7 d earlier, or with no photos, or when the owner can't be emailed (reminders off → dashboard shows the date from day 38); paid/comped books and books with pending/paid/needs_review/disputed orders never auto-deleted; pending uploads + orphan storage objects 7 d; superseded/failed export rows 30 d (amends D-051 — cap counts 24 h only); unlock attempts 24 h; stale AI runs 1 h → failed. Numbers live in src/lib/cleanup/rules.ts (legal pages/FAQ import them). Opening a warned draft in the editor/review restarts its clock.
+
+## D-056 — One daily cron (2026-11-10)
+**Decision:** /api/cron/cleanup at 0 1 * * * UTC (Hobby: fires within the hour), Bearer CRON_SECRET (constant-time), 240 s budget, batched sweeps resumed next day, row-first then storage with an orphan sweep as safety net, count-only logs. Emergency stop = remove CRON_SECRET (route 503).
+
+## D-057 — Email via Resend; crash-safe warnings (2026-11-10)
+**Decision:** v1 emails: link expires in 3 days, draft deletion in 7 days; one-click unsubscribe (HMAC(BOOK_ACCESS_SECRET,"unsub-v1"), GET non-mutating) sets profiles.email_reminders=false. Claim → send → confirm (migration 1800): a warning counts as sent only after Resend accepts it; stale claims reclaimable after 1 h; warnings get a 100 s sub-budget. No key → nothing claimed. Supabase Auth SMTP via Resend before launch. Deploy order for 1800: code first, then migration the same day.
+
+## D-058 — Privacy-first analytics and errors (2026-11-10)
+**Decision:** PostHog EU, cookieless (memory persistence), lazy slim build, allow-listed events with numbers/booleans/enums only, sanitized URLs (/b/:slug, :id, no query); "Discard client IP data" on in PostHog. Sentry EU, no tracing/Replay, sendDefaultPii false, scrubbed events (query strings, slugs, ids, emails, tokens, caption-like keys, Postgres row text). Both no-op without keys. **Rejected:** cookie banner + persistent ids (friction for WhatsApp visitors, consent burden).
+
+## D-059 — AI daily budget breaker (2026-11-10)
+**Decision:** AI_DAILY_BUDGET_USD caps total live AI spend per Asia/Dubai day; at/over budget new builds, rebuilds and rewrites are refused before any run row or model call (rule-based album + "AI is taking a break — try again later"); 0 = kill switch; invalid value = unlimited; spend query errors fail open; ≤ 60 s per-process cache. Admin page /admin/ai-spend shows daily spend vs budget.
+
+## D-060 — Delete book and delete account in v1 (2026-11-10)
+**Decision:** Delete book (dashboard ⋯ menu) via delete_book_guarded RPC — refused if paid/comped or an order is pending/paid/needs_review/disputed ("contact support"). Delete account (Settings, type DELETE) deletes ALL the user's books incl. paid/comped (orders kept with nulls for accounting), storage, then the auth user; refused while an order is pending ("payment in progress") or disputed/needs_review ("being reviewed"). **Why:** UAE PDPL / GDPR rights promised in the privacy policy.
+
+## D-061 — Comped demo books (approved exception to webhook-only is_paid) (2026-11-10)
+**Decision:** Admin-only `comp_book` RPC (service_role) via scripts/comp-book.mjs (--admin must be in ADMIN_USER_IDS) marks a book paid and records an AED 0 'comped' order (note + comped_by) as an audit trail. Used for landing-page demo books (scripts/seed-demo-books.mjs comps first, then builds). Customer books still become paid only through the Stripe webhook. Reverting a comp is a manual RUNBOOK step. **User approved (b) on 2026-11-10.**

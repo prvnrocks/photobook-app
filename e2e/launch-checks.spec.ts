@@ -150,4 +150,48 @@ test.describe("unsubscribe against the live DB", () => {
     await expect.poll(reminders, { timeout: 10_000 }).toBe(false);
     console.log(`[unsub] before=${before} afterGETs=unchanged afterPOST=false`);
   });
+
+  test("review S3: opening a WARNED draft in the editor resets its idle clock and clears the warning; an unwarned one is untouched", async ({ page }) => {
+    test.setTimeout(90_000);
+    const ins = await admin
+      .from("books")
+      .insert([
+        { user_id: uid, title: "Warned draft", occasion: "other", tone: "fun" },
+        { user_id: uid, title: "Quiet draft", occasion: "other", tone: "fun" },
+      ])
+      .select("id, title");
+    expect(ins.error).toBeNull();
+    const warned = ins.data!.find((b) => b.title === "Warned draft")!.id as string;
+    const quiet = ins.data!.find((b) => b.title === "Quiet draft")!.id as string;
+    // updated_at can't be back-dated (the trigger sets now()), so assert a strict bump over the
+    // seeded value instead. Warning-only updates keep updated_at (1600 trigger).
+    const warn = await admin.from("books").update({ draft_warning_sent_at: new Date(Date.now() - 86_400_000).toISOString() }).eq("id", warned);
+    expect(warn.error).toBeNull();
+    const row = async (id: string) =>
+      (await admin.from("books").select("updated_at, draft_warning_sent_at").eq("id", id).single()).data as {
+        updated_at: string;
+        draft_warning_sent_at: string | null;
+      };
+    const w0 = await row(warned);
+    const q0 = await row(quiet);
+    expect(w0.draft_warning_sent_at).not.toBeNull();
+    await page.waitForTimeout(1_500);
+
+    const { data: link } = await admin.auth.admin.generateLink({ type: "magiclink", email: (await admin.auth.admin.getUserById(uid)).data.user!.email! });
+    await page.setViewportSize(VIEWPORT);
+    await page.goto(`/auth/confirm?token_hash=${link.properties!.hashed_token}&type=magiclink&next=/dashboard`);
+    await expect(page).toHaveURL(/\/dashboard$/);
+    for (const id of [warned, quiet]) {
+      const res = await page.goto(`/books/${id}/edit`);
+      expect(res?.status()).toBeLessThan(400);
+    }
+    const w1 = await row(warned);
+    const q1 = await row(quiet);
+    console.log(
+      `[touch] warned: bumped=${Date.parse(w1.updated_at) > Date.parse(w0.updated_at)} cleared=${w1.draft_warning_sent_at === null}; quiet: unchanged=${q1.updated_at === q0.updated_at}`,
+    );
+    expect(Date.parse(w1.updated_at)).toBeGreaterThan(Date.parse(w0.updated_at) + 1_000);
+    expect(w1.draft_warning_sent_at).toBeNull();
+    expect(q1.updated_at).toBe(q0.updated_at);
+  });
 });
