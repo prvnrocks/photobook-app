@@ -322,9 +322,9 @@ interface ExportTimings {
   plan: number;
   /** Plan built → first prefetch window settled (-1: not prefetched / not reached). */
   images: number;
-  launch: number;
+  /** Live renderer timings: launch + finished chunks, readable after a failure too. */
+  renderer: RenderTimings;
   render: number;
-  chunks: number[];
   merge: number;
   upload: number;
   finish: number;
@@ -346,8 +346,8 @@ export function formatTimingLog(
 ): string {
   const n = (v: number) => (Number.isFinite(v) ? Math.round(v) : -1);
   return (
-    `[pdf-export] timing ${exportId} load=${n(t.load)} plan=${n(t.plan)} images_ready=${n(t.images)} launch=${n(t.launch)} ` +
-    `render=${n(t.render)} chunks=${t.chunks.map(n).join("/") || "-"} merge=${n(t.merge)} upload=${n(t.upload)} finish=${n(t.finish)} ` +
+    `[pdf-export] timing ${exportId} load=${n(t.load)} plan=${n(t.plan)} images_ready=${n(t.images)} launch=${n(t.renderer.launchMs)} ` +
+    `render=${n(t.render)} chunks=${t.renderer.chunkMs.map(n).join("/") || "-"} merge=${n(t.merge)} upload=${n(t.upload)} finish=${n(t.finish)} ` +
     `imgs=${n(extra.images)} produced=${n(extra.produced)} failed=${n(extra.failed)} peak_kb=${n(extra.peakKb)} ` +
     `dl_sum=${n(extra.downloadMs)} enc_sum=${n(extra.encodeMs)} conc=${extra.concurrency ?? "auto"} enc_conc=${extra.encodeConcurrency ?? "auto"}`
   );
@@ -414,7 +414,6 @@ async function renderAndStore(
     onChunkDone = (k) => controller.chunkDone(k);
   }
 
-  const renderTimings: RenderTimings = { launchMs: 0, chunkMs: [] };
   const tRender = Date.now();
   const chunks = await render({
     origin,
@@ -424,12 +423,10 @@ async function renderAndStore(
     sheetCount,
     loader,
     onChunkDone,
-    timings: renderTimings,
+    timings: timings.renderer,
     ...(opts.parallelChunks ? { parallelChunks: opts.parallelChunks } : {}),
   });
   timings.render = Date.now() - tRender;
-  timings.launch = renderTimings.launchMs;
-  timings.chunks = renderTimings.chunkMs;
   const stats = loader.stats?.();
   if (stats) {
     imageStats.images = plan.size;
@@ -534,7 +531,16 @@ export async function runExport(
       reject(new ExportJobError("render_timeout"));
     }, opts.deadlineMs ?? EXPORT_DEADLINE_MS);
   });
-  const timings: ExportTimings = { load: -1, plan: -1, images: -1, launch: -1, render: -1, chunks: [], merge: -1, upload: -1, finish: -1 };
+  const timings: ExportTimings = {
+    load: -1,
+    plan: -1,
+    images: -1,
+    renderer: { launchMs: -1, chunkMs: [] },
+    render: -1,
+    merge: -1,
+    upload: -1,
+    finish: -1,
+  };
   const imageStats: ImageLogStats = { images: -1, produced: -1, failed: -1, peakKb: -1, downloadMs: -1, encodeMs: -1 };
   const logTimings = () =>
     console.info(

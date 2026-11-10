@@ -306,6 +306,24 @@ describe.skipIf(!CHROME)("PDF render with real Chromium", () => {
     ).rejects.toMatchObject({ code: "image_failed" });
   }, 60_000);
 
+  it("hooks: onChunkDone per chunk, timings filled; two tabs in parallel keep chunk order", async () => {
+    const base = { origin, bookId: BOOK, exportId: EXPORT, docRev: 7, sheetCount: 6, chunkSheets: 2, loader, browser };
+    const done: number[] = [];
+    const timings = { launchMs: -1, chunkMs: [] as number[] };
+    const seq = await renderBook({ ...base, onChunkDone: (k) => done.push(k), timings });
+    expect(done).toEqual([0, 1, 2]);
+    expect(timings.launchMs).toBe(0); // caller's browser: no launch
+    expect(timings.chunkMs).toHaveLength(3);
+    expect(timings.chunkMs.every((ms) => ms > 0)).toBe(true);
+
+    const parDone: number[] = [];
+    const par = await renderBook({ ...base, onChunkDone: (k) => parDone.push(k), parallelChunks: 2 });
+    expect(parDone.sort()).toEqual([0, 1, 2]);
+    const pages = async (chunks: Buffer[]) => Promise.all(chunks.map(async (c) => (await PDFDocument.load(c)).getPageCount()));
+    expect(await pages(par)).toEqual(await pages(seq));
+    expect(await pages(seq)).toEqual([2, 2, 2]);
+  }, 60_000);
+
   it("a page that never reports ready → render_timeout; __PRINT_TIMEOUT__ → render_timeout", async () => {
     const t0 = performance.now();
     await expect(renderChunk(browser, { url: `${origin}/never-ready`, origin, loader, timeoutMs: 1_500 })).rejects.toMatchObject({

@@ -221,7 +221,7 @@ export interface RenderBookOptions {
 export interface RenderTimings {
   /** Browser launch (0 when the caller passed a browser). */
   launchMs: number;
-  /** Per chunk, navigation → PDF bytes. */
+  /** Per finished chunk, navigation → PDF bytes (filled as chunks finish). */
   chunkMs: number[];
 }
 
@@ -300,8 +300,9 @@ export async function renderBook(opts: RenderBookOptions): Promise<Buffer[]> {
   };
 
   if (timings) {
+    // Filled in place (the caller may read them after a failure, too).
     timings.launchMs = 0;
-    timings.chunkMs = [];
+    timings.chunkMs.length = 0;
   }
   if (opts.browser) return run(opts.browser);
   const t0 = Date.now();

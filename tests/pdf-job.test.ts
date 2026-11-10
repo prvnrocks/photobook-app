@@ -361,12 +361,22 @@ describe("runExport prefetch + timing logs", () => {
     expect(logs.join("\n")).toMatch(new RegExp(`timing ${EXP} .*conc=3`));
   });
 
-  it("a failed job still logs its timing line (phases not reached = -1)", async () => {
-    mocks.renderBook.mockRejectedValue(new PdfRenderError("render_timeout"));
+  it("a failed job still logs its timing line: launch + finished chunks, phases not reached = -1", async () => {
+    mocks.renderBook.mockImplementation(async (opts: { timings: { launchMs: number; chunkMs: number[] } }) => {
+      opts.timings.launchMs = 350;
+      opts.timings.chunkMs.push(1200);
+      throw new PdfRenderError("render_timeout");
+    });
     expect(await runExport(EXP)).toBe("failed");
     const timing = logs.find((l) => l.includes(`timing ${EXP}`));
-    expect(timing).toMatch(/merge=-1 upload=-1 finish=-1/);
+    expect(timing).toMatch(/launch=350 render=-1 chunks=1200 merge=-1 upload=-1 finish=-1/);
     expectNoPii();
+  });
+
+  it("a job failing before render logs launch=-1 and no chunks", async () => {
+    mocks.getExportForRender.mockResolvedValueOnce(null);
+    expect(await runExport(EXP)).toBe("failed");
+    expect(logs.find((l) => l.includes(`timing ${EXP}`))).toMatch(/load=-1 plan=-1 images_ready=-1 launch=-1 render=-1 chunks=- /);
   });
 });
 
