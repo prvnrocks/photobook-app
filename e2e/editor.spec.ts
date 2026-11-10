@@ -461,22 +461,71 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
     await cur(page).getByTestId("caption-target").click();
     await expect(page.getByTestId("caption-input")).toBeVisible();
     await expectNoOverflow(page, "caption");
+    // The open sheet's backdrop covers the toolbar on mobile: close it, the selection stays.
     for (const tool of ["ai-caption", "caption-style", "chapter"]) {
+      await page.getByTestId("editor-panel-close").click();
       const btn = page.getByTestId(`editor-tool-${tool}`);
-      if ((await btn.count()) === 0) continue;
+      await expect(btn, `toolbar shows ${tool} for a caption`).toBeVisible();
       await btn.click();
       await expect(page.getByTestId(`editor-panel-${tool}`)).toBeVisible();
       await expectNoOverflow(page, tool);
     }
     await page.getByTestId("editor-panel-close").click();
-    await cur(page).locator('[data-slot-index="0"] [data-testid="slot-target"]').click();
     for (const tool of ["replace", "crop", "layout", "pages", "page-menu"]) {
+      if (await page.getByTestId("editor-panel-close").isVisible()) await page.getByTestId("editor-panel-close").click();
+      const slot = cur(page).locator('[data-slot-index="0"] [data-testid="slot-target"]');
+      // A second tap on a selected slot deselects it — only tap when not selected.
+      const selected = (await slot.getAttribute("data-selected")) === "true";
+      // Slot tools need the slot selected; page tools (Pages / Page menu) show with no selection.
+      if ((tool === "replace" || tool === "crop") && !selected) await slot.click();
+      if ((tool === "pages" || tool === "page-menu") && selected) await slot.click();
       await page.getByTestId(`editor-tool-${tool}`).click();
       await expect(page.getByTestId(`editor-panel-${tool}`)).toBeVisible();
       await expectNoOverflow(page, tool);
-      await page.getByTestId("editor-panel-close").click();
-      await cur(page).locator('[data-slot-index="0"] [data-testid="slot-target"]').click().catch(() => {});
+      if (tool === "crop") await page.getByTestId("crop-done").click();
+      else await page.getByTestId("editor-panel-close").click();
     }
+  });
+
+  test("caption fonts Inter / Playfair / Cairo / Tajawal + alignment apply to the page", async ({ page }) => {
+    await open(page);
+    await goToItem(page, 2);
+    await cur(page).getByTestId("caption-target").click();
+    await page.getByTestId("caption-open-style").click();
+    const cap = cur(page).getByTestId("page-caption");
+    for (const f of ["Inter", "Playfair", "Cairo", "Tajawal"]) {
+      await page.getByTestId(`font-${f}`).click();
+      await expect.poll(() => cap.evaluate((el) => getComputedStyle(el).fontFamily)).toContain(f === "Playfair" ? "Playfair" : f);
+    }
+    await page.getByTestId("align-right").click();
+    await expect.poll(() => cap.evaluate((el) => getComputedStyle(el).textAlign)).toBe("right");
+    await waitSaved(page);
+    await expectNoOverflow(page, "font picker");
+  });
+
+  test("low-resolution warning on a zoomed slot explains, never blocks", async ({ page }) => {
+    await open(page);
+    await goToItem(page, 1);
+    const badge = cur(page).getByTestId("low-res-badge").first();
+    await expect(badge).toBeVisible();
+    await badge.click();
+    await expect(cur(page).getByTestId("low-res-message")).toContainText("blurry when printed");
+    // Still editable: the slot tools work.
+    await cur(page).locator('[data-slot-index="0"] [data-testid="slot-target"]').click();
+    await expect(page.getByTestId("editor-tool-replace")).toBeVisible();
+  });
+
+  test("Move to chapter appends the page to that chapter; toast Undo", async ({ page }) => {
+    await open(page, "?pages=20");
+    await goToItem(page, 4);
+    await page.getByTestId("editor-tool-page-menu").click();
+    await expect(page.getByTestId("page-menu")).toBeVisible();
+    await page.getByTestId("page-menu-chapter").last().click();
+    await expect(counter(page)).toHaveText("20 / 20");
+    await expect(page.getByTestId("editor-toast")).toContainText("The party");
+    await page.getByTestId("editor-toast-action").click();
+    await expect(page.getByTestId("editor-toast")).toHaveCount(0);
+    await waitSaved(page);
   });
 
   test("Done saves pending edits, then leaves the editor", async ({ page }) => {
