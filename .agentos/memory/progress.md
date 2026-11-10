@@ -72,3 +72,11 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 ## 2026-11-10 — Milestone 5a — deployed
 - Code live (main), migration 0900 applied (rls_check 93). Live signed-in tests pass: save + rev/409, 21-page 422, column guard no-op, rewrite (replay), Done.
 - LEFT: phone "Done when" check (NEEDS-HUMAN); M5b live ✨ with API key. NEXT: Milestone 6.
+
+## 2026-11-10 — Milestone 6 — built, reviewed (re-review APPROVED); NOT deployed
+- Publish (/books/[id]/publish; snapshot published_doc, slug, free 30-day expiry fixed at first publish, optional password with scrypt + HMAC cookie + rate-limited unlock), public /b/[slug] flipbook (react-pageflip 2.0.3, single page on phone / spread ≥768 px, counter, Contents sheet, fullscreen, share WhatsApp/copy/native, watermark + "Made with" footer + end card for free), expired/password/404 states, OG PNG via next/og, dashboard/editor publish chips. Run report: .agentos/runs/m6.md.
+- Review fixes (T11, commits ff79a17 + 8259441): viewer title/caption language from snapshot only (B1); published = live snapshot exists; migration 1100 clear_unlock_attempt (only failures count, book limit 30/h, IPv6 /64); no scrypt on unknown book; password refused without BOOK_ACCESS_SECRET; OG cache 1 h; flipbook rotation leak fixed (detached nodes 14,140 → 0 over 20 toggles); React cache() shares one read between metadata + page.
+- Tests: lint/typecheck ✓, vitest 2477/2477, e2e viewer+publish 22/22, live publish-auth 8 pass/1 skip (password test e needs BOOK_ACCESS_SECRET in .env.local; test g's new unpublish→Draft step not yet run live). PGlite: 11 migrations apply, rls_check 106/106 (harness in session scratchpad pg/ — not in repo).
+- DEPLOY ORDER: set BOOK_ACCESS_SECRET in Vercel (Production + Preview) and .env.local → merge/deploy code → user runs `npx supabase db push` (1100; safe either order, unlock still works without it) → run rls_check on prod (106) → run live publish-auth incl. e + g.
+- LEFT (NEEDS-HUMAN): "Done when" — WhatsApp preview + smooth flip on another phone; iPhone battery with idle pageflip rAF loop.
+- Optional NICE: normalise IPv4 text before bucketing (unlock.ts ~688); drop unused `admin` param in getPublishedBookRow. NEXT: deploy M6, then Milestone 7 (Stripe).
