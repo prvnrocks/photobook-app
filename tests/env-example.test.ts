@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest";
 
 // Keys from docs/PLAN.md -> "Before you start" -> `.env.local` keys, plus AI_MODE (D-024) and
 // ADMIN_USER_IDS (D-027) added in M3, BOOK_ACCESS_SECRET (D-040) added in M6,
-// STRIPE_ALLOW_TEST_IN_PROD (M7 review: test keys refused on Vercel Production unless 1).
+// STRIPE_ALLOW_TEST_IN_PROD (M7 review: test keys refused on Vercel Production unless 1),
+// PDF_CHROME_PATH + VERCEL_AUTOMATION_BYPASS_SECRET (M8 T6: PDF renderer).
 const REQUIRED_KEYS = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
@@ -19,6 +20,8 @@ const REQUIRED_KEYS = [
   "NEXT_PUBLIC_APP_URL",
   "CRON_SECRET",
   "BOOK_ACCESS_SECRET",
+  "PDF_CHROME_PATH",
+  "VERCEL_AUTOMATION_BYPASS_SECRET",
 ];
 
 function parseEnv(text: string): Map<string, string> {
@@ -38,7 +41,7 @@ function parseEnv(text: string): Map<string, string> {
 describe(".env.example", () => {
   const env = parseEnv(readFileSync(join(process.cwd(), ".env.example"), "utf8"));
 
-  it("contains exactly the 13 expected keys", () => {
+  it("contains exactly the 15 expected keys", () => {
     expect([...env.keys()].sort()).toEqual([...REQUIRED_KEYS].sort());
   });
 

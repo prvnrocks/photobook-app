@@ -38,6 +38,8 @@ describe("server/client boundaries", () => {
     "src/lib/photos/finalize.ts",
     "src/lib/publish/password.ts",
     "src/lib/publish/access-cookie.ts",
+    "src/lib/pdf/print-token.ts",
+    "src/lib/db/print.ts",
   ])(
     '%s starts with import "server-only"',
     (file) => {
@@ -48,7 +50,16 @@ describe("server/client boundaries", () => {
     },
   );
 
-  it.each(["src/lib/publish/slug.ts", "src/lib/publish/rules.ts", "src/lib/publish/public-doc.ts", "src/lib/brand.ts"])(
+  it.each([
+    "src/lib/publish/slug.ts",
+    "src/lib/publish/rules.ts",
+    "src/lib/publish/public-doc.ts",
+    "src/lib/brand.ts",
+    "src/lib/pdf/rules.ts",
+    "src/lib/pdf/print-assets.ts",
+    "src/lib/pdf/print-doc.ts",
+    "src/lib/pdf/print-ready.ts",
+  ])(
     "%s stays isomorphic (no server-only, no node: imports)",
     (file) => {
       const src = readFileSync(join(ROOT, file), "utf8");
@@ -266,4 +277,101 @@ describe("payments boundaries (M7)", () => {
       expect(src).not.toMatch(/^\s*import\s+(?!type\b)[^'";]*from\s+["']stripe["']/m);
     },
   );
+});
+
+// --- M8 T4 additions ---------------------------------------------------------
+
+describe("print image boundaries (M8 T4)", () => {
+  it('src/lib/pdf/images.ts starts with import "server-only"', () => {
+    const first = readFileSync(join(SRC, "lib", "pdf", "images.ts"), "utf8")
+      .split(/\r?\n/)
+      .find((l) => l.trim() !== "");
+    expect(first?.trim()).toMatch(/^import ["']server-only["'];?$/);
+  });
+
+  it("src/lib/pdf/image-plan.ts stays pure (no server-only, sharp, node: or env)", () => {
+    const src = readFileSync(join(SRC, "lib", "pdf", "image-plan.ts"), "utf8");
+    expect(src).not.toMatch(/["']server-only["']|["']sharp["']|from\s+["']node:|process\.env/);
+  });
+
+  it("sharp is only imported from server-only modules, never from client code", () => {
+    const importers = walk(SRC).filter((f) =>
+      importSpecifiers(readFileSync(f, "utf8")).some((s) => /^sharp(\/|$)/.test(s)),
+    );
+    const offenders = importers
+      .filter((f) => {
+        const src = readFileSync(f, "utf8");
+        const first = src.split(/\r?\n/).find((l) => l.trim() !== "");
+        return hasUseClientDirective(src) || !/^import ["']server-only["'];?$/.test(first?.trim() ?? "");
+      })
+      .map(rel);
+    expect(offenders).toEqual([]);
+  });
+
+  it('no "use client" file imports src/lib/pdf/images', () => {
+    const offenders = walk(SRC)
+      .filter((f) => hasUseClientDirective(readFileSync(f, "utf8")))
+      .flatMap((f) =>
+        importSpecifiers(readFileSync(f, "utf8"))
+          .filter((s) => /(^|\/)lib\/pdf\/images$/.test(s))
+          .map((s) => `${rel(f)} -> ${s}`),
+      );
+    expect(offenders).toEqual([]);
+  });
+});
+
+// --- M8 T6 additions ---------------------------------------------------------
+
+describe("PDF renderer boundaries (M8 T6)", () => {
+  it.each(["src/lib/pdf/browser.ts", "src/lib/pdf/render-pdf.ts", "src/lib/pdf/job.ts"])('%s starts with import "server-only"', (file) => {
+    const first = readFileSync(join(ROOT, file), "utf8")
+      .split(/\r?\n/)
+      .find((l) => l.trim() !== "");
+    expect(first?.trim()).toMatch(/^import ["']server-only["'];?$/);
+  });
+
+  it.each(["src/lib/pdf/request-routing.ts", "src/lib/pdf/errors.ts", "src/lib/pdf/finalize.ts"])(
+    "%s stays pure (no server-only, puppeteer, chromium, node: or env)",
+    (file) => {
+      const src = readFileSync(join(ROOT, file), "utf8");
+      expect(importSpecifiers(src).filter((s) => /^(server-only|puppeteer|@sparticuz\/|node:|sharp$)/.test(s))).toEqual([]);
+      expect(src).not.toMatch(/process\.env/);
+    },
+  );
+
+  it("puppeteer-core / @sparticuz/chromium are imported only by src/lib/pdf/{browser,render-pdf}.ts", () => {
+    const importers = walk(SRC)
+      .filter((f) => importSpecifiers(readFileSync(f, "utf8")).some((s) => /^(puppeteer-core|puppeteer|@sparticuz\/chromium)(\/|$)/.test(s)))
+      .map(rel)
+      .sort();
+    expect(importers).toEqual(["src/lib/pdf/browser.ts", "src/lib/pdf/render-pdf.ts"]);
+  });
+
+  it("app code never imports playwright", () => {
+    const offenders = walk(SRC)
+      .filter((f) => importSpecifiers(readFileSync(f, "utf8")).some((s) => /^(playwright|@playwright\/)/.test(s)))
+      .map(rel);
+    expect(offenders).toEqual([]);
+  });
+
+  it('no "use client" file imports the PDF renderer modules', () => {
+    const offenders = walk(SRC)
+      .filter((f) => hasUseClientDirective(readFileSync(f, "utf8")))
+      .flatMap((f) =>
+        importSpecifiers(readFileSync(f, "utf8"))
+          .filter((s) => /(^|\/)lib\/pdf\/(browser|render-pdf|finalize)$|^pdf-lib(\/|$)/.test(s))
+          .map((s) => `${rel(f)} -> ${s}`),
+      );
+    expect(offenders).toEqual([]);
+  });
+
+  it("VERCEL_AUTOMATION_BYPASS_SECRET / PDF_CHROME_PATH are read only by the renderer", () => {
+    const reads = (name: string) =>
+      walk(SRC)
+        .filter((f) => new RegExp(`\\benv\\??\\.${name}\\b|\\benv\\[["']${name}["']\\]`).test(readFileSync(f, "utf8")))
+        .map(rel);
+    expect(reads("VERCEL_AUTOMATION_BYPASS_SECRET")).toEqual(["src/lib/pdf/render-pdf.ts"]);
+    const chrome = reads("PDF_CHROME_PATH");
+    expect(chrome).toEqual(["src/lib/pdf/browser.ts"]);
+  });
 });

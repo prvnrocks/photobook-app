@@ -5,11 +5,12 @@
 import type { CSSProperties, ReactNode } from "react";
 import { cropBoxStyle, rectStyle, type RenderSlot } from "@/lib/book/render";
 import type { Rect } from "@/lib/book/types";
+import { BLEED_MM, PAGE_MM, SHEET_MM } from "@/lib/layouts";
 
 export type BookRenderMode = "edit" | "view" | "print";
 
 /**
- * A5 page box (148×210). `container-type: inline-size` makes `cqw` = 1 % of the page width, so
+ * A5 page box (148×210). In print mode: the 154×216 mm bleed sheet instead (see PrintSheet). `container-type: inline-size` makes `cqw` = 1 % of the page width, so
  * every text size scales with the page: strip thumbnail, big editor page and print look identical.
  */
 export function PageFrame({
@@ -25,6 +26,13 @@ export function PageFrame({
   children?: ReactNode;
   data?: Record<`data-${string}`, string>;
 }) {
+  if (mode === "print") {
+    return (
+      <PrintSheet background={background} className={className} data={data}>
+        {children}
+      </PrintSheet>
+    );
+  }
   const style: CSSProperties = {
     containerType: "inline-size",
     background,
@@ -39,6 +47,53 @@ export function PageFrame({
       {...data}
     >
       {children}
+    </div>
+  );
+}
+
+/**
+ * Print sheet (D-050): 154×216 mm = 148×210 trim + 3 mm bleed on every side, in CSS mm so the
+ * PDF page maps 1:1. The background fills the whole sheet (bleed included). Children are laid
+ * out in the trim box, which is the `cqw` container — text sizes match the viewer exactly. Photo
+ * slots from a `bleed` render model use rects that run past 0..100 % of the trim box into the
+ * bleed; the trim box doesn't clip, the sheet does.
+ */
+function PrintSheet({
+  background,
+  className,
+  children,
+  data,
+}: {
+  background: string;
+  className?: string;
+  children?: ReactNode;
+  data?: Record<`data-${string}`, string>;
+}) {
+  const sheet: CSSProperties = {
+    width: `${SHEET_MM.w}mm`,
+    height: `${SHEET_MM.h}mm`,
+    background,
+    printColorAdjust: "exact",
+    WebkitPrintColorAdjust: "exact",
+  };
+  const trim: CSSProperties = {
+    left: `${BLEED_MM}mm`,
+    top: `${BLEED_MM}mm`,
+    width: `${PAGE_MM.w}mm`,
+    height: `${PAGE_MM.h}mm`,
+    containerType: "inline-size",
+  };
+  return (
+    <div
+      className={`relative shrink-0 overflow-hidden select-none ${className ?? ""}`}
+      style={sheet}
+      data-mode="print"
+      data-print-sheet="true"
+      {...data}
+    >
+      <div className="absolute" style={trim} data-print-trim="true">
+        {children}
+      </div>
     </div>
   );
 }

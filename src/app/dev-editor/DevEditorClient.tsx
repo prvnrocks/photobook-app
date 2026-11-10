@@ -56,16 +56,19 @@ export function DevEditorClient({
   ai = "off",
   pages = null,
   published = false,
+  paid = false,
   paymentsEnabled = false,
 }: {
   mode: DevSaveMode;
   ai?: DevAiMode;
   pages?: number | null;
   published?: boolean;
+  paid?: boolean;
   paymentsEnabled?: boolean;
 }) {
   const [data] = useState(() => {
-    const d = withDevPagesData(devEditorData(mode, ai), pages);
+    const base = withDevPagesData(devEditorData(mode, ai), pages);
+    const d = paid ? { ...base, book: { ...base.book, isPaid: true, maxPages: 100 } } : base;
     return published ? { ...d, publishedRev: d.docRev } : d;
   });
   const [transport] = useState(() => devTransport(mode));

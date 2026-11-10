@@ -61,7 +61,7 @@ export function BookPage(props: BookPageProps) {
     );
   }
 
-  const m = pageRenderModel(doc, page, photos, captionLang);
+  const m = pageRenderModel(doc, page, photos, captionLang, { bleed: mode === "print" });
   if (!m) {
     return <PageFrame background={doc.style.background} mode={mode} className={className} data={{ "data-page": "missing" }} />;
   }

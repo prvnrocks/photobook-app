@@ -18,6 +18,7 @@ import type {
   UnpublishBookResult,
 } from "@/app/books/[id]/publish/actions";
 import { UpgradeButtonView } from "@/components/upgrade/UpgradeButton";
+import type { PdfTransport } from "@/lib/pdf/ui";
 import { ShareButtons } from "@/components/viewer/ShareButtons";
 import {
   blockReasonCopy,
@@ -29,6 +30,7 @@ import {
   unpublishErrorCopy,
 } from "@/lib/publish/ui";
 import { PasswordField } from "./PasswordField";
+import { PdfDownloadView } from "./PdfDownload";
 
 export type PublishActions = {
   publish: () => Promise<PublishBookResult>;
@@ -69,6 +71,7 @@ export function PublishPanelView({
   refreshing = false,
   now,
   wait,
+  pdfTransport,
 }: PublishPanelProps & {
   refresh: () => void;
   refreshing?: boolean;
@@ -76,6 +79,8 @@ export function PublishPanelView({
   now?: Date;
   /** Conflict retry delay (tests). */
   wait?: (ms: number) => Promise<void>;
+  /** PDF API transport (dev fixture); defaults to same-origin fetch. */
+  pdfTransport?: PdfTransport;
 }) {
   const [busy, setBusy] = useState<"publish" | "unpublish" | null>(null);
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
@@ -237,6 +242,23 @@ export function PublishPanelView({
         <section className="flex flex-col gap-3 rounded-xl bg-muted/50 p-4" data-testid="publish-free-notice">
           <p className="text-sm">{FREE_NOTICE_COPY}</p>
           {upgrade("outline")}
+        </section>
+      ) : null}
+
+      {state.isPaid ? (
+        <section className="flex flex-col gap-3 rounded-xl border p-4" data-testid="publish-pdf">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold">PDF</h2>
+            <p className="text-sm text-muted-foreground">Download your book as a print-ready PDF.</p>
+          </div>
+          <PdfDownloadView
+            bookId={bookId}
+            isPaid={state.isPaid}
+            paymentsEnabled={paymentsEnabled}
+            returnTo={`/books/${bookId}/publish`}
+            refresh={refresh}
+            transport={pdfTransport}
+          />
         </section>
       ) : null}
 

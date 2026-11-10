@@ -36,6 +36,7 @@ import { addPageTool } from "./add-page";
 import { pageMenuTool } from "./page-menu";
 import { pagesTool } from "./pages";
 import { upgradeTool } from "../UpgradeSheet";
+import { pdfDownloadTool } from "./pdf-download";
 
 export type { EditorPanelProps, EditorTool, ToolScope } from "./types";
 
@@ -48,6 +49,7 @@ export const EDITOR_TOOLS: readonly EditorTool[] = [
   addPageTool,
   pageMenuTool,
   upgradeTool,
+  pdfDownloadTool,
   captionEditorTool,
   aiCaptionTool,
   captionStyleTool,

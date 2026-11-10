@@ -1349,7 +1349,10 @@ describe("migrations: Milestone 5 editor (0900, D-036 / D-037)", () => {
 
   it("database.types.ts declares books.doc_rev and the RPC args (hand-edited until types gen)", () => {
     const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
-    expect(types.match(/doc_rev\??: number/g)).toHaveLength(3);
+    // scoped to the books table block (exports, 1400, has its own doc_rev columns)
+    const books = types.slice(types.indexOf("      books: {"), types.indexOf("      exports: {"));
+    expect(books.length).toBeGreaterThan(0);
+    expect(books.match(/doc_rev\??: number/g)).toHaveLength(3);
     expect(types).toMatch(
       /create_rewrite_run_capped: \{\s*Args: \{\s*p_book: string\s*p_cap: number\s*p_daily_cap: number\s*p_enforce: boolean\s*p_mode: string\s*p_user: string\s*\}\s*Returns: Json/,
     );
@@ -1899,10 +1902,310 @@ describe("migrations: Milestone 7 payments review (1300)", () => {
     }
   });
 
-  it("rls_check.sql covers the review fixes and counts 121 checks", () => {
+  it("rls_check.sql covers the review fixes", () => {
     const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
     expect(rls).toContain(name);
     for (const tag of ["needs_review", "double payment", "fulfil no-op"]) expect(rls).toContain(`RLS FAIL [${tag}]`);
-    expect(rls).toContain("RLS OK — all 121 checks passed");
+    // the total check count is pinned by the latest milestone suite (1400)
+  });
+});
+
+describe("migrations: Milestone 8 exports (1400, D-047 / D-051)", () => {
+  const name = "20261113001400_exports.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const ws = (s: string) => s.replace(/\s+/g, " ");
+  const flat = ws(sql);
+  const fns = matchesAll(/create\s+(?:or\s+replace\s+)?function\s+([\w.]+)\s*\(([\s\S]*?)\bas\s+\$\$([\s\S]*?)\$\$/, sql).map(
+    (x) => ({ name: x[1], header: x[2], body: x[3] }),
+  );
+  const SIG = {
+    "public.create_export_job": "(uuid, uuid, bigint, jsonb, text, integer, integer)",
+    "public.claim_export": "(uuid, integer)",
+    "public.finish_export": "(uuid, uuid, text, bigint, integer)",
+    "public.fail_export": "(uuid, uuid, text)",
+  } as const;
+  const RETURNS = {
+    "public.create_export_job": "jsonb",
+    "public.claim_export": "uuid",
+    "public.finish_export": "boolean",
+    "public.fail_export": "boolean",
+  } as const;
+  const OWNER_COLS = ["id", "book_id", "doc_rev", "status", "bytes", "page_count", "error_code", "created_at", "finished_at"];
+  const fn = (n: string) => fns.find((x) => x.name === n);
+
+  it("exists, sorts right after 1300, only adds (no drop, no edits of older objects)", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files.indexOf(name)).toBe(files.indexOf("20261112001300_payments_review.sql") + 1);
+    expect(sql).not.toMatch(/\bdrop\b/);
+    expect(sql).not.toMatch(/\balter\s+table\s+public\.(?!exports\b)/);
+    expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
+    expect(fns.map((f) => f.name).sort()).toEqual(Object.keys(SIG).sort());
+  });
+
+  it("public.exports: columns, FKs cascade, doc snapshot ≤ 1 MiB, status / lang / code checks", () => {
+    expect(flat).toContain("book_id uuid not null references public.books (id) on delete cascade,");
+    expect(flat).toContain("user_id uuid not null references auth.users (id) on delete cascade,");
+    expect(flat).toContain("doc_rev bigint not null,");
+    expect(flat).toContain("doc jsonb not null,");
+    expect(flat).toContain("constraint exports_doc_size check (pg_column_size(doc) <= 1048576)");
+    expect(flat).toContain("constraint exports_caption_lang_check check (caption_lang in ('en', 'ar'))");
+    expect(flat).toContain("constraint exports_status_check check (status in ('queued', 'rendering', 'ready', 'failed'))");
+    expect(flat).toContain("status text not null default 'queued',");
+    expect(flat).toContain("attempt integer not null default 0,");
+    expect(flat).toContain("error_code is null or error_code ~ '^[a-z0-9_]{1,64}$'");
+    expect(flat).toContain("bytes is null or bytes between 1 and 52428800");
+  });
+
+  it("path must be exactly {user_id}/{book_id}/{id}.pdf (bucket exports convention, 0200)", () => {
+    expect(flat).toContain(
+      "constraint exports_path_owner check ( path is null or path = (user_id::text || '/' || book_id::text || '/' || id::text || '.pdf') )",
+    );
+  });
+
+  it("indexes: ready lookup, per-user daily count, one job in flight per book", () => {
+    expect(flat).toContain("create index exports_book_ready_idx on public.exports (book_id, doc_rev) where status = 'ready';");
+    expect(flat).toContain("create index exports_user_created_idx on public.exports (user_id, created_at);");
+    expect(flat).toContain(
+      "create unique index exports_one_active_per_book on public.exports (book_id) where status in ('queued', 'rendering');",
+    );
+  });
+
+  it("RLS on, one owner-only SELECT policy, no client write policies", () => {
+    expect(flat).toContain("alter table public.exports enable row level security;");
+    const ps = policies.filter((p) => p.table === "public.exports");
+    expect(ps).toHaveLength(1);
+    expect(ws(ps[0].text)).toContain("for select to authenticated using (user_id = (select auth.uid()))");
+  });
+
+  it("grants: nothing for anon; authenticated only column SELECT on the status columns; service_role all", () => {
+    const acl = effectiveTablePrivileges();
+    expect(sorted(acl["public.exports"]?.anon)).toEqual([]);
+    expect(sorted(acl["public.exports"]?.authenticated)).toEqual([]);
+    expect(sorted(acl["public.exports"]?.service_role)).toEqual([...ALL_PRIVS].sort());
+    expect(flat).toContain("revoke all on table public.exports from public, anon, authenticated;");
+    const g = matchesAll(/grant\s+select\s*\(([^)]*)\)\s+on\s+(?:table\s+)?public\.exports\s+to\s+([a-z_, ]+);/);
+    expect(g).toHaveLength(1);
+    expect(g[0][2].trim()).toBe("authenticated");
+    expect(g[0][1].split(",").map((c) => c.trim())).toEqual(OWNER_COLS);
+    expect(all).not.toMatch(/grant\s+(insert|update|delete)[^;]*on\s+(?:table\s+)?public\.exports\s+to\s+[a-z_, ]*\b(anon|authenticated)\b/);
+  });
+
+  it("src/lib/db/exports.ts owner reads select only granted columns", () => {
+    const src = readFileSync(join(process.cwd(), "src", "lib", "db", "exports.ts"), "utf8");
+    const cols = src.match(/export const OWNER_EXPORT_COLUMNS =\s*"([^"]+)"/);
+    expect(cols).not.toBeNull();
+    for (const c of cols![1].split(",").map((x) => x.trim())) expect(OWNER_COLS, c).toContain(c);
+  });
+
+  it.each(Object.keys(SIG))("%s: SECURITY INVOKER, search_path '', service_role-only EXECUTE", (n) => {
+    const f = fn(n);
+    expect(f, `${n} missing`).toBeDefined();
+    const ret = RETURNS[n as keyof typeof RETURNS];
+    expect(ws(f!.header)).toMatch(new RegExp(`\\) returns ${ret} language plpgsql volatile security invoker set search_path = '' ?$`));
+    expect(f!.header).not.toMatch(/security\s+definer/);
+    const sig = SIG[n as keyof typeof SIG];
+    expect(flat).toContain(`revoke all on function ${n}${sig} from public, anon, authenticated;`);
+    expect(flat).toContain(`grant execute on function ${n}${sig} to service_role;`);
+    const grants = matchesAll(new RegExp(`grant execute on function ${esc(n)}\\s*\\([^)]*\\)\\s+to\\s+([a-z_, ]+?)\\s*;`), sql).map((g) =>
+      g[1].trim(),
+    );
+    expect(grants).toEqual(["service_role"]);
+    expect(flat.indexOf(`revoke all on function ${n}`)).toBeLessThan(flat.indexOf(`grant execute on function ${n}`));
+    expect(ws(f!.body)).toContain("raise exception 'invalid_argument' using errcode = '22023';");
+  });
+
+  it("create_export_job: new advisory key space 6, owner + live is_paid, reap → reuse → running → cap → insert", () => {
+    const body = ws(fn("public.create_export_job")!.body);
+    const used = matchesAll(/hashtextextended\s*\([^,]+,\s*(\d+)\s*\)/).map((x) => x[1]);
+    // key 6 = create_export_job only (1400, re-created with a new signature in 1500)
+    expect(used.filter((k) => k === "6")).toHaveLength(2);
+    expect(matchesAll(/hashtextextended\s*\([^,]+,\s*6\s*\)/, sql)).toHaveLength(1);
+    const lock = body.indexOf("perform pg_advisory_xact_lock(hashtextextended(p_user::text, 6));");
+    const owner = body.indexOf("where b.id = p_book and b.user_id = p_user;");
+    const paid = body.indexOf("return jsonb_build_object('status', 'not_paid');");
+    const rev = body.indexOf("return jsonb_build_object('status', 'stale_rev', 'doc_rev', v_rev);");
+    const reap = body.indexOf("set status = 'failed', error_code = 'stale'");
+    const ready = body.indexOf("return jsonb_build_object('status', 'ready', 'export_id', v_id);");
+    const running = body.indexOf("return jsonb_build_object('status', 'running', 'export_id', v_id, 'doc_rev', v_frev);");
+    const cap = body.indexOf("return jsonb_build_object('status', 'daily_cap');");
+    const insert = body.indexOf("insert into public.exports");
+    const order = [lock, owner, paid, rev, reap, ready, running, cap, insert];
+    expect(order.every((i) => i > 0), JSON.stringify(order)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(body).toContain("e.created_at > now() - interval '24 hours'");
+    expect(body).toContain("e.caption_lang = p_caption_lang");
+    expect(body).toContain("return jsonb_build_object('status', 'created', 'export_id', v_id);");
+  });
+
+  it("claim / finish / fail: lease token checks, attempts capped at 3", () => {
+    const claim = ws(fn("public.claim_export")!.body);
+    expect(claim).toContain("and e.attempt < 3");
+    expect(claim).toContain("(e.status = 'queued' or (e.status = 'rendering' and e.lease_until < now()))");
+    expect(claim).toContain("v_secs := least(900, greatest(30, p_lease_seconds));");
+    for (const n of ["public.finish_export", "public.fail_export"]) {
+      const body = ws(fn(n)!.body);
+      expect(body, n).toContain("and e.status = 'rendering' and e.lease_token = p_token;");
+      expect(body, n).toContain("lease_token = null, lease_until = null");
+      expect(body, n).toContain("return found;");
+    }
+  });
+
+  it("rls_check.sql covers exports (the total count is pinned by the 1500 suite)", () => {
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain(name);
+    for (const tag of [
+      "exports grants",
+      "exports columns",
+      "exports rpc grants",
+      "exports create",
+      "exports running",
+      "exports not_paid",
+      "exports not_found",
+      "exports stale_rev",
+      "exports claim",
+      "exports token",
+      "exports ready reuse",
+      "exports fail",
+      "exports daily_cap",
+      "exports stale",
+      "exports path",
+      "exports attempts",
+      "exports args",
+      "exports one active",
+      "exports owner read",
+      "exports cross-user",
+      "exports doc",
+      "exports client write",
+      "exports client rpc",
+      "exports anon",
+      "exports cascade",
+    ]) {
+      expect(rls).toContain(`RLS FAIL [${tag}]`);
+    }
+  });
+
+  it("database.types.ts declares exports and the 4 RPCs (hand-edited)", () => {
+    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
+    expect(types).toMatch(/exports: \{\s*Row: \{[\s\S]*?lease_token: string \| null[\s\S]*?\}\s*Insert:/);
+    expect(types).toMatch(/create_export_job: \{\s*Args: \{[\s\S]*?p_doc: Json[\s\S]*?\}\s*Returns: Json/);
+    expect(types).toMatch(/claim_export: \{\s*Args: \{ p_export: string; p_lease_seconds: number \}\s*Returns: string/);
+    expect(types).toMatch(/finish_export: \{\s*Args: \{[\s\S]*?p_token: string\s*\}\s*Returns: boolean/);
+    expect(types).toMatch(/fail_export: \{\s*Args: \{ p_code: string; p_export: string; p_token: string \}\s*Returns: boolean/);
+  });
+});
+
+describe("migrations: Milestone 8 exports review (1500, S1 / N1 / N2 / N3)", () => {
+  const name = "20261113001500_exports_review.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const ws = (s: string) => s.replace(/\s+/g, " ");
+  const flat = ws(sql);
+  const fns = matchesAll(/create\s+(?:or\s+replace\s+)?function\s+([\w.]+)\s*\(([\s\S]*?)\bas\s+\$\$([\s\S]*?)\$\$/, sql).map(
+    (x) => ({ name: x[1], header: x[2], body: x[3] }),
+  );
+  const SIG = {
+    "public.create_export_job": "(uuid, uuid, bigint, jsonb, text, integer, integer, integer)",
+    "public.supersede_exports": "(uuid, uuid, uuid[], text)",
+  } as const;
+  const RETURNS = { "public.create_export_job": "jsonb", "public.supersede_exports": "integer" } as const;
+  const fn = (n: string) => fns.find((x) => x.name === n);
+
+  it("exists right after 1400 (1400 untouched); drops only the old create_export_job and the status check", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files.indexOf(name)).toBe(files.indexOf("20261113001400_exports.sql") + 1);
+    const drops = matchesAll(/\bdrop\s+(function|constraint)\s+([\w.]+(?:\([^)]*\))?)/, sql).map((d) => `${d[1]} ${d[2]}`);
+    expect(drops).toEqual([
+      "constraint exports_status_check",
+      "function public.create_export_job(uuid, uuid, bigint, jsonb, text, integer, integer)",
+    ]);
+    expect(sql).not.toMatch(/\balter\s+table\s+public\.(?!exports\b)/);
+    expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
+    expect(sql).not.toMatch(/\bcreate\s+policy\b/);
+    expect(sql).not.toMatch(/\b(grant|revoke)\s+[a-z_\s,()]+\s+on\s+(?:table\s+)?public\./);
+    expect(sql).not.toMatch(/\bdelete\s+from\b/);
+    expect(fns.map((f) => f.name).sort()).toEqual(Object.keys(SIG).sort());
+  });
+
+  it("superseded status + purged_at + renderer_version with consistency checks", () => {
+    expect(flat).toContain("alter table public.exports add column purged_at timestamptz;");
+    expect(flat).toContain("alter table public.exports add column renderer_version integer not null default 1;");
+    expect(flat).toContain("check (renderer_version between 1 and 1000)");
+    expect(flat).toContain("check (status in ('queued', 'rendering', 'ready', 'failed', 'superseded'))");
+    expect(flat).toContain("status <> 'superseded' or (path is null and purged_at is not null and finished_at is not null)");
+    expect(flat).toContain("check (purged_at is null or status = 'superseded')");
+  });
+
+  it.each(Object.keys(SIG))("%s: SECURITY INVOKER, search_path '', service_role-only EXECUTE, latest definition", (n) => {
+    const f = fn(n);
+    expect(f, `${n} missing`).toBeDefined();
+    expect(latestFunction(n)!.body).toBe(f!.body);
+    expect(ws(f!.header)).toMatch(
+      new RegExp(`\\) returns ${RETURNS[n as keyof typeof RETURNS]} language plpgsql volatile security invoker set search_path = '' ?$`),
+    );
+    const sig = SIG[n as keyof typeof SIG];
+    expect(flat).toContain(`revoke all on function ${n}${sig} from public, anon, authenticated;`);
+    const grants = matchesAll(new RegExp(`grant execute on function ${esc(n)}\\s*\\([^)]*\\)\\s+to\\s+([a-z_, ]+?)\\s*;`), sql).map((g) =>
+      g[1].trim(),
+    );
+    expect(grants).toEqual(["service_role"]);
+    expect(ws(f!.body)).toContain("raise exception 'invalid_argument' using errcode = '22023';");
+  });
+
+  it("create_export_job: renderer version in reuse + insert, lease-only reaping of rendering rows, claimable running answer, cap counts all rows", () => {
+    const body = ws(fn("public.create_export_job")!.body);
+    expect(body).toContain("p_renderer_version not between 1 and 1000");
+    expect(body).toContain(
+      "((e.status = 'queued' and e.created_at <= now() - make_interval(secs => p_stale_seconds)) or (e.status = 'rendering' and e.lease_until < now() and (e.attempt >= 3 or e.created_at <= now() - interval '1 hour')))",
+    );
+    expect(body).toContain("and e.status = 'ready' and e.doc_rev = p_doc_rev and e.caption_lang = p_caption_lang and e.renderer_version = p_renderer_version");
+    expect(body).toContain("(e.status = 'queued' or (e.lease_until < now() and e.attempt < 3))");
+    expect(body).toContain("'state', v_state, 'claimable', coalesce(v_claim, false)");
+    expect(body).toContain("where e.user_id = p_user and e.created_at > now() - interval '24 hours';");
+    expect(body).toContain("values (p_book, p_user, p_doc_rev, p_doc, p_caption_lang, p_renderer_version, 'queued')");
+    const order = [
+      "perform pg_advisory_xact_lock(hashtextextended(p_user::text, 6));",
+      "return jsonb_build_object('status', 'not_found');",
+      "return jsonb_build_object('status', 'not_paid');",
+      "set status = 'failed', error_code = 'stale'",
+      "return jsonb_build_object('status', 'ready', 'export_id', v_id);",
+      "return jsonb_build_object('status', 'running'",
+      "return jsonb_build_object('status', 'daily_cap');",
+      "insert into public.exports",
+    ].map((x) => body.indexOf(x));
+    expect(order.every((i) => i > 0), JSON.stringify(order)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  it("supersede_exports: ready rows of (book, user) only, never deletes", () => {
+    const body = ws(fn("public.supersede_exports")!.body);
+    expect(body).toContain("set status = 'superseded', path = null, purged_at = now(), error_code = p_reason");
+    expect(body).toContain("where e.book_id = p_book and e.user_id = p_user and e.id = any (p_ids) and e.status = 'ready';");
+    expect(body).toContain("p_reason !~ '^[a-z0-9_]{1,64}$'");
+    expect(body).not.toMatch(/\bdelete\b/);
+  });
+
+  it("app code never deletes export rows (rows feed the daily cap)", () => {
+    for (const f of ["src/lib/db/exports.ts", "src/lib/pdf/job.ts", "src/lib/pdf/status.ts"]) {
+      const src = readFileSync(join(process.cwd(), f), "utf8");
+      expect(src, f).not.toMatch(/from\("exports"\)[\s\S]{0,200}\.delete\(/);
+      expect(src, f).not.toContain("deleteExportRows");
+    }
+  });
+
+  it("rls_check.sql covers 1500 and counts 146 checks", () => {
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain(name);
+    for (const tag of ["exports rekick", "exports reaper", "exports renderer version", "exports supersede", "exports stale"]) {
+      expect(rls).toContain(`RLS FAIL [${tag}]`);
+    }
+    expect(rls).toContain("RLS OK — all 146 checks passed");
+  });
+
+  it("database.types.ts: renderer_version / purged_at, 8-arg create_export_job, supersede_exports (hand-edited)", () => {
+    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
+    expect(types).toMatch(/exports: \{\s*Row: \{[\s\S]*?purged_at: string \| null\s*renderer_version: number[\s\S]*?\}\s*Insert:/);
+    expect(types).toMatch(/create_export_job: \{\s*Args: \{[\s\S]*?p_renderer_version: number[\s\S]*?\}\s*Returns: Json/);
+    expect(types).toMatch(/supersede_exports: \{\s*Args: \{ p_book: string; p_ids: string\[\]; p_reason: string; p_user: string \}\s*Returns: number/);
   });
 });

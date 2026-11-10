@@ -1,5 +1,5 @@
 -- =============================================================================
--- supabase/tests/rls_check.sql — live RLS / trigger / storage check (Milestones 1–7)
+-- supabase/tests/rls_check.sql — live RLS / trigger / storage check (Milestones 1–8)
 --
 -- HOW TO RUN
 --   1. Apply the migrations first (`npm run db:push`) — including
@@ -28,7 +28,15 @@
 --      record_stripe_order_event: service-role only, idempotent per event,
 --      refunds never revoke books.is_paid)
 --      and 20261112001300_payments_review.sql (orders status needs_review,
---      fulfil reports already_paid_other_session and skips no-op book updates).
+--      fulfil reports already_paid_other_session and skips no-op book updates)
+--      and 20261113001400_exports.sql (public.exports PDF jobs: owner reads
+--      status columns only, no client writes, create_export_job / claim_export /
+--      finish_export / fail_export service-role only, ready reuse / running /
+--      daily cap / stale reaping / lease tokens / attempt limit)
+--      and 20261113001500_exports_review.sql (status 'superseded' + purged_at:
+--      cleanup never deletes rows, so the daily cap keeps counting them;
+--      renderer_version in ready reuse; supersede_exports service-role only;
+--      reaper: rendering rows only with an expired lease, claimable re-kick).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -37,7 +45,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 121 checks passed
+--       RLS OK — all 146 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -53,7 +61,7 @@
 --   in an exception (pass or fail), so Postgres rolls back everything it did:
 --   the 2 fake auth.users (A, B), their profiles, books, photo rows (incl. the
 --   500 photo-cap test rows), storage object rows, agent runs/steps and
---   user_memory rows, unlock attempts, orders and stripe_events rows. Nothing is committed, so nothing needs cleaning up.
+--   user_memory rows, unlock attempts, orders, stripe_events and exports rows. Nothing is committed, so nothing needs cleaning up.
 --   (We deliberately do NOT use `begin; … rollback;`: when a statement errors,
 --   Postgres skips the rest of the batch, so a trailing `rollback;` would never
 --   run and the editor's connection would be left in an aborted transaction.)
@@ -105,6 +113,22 @@ declare
   v_txt      text;
   slug_pub   text := 'rls-check-pub-'   || substr(md5(random()::text), 1, 12);
   slug_unpub text := 'rls-check-unpub-' || substr(md5(random()::text), 1, 12);
+  book_x     uuid;
+  book_x2    uuid;
+  book_xb    uuid;
+  book_x3    uuid;
+  exp_1      uuid;
+  exp_2      uuid;
+  exp_3      uuid;
+  exp_4      uuid;
+  exp_5      uuid;
+  exp_6      uuid;
+  exp_7      uuid;
+  exp_b      uuid;
+  etok1      uuid;
+  etok2      uuid;
+  erev       bigint;
+  erev3      bigint;
   r          record;
   a2_created timestamptz;
   n          integer;
@@ -1916,6 +1940,456 @@ begin
     raise exception 'RLS FAIL [double payment]: refunded earlier order counted as a second payment (%)', v_txt;
   end if;
   reset role;
+  checks := checks + 1;
+
+  -- ---------------------------------------------------------------------------
+  -- 1400 (M8): public.exports — PDF export jobs
+  -- ---------------------------------------------------------------------------
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  insert into public.books (user_id, title) values (uid_a, 'RLS check export paid') returning id into book_x;
+  update public.books set is_paid = true, max_pages = 100, expires_at = null where id = book_x;
+  select doc_rev into erev from public.books where id = book_x;
+  insert into public.books (user_id, title) values (uid_a, 'RLS check export unpaid') returning id into book_x2;
+  insert into public.books (user_id, title) values (uid_b, 'RLS check export B') returning id into book_xb;
+  update public.books set is_paid = true where id = book_xb;
+
+  if has_table_privilege('anon', 'public.exports', 'select, insert, update, delete, truncate')
+     or has_table_privilege('authenticated', 'public.exports', 'select, insert, update, delete, truncate')
+     or has_column_privilege('anon', 'public.exports', 'id', 'select')
+     or not (select c.relrowsecurity from pg_class as c where c.oid = 'public.exports'::regclass)
+     or exists (select 1 from pg_policies as p
+                 where p.schemaname = 'public' and p.tablename = 'exports'
+                   and (p.cmd <> 'SELECT' or p.roles <> '{authenticated}')) then
+    raise exception 'RLS FAIL [exports grants]: table privileges for clients, RLS off or a non-owner-select policy';
+  end if;
+  checks := checks + 1;
+
+  if has_column_privilege('authenticated', 'public.exports', 'doc', 'select')
+     or has_column_privilege('authenticated', 'public.exports', 'path', 'select')
+     or has_column_privilege('authenticated', 'public.exports', 'lease_token', 'select')
+     or has_column_privilege('authenticated', 'public.exports', 'lease_until', 'select')
+     or has_column_privilege('authenticated', 'public.exports', 'user_id', 'select')
+     or has_column_privilege('authenticated', 'public.exports', 'status', 'update')
+     or has_column_privilege('authenticated', 'public.exports', 'status', 'insert')
+     or not has_column_privilege('authenticated', 'public.exports', 'status', 'select')
+     or not has_column_privilege('authenticated', 'public.exports', 'error_code', 'select')
+     or not has_column_privilege('authenticated', 'public.exports', 'page_count', 'select') then
+    raise exception 'RLS FAIL [exports columns]: authenticated column privileges are not exactly the status columns';
+  end if;
+  checks := checks + 1;
+
+  if has_function_privilege('authenticated', 'public.create_export_job(uuid, uuid, bigint, jsonb, text, integer, integer, integer)', 'execute')
+     or has_function_privilege('anon', 'public.create_export_job(uuid, uuid, bigint, jsonb, text, integer, integer, integer)', 'execute')
+     or has_function_privilege('authenticated', 'public.claim_export(uuid, integer)', 'execute')
+     or has_function_privilege('anon', 'public.claim_export(uuid, integer)', 'execute')
+     or has_function_privilege('authenticated', 'public.finish_export(uuid, uuid, text, bigint, integer)', 'execute')
+     or has_function_privilege('anon', 'public.finish_export(uuid, uuid, text, bigint, integer)', 'execute')
+     or has_function_privilege('authenticated', 'public.fail_export(uuid, uuid, text)', 'execute')
+     or has_function_privilege('anon', 'public.fail_export(uuid, uuid, text)', 'execute')
+     or not has_function_privilege('service_role', 'public.create_export_job(uuid, uuid, bigint, jsonb, text, integer, integer, integer)', 'execute')
+     or not has_function_privilege('service_role', 'public.claim_export(uuid, integer)', 'execute')
+     or not has_function_privilege('service_role', 'public.finish_export(uuid, uuid, text, bigint, integer)', 'execute')
+     or not has_function_privilege('service_role', 'public.fail_export(uuid, uuid, text)', 'execute')
+     or has_function_privilege('authenticated', 'public.supersede_exports(uuid, uuid, uuid[], text)', 'execute')
+     or has_function_privilege('anon', 'public.supersede_exports(uuid, uuid, uuid[], text)', 'execute')
+     or not has_function_privilege('service_role', 'public.supersede_exports(uuid, uuid, uuid[], text)', 'execute')
+     or to_regprocedure('public.create_export_job(uuid, uuid, bigint, jsonb, text, integer, integer)') is not null then
+    raise exception 'RLS FAIL [exports rpc grants]: export RPCs executable by a client role or not by service_role';
+  end if;
+  checks := checks + 1;
+
+  -- created → running (same book) → claim / finish with token checks → ready reuse
+  set local role service_role;
+  v_res := public.create_export_job(book_x, uid_a, erev, '{"pages":[{"n":1}]}', 'en', 2, 2, 600);
+  if v_res->>'status' is distinct from 'created' or v_res->>'export_id' is null then
+    raise exception 'RLS FAIL [exports create]: expected created, got %', v_res;
+  end if;
+  exp_1 := (v_res->>'export_id')::uuid;
+  select count(*) into n from public.exports
+   where id = exp_1 and status = 'queued' and user_id = uid_a and book_id = book_x and doc_rev = erev
+     and doc = '{"pages":[{"n":1}]}'::jsonb and caption_lang = 'en' and attempt = 0 and path is null;
+  if n <> 1 then raise exception 'RLS FAIL [exports create]: queued row not stored as expected'; end if;
+  checks := checks + 1;
+
+  v_res := public.create_export_job(book_x, uid_a, erev, '{"pages":[]}', 'ar', 2, 2, 600);
+  if v_res->>'status' is distinct from 'running' or (v_res->>'export_id')::uuid is distinct from exp_1 then
+    raise exception 'RLS FAIL [exports running]: second job for a book in flight returned %', v_res;
+  end if;
+  select count(*) into n from public.exports where book_id = book_x;
+  if n <> 1 then raise exception 'RLS FAIL [exports running]: % rows for one book in flight', n; end if;
+  checks := checks + 1;
+
+  v_res := public.create_export_job(book_x2, uid_a, 0, '{}', 'en', 2, 20, 600);
+  if v_res->>'status' is distinct from 'not_paid' then
+    raise exception 'RLS FAIL [exports not_paid]: unpaid book returned %', v_res;
+  end if;
+  v_res := public.create_export_job(book_xb, uid_a, 0, '{}', 'en', 2, 20, 600);
+  if v_res->>'status' is distinct from 'not_found' then
+    raise exception 'RLS FAIL [exports not_found]: another user''s book returned %', v_res;
+  end if;
+  v_res := public.create_export_job(gen_random_uuid(), uid_a, 0, '{}', 'en', 2, 20, 600);
+  if v_res->>'status' is distinct from 'not_found' then
+    raise exception 'RLS FAIL [exports not_found]: missing book returned %', v_res;
+  end if;
+  v_res := public.create_export_job(book_x, uid_a, erev + 5, '{}', 'en', 2, 20, 600);
+  if v_res->>'status' is distinct from 'stale_rev' or (v_res->>'doc_rev')::bigint is distinct from erev then
+    raise exception 'RLS FAIL [exports stale_rev]: wrong doc_rev returned %', v_res;
+  end if;
+  select count(*) into n from public.exports where user_id = uid_a;
+  if n <> 1 then raise exception 'RLS FAIL [exports not_paid]: a refused call inserted a row (% rows)', n; end if;
+  checks := checks + 1;
+
+  etok1 := public.claim_export(exp_1, 120);
+  etok2 := public.claim_export(exp_1, 120);
+  if etok1 is null or etok2 is not null then
+    raise exception 'RLS FAIL [exports claim]: first claim % / second claim of a live lease %', etok1, etok2;
+  end if;
+  select count(*) into n from public.exports
+   where id = exp_1 and status = 'rendering' and attempt = 1 and lease_token = etok1 and lease_until > now();
+  if n <> 1 then raise exception 'RLS FAIL [exports claim]: lease not recorded'; end if;
+  checks := checks + 1;
+
+  if public.finish_export(exp_1, gen_random_uuid(), uid_a || '/' || book_x || '/' || exp_1 || '.pdf', 1000, 3)
+     or public.fail_export(exp_1, gen_random_uuid(), 'boom') then
+    raise exception 'RLS FAIL [exports token]: finish / fail accepted a wrong lease token';
+  end if;
+  if not public.finish_export(exp_1, etok1, uid_a || '/' || book_x || '/' || exp_1 || '.pdf', 1000, 3) then
+    raise exception 'RLS FAIL [exports token]: finish with the right token returned false';
+  end if;
+  select count(*) into n from public.exports
+   where id = exp_1 and status = 'ready' and bytes = 1000 and page_count = 3 and finished_at is not null
+     and lease_token is null and lease_until is null;
+  if n <> 1 then raise exception 'RLS FAIL [exports token]: ready row not stored as expected'; end if;
+  if public.finish_export(exp_1, etok1, uid_a || '/' || book_x || '/' || exp_1 || '.pdf', 1000, 3)
+     or public.fail_export(exp_1, etok1, 'late') or public.claim_export(exp_1, 120) is not null then
+    raise exception 'RLS FAIL [exports token]: a ready job could be finished / failed / claimed again';
+  end if;
+  checks := checks + 1;
+
+  v_res := public.create_export_job(book_x, uid_a, erev, '{"pages":[]}', 'en', 2, 2, 600);
+  if v_res->>'status' is distinct from 'ready' or (v_res->>'export_id')::uuid is distinct from exp_1 then
+    raise exception 'RLS FAIL [exports ready reuse]: same doc_rev + lang returned %', v_res;
+  end if;
+  -- reuse works even with the daily cap at 0 (no row is created)
+  v_res := public.create_export_job(book_x, uid_a, erev, '{"pages":[]}', 'en', 2, 0, 600);
+  if v_res->>'status' is distinct from 'ready' then
+    raise exception 'RLS FAIL [exports ready reuse]: reuse blocked by the daily cap: %', v_res;
+  end if;
+  -- another caption_lang is a different PDF
+  v_res := public.create_export_job(book_x, uid_a, erev, '{"pages":[]}', 'ar', 2, 2, 600);
+  if v_res->>'status' is distinct from 'created' then
+    raise exception 'RLS FAIL [exports ready reuse]: other caption_lang returned %', v_res;
+  end if;
+  exp_2 := (v_res->>'export_id')::uuid;
+  checks := checks + 1;
+
+  etok1 := public.claim_export(exp_2, 120);
+  begin
+    perform public.fail_export(exp_2, etok1, 'Not A Code!');
+    raise exception 'RLS FAIL [exports fail]: free-text error code accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  if not public.fail_export(exp_2, etok1, 'render_timeout') then
+    raise exception 'RLS FAIL [exports fail]: fail with the right token returned false';
+  end if;
+  select count(*) into n from public.exports
+   where id = exp_2 and status = 'failed' and error_code = 'render_timeout' and finished_at is not null
+     and lease_token is null;
+  if n <> 1 then raise exception 'RLS FAIL [exports fail]: failed row not stored as expected'; end if;
+  checks := checks + 1;
+
+  -- 2 rows in the last 24 h (ready + failed) → cap 2 reached; cap 3 → created
+  v_res := public.create_export_job(book_x, uid_a, erev, '{"pages":[]}', 'ar', 2, 2, 600);
+  if v_res->>'status' is distinct from 'daily_cap' then
+    raise exception 'RLS FAIL [exports daily_cap]: cap reached returned %', v_res;
+  end if;
+  v_res := public.create_export_job(book_x, uid_a, erev, '{"pages":[]}', 'ar', 2, 3, 600);
+  if v_res->>'status' is distinct from 'created' then
+    raise exception 'RLS FAIL [exports daily_cap]: under the cap returned %', v_res;
+  end if;
+  exp_3 := (v_res->>'export_id')::uuid;
+  checks := checks + 1;
+
+  -- stale reaping: an old queued job and a rendering job with an expired lease
+  reset role;
+  update public.exports set created_at = now() - interval '1 hour' where id = exp_3;
+  set local role service_role;
+  v_res := public.create_export_job(book_x, uid_a, erev, '{"pages":[]}', 'ar', 2, 10, 600);
+  if v_res->>'status' is distinct from 'created' then
+    raise exception 'RLS FAIL [exports stale]: old queued job not reaped (%)', v_res;
+  end if;
+  exp_4 := (v_res->>'export_id')::uuid;
+  if not exists (select 1 from public.exports
+                  where id = exp_3 and status = 'failed' and error_code = 'stale' and finished_at is not null) then
+    raise exception 'RLS FAIL [exports stale]: old queued job not marked failed/stale';
+  end if;
+  etok1 := public.claim_export(exp_4, 120);
+  reset role;
+  update public.exports set lease_until = now() - interval '1 second' where id = exp_4;
+  set local role service_role;
+  -- an expired lease may be re-claimed; the old worker's token is then dead
+  etok2 := public.claim_export(exp_4, 120);
+  if etok2 is null or etok2 = etok1
+     or public.finish_export(exp_4, etok1, uid_a || '/' || book_x || '/' || exp_4 || '.pdf', 10, 1) then
+    raise exception 'RLS FAIL [exports stale]: expired lease not re-claimable or old token still finishes';
+  end if;
+  checks := checks + 1;
+
+  -- 1500 N3: an expired lease with claims left is NOT reaped — create_export_job reports it as
+  -- running + claimable and the caller re-kicks it (claim_export, attempt 3 of 3)
+  reset role;
+  update public.exports set lease_until = now() - interval '1 second' where id = exp_4;
+  set local role service_role;
+  v_res := public.create_export_job(book_x, uid_a, erev, '{"pages":[]}', 'ar', 2, 10, 600);
+  if v_res->>'status' is distinct from 'running' or (v_res->>'export_id')::uuid is distinct from exp_4
+     or v_res->>'state' is distinct from 'rendering' or (v_res->>'claimable')::boolean is not true then
+    raise exception 'RLS FAIL [exports rekick]: expired lease with claims left returned %', v_res;
+  end if;
+  etok1 := public.claim_export(exp_4, 120);
+  if etok1 is null or etok1 = etok2
+     or (select attempt from public.exports where id = exp_4) <> 3 then
+    raise exception 'RLS FAIL [exports rekick]: claimable job could not be re-claimed';
+  end if;
+  checks := checks + 1;
+
+  -- 1500 N2: a live lease is never reaped, however old the row
+  reset role;
+  update public.exports set created_at = now() - interval '2 hours' where id = exp_4;
+  set local role service_role;
+  v_res := public.create_export_job(book_x, uid_a, erev, '{"pages":[]}', 'ar', 2, 10, 600);
+  if v_res->>'status' is distinct from 'running' or (v_res->>'export_id')::uuid is distinct from exp_4
+     or (v_res->>'claimable')::boolean is not false
+     or not exists (select 1 from public.exports where id = exp_4 and status = 'rendering' and lease_token = etok1) then
+    raise exception 'RLS FAIL [exports reaper]: rendering job with a live lease reaped or claimable (%)', v_res;
+  end if;
+  checks := checks + 1;
+
+  -- expired lease + attempts used up → reaped; its lease holder can no longer finish
+  reset role;
+  update public.exports set lease_until = now() - interval '1 second' where id = exp_4;
+  set local role service_role;
+  v_res := public.create_export_job(book_x, uid_a, erev, '{"pages":[]}', 'ar', 2, 10, 600);
+  if v_res->>'status' is distinct from 'created' then
+    raise exception 'RLS FAIL [exports stale]: rendering job with expired lease not reaped (%)', v_res;
+  end if;
+  exp_5 := (v_res->>'export_id')::uuid;
+  if public.finish_export(exp_4, etok1, uid_a || '/' || book_x || '/' || exp_4 || '.pdf', 10, 1)
+     or not exists (select 1 from public.exports where id = exp_4 and status = 'failed' and error_code = 'stale') then
+    raise exception 'RLS FAIL [exports stale]: reaped job could still be finished by its lease holder';
+  end if;
+  checks := checks + 1;
+
+  -- path must be exactly {user}/{book}/{id}.pdf; at most 3 claims
+  etok1 := public.claim_export(exp_5, 120);
+  begin
+    perform public.finish_export(exp_5, etok1, uid_b || '/' || book_x || '/' || exp_5 || '.pdf', 10, 1);
+    raise exception 'RLS FAIL [exports path]: finish accepted a path outside {user}/{book}/{id}.pdf';
+  exception when check_violation then null;
+  end;
+  begin
+    perform public.finish_export(exp_5, etok1, uid_a || '/' || book_x || '/' || exp_5 || '.pdf', 0, 1);
+    raise exception 'RLS FAIL [exports path]: finish accepted 0 bytes';
+  exception when check_violation then null;
+  end;
+  for n in 1..2 loop
+    reset role;
+    update public.exports set lease_until = now() - interval '1 second' where id = exp_5;
+    set local role service_role;
+    if public.claim_export(exp_5, 120) is null then
+      raise exception 'RLS FAIL [exports attempts]: claim % of 3 refused', n + 1;
+    end if;
+  end loop;
+  reset role;
+  update public.exports set lease_until = now() - interval '1 second' where id = exp_5;
+  set local role service_role;
+  if public.claim_export(exp_5, 120) is not null
+     or (select attempt from public.exports where id = exp_5) <> 3 then
+    raise exception 'RLS FAIL [exports attempts]: a 4th claim was granted';
+  end if;
+  checks := checks + 1;
+
+  begin
+    perform public.create_export_job(book_x, uid_a, erev, '{}', 'fr', 2, 10, 600);
+    raise exception 'RLS FAIL [exports args]: caption_lang fr accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.create_export_job(book_x, uid_a, erev, '[]', 'en', 2, 10, 600);
+    raise exception 'RLS FAIL [exports args]: non-object doc accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.create_export_job(book_x, uid_a, erev, '{}', 'en', 2, 10, 5);
+    raise exception 'RLS FAIL [exports args]: stale window of 5 s accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  checks := checks + 1;
+
+  -- one in-flight job per book, even for a direct insert (exp_5 is still rendering)
+  reset role;
+  begin
+    insert into public.exports (book_id, user_id, doc_rev, doc) values (book_x, uid_a, erev, '{}');
+    raise exception 'RLS FAIL [exports one active]: a second in-flight job for one book was accepted';
+  exception when unique_violation then null;
+  end;
+  insert into public.exports (book_id, user_id, doc_rev, doc, status) values (book_xb, uid_b, 0, '{"b":1}', 'queued')
+  returning id into exp_b;
+  checks := checks + 1;
+
+  -- 1500 N1: a ready PDF is reused only by the same renderer_version
+  reset role;
+  insert into public.books (user_id, title) values (uid_a, 'RLS check export versions') returning id into book_x3;
+  update public.books set is_paid = true, max_pages = 100, expires_at = null where id = book_x3;
+  select doc_rev into erev3 from public.books where id = book_x3;
+  set local role service_role;
+  v_res := public.create_export_job(book_x3, uid_a, erev3, '{"pages":[]}', 'en', 1, 100, 600);
+  exp_6 := (v_res->>'export_id')::uuid;
+  etok1 := public.claim_export(exp_6, 120);
+  if exp_6 is null or etok1 is null
+     or not public.finish_export(exp_6, etok1, uid_a || '/' || book_x3 || '/' || exp_6 || '.pdf', 100, 2) then
+    raise exception 'RLS FAIL [exports renderer version]: could not make a version-1 ready export (%)', v_res;
+  end if;
+  v_res := public.create_export_job(book_x3, uid_a, erev3, '{"pages":[]}', 'en', 1, 100, 600);
+  if v_res->>'status' is distinct from 'ready' or (v_res->>'export_id')::uuid is distinct from exp_6 then
+    raise exception 'RLS FAIL [exports renderer version]: same renderer version not reused (%)', v_res;
+  end if;
+  v_res := public.create_export_job(book_x3, uid_a, erev3, '{"pages":[]}', 'en', 2, 100, 600);
+  if v_res->>'status' is distinct from 'created' then
+    raise exception 'RLS FAIL [exports renderer version]: a PDF of another renderer version was reused (%)', v_res;
+  end if;
+  exp_7 := (v_res->>'export_id')::uuid;
+  if not exists (select 1 from public.exports where id = exp_7 and renderer_version = 2)
+     or not exists (select 1 from public.exports where id = exp_6 and renderer_version = 1) then
+    raise exception 'RLS FAIL [exports renderer version]: renderer_version not stored';
+  end if;
+  begin
+    perform public.create_export_job(book_x3, uid_a, erev3, '{}', 'en', 0, 100, 600);
+    raise exception 'RLS FAIL [exports renderer version]: renderer version 0 accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  checks := checks + 1;
+
+  -- 1500 S1: cleanup supersedes (never deletes) — the row survives, is never reused, still counts
+  etok1 := public.claim_export(exp_7, 120);
+  if not public.finish_export(exp_7, etok1, uid_a || '/' || book_x3 || '/' || exp_7 || '.pdf', 100, 2) then
+    raise exception 'RLS FAIL [exports supersede]: could not finish the newer export';
+  end if;
+  if public.supersede_exports(book_x3, uid_b, array[exp_6], null) <> 0
+     or public.supersede_exports(book_x, uid_a, array[exp_5], null) <> 0 then
+    raise exception 'RLS FAIL [exports supersede]: superseded another user''s or a non-ready row';
+  end if;
+  n := public.supersede_exports(book_x3, uid_a, array[exp_6], null);
+  if n <> 1
+     or not exists (select 1 from public.exports
+                     where id = exp_6 and status = 'superseded' and path is null and purged_at is not null
+                       and finished_at is not null and bytes = 100) then
+    raise exception 'RLS FAIL [exports supersede]: older ready row not kept as superseded';
+  end if;
+  select count(*) into n from public.exports
+   where user_id = uid_a and created_at > now() - interval '24 hours';
+  -- cap = rows so far: a reused superseded row would answer ready, a deleted one created
+  v_res := public.create_export_job(book_x3, uid_a, erev3, '{"pages":[]}', 'en', 1, n, 600);
+  if v_res->>'status' is distinct from 'daily_cap' then
+    raise exception 'RLS FAIL [exports supersede]: superseded row reused or not counted by the cap (%)', v_res;
+  end if;
+  begin
+    perform public.supersede_exports(book_x3, uid_a, array[exp_7], 'Not A Code!');
+    raise exception 'RLS FAIL [exports supersede]: free-text reason accepted';
+  exception when invalid_parameter_value then null;
+  end;
+  reset role;
+  begin
+    update public.exports set status = 'superseded', purged_at = now() where id = exp_7;
+    raise exception 'RLS FAIL [exports supersede]: superseded row kept its path';
+  exception when check_violation then null;
+  end;
+  set local role service_role;
+  -- the missing-file path marks the row too (reason recorded), and a new job can then be made
+  n := public.supersede_exports(book_x3, uid_a, array[exp_7], 'missing_file');
+  if n <> 1
+     or not exists (select 1 from public.exports where id = exp_7 and status = 'superseded' and error_code = 'missing_file') then
+    raise exception 'RLS FAIL [exports supersede]: missing-file row not marked';
+  end if;
+  v_res := public.create_export_job(book_x3, uid_a, erev3, '{"pages":[]}', 'en', 2, 100, 600);
+  if v_res->>'status' is distinct from 'created' then
+    raise exception 'RLS FAIL [exports supersede]: missing-file row still reused (%)', v_res;
+  end if;
+  checks := checks + 1;
+
+  -- owner reads status columns only; other users see nothing; no client writes
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.exports where book_id = book_x and status in ('ready', 'failed', 'rendering');
+  if n <> 5 then raise exception 'RLS FAIL [exports owner read]: A sees % of 5 own export rows', n; end if;
+  select count(*) into n from public.exports where id = exp_b;
+  if n <> 0 then raise exception 'RLS FAIL [exports cross-user]: A can read B''s export row'; end if;
+  checks := checks + 1;
+
+  begin
+    select count(*) into n from public.exports where doc is not null;
+    raise exception 'RLS FAIL [exports doc]: owner could read the doc snapshot';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    select count(*) into n from public.exports where path is not null or lease_token is not null;
+    raise exception 'RLS FAIL [exports doc]: owner could read path / lease_token';
+  exception when insufficient_privilege then null;
+  end;
+  checks := checks + 1;
+
+  begin
+    insert into public.exports (book_id, user_id, doc_rev, doc) values (book_x2, uid_a, 0, '{}');
+    raise exception 'RLS FAIL [exports client write]: owner could insert an export';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.exports set status = 'ready' where id = exp_2;
+    raise exception 'RLS FAIL [exports client write]: owner could update an export';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    delete from public.exports where id = exp_2;
+    raise exception 'RLS FAIL [exports client write]: owner could delete an export';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.create_export_job(book_x, uid_a, erev, '{}', 'en', 2, 10, 600);
+    raise exception 'RLS FAIL [exports client rpc]: owner could execute create_export_job';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.claim_export(exp_5, 120);
+    raise exception 'RLS FAIL [exports client rpc]: owner could execute claim_export';
+  exception when insufficient_privilege then null;
+  end;
+  checks := checks + 1;
+
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_b, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.exports where book_id = book_x;
+  if n <> 0 then raise exception 'RLS FAIL [exports cross-user]: B can read % of A''s export rows', n; end if;
+  select count(*) into n from public.exports where id = exp_b;
+  if n <> 1 then raise exception 'RLS FAIL [exports cross-user]: B cannot read own export row'; end if;
+  reset role;
+
+  set local role anon;
+  perform set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
+  begin
+    select count(*) into n from public.exports;
+    raise exception 'RLS FAIL [exports anon]: anon could read exports (% rows)', n;
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  checks := checks + 1;
+
+  -- rows cascade with the book
+  delete from public.books where id = book_xb;
+  if exists (select 1 from public.exports where id = exp_b) then
+    raise exception 'RLS FAIL [exports cascade]: export row survived its book';
+  end if;
   checks := checks + 1;
 
   -- ---------------------------------------------------------------------------

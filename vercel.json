@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "fluid": true,
+  "functions": {
+    "src/app/api/books/*/pdf/route.ts": {
+      "maxDuration": 300
+    }
+  }
+}
