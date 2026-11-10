@@ -10,6 +10,7 @@ import { EDITOR_TOOLS } from "@/components/editor/tools/registry";
 import type { EditorTool } from "@/components/editor/tools/types";
 import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
 import { replacePhoto, setCover } from "@/lib/book/edit-ops";
+import type { BookFormat } from "@/lib/book/types";
 import { devEditorData, devTransport, type DevAiMode, type DevSaveMode } from "@/lib/editor/dev-fixture";
 import { withDevPagesData } from "@/lib/editor/dev-pages-fixture";
 
@@ -57,6 +58,7 @@ export function DevEditorClient({
   pages = null,
   published = false,
   paid = false,
+  format = "A5_PORTRAIT",
   paymentsEnabled = false,
 }: {
   mode: DevSaveMode;
@@ -64,10 +66,12 @@ export function DevEditorClient({
   pages?: number | null;
   published?: boolean;
   paid?: boolean;
+  format?: BookFormat;
   paymentsEnabled?: boolean;
 }) {
   const [data] = useState(() => {
-    const base = withDevPagesData(devEditorData(mode, ai), pages);
+    const fixture = withDevPagesData(devEditorData(mode, ai), pages);
+    const base = format === fixture.doc.format ? fixture : { ...fixture, doc: { ...fixture.doc, format } };
     const d = paid ? { ...base, book: { ...base.book, isPaid: true, maxPages: 100 } } : base;
     return published ? { ...d, publishedRev: d.docRev } : d;
   });

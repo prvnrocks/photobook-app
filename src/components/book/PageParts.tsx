@@ -4,41 +4,50 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import { cropBoxStyle, rectStyle, type RenderSlot } from "@/lib/book/render";
-import type { Rect } from "@/lib/book/types";
-import { BLEED_MM, PAGE_MM, SHEET_MM } from "@/lib/layouts";
+import { pageMm, sheetMm } from "@/lib/book/format";
+import { withPageAspect } from "@/lib/book/format-style";
+import type { BookFormat, Rect } from "@/lib/book/types";
+import { BLEED_MM } from "@/lib/layouts";
 
 export type BookRenderMode = "edit" | "view" | "print";
 
 /**
- * A5 page box (148×210). In print mode: the 154×216 mm bleed sheet instead (see PrintSheet). `container-type: inline-size` makes `cqw` = 1 % of the page width, so
+ * Trim page box of `format` (A5 portrait 148×210 via the aspect class; other formats add an inline
+ * aspect-ratio, see format-style.ts). In print mode: the format's bleed sheet instead (see PrintSheet). `container-type: inline-size` makes `cqw` = 1 % of the page width, so
  * every text size scales with the page: strip thumbnail, big editor page and print look identical.
  */
 export function PageFrame({
   background,
   mode,
+  format,
   className,
   children,
   data,
 }: {
   background: string;
   mode: BookRenderMode;
+  /** doc.format; missing → A5 portrait. */
+  format?: BookFormat | null;
   className?: string;
   children?: ReactNode;
   data?: Record<`data-${string}`, string>;
 }) {
   if (mode === "print") {
     return (
-      <PrintSheet background={background} className={className} data={data}>
+      <PrintSheet background={background} format={format} className={className} data={data}>
         {children}
       </PrintSheet>
     );
   }
-  const style: CSSProperties = {
-    containerType: "inline-size",
-    background,
-    printColorAdjust: "exact",
-    WebkitPrintColorAdjust: "exact",
-  };
+  const style: CSSProperties = withPageAspect(
+    {
+      containerType: "inline-size",
+      background,
+      printColorAdjust: "exact",
+      WebkitPrintColorAdjust: "exact",
+    },
+    format,
+  );
   return (
     <div
       className={`relative aspect-[148/210] w-full overflow-hidden select-none ${className ?? ""}`}
@@ -52,7 +61,8 @@ export function PageFrame({
 }
 
 /**
- * Print sheet (D-050): 154×216 mm = 148×210 trim + 3 mm bleed on every side, in CSS mm so the
+ * Print sheet (D-050): sheetMm(format) = trim page + 3 mm bleed on every side (portrait 154×216,
+ * landscape 216×154 mm), in CSS mm so the
  * PDF page maps 1:1. The background fills the whole sheet (bleed included). Children are laid
  * out in the trim box, which is the `cqw` container — text sizes match the viewer exactly. Photo
  * slots from a `bleed` render model use rects that run past 0..100 % of the trim box into the
@@ -60,18 +70,22 @@ export function PageFrame({
  */
 function PrintSheet({
   background,
+  format,
   className,
   children,
   data,
 }: {
   background: string;
+  format?: BookFormat | null;
   className?: string;
   children?: ReactNode;
   data?: Record<`data-${string}`, string>;
 }) {
+  const sheetSize = sheetMm(format);
+  const pageSize = pageMm(format);
   const sheet: CSSProperties = {
-    width: `${SHEET_MM.w}mm`,
-    height: `${SHEET_MM.h}mm`,
+    width: `${sheetSize.w}mm`,
+    height: `${sheetSize.h}mm`,
     background,
     printColorAdjust: "exact",
     WebkitPrintColorAdjust: "exact",
@@ -79,8 +93,8 @@ function PrintSheet({
   const trim: CSSProperties = {
     left: `${BLEED_MM}mm`,
     top: `${BLEED_MM}mm`,
-    width: `${PAGE_MM.w}mm`,
-    height: `${PAGE_MM.h}mm`,
+    width: `${pageSize.w}mm`,
+    height: `${pageSize.h}mm`,
     containerType: "inline-size",
   };
   return (

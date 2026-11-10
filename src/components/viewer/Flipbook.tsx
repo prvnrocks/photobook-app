@@ -10,6 +10,8 @@
 //   references to pages/elements so the detached DOM can be GC'd (retirePageFlip).
 // - page-flip only re-measures on window "resize"; the stage is measured with ResizeObserver
 //   and we call update() after our own size change.
+// - Page ratio comes from doc.format (pageRatio): fitBook sizes the stage and page-flip gets the
+//   same width/height; settings are read once, so a format change remounts the book (key).
 // - Orientation is decided by us (viewport >= 768 px = spread), not by page-flip's minWidth
 //   heuristic; switching remounts the book at the same page.
 // - Children are static (keyed by page count) and read doc/photos/current page from context:
@@ -35,9 +37,10 @@ import {
   type Ref,
 } from "react";
 import { BookPage, type RenderPhotos } from "@/components/book/BookPage";
+import { withPageAspect } from "@/lib/book/format-style";
 import { backgroundColor } from "@/lib/book/render";
 import type { BookDoc } from "@/lib/book/types";
-import { fitBook, PAGE_RATIO_H, PAGE_RATIO_W, SPREAD_MEDIA_QUERY } from "@/lib/viewer/fit";
+import { fitBook, pageRatio, SPREAD_MEDIA_QUERY, type PageRatio } from "@/lib/viewer/fit";
 import { flipLayout, flipPageKind, startIndexFor, type FlipLayout } from "@/lib/viewer/pages";
 import { inPhotoWindow, photoWindow, spreadStart, type PhotoWindow } from "@/lib/viewer/window";
 import { FlipPage } from "./FlipPage";
@@ -138,7 +141,13 @@ function WindowedPage({ index }: { index: number }) {
   const kind = flipPageKind(ctx.layout, index).kind;
   if (kind === "end") return <>{ctx.endPage}</>;
   if (kind === "filler") {
-    return <div className="aspect-[148/210] w-full" style={{ background: backgroundColor(ctx.doc.style.background) }} data-filler="true" />;
+    return (
+      <div
+        className="aspect-[148/210] w-full"
+        style={withPageAspect({ background: backgroundColor(ctx.doc.style.background) }, ctx.doc.format)}
+        data-filler="true"
+      />
+    );
   }
   const inWin = inPhotoWindow(ctx.win, index);
   return (
@@ -283,13 +292,15 @@ type HTMLFlipBookProps = ComponentProps<typeof HTMLFlipBook>;
 type BookInstanceProps = {
   pageCount: number;
   spread: boolean;
+  /** Page width:height of doc.format (page-flip only uses the ratio with size "stretch"). */
+  ratio: PageRatio;
   startPage: number;
   onInstance: (pf: PageFlipInstance | null) => void;
   onFlipIndex: (index: number) => void;
 };
 
 /** One react-pageflip book. Remounted (keyed) when the page count or spread mode changes. */
-function BookInstance({ pageCount, spread, startPage, onInstance, onFlipIndex }: BookInstanceProps) {
+function BookInstance({ pageCount, spread, ratio, startPage, onInstance, onFlipIndex }: BookInstanceProps) {
   const bookRef = useRef<{ pageFlip(): PageFlipInstance | undefined } | null>(null);
   const instRef = useRef<PageFlipInstance | null>(null);
   const cbRef = useRef({ onInstance, onFlipIndex });
@@ -301,8 +312,8 @@ function BookInstance({ pageCount, spread, startPage, onInstance, onFlipIndex }:
   const [settings] = useState(() => ({
     startPage,
     size: "stretch" as const,
-    width: PAGE_RATIO_W,
-    height: PAGE_RATIO_H,
+    width: ratio.w,
+    height: ratio.h,
     // Phones: usePortrait + a huge minWidth forces single-page mode. Spread: usePortrait false.
     // page-flip copies minWidth/minHeight into inline styles; overridden by !min-w-0 below.
     minWidth: spread ? 1 : 4000,
@@ -396,7 +407,8 @@ export function Flipbook({
     [doc.pages.length, hasEnd, spread],
   );
   const pageCount = layout.count;
-  const box = useMemo(() => (avail && spread !== null ? fitBook(avail, spread) : null), [avail, spread]);
+  const ratio = useMemo(() => pageRatio(doc.format), [doc.format]);
+  const box = useMemo(() => (avail && spread !== null ? fitBook(avail, spread, ratio) : null), [avail, spread, ratio]);
 
   const clamp = useCallback((i: number) => Math.min(Math.max(Math.trunc(i) || 0, 0), pageCount - 1), [pageCount]);
   const [current, setCurrent] = useState(() => clamp(currentPage ?? 0));
@@ -494,9 +506,10 @@ export function Flipbook({
         <div style={{ width: box.width, height: box.height }} className="relative shrink-0">
           <PagesContext.Provider value={ctx}>
             <BookInstance
-              key={`${pageCount}:${spread ? "spread" : "single"}`}
+              key={`${pageCount}:${spread ? "spread" : "single"}:${ratio.w}x${ratio.h}`}
               pageCount={pageCount}
               spread={spread}
+              ratio={ratio}
               startPage={startIndexFor(layout, current)}
               onInstance={onInstance}
               onFlipIndex={onFlipIndex}

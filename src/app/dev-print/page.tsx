@@ -1,7 +1,8 @@
 // Dev-only visual check for print mode (D-050 bleed): the dev fixture doc rendered through
 // <BookPage mode="print"> at real size (154×216 mm sheets = 148×210 trim + 3 mm bleed), cover +
 // a few pages incl. Arabic captions. Dashed guides (outside <BookPage>) mark the trim (red) and
-// the 4 mm text safe zone (blue); `?guides=0` hides them.
+// the 4 mm text safe zone (blue); `?guides=0` hides them. `?format=landscape` renders the fixture
+// as an A5 landscape book (216×154 mm sheets; portrait layouts until M10b) — also with `?sheets=`.
 // `?sheets=from-to` instead renders exactly what /print/[bookId] renders (<PrintDocument>, the
 // print CSS and the __PRINT_READY__ signal) for that sheet range of the fixture doc, without the
 // DB or a token — for Playwright / page.pdf checks. Add `?printAssets=1` to point every photo at
@@ -11,21 +12,22 @@
 import { notFound } from "next/navigation";
 import { BookPage } from "@/components/book/BookPage";
 import { PrintDocument } from "@/components/print/PrintDocument";
-import { devPreviewDoc, devPreviewPhotos } from "@/lib/book/dev-preview";
-import { BLEED_MM, PAGE_MM, SAFE_MM, SHEET_MM } from "@/lib/layouts";
+import { devPreviewDoc, devPreviewPhotos, parseDevFormat } from "@/lib/book/dev-preview";
+import { pageMm, sheetMm, type SizeMm } from "@/lib/book/format";
+import { BLEED_MM, SAFE_MM } from "@/lib/layouts";
 import { printRenderPhotos, printSheetTargets } from "@/lib/pdf/print-doc";
 
 export const dynamic = "force-dynamic";
 
-function Guides() {
+function Guides({ sheet }: { sheet: SizeMm }) {
   const box = (inset: number, color: string) => (
     <div
       className="pointer-events-none absolute"
       style={{
         left: `${inset}mm`,
         top: `${inset}mm`,
-        width: `${SHEET_MM.w - 2 * inset}mm`,
-        height: `${SHEET_MM.h - 2 * inset}mm`,
+        width: `${sheet.w - 2 * inset}mm`,
+        height: `${sheet.h - 2 * inset}mm`,
         outline: `0.3mm dashed ${color}`,
       }}
     />
@@ -46,7 +48,10 @@ export default async function DevPrintPreview({
   if (process.env.NODE_ENV === "production") notFound();
   const sp = await searchParams;
   const guides = sp.guides !== "0";
-  const doc = devPreviewDoc();
+  const format = parseDevFormat(sp.format);
+  const doc = devPreviewDoc(format);
+  const sheet = sheetMm(format);
+  const trim = pageMm(format);
   const photos = devPreviewPhotos();
   if (typeof sp.sheets === "string") {
     const m = /^(\d{1,3})-(\d{1,3})$/.exec(sp.sheets);
@@ -65,13 +70,13 @@ export default async function DevPrintPreview({
     <main className="bg-neutral-300 p-4" data-testid="dev-print">
       <h1 className="mb-1 text-lg font-semibold">Print preview (dev only)</h1>
       <p className="mb-4 text-sm text-neutral-700">
-        Sheet {SHEET_MM.w}×{SHEET_MM.h} mm, trim {PAGE_MM.w}×{PAGE_MM.h} mm (red), text safe zone {SAFE_MM} mm (blue).
+        Sheet {sheet.w}×{sheet.h} mm, trim {trim.w}×{trim.h} mm (red), text safe zone {SAFE_MM} mm (blue).
       </p>
       <div className="flex flex-col items-start gap-6">
         {targets.map((t) => (
           <div key={String(t)} className="relative shadow-lg">
             <BookPage doc={doc} page={t} mode="print" photos={photos} captionLang="ar" priority />
-            {guides ? <Guides /> : null}
+            {guides ? <Guides sheet={sheet} /> : null}
           </div>
         ))}
       </div>

@@ -27,6 +27,7 @@ export function BookCover({ doc, mode, photos, captionLang, renderSlotOverlay, r
     <PageFrame
       background={backgroundColor(doc.style.background)}
       mode={mode}
+      format={doc.format}
       className={className}
       data={{ "data-page": "cover", "data-layout": m.layoutId }}
     >

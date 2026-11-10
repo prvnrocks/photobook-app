@@ -23,13 +23,13 @@ export function slotIsLowRes(
 ): boolean {
   if (page === "cover") {
     const p = doc.cover.photoId !== null ? byId.get(doc.cover.photoId) : undefined;
-    return p ? isSlotLowRes(p, doc.cover.layout, 0, 1) : false;
+    return p ? isSlotLowRes(p, doc.cover.layout, 0, 1, doc.format) : false;
   }
   const pg = doc.pages[page];
   const slot = pg?.slots[slotIdx];
   if (!pg || !slot || slot.photoId === null) return false;
   const p = byId.get(slot.photoId);
-  return p ? isSlotLowRes(p, pg.layout, slotIdx, slot.crop.zoom) : false;
+  return p ? isSlotLowRes(p, pg.layout, slotIdx, slot.crop.zoom, doc.format) : false;
 }
 
 export function LowResBadge({ page, slotIdx }: { page: EditorPosition; slotIdx: number }) {

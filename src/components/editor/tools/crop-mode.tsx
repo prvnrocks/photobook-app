@@ -38,7 +38,7 @@ export function cropTarget(ctx: Pick<EditorContextValue, "state" | "photos">): C
   const slot = page?.slots[sel.slotIdx];
   if (!page || !slot || slot.photoId === null) return null;
   const p = ctx.photos.web[slot.photoId];
-  const mm = layoutSlotMm(page.layout, sel.slotIdx);
+  const mm = layoutSlotMm(page.layout, sel.slotIdx, ctx.state.doc.format);
   if (!p?.url || !mm || !finitePos(p.width) || !finitePos(p.height)) return null;
   return {
     pageIdx: sel.pageIdx,
@@ -129,7 +129,7 @@ export function CropPanel({ ctx, close }: EditorPanelProps) {
 
   const style = cropToStyle(t.frame.photoW, t.frame.photoH, t.frame.slotWmm, t.frame.slotHmm, t.crop);
   const aspect = t.frame.slotWmm / t.frame.slotHmm;
-  const lowRes = isSlotLowRes(t.photo, t.layoutId, t.slotIdx, t.crop.zoom);
+  const lowRes = isSlotLowRes(t.photo, t.layoutId, t.slotIdx, t.crop.zoom, ctx.state.doc.format);
   const zoomKey = `crop:${t.pageId}:${t.slotIdx}:zoom`;
 
   return (

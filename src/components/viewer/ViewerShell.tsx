@@ -71,8 +71,8 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
   const replay = useCallback(() => api.current?.goTo(0), []);
   const openShare = useCallback(() => setSheet("share"), []);
   const endPage = useMemo(
-    () => <EndCard isPaid={isPaid} model={endModel} onReplay={replay} onShare={openShare} />,
-    [isPaid, endModel, replay, openShare],
+    () => <EndCard isPaid={isPaid} model={endModel} onReplay={replay} onShare={openShare} format={doc.format} />,
+    [isPaid, endModel, replay, openShare, doc.format],
   );
   const pageOverlay = useMemo(() => (isPaid ? undefined : <Watermark />), [isPaid]);
 

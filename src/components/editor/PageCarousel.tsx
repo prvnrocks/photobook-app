@@ -12,6 +12,7 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { pageAspectStyle } from "@/lib/book/format-style";
 import { itemToPosition, positionToItem } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
 import { useEditor } from "./editor-context";
@@ -29,6 +30,8 @@ export function PageCarousel() {
   const ref = useRef<HTMLDivElement>(null);
   const current = positionToItem(state.page);
   const count = state.doc.pages.length + 1;
+  /** Inline aspect-ratio for non-A5-portrait formats (undefined → the aspect-[148/210] class). */
+  const aspectStyle = pageAspectStyle(state.doc.format);
   const currentRef = useRef(current);
   /** Item a programmatic scroll is heading to (null = the user is in control). */
   const scrollTarget = useRef<number | null>(null);
@@ -141,9 +144,13 @@ export function PageCarousel() {
               inert={item !== current ? true : undefined}
               data-testid="carousel-item"
             >
-              {/* Height-bound A5 box: as tall as the space allows, never wider than the screen. */}
-              <div className="flex aspect-[148/210] h-full max-w-full items-center">
-                {near ? <EditablePage page={position} priority={item === current} /> : <div className="aspect-[148/210] w-full bg-neutral-100" />}
+              {/* Height-bound page box (doc.format): as tall as the space allows, never wider than the screen. */}
+              <div className="flex aspect-[148/210] h-full max-w-full items-center" style={aspectStyle}>
+                {near ? (
+                  <EditablePage page={position} priority={item === current} />
+                ) : (
+                  <div className="aspect-[148/210] w-full bg-neutral-100" style={aspectStyle} />
+                )}
               </div>
             </div>
           );

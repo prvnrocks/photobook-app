@@ -5,6 +5,8 @@
 // Paid (D-054): "The end", the snapshot title (dir="auto"), Replay + Share, small "Made with" link,
 // on the book's page background. Free: the "Make your own photobook" CTA.
 
+import { pageAspectStyle } from "@/lib/book/format-style";
+import type { BookFormat } from "@/lib/book/types";
 import { APP_NAME, MADE_WITH } from "@/lib/brand";
 import { END_CARD_HEADING, type EndCardModel } from "@/lib/viewer/end-card";
 import { CREATE_YOURS_HREF } from "@/lib/viewer/share";
@@ -17,15 +19,18 @@ export type EndCardProps = {
   onReplay?: () => void;
   /** Open the share sheet. */
   onShare?: () => void;
+  /** doc.format: the card takes the book's page shape (missing → A5 portrait). */
+  format?: BookFormat | null;
 };
 
 const BTN =
   "inline-flex min-h-11 min-w-[28cqw] items-center justify-center rounded-full px-[6cqw] py-[2.6cqw] text-[4.2cqw] font-medium transition-opacity hover:opacity-85";
 
-export function EndCard({ isPaid, model, onReplay, onShare }: EndCardProps) {
+export function EndCard({ isPaid, model, onReplay, onShare, format }: EndCardProps) {
   return (
     <div
       className="relative aspect-[148/210] w-full overflow-hidden [container-type:inline-size]"
+      style={pageAspectStyle(format)}
       data-testid="end-card"
       data-paid={String(isPaid)}
     >
@@ -34,7 +39,7 @@ export function EndCard({ isPaid, model, onReplay, onShare }: EndCardProps) {
   );
 }
 
-function PaidEnd({ model, onReplay, onShare }: Omit<EndCardProps, "isPaid">) {
+function PaidEnd({ model, onReplay, onShare }: Omit<EndCardProps, "isPaid" | "format">) {
   const dark = model?.dark ?? false;
   const ink = dark ? "text-white" : "text-neutral-900";
   const muted = dark ? "text-white/70" : "text-neutral-500";

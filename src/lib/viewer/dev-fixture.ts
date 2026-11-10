@@ -3,7 +3,7 @@
 // English and Arabic captions.
 
 import type { RenderPhotos } from "@/lib/book/render";
-import type { BookDoc, Chapter } from "@/lib/book/types";
+import type { BookDoc, BookFormat, Chapter } from "@/lib/book/types";
 import { LAYOUTS } from "@/lib/layouts";
 
 const COLORS = ["#c2410c", "#0f766e", "#1d4ed8", "#a21caf", "#4d7c0f", "#b45309", "#be123c", "#334155"];
@@ -57,7 +57,9 @@ export function devViewerBackground(raw: unknown): string {
   return typeof raw === "string" && /^[0-9A-Fa-f]{6}$/.test(raw) ? `#${raw.toUpperCase()}` : "#FFFFFF";
 }
 
-export function devViewerDoc(opts: { lang?: "en" | "ar"; pages?: number; background?: string } = {}): BookDoc {
+export function devViewerDoc(
+  opts: { lang?: "en" | "ar"; pages?: number; background?: string; format?: BookFormat } = {},
+): BookDoc {
   const pageLayouts = LAYOUTS.filter((l) => l.role === "page");
   const count = opts.pages ?? DEV_VIEWER_PAGE_COUNT;
   let n = 1;
@@ -81,7 +83,7 @@ export function devViewerDoc(opts: { lang?: "en" | "ar"; pages?: number; backgro
   });
   return {
     version: 2,
-    format: "A5_PORTRAIT",
+    format: opts.format ?? "A5_PORTRAIT",
     occasion: "travel",
     cover: {
       layout: "cover",

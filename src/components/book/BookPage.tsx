@@ -65,7 +65,7 @@ export function BookPage(props: BookPageProps) {
 
   const m = pageRenderModel(doc, page, photos, captionLang, { bleed: mode === "print" });
   if (!m) {
-    return <PageFrame background={backgroundColor(doc.style.background)} mode={mode} className={className} data={{ "data-page": "missing" }} />;
+    return <PageFrame background={backgroundColor(doc.style.background)} mode={mode} format={doc.format} className={className} data={{ "data-page": "missing" }} />;
   }
 
   const c = m.caption;
@@ -75,6 +75,7 @@ export function BookPage(props: BookPageProps) {
     <PageFrame
       background={backgroundColor(effectiveBackground(doc, doc.pages[page]))}
       mode={mode}
+      format={doc.format}
       className={className}
       data={{ "data-page": String(page), "data-page-id": m.pageId, "data-layout": m.layoutId }}
     >

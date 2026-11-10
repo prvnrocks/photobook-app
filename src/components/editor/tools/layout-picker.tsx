@@ -6,7 +6,8 @@
 
 import { LayoutTemplate } from "lucide-react";
 import { changeLayout } from "@/lib/book/edit-ops";
-import type { Layout } from "@/lib/book/types";
+import { pageAspectStyle } from "@/lib/book/format-style";
+import type { BookFormat, Layout } from "@/lib/book/types";
 import { layoutChangeNotice } from "@/lib/editor/photo-picker";
 import { layoutsByRole } from "@/lib/layouts";
 import { cn } from "@/lib/utils";
@@ -21,10 +22,14 @@ export function layoutTargetPage(ctx: Pick<EditorContextValue, "state">): number
   return typeof idx === "number" && idx >= 0 && idx < doc.pages.length ? idx : null;
 }
 
-/** Small page diagram of a layout, straight from its data. */
-export function LayoutDiagram({ layout, className }: { layout: Layout; className?: string }) {
+/** Small page diagram of a layout, straight from its data, in the book's page shape (doc.format). */
+export function LayoutDiagram({ layout, format, className }: { layout: Layout; format?: BookFormat | null; className?: string }) {
   return (
-    <div className={cn("relative aspect-[148/210] w-full rounded-sm border bg-white", className)} aria-hidden="true">
+    <div
+      className={cn("relative aspect-[148/210] w-full rounded-sm border bg-white", className)}
+      style={pageAspectStyle(format)}
+      aria-hidden="true"
+    >
       {layout.slots.map((r, i) => (
         <div
           key={i}
@@ -89,7 +94,7 @@ export function LayoutPickerPanel({ ctx, close }: EditorPanelProps) {
                 data-testid="layout-option"
                 data-layout-id={l.id}
               >
-                <LayoutDiagram layout={l} />
+                <LayoutDiagram layout={l} format={ctx.state.doc.format} />
                 <span className="text-xs font-medium tabular-nums">
                   {l.photoCount === 1 ? "1 photo" : `${l.photoCount} photos`}
                 </span>

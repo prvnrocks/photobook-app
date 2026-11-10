@@ -2,7 +2,7 @@
 
 import { LAYOUTS } from "@/lib/layouts";
 import type { RenderPhotos } from "./render";
-import type { BookDoc } from "./types";
+import type { BookDoc, BookFormat } from "./types";
 
 const COLORS = ["#c2410c", "#0f766e", "#1d4ed8", "#a21caf", "#4d7c0f", "#b45309", "#be123c", "#334155"];
 
@@ -28,7 +28,16 @@ export function devPreviewPhotos(): RenderPhotos {
   return out;
 }
 
-export function devPreviewDoc(): BookDoc {
+/**
+ * Book format from a dev route's `?format=` query value: "landscape" → A5_LANDSCAPE, anything else
+ * → A5_PORTRAIT. Until M10b brings landscape layouts, landscape fixtures reuse the portrait
+ * layouts (stretched slots) — fine for format plumbing checks.
+ */
+export function parseDevFormat(raw: unknown): BookFormat {
+  return raw === "landscape" ? "A5_LANDSCAPE" : "A5_PORTRAIT";
+}
+
+export function devPreviewDoc(format: BookFormat = "A5_PORTRAIT"): BookDoc {
   let n = 1;
   const pages = LAYOUTS.filter((l) => l.role === "page").map((l, i) => ({
     id: `pg${i}`,
@@ -46,7 +55,7 @@ export function devPreviewDoc(): BookDoc {
   }));
   return {
     version: 2,
-    format: "A5_PORTRAIT",
+    format,
     occasion: "wedding",
     cover: { layout: "cover", photoId: "d0", title: "Sara & Omar", subtitle: "Abu Dhabi · 2026" },
     chapters: [],
