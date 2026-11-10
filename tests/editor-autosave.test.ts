@@ -90,7 +90,9 @@ describe("classifySaveResponse", () => {
     expect(classifySaveResponse(401, {})).toEqual({ kind: "signedOut" });
     expect(classifySaveResponse(404, {})).toEqual({ kind: "failed" });
     expect(classifySaveResponse(403, {})).toEqual({ kind: "failed" });
-    expect(classifySaveResponse(413, {})).toEqual({ kind: "retry", reason: "too_large" });
+    // 413: resending the same doc can never succeed → rejected like a 422, not retried forever.
+    expect(classifySaveResponse(413, { error: "too_large" })).toEqual({ kind: "invalid", code: "too_large" });
+    expect(classifySaveResponse(413, null)).toEqual({ kind: "invalid", code: "too_large" });
     expect(classifySaveResponse(429, {})).toEqual({ kind: "retry", reason: "rate" });
     expect(classifySaveResponse(500, {})).toEqual({ kind: "retry", reason: "server" });
     expect(classifySaveResponse(null, null)).toEqual({ kind: "retry", reason: "network" });
@@ -108,9 +110,10 @@ describe("classifySaveResponse", () => {
   });
 
   it("has friendly copy for every 422 code", () => {
-    for (const c of ["page_limit", "foreign_photo", "duplicate_photo", "invalid_font", "invalid_doc", "x"]) {
+    for (const c of ["page_limit", "foreign_photo", "duplicate_photo", "invalid_font", "invalid_doc", "too_large", "x"]) {
       expect(invalidSaveCopy(c).length).toBeGreaterThan(10);
     }
+    expect(invalidSaveCopy("too_large")).toBe("This album is too big to save — try removing a page.");
   });
 });
 
@@ -264,7 +267,7 @@ describe("AutosaveScheduler", () => {
     expect(calls[1].doc).toBe(b);
   });
 
-  it("network / 5xx / 413 retry with exponential backoff and send the newest doc", async () => {
+  it("network / 5xx / 429 retry with exponential backoff and send the newest doc", async () => {
     const { s, timers, calls } = setup();
     s.change(mk("a"));
     timers.advance(DEBOUNCE_MS);
@@ -287,7 +290,7 @@ describe("AutosaveScheduler", () => {
     timers.advance(1);
     expect(calls).toHaveLength(3);
     expect(calls[2].doc).toBe(b);
-    calls[2].resolve({ kind: "retry", reason: "too_large" });
+    calls[2].resolve({ kind: "retry", reason: "rate" });
     await flushMicrotasks();
     timers.advance(8000);
     expect(calls).toHaveLength(4);
@@ -352,6 +355,141 @@ describe("AutosaveScheduler", () => {
     await flushMicrotasks();
     s.flush();
     expect(calls).toHaveLength(2);
+  });
+
+  it("413 too_large is not retried: invalid state; a smaller next edit saves", async () => {
+    const { s, timers, calls } = setup();
+    s.change(mk("huge"));
+    timers.advance(DEBOUNCE_MS);
+    calls[0].resolve(classifySaveResponse(413, { error: "too_large" }));
+    await flushMicrotasks();
+    expect(s.getStatus()).toEqual({ kind: "invalid", code: "too_large" });
+    timers.advance(120_000);
+    expect(calls).toHaveLength(1);
+    const smaller = mk("smaller");
+    s.change(smaller);
+    timers.advance(DEBOUNCE_MS);
+    expect(calls).toHaveLength(2);
+    expect(calls[1].doc).toBe(smaller);
+  });
+
+  // ---- S4: leaving the page while a save is in flight --------------------------------------------
+
+  it("keepalive flush during an in-flight save sends the newer doc at once (rescue, same baseRev)", async () => {
+    const { s, timers, calls } = setup(1);
+    const a = mk("a");
+    const b = mk("b");
+    s.change(a);
+    timers.advance(DEBOUNCE_MS);
+    expect(calls).toHaveLength(1);
+    s.change(b); // queued behind the in-flight save
+    const p = s.flush({ keepalive: true });
+    expect(p).not.toBeNull();
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toMatchObject({ doc: b, rev: 1, keepalive: true });
+    // A second hidden/pagehide event doesn't send a third copy.
+    s.flush({ keepalive: true });
+    expect(calls).toHaveLength(2);
+  });
+
+  it("rescue wins the race (in-flight gets 409): newer doc saved, no false conflict", async () => {
+    const { s, timers, calls, saved } = setup(1);
+    const b = mk("b");
+    s.change(mk("a"));
+    timers.advance(DEBOUNCE_MS);
+    s.change(b);
+    const p = s.flush({ keepalive: true });
+    calls[1].resolve({ kind: "ok", rev: 2, savedAt: "t" });
+    calls[0].resolve({ kind: "conflict" });
+    await p;
+    expect(s.getStatus()).toEqual({ kind: "saved", savedAt: "t" });
+    expect(s.getRev()).toBe(2);
+    expect(saved).toEqual([2]);
+    expect(s.hasUnsaved()).toBe(false);
+    timers.advance(DEBOUNCE_MS * 5);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("in-flight wins the race (rescue gets 409), page stays alive: newer doc is chained right after", async () => {
+    const { s, timers, calls } = setup(1);
+    const b = mk("b");
+    s.change(mk("a"));
+    timers.advance(DEBOUNCE_MS);
+    s.change(b);
+    const p = s.flush({ keepalive: true });
+    calls[0].resolve({ kind: "ok", rev: 2, savedAt: null });
+    calls[1].resolve({ kind: "conflict" });
+    await p;
+    // Sent at once (no new debounce), against the rev the in-flight save produced.
+    expect(calls).toHaveLength(3);
+    expect(calls[2]).toMatchObject({ doc: b, rev: 2 });
+    expect(s.getStatus().kind).toBe("saving");
+    calls[2].resolve({ kind: "ok", rev: 3, savedAt: "t3" });
+    await flushMicrotasks();
+    expect(s.getStatus()).toEqual({ kind: "saved", savedAt: "t3" });
+  });
+
+  it("both requests 409 → a real conflict (another tab)", async () => {
+    const { s, timers, calls } = setup(1);
+    s.change(mk("a"));
+    timers.advance(DEBOUNCE_MS);
+    s.change(mk("b"));
+    const p = s.flush({ keepalive: true });
+    calls[0].resolve({ kind: "conflict" });
+    calls[1].resolve({ kind: "conflict" });
+    await p;
+    expect(s.getStatus()).toEqual({ kind: "conflict" });
+  });
+
+  it("in-flight aborted by the unload (network) but rescue landed → saved", async () => {
+    const { s, timers, calls } = setup(1);
+    const b = mk("b");
+    s.change(mk("a"));
+    timers.advance(DEBOUNCE_MS);
+    s.change(b);
+    const p = s.flush({ keepalive: true });
+    calls[0].resolve({ kind: "retry", reason: "network" });
+    calls[1].resolve({ kind: "ok", rev: 2, savedAt: null });
+    await p;
+    expect(s.getStatus().kind).toBe("saved");
+    expect(s.getRev()).toBe(2);
+  });
+
+  it("both ok (one was a no-op re-save): keeps the higher rev and resends the newest doc if needed", async () => {
+    const { s, timers, calls } = setup(1);
+    const b = mk("b");
+    s.change(mk("a"));
+    timers.advance(DEBOUNCE_MS);
+    s.change(b);
+    const p = s.flush({ keepalive: true });
+    calls[1].resolve({ kind: "ok", rev: 1, savedAt: null }); // rescue doc equalled the stored one
+    calls[0].resolve({ kind: "ok", rev: 2, savedAt: null });
+    await p;
+    expect(s.getRev()).toBe(2);
+    expect(calls).toHaveLength(3);
+    expect(calls[2]).toMatchObject({ doc: b, rev: 2 });
+  });
+
+  it("non-keepalive flush during flight (Done / back online) cancels the debounce and chains", async () => {
+    const { s, timers, calls } = setup(1);
+    const b = mk("b");
+    s.change(mk("a"));
+    timers.advance(DEBOUNCE_MS);
+    s.change(b);
+    const p = s.flush();
+    expect(calls).toHaveLength(1); // no rescue without keepalive
+    calls[0].resolve({ kind: "ok", rev: 2, savedAt: null });
+    await p;
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toMatchObject({ doc: b, rev: 2, keepalive: false });
+  });
+
+  it("keepalive flush with nothing newer than the in-flight doc sends nothing extra", () => {
+    const { s, timers, calls } = setup(1);
+    s.change(mk("a"));
+    timers.advance(DEBOUNCE_MS);
+    s.flush({ keepalive: true });
+    expect(calls).toHaveLength(1);
   });
 
   it("dispose stops timers; an in-flight save still records the rev", async () => {

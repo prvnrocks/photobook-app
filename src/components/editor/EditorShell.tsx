@@ -11,6 +11,7 @@
 import { ArrowLeft, Redo2, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { AiSessionBlock } from "@/lib/editor/caption-tools";
 import { canRedo, canUndo } from "@/lib/editor/store";
 import { httpEditorTransport, type EditorTransport } from "@/lib/editor/transport";
 import type { FinishResult } from "@/lib/editor/done";
@@ -52,6 +53,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
   const autosave = useAutosave({ doc: state.doc, baseRev: data.docRev, enabled: saveEnabled, transport });
   const photos = usePhotoUrls(data.photos, transport);
   const [rewrites, setRewritesState] = useState({ used: data.rewritesUsed, left: data.rewritesLeft });
+  const [aiBlocked, setAiBlocked] = useState<AiSessionBlock | null>(null);
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   useBrokenImageWatcher(rootRef, photos);
@@ -78,12 +80,19 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
       photos,
       readOnly: state.readOnly,
       save: { status: autosave.status, flush: autosave.flush },
-      ai: { mode: data.aiMode, rewritesUsed: rewrites.used, rewritesLeft: rewrites.left, setRewrites },
+      ai: {
+        mode: data.aiMode,
+        rewritesUsed: rewrites.used,
+        rewritesLeft: rewrites.left,
+        setRewrites,
+        blocked: aiBlocked,
+        blockSession: setAiBlocked,
+      },
       activeTool,
       openTool,
       closeTool,
     }),
-    [data.book, data.aiMode, state, actions, photos, autosave.status, autosave.flush, rewrites, setRewrites, activeTool, openTool, closeTool],
+    [data.book, data.aiMode, state, actions, photos, autosave.status, autosave.flush, rewrites, setRewrites, aiBlocked, activeTool, openTool, closeTool],
   );
 
   const registry = toolsProp ?? EDITOR_TOOLS;
@@ -176,7 +185,8 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
 
         <SaveBanner status={autosave.status} bookId={data.book.id} />
 
-        <div className="flex min-h-0 flex-1">
+        {/* Column on mobile so a docked panel (on-page text editing) sits under the page. */}
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
           <PageStrip className="hidden w-36 shrink-0 lg:block" />
           <main className="flex min-h-0 min-w-0 flex-1 flex-col">
             <PageCarousel />

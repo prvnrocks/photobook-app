@@ -14,6 +14,7 @@ import {
   REWRITE_FAILURE_COPY,
   requestRewrite,
   rewriteOptions,
+  sessionBlockFor,
   type RewriteInstruction,
   type RewriteUiState,
 } from "@/lib/editor/caption-tools";
@@ -26,6 +27,8 @@ import type { EditorPanelProps, EditorTool } from "./types";
 /** Static reason the menu can't be used right now, or null. */
 export function aiMenuBlockedReason(ctx: Pick<EditorContextValue, "ai" | "state">, text: string): string | null {
   if (ctx.ai.mode === "off") return REWRITE_FAILURE_COPY.off;
+  // A server answer earlier in this session (503 / auth / daily limit) switched ✨ off.
+  if (ctx.ai.blocked) return REWRITE_FAILURE_COPY[ctx.ai.blocked];
   if (text.trim() === "") return "Write a caption first — AI can then rewrite it.";
   return null;
 }
@@ -40,18 +43,21 @@ function OptionButton({
   disabled,
   active,
   testId,
+  hint,
 }: {
   label: string;
   onClick(): void;
   disabled: boolean;
   active: boolean;
   testId: string;
+  hint?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
+      title={hint}
       className={cn(
         "flex min-h-11 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium hover:bg-muted disabled:opacity-40",
         active && "border-primary",
@@ -89,6 +95,13 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
       ctx.ai.setRewrites(ctx.ai.rewritesUsed + 1, nextRewritesLeft(ctx.ai.rewritesLeft, result.remaining));
     } else if (result.kind === "limit") {
       ctx.ai.setRewrites(ctx.ai.rewritesUsed, 0);
+    }
+    const block = sessionBlockFor(result.kind);
+    if (block) {
+      // Shown by the blocked view (all options disabled) for the rest of the session.
+      ctx.ai.blockSession?.(block);
+      setUi({ kind: "idle" });
+      return;
     }
     setUi(result);
   };
@@ -162,6 +175,7 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
 
   const failure = ui.kind !== "idle" && ui.kind !== "loading" ? ui.kind : null;
   const disabled = loading || limitReached;
+  const shortHint = options.main.find((o) => o.instruction === "shorter")?.disabledReason ?? null;
 
   return (
     <div className="flex flex-col gap-3" data-testid="ai-caption-menu" data-state={ui.kind}>
@@ -202,12 +216,18 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
             key={o.instruction}
             label={o.label}
             onClick={() => void run(o.instruction)}
-            disabled={disabled}
+            disabled={disabled || o.disabledReason !== undefined}
             active={loading && ui.instruction === o.instruction}
             testId={`ai-option-${o.instruction}`}
+            hint={o.disabledReason}
           />
         ))}
       </div>
+      {shortHint && failure !== "tooShort" ? (
+        <p className="-mt-1 text-xs text-muted-foreground" data-testid="ai-shorter-hint">
+          {shortHint}
+        </p>
+      ) : null}
       <div className="flex flex-col gap-1.5">
         <p className="text-xs font-medium text-muted-foreground">Change tone</p>
         <div className="grid grid-cols-2 gap-2">

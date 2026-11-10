@@ -89,18 +89,36 @@ describe("add → move → delete → undo/redo", () => {
     expect(s.doc.pages[s.page as number].id).toBe(deletedId);
   });
 
-  it("delete the LAST page → toast Undo still lands on it; plain header undo stays one page earlier", () => {
+  it("delete the LAST page → header Undo and toast Undo both land on the restored page; redo returns", () => {
     const doc0 = chaptered();
     const last = doc0.pages.length - 1;
+    const lastId = doc0.pages[last].id;
     let s = initEditorState(doc0, { page: last });
     s = run(s, apply((d) => deletePage(d, last), { select: null }));
     expect(s.page).toBe(last - 1);
     const headerUndo = run(s, { type: "undo" });
     expect(headerUndo.doc).toBe(doc0);
-    // Documented behaviour (not a bug): the store keeps the clamped position.
-    expect(headerUndo.page).toBe(last - 1);
+    // T14 bug 3 (fixed): undo lands where the edit was made — the restored last page.
+    expect(headerUndo.page).toBe(last);
+    expect(headerUndo.doc.pages[headerUndo.page as number].id).toBe(lastId);
     const toastUndo = run(s, { type: "undo" }, { type: "goTo", page: last });
     expect(toastUndo.page).toBe(last);
+    // Redo deletes it again and goes back to where Undo was pressed.
+    const redone = run(headerUndo, { type: "redo" });
+    expect(redone.doc).toBe(s.doc);
+    expect(redone.page).toBe(last - 1);
+  });
+
+  it("header Undo after navigating away returns to the page the edit was made on", () => {
+    const doc0 = chaptered();
+    let s = initEditorState(doc0, { page: 1 });
+    s = run(s, apply((d) => deletePage(d, 1), { select: null }));
+    s = run(s, { type: "goTo", page: 4 });
+    s = run(s, { type: "undo" });
+    expect(s.doc).toBe(doc0);
+    expect(s.page).toBe(1);
+    expect(s.pastPages).toHaveLength(s.past.length);
+    expect(s.futurePages).toHaveLength(s.future.length);
   });
 
   it("deleting the only page of a chapter prunes it; undo brings the chapter back", () => {
@@ -244,9 +262,14 @@ describe("random edit walks (seeded) stay saveable and fully undoable", () => {
       }
       expect(applied).toBeGreaterThan(10);
       expect(s.past.length).toBe(Math.min(applied, 50));
+      expect(s.pastPages.length).toBe(s.past.length);
       if (applied <= 50) {
-        while (s.past.length) s = run(s, { type: "undo" });
+        while (s.past.length) {
+          s = run(s, { type: "undo" });
+          if (s.page !== "cover") expect(s.page).toBeLessThan(s.doc.pages.length);
+        }
         expect(s.doc).toBe(doc0);
+        expect(s.futurePages.length).toBe(s.future.length);
       }
     });
   }

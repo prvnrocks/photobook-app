@@ -4,6 +4,10 @@
 // Item 0 = cover, item i + 1 = doc.pages[i]. Scroll position ⇄ state.page stay in sync:
 // swiping updates the store; store changes (strip tap, prev/next, undo) scroll the carousel
 // (instant for jumps > 1 so intermediate snap points don't feed back into the store).
+// While such a programmatic scroll runs, scroll events are NOT fed back into the store: a smooth
+// scroll passes through intermediate positions, and feeding those back dropped fast Next taps
+// (T14 bug 2). Prev/next always step from the store's index (the target), never from the
+// in-progress scroll position. A touch/wheel/key by the user hands control back to the scroll.
 // Only items within WINDOW of the current one render a <BookPage>; the rest are empty boxes.
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -26,6 +30,10 @@ export function PageCarousel() {
   const current = positionToItem(state.page);
   const count = state.doc.pages.length + 1;
   const currentRef = useRef(current);
+  /** Item a programmatic scroll is heading to (null = the user is in control). */
+  const scrollTarget = useRef<number | null>(null);
+  const targetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastStoreItem = useRef(current);
   const firstRun = useRef(true);
   // Items are keyed by page id, so when pages are added/removed/reordered (Task 11) the browser
   // re-snaps to the element that was snapped before — not the store's position. For a moment
@@ -42,11 +50,21 @@ export function PageCarousel() {
   // store → scroll
   useEffect(() => {
     currentRef.current = current;
+    const from = lastStoreItem.current;
+    lastStoreItem.current = current;
     const el = ref.current;
     if (!el || el.clientWidth === 0) return;
     const shown = Math.round(el.scrollLeft / el.clientWidth);
-    if (shown !== current) {
-      const jump = Math.abs(shown - current) > 1 || firstRun.current;
+    if (shown !== current || scrollTarget.current !== null) {
+      // A step of one store index scrolls smoothly even if a previous smooth scroll is still
+      // running (rapid Next taps); real jumps (strip tap, undo elsewhere) are instant.
+      const jump = Math.abs(from - current) > 1 || firstRun.current;
+      scrollTarget.current = current;
+      if (targetTimer.current) clearTimeout(targetTimer.current);
+      // Fallback in case the scroll never reports arriving (interrupted, no scroll event).
+      targetTimer.current = setTimeout(() => {
+        scrollTarget.current = null;
+      }, 1000);
       el.scrollTo({ left: current * el.clientWidth, behavior: jump ? "instant" : "smooth" });
     }
     firstRun.current = false;
@@ -62,6 +80,11 @@ export function PageCarousel() {
       raf = requestAnimationFrame(() => {
         if (el.clientWidth === 0) return;
         const shown = Math.round(el.scrollLeft / el.clientWidth);
+        if (scrollTarget.current !== null) {
+          // Our own scroll: ignore the positions it passes through; done once it arrives.
+          if (Math.abs(el.scrollLeft - scrollTarget.current * el.clientWidth) < 2) scrollTarget.current = null;
+          return;
+        }
         if (shown !== currentRef.current && performance.now() < pinUntil.current) {
           el.scrollTo({ left: currentRef.current * el.clientWidth, behavior: "instant" });
           return;
@@ -76,12 +99,25 @@ export function PageCarousel() {
     const ro = new ResizeObserver(() => {
       el.scrollTo({ left: currentRef.current * el.clientWidth, behavior: "instant" });
     });
+    // The user takes over (swipe, trackpad, keyboard scrolling): stop ignoring scroll events.
+    const release = () => {
+      scrollTarget.current = null;
+    };
     el.addEventListener("scroll", onScroll, { passive: true });
+    el.addEventListener("touchstart", release, { passive: true });
+    el.addEventListener("pointerdown", release, { passive: true });
+    el.addEventListener("wheel", release, { passive: true });
+    el.addEventListener("keydown", release);
     ro.observe(el);
     return () => {
       cancelAnimationFrame(raf);
       el.removeEventListener("scroll", onScroll);
+      el.removeEventListener("touchstart", release);
+      el.removeEventListener("pointerdown", release);
+      el.removeEventListener("wheel", release);
+      el.removeEventListener("keydown", release);
       ro.disconnect();
+      if (targetTimer.current) clearTimeout(targetTimer.current);
     };
   }, [actions]);
 

@@ -320,6 +320,44 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
     await waitSaved(page);
   });
 
+  test("delete the LAST page → header Undo lands on the restored page (T14 bug 3)", async ({ page }) => {
+    await open(page);
+    await goToItem(page, 6);
+    await page.getByTestId("editor-tool-page-menu").click();
+    await page.getByTestId("page-menu-delete").click();
+    await expect(counter(page)).toHaveText("5 / 5");
+    await page.getByTestId("editor-undo").click();
+    await expect(counter(page)).toHaveText("6 / 6");
+    await settle(page);
+    await expect(cur(page).locator("[data-layout]").first()).toHaveAttribute("data-layout", "four-grid");
+    await page.getByTestId("editor-redo").click();
+    await expect(counter(page)).toHaveText("5 / 5");
+  });
+
+  test("rapid Next taps (< 150 ms apart) are all counted (T14 bug 2)", async ({ page }) => {
+    await open(page);
+    const next = page.getByTestId("carousel-next");
+    for (let i = 0; i < 4; i++) {
+      await next.click();
+      await page.waitForTimeout(60);
+    }
+    await expect(counter(page)).toHaveText("4 / 6");
+    await settle(page);
+    await expect(counter(page)).toHaveText("4 / 6");
+    await expect(cur(page)).toHaveAttribute("aria-label", "Page 4 of 6");
+    // And back.
+    const prev = page.getByTestId("carousel-prev");
+    for (let i = 0; i < 3; i++) {
+      await prev.click();
+      await page.waitForTimeout(60);
+    }
+    await settle(page);
+    await expect(counter(page)).toHaveText("1 / 6");
+    // A swipe still works after programmatic scrolling.
+    await swipe(page, "left");
+    await expect(counter(page)).toHaveText("2 / 6");
+  });
+
   test("free book at 20 pages: Add page opens the Upgrade sheet, no page 21", async ({ page }) => {
     await open(page, "?pages=20");
     await goToItem(page, 20);
@@ -394,7 +432,7 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
     [502, { error: "rewrite_unusable", retryable: false }, "Couldn't improve this one"],
     [502, { error: "refusal", retryable: false }, "Can't rewrite this caption"],
     [502, { error: "timeout", retryable: true }, "Try again"],
-    [503, { error: "ai_off" }, "AI captions aren't switched on yet"],
+    [400, { error: "too_short" }, "This caption is already short"],
   ] as const) {
     test(`✨ mocked ${status} ${body.error} → "${copy}"`, async ({ page }) => {
       await page.route("**/api/ai/rewrite", (r) => r.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) }));
@@ -405,6 +443,70 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
       await expect(cur(page).getByTestId("page-caption")).toHaveText(before);
     });
   }
+
+  // Session-wide failures switch ✨ off like AI off: blocked copy, every option disabled.
+  for (const [status, body, copy] of [
+    [503, { error: "ai_off" }, "AI captions aren't switched on yet"],
+    [503, { error: "ai_unavailable" }, "AI captions aren't available right now"],
+    [502, { error: "auth", retryable: false }, "AI captions aren't available right now — try later"],
+    [502, { error: "bad_request", retryable: false }, "AI captions aren't available right now — try later"],
+    [429, { error: "daily_limit" }, "You've reached today's AI rewrite limit — try again tomorrow"],
+  ] as const) {
+    test(`✨ mocked ${status} ${body.error} → ✨ off: "${copy}"`, async ({ page }) => {
+      let calls = 0;
+      await page.route("**/api/ai/rewrite", (r) => {
+        calls++;
+        return r.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
+      });
+      await openAiMenu(page, "?ai=replay");
+      await page.getByTestId("ai-option-rewrite").click();
+      await expect(page.getByTestId("ai-caption-blocked")).toContainText(copy);
+      await expect(page.getByTestId("ai-option-rewrite")).toBeDisabled();
+      await expect(page.getByTestId("ai-upgrade")).toHaveCount(0);
+      // Still off after closing and reopening the menu.
+      await page.getByTestId("editor-panel-close").click();
+      await page.getByTestId("editor-tool-ai-caption").click();
+      await expect(page.getByTestId("ai-caption-blocked")).toContainText(copy);
+      expect(calls).toBe(1);
+    });
+  }
+
+  test("✨ Shorter is disabled for a caption of ≤ 3 words", async ({ page }) => {
+    await open(page, "?ai=replay");
+    await goToItem(page, 2);
+    await cur(page).getByTestId("caption-target").click();
+    await page.getByTestId("caption-input").fill("Eid mubarak");
+    await page.getByTestId("caption-open-ai").click();
+    await expect(page.getByTestId("ai-option-shorter")).toBeDisabled();
+    await expect(page.getByTestId("ai-option-rewrite")).toBeEnabled();
+    await expect(page.getByTestId("ai-shorter-hint")).toContainText("This caption is already short");
+  });
+
+  test("caption sheet is docked under the page: the caption being edited stays visible", async ({ page }) => {
+    await open(page);
+    await goToItem(page, 2);
+    await cur(page).getByTestId("caption-target").click();
+    const panel = page.getByTestId("editor-panel-caption");
+    await expect(panel).toBeVisible();
+    await expect(panel).toHaveAttribute("data-docked", "true");
+    await settle(page);
+    await page.getByTestId("caption-input").fill("Still visible while typing");
+    const cap = cur(page).getByTestId("page-caption");
+    await expect(cap).toHaveText("Still visible while typing");
+    await expect
+      .poll(async () => {
+        const c = (await cap.boundingBox())!;
+        const p = (await panel.boundingBox())!;
+        return c.y >= 0 && c.y + c.height <= p.y + 1;
+      })
+      .toBe(true);
+    await expectNoOverflow(page, "docked caption sheet");
+    // A slot tool still uses the floating sheet.
+    await page.getByTestId("editor-panel-close").click();
+    await cur(page).locator('[data-slot-index="0"] [data-testid="slot-target"]').click();
+    await page.getByTestId("editor-tool-replace").click();
+    await expect(page.getByTestId("editor-panel-replace")).toHaveAttribute("data-docked", "false");
+  });
 
   async function editCoverTitle(page: Page, title: string) {
     await page.getByTestId("cover-text-target").click();

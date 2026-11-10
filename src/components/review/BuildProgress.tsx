@@ -17,7 +17,7 @@ import {
   type RunTrigger,
   type StartOutcome,
 } from "@/lib/runs/client";
-import { abortableSleep, driveRun } from "@/lib/runs/drive";
+import { abortableSleep, DriveWaker, driveRun } from "@/lib/runs/drive";
 import { limitCopy, newerSnapshot, stageCopy, type ProgressSnapshot } from "@/lib/runs/stage-copy";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +72,8 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
    */
   const startRef = useRef<Promise<StartOutcome> | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
+  /** Tab visible again / back online → resume a stalled loop (see src/lib/runs/drive.ts). */
+  const [waker] = useState(() => new DriveWaker());
 
   const [status, setStatus] = useState<Status>({ kind: "running", reconnecting: false });
   const [snap, setSnap] = useState<ProgressSnapshot>({ state: "queued", progress: null });
@@ -143,6 +145,7 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
           advance: (rid, s) => advanceRun(rid, { signal: s }),
           signal,
           sleep: abortableSleep,
+          waker,
           onTick: (tick) => {
             report(tick);
             setStatus((s) => (s.kind === "running" && s.reconnecting ? { kind: "running", reconnecting: false } : s));
@@ -163,7 +166,7 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
         clearInterval(poll);
       }
     },
-    [bookId, trigger, goToReview, report],
+    [bookId, trigger, goToReview, report, waker],
   );
 
   const begin = useCallback(() => {
@@ -177,6 +180,30 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
     begin();
     return () => controllerRef.current?.abort();
   }, [begin]);
+
+  // Phones: after the device slept or lost the network, carry on as soon as the user is back.
+  // A running loop is woken (one request at a time — drive.ts replaces a stale one); a loop that
+  // gave up on the connection meanwhile is restarted (same run: runIdRef is kept).
+  const statusRef = useRef(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+  useEffect(() => {
+    const resume = () => {
+      if (document.visibilityState !== "visible") return;
+      const st = statusRef.current;
+      if (st.kind === "running") waker.wake();
+      else if (st.kind === "error" && st.error === "unavailable" && navigator.onLine !== false) begin();
+    };
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("online", resume);
+    window.addEventListener("pageshow", resume);
+    return () => {
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("online", resume);
+      window.removeEventListener("pageshow", resume);
+    };
+  }, [waker, begin]);
 
   const copy = stageCopy(snap.state, snap.progress);
   const liveText = running

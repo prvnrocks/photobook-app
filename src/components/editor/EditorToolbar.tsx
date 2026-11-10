@@ -81,32 +81,48 @@ export function EditorToolbar({ tools }: { tools: EditorTool[] }) {
 }
 
 /**
- * Panel of the active tool: bottom sheet on mobile (with a tap-to-close backdrop), right-hand
- * side panel on desktop (lg). Rendered by EditorShell.
+ * While editing text that sits ON the page (caption, cover title), the mobile panel is docked
+ * under the page instead of floating over it: the carousel gets shorter, the height-bound page
+ * scales down, and the text being edited stays visible. Exported for tests.
+ */
+export function panelDocksOnMobile(selection: EditorContextValue["state"]["selection"]): boolean {
+  return selection?.kind === "caption" || (selection?.kind === "cover" && selection.part === "text");
+}
+
+/**
+ * Panel of the active tool: bottom sheet on mobile (with a tap-to-close backdrop) — or docked
+ * under the page for on-page text (see panelDocksOnMobile) — right-hand side panel on desktop
+ * (lg). Rendered by EditorShell, whose panel row is a column on mobile.
  */
 export function EditorPanelHost({ tool }: { tool: EditorTool | null }) {
   const ctx = useEditor();
   if (!tool || !tool.Panel) return null;
   const Panel = tool.Panel;
   const title = tool.panelTitle ?? tool.label;
+  const docked = panelDocksOnMobile(ctx.state.selection);
   return (
     <>
-      <button
-        type="button"
-        aria-label="Close panel"
-        tabIndex={-1}
-        onClick={ctx.closeTool}
-        className="fixed inset-0 z-30 bg-black/20 lg:hidden"
-      />
+      {docked ? null : (
+        <button
+          type="button"
+          aria-label="Close panel"
+          tabIndex={-1}
+          onClick={ctx.closeTool}
+          className="fixed inset-0 z-30 bg-black/20 lg:hidden"
+        />
+      )}
       <aside
         role="dialog"
         aria-label={title}
         className={cn(
-          "fixed inset-x-0 bottom-0 z-40 flex max-h-[70dvh] flex-col rounded-t-2xl border-t bg-background shadow-xl",
+          docked
+            ? "relative flex max-h-[42dvh] shrink-0 flex-col rounded-t-2xl border-t bg-background shadow-[0_-4px_16px_rgba(0,0,0,0.08)]"
+            : "fixed inset-x-0 bottom-0 z-40 flex max-h-[70dvh] flex-col rounded-t-2xl border-t bg-background shadow-xl",
           "pb-[env(safe-area-inset-bottom)]",
           "lg:static lg:z-auto lg:max-h-none lg:w-80 lg:shrink-0 lg:rounded-none lg:border-t-0 lg:border-l lg:pb-0 lg:shadow-none",
         )}
         data-testid={`editor-panel-${tool.id}`}
+        data-docked={docked ? "true" : "false"}
       >
         <div className="flex shrink-0 items-center gap-2 border-b px-4">
           <h2 className="flex-1 truncate py-3 text-base font-semibold">{title}</h2>

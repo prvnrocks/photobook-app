@@ -5,7 +5,9 @@
 // - History: undo/redo stacks of whole doc snapshots (ops share untouched pages by reference,
 //   so a snapshot is cheap). Capped at HISTORY_CAP; a no-op (op returns the same doc) pushes
 //   nothing. Consecutive edits with the same `coalesceKey` (caption typing, crop drags) share
-//   ONE undo entry.
+//   ONE undo entry. Each entry also remembers the position it was made on (`pastPages` /
+//   `futurePages`, parallel to `past` / `future`): undo lands where the edit was made (e.g. on the
+//   restored page after deleting the LAST page — not one page early), redo where it was undone.
 // - Position: `page` is what the carousel shows — "cover" or an index into doc.pages — and is
 //   clamped after every change. `selection` is dropped when it no longer points at something.
 // - Ops throw EditOpError for UI bugs / limits; the reducer catches it into `error` (a stable
@@ -35,6 +37,10 @@ export interface EditorState {
   doc: BookDoc;
   past: BookDoc[];
   future: BookDoc[];
+  /** Position each `past` entry was left from (same length as `past`). */
+  pastPages: EditorPosition[];
+  /** Position each `future` entry was undone from (same length as `future`). */
+  futurePages: EditorPosition[];
   page: EditorPosition;
   selection: EditorSelection;
   /** True when edits are not allowed (no saving, conflict, signed out…). `apply` is ignored. */
@@ -63,6 +69,8 @@ export function initEditorState(doc: BookDoc, opts: { readOnly?: boolean; page?:
     doc,
     past: [],
     future: [],
+    pastPages: [],
+    futurePages: [],
     page: clampPosition(doc, opts.page ?? "cover"),
     selection: null,
     readOnly: opts.readOnly === true,
@@ -124,9 +132,9 @@ function settle(state: EditorState, doc: BookDoc, page: EditorPosition, selectio
   return { ...state, doc, page: pos, selection: sel };
 }
 
-function pushPast(past: BookDoc[], doc: BookDoc): BookDoc[] {
+function pushPast<T>(past: T[], entry: T): T[] {
   const next = past.length >= HISTORY_CAP ? past.slice(past.length - HISTORY_CAP + 1) : past.slice();
-  next.push(doc);
+  next.push(entry);
   return next;
 }
 
@@ -158,16 +166,29 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       const key = action.coalesceKey ?? null;
       const coalesce = key !== null && key === state.lastCoalesceKey && state.past.length > 0;
       const past = coalesce ? state.past : pushPast(state.past, state.doc);
-      return { ...settle(state, doc, page, selection), past, future: [], error: null, lastCoalesceKey: key };
+      const pastPages = coalesce ? state.pastPages : pushPast(state.pastPages, state.page);
+      return {
+        ...settle(state, doc, page, selection),
+        past,
+        pastPages,
+        future: [],
+        futurePages: [],
+        error: null,
+        lastCoalesceKey: key,
+      };
     }
     case "undo": {
       if (state.readOnly || state.past.length === 0) return state;
       const prev = state.past[state.past.length - 1];
+      const at = state.pastPages[state.pastPages.length - 1] ?? state.page;
       const future = [state.doc, ...state.future].slice(0, HISTORY_CAP);
+      const futurePages = [state.page, ...state.futurePages].slice(0, HISTORY_CAP);
       return {
-        ...settle(state, prev, state.page, state.selection),
+        ...settle(state, prev, at, state.selection),
         past: state.past.slice(0, -1),
+        pastPages: state.pastPages.slice(0, -1),
         future,
+        futurePages,
         error: null,
         lastCoalesceKey: null,
       };
@@ -175,10 +196,13 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
     case "redo": {
       if (state.readOnly || state.future.length === 0) return state;
       const [next, ...future] = state.future;
+      const [at = state.page, ...futurePages] = state.futurePages;
       return {
-        ...settle(state, next, state.page, state.selection),
+        ...settle(state, next, at, state.selection),
         past: pushPast(state.past, state.doc),
+        pastPages: pushPast(state.pastPages, state.page),
         future,
+        futurePages,
         error: null,
         lastCoalesceKey: null,
       };

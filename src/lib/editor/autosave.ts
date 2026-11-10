@@ -7,11 +7,14 @@
 //   409 conflict          → terminal, no retry ("Changed in another tab – Reload")
 //   503 saving_unavailable→ terminal, autosave stops
 //   422 <code> / 400      → this doc is rejected: no retry, friendly message; the NEXT edit tries again
+//   413 too_large         → same as 422 (code `too_large`): resending the same doc can't succeed
 //   401                   → terminal (signed out)
 //   403 / 404             → terminal (can't save this book)
-//   413 / 429 / 5xx / network → retry with backoff
+//   429 / 5xx / network   → retry with backoff
 // Rules: debounce DEBOUNCE_MS after the last change; ONE request in flight per book; changes made
 // while a request is in flight are queued (only the latest doc is kept) and sent right after.
+// Leaving the page (flush with keepalive) while a request is in flight and a newer doc is queued
+// sends the newer doc at once as a keepalive "rescue" (see flush()).
 
 import type { BookDoc } from "@/lib/book/types";
 
@@ -28,7 +31,7 @@ export type SaveOutcome =
   | { kind: "invalid"; code: string }
   | { kind: "signedOut" }
   | { kind: "failed" }
-  | { kind: "retry"; reason: "network" | "server" | "too_large" | "rate" };
+  | { kind: "retry"; reason: "network" | "server" | "rate" };
 
 export type AutosaveStatus =
   | { kind: "idle" }
@@ -61,12 +64,12 @@ export function classifySaveResponse(status: number | null, body: unknown): Save
   }
   if (status === 409) return { kind: "conflict" };
   if (status === 503) return { kind: "unavailable" };
+  if (status === 413) return { kind: "invalid", code: "too_large" };
   if (status === 422 || status === 400) {
     return { kind: "invalid", code: typeof b.error === "string" ? b.error : "invalid_doc" };
   }
   if (status === 401) return { kind: "signedOut" };
   if (status === 403 || status === 404) return { kind: "failed" };
-  if (status === 413) return { kind: "retry", reason: "too_large" };
   if (status === 429) return { kind: "retry", reason: "rate" };
   return { kind: "retry", reason: "server" };
 }
@@ -93,6 +96,8 @@ export function invalidSaveCopy(code: string): string {
       return "The same photo is used twice. Change one of them to keep saving.";
     case "invalid_font":
       return "A caption font isn't supported. Pick another font to keep saving.";
+    case "too_large":
+      return "This album is too big to save — try removing a page.";
     default:
       return "This change couldn't be saved. Undo it or try another edit.";
   }
@@ -128,6 +133,10 @@ export class AutosaveScheduler {
   /** Newest doc not yet saved (null = nothing to save). */
   private latest: BookDoc | null = null;
   private inflight: Promise<void> | null = null;
+  /** The doc of the request in flight. */
+  private inflightDoc: BookDoc | null = null;
+  /** A keepalive "rescue" of a newer doc sent while `inflight` was still pending (see flush). */
+  private rescue: { doc: BookDoc; outcome: Promise<SaveOutcome> } | null = null;
   private timer: unknown = null;
   private timerKind: "debounce" | "retry" | null = null;
   private attempt = 0;
@@ -180,10 +189,31 @@ export class AutosaveScheduler {
     if (!this.inflight) this.setStatus({ kind: "pending" });
   }
 
-  /** Send now (pagehide / tab hidden / unmount / back online). Returns the in-flight save, if any. */
+  /**
+   * Send now (pagehide / tab hidden / unmount / back online / Done). Returns the in-flight save,
+   * if any.
+   *
+   * While a request is in flight, a newer queued doc can't simply wait for it if the page is
+   * going away: so
+   * - the debounce is cancelled, so the newer doc goes out the moment the in-flight request
+   *   settles (covers "tab hidden, page stays alive");
+   * - with `keepalive` (the page may be unloading) the newer doc is ALSO sent at once as a
+   *   keepalive "rescue" against the same baseRev, so it survives an unload that kills the
+   *   chain. The server's rev check keeps this safe: of the two requests at most one wins; the
+   *   other gets 409, and the outcomes are reconciled together (an own-race 409 is never shown
+   *   as "changed in another tab").
+   * Residual risk (accepted): if the in-flight request lands first and the page is gone before
+   * the chained resend, the rescue's 409 means the newest edits (those of the last ~2 s) are lost.
+   * The book stays consistent — it holds the older doc. Two keepalive bodies may also exceed the
+   * browser's shared 64 KB keepalive quota; that send then fails like a network error.
+   */
   flush(opts: { keepalive?: boolean } = {}): Promise<void> | null {
-    if (this.disposed || isTerminal(this.status)) return this.inflight;
-    if (this.latest === null || this.inflight) return this.inflight;
+    if (this.disposed || isTerminal(this.status) || this.latest === null) return this.inflight;
+    if (this.inflight) {
+      if (this.timerKind === "debounce") this.clearTimer();
+      if (opts.keepalive && !this.rescue && this.latest !== this.inflightDoc) this.sendRescue(this.latest);
+      return this.inflight;
+    }
     this.clearTimer();
     this.fire(opts.keepalive === true);
     return this.inflight;
@@ -215,18 +245,36 @@ export class AutosaveScheduler {
     const doc = this.latest;
     const rev = this.baseRev;
     this.setStatus({ kind: "saving" });
+    const outcome = this.safeSend(doc, rev, keepalive);
+    this.inflightDoc = doc;
+    this.inflight = outcome.then(async (o) => {
+      // A rescue sent during this request: wait for it too, then settle both together.
+      const rescue = this.rescue;
+      const r = rescue ? await rescue.outcome : null;
+      this.rescue = null;
+      this.inflight = null;
+      this.inflightDoc = null;
+      if (rescue && r) {
+        const settled = reconcileRescue(doc, o, rescue.doc, r);
+        this.handle(settled.doc, settled.outcome);
+      } else {
+        this.handle(doc, o);
+      }
+    });
+  }
+
+  private safeSend(doc: BookDoc, rev: number, keepalive: boolean): Promise<SaveOutcome> {
     let outcome: Promise<SaveOutcome>;
     try {
       outcome = this.opts.send(doc, rev, { keepalive });
     } catch {
       outcome = Promise.resolve({ kind: "retry", reason: "network" });
     }
-    this.inflight = outcome
-      .catch((): SaveOutcome => ({ kind: "retry", reason: "network" }))
-      .then((o) => {
-        this.inflight = null;
-        this.handle(doc, o);
-      });
+    return outcome.catch((): SaveOutcome => ({ kind: "retry", reason: "network" }));
+  }
+
+  private sendRescue(doc: BookDoc) {
+    this.rescue = { doc, outcome: this.safeSend(doc, this.baseRev, true) };
   }
 
   private handle(sent: BookDoc, o: SaveOutcome) {
@@ -272,4 +320,26 @@ export class AutosaveScheduler {
     this.clearTimer();
     this.setStatus({ kind: o.kind });
   }
+}
+
+/**
+ * Settle an in-flight save (`first`) together with the keepalive rescue of a newer doc sent
+ * against the same baseRev (see AutosaveScheduler.flush). Both carried the same baseRev, so
+ * normally at most one changed the book:
+ * - rescue ok → the newer doc is saved (if both were ok, one of them was a no-op re-save; the
+ *   higher rev is the book's current one);
+ * - otherwise → the in-flight result as usual (a rescue 409 just means the in-flight request
+ *   won the race; its ok-handler then sends the still-queued newer doc).
+ */
+export function reconcileRescue(
+  firstDoc: BookDoc,
+  first: SaveOutcome,
+  rescueDoc: BookDoc,
+  rescue: SaveOutcome,
+): { doc: BookDoc; outcome: SaveOutcome } {
+  if (rescue.kind === "ok") {
+    if (first.kind === "ok" && first.rev > rescue.rev) return { doc: firstDoc, outcome: first };
+    return { doc: rescueDoc, outcome: rescue };
+  }
+  return { doc: firstDoc, outcome: first };
 }

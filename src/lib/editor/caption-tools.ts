@@ -79,14 +79,28 @@ export const TONE_LABELS: Record<Tone, string> = {
 export interface RewriteOption {
   instruction: RewriteInstruction;
   label: string;
+  /** Set when this option can't help with this text (shown as a hint; the button is disabled). */
+  disabledReason?: string;
+}
+
+/**
+ * "Shorter" needs more than this many words. Mirrors the rewrite route's 400 `too_short` check
+ * (server-side, src/lib/ai — not importable here); the server stays authoritative.
+ */
+export const SHORTER_MAX_WORDS_BLOCKED = 3;
+
+export function canShorten(text: string): boolean {
+  return countWords(text) > SHORTER_MAX_WORDS_BLOCKED;
 }
 
 /** Menu options for a caption (translate label follows the caption's script). */
 export function rewriteOptions(text: string): { main: RewriteOption[]; tones: RewriteOption[] } {
+  const shorter: RewriteOption = { instruction: "shorter", label: "Shorter" };
+  if (!canShorten(text)) shorter.disabledReason = REWRITE_FAILURE_COPY.tooShort;
   return {
     main: [
       { instruction: "rewrite", label: "Rewrite" },
-      { instruction: "shorter", label: "Shorter" },
+      shorter,
       { instruction: "translate", label: translateLabel(text) },
     ],
     tones: TONES.map((t) => ({ instruction: `tone:${t}` as const, label: TONE_LABELS[t] })),
@@ -101,7 +115,13 @@ export type RewriteUiState =
   | { kind: "loading"; instruction: RewriteInstruction }
   | { kind: "preview"; text: string; lang: string; remaining: number | null; instruction: RewriteInstruction }
   | { kind: "off" }
+  /** AI is temporarily unusable (503 ai_unavailable, 502 auth / bad_request). */
+  | { kind: "unavailable" }
   | { kind: "limit" }
+  /** Per-user daily ceiling (429 daily_limit) — not the per-book cap; no Upgrade. */
+  | { kind: "dailyLimit" }
+  /** 400 too_short: nothing to shorten. */
+  | { kind: "tooShort" }
   | { kind: "busy" }
   | { kind: "retry" }
   | { kind: "unusable" }
@@ -113,7 +133,10 @@ export type RewriteFailureKind = Exclude<RewriteUiState["kind"], "idle" | "loadi
 
 export const REWRITE_FAILURE_COPY: Record<RewriteFailureKind, string> = {
   off: "AI captions aren't switched on yet",
+  unavailable: "AI captions aren't available right now — try later",
   limit: "No AI rewrites left on this book",
+  dailyLimit: "You've reached today's AI rewrite limit — try again tomorrow",
+  tooShort: "This caption is already short",
   busy: "One rewrite at a time — wait for the current one to finish.",
   retry: "The AI didn't answer in time. Try again.",
   unusable: "Couldn't improve this one — try another option",
@@ -145,17 +168,31 @@ export function rewriteResponseState(status: number, body: unknown, instruction:
       instruction,
     };
   }
-  if (status === 503 || error === "ai_off") return { kind: "off" };
-  if (status === 429) return { kind: "limit" };
+  if (error === "ai_off") return { kind: "off" };
+  if (status === 503) return { kind: "unavailable" }; // ai_unavailable (or any other 503)
+  if (status === 429) return error === "daily_limit" ? { kind: "dailyLimit" } : { kind: "limit" };
+  if (status === 400 && error === "too_short") return { kind: "tooShort" };
   if (status === 409) return { kind: "busy" };
   if (status === 401) return { kind: "signedOut" };
   if (status === 502) {
     if (error === "refusal") return { kind: "refused" };
     if (error === "rewrite_unusable") return { kind: "unusable" };
+    // Our API key / request shape: nothing the user can fix by trying another option.
+    if (error === "auth" || error === "bad_request") return { kind: "unavailable" };
     return field(body, "retryable") === true ? { kind: "retry" } : { kind: "unusable" };
   }
   if (status === 504 || status === 408) return { kind: "retry" };
   return { kind: "error" };
+}
+
+/**
+ * Failures that switch ✨ off for the rest of this editor session (like AI off): retrying any
+ * option would fail the same way. tooShort / unusable / refused are about this caption only.
+ */
+export type AiSessionBlock = "off" | "unavailable" | "dailyLimit";
+
+export function sessionBlockFor(kind: RewriteUiState["kind"]): AiSessionBlock | null {
+  return kind === "off" || kind === "unavailable" || kind === "dailyLimit" ? kind : null;
 }
 
 /** Rewrites left after a successful rewrite: the server's `remaining`, else previous − 1. */

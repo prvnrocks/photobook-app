@@ -243,6 +243,35 @@ describe("caption tools render", () => {
     expect(aiMenuBlockedReason(ctx, "  ")).toMatch(/Write a caption first/);
   });
 
+  it("✨ menu: a session block (503 ai_unavailable / daily limit) disables every option", () => {
+    const { ctx } = makeCtx(sel, { ai: "replay" });
+    for (const [blocked, copy] of [
+      ["unavailable", "AI captions aren&#x27;t available right now — try later"],
+      ["dailyLimit", "You&#x27;ve reached today&#x27;s AI rewrite limit — try again tomorrow"],
+    ] as const) {
+      const c = { ...ctx, ai: { ...ctx.ai, blocked } } as EditorContextValue;
+      const html = renderPanel(aiCaptionTool, c);
+      expect(html).toContain('data-state="blocked"');
+      expect(html).toContain(copy);
+      expect(html).not.toContain("ai-upgrade");
+    }
+  });
+
+  it("✨ menu: Shorter disabled with a hint for a ≤ 3-word caption", () => {
+    const { ctx } = makeCtx(sel, {
+      ai: "replay",
+      mutate: (d) => {
+        const p = d.doc.pages[sel.pageIdx];
+        p.caption = { text: "Eid mubarak", font: "Playfair", align: "center", source: "user" };
+      },
+    });
+    const html = renderPanel(aiCaptionTool, ctx);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*title="This caption is already short"[^>]*data-testid="ai-option-shorter"/);
+    expect(html).toMatch(/<button[^>]*data-testid="ai-option-rewrite"/);
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*data-testid="ai-option-rewrite"/);
+    expect(html).toContain('data-testid="ai-shorter-hint"');
+  });
+
   it("✨ menu: limit → message + Upgrade", () => {
     const { ctx } = makeCtx(sel, { ai: "limit" });
     const html = renderPanel(aiCaptionTool, ctx);
