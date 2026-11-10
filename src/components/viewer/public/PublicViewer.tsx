@@ -11,9 +11,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef } from "react";
 import type { RenderPhotos } from "@/components/book/BookPage";
 import { ViewerShell, type ViewerShellProps } from "@/components/viewer/ViewerShell";
+import { track } from "@/lib/analytics/client";
 import { claimImageRefresh, isBookPhotoSrc, type RefreshStore } from "@/lib/viewer/image-refresh";
 
-export type PublicViewerProps = ViewerShellProps & { slug: string };
+export type PublicViewerProps = ViewerShellProps & {
+  slug: string;
+  /** Signed-in owner viewing their own book (analytics only; false when analytics is off). */
+  isOwner?: boolean;
+};
 
 function sessionStore(): RefreshStore | null {
   try {
@@ -30,8 +35,17 @@ function photoUrls(photos: RenderPhotos): Set<string> {
   return out;
 }
 
-export function PublicViewer({ slug, ...shell }: PublicViewerProps) {
+export function PublicViewer({ slug, isOwner = false, ...shell }: PublicViewerProps) {
   const router = useRouter();
+
+  // analytics (M9 T14): once per page load; flags + page count only (never the slug or title).
+  const openedRef = useRef(false);
+  const pageCount = shell.doc.pages.length;
+  useEffect(() => {
+    if (openedRef.current) return;
+    openedRef.current = true;
+    track("viewer_opened", { is_paid: shell.isPaid, pages: pageCount, is_owner: isOwner });
+  }, [shell.isPaid, pageCount, isOwner]);
   const memory = useRef<{ last: number | null }>({ last: null });
   const urls = useMemo(() => photoUrls(shell.photos), [shell.photos]);
 

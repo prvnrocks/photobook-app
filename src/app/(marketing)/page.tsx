@@ -1,55 +1,69 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { DemoVideo } from "@/components/marketing/DemoVideo";
+import { ExampleBooks } from "@/components/marketing/ExampleBooks";
+import { Faq } from "@/components/marketing/Faq";
+import { HeroIllustration } from "@/components/marketing/HeroIllustration";
+import { HowItWorks } from "@/components/marketing/HowItWorks";
+import { Pricing } from "@/components/marketing/Pricing";
+import { AccountDeletedNotice } from "@/components/settings/AccountDeletedNotice";
 import { buttonVariants } from "@/components/ui/button";
+import { APP_NAME } from "@/lib/brand";
+import { CTA_HREF, CTA_LABEL, HERO_CLAIM, HERO_SUBCOPY, LANDING_DESCRIPTION, LANDING_TITLE } from "@/lib/marketing/copy";
+import { getDemoVideo } from "@/lib/marketing/demo";
+import { EXAMPLE_BOOKS } from "@/lib/marketing/examples";
 import { cn } from "@/lib/utils";
 
+export const metadata: Metadata = {
+  title: { absolute: `${APP_NAME} — ${LANDING_TITLE}` },
+  description: LANDING_DESCRIPTION,
+  alternates: { canonical: "/" },
+  openGraph: { type: "website", siteName: APP_NAME, title: `${APP_NAME} — ${LANDING_TITLE}`, description: LANDING_DESCRIPTION, url: "/" },
+  twitter: { card: "summary_large_image", title: `${APP_NAME} — ${LANDING_TITLE}`, description: LANDING_DESCRIPTION },
+};
+
 export default function LandingPage() {
+  const demo = getDemoVideo();
   return (
-    <div className="flex min-h-dvh flex-col">
-      <main className="mx-auto flex w-full max-w-md min-w-0 flex-1 flex-col gap-8 px-4 py-12 sm:px-6">
-        <section className="flex flex-col gap-4">
-          <h1
-            data-testid="hero-heading"
-            className="font-heading text-3xl font-semibold tracking-tight break-words"
-          >
-            Turn your photos into a beautiful book
-          </h1>
-          <p className="text-base text-muted-foreground">
-            Upload your photos, our AI builds the album, and you share it as a
-            flipbook link anyone can open.
-          </p>
-          <Link
-            href="/login"
-            data-testid="cta-create"
-            className={cn(buttonVariants({ size: "lg" }), "h-11 w-full px-4 text-base sm:w-auto sm:self-start")}
-          >
-            Create your book
-          </Link>
-        </section>
+    <main className="flex flex-col">
+      <div className="px-4 sm:px-6">
+        <AccountDeletedNotice />
+      </div>
+      <section
+        data-testid="section-hero"
+        className="bg-gradient-to-b from-amber-50 via-background to-background"
+      >
+        <div className="mx-auto grid w-full max-w-5xl items-center gap-10 px-4 pt-10 pb-12 sm:px-6 md:grid-cols-2 md:pt-16">
+          <div className="flex min-w-0 flex-col gap-5">
+            <h1
+              data-testid="hero-heading"
+              className="font-heading text-[2rem] leading-tight font-semibold tracking-tight break-words sm:text-5xl"
+            >
+              {HERO_CLAIM}
+            </h1>
+            <p className="text-base text-muted-foreground sm:text-lg">{HERO_SUBCOPY}</p>
+            <div className="flex flex-col gap-2">
+              <Link
+                href={CTA_HREF}
+                data-testid="cta-create"
+                className={cn(buttonVariants({ size: "lg" }), "h-12 w-full px-6 text-base sm:w-auto sm:self-start")}
+              >
+                {CTA_LABEL}
+              </Link>
+              <p className="text-sm text-muted-foreground">Free to try. No card needed.</p>
+            </div>
+          </div>
+          <HeroIllustration />
+        </div>
+      </section>
 
-        <section
-          aria-label="Sample captions"
-          className="flex flex-col gap-3 rounded-xl border bg-card p-4 text-card-foreground"
-        >
-          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Sample captions
-          </p>
-          <p dir="auto" className="text-lg break-words">
-            Golden hour on the Corniche, just the two of us.
-          </p>
-          <p
-            dir="auto"
-            lang="ar"
-            data-testid="sample-caption-ar"
-            className="font-arabic text-lg break-words"
-          >
-            أجمل الذكريات تبدأ بصورة
-          </p>
-        </section>
-      </main>
-
-      <footer className="mx-auto w-full max-w-md px-4 py-6 text-center text-sm text-muted-foreground sm:px-6">
-        Made in Abu Dhabi
-      </footer>
-    </div>
+      <div className="mx-auto flex w-full max-w-5xl min-w-0 flex-col gap-16 px-4 pt-6 pb-16 sm:px-6">
+        {demo ? <DemoVideo video={demo} /> : null}
+        <HowItWorks />
+        <ExampleBooks books={EXAMPLE_BOOKS} />
+        <Pricing />
+        <Faq />
+      </div>
+    </main>
   );
 }

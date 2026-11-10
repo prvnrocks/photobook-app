@@ -288,6 +288,7 @@ describe("dashboard publish chip", () => {
       ai_status: "done",
       slug: "s-1",
       expires_at: "2026-12-12T08:00:00Z",
+      draft_warning_sent_at: null,
       published: true,
       photo_count: 30,
       user_edited: true,

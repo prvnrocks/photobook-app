@@ -37,3 +37,6 @@ yarn-error.log*
 # Agentic OS raw logs stay on this machine (they contain prompts and commands); memory + run reports are committed
 .agentos/logs/
 .claude/settings.local.json
+
+# demo tooling drafts (scripts/record-demo.mjs --draft)
+public/demo/*.draft.*

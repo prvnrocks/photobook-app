@@ -15,6 +15,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { startUpgradeCheckout } from "@/app/books/[id]/upgrade/actions";
+import { track } from "@/lib/analytics/client";
 import type { StartUpgradeCheckoutResult, StartUpgradeErrorCode } from "@/lib/upgrade/types";
 import { PAYMENTS_UNAVAILABLE_HINT, runUpgradeCheckout, UPGRADE_BUTTON_LABEL } from "@/lib/upgrade/ui";
 
@@ -87,7 +88,15 @@ export function UpgradeButtonView({
     setBusy(true);
     setMessage(null);
     onBeforeStart?.();
-    const outcome = await runUpgradeCheckout({ start: () => start(bookId, returnTo), navigate, refresh });
+    const outcome = await runUpgradeCheckout({
+      start: () => start(bookId, returnTo),
+      navigate: (url) => {
+        // analytics (M9 T14): beacon, the page is about to leave for Stripe.
+        track("checkout_started", {}, { beacon: true });
+        navigate(url);
+      },
+      refresh,
+    });
     // Navigating: keep the spinner until the page unloads.
     if (outcome.kind === "error") {
       setBusy(false);

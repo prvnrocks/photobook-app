@@ -22,6 +22,13 @@ describe("flipLayout", () => {
       expect(l.fillerIndex).toBe(d % 2 === 1 ? d + 1 : null);
     }
   });
+  it("phone 20 pages: 22 indexes, end card 21, no filler; spread odd: filler then end card", () => {
+    expect(flipLayout(20, { endCard: true, spread: false })).toEqual({ docPages: 20, count: 22, endIndex: 21, fillerIndex: null });
+    expect(flipLayout(19, { endCard: true, spread: false })).toEqual({ docPages: 19, count: 21, endIndex: 20, fillerIndex: null });
+    expect(flipLayout(19, { endCard: true, spread: true })).toEqual({ docPages: 19, count: 22, endIndex: 21, fillerIndex: 20 });
+    expect(flipLayout(20, { endCard: true, spread: true })).toEqual({ docPages: 20, count: 22, endIndex: 21, fillerIndex: null });
+    for (let d = 0; d <= 101; d++) expect(flipLayout(d, { endCard: true, spread: false }).fillerIndex).toBeNull();
+  });
   it("without end card it is just cover + pages", () => {
     expect(flipLayout(3, { endCard: false, spread: true })).toEqual({ docPages: 3, count: 4, endIndex: null, fillerIndex: null });
   });

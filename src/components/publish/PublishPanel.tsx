@@ -18,6 +18,8 @@ import type {
   UnpublishBookResult,
 } from "@/app/books/[id]/publish/actions";
 import { UpgradeButtonView } from "@/components/upgrade/UpgradeButton";
+import { track } from "@/lib/analytics/client";
+import { deletesOnLabel, expiredBookDeleteDate } from "@/lib/dashboard/deletion-chip";
 import type { PdfTransport } from "@/lib/pdf/ui";
 import { ShareButtons } from "@/components/viewer/ShareButtons";
 import {
@@ -98,6 +100,13 @@ export function PublishPanelView({
     }
     setBusy(null);
     if (r.ok) {
+      // analytics (M9 T14): flags + page count only.
+      track("published", {
+        is_paid: state.isPaid,
+        has_password: state.hasPassword,
+        pages: state.pageCount,
+        first: state.publishedAt === null,
+      });
       setMessage({ tone: "ok", text: state.published ? "Changes published" : "Your book is live" });
       refresh();
     } else {
@@ -133,6 +142,8 @@ export function PublishPanelView({
   const live = state.published && !state.expired;
   const expiry = expiryLabel({ isPaid: state.isPaid, expiresAt: state.expiresAt, expired: state.expired, now });
   const blocked = state.canPublishReason;
+  const deleteDate = state.expired ? expiredBookDeleteDate({ is_paid: state.isPaid, expires_at: state.expiresAt }, now) : null;
+  const deletesOn = deleteDate ? deletesOnLabel(deleteDate, now) : null;
   const publishLabel = state.published ? "Publish changes" : "Publish";
   const upgrade = (variant: "primary" | "outline") => (
     <UpgradeButtonView
@@ -177,6 +188,11 @@ export function PublishPanelView({
         <section className="flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4" data-testid="publish-expired">
           <p className="text-base font-semibold text-amber-900">{EXPIRED_COPY}</p>
           <p className="text-sm text-amber-900/80">You can still edit your book. Upgrading makes the link permanent.</p>
+          {deletesOn ? (
+            <p className="text-sm font-medium text-amber-900" data-testid="publish-deletes-on">
+              {deletesOn}. Upgrade to keep it.
+            </p>
+          ) : null}
           {upgrade("primary")}
         </section>
       ) : live && state.url ? (

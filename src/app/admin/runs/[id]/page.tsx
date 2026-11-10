@@ -4,6 +4,7 @@
 // JSON (which by D-027 holds ids/keep/reason/quality only) — never photo URLs
 // or thumbnails.
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { isAdminUser } from "@/lib/auth/is-admin";
@@ -122,6 +123,11 @@ export default async function AdminRunTracePage({ params }: PageProps) {
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-6">
+      <nav className="mb-2 text-sm" aria-label="Admin">
+        <Link href="/admin/ai-spend" className="inline-flex min-h-11 items-center underline">
+          AI spend
+        </Link>
+      </nav>
       <h1 className="text-xl font-semibold" data-testid="trace-heading">
         Run trace
       </h1>

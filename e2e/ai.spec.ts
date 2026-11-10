@@ -57,6 +57,12 @@ test.describe("admin trace page when signed out", () => {
     const res = await request.get(`/admin/runs/not-a-uuid`, { maxRedirects: 0 });
     expect(res.status()).toBe(404);
   });
+
+  test("/admin/ai-spend -> 404, no redirect", async ({ request }) => {
+    const res = await request.get(`/admin/ai-spend`, { maxRedirects: 0 });
+    expect(res.status()).toBe(404);
+    expect(res.headers()["location"]).toBeUndefined();
+  });
 });
 
 test.describe("/api/ai/runs endpoints when signed out", () => {

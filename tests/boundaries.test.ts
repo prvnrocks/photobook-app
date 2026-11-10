@@ -34,6 +34,7 @@ describe("server/client boundaries", () => {
     "src/lib/ai/transport-live.ts",
     "src/lib/ai/transport-factory.ts",
     "src/lib/ai/orchestrator.ts",
+    "src/lib/ai/budget.ts",
     "src/lib/stripe.ts",
     "src/lib/photos/finalize.ts",
     "src/lib/publish/password.ts",
@@ -373,5 +374,66 @@ describe("PDF renderer boundaries (M8 T6)", () => {
     expect(reads("VERCEL_AUTOMATION_BYPASS_SECRET")).toEqual(["src/lib/pdf/render-pdf.ts"]);
     const chrome = reads("PDF_CHROME_PATH");
     expect(chrome).toEqual(["src/lib/pdf/browser.ts"]);
+  });
+});
+
+// --- M9 T13 additions (Sentry, D-058) -----------------------------------------
+
+describe("Sentry boundaries (M9 T13)", () => {
+  const SENTRY_CONFIGS = [
+    "src/instrumentation-client.ts",
+    "src/sentry.edge.config.ts",
+    "src/sentry.server.config.ts",
+  ];
+
+  it("Sentry DSN env vars are only read in the three Sentry config files", () => {
+    const matches = walk(SRC)
+      .filter((f) => /SENTRY_DSN/.test(readFileSync(f, "utf8")))
+      .map(rel)
+      .sort();
+    expect(matches).toEqual(SENTRY_CONFIGS);
+  });
+
+  it("SENTRY_AUTH_TOKEN is never referenced under src (build-time only, next.config.ts)", () => {
+    const matches = walk(SRC)
+      .filter((f) => /SENTRY_(AUTH_TOKEN|ORG|PROJECT)/.test(readFileSync(f, "utf8")))
+      .map(rel);
+    expect(matches).toEqual([]);
+    expect(readFileSync(join(ROOT, "next.config.ts"), "utf8")).toMatch(/process\.env\.SENTRY_AUTH_TOKEN/);
+  });
+
+  it.each(SENTRY_CONFIGS)("%s routes events through the shared scrubbed options", (file) => {
+    const src = readFileSync(join(ROOT, file), "utf8");
+    expect(src).toMatch(/from "@\/lib\/observability\/sentry-options"/);
+    expect(src).toMatch(/Sentry\.init\(\s*sentryOptions\(/);
+    expect(src).not.toMatch(/replayIntegration|tracesSampleRate|profilesSampleRate|sendDefaultPii/);
+  });
+
+  it.each(["src/lib/observability/scrub.ts", "src/lib/observability/sentry-options.ts"])(
+    "%s stays isomorphic (no server-only, no node: imports, no process.env)",
+    (file) => {
+      const src = readFileSync(join(ROOT, file), "utf8");
+      expect(src).not.toMatch(/["']server-only["']|from\s+["']node:|process\.env/);
+    },
+  );
+
+  it("no Sentry Replay or tunnel route anywhere in src or next.config.ts", () => {
+    const files = [...walk(SRC), join(ROOT, "next.config.ts")];
+    const offenders = files
+      .filter((f) => /replayIntegration|tunnelRoute\s*:/.test(readFileSync(f, "utf8")))
+      .map(rel);
+    expect(offenders).toEqual([]);
+  });
+
+  it("instrumentation.ts exports onRequestError and loads the runtime configs", () => {
+    const src = readFileSync(join(SRC, "instrumentation.ts"), "utf8");
+    expect(src).toMatch(/export const onRequestError = Sentry\.captureRequestError/);
+    expect(src).toMatch(/import\("\.\/sentry\.server\.config"\)/);
+    expect(src).toMatch(/import\("\.\/sentry\.edge\.config"\)/);
+  });
+
+  it("the Stripe webhook route never imports Sentry (raw body stays untouched)", () => {
+    const src = readFileSync(join(SRC, "app", "api", "stripe", "webhook", "route.ts"), "utf8");
+    expect(src).not.toMatch(/@sentry\//);
   });
 });

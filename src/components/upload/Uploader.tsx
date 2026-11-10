@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, useTransition, type ChangeEvent } from "react";
 import { deleteUnfinishedAction } from "@/app/books/actions";
 import { Button } from "@/components/ui/button";
+import { track } from "@/lib/analytics/client";
 import {
   finalizeWithPlaces,
   type FinalizeError,
@@ -183,6 +184,8 @@ export function Uploader(props: UploaderProps) {
       setPhase("done");
       return;
     }
+    // analytics (M9 T14): counts only.
+    track("upload_done", { photos: s.uploaded, failed: s.failed, skipped: s.skipped });
     const ready = base + s.uploaded;
     if (s.uploaded > finalizedAtRef.current || (!hasDocRef.current && ready > 0)) {
       await runFinalize(s.uploaded);

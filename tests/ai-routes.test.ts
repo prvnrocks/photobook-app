@@ -209,7 +209,7 @@ describe("POST /api/ai/runs", () => {
     await expectShape(await call(), 409, { error: "user_edited" });
   });
 
-  it.each(["daily_builds", "rebuilds", "analysed_photos"])("429 limit %s", async (limit) => {
+  it.each(["daily_builds", "rebuilds", "analysed_photos", "budget_exhausted"])("429 limit %s", async (limit) => {
     mocks.startRun.mockResolvedValue({ ok: false, error: "limit", limit });
     await expectShape(await call(), 429, { error: "limit", limit });
   });

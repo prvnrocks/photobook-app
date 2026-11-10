@@ -159,7 +159,7 @@ export function pageRenderModel(
 }
 
 /** Cover title font: the book style font, switched to an Arabic font for an Arabic title. */
-function coverFont(text: string, styleFont: string): CaptionFont {
+export function coverFont(text: string, styleFont: string): CaptionFont {
   const base: CaptionFont = isCaptionFont(styleFont) ? styleFont : DEFAULT_LATIN_CAPTION_FONT;
   if (isMainlyArabic(text) && !ARABIC_CAPTION_FONTS.includes(base)) return DEFAULT_ARABIC_CAPTION_FONT;
   return base;

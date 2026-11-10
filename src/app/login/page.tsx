@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { safeNextPath } from "@/lib/auth/redirect";
@@ -41,6 +42,17 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </p>
       </header>
       <LoginForm next={next} error={error === "auth"} />
+      <p className="text-center text-xs text-muted-foreground" data-testid="login-legal">
+        By continuing you agree to the{" "}
+        <Link href="/terms" className="underline underline-offset-4">
+          Terms
+        </Link>{" "}
+        and{" "}
+        <Link href="/privacy" className="underline underline-offset-4">
+          Privacy Policy
+        </Link>
+        .
+      </p>
     </main>
   );
 }

@@ -9,8 +9,9 @@
 //   201 { runId, mode, state }                     — mode 'rule' runs synchronously (state done|failed)
 //   400 { error: 'invalid_body' } | 401 | 403 | 404 { error: 'not_found' }
 //   409 { error: 'already_running', runId | null } | 409 { error: 'user_edited' }
-//   429 { error: 'limit', limit: 'daily_builds' | 'rebuilds' | 'analysed_photos' | 'rate' }
-//       ('rate' also sets Retry-After in seconds)
+//   429 { error: 'limit', limit: 'daily_builds' | 'rebuilds' | 'analysed_photos' | 'rate' | 'budget_exhausted' }
+//       ('rate' also sets Retry-After in seconds; 'budget_exhausted' = D-059 global daily AI budget
+//       used up — live mode only, no run created, nothing counted, the rule album stays)
 //   500 { error: 'server_error' }
 // Logs carry error codes only — never ids, run data or photo data.
 import { type NextRequest } from "next/server";

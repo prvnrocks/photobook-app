@@ -199,7 +199,11 @@ export type Database = {
           created_at: string
           doc: Json
           doc_rev: number
+          draft_warning_claimed_at: string | null
+          draft_warning_sent_at: string | null
           expires_at: string | null
+          expiry_warning_claimed_at: string | null
+          expiry_warning_sent_at: string | null
           id: string
           is_paid: boolean
           last_published_at: string | null
@@ -222,7 +226,11 @@ export type Database = {
           created_at?: string
           doc?: Json
           doc_rev?: number
+          draft_warning_claimed_at?: string | null
+          draft_warning_sent_at?: string | null
           expires_at?: string | null
+          expiry_warning_claimed_at?: string | null
+          expiry_warning_sent_at?: string | null
           id?: string
           is_paid?: boolean
           last_published_at?: string | null
@@ -245,7 +253,11 @@ export type Database = {
           created_at?: string
           doc?: Json
           doc_rev?: number
+          draft_warning_claimed_at?: string | null
+          draft_warning_sent_at?: string | null
           expires_at?: string | null
+          expiry_warning_claimed_at?: string | null
+          expiry_warning_sent_at?: string | null
           id?: string
           is_paid?: boolean
           last_published_at?: string | null
@@ -339,10 +351,12 @@ export type Database = {
         Row: {
           amount: number
           book_id: string | null
+          comped_by: string | null
           created_at: string
           currency: string
           id: string
           livemode: boolean | null
+          note: string | null
           paid_at: string | null
           refunded_at: string | null
           status: string
@@ -354,10 +368,12 @@ export type Database = {
         Insert: {
           amount: number
           book_id?: string | null
+          comped_by?: string | null
           created_at?: string
           currency?: string
           id?: string
           livemode?: boolean | null
+          note?: string | null
           paid_at?: string | null
           refunded_at?: string | null
           status?: string
@@ -369,10 +385,12 @@ export type Database = {
         Update: {
           amount?: number
           book_id?: string | null
+          comped_by?: string | null
           created_at?: string
           currency?: string
           id?: string
           livemode?: boolean | null
+          note?: string | null
           paid_at?: string | null
           refunded_at?: string | null
           status?: string
@@ -492,16 +510,19 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
+          email_reminders: boolean
           id: string
           name: string | null
         }
         Insert: {
           created_at?: string
+          email_reminders?: boolean
           id: string
           name?: string | null
         }
         Update: {
           created_at?: string
+          email_reminders?: boolean
           id?: string
           name?: string | null
         }
@@ -530,9 +551,43 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_ai_spend_daily: {
+        Args: { p_days: number }
+        Returns: {
+          build_usd: number
+          day: string
+          failed: number
+          null_book_runs: number
+          rewrite_usd: number
+          runs: number
+          usd: number
+        }[]
+      }
       claim_agent_run: {
         Args: { p_lease_seconds: number; p_run_id: string }
         Returns: string
+      }
+      claim_draft_warnings: {
+        Args: { p_delete_days: number; p_limit: number; p_warn_days: number }
+        Returns: {
+          book_id: string
+          delete_after: string
+          email: string
+          last_activity_at: string
+          title: string
+          user_id: string
+        }[]
+      }
+      claim_expiry_warnings: {
+        Args: { p_days_before: number; p_limit: number }
+        Returns: {
+          book_id: string
+          email: string
+          expires_at: string
+          is_live: boolean
+          title: string
+          user_id: string
+        }[]
       }
       claim_export: {
         Args: { p_export: string; p_lease_seconds: number }
@@ -542,8 +597,53 @@ export type Database = {
         Args: { p_book_id: string; p_min_interval_seconds: number }
         Returns: number
       }
+      cleanup_delete_abandoned_drafts: {
+        Args: { p_days: number; p_limit: number; p_notice_days: number }
+        Returns: {
+          book_id: string
+          user_id: string
+        }[]
+      }
+      cleanup_delete_expired_books: {
+        Args: { p_grace_days: number; p_limit: number }
+        Returns: {
+          book_id: string
+          user_id: string
+        }[]
+      }
+      cleanup_old_exports: {
+        Args: { p_days: number }
+        Returns: number
+      }
+      cleanup_orphan_objects: {
+        Args: { p_bucket: string; p_days: number; p_limit: number }
+        Returns: {
+          name: string
+        }[]
+      }
+      cleanup_pending_uploads: {
+        Args: { p_days: number; p_limit: number }
+        Returns: {
+          book_id: string
+          paths: string[]
+          photo_id: string
+          user_id: string
+        }[]
+      }
+      cleanup_unlock_attempts: {
+        Args: { p_hours: number }
+        Returns: number
+      }
       clear_unlock_attempt: {
         Args: { p_book: string; p_ip_hash: string }
+        Returns: boolean
+      }
+      comp_book: {
+        Args: { p_admin: string; p_book: string; p_reason: string }
+        Returns: string
+      }
+      confirm_warning: {
+        Args: { p_book: string; p_kind: string }
         Returns: boolean
       }
       create_agent_run_capped: {
@@ -581,6 +681,10 @@ export type Database = {
           p_user: string
         }
         Returns: Json
+      }
+      delete_book_guarded: {
+        Args: { p_book: string; p_user: string }
+        Returns: string
       }
       fail_export: {
         Args: { p_code: string; p_export: string; p_token: string }
@@ -627,6 +731,10 @@ export type Database = {
           title: string
         }[]
       }
+      reap_stale_agent_runs: {
+        Args: { p_hours: number }
+        Returns: number
+      }
       record_stripe_order_event: {
         Args: {
           p_event_id: string
@@ -641,6 +749,10 @@ export type Database = {
       release_agent_run: {
         Args: { p_run_id: string; p_token: string }
         Returns: undefined
+      }
+      release_warning: {
+        Args: { p_book: string; p_kind: string }
+        Returns: boolean
       }
       reserve_geocode_calls: {
         Args: { p_book_id: string; p_daily_cap: number; p_want: number }

@@ -10,6 +10,7 @@ import { BookUnavailable } from "@/components/viewer/public/BookUnavailable";
 import { ExpiredBook } from "@/components/viewer/public/ExpiredBook";
 import { PasswordGate } from "@/components/viewer/public/PasswordGate";
 import { PublicViewer } from "@/components/viewer/public/PublicViewer";
+import { analyticsEnabled } from "@/lib/analytics/flash";
 import { getSiteUrl } from "@/lib/auth/redirect";
 import { APP_NAME } from "@/lib/brand";
 import { isViewerOwner, type OgData, type ViewerBookResult } from "@/lib/db/public-books";
@@ -79,6 +80,8 @@ export default async function PublicBookPage({ params }: Params) {
       const title = book.title?.trim() || APP_NAME;
       // Password books: share text carries no title (D-040).
       const shareTitle = book.hasPassword ? `A photobook on ${APP_NAME}` : title;
+      // analytics (M9 T14): owner flag for viewer_opened — only looked up when PostHog is on.
+      const isOwner = analyticsEnabled() && bookId ? await isViewerOwner(bookId) : false;
       return (
         <PublicViewer
           slug={slug}
@@ -89,6 +92,7 @@ export default async function PublicBookPage({ params }: Params) {
           isPaid={book.isPaid}
           shareUrl={`${getSiteUrl()}/b/${slug}`}
           shareTitle={shareTitle}
+          isOwner={isOwner}
         />
       );
     }

@@ -25,12 +25,14 @@ const mocks = vi.hoisted(() => ({
   steps: [] as AgentStepRecord[],
   insertStepError: null as Error | null,
   countError: null as Error | null,
+  todaySpend: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: async () => mocks.user }));
 vi.mock("@/lib/db/books", () => ({ getMyBook: mocks.getMyBook }));
 vi.mock("@/lib/db/photo-notes", () => ({ getPhotoNotesAdmin: mocks.getPhotoNotesAdmin }));
 vi.mock("@/lib/db/memory", () => ({ getUserMemoryAdmin: mocks.getUserMemoryAdmin }));
+vi.mock("@/lib/db/ai-spend", () => ({ getTodaySpendUsd: mocks.todaySpend }));
 vi.mock("@/lib/ai/transport-factory", async (orig) => {
   const real = await orig<typeof import("@/lib/ai/transport-factory")>();
   return {
@@ -156,6 +158,7 @@ beforeEach(() => {
   mocks.steps = [];
   mocks.insertStepError = null;
   mocks.countError = null;
+  mocks.todaySpend.mockReset().mockResolvedValue(0);
   mocks.getMyBook.mockReset().mockResolvedValue(bookRow());
   mocks.getPhotoNotesAdmin.mockReset().mockResolvedValue([
     { id: P1, takenAt: "2026-07-04T10:00:00+04:00", place: null, ai: { v: CURATOR_PROMPT_VERSION, description: SECRET_NOTE, scene: "group", mood: "joyful", quality: 0.8, coverWorthy: false } },
@@ -338,6 +341,68 @@ describe("POST /api/ai/rewrite", () => {
     expect(mocks.runs[0]).toMatchObject({ state: "failed", errorCode: "rewrite_unusable" });
     expect(mocks.steps).toHaveLength(2);
     expectNoPrivateData();
+  });
+
+  describe("D-059 daily AI budget (live mode)", () => {
+    const liveOk: AgentTransport = {
+      kind: "live",
+      parse: async () => ({
+        parsed: { text: "A brand new caption about the day" } as never,
+        stopReason: "end_turn",
+        usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0 },
+        model: "claude-opus-5-5",
+        latencyMs: 1,
+      }),
+    };
+    beforeEach(() => {
+      vi.stubEnv("AI_MODE", "live");
+      vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-test");
+      mocks.transport = liveOk;
+    });
+
+    it("over budget → 429 budget_exhausted, no run row, no model call, nothing counted", async () => {
+      vi.stubEnv("AI_DAILY_BUDGET_USD", "10");
+      mocks.todaySpend.mockResolvedValue(10.5);
+      expect(await read(await call())).toEqual({ status: 429, body: { error: "budget_exhausted" } });
+      expect(mocks.createCalls).toHaveLength(0);
+      expect(mocks.runs).toHaveLength(0);
+      expect(mocks.requests).toHaveLength(0);
+      expect(mocks.steps).toHaveLength(0);
+      expect(mocks.getPhotoNotesAdmin).not.toHaveBeenCalled();
+    });
+
+    it("under budget → unchanged", async () => {
+      vi.stubEnv("AI_DAILY_BUDGET_USD", "10");
+      mocks.todaySpend.mockResolvedValue(2);
+      const r = await read(await call());
+      expect(r.status).toBe(200);
+      expect(mocks.createCalls).toHaveLength(1);
+      expect(mocks.requests).toHaveLength(1);
+    });
+
+    it("unset budget → unchanged, spend never queried", async () => {
+      vi.stubEnv("AI_DAILY_BUDGET_USD", "");
+      mocks.todaySpend.mockResolvedValue(1_000);
+      expect((await read(await call())).status).toBe(200);
+      expect(mocks.todaySpend).not.toHaveBeenCalled();
+    });
+
+    it("spend query failure → fails open, logs the code only", async () => {
+      vi.stubEnv("AI_DAILY_BUDGET_USD", "10");
+      mocks.todaySpend.mockRejectedValue(Object.assign(new Error("db down"), { code: "57P01" }));
+      expect((await read(await call())).status).toBe(200);
+      expect(logs).toContain("[ai-budget] spend_query_failed (57P01)");
+      expectNoPrivateData();
+    });
+
+    it("replay mode is never refused", async () => {
+      vi.stubEnv("AI_MODE", "replay");
+      vi.stubEnv("ANTHROPIC_API_KEY", "");
+      mocks.transport = null;
+      vi.stubEnv("AI_DAILY_BUDGET_USD", "0");
+      expect((await read(await call())).status).toBe(200);
+      expect(mocks.todaySpend).not.toHaveBeenCalled();
+    });
   });
 
   it("oversized body is rejected by the streamed reader (Content-Length or counted bytes) → 400", async () => {

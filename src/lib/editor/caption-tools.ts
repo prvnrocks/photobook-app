@@ -120,6 +120,8 @@ export type RewriteUiState =
   | { kind: "limit" }
   /** Per-user daily ceiling (429 daily_limit) — not the per-book cap; no Upgrade. */
   | { kind: "dailyLimit" }
+  /** 429 budget_exhausted (D-059): global daily AI budget used up — try later, not counted. */
+  | { kind: "aiBreak" }
   /** 400 too_short: nothing to shorten. */
   | { kind: "tooShort" }
   | { kind: "busy" }
@@ -136,6 +138,7 @@ export const REWRITE_FAILURE_COPY: Record<RewriteFailureKind, string> = {
   unavailable: "AI captions aren't available right now — try later",
   limit: "No AI rewrites left on this book",
   dailyLimit: "You've reached today's AI rewrite limit — try again tomorrow",
+  aiBreak: "AI is taking a break — try again later",
   tooShort: "This caption is already short",
   busy: "One rewrite at a time — wait for the current one to finish.",
   retry: "The AI didn't answer in time. Try again.",
@@ -170,7 +173,10 @@ export function rewriteResponseState(status: number, body: unknown, instruction:
   }
   if (error === "ai_off") return { kind: "off" };
   if (status === 503) return { kind: "unavailable" }; // ai_unavailable (or any other 503)
-  if (status === 429) return error === "daily_limit" ? { kind: "dailyLimit" } : { kind: "limit" };
+  if (status === 429) {
+    if (error === "budget_exhausted") return { kind: "aiBreak" };
+    return error === "daily_limit" ? { kind: "dailyLimit" } : { kind: "limit" };
+  }
   if (status === 400 && error === "too_short") return { kind: "tooShort" };
   if (status === 409) return { kind: "busy" };
   if (status === 401) return { kind: "signedOut" };

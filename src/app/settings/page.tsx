@@ -2,9 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/layout/AppHeader";
+import { DeleteAccount } from "@/components/settings/DeleteAccount";
+import { EmailRemindersToggle } from "@/components/settings/EmailRemindersToggle";
 import { SettingsMemory } from "@/components/settings/SettingsMemory";
 import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { getOwnEmailReminders } from "@/lib/db/account";
 import { getOwnMemoryView, type OwnMemoryView } from "@/lib/db/memory";
 import { getMyProfile } from "@/lib/db/profiles";
 import { SETTINGS_COPY } from "@/lib/settings/ui";
@@ -27,7 +30,12 @@ export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=%2Fsettings");
 
-  const [profile, memory] = await Promise.all([getMyProfile().catch(() => null), loadMemory()]);
+  const [profile, memory, remindersOn] = await Promise.all([
+    getMyProfile().catch(() => null),
+    loadMemory(),
+    // null = couldn't load (the section shows a friendly error instead of a possibly wrong switch).
+    getOwnEmailReminders(user.id).catch(() => null),
+  ]);
   const displayName = profile?.name ?? profile?.email ?? user.email ?? null;
 
   return (
@@ -37,7 +45,11 @@ export default async function SettingsPage() {
         <h1 className="mb-6 text-2xl font-semibold" data-testid="settings-heading">
           {SETTINGS_COPY.heading}
         </h1>
-        <SettingsMemory view={memory} />
+        <div className="flex min-w-0 flex-col gap-4">
+          <EmailRemindersToggle initialOn={remindersOn} />
+          <SettingsMemory view={memory} />
+          <DeleteAccount />
+        </div>
         <Link
           href="/dashboard"
           className={cn(buttonVariants({ variant: "ghost" }), "mt-4 h-11 w-full px-4 text-base")}

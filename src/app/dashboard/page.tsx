@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { deleteBookAction } from "@/app/books/actions";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { BookList } from "@/components/dashboard/BookList";
 import { EmptyState } from "@/components/dashboard/EmptyState";
 import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { getOwnEmailReminders } from "@/lib/db/account";
 import { listMyBooks, type BookListItem } from "@/lib/db/books";
 import { getMyProfile, type MyProfile } from "@/lib/db/profiles";
 import { cn } from "@/lib/utils";
@@ -30,11 +32,22 @@ async function loadProfile(): Promise<MyProfile | null> {
   }
 }
 
+/** null when the setting couldn't be loaded (the chips then use the no-email rule — never a later date). */
+async function loadEmailReminders(userId: string): Promise<boolean | null> {
+  try {
+    return await getOwnEmailReminders(userId);
+  } catch {
+    return null;
+  }
+}
+
 export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=%2Fdashboard");
 
-  const [profile, books] = await Promise.all([loadProfile(), loadBooks()]);
+  const [profile, books, reminders] = await Promise.all([loadProfile(), loadBooks(), loadEmailReminders(user.id)]);
+  // Drafts of owners who get no warning email are deleted without one (review S2) — the chips show it.
+  const emailable = reminders === null ? null : reminders && Boolean(user.email);
   const displayName = profile?.name ?? profile?.email ?? user.email ?? null;
 
   return (
@@ -64,7 +77,7 @@ export default async function DashboardPage() {
         ) : books.length === 0 ? (
           <EmptyState />
         ) : (
-          <BookList books={books} />
+          <BookList books={books} deleteBook={deleteBookAction} emailable={emailable} />
         )}
       </main>
     </>

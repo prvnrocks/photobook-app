@@ -11,6 +11,7 @@ import { getCurrentUser } from "@/lib/auth/current-user";
 import { docOrigin } from "@/lib/book/replaceable";
 import { countLiveRebuilds, getActiveRunForBook } from "@/lib/db/agent-runs";
 import { getBookForRun, getMyBook } from "@/lib/db/books";
+import { touchWarnedDraft } from "@/lib/db/draft-activity";
 import { listReviewPhotos } from "@/lib/db/photos";
 import { getMyProfile } from "@/lib/db/profiles";
 import { getLayout } from "@/lib/layouts";
@@ -42,6 +43,8 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   // Ownership under RLS first; the admin-client helpers below assume it was checked.
   const book = await getMyBook(id);
   if (!book) notFound();
+  // Owner opened a warned draft: counts as activity (review S3). Never throws.
+  await touchWarnedDraft(book.id, user.id);
 
   const aiMode = resolveAiMode();
   const [photos, forRun, activeRun, usedRebuilds, profile] = await Promise.all([

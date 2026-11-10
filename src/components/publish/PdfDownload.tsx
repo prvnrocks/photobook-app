@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { UpgradeButtonView } from "@/components/upgrade/UpgradeButton";
+import { track } from "@/lib/analytics/client";
 import {
   createPdfDownloadController,
   fetchPdfTransport,
@@ -78,9 +79,16 @@ export function PdfDownloadView({
 
   useEffect(() => {
     if (!isPaid) return;
+    // analytics (M9 T14): one pdf_downloaded per ready; reused = no queued/rendering step seen.
+    let rendered = false;
     const c = createPdfDownloadController({
       bookId,
-      onChange: setState,
+      onChange: (s) => {
+        if (s.kind === "starting") rendered = false;
+        else if (s.kind === "preparing") rendered = true;
+        else if (s.kind === "ready") track("pdf_downloaded", { pages: s.pageCount, reused: !rendered }, { beacon: true });
+        setState(s);
+      },
       transport: (m, u) => latest.current.transport(m, u),
       navigate: (url) => (latest.current.navigate ? latest.current.navigate(url) : window.location.assign(url)),
       beforeStart: () => latest.current.onBeforeStart?.(),

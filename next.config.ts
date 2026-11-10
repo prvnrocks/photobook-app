@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs/config";
 
 /**
  * Headers for the public flipbook /b/[slug] (and its og image). noindex: shared books are private
@@ -42,4 +43,36 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// --- Sentry (M9 T13, D-058) ------------------------------------------------------------------
+// Always wrapped so dev/CI/prod builds behave the same; without SENTRY_AUTH_TOKEN nothing is
+// uploaded (and the runtime SDK is a no-op without a DSN). With the token, source maps are
+// generated hidden, uploaded to Sentry EU and deleted from the build output.
+// Build-time auto-instrumentation is off: route handlers (incl. the raw-body Stripe webhook),
+// middleware and app-dir components stay unwrapped; server errors come from onRequestError in
+// src/instrumentation.ts. Tracing/Replay/debug code is tree-shaken out (no performance data).
+export const SENTRY_BUILD_OPTIONS: Parameters<typeof withSentryConfig>[1] = {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  sentryUrl: "https://de.sentry.io/",
+  silent: !process.env.CI,
+  telemetry: false,
+  widenClientFileUpload: true,
+  sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN, deleteSourcemapsAfterUpload: true },
+  webpack: {
+    autoInstrumentServerFunctions: false,
+    autoInstrumentMiddleware: false,
+    autoInstrumentAppDirectory: false,
+  },
+  bundleSizeOptimizations: {
+    excludeDebugStatements: true,
+    excludeTracing: true,
+    excludeReplayIframe: true,
+    excludeReplayShadowDom: true,
+    excludeReplayWorker: true,
+  },
+  // tunnelRoute deliberately unset: it would add a public route that proxies to Sentry.
+};
+
+export default withSentryConfig(nextConfig, SENTRY_BUILD_OPTIONS);
+// --- end Sentry ----------------------------------------------------------------------------

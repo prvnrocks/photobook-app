@@ -3,8 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { withAnalyticsFlash } from "@/lib/analytics/flash";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { CAPTION_LANGS, OCCASIONS, TONES } from "@/lib/book/options";
+import { deleteBookCompletely } from "@/lib/cleanup/delete-book";
+import type { DeleteBookActionResult } from "@/lib/dashboard/delete-book";
 import { createBook } from "@/lib/db/books";
 import { deletePhoto, deleteUnfinished } from "@/lib/db/photos";
 import { isUuid } from "@/lib/uuid";
@@ -75,7 +78,8 @@ export async function createBookAction(
     return { ok: false, error: MSG_CREATE_FAILED };
   }
 
-  redirect(`/books/${id}/upload`);
+  // analytics (M9 T14): one-shot ?_ev=book_created only when PostHog is configured.
+  redirect(withAnalyticsFlash(`/books/${id}/upload`, "book_created"));
 }
 
 /** Deletes one photo (files + row) of the current user's book. */
@@ -113,5 +117,27 @@ export async function deleteUnfinishedAction(bookId: string): Promise<PhotoActio
     return { ok: false, error: MSG_DELETE_FAILED };
   }
   revalidatePath(`/books/${bookId}/upload`);
+  return { ok: true };
+}
+
+/**
+ * Dashboard "Delete book" (D-060): deletes the signed-in user's book (row via delete_book_guarded,
+ * then its Storage prefixes). Refuses books with a payment ('protected'); a foreign or missing
+ * book is 'not_found'. Storage failures still count as deleted (the orphan sweep finishes them).
+ */
+export async function deleteBookAction(bookId: string): Promise<DeleteBookActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "unauthenticated" };
+  if (!isUuid(bookId)) return { ok: false, error: "not_found" };
+
+  const result = await deleteBookCompletely({ bookId, userId: user.id });
+  if (!result.ok) {
+    if (result.error === "protected") return { ok: false, error: "protected" };
+    if (result.error === "failed") return { ok: false, error: "failed" };
+    // Already gone (e.g. deleted in another tab): refresh the list so the card disappears.
+    revalidatePath("/dashboard");
+    return { ok: false, error: "not_found" };
+  }
+  revalidatePath("/dashboard");
   return { ok: true };
 }

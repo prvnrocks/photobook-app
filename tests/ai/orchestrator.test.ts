@@ -945,6 +945,70 @@ describe("orchestrator — limits", () => {
   });
 });
 
+describe("orchestrator — D-059 daily AI budget breaker", () => {
+  const input = { bookId: BOOK, userId: USER, trigger: "build" as const };
+
+  it("live + over budget → limit budget_exhausted, no run row, no model call, nothing written", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 10), { mode: "live" });
+    let checks = 0;
+    const over: OrchestratorDeps = { ...deps, isOverDailyAiBudget: async () => (checks++, true) };
+    expect(await orch.startRun(input, over)).toEqual({ ok: false, error: "limit", limit: "budget_exhausted" });
+    expect(await orch.startRun({ ...input, trigger: "rebuild" }, over)).toEqual({ ok: false, error: "limit", limit: "budget_exhausted" });
+    expect(checks).toBe(2);
+    expect(db.createCalls).toHaveLength(0);
+    expect(db.runs.size).toBe(0);
+    expect(transport.calls).toHaveLength(0);
+    expect(db.writes).toEqual([]);
+  });
+
+  it("live + under budget → unchanged (run created)", async () => {
+    const { db, deps } = setup(photos150().slice(0, 10), { mode: "live" });
+    const under: OrchestratorDeps = { ...deps, isOverDailyAiBudget: async () => false };
+    expect(await orch.startRun(input, under)).toMatchObject({ ok: true, mode: "live", state: "queued" });
+    expect(db.createCalls).toHaveLength(1);
+  });
+
+  it("no budget dep (unset budget) → unchanged", async () => {
+    const { db, deps } = setup(photos150().slice(0, 10), { mode: "live" });
+    expect(deps.isOverDailyAiBudget).toBeUndefined();
+    expect(await orch.startRun(input, deps)).toMatchObject({ ok: true, mode: "live" });
+    expect(db.createCalls).toHaveLength(1);
+  });
+
+  it("a throwing budget check fails open", async () => {
+    const { db, deps } = setup(photos150().slice(0, 10), { mode: "live" });
+    const broken: OrchestratorDeps = {
+      ...deps,
+      isOverDailyAiBudget: async () => {
+        throw new Error("boom");
+      },
+    };
+    expect(await orch.startRun(input, broken)).toMatchObject({ ok: true, mode: "live" });
+    expect(db.createCalls).toHaveLength(1);
+  });
+
+  it("replay and off modes are never refused (they cost nothing) and never check", async () => {
+    let checks = 0;
+    const replay = setup(photos150().slice(0, 10));
+    expect(await orch.startRun(input, { ...replay.deps, isOverDailyAiBudget: async () => (checks++, true) })).toMatchObject({
+      ok: true,
+      mode: "replay",
+    });
+    const off = setup(photos150().slice(0, 10), { mode: "off" });
+    expect(await orch.startRun(input, { ...off.deps, isOverDailyAiBudget: async () => (checks++, true) })).toMatchObject({
+      ok: true,
+      mode: "rule",
+    });
+    expect(checks).toBe(0);
+  });
+
+  it("owner / user-edited checks still come first", async () => {
+    const { deps } = setup(photos150().slice(0, 10), { mode: "live" });
+    const over: OrchestratorDeps = { ...deps, isOverDailyAiBudget: async () => true };
+    expect(await orch.startRun({ ...input, userId: "someone-else" }, over)).toEqual({ ok: false, error: "not_found" });
+  });
+});
+
 describe("orchestrator — AI mode changed during a run", () => {
   it("replay run, server now resolves 'off' → finishes with the rule album, error_code mode_changed, no calls", async () => {
     const { db, transport, deps } = setup(photos150().slice(0, 30));
