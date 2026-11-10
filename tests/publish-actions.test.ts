@@ -81,6 +81,7 @@ function row(over: Record<string, unknown> = {}) {
   return {
     id: BOOK,
     title: "Summer in Abu Dhabi",
+    caption_lang: "en",
     doc: doc(),
     doc_rev: 7,
     max_pages: 20,
@@ -154,6 +155,8 @@ describe("publishBookAction", () => {
     const pub = (upd.payload as { published_doc: Record<string, unknown> }).published_doc;
     expect(pub).not.toHaveProperty("meta");
     expect(JSON.stringify(pub)).not.toContain('"source"');
+    // caption language frozen into the snapshot (D-039, M6 review B1)
+    expect(pub.captionLang).toBe("en");
     expect(upd.payload).not.toHaveProperty("doc");
     expect(upd.payload).not.toHaveProperty("doc_rev");
     expect(upd.calls).toEqual([
@@ -169,6 +172,19 @@ describe("publishBookAction", () => {
     expect(fake.learnFromBook).toHaveBeenCalledWith(USER, BOOK, "publish");
     expect(fake.revalidatePath).toHaveBeenCalledWith("/dashboard");
     expect(fake.revalidatePath).toHaveBeenCalledWith(`/b/${r.slug}`);
+  });
+
+  it("freezes caption_lang 'ar' into the snapshot; unknown / null values snapshot as 'en'", async () => {
+    fake.state.results.push({ data: row({ caption_lang: "ar" }), error: null }, { data: [{ id: BOOK }], error: null });
+    expect((await publishBookAction(BOOK)).ok).toBe(true);
+    const snap = (u: Chain) => (u.payload as { published_doc: Record<string, unknown> }).published_doc;
+    expect(snap(updates()[0]).captionLang).toBe("ar");
+    for (const lang of [null, "fr"]) {
+      fake.state.chains = [];
+      fake.state.results.push({ data: row({ caption_lang: lang }), error: null }, { data: [{ id: BOOK }], error: null });
+      expect((await publishBookAction(BOOK)).ok).toBe(true);
+      expect(snap(updates()[0]).captionLang).toBe("en");
+    }
   });
 
   it("republish keeps slug, published_at and expires_at verbatim (never extended)", async () => {
@@ -330,6 +346,29 @@ describe("unpublishBookAction", () => {
 });
 
 describe("setBookPasswordAction", () => {
+  beforeEach(() => {
+    // S4: a password is only accepted when viewers could unlock it (BOOK_ACCESS_SECRET set).
+    vi.stubEnv("BOOK_ACCESS_SECRET", "test-secret-test-secret-test-secret-0123");
+  });
+
+  it.each([
+    ["missing", ""],
+    ["too short", "short"],
+  ])("BOOK_ACCESS_SECRET %s → unavailable before hashing, no write", async (_label, value) => {
+    vi.stubEnv("BOOK_ACCESS_SECRET", value);
+    expect(await setBookPasswordAction(BOOK, PW)).toEqual({ ok: false, error: "unavailable" });
+    // Checked before validation (and so before scrypt): even an invalid password gets the same answer.
+    expect(await setBookPasswordAction(BOOK, "abc")).toEqual({ ok: false, error: "unavailable" });
+    expect(updates()).toHaveLength(0);
+  });
+
+  it("BOOK_ACCESS_SECRET missing → removing a password (null) still works", async () => {
+    vi.stubEnv("BOOK_ACCESS_SECRET", "");
+    fake.state.results.push({ data: [{ slug: null }], error: null });
+    expect(await setBookPasswordAction(BOOK, null)).toEqual({ ok: true, hasPassword: false });
+    expect(updates()[0].payload).toEqual({ password_hash: null });
+  });
+
   it("sets an scrypt hash (never the plaintext) and revalidates the viewer", async () => {
     fake.state.results.push({ data: [{ slug: "a-AbCdEfGh12" }], error: null });
     expect(await setBookPasswordAction(BOOK, PW)).toEqual({ ok: true, hasPassword: true });

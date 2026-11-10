@@ -16,6 +16,7 @@ const fake = vi.hoisted(() => {
     queryCount: 0,
     user: null as { id: string } | null,
     now: Date.now(),
+    clearResult: { data: true, error: null } as { data: unknown; error: { code?: string } | null },
   };
 
   function query(table: string, cols: string) {
@@ -78,6 +79,7 @@ const fake = vi.hoisted(() => {
       state.queryCount++;
       state.rpcs.push({ fn, args });
       if (fn === "get_published_book") return { data: getPublishedBook(args.p_slug as string), error: null };
+      if (fn === "clear_unlock_attempt") return state.clearResult;
       return { data: null, error: { code: "42883" } };
     },
     storage: {
@@ -98,7 +100,8 @@ const fake = vi.hoisted(() => {
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => fake.admin }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => fake.server }));
 
-const { getViewerBook, getOgData, isViewerOwner, VIEWER_URL_TTL_SECONDS } = await import("@/lib/db/public-books");
+const { getViewerBook, getOgData, isViewerOwner, clearUnlockAttempt, VIEWER_URL_TTL_SECONDS } = await import("@/lib/db/public-books");
+const { APP_NAME } = await import("@/lib/brand");
 const { hashPassword, passwordFingerprint } = await import("@/lib/publish/password");
 const { signAccess, accessExpiry } = await import("@/lib/publish/access-cookie");
 
@@ -227,6 +230,7 @@ beforeEach(() => {
   fake.state.signCalls = [];
   fake.state.queryCount = 0;
   fake.state.user = null;
+  fake.state.clearResult = { data: true, error: null };
 });
 
 const cookieFor = (hash: string, bookId = BOOK) =>
@@ -237,7 +241,8 @@ describe("getViewerBook", () => {
     const r = await getViewerBook(SLUG);
     expect(r.bookId).toBe(BOOK);
     expect(r.book.state).toBe("ok");
-    expect(r.book.title).toBe("Our trip");
+    // Snapshot cover title (D-039), not the live books.title ("Our trip").
+    expect(r.book.title).toBe("Our Trip");
     expect(r.book.pageCount).toBe(2);
     expect(r.book.publishedRev).toBe(3);
     expect(r.book.hasPassword).toBe(false);
@@ -358,9 +363,72 @@ describe("getViewerBook", () => {
     expect(fake.state.signCalls).toHaveLength(0);
   });
 
-  it("captionLang is normalised", async () => {
+  it("captionLang is normalised (old snapshot without captionLang → live column)", async () => {
     fake.state.books = [book({ caption_lang: "ar" })];
     expect((await getViewerBook(SLUG)).book.captionLang).toBe("ar");
+    fake.state.books = [book({ caption_lang: "xx" })];
+    expect((await getViewerBook(SLUG)).book.captionLang).toBe("en");
+  });
+
+  it("title comes from the snapshot even when the live books.title differs (D-039)", async () => {
+    fake.state.books = [book({ title: "Unpublished new title" })];
+    const r = await getViewerBook(SLUG);
+    expect(r.book.title).toBe("Our Trip");
+    expect(JSON.stringify(r.book)).not.toContain("Unpublished new title");
+  });
+
+  it("empty / blank snapshot cover title → APP_NAME (never the live books.title)", async () => {
+    const doc = publicDoc({ cover: P1, pages: [P1] });
+    doc.cover.title = "   ";
+    fake.state.books = [book({ title: "Live title", published_doc: doc })];
+    const r = await getViewerBook(SLUG);
+    expect(r.book.title).toBe(APP_NAME);
+    const og = await getOgData(SLUG);
+    expect(og.title).toBeNull();
+    expect(JSON.stringify([r.book, og])).not.toContain("Live title");
+  });
+
+  it("snapshot captionLang wins over the live caption_lang (D-039)", async () => {
+    fake.state.books = [book({ caption_lang: "en", published_doc: { ...publicDoc({ cover: P1, pages: [P1] }), captionLang: "ar" } })];
+    expect((await getViewerBook(SLUG)).book.captionLang).toBe("ar");
+    expect((await getOgData(SLUG)).captionLang).toBe("ar");
+    fake.state.books = [book({ caption_lang: "ar", published_doc: { ...publicDoc({ cover: P1, pages: [P1] }), captionLang: "en" } })];
+    expect((await getViewerBook(SLUG)).book.captionLang).toBe("en");
+    expect((await getOgData(SLUG)).captionLang).toBe("en");
+  });
+
+  it("old snapshot without captionLang still parses and renders", async () => {
+    const doc = publicDoc({ cover: P1, pages: [P1, P2] });
+    expect(doc).not.toHaveProperty("captionLang");
+    fake.state.books = [book({ caption_lang: "ar", published_doc: doc })];
+    const r = await getViewerBook(SLUG);
+    expect(r.book.state).toBe("ok");
+    expect(r.book.doc).not.toHaveProperty("captionLang");
+    expect(r.book.captionLang).toBe("ar");
+  });
+
+  it("snapshot with an invalid captionLang → unavailable (strict schema)", async () => {
+    fake.state.books = [book({ published_doc: { ...publicDoc({ cover: P1, pages: [P1] }), captionLang: "fr" } })];
+    expect((await getViewerBook(SLUG)).book.state).toBe("unavailable");
+  });
+});
+
+describe("clearUnlockAttempt", () => {
+  it("calls clear_unlock_attempt with the pair; true → cleared, false → none", async () => {
+    expect(await clearUnlockAttempt(BOOK, "iphash")).toBe("cleared");
+    expect(fake.state.rpcs).toEqual([{ fn: "clear_unlock_attempt", args: { p_book: BOOK, p_ip_hash: "iphash" } }]);
+    fake.state.clearResult = { data: false, error: null };
+    expect(await clearUnlockAttempt(BOOK, "iphash")).toBe("none");
+  });
+
+  it.each(["PGRST202", "42883"])("missing function (%s, migration 1100 not applied) → 'missing', no throw", async (code) => {
+    fake.state.clearResult = { data: null, error: { code } };
+    expect(await clearUnlockAttempt(BOOK, "iphash")).toBe("missing");
+  });
+
+  it("other errors throw a code-only PublicBooksQueryError", async () => {
+    fake.state.clearResult = { data: null, error: { code: "57014" } };
+    await expect(clearUnlockAttempt(BOOK, "iphash")).rejects.toThrow("Failed to clear unlock attempt (57014)");
   });
 });
 
@@ -371,6 +439,12 @@ describe("getOgData", () => {
     expect(og.coverUrl).toBe(`https://signed.test/${OWNER}/${BOOK}/${P1}/web.jpg?t=1`);
     expect(fake.state.signCalls).toHaveLength(1);
     expectClean(og);
+  });
+
+  it("title is the snapshot cover title even when the live books.title differs (D-039)", async () => {
+    fake.state.books = [book({ title: "Unpublished new title" })];
+    const og = await getOgData(SLUG);
+    expect(og.title).toBe("Our Trip");
   });
 
   it("password / expired → no title, no cover, no signing", async () => {

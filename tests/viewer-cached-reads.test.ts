@@ -3,14 +3,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-const getViewerBook = vi.fn(async (...args: unknown[]) => void args || ({ bookId: null, book: { state: "not_found" } }));
-const getOgData = vi.fn(async (...args: unknown[]) => void args || ({ state: "not_found" }));
-const getPublishedBookRow = vi.fn(async (...args: unknown[]) => void args || null);
-vi.mock("@/lib/db/public-books", () => ({ getViewerBook, getOgData, getPublishedBookRow }));
+// vi.hoisted: the vi.mock factory below is hoisted above plain const declarations.
+const { getViewerBook, getOgData } = vi.hoisted(() => ({
+  getViewerBook: vi
+    .fn<(slug: string, opts: { accessCookie?: string | null }) => Promise<unknown>>()
+    .mockResolvedValue({ bookId: null, book: { state: "not_found" } }),
+  getOgData: vi.fn<(slug: string) => Promise<unknown>>().mockResolvedValue({ state: "not_found" }),
+}));
+vi.mock("@/lib/db/public-books", () => ({ getViewerBook, getOgData }));
 
-const { getViewerBookCached, getOgDataCached, getPublishedBookRowCached } = await import("@/lib/viewer/cached-reads");
+const { getViewerBookCached, getOgDataCached } = await import("@/lib/viewer/cached-reads");
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  getViewerBook.mockClear();
+  getOgData.mockClear();
+});
 
 describe("cached public reads", () => {
   it("getViewerBookCached passes slug + access cookie through", async () => {
@@ -20,10 +27,8 @@ describe("cached public reads", () => {
     expect(getViewerBook).toHaveBeenLastCalledWith("trip-abcdefghij", { accessCookie: null });
   });
 
-  it("getOgDataCached / getPublishedBookRowCached call the slug-only readers", async () => {
+  it("getOgDataCached calls the slug-only reader", async () => {
     await getOgDataCached("trip-abcdefghij");
     expect(getOgData).toHaveBeenCalledWith("trip-abcdefghij");
-    await getPublishedBookRowCached("trip-abcdefghij");
-    expect(getPublishedBookRow).toHaveBeenCalledWith("trip-abcdefghij");
   });
 });

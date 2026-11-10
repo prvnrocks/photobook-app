@@ -15,6 +15,7 @@ import "server-only";
 // built field by field; the internal bookId is returned beside it, never inside it.
 //
 // Errors carry only the operation and a Postgres/Storage code.
+import { cache } from "react";
 import { APP_NAME } from "@/lib/brand";
 import type { CaptionLang } from "@/lib/book/options";
 import type { RenderPhoto } from "@/lib/book/render";
@@ -73,6 +74,14 @@ export async function getPublishedBookRow(slug: string, admin: AdminClient = cre
   if (!row || !isUuid(row.id)) return null;
   return row;
 }
+
+/**
+ * getPublishedBookRow memoised per server render (React cache(); call-through outside one), so
+ * /b/[slug]'s generateMetadata (getOgData) and page (getViewerBook) share ONE get_published_book
+ * call (M6 review N3). Defined here rather than imported from src/lib/viewer/cached-reads.ts to
+ * avoid a circular import. Not used by getUnlockTarget (a server action must see fresh state).
+ */
+const getPublishedBookRowForRender = cache((slug: string) => getPublishedBookRow(slug));
 
 export type ViewerState = "ok" | "expired" | "locked" | "not_found" | "unavailable";
 
@@ -217,7 +226,7 @@ export type ViewerOptions = {
 export async function getViewerBook(slug: string, opts: ViewerOptions = {}): Promise<ViewerBookResult> {
   if (!isValidSlug(slug)) return NOT_FOUND;
   const admin = createAdminClient();
-  const row = await getPublishedBookRow(slug, admin);
+  const row = await getPublishedBookRowForRender(slug);
   if (!row) return NOT_FOUND;
   const bookId = row.id;
 
@@ -280,7 +289,7 @@ export async function getOgData(slug: string): Promise<OgData> {
   });
   if (!isValidSlug(slug)) return base("not_found", null);
   const admin = createAdminClient();
-  const row = await getPublishedBookRow(slug, admin);
+  const row = await getPublishedBookRowForRender(slug);
   if (!row) return base("not_found", null);
   if (row.is_expired) return base("expired", row);
   if (row.has_password) return base("locked", row);

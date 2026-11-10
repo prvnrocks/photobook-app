@@ -12,10 +12,11 @@ import { PasswordGate } from "@/components/viewer/public/PasswordGate";
 import { PublicViewer } from "@/components/viewer/public/PublicViewer";
 import { getSiteUrl } from "@/lib/auth/redirect";
 import { APP_NAME } from "@/lib/brand";
-import { getOgData, getViewerBook, isViewerOwner, type OgData, type ViewerBookResult } from "@/lib/db/public-books";
+import { isViewerOwner, type OgData, type ViewerBookResult } from "@/lib/db/public-books";
 import { accessCookieName } from "@/lib/publish/access-cookie";
 import { publicDocToRenderDoc } from "@/lib/publish/public-doc";
 import { isValidSlug } from "@/lib/publish/slug";
+import { getOgDataCached, getViewerBookCached } from "@/lib/viewer/cached-reads";
 import { buildBookMetadata } from "@/lib/viewer/metadata";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +34,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
   let og: OgData;
   try {
-    og = await getOgData(slug);
+    og = await getOgDataCached(slug);
   } catch {
     og = { state: "unavailable", title: null, coverUrl: null, isPaid: false, publishedRev: null, hasPassword: false, captionLang: "en" };
   }
@@ -47,7 +48,7 @@ export default async function PublicBookPage({ params }: Params) {
   const accessCookie = (await cookies()).get(accessCookieName(slug))?.value ?? null;
   let result: ViewerBookResult;
   try {
-    result = await getViewerBook(slug, { accessCookie });
+    result = await getViewerBookCached(slug, accessCookie);
   } catch {
     return <BookUnavailable />;
   }
