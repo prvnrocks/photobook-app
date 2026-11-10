@@ -130,15 +130,16 @@ planted bad caption in tests; a second book reflects the user's earlier tone/len
 **M4a done (replay) 2026-11-09** — planted bad caption caught + repaired (replay), second book reflects memory (replay), Arabic captions native-script with Cairo; "fitting quotes on every page" (every page with a caption area) waits for **M4b** with the live key (together with M3b). Also: per-run cost cap (D-035), migration 0800 (cursor 256 KB).
 
 ## Milestone 5 — Editor (2–3 days) ⭐
-- [ ] `/books/[id]/edit`: page strip + big current page; mobile = swipe pages, bottom toolbar
-- [ ] Shared `<BookPage doc page mode="edit|view|print">` used by editor, viewer and PDF
-- [ ] Change layout (photos re-flow), replace photo (from the book's kept + dropped photos), pan & zoom crop
-- [ ] Edit captions inline (`dir="auto"`), fonts: Inter, Playfair, Cairo, Tajawal
-- [ ] **✨ AI caption button** on every caption: rewrite / shorter / change tone / translate EN↔AR (one call, ~1 s)
-- [ ] Add / delete / reorder pages (dnd-kit), edit cover title + subtitle, move a page to another chapter
-- [ ] Autosave (debounced 2 s) + "Saved ✓"; low-resolution warning on slots
-- [ ] Free limit: block page 21 with "Upgrade"
+- [x] `/books/[id]/edit`: page strip + big current page; mobile = swipe pages, bottom toolbar
+- [x] Shared `<BookPage doc page mode="edit|view|print">` used by editor, viewer and PDF
+- [x] Change layout (photos re-flow), replace photo (from the book's kept + dropped photos), pan & zoom crop
+- [x] Edit captions inline (`dir="auto"`), fonts: Inter, Playfair, Cairo, Tajawal
+- [ ] **✨ AI caption button** on every caption: rewrite / shorter / change tone / translate EN↔AR (one call, ~1 s) — built + replay-tested; live latency/quality pending M5b (API key)
+- [x] Add / delete / reorder pages (dnd-kit), edit cover title + subtitle, move a page to another chapter
+- [x] Autosave (debounced 2 s) + "Saved ✓"; low-resolution warning on slots
+- [x] Free limit: block page 21 with "Upgrade"
 **Done when:** you can fully customise an AI-generated 20-page book on your phone without frustration.
+> M5a (2026-11-10): built + tested (2111 unit, 45 editor e2e at 375 px, live signed-in pre-0900). Live save needs migration 0900 (deploy code first, then `db push`); phone "Done when" check is NEEDS-HUMAN.
 
 ## Milestone 6 — Publish + flipbook viewer + sharing (1 day)
 - [ ] Publish → unique slug, `published_at`, `expires_at = now + 30 days` if unpaid

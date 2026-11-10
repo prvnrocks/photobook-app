@@ -60,3 +60,11 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - Prod probes OK (/settings protected, AI routes 401/403 signed-out, AI mode `off` without key).
 - LEFT: phone check (Settings, new-book prefill, captions preview); M3b + M4b live validation once ANTHROPIC_API_KEY is set; ADMIN_USER_IDS in Vercel.
 - NEXT: Milestone 5 (editor).
+
+## 2026-11-10 — Milestone 5a — built, reviewed (deploy: code first, then migration 0900)
+- Editor at /books/[id]/edit: swipe carousel + desktop strip, bottom toolbar tools (Replace / Layout / Crop / low-res badge, Caption + 4 fonts + align, Cover title/subtitle, Chapter title, ✨ AI menu, Pages sheet with dnd-kit + buttons, Add page, Page menu, Upgrade "coming soon"), undo/redo, autosave 2 s with Saved ✓ and 409 reload banner, Done (flush → memory learn → dashboard). Shared <BookPage>/<BookCover> renderer (edit/view/print).
+- Server: migration 0900 (doc/page_count/doc_rev server-only, doc_rev optimistic concurrency, rewrite runs in own 'rewriting' state excluded from build machinery, create_rewrite_run_capped with per-book cap + per-user daily ceiling + stale reaping); PUT /api/books/[id]/doc full server validation; photo-urls refresh; POST /api/ai/rewrite (Rewriter agent, replay mode, D-030 pre-check). Review→editor, dashboard card routing, build loop wakes after phone sleep.
+- Tests: lint/typecheck ✓, vitest 2111/2111, e2e/editor.spec.ts 45/45 at 375 px, live E2E_AUTH a/b ✓ (c/d need 0900), PGlite rls_check 93 ✓. Reviewer APPROVED after 1 BLOCKER (rewrite runs leaking into builds) fixed.
+- LEFT: deploy code → user `npm run db:push` (0900) → rls_check 93 → regen types, drop getMyBook doc_rev fallback → run E2E_AUTH c/d/r. NEEDS-HUMAN: phone "Done when" check (swipe, pinch crop, touch drag reorder, iOS keyboard vs docked caption sheet). M5b with API key: ✨ latency ~1 s, Arabic translation quality, cost per rewrite.
+- Backlog: EditorToast single API + dismissOnEdit default (N2), carousel guard on slot tap (N1), stale rewrite rows with null book_id → cron (N3), toolbar sideways scroll at 375 px, keepalive 64 KB for 100-page books (N5), tone unlearning, "confirmed" marker for dashboard routing.
+- NEXT: Milestone 6 (publish + flipbook viewer + sharing).
