@@ -36,6 +36,8 @@ describe("server/client boundaries", () => {
     "src/lib/ai/orchestrator.ts",
     "src/lib/stripe.ts",
     "src/lib/photos/finalize.ts",
+    "src/lib/publish/password.ts",
+    "src/lib/publish/access-cookie.ts",
   ])(
     '%s starts with import "server-only"',
     (file) => {
@@ -43,6 +45,14 @@ describe("server/client boundaries", () => {
         .split(/\r?\n/)
         .find((l) => l.trim() !== "");
       expect(first?.trim()).toMatch(/^import ["']server-only["'];?$/);
+    },
+  );
+
+  it.each(["src/lib/publish/slug.ts", "src/lib/publish/rules.ts", "src/lib/publish/public-doc.ts", "src/lib/brand.ts"])(
+    "%s stays isomorphic (no server-only, no node: imports)",
+    (file) => {
+      const src = readFileSync(join(ROOT, file), "utf8");
+      expect(src).not.toMatch(/["']server-only["']|from\s+["']node:|process\.env/);
     },
   );
 
