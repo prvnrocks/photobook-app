@@ -22,8 +22,8 @@ function fullDoc(): BookDoc {
     occasion: "wedding",
     cover: { layout: "cover", photoId: "p1", title: "Sara & Omar", subtitle: "Abu Dhabi · 2026" },
     chapters: [
-      { id: "c1", title: "The henna night", dateLabel: "12 Mar 2026", place: "Al Ain, UAE" },
-      { id: "c2", title: "ليلة العمر", dateLabel: "13 Mar 2026", place: null },
+      { id: "c1", title: "The henna night", dateLabel: "March 2026", place: "Al Ain, UAE" },
+      { id: "c2", title: "ليلة العمر", dateLabel: "March 2026", place: null },
     ],
     pages: [
       {
@@ -84,12 +84,13 @@ function keysDeep(v: unknown, out = new Set<string>()): Set<string> {
 }
 
 describe("toPublicDoc", () => {
-  it("drops meta, caption source, chapter date/place, occasion and unknown keys", () => {
+  it("drops meta, caption source, chapter place, occasion and unknown keys (no raw timestamps, GPS/place or ai)", () => {
     const doc = fullDoc() as BookDoc & Record<string, unknown>;
     // Simulate extras that slipped past a non-parsing writer.
     const dirty = {
       ...doc,
-      takenAt: "2026-03-12",
+      takenAt: "2026-03-12T18:42:07Z",
+      chapters: doc.chapters.map((c) => ({ ...c, takenAt: "2026-03-12T18:42:07Z", startAt: 1773340927000 })),
       pages: doc.pages.map((p) => ({
         ...p,
         storagePath: "u/1/p.jpg",
@@ -99,13 +100,15 @@ describe("toPublicDoc", () => {
     } as unknown as BookDoc;
     const pub = toPublicDoc(dirty);
     const keys = keysDeep(pub);
-    for (const k of ["meta", "source", "dateLabel", "place", "occasion", "takenAt", "storagePath", "gps", "ai", "runId", "userEdited", "generator", "lat", "lng", "path"]) {
+    for (const k of ["meta", "source", "place", "startAt", "occasion", "takenAt", "storagePath", "gps", "ai", "runId", "userEdited", "generator", "lat", "lng", "path"]) {
       expect(keys.has(k), k).toBe(false);
     }
     const json = JSON.stringify(pub);
-    for (const s of ["Al Ain", "12 Mar 2026", "6f1d2a3b", "u/1/p.jpg", "secret", "24.4"]) {
+    for (const s of ["Al Ain", "2026-03-12T", "1773340927000", "6f1d2a3b", "u/1/p.jpg", "secret", "24.4"]) {
       expect(json).not.toContain(s);
     }
+    // Coarse chapter date labels are part of the shared album (D-040 "title · date").
+    expect(pub.chapters.map((c) => c.dateLabel)).toEqual(["March 2026", "March 2026"]);
     expect(parsePublicDoc(pub)).toEqual({ ok: true, doc: pub });
   });
 
@@ -115,8 +118,8 @@ describe("toPublicDoc", () => {
     expect(pub.cover).toEqual(doc.cover);
     expect(pub.style).toEqual(doc.style);
     expect(pub.chapters).toEqual([
-      { id: "c1", title: "The henna night" },
-      { id: "c2", title: "ليلة العمر" },
+      { id: "c1", title: "The henna night", dateLabel: "March 2026" },
+      { id: "c2", title: "ليلة العمر", dateLabel: "March 2026" },
     ]);
     expect(pub.pages.map((p) => [p.id, p.chapterId, p.layout])).toEqual(doc.pages.map((p) => [p.id, p.chapterId, p.layout]));
     expect(pub.pages.map((p) => p.slots)).toEqual(doc.pages.map((p) => p.slots));
@@ -127,6 +130,9 @@ describe("toPublicDoc", () => {
     const doc = fullDoc();
     const render = publicDocToRenderDoc(toPublicDoc(doc));
     expect(parseBookDoc(render).ok).toBe(true);
+    expect(render.chapters.map((c) => [c.id, c.title, c.dateLabel, c.place])).toEqual(
+      doc.chapters.map((c) => [c.id, c.title, c.dateLabel, null]),
+    );
     const targets: (number | "cover")[] = ["cover", ...doc.pages.map((_, i) => i)];
     for (const captionLang of ["en", "ar"]) {
       for (const page of targets) {

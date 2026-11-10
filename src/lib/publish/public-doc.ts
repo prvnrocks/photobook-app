@@ -1,7 +1,8 @@
 // Public snapshot of a book document (D-039: `books.published_doc`), served to anonymous viewers.
 // Pure + isomorphic. Keeps ONLY what <BookPage>/<BookCover> render plus chapter titles for the
-// viewer's chapter label / Contents sheet (D-040). Dropped: `meta` (generator, runId, userEdited),
-// caption `source` (who wrote it), chapter `dateLabel` / `place` (derived from takenAt / GPS),
+// viewer's chapter label "title · date" / Contents sheet (D-040). Kept: chapter `dateLabel` (a
+// coarse human label like "March 2025" the owner shares as part of the album). Dropped: `meta`
+// (generator, runId, userEdited), caption `source` (who wrote it), chapter `place` (GPS-derived),
 // `occasion`, and any unknown keys — objects are rebuilt field by field, never spread.
 
 import { z } from "zod";
@@ -27,7 +28,7 @@ const PublicPageSchema = z
     caption: PublicCaptionSchema.nullable(),
   })
   .strict();
-const PublicChapterSchema = ChapterSchema.pick({ id: true, title: true }).strict();
+const PublicChapterSchema = ChapterSchema.pick({ id: true, title: true, dateLabel: true }).strict();
 
 /** Strict: a published_doc with any extra key fails to parse (viewer then shows "unavailable"). */
 export const PublicBookDocSchema = z
@@ -54,7 +55,7 @@ export function toPublicDoc(doc: BookDoc): PublicBookDoc {
       title: doc.cover.title,
       subtitle: doc.cover.subtitle,
     },
-    chapters: doc.chapters.map((c) => ({ id: c.id, title: c.title })),
+    chapters: doc.chapters.map((c) => ({ id: c.id, title: c.title, dateLabel: c.dateLabel })),
     pages: doc.pages.map((p) => ({
       id: p.id,
       chapterId: p.chapterId,
@@ -79,7 +80,7 @@ export function parsePublicDoc(input: unknown): PublicDocParse {
 
 /**
  * Adapter for the shared renderer, whose props are typed as the full BookDoc. Fills fields the
- * renderer never reads with neutral values (caption source "user", empty dateLabel, null place,
+ * renderer never reads with neutral values (caption source "user", null place,
  * occasion "other", no meta). Render-only — never save the result as a book doc.
  */
 export function publicDocToRenderDoc(pub: PublicBookDoc): BookDoc {
@@ -88,7 +89,7 @@ export function publicDocToRenderDoc(pub: PublicBookDoc): BookDoc {
     format: "A5_PORTRAIT",
     occasion: "other",
     cover: { ...pub.cover },
-    chapters: pub.chapters.map((c) => ({ id: c.id, title: c.title, dateLabel: "", place: null })),
+    chapters: pub.chapters.map((c) => ({ id: c.id, title: c.title, dateLabel: c.dateLabel, place: null })),
     pages: pub.pages.map((p) => ({
       id: p.id,
       chapterId: p.chapterId,
