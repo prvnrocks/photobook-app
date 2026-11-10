@@ -1,0 +1,53 @@
+// Internal print route (M8 T5, D-048): opened only by the headless-Chromium PDF renderer with a
+// 5-minute signed token: /print/{bookId}?token=… → sheets from..to of the export's doc snapshot.
+// Anything wrong (token, export row, rev, status, range, doc) is a plain 404. Images point at the
+// print-asset origin (src/lib/pdf/print-assets.ts), served by the renderer's request interception.
+// noindex/no-store/no-referrer headers come from next.config.ts.
+
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { PrintDocument } from "@/components/print/PrintDocument";
+import { parseBookDoc } from "@/lib/book/schema";
+import { getExportForRender } from "@/lib/db/exports";
+import { listPrintPhotoDims } from "@/lib/db/print";
+import { printPhotoIds, printRenderPhotos, printSheetTargets } from "@/lib/pdf/print-doc";
+import { verifyPrintToken } from "@/lib/pdf/print-token";
+
+export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Print",
+  robots: { index: false, follow: false },
+};
+
+export default async function PrintPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ bookId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const { bookId } = await params;
+  const { token } = await searchParams;
+  const grant = verifyPrintToken(token, { bookId, nowSec: Math.floor(Date.now() / 1000) });
+  if (!grant) notFound();
+
+  const exp = await getExportForRender(grant.exportId);
+  if (
+    !exp ||
+    exp.bookId.toLowerCase() !== grant.bookId ||
+    exp.docRev !== grant.docRev ||
+    (exp.status !== "rendering" && exp.status !== "queued")
+  ) {
+    notFound();
+  }
+
+  const parsed = parseBookDoc(exp.doc);
+  if (!parsed.ok) notFound();
+  const doc = parsed.doc;
+  const sheets = printSheetTargets(doc.pages.length, grant.from, grant.to);
+  if (!sheets) notFound();
+
+  const photos = printRenderPhotos(await listPrintPhotoDims(exp.bookId, printPhotoIds(doc, sheets)));
+  return <PrintDocument doc={doc} photos={photos} captionLang={exp.captionLang} sheets={sheets} />;
+}

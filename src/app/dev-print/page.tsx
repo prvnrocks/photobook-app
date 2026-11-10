@@ -2,12 +2,18 @@
 // <BookPage mode="print"> at real size (154×216 mm sheets = 148×210 trim + 3 mm bleed), cover +
 // a few pages incl. Arabic captions. Dashed guides (outside <BookPage>) mark the trim (red) and
 // the 4 mm text safe zone (blue); `?guides=0` hides them.
+// `?sheets=from-to` instead renders exactly what /print/[bookId] renders (<PrintDocument>, the
+// print CSS and the __PRINT_READY__ signal) for that sheet range of the fixture doc, without the
+// DB or a token — for Playwright / page.pdf checks. Add `?printAssets=1` to point every photo at
+// the print-asset origin (as /print does; images then fail unless the client intercepts them).
 // 404s in production builds (incl. Vercel previews, which run NODE_ENV=production).
 
 import { notFound } from "next/navigation";
 import { BookPage } from "@/components/book/BookPage";
+import { PrintDocument } from "@/components/print/PrintDocument";
 import { devPreviewDoc, devPreviewPhotos } from "@/lib/book/dev-preview";
 import { BLEED_MM, PAGE_MM, SAFE_MM, SHEET_MM } from "@/lib/layouts";
+import { printRenderPhotos, printSheetTargets } from "@/lib/pdf/print-doc";
 
 export const dynamic = "force-dynamic";
 
@@ -38,9 +44,20 @@ export default async function DevPrintPreview({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   if (process.env.NODE_ENV === "production") notFound();
-  const guides = (await searchParams).guides !== "0";
+  const sp = await searchParams;
+  const guides = sp.guides !== "0";
   const doc = devPreviewDoc();
   const photos = devPreviewPhotos();
+  if (typeof sp.sheets === "string") {
+    const m = /^(\d{1,3})-(\d{1,3})$/.exec(sp.sheets);
+    const sheets = m ? printSheetTargets(doc.pages.length, Number(m[1]), Number(m[2])) : null;
+    if (!sheets) notFound();
+    const shown =
+      sp.printAssets === "1"
+        ? printRenderPhotos(Object.entries(photos).map(([id, p]) => ({ id, width: p?.width ?? null, height: p?.height ?? null })))
+        : photos;
+    return <PrintDocument doc={doc} photos={shown} captionLang="ar" sheets={sheets} />;
+  }
   const pick = ["full-page", "one-portrait", "two-vertical", "three-mixed"];
   const pages = pick.map((id) => doc.pages.findIndex((p) => p.layout === id)).filter((i) => i >= 0);
   const targets: (number | "cover")[] = ["cover", ...pages];
