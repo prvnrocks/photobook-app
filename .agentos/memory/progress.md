@@ -112,3 +112,5 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 ## 2026-11-10 — Milestone 8 — deployed
 - main = 952b737 live; Vercel accepted vercel.json (fluid + maxDuration 300) on Hobby. Prod probes OK: status route 401 anon, POST /pdf 403 cross-origin / 401 anon, /print 404 (no/garbage token) with noindex + no-store, robots Disallow /print/, /dev-print 404.
 - LEFT (NEEDS-HUMAN): phone test of a real paid 40-page PDF on production (timing on Hobby 1 vCPU; read `[pdf-export] timing` in Vercel logs), function region near Supabase, Pro before real payments; M7 real Stripe test payment; M6 phone check; VAT. NEXT: Milestone 9.
+- (2026-11-10) Test: user's book 'Myra Birthday' (d0401435…) marked paid via service role for M8 phone test (no order row). Revert: is_paid=false, max_pages=20, expires_at=<30 d from publish>.
+- (2026-11-10) Reverted 'Myra Birthday' to free (is_paid=false, max_pages=20, expires_at=2026-12-10T09:20:28Z). No PDF export was created. User reported 'empty white screen in the last' on the paid viewer → M9 bug to investigate (likely paid end card / odd-page spread filler).
