@@ -95,3 +95,8 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - DEPLOY: code safe without keys (buttons "Payments unavailable"). Prod refuses sk_test keys unless STRIPE_ALLOW_TEST_IN_PROD=1.
 - NEEDS-HUMAN (T10 = "Done when" with real Stripe): Stripe account (UAE entity for AED payouts) → test keys in .env.local + Vercel Preview → `brew install stripe/stripe-cli/stripe && stripe login` → local `stripe listen --forward-to localhost:3000/api/stripe/webhook` + card 4242 → Dashboard webhook endpoint for Preview (events: checkout.session.completed, async_payment_succeeded, async_payment_failed, expired, charge.refunded, charge.dispute.created) → enable Apple Pay / Google Pay → pay on a phone; confirm a non-AED card session object. VAT question to an accountant (D-046).
 - Backlog: double-payment check should include needs_review orders (needs migration); support runbook (admin exit from needs_review; paid-but-invalid with no order row only logs); add support email to brand.ts; getUpgradeTarget could return `live`. NEXT: deploy M7, T10 real test payment, then Milestone 8 (PDF).
+
+## 2026-11-10 — Milestone 7 — deployed (payments dormant until Stripe keys)
+- main = 5e7f181 live on https://photobook-app-alpha.vercel.app; migrations 1200 + 1300 in prod (rls_check 121).
+- Prod probes OK: webhook POST 503 payments_unavailable (no keys), GET 405; /books/<id>/upgrade/success → login; /dev-upgrade 404; /api/stripe/checkout 404.
+- LEFT (NEEDS-HUMAN): Stripe account + test keys on Vercel Preview → real test payment (T10, the "Done when"); VAT check; M6 phone check. NEXT: Milestone 8 (PDF).
