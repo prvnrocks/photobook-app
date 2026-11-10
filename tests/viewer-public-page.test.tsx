@@ -24,8 +24,11 @@ vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new NotFoundSignal("NEXT_NOT_FOUND");
   },
-  useRouter: () => ({ refresh: h.refresh }),
+  useRouter: () => ({ refresh: h.refresh, replace: vi.fn() }),
+  usePathname: () => "/b/x",
+  useSearchParams: () => new URLSearchParams(),
 }));
+vi.mock("@/app/books/[id]/upgrade/actions", () => ({ startUpgradeCheckout: vi.fn() }));
 vi.mock("@/app/b/[slug]/actions", () => ({ unlockBookAction: vi.fn() }));
 
 import PublicBookPage, { dynamic, generateMetadata, viewport } from "@/app/b/[slug]/page";
@@ -133,16 +136,36 @@ describe("/b/[slug] state mapping", () => {
     expect(propsContain(el, BOOK_ID)).toBe(false);
   });
 
-  it("expired, owner: upgrade (coming soon) + open in editor", async () => {
+  it("expired, owner, payments off: disabled upgrade + 'Payments unavailable' + open in editor", async () => {
+    delete process.env.STRIPE_SECRET_KEY;
+    delete process.env.STRIPE_WEBHOOK_SECRET;
     h.getViewerBook.mockResolvedValue(book("expired"));
     h.isViewerOwner.mockResolvedValue(true);
     const { html } = await render();
     expect(html).toContain("This photobook has expired");
-    expect(html).toContain("Upgrade to bring it back");
-    expect(html).toContain("Coming soon");
-    expect(html).toMatch(/data-testid="expired-upgrade"[^>]*disabled|disabled[^>]*data-testid="expired-upgrade"/);
+    expect(html).toContain("Upgrade to bring it back — AED 39");
+    expect(html).toContain("Payments unavailable");
+    expect(html).not.toMatch(/coming soon/i);
+    expect(html).toMatch(/<button type="button" disabled=""[^>]*data-testid="expired-upgrade"/);
     expect(html).toContain(`href="/books/${BOOK_ID}/edit"`);
     expect(html).toContain("Open in editor");
+  });
+
+  it("expired, owner, payments on: enabled upgrade with the book id + /b/{slug} return", async () => {
+    process.env.STRIPE_SECRET_KEY = "sk_test_dummy";
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_dummy";
+    try {
+      h.getViewerBook.mockResolvedValue(book("expired"));
+      h.isViewerOwner.mockResolvedValue(true);
+      const { html, el } = await render();
+      expect(html).toMatch(/<button type="button" class="[^"]*" data-testid="expired-upgrade"/); // no disabled=""
+      expect(html).not.toContain("Payments unavailable");
+      expect(propsContain(el, BOOK_ID)).toBe(true);
+      expect(propsContain(el, `/b/${SLUG}`)).toBe(true);
+    } finally {
+      delete process.env.STRIPE_SECRET_KEY;
+      delete process.env.STRIPE_WEBHOOK_SECRET;
+    }
   });
 
   it("locked → password gate, no title, no id", async () => {

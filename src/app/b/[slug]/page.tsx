@@ -16,6 +16,7 @@ import { isViewerOwner, type OgData, type ViewerBookResult } from "@/lib/db/publ
 import { accessCookieName } from "@/lib/publish/access-cookie";
 import { publicDocToRenderDoc } from "@/lib/publish/public-doc";
 import { isValidSlug } from "@/lib/publish/slug";
+import { isPaymentsEnabled } from "@/lib/stripe";
 import { getOgDataCached, getViewerBookCached } from "@/lib/viewer/cached-reads";
 import { buildBookMetadata } from "@/lib/viewer/metadata";
 
@@ -59,7 +60,14 @@ export default async function PublicBookPage({ params }: Params) {
       return notFound();
     case "expired": {
       const isOwner = bookId ? await isViewerOwner(bookId) : false;
-      return <ExpiredBook isOwner={isOwner} editorHref={isOwner && bookId ? `/books/${bookId}/edit` : null} />;
+      const owned = isOwner && bookId ? bookId : null;
+      return (
+        <ExpiredBook
+          isOwner={isOwner}
+          editorHref={owned ? `/books/${owned}/edit` : null}
+          upgrade={owned ? { bookId: owned, returnTo: `/b/${slug}`, paymentsEnabled: isPaymentsEnabled() } : null}
+        />
+      );
     }
     case "locked":
       return <PasswordGate slug={slug} />;

@@ -25,6 +25,7 @@ import {
 } from "@/lib/publish/ui";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/app/books/[id]/upgrade/actions", () => ({ startUpgradeCheckout: vi.fn() }));
 
 const NOW = new Date("2026-11-10T10:00:00.000Z");
 const BOOK = "11111111-1111-4111-8111-111111111111";
@@ -35,9 +36,17 @@ const actions: PublishActions = {
   setPassword: async () => ({ ok: true, hasPassword: true }),
 };
 
-function panel(name: DevPublishStateName): string {
+function panel(name: DevPublishStateName, paymentsEnabled = true): string {
   return renderToStaticMarkup(
-    <PublishPanelView bookId={BOOK} title="Sara & Omar" state={devPublishState(name)} actions={actions} refresh={() => {}} now={NOW} />,
+    <PublishPanelView
+      bookId={BOOK}
+      title="Sara & Omar"
+      state={devPublishState(name)}
+      actions={actions}
+      paymentsEnabled={paymentsEnabled}
+      refresh={() => {}}
+      now={NOW}
+    />,
   );
 }
 
@@ -152,17 +161,29 @@ describe("PublishPanelView states", () => {
     expect(has(html, "publish-message-slot")).toBe(true);
   });
 
-  it("unpublished free: Publish enabled, free notice + upgrade coming soon, password, no unpublish", () => {
+  it("unpublished free: Publish enabled, free notice + live upgrade, password, no unpublish", () => {
     const html = panel("draft");
     expect(html).toContain('data-state="unpublished"');
     expect(html).toMatch(/<button type="button" class="[^"]*" data-testid="publish-button"/); // no disabled=""
     expect(html).toContain(">Publish</");
     expect(html).toContain(FREE_NOTICE_COPY);
-    expect(html).toMatch(/<button type="button" disabled=""[^>]*data-testid="publish-upgrade"/);
-    expect(html).toContain("coming soon");
+    expect(html).toMatch(/<button type="button" class="[^"]*" data-testid="publish-upgrade"/); // no disabled=""
+    expect(html).toContain("Upgrade this book — AED 39");
+    expect(html).not.toMatch(/coming soon/i);
+    expect(has(html, "publish-upgrade-unavailable")).toBe(false);
     expect(has(html, "password-section")).toBe(true);
     expect(has(html, "unpublish-section")).toBe(false);
     expect(has(html, "share-buttons")).toBe(false);
+  });
+
+  it("payments off: disabled upgrade + 'Payments unavailable' (free notice and expired)", () => {
+    for (const name of ["draft", "expired"] as const) {
+      const html = panel(name, false);
+      expect(html).toMatch(/<button type="button" disabled=""[^>]*data-testid="publish-upgrade"/);
+      expect(has(html, "publish-upgrade-unavailable")).toBe(true);
+      expect(html).toContain("Payments unavailable");
+      expect(html).not.toMatch(/coming soon/i);
+    }
   });
 
   it("unpublished paid: no free notice", () => {

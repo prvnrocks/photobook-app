@@ -3,15 +3,24 @@
 // Mounts the real PublishPanelView with a fixture state and stubbed actions (dev-only route).
 // Successful actions update the local fixture state the way a server refresh would.
 
-import { useMemo, useRef, useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 import type { PublishBookResult, PublishState } from "@/app/books/[id]/publish/actions";
 import { PublishPanelView, type PublishActions } from "@/components/publish/PublishPanel";
+import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
 import { DEV_PUBLISH_URL, devPublishState, type DevPublishStateName } from "@/lib/publish/dev-fixture";
 
 const BOOK_ID = "00000000-0000-4000-8000-000000000000";
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-export function DevPublishClient({ name, result }: { name: DevPublishStateName; result: "ok" | "conflict" | "conflict2" | "failed" }) {
+export function DevPublishClient({
+  name,
+  result,
+  paymentsEnabled,
+}: {
+  name: DevPublishStateName;
+  result: "ok" | "conflict" | "conflict2" | "failed";
+  paymentsEnabled: boolean;
+}) {
   const [state, setState] = useState<PublishState>(() => devPublishState(name));
   const next = useRef<PublishState>(state);
   const calls = useRef(0);
@@ -45,11 +54,15 @@ export function DevPublishClient({ name, result }: { name: DevPublishStateName; 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-4 px-4 pb-10 pt-3">
       <h1 className="text-2xl font-semibold">Share your book</h1>
+      <Suspense fallback={null}>
+        <UpgradeCancelledNotice />
+      </Suspense>
       <PublishPanelView
         bookId={BOOK_ID}
         title="Sara & Omar"
         state={state}
         actions={actions}
+        paymentsEnabled={paymentsEnabled}
         refresh={() => setState(next.current)}
       />
     </main>

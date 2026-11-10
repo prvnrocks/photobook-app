@@ -41,6 +41,8 @@ export type EditorShellProps = {
   backHref?: string;
   /** Header "Done" (T12): bound finishEditingAction. Absent → Done saves, then goes to backHref. */
   finish?: () => Promise<FinishResult>;
+  /** isPaymentsEnabled() from the server page; false → the Upgrade sheet shows "Payments unavailable". */
+  paymentsEnabled?: boolean;
 };
 
 function isTypingTarget(t: EventTarget | null): boolean {
@@ -48,7 +50,7 @@ function isTypingTarget(t: EventTarget | null): boolean {
   return t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT";
 }
 
-export function EditorShell({ data, transport: transportProp, tools: toolsProp, backHref = "/dashboard", finish }: EditorShellProps) {
+export function EditorShell({ data, transport: transportProp, tools: toolsProp, backHref = "/dashboard", finish, paymentsEnabled = false }: EditorShellProps) {
   const [transport] = useState(() => transportProp ?? httpEditorTransport(data.book.id));
   const saveEnabled = data.canSave && data.docRev !== null;
   const { state, actions } = useEditorStore(data.doc, { readOnly: !saveEnabled });
@@ -77,6 +79,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
   const ctx = useMemo<EditorContextValue>(
     () => ({
       book: data.book,
+      paymentsEnabled,
       state,
       actions,
       photos,
@@ -94,7 +97,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
       openTool,
       closeTool,
     }),
-    [data.book, data.aiMode, state, actions, photos, autosave.status, autosave.flush, rewrites, setRewrites, aiBlocked, activeTool, openTool, closeTool],
+    [data.book, paymentsEnabled, data.aiMode, state, actions, photos, autosave.status, autosave.flush, rewrites, setRewrites, aiBlocked, activeTool, openTool, closeTool],
   );
 
   const registry = toolsProp ?? EDITOR_TOOLS;

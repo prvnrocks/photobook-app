@@ -1,11 +1,14 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { Suspense } from "react";
 import { EditorShell } from "@/components/editor/EditorShell";
+import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
 import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getEditorData } from "@/lib/db/editor";
 import { editorRedirect, toEditorShellData } from "@/lib/editor/page-data";
+import { isPaymentsEnabled } from "@/lib/stripe";
 import { cn } from "@/lib/utils";
 import { finishEditingAction } from "./actions";
 
@@ -51,5 +54,12 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
 
   // Header "Done": flush saves client-side, then Memory Keeper + redirect (T12/T13).
   const finish = finishEditingAction.bind(null, data.book.id);
-  return <EditorShell data={shell} finish={finish} />;
+  return (
+    <>
+      <EditorShell data={shell} finish={finish} paymentsEnabled={isPaymentsEnabled()} />
+      <Suspense fallback={null}>
+        <UpgradeCancelledNotice floating />
+      </Suspense>
+    </>
+  );
 }

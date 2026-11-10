@@ -1,7 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { EditorShell } from "@/components/editor/EditorShell";
 import { devEditorData, devTransport } from "@/lib/editor/dev-fixture";
+
+// The editor registry → UpgradeSheet → UpgradeButton imports the upgrade server action (server-only).
+vi.mock("@/app/books/[id]/upgrade/actions", () => ({ startUpgradeCheckout: vi.fn() }));
 
 describe("editor header Done button (T12)", () => {
   it("renders without an app router (navigation is mounted only after Done)", () => {

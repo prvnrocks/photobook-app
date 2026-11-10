@@ -209,7 +209,7 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
           ) : null}
         </div>
       ) : null}
-      {limitReached && showUpgrade ? <UpgradeSheet reason="rewrites" /> : null}
+      {limitReached && showUpgrade ? <UpgradeSheet reason="rewrites" ctx={ctx} /> : null}
       <div className="grid grid-cols-2 gap-2">
         {options.main.map((o) => (
           <OptionButton

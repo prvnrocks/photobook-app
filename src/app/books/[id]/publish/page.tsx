@@ -2,9 +2,12 @@ import type { Metadata } from "next";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { Suspense } from "react";
 import { PublishPanel } from "@/components/publish/PublishPanel";
+import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getMyBookTitle } from "@/lib/db/books";
+import { isPaymentsEnabled } from "@/lib/stripe";
 import { getPublishState, publishBookAction, setBookPasswordAction, unpublishBookAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -51,8 +54,12 @@ export default async function PublishPage({ params }: { params: Promise<{ id: st
           {title}
         </p>
       </div>
+      <Suspense fallback={null}>
+        <UpgradeCancelledNotice />
+      </Suspense>
       <PublishPanel
         bookId={id}
+        paymentsEnabled={isPaymentsEnabled()}
         title={title}
         state={res.state}
         actions={{

@@ -363,11 +363,35 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
     await goToItem(page, 20);
     await page.getByTestId("editor-tool-add-page").click();
     await expect(page.getByTestId("upgrade-sheet")).toBeVisible();
-    await expect(page.getByTestId("upgrade-button")).toBeDisabled(); // "Coming soon" until M7 (D-037 3)
+    // M7: live when the dev server has Stripe keys, else disabled + "Payments unavailable".
+    const btn = page.getByTestId("upgrade-button");
+    await expect(btn).toHaveText("Upgrade this book — AED 39");
+    const on = (await page.getByTestId("upgrade-button-wrap").getAttribute("data-payments")) === "on";
+    if (process.env.E2E_PAYMENTS === "1") expect(on).toBe(true);
+    if (process.env.E2E_PAYMENTS === "0") expect(on).toBe(false);
+    if (on) {
+      await expect(btn).toBeEnabled();
+      await expect(page.getByTestId("upgrade-button-unavailable")).toHaveCount(0);
+    } else {
+      await expect(btn).toBeDisabled();
+      await expect(page.getByTestId("upgrade-button-unavailable")).toHaveText("Payments unavailable");
+    }
+    expect((await btn.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await expect(counter(page)).toHaveText("20 / 20");
     await expectNoOverflow(page, "upgrade sheet");
     await page.getByTestId("editor-panel-close").click();
     await expect(page.getByTestId("upgrade-sheet")).toHaveCount(0);
+  });
+
+  test("?upgrade=cancelled: floating 'Payment cancelled' notice, param removed, dismissible", async ({ page }) => {
+    await page.goto("/dev-editor?upgrade=cancelled");
+    await expect(page.getByTestId("editor-shell")).toBeVisible();
+    const notice = page.getByTestId("upgrade-cancelled");
+    await expect(notice).toContainText("Payment cancelled");
+    await expect(page).toHaveURL(/\/dev-editor$/);
+    await expectNoOverflow(page, "cancelled notice");
+    await page.getByTestId("upgrade-cancelled-dismiss").click();
+    await expect(notice).toHaveCount(0);
   });
 
   test("Add page below the limit inserts after the current page", async ({ page }) => {
