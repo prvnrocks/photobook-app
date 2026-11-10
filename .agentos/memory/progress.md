@@ -126,3 +126,10 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - main = e7cf172 live. Prod probes OK: landing (hero claim) / privacy / terms / sitemap (only /, /privacy, /terms) 200; /admin/ai-spend, /dev-print, /dev-upgrade 404; /settings → login; unsubscribe bad token 400; /api/cron/cleanup 503 (CRON_SECRET not set → cron inactive, by design until set).
 - LEFT (NEEDS-HUMAN): rls_check on prod → 173; set CRON_SECRET (+ AI_DAILY_BUDGET_USD) in Vercel Production and redeploy → check first cron log + `[email] warnings` (no legacy=1); everything in docs/LAUNCH.md; MAPBOX_TOKEN invalid. NEXT: launch checklist, then M10.
 - (2026-11-10) Prod rls_check 173 OK (user) after M9 deploy.
+
+## 2026-11-10 — Milestone 10a — built, reviewed (APPROVED), live-tested; NOT deployed (no migration)
+- Doc v2 (format portrait|landscape, Background union colour/texture/photo, designStyle, page background + source, side, ≤ 12 slots); upgrade on read, serializeDoc writes v1 when no v2 feature (existing books byte-identical; M9 rollback safe for them). Golden freeze of M9 rendering (764 cases) stays byte-identical.
+- Landscape geometry everywhere (lib + components + PDF @page; Chromium landscape 612×437.04 pt). Backgrounds: 16 swatches, 6 original CC0 textures (scripts/gen-textures.mjs), faded photo with veil; picker tool (This page / Whole book); rendered in editor, viewer, PDF (tile once per PDF, no CSS filter in print — guarded). Open-book editor ≥ 768 px, phone "View spread" sheet. CLAUDE.md formats line updated (user-approved).
+- Tests: vitest 4014, e2e/m10a.spec.ts live 7/7, launch-smoke 7/7, editor 59/59, pdf 7/7. Run report .agentos/runs/m10.md.
+- NEEDS-HUMAN: font + texture sign-off (docs/design/), phone check of facing pages/spread sheet/backgrounds; A7 font fallback chains on Linux sparticuz Chromium (check after deploy).
+- Backlog: delete-photo strip should reflow pages (D-028) before any delete UI; published_doc keeps deleted photo refs until republish; picker polish (slider 60% display, keyboard commit, toast tracking, end-card ink parity). NEXT: deploy M10a (merge only), then M10b after design sign-off (migration 1900 first).

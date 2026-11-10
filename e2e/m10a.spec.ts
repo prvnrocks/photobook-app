@@ -20,6 +20,13 @@
  *      books_set_doc_rev trigger bumps doc_rev, the write is guarded by the current doc_rev like the
  *      save route) → Publish changes → viewer 375 + 1280 pages are 210:148 → Download PDF → MediaBox
  *      612×437 pt, backgrounds still present
+ *   f. review fix B1: service-role reset of meta.userEdited (+ portrait) → review screen drops the page-2
+ *      background photo → Update album succeeds; the photo leaves every slot/cover, the page background
+ *      (photo, veil 0.8, source user) survives on the page that kept its companions
+ *   g. review fix S3: book default also set to that photo (service role) → the real deletePhotoAction
+ *      (POST with the Next-Action id from this build's .next manifest — no UI calls it yet) → photo row
+ *      gone, no reference left in the doc (book → white, v1 again), doc_rev bumped, meta unchanged →
+ *      editor background change saves 200 (no 422 foreign_photo); published viewer still loads
  * afterAll (always): orders, private.stripe_events (linked CLI), exports rows, storage objects under
  * `<uid>/` (photos + exports), then the user (books/photos cascade). Per-test timeouts only.
  * Logs: counts / booleans / timings only.
@@ -619,4 +626,166 @@ test("e. landscape doc (service-role write) → Publish changes → viewer 210:1
 
   const file = await downloadPdf("m10a-landscape.pdf");
   checkPdf(file, "landscape", after.doc.pages.length);
+});
+
+// ---- M10a review fixes (A12a) ------------------------------------------------------------------
+
+type DocPage = { slots: { photoId: string | null }[]; background?: StoredBg | null };
+const slotIds = (d: StoredDoc) => (d.pages as unknown as DocPage[]).flatMap((p) => p.slots.map((s) => s.photoId).filter((x): x is string => !!x));
+const coverId = (d: StoredDoc) => ((d as unknown as { cover: { photoId: string | null } }).cover.photoId ?? null);
+let b1Done = false;
+
+test("f. B1: Update album keeps a page background whose photo was DROPPED on review", async () => {
+  test.skip(!paid, "needs test d");
+  test.setTimeout(180_000);
+  // Make the album replaceable again (the editor saves set meta.userEdited) and portrait (M10a has
+  // no format UI). A user-set page background (source user) on a not-edited album is exactly the
+  // shape a future AI suggestion (M10c) or a never-edited album would have; Update album must keep it.
+  const before = await bookRow();
+  const meta = (before.doc as unknown as { meta?: Record<string, unknown> }).meta ?? {};
+  const doc = { ...before.doc, format: "A5_PORTRAIT", meta: { ...meta, userEdited: false } };
+  const upd = await admin.from("books").update({ doc }).eq("id", bookId).eq("doc_rev", before.doc_rev).select("doc_rev");
+  expect(upd.error).toBeNull();
+  expect(upd.data?.length).toBe(1);
+
+  const start = await bookRow();
+  const bgIdx = (start.doc.pages as unknown as DocPage[]).findIndex((p) => p.background?.kind === "photo" && p.background.photoId === bgPhotoId);
+  expect(bgIdx).toBeGreaterThanOrEqual(0);
+  const inAlbum = slotIds(start.doc).includes(bgPhotoId) || coverId(start.doc) === bgPhotoId;
+  // Companion photos on the background page (to find the page again after the relayout).
+  const companions = (start.doc.pages as unknown as DocPage[])[bgIdx].slots.map((s) => s.photoId).filter((x): x is string => !!x && x !== bgPhotoId);
+
+  // Drop the background photo on the review screen.
+  await page.goto(`/books/${bookId}/review`);
+  const tile = page.locator(`[data-testid="review-tile"][data-photo-id="${bgPhotoId}"]`);
+  await expect(tile).toHaveAttribute("data-state", "kept", { timeout: 30_000 });
+  await tile.click();
+  await expect(tile).toHaveAttribute("data-state", "dropped");
+  await expect
+    .poll(async () => (await admin.from("photos").select("status, user_override").eq("id", bgPhotoId).single()).data, { timeout: 15_000 })
+    .toMatchObject({ status: "dropped", user_override: true });
+
+  await expect(page.getByTestId("update-album-bar")).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId("update-album").click();
+  await expect(page.getByTestId("update-album-toast")).toHaveText("Album updated", { timeout: 30_000 });
+  await expect(page.getByTestId("update-album-error")).toHaveCount(0);
+
+  const after = await bookRow();
+  const pages = after.doc.pages as unknown as DocPage[];
+  expect(slotIds(after.doc)).not.toContain(bgPhotoId);
+  expect(coverId(after.doc)).not.toBe(bgPhotoId);
+  const withBg = pages.map((p, i) => ({ p, i })).filter(({ p }) => p.background?.kind === "photo" && p.background.photoId === bgPhotoId);
+  expect(withBg.length).toBe(1);
+  expect(withBg[0].p.background).toMatchObject({ kind: "photo", photoId: bgPhotoId, veil: FADE, source: "user" });
+  if (companions.length) expect(withBg[0].p.slots.some((s) => s.photoId && companions.includes(s.photoId))).toBe(true);
+  expect(after.doc.version).toBe(2);
+  expect((after.doc.style as { background: StoredBg }).background).toEqual({ kind: "texture", textureId: BOOK_TEXTURE });
+  console.log(
+    `[f] B1 relayout: bgPhotoInAlbumBefore=${inAlbum} pagesBefore=${start.doc.pages.length} pagesAfter=${pages.length} bgPageBefore=${bgIdx} bgPageAfter=${withBg[0].i} companions=${companions.length} docRev ${start.doc_rev}→${after.doc_rev}`,
+  );
+  b1Done = true;
+});
+
+function deletePhotoActionId(): string {
+  const m = JSON.parse(readFileSync(path.join(REPO, ".next", "server", "server-reference-manifest.json"), "utf8")) as {
+    node: Record<string, { exportedName?: string }>;
+  };
+  const hit = Object.entries(m.node).find(([, v]) => v.exportedName === "deletePhotoAction");
+  if (!hit) throw new Error("deletePhotoAction not in the server-reference manifest (run next build in this copy)");
+  return hit[0];
+}
+
+test("g. S3: deletePhotoAction on a background photo strips it from the doc; editor saves afterwards", async () => {
+  test.skip(!b1Done, "needs test f");
+  test.setTimeout(180_000);
+  // Also make it the book default (whole-book faded photo) so both strip paths run: book → white, page → removed.
+  const before = await bookRow();
+  const doc = { ...before.doc, style: { ...before.doc.style, background: { kind: "photo", photoId: bgPhotoId, veil: FADE, veilColor: "#FFFFFF" } } };
+  const upd = await admin.from("books").update({ doc }).eq("id", bookId).eq("doc_rev", before.doc_rev).select("doc_rev");
+  expect(upd.error).toBeNull();
+  expect(upd.data?.length).toBe(1);
+  const start = await bookRow();
+  const metaBefore = JSON.stringify((start.doc as { meta?: unknown }).meta ?? null);
+
+  // The real server action (no UI calls it yet — UI deletion is a later milestone): POST with the
+  // Next-Action id from this build's manifest and the signed-in user's cookies.
+  const res = await page.request.post(`/books/${bookId}/upload`, {
+    headers: {
+      "Next-Action": deletePhotoActionId(),
+      "Content-Type": "text/plain;charset=UTF-8",
+      Accept: "text/x-component",
+      Origin: baseURL,
+    },
+    data: JSON.stringify([bgPhotoId, bookId]),
+  });
+  const body = await res.text();
+  expect(res.status()).toBe(200);
+  expect(body).toContain('"ok":true');
+
+  expect((await admin.from("photos").select("id").eq("id", bgPhotoId)).data?.length ?? -1).toBe(0);
+  const after = await bookRow();
+  const raw = JSON.stringify(after.doc);
+  expect(raw).not.toContain(bgPhotoId);
+  // Book default → white; with no v2 feature left, serializeDoc writes v1 again (style.background = hex).
+  const bookBg = (after.doc.style as { background: StoredBg | string }).background;
+  if (after.doc.version === 1) expect(bookBg).toBe("#FFFFFF");
+  else expect(bookBg).toEqual({ kind: "color", hex: "#FFFFFF" });
+  expect(after.doc_rev).toBeGreaterThan(start.doc_rev);
+  expect(JSON.stringify((after.doc as { meta?: unknown }).meta ?? null)).toBe(metaBefore);
+
+  // The editor opens and a save succeeds (no 422 foreign_photo).
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const saves: number[] = [];
+  const saveBodies: string[] = [];
+  const consoleMsgs: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error" || m.type() === "warning") consoleMsgs.push(`${m.type()}: ${m.text().slice(0, 200)}`);
+  });
+  page.on("response", async (r) => {
+    if (/\/api\/books\/[^/]+\/doc/.test(r.url()) && r.request().method() !== "GET") {
+      saves.push(r.status());
+      saveBodies.push(`${r.status()} ${(await r.text().catch(() => "")).slice(0, 300)}`);
+    }
+  });
+  page.on("requestfailed", (r) => {
+    if (/\/api\/books\//.test(r.url())) saveBodies.push(`FAILED ${r.method()} ${r.failure()?.errorText}`);
+  });
+  await page.goto(`/books/${bookId}/edit`);
+  await expect(page.getByTestId("editor-shell")).toBeVisible();
+  await page.getByTestId("carousel-next").click();
+  await settle(page);
+  await openBgTool(page);
+  await page.getByTestId("bg-scope-page").click();
+  await page.getByTestId("bg-tab-texture").click();
+  await page.getByTestId("bg-texture-kraft").click();
+  // Published book: after a save the header shows "Publish changes" instead of the save status,
+  // so wait for the PUT itself and the stored doc.
+  try {
+    await expect.poll(() => saves.length, { timeout: 20_000 }).toBeGreaterThan(0);
+    await expect
+      .poll(async () => ((await bookRow()).doc.pages as unknown as DocPage[])[0]?.background, { timeout: 20_000 })
+      .toMatchObject({ kind: "texture", textureId: "kraft", source: "user" });
+  } finally {
+    console.log(`[g] save responses: ${JSON.stringify(saveBodies)} console=${JSON.stringify(consoleMsgs.slice(-10))}`);
+  }
+  await expect(page.getByTestId("editor-publish-changes")).toBeVisible();
+  await closePanel(page);
+  expect(saves.length).toBeGreaterThan(0);
+  expect(saves.every((s) => s >= 200 && s < 300)).toBe(true);
+  expect(errors).toEqual([]);
+  const final = await bookRow();
+  expect(JSON.stringify(final.doc)).not.toContain(bgPhotoId);
+
+  // The published snapshot still names the deleted photo (publish is a snapshot) — the viewer must still load.
+  const v = await page.context().browser()!.newContext({ baseURL, viewport: PHONE });
+  try {
+    const vp = await v.newPage();
+    const r = await vp.goto(`/b/${slug}`);
+    expect(r?.status()).toBe(200);
+    await expect(vp.getByTestId("flipbook")).toHaveAttribute("data-ready", "true", { timeout: 30_000 });
+  } finally {
+    await v.close();
+  }
+  console.log(`[g] S3 delete: status=${res.status()} docRev ${start.doc_rev}→${after.doc_rev}→${final.doc_rev} saves=${JSON.stringify(saves)} publishedStillRefs=${JSON.stringify(final.published_doc).includes(bgPhotoId)}`);
 });

@@ -172,6 +172,14 @@ planted bad caption in tests; a second book reflects the user's earlier tone/len
 - [ ] Stripe live mode when licence is ready → 🚀 launch
 > M9 (2026-11-10): built + reviewed (APPROVED); launch smoke 7/7 live. Landing page built (pricing, FAQ, how it works) — demo video + 3 example books wait for the seed/record scripts (NEEDS-HUMAN photos). Migrations 1600–1800 in prod. Deployed 2026-11-10 (main e7cf172); cron inactive until CRON_SECRET is set. Launch checklist: docs/LAUNCH.md; operations: docs/RUNBOOK.md.
 
+## Milestone 10 — Book design system (spreads, landscape, styles, backgrounds)
+Plan + decisions: `.agentos/runs/m10.md`, D-062. Three shippable phases.
+- [x] M10a: doc v2 (upgrade on read, v1 on write), portrait + landscape geometry, backgrounds (colour / own paper textures / faded photo; page or whole book) in editor, viewer and PDF, open-book (facing pages) editor ≥ 768 px + phone "View spread"
+- [ ] M10b: landscape layouts, two-page spread layouts, modern style (split-strip cover, text panel, grids), new OFL fonts (script / display / serif + Arabic pairs), format + style on new books, AI per format/style (migration 1900, migration first)
+- [ ] M10c: geometric + scrapbook styles (shapes, frames, tilt, stickers), crop on shaped slots, AI-suggested backgrounds (kept photos only)
+**Done when:** a user builds a landscape or portrait book in any style with spreads and backgrounds that look the same in editor, flipbook and PDF.
+> M10a (2026-11-10): built, reviewed (APPROVED), live e2e/m10a 7/7, launch-smoke 7/7, editor 59/59, goldens byte-frozen. No migration. NOT deployed. Needs user sign-off on fonts/textures (docs/design/) before M10b.
+
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
 - [ ] AI "story mode": a short paragraph per chapter; AI-picked background colours from the photos
