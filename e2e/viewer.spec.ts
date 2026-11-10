@@ -1,4 +1,8 @@
-// Viewer chrome on the dev-only /dev-viewer fixture (no auth / Supabase). 375 px touch + 1280 px.
+// M6 flipbook viewer on the dev-only /dev-viewer fixture (no auth / Supabase), run against `next dev`
+// like e2e/editor.spec.ts. 375 px touch (single page) + 1280 px (spread). Covers swipe, counter,
+// chapter label, Contents, watermark + footer (unpaid only), Arabic, end card, pseudo-fullscreen,
+// photo windowing (≤ 5 pages carry image URLs on a phone) and no horizontal overflow.
+// (Replaces e2e/viewer-chrome.spec.ts from T5.)
 import { expect, test, type Page } from "@playwright/test";
 
 async function ready(page: Page, url: string) {
@@ -36,6 +40,18 @@ async function noHorizontalOverflow(page: Page) {
 }
 
 const counter = (page: Page) => page.getByTestId("page-counter");
+
+/** Flip indexes whose page currently has at least one <img> with a real src (windowing). */
+async function pagesWithImages(page: Page): Promise<number[]> {
+  return page.evaluate(() => {
+    const out = new Set<number>();
+    for (const el of Array.from(document.querySelectorAll<HTMLElement>("[data-flip-index]"))) {
+      const imgs = Array.from(el.querySelectorAll("img"));
+      if (imgs.some((i) => (i.getAttribute("src") ?? "") !== "")) out.add(Number(el.dataset.flipIndex));
+    }
+    return [...out].sort((a, b) => a - b);
+  });
+}
 
 test.describe("phone 375 (touch)", () => {
   test.use({ viewport: { width: 375, height: 740 }, hasTouch: true, isMobile: true });
@@ -128,6 +144,49 @@ test.describe("phone 375 (touch)", () => {
     expect(s.f.toLowerCase()).toContain("cairo");
     await noHorizontalOverflow(page);
   });
+
+  test("single-page mode; only pages near the current one carry image URLs (≤ 5)", async ({ page }) => {
+    await ready(page, "/dev-viewer?paid=0");
+    await expect(page.getByTestId("flipbook")).toHaveAttribute("data-spread", "false");
+    expect(await page.locator("[data-testid=flipbook]").count()).toBe(1);
+    const atCover = await pagesWithImages(page);
+    expect(atCover.length).toBeGreaterThan(0);
+    expect(atCover.length).toBeLessThanOrEqual(5);
+    expect(Math.max(...atCover)).toBeLessThanOrEqual(2);
+    for (let i = 0; i < 6; i++) await page.getByTestId("next-page").click();
+    await expect(counter(page)).toHaveText("6 / 12");
+    await expect.poll(async () => (await pagesWithImages(page)).includes(6)).toBe(true);
+    const mid = await pagesWithImages(page);
+    expect(mid.length).toBeLessThanOrEqual(5);
+    expect(Math.min(...mid)).toBeGreaterThanOrEqual(4);
+    expect(Math.max(...mid)).toBeLessThanOrEqual(8);
+  });
+
+  test("two swipes forward, prev button goes back; prev disabled on the cover", async ({ page }) => {
+    await ready(page, "/dev-viewer?paid=0");
+    await expect(page.getByTestId("prev-page")).toBeDisabled();
+    await swipeLeft(page);
+    await swipeLeft(page);
+    await expect(counter(page)).toHaveText("2 / 12");
+    await page.getByTestId("prev-page").click();
+    await expect(counter(page)).toHaveText("1 / 12");
+  });
+
+  test("Arabic captions use dir=auto and render RTL", async ({ page }) => {
+    await ready(page, "/dev-viewer?paid=0&lang=ar");
+    for (let i = 0; i < 4; i++) await page.getByTestId("next-page").click();
+    await expect(counter(page)).toHaveText("4 / 12");
+    const caps = page.locator('[data-testid="page-caption"]');
+    await expect.poll(() => caps.count()).toBeGreaterThan(0);
+    const info = await caps.evaluateAll((els) =>
+      els.map((el) => ({ dir: el.getAttribute("dir"), d: getComputedStyle(el).direction, ar: /[\u0600-\u06FF]/.test(el.textContent ?? "") })),
+    );
+    expect(info.every((c) => c.dir === "auto")).toBe(true);
+    const arabic = info.filter((c) => c.ar);
+    expect(arabic.length).toBeGreaterThan(0);
+    expect(arabic.every((c) => c.d === "rtl")).toBe(true);
+    await noHorizontalOverflow(page);
+  });
 });
 
 test.describe("desktop 1280 (spread)", () => {
@@ -162,5 +221,18 @@ test.describe("desktop 1280 (spread)", () => {
     await expect(page.getByTestId("viewer-bottom-bar")).toBeVisible();
     await page.getByTestId("fullscreen-button").click();
     await expect(page.getByTestId("viewer-shell")).toHaveAttribute("data-fullscreen", "off");
+  });
+
+  test("unpaid spread: watermark + footer, paid: neither; no overflow", async ({ page }) => {
+    await ready(page, "/dev-viewer?paid=0");
+    await expect(page.getByTestId("made-with-footer")).toBeVisible();
+    await expect(page.getByTestId("watermark").first()).toBeVisible();
+    await noHorizontalOverflow(page);
+    await ready(page, "/dev-viewer?paid=1");
+    await expect(page.getByTestId("made-with-footer")).toHaveCount(0);
+    await expect(page.getByTestId("watermark")).toHaveCount(0);
+    await page.getByTestId("next-page").click();
+    await expect(counter(page)).toHaveText("1–2 / 12");
+    await noHorizontalOverflow(page);
   });
 });
