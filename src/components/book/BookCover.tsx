@@ -22,7 +22,7 @@ export type BookCoverProps = {
 };
 
 export function BookCover({ doc, mode, photos, captionLang, renderSlotOverlay, renderTextOverlay, className, priority }: BookCoverProps) {
-  const m = coverRenderModel(doc, photos, captionLang);
+  const m = coverRenderModel(doc, photos, captionLang, { bleed: mode === "print" });
   return (
     <PageFrame
       background={doc.style.background}

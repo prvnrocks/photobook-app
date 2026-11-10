@@ -14,6 +14,7 @@ import {
   isCaptionFont,
   type CaptionFont,
 } from "./fonts";
+import { bleedRect } from "./bleed";
 import { slotSizeMm } from "./resolution";
 import type { BookDoc, Caption, Crop, Rect } from "./types";
 
@@ -25,9 +26,19 @@ export interface RenderPhoto {
 }
 export type RenderPhotos = Readonly<Record<string, RenderPhoto | undefined>>;
 
+export { bleedRect, printSlotSizeMm, EDGE_EPS_PCT, type BleedRect } from "./bleed";
+
+export interface RenderOptions {
+  /**
+   * Print (D-050): slots touching a trim edge are extended into the 3 mm bleed (rect may run
+   * past 0..100 %) and the crop is computed for the extended box. Text rects never change.
+   */
+  bleed?: boolean;
+}
+
 export interface RenderSlot {
   index: number;
-  /** Slot rectangle in % of the page. */
+  /** Slot rectangle in % of the trim page. With `bleed`, edge slots run past 0..100 %. */
   rect: Rect;
   photoId: string | null;
   /** null = empty slot (no photo, or the photo is not in `photos`, e.g. deleted). */
@@ -85,7 +96,15 @@ export function cropBoxStyle(s: CropStyle): { left: string; top: string; width: 
   return { left: `${s.left}%`, top: `${s.top}%`, width: `${s.width}%`, height: `${s.height}%` };
 }
 
-function renderSlot(index: number, rect: Rect, photoId: string | null, crop: Crop, photos: RenderPhotos): RenderSlot {
+function renderSlot(
+  index: number,
+  layoutRect: Rect,
+  photoId: string | null,
+  crop: Crop,
+  photos: RenderPhotos,
+  opts: RenderOptions,
+): RenderSlot {
+  const rect = opts.bleed ? bleedRect(layoutRect).pct : layoutRect;
   const p = photoId !== null && Object.prototype.hasOwnProperty.call(photos, photoId) ? photos[photoId] : undefined;
   if (!p || !p.url) return { index, rect, photoId, photo: null };
   const mm = slotSizeMm(rect);
@@ -108,6 +127,7 @@ export function pageRenderModel(
   pageIndex: number,
   photos: RenderPhotos,
   captionLang = "en",
+  opts: RenderOptions = {},
 ): PageRenderModel | null {
   const page = Number.isInteger(pageIndex) ? doc.pages[pageIndex] : undefined;
   if (!page) return null;
@@ -117,7 +137,7 @@ export function pageRenderModel(
   }
   const slots = layout.slots.map((rect, i) => {
     const s = page.slots[i];
-    return renderSlot(i, rect, s?.photoId ?? null, s?.crop ?? DEFAULT_CROP, photos);
+    return renderSlot(i, rect, s?.photoId ?? null, s?.crop ?? DEFAULT_CROP, photos, opts);
   });
   let caption: RenderCaption | null = null;
   if (layout.caption) {
@@ -157,7 +177,12 @@ export function coverTitleSizeCqw(title: string): number {
   return 3.6;
 }
 
-export function coverRenderModel(doc: BookDoc, photos: RenderPhotos, captionLang = "en"): CoverRenderModel {
+export function coverRenderModel(
+  doc: BookDoc,
+  photos: RenderPhotos,
+  captionLang = "en",
+  opts: RenderOptions = {},
+): CoverRenderModel {
   const layout = getLayout(doc.cover.layout);
   const known = !!layout && layout.role === "cover";
   const rect = known ? layout.slots[0] : undefined;
@@ -168,7 +193,7 @@ export function coverRenderModel(doc: BookDoc, photos: RenderPhotos, captionLang
     kind: "cover",
     layoutId: doc.cover.layout,
     knownLayout: known,
-    slot: rect ? renderSlot(0, rect, doc.cover.photoId, DEFAULT_CROP, photos) : null,
+    slot: rect ? renderSlot(0, rect, doc.cover.photoId, DEFAULT_CROP, photos, opts) : null,
     textRect: known ? layout.caption : null,
     title: {
       text: title,

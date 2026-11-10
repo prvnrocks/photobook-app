@@ -264,6 +264,71 @@ export type Database = {
         }
         Relationships: []
       }
+      exports: {
+        Row: {
+          attempt: number
+          book_id: string
+          bytes: number | null
+          caption_lang: string
+          created_at: string
+          doc: Json
+          doc_rev: number
+          error_code: string | null
+          finished_at: string | null
+          id: string
+          lease_token: string | null
+          lease_until: string | null
+          page_count: number | null
+          path: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          attempt?: number
+          book_id: string
+          bytes?: number | null
+          caption_lang?: string
+          created_at?: string
+          doc: Json
+          doc_rev: number
+          error_code?: string | null
+          finished_at?: string | null
+          id?: string
+          lease_token?: string | null
+          lease_until?: string | null
+          page_count?: number | null
+          path?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          attempt?: number
+          book_id?: string
+          bytes?: number | null
+          caption_lang?: string
+          created_at?: string
+          doc?: Json
+          doc_rev?: number
+          error_code?: string | null
+          finished_at?: string | null
+          id?: string
+          lease_token?: string | null
+          lease_until?: string | null
+          page_count?: number | null
+          path?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exports_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           amount: number
@@ -463,6 +528,10 @@ export type Database = {
         Args: { p_lease_seconds: number; p_run_id: string }
         Returns: string
       }
+      claim_export: {
+        Args: { p_export: string; p_lease_seconds: number }
+        Returns: string
+      }
       claim_finalize_run: {
         Args: { p_book_id: string; p_min_interval_seconds: number }
         Returns: number
@@ -483,6 +552,18 @@ export type Database = {
         }
         Returns: Json
       }
+      create_export_job: {
+        Args: {
+          p_book: string
+          p_caption_lang: string
+          p_daily_cap: number
+          p_doc: Json
+          p_doc_rev: number
+          p_stale_seconds: number
+          p_user: string
+        }
+        Returns: Json
+      }
       create_rewrite_run_capped: {
         Args: {
           p_book: string
@@ -493,6 +574,20 @@ export type Database = {
           p_user: string
         }
         Returns: Json
+      }
+      fail_export: {
+        Args: { p_code: string; p_export: string; p_token: string }
+        Returns: boolean
+      }
+      finish_export: {
+        Args: {
+          p_bytes: number
+          p_export: string
+          p_pages: number
+          p_path: string
+          p_token: string
+        }
+        Returns: boolean
       }
       fulfill_book_checkout: {
         Args: {

@@ -37,3 +37,15 @@ export function layoutsByRole(role: LayoutRole): readonly Layout[] {
 
 /** A5 portrait page size in mm (aspect ratio for slot orientation maths). */
 export const PAGE_MM = { w: 148, h: 210 } as const;
+
+/**
+ * Print bleed (D-050): the PDF sheet is the trim page plus BLEED_MM on every side. Photo slots
+ * that touch a trim edge extend into the bleed; the page background fills the whole sheet.
+ */
+export const BLEED_MM = 3;
+
+/** Print sheet size in mm = trim page + bleed on every side (154×216). */
+export const SHEET_MM = { w: PAGE_MM.w + 2 * BLEED_MM, h: PAGE_MM.h + 2 * BLEED_MM } as const;
+
+/** Safe zone (D-050): every caption / cover-text rect stays at least this far inside the trim. */
+export const SAFE_MM = 4;

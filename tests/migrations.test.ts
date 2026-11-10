@@ -1349,7 +1349,10 @@ describe("migrations: Milestone 5 editor (0900, D-036 / D-037)", () => {
 
   it("database.types.ts declares books.doc_rev and the RPC args (hand-edited until types gen)", () => {
     const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
-    expect(types.match(/doc_rev\??: number/g)).toHaveLength(3);
+    // scoped to the books table block (exports, 1400, has its own doc_rev columns)
+    const books = types.slice(types.indexOf("      books: {"), types.indexOf("      exports: {"));
+    expect(books.length).toBeGreaterThan(0);
+    expect(books.match(/doc_rev\??: number/g)).toHaveLength(3);
     expect(types).toMatch(
       /create_rewrite_run_capped: \{\s*Args: \{\s*p_book: string\s*p_cap: number\s*p_daily_cap: number\s*p_enforce: boolean\s*p_mode: string\s*p_user: string\s*\}\s*Returns: Json/,
     );
@@ -1899,10 +1902,194 @@ describe("migrations: Milestone 7 payments review (1300)", () => {
     }
   });
 
-  it("rls_check.sql covers the review fixes and counts 121 checks", () => {
+  it("rls_check.sql covers the review fixes", () => {
     const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
     expect(rls).toContain(name);
     for (const tag of ["needs_review", "double payment", "fulfil no-op"]) expect(rls).toContain(`RLS FAIL [${tag}]`);
-    expect(rls).toContain("RLS OK — all 121 checks passed");
+    // the total check count is pinned by the latest milestone suite (1400)
+  });
+});
+
+describe("migrations: Milestone 8 exports (1400, D-047 / D-051)", () => {
+  const name = "20261113001400_exports.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const ws = (s: string) => s.replace(/\s+/g, " ");
+  const flat = ws(sql);
+  const fns = matchesAll(/create\s+(?:or\s+replace\s+)?function\s+([\w.]+)\s*\(([\s\S]*?)\bas\s+\$\$([\s\S]*?)\$\$/, sql).map(
+    (x) => ({ name: x[1], header: x[2], body: x[3] }),
+  );
+  const SIG = {
+    "public.create_export_job": "(uuid, uuid, bigint, jsonb, text, integer, integer)",
+    "public.claim_export": "(uuid, integer)",
+    "public.finish_export": "(uuid, uuid, text, bigint, integer)",
+    "public.fail_export": "(uuid, uuid, text)",
+  } as const;
+  const RETURNS = {
+    "public.create_export_job": "jsonb",
+    "public.claim_export": "uuid",
+    "public.finish_export": "boolean",
+    "public.fail_export": "boolean",
+  } as const;
+  const OWNER_COLS = ["id", "book_id", "doc_rev", "status", "bytes", "page_count", "error_code", "created_at", "finished_at"];
+  const fn = (n: string) => fns.find((x) => x.name === n);
+
+  it("exists, sorts right after 1300, only adds (no drop, no edits of older objects)", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files.indexOf(name)).toBe(files.indexOf("20261112001300_payments_review.sql") + 1);
+    expect(sql).not.toMatch(/\bdrop\b/);
+    expect(sql).not.toMatch(/\balter\s+table\s+public\.(?!exports\b)/);
+    expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
+    expect(fns.map((f) => f.name).sort()).toEqual(Object.keys(SIG).sort());
+  });
+
+  it("public.exports: columns, FKs cascade, doc snapshot ≤ 1 MiB, status / lang / code checks", () => {
+    expect(flat).toContain("book_id uuid not null references public.books (id) on delete cascade,");
+    expect(flat).toContain("user_id uuid not null references auth.users (id) on delete cascade,");
+    expect(flat).toContain("doc_rev bigint not null,");
+    expect(flat).toContain("doc jsonb not null,");
+    expect(flat).toContain("constraint exports_doc_size check (pg_column_size(doc) <= 1048576)");
+    expect(flat).toContain("constraint exports_caption_lang_check check (caption_lang in ('en', 'ar'))");
+    expect(flat).toContain("constraint exports_status_check check (status in ('queued', 'rendering', 'ready', 'failed'))");
+    expect(flat).toContain("status text not null default 'queued',");
+    expect(flat).toContain("attempt integer not null default 0,");
+    expect(flat).toContain("error_code is null or error_code ~ '^[a-z0-9_]{1,64}$'");
+    expect(flat).toContain("bytes is null or bytes between 1 and 52428800");
+  });
+
+  it("path must be exactly {user_id}/{book_id}/{id}.pdf (bucket exports convention, 0200)", () => {
+    expect(flat).toContain(
+      "constraint exports_path_owner check ( path is null or path = (user_id::text || '/' || book_id::text || '/' || id::text || '.pdf') )",
+    );
+  });
+
+  it("indexes: ready lookup, per-user daily count, one job in flight per book", () => {
+    expect(flat).toContain("create index exports_book_ready_idx on public.exports (book_id, doc_rev) where status = 'ready';");
+    expect(flat).toContain("create index exports_user_created_idx on public.exports (user_id, created_at);");
+    expect(flat).toContain(
+      "create unique index exports_one_active_per_book on public.exports (book_id) where status in ('queued', 'rendering');",
+    );
+  });
+
+  it("RLS on, one owner-only SELECT policy, no client write policies", () => {
+    expect(flat).toContain("alter table public.exports enable row level security;");
+    const ps = policies.filter((p) => p.table === "public.exports");
+    expect(ps).toHaveLength(1);
+    expect(ws(ps[0].text)).toContain("for select to authenticated using (user_id = (select auth.uid()))");
+  });
+
+  it("grants: nothing for anon; authenticated only column SELECT on the status columns; service_role all", () => {
+    const acl = effectiveTablePrivileges();
+    expect(sorted(acl["public.exports"]?.anon)).toEqual([]);
+    expect(sorted(acl["public.exports"]?.authenticated)).toEqual([]);
+    expect(sorted(acl["public.exports"]?.service_role)).toEqual([...ALL_PRIVS].sort());
+    expect(flat).toContain("revoke all on table public.exports from public, anon, authenticated;");
+    const g = matchesAll(/grant\s+select\s*\(([^)]*)\)\s+on\s+(?:table\s+)?public\.exports\s+to\s+([a-z_, ]+);/);
+    expect(g).toHaveLength(1);
+    expect(g[0][2].trim()).toBe("authenticated");
+    expect(g[0][1].split(",").map((c) => c.trim())).toEqual(OWNER_COLS);
+    expect(all).not.toMatch(/grant\s+(insert|update|delete)[^;]*on\s+(?:table\s+)?public\.exports\s+to\s+[a-z_, ]*\b(anon|authenticated)\b/);
+  });
+
+  it("src/lib/db/exports.ts owner reads select only granted columns", () => {
+    const src = readFileSync(join(process.cwd(), "src", "lib", "db", "exports.ts"), "utf8");
+    const cols = src.match(/export const OWNER_EXPORT_COLUMNS =\s*"([^"]+)"/);
+    expect(cols).not.toBeNull();
+    for (const c of cols![1].split(",").map((x) => x.trim())) expect(OWNER_COLS, c).toContain(c);
+  });
+
+  it.each(Object.keys(SIG))("%s: SECURITY INVOKER, search_path '', service_role-only EXECUTE", (n) => {
+    const f = fn(n);
+    expect(f, `${n} missing`).toBeDefined();
+    const ret = RETURNS[n as keyof typeof RETURNS];
+    expect(ws(f!.header)).toMatch(new RegExp(`\\) returns ${ret} language plpgsql volatile security invoker set search_path = '' ?$`));
+    expect(f!.header).not.toMatch(/security\s+definer/);
+    const sig = SIG[n as keyof typeof SIG];
+    expect(flat).toContain(`revoke all on function ${n}${sig} from public, anon, authenticated;`);
+    expect(flat).toContain(`grant execute on function ${n}${sig} to service_role;`);
+    const grants = matchesAll(new RegExp(`grant execute on function ${esc(n)}\\s*\\([^)]*\\)\\s+to\\s+([a-z_, ]+?)\\s*;`)).map((g) =>
+      g[1].trim(),
+    );
+    expect(grants).toEqual(["service_role"]);
+    expect(flat.indexOf(`revoke all on function ${n}`)).toBeLessThan(flat.indexOf(`grant execute on function ${n}`));
+    expect(ws(f!.body)).toContain("raise exception 'invalid_argument' using errcode = '22023';");
+  });
+
+  it("create_export_job: new advisory key space 6, owner + live is_paid, reap → reuse → running → cap → insert", () => {
+    const body = ws(fn("public.create_export_job")!.body);
+    const used = matchesAll(/hashtextextended\s*\([^,]+,\s*(\d+)\s*\)/).map((x) => x[1]);
+    expect(used.filter((k) => k === "6")).toHaveLength(1);
+    const lock = body.indexOf("perform pg_advisory_xact_lock(hashtextextended(p_user::text, 6));");
+    const owner = body.indexOf("where b.id = p_book and b.user_id = p_user;");
+    const paid = body.indexOf("return jsonb_build_object('status', 'not_paid');");
+    const rev = body.indexOf("return jsonb_build_object('status', 'stale_rev', 'doc_rev', v_rev);");
+    const reap = body.indexOf("set status = 'failed', error_code = 'stale'");
+    const ready = body.indexOf("return jsonb_build_object('status', 'ready', 'export_id', v_id);");
+    const running = body.indexOf("return jsonb_build_object('status', 'running', 'export_id', v_id, 'doc_rev', v_frev);");
+    const cap = body.indexOf("return jsonb_build_object('status', 'daily_cap');");
+    const insert = body.indexOf("insert into public.exports");
+    const order = [lock, owner, paid, rev, reap, ready, running, cap, insert];
+    expect(order.every((i) => i > 0), JSON.stringify(order)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(body).toContain("e.created_at > now() - interval '24 hours'");
+    expect(body).toContain("e.caption_lang = p_caption_lang");
+    expect(body).toContain("return jsonb_build_object('status', 'created', 'export_id', v_id);");
+  });
+
+  it("claim / finish / fail: lease token checks, attempts capped at 3", () => {
+    const claim = ws(fn("public.claim_export")!.body);
+    expect(claim).toContain("and e.attempt < 3");
+    expect(claim).toContain("(e.status = 'queued' or (e.status = 'rendering' and e.lease_until < now()))");
+    expect(claim).toContain("v_secs := least(900, greatest(30, p_lease_seconds));");
+    for (const n of ["public.finish_export", "public.fail_export"]) {
+      const body = ws(fn(n)!.body);
+      expect(body, n).toContain("and e.status = 'rendering' and e.lease_token = p_token;");
+      expect(body, n).toContain("lease_token = null, lease_until = null");
+      expect(body, n).toContain("return found;");
+    }
+  });
+
+  it("rls_check.sql covers exports and counts 141 checks", () => {
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain(name);
+    for (const tag of [
+      "exports grants",
+      "exports columns",
+      "exports rpc grants",
+      "exports create",
+      "exports running",
+      "exports not_paid",
+      "exports not_found",
+      "exports stale_rev",
+      "exports claim",
+      "exports token",
+      "exports ready reuse",
+      "exports fail",
+      "exports daily_cap",
+      "exports stale",
+      "exports path",
+      "exports attempts",
+      "exports args",
+      "exports one active",
+      "exports owner read",
+      "exports cross-user",
+      "exports doc",
+      "exports client write",
+      "exports client rpc",
+      "exports anon",
+      "exports cascade",
+    ]) {
+      expect(rls).toContain(`RLS FAIL [${tag}]`);
+    }
+    expect(rls).toContain("RLS OK — all 141 checks passed");
+  });
+
+  it("database.types.ts declares exports and the 4 RPCs (hand-edited)", () => {
+    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
+    expect(types).toMatch(/exports: \{\s*Row: \{[\s\S]*?lease_token: string \| null[\s\S]*?\}\s*Insert:/);
+    expect(types).toMatch(/create_export_job: \{\s*Args: \{[\s\S]*?p_doc: Json[\s\S]*?\}\s*Returns: Json/);
+    expect(types).toMatch(/claim_export: \{\s*Args: \{ p_export: string; p_lease_seconds: number \}\s*Returns: string/);
+    expect(types).toMatch(/finish_export: \{\s*Args: \{[\s\S]*?p_token: string\s*\}\s*Returns: boolean/);
+    expect(types).toMatch(/fail_export: \{\s*Args: \{ p_code: string; p_export: string; p_token: string \}\s*Returns: boolean/);
   });
 });
