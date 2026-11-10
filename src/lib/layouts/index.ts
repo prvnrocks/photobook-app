@@ -10,8 +10,12 @@ import { onePortrait } from "./one-portrait";
 import { threeMixed } from "./three-mixed";
 import { twoHorizontal } from "./two-horizontal";
 import { twoVertical } from "./two-vertical";
+import { CLASSIC_LANDSCAPE_LAYOUTS } from "./classic/landscape";
+import { MODERN_LANDSCAPE_LAYOUTS } from "./modern/landscape";
+import { MODERN_PORTRAIT_LAYOUTS } from "./modern/portrait";
 
-export const LAYOUTS: readonly Layout[] = [
+/** The M1–M10a catalogue: classic A5 portrait. Order and geometry frozen (goldens, AI prompt cache). */
+export const CLASSIC_PORTRAIT_LAYOUTS: readonly Layout[] = [
   cover,
   fullPage,
   onePortrait,
@@ -19,6 +23,14 @@ export const LAYOUTS: readonly Layout[] = [
   twoHorizontal,
   threeMixed,
   fourGrid,
+];
+
+/** Every layout of every format and style (M10b). Format/style-aware code uses layoutsFor() in lib/book/spreads. */
+export const LAYOUTS: readonly Layout[] = [
+  ...CLASSIC_PORTRAIT_LAYOUTS,
+  ...CLASSIC_LANDSCAPE_LAYOUTS,
+  ...MODERN_PORTRAIT_LAYOUTS,
+  ...MODERN_LANDSCAPE_LAYOUTS,
 ];
 
 export const LAYOUT_IDS: readonly string[] = LAYOUTS.map((l) => l.id);
@@ -31,8 +43,12 @@ export function getLayout(id: string): Layout | undefined {
   return BY_ID.get(id);
 }
 
+/**
+ * Legacy: classic A5 portrait layouts of `role` only (M1–M10a callers: fit, layout picker, Storyteller
+ * catalogue). New code must use layoutsFor(format, style, role) from lib/book/spreads.
+ */
 export function layoutsByRole(role: LayoutRole): readonly Layout[] {
-  return LAYOUTS.filter((l) => l.role === role);
+  return CLASSIC_PORTRAIT_LAYOUTS.filter((l) => l.role === role);
 }
 
 /**

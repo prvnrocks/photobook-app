@@ -1,6 +1,6 @@
 // Fixture doc + placeholder photos for the dev-only /dev-book-page preview. No user data.
 
-import { LAYOUTS } from "@/lib/layouts";
+import { CLASSIC_PORTRAIT_LAYOUTS as LAYOUTS } from "@/lib/layouts";
 import type { RenderPhotos } from "./render";
 import type { BookDoc, BookFormat } from "./types";
 

@@ -4,7 +4,7 @@
 
 import type { RenderPhotos } from "@/lib/book/render";
 import type { BookDoc, BookFormat, Chapter } from "@/lib/book/types";
-import { LAYOUTS } from "@/lib/layouts";
+import { CLASSIC_PORTRAIT_LAYOUTS as LAYOUTS } from "@/lib/layouts";
 
 const COLORS = ["#c2410c", "#0f766e", "#1d4ed8", "#a21caf", "#4d7c0f", "#b45309", "#be123c", "#334155"];
 
