@@ -21,6 +21,7 @@ import { pageAspectStyle } from "@/lib/book/format-style";
 import {
   editorSpreads,
   spreadAriaLabel,
+  spreadAspectRatio,
   spreadCounterLabel,
   spreadOfPosition,
   spreadToPosition,
@@ -50,6 +51,7 @@ export function PageCarousel() {
   const current = spread ? spreadOfPosition(state.page) : positionToItem(state.page);
   const count = spreads ? spreads.length : pageCount + 1;
   const [preview, setPreview] = useState(false);
+  const spreadButton = useRef<HTMLButtonElement>(null);
   const pageCountRef = useRef(pageCount);
   useEffect(() => {
     pageCountRef.current = pageCount;
@@ -232,6 +234,7 @@ export function PageCarousel() {
         </button>
         {spread ? null : (
           <button
+            ref={spreadButton}
             type="button"
             onClick={() => setPreview(true)}
             disabled={pageCount === 0}
@@ -240,11 +243,35 @@ export function PageCarousel() {
             data-testid="view-spread"
           >
             <BookOpen className="size-4" aria-hidden="true" />
-            Spread
+            {/* < 360 px the label would sit on the Next button: icon only (aria-label stays). */}
+            <span className="max-[359px]:sr-only">Spread</span>
           </button>
         )}
       </div>
-      {preview && !spread ? <SpreadPreviewSheet onClose={() => setPreview(false)} /> : null}
+      {preview && !spread ? <SpreadPreviewSheet onClose={() => setPreview(false)} returnFocus={spreadButton} /> : null}
     </section>
+  );
+}
+
+/**
+ * md+ stand-in for the spread carousel while the screen width isn't known yet (server render +
+ * hydration, N7): same box as the real thing — desk, the current spread (or the cover alone) at
+ * its aspect ratio, counter row — so switching to the live carousel doesn't move anything.
+ * EditorShell shows it with `hidden md:flex`; phones never see it.
+ */
+export function SpreadCarouselPlaceholder({ className }: { className?: string }) {
+  const { state } = useEditor();
+  const pageCount = state.doc.pages.length;
+  const current = spreadOfPosition(state.page);
+  const aspect = current === 0 ? pageAspectStyle(state.doc.format) : { aspectRatio: spreadAspectRatio(state.doc.format) };
+  return (
+    <div className={cn("min-h-0 flex-1 flex-col", className)} aria-hidden="true" data-testid="spread-placeholder">
+      <div className="flex min-h-0 flex-1 items-center justify-center bg-stone-100 px-6 py-4">
+        <div className={cn("h-full max-w-full bg-neutral-50", current === 0 && "aspect-[148/210]")} style={aspect} />
+      </div>
+      <div className="flex h-11 shrink-0 items-center justify-center pb-1 text-sm tabular-nums text-muted-foreground">
+        {spreadCounterLabel(current, pageCount)}
+      </div>
+    </div>
   );
 }

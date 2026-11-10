@@ -8,7 +8,7 @@ import { getCurrentUser } from "@/lib/auth/current-user";
 import { CAPTION_LANGS, OCCASIONS, TONES } from "@/lib/book/options";
 import { deleteBookCompletely } from "@/lib/cleanup/delete-book";
 import type { DeleteBookActionResult } from "@/lib/dashboard/delete-book";
-import { createBook } from "@/lib/db/books";
+import { createBook, stripPhotoFromBookDoc } from "@/lib/db/books";
 import { deletePhoto, deleteUnfinished } from "@/lib/db/photos";
 import { isUuid } from "@/lib/uuid";
 import {
@@ -82,7 +82,13 @@ export async function createBookAction(
   redirect(withAnalyticsFlash(`/books/${id}/upload`, "book_created"));
 }
 
-/** Deletes one photo (files + row) of the current user's book. */
+/**
+ * Deletes one photo (files + row) of the current user's book, then strips it from the book doc
+ * (slots/cover → empty, backgrounds using it removed; M10a review S3). The doc cleanup is best
+ * effort: the photo is gone either way; if it fails, Update album drops the dangling references
+ * (relayoutDoc) and the editor reports them as foreign_photo on save. The book id for the
+ * cleanup comes from the deleted row, never from the client.
+ */
 export async function deletePhotoAction(
   photoId: string,
   bookId: string,
@@ -91,11 +97,21 @@ export async function deletePhotoAction(
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: MSG_SIGNED_OUT };
 
+  let ownerBookId: string | null;
   try {
-    await deletePhoto(photoId);
+    ownerBookId = await deletePhoto(photoId);
   } catch (err) {
     console.error("[books] delete photo failed:", err instanceof Error ? err.message : "unknown");
     return { ok: false, error: MSG_DELETE_FAILED };
+  }
+  if (ownerBookId !== null) {
+    try {
+      const r = await stripPhotoFromBookDoc(ownerBookId, photoId);
+      if (r === "conflict") console.error("[books] strip deleted photo from doc: conflict");
+    } catch (err) {
+      console.error("[books] strip deleted photo from doc failed:", err instanceof Error ? err.message : "unknown");
+    }
+    revalidatePath(`/books/${ownerBookId}/edit`);
   }
   revalidatePath(`/books/${bookId}/upload`);
   return { ok: true };

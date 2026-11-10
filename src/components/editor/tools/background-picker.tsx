@@ -3,7 +3,9 @@
 // Background (M10a A8): page / book background picker. Tabs Colour / Paper / Photo, scope
 // "This page" (page.background, source "user") or "Whole book" (style.background; replaces page
 // overrides, one undo step). Every tap is an edit op, so the page previews it live, autosave and
-// undo follow. The cover only has the book background. Caption ink follows the background in
+// undo follow. The cover only has the book background. Fade / veil colour changes of the
+// existing book photo keep page overrides (keepsPageOverrides); other "Whole book" changes
+// replace them with a warning + Undo toast. Radio groups: one tab stop, arrow keys (N5). Caption ink follows the background in
 // <BookPage> (render.ts resolveBackground) — nothing to do here.
 // Pure helpers + copy: src/lib/editor/background-picker.ts.
 
@@ -29,19 +31,24 @@ import {
   FADE_MIN,
   FADE_STEP,
   fadeLabel,
+  fadeMin,
   initialTab,
   isSuggested,
   pageOverride,
   photoBackground,
+  planBookBackground,
   sameHex,
   TINT_SWATCHES,
   VEIL_SWATCHES,
+  withVeilColor,
   type BackgroundScope,
   type BackgroundTab,
 } from "@/lib/editor/background-picker";
+import { rovingTabStop } from "@/lib/editor/roving";
 import type { EditorShellPhoto } from "@/lib/editor/types";
 import { cn } from "@/lib/utils";
 import { showEditorToast } from "../EditorToast";
+import { onRadioGroupKeyDown } from "../radio-group-keys";
 import type { EditorPanelProps, EditorTool } from "./types";
 
 let sessionSeq = 0;
@@ -63,9 +70,10 @@ export function BackgroundPickerPanel({ ctx }: EditorPanelProps) {
       ctx.actions.edit((d) => setPageBackground(d, pageIdx, bg), { goTo: pageIdx, coalesceKey });
       return;
     }
-    const replaced = pageBackgroundOverrideCount(doc);
-    ctx.actions.edit((d) => setBookBackground(d, bg), { coalesceKey });
-    if (replaced > 0 && coalesceKey === undefined) {
+    // Fade / veil colour of the same book photo is an adjustment: page overrides stay, no toast.
+    const { keepPageOverrides, replaced } = planBookBackground(doc, bg);
+    ctx.actions.edit((d) => setBookBackground(d, bg, { keepPageOverrides }), { coalesceKey });
+    if (replaced > 0) {
       showEditorToast({
         message: `Whole book updated (${replaced === 1 ? "1 page" : `${replaced} pages`} lost their own background)`,
         action: { label: "Undo", run: ctx.actions.undo },
@@ -90,6 +98,7 @@ export function BackgroundPickerPanel({ ctx }: EditorPanelProps) {
       suggested={scope === "page" && isSuggested(doc, pageIdx)}
       hasOverride={scope === "page" && pageOverride(doc, pageIdx) !== null}
       overrideCount={pageBackgroundOverrideCount(doc)}
+      adjustKeepsOverrides={scope === "book" && doc.style.background.kind === "photo"}
       photos={photos}
       disabled={ctx.readOnly}
       onApply={(bg) => apply(bg)}
@@ -113,6 +122,8 @@ export interface BackgroundPickerViewProps {
   hasOverride: boolean;
   /** Pages with their own background ("Whole book" replaces them). */
   overrideCount: number;
+  /** "Whole book" shows a photo: fade / veil colour changes keep the pages' own backgrounds. */
+  adjustKeepsOverrides?: boolean;
   photos: readonly EditorShellPhoto[];
   disabled?: boolean;
   onApply(bg: Background): void;
@@ -123,13 +134,14 @@ export interface BackgroundPickerViewProps {
 
 /** Router-free view (static-render tests). */
 export function BackgroundPickerView(props: BackgroundPickerViewProps) {
-  const { scopes, scope, onScope, tab, onTab, suggested, hasOverride, overrideCount, disabled, onReset } = props;
+  const { scopes, scope, onScope, tab, onTab, suggested, hasOverride, overrideCount, adjustKeepsOverrides, disabled, onReset } = props;
+  const scopeStop = rovingTabStop(BACKGROUND_SCOPES.map((s) => ({ checked: scope === s.id, disabled: !scopes.includes(s.id) })));
   const id = useId();
   return (
     <div className="flex min-w-0 flex-col gap-3" data-testid="background-picker" data-scope={scope}>
       <div className="flex items-center gap-2">
-        <div role="radiogroup" aria-label="Apply to" className="grid flex-1 grid-cols-2 gap-1 rounded-lg bg-muted p-1" data-testid="bg-scope">
-          {BACKGROUND_SCOPES.map((s) => {
+        <div role="radiogroup" aria-label="Apply to" onKeyDown={onRadioGroupKeyDown} className="grid flex-1 grid-cols-2 gap-1 rounded-lg bg-muted p-1" data-testid="bg-scope">
+          {BACKGROUND_SCOPES.map((s, i) => {
             const available = scopes.includes(s.id);
             return (
               <button
@@ -138,6 +150,7 @@ export function BackgroundPickerView(props: BackgroundPickerViewProps) {
                 role="radio"
                 aria-checked={scope === s.id}
                 disabled={!available}
+                tabIndex={i === scopeStop ? 0 : -1}
                 onClick={() => onScope(s.id)}
                 className={cn(
                   "min-h-11 min-w-0 rounded-md px-1 text-sm font-medium disabled:opacity-40",
@@ -166,7 +179,9 @@ export function BackgroundPickerView(props: BackgroundPickerViewProps) {
         </p>
       ) : scope === "book" && overrideCount > 0 ? (
         <p className="text-xs text-amber-800" data-testid="bg-replace-note">
-          Also replaces the background of {overrideCount === 1 ? "1 page that has" : `${overrideCount} pages that have`} its own.
+          {adjustKeepsOverrides ? "A new background also replaces" : "Also replaces"} the background of{" "}
+          {overrideCount === 1 ? "1 page that has" : `${overrideCount} pages that have`} its own.
+          {adjustKeepsOverrides ? " Changing the fade keeps them." : null}
         </p>
       ) : null}
 
@@ -218,9 +233,12 @@ function SwatchButton({
   onPick,
   testId,
   label,
+  tabStop,
 }: {
   swatch: BackgroundSwatch;
   selected: boolean;
+  /** Roving tab stop of its radio group. */
+  tabStop: boolean;
   disabled?: boolean;
   onPick(): void;
   testId: string;
@@ -232,6 +250,7 @@ function SwatchButton({
       role="radio"
       aria-checked={selected}
       aria-label={label ?? swatch.label}
+      tabIndex={tabStop ? 0 : -1}
       disabled={disabled}
       onClick={onPick}
       className={cn(
@@ -251,13 +270,16 @@ function SwatchButton({
 }
 
 function ColourTab({ current, disabled, onApply }: BackgroundPickerViewProps) {
+  const isSel = (s: BackgroundSwatch) => current.kind === "color" && sameHex(current.hex, s.hex);
+  const stop = rovingTabStop(BACKGROUND_SWATCHES.map((s) => ({ checked: isSel(s) })));
   return (
-    <div role="radiogroup" aria-label="Colour" className="grid grid-cols-6 gap-3 p-1 sm:grid-cols-8" data-testid="bg-colours">
-      {BACKGROUND_SWATCHES.map((s) => (
+    <div role="radiogroup" aria-label="Colour" onKeyDown={onRadioGroupKeyDown} className="grid grid-cols-6 gap-3 p-1 sm:grid-cols-8" data-testid="bg-colours">
+      {BACKGROUND_SWATCHES.map((s, i) => (
         <SwatchButton
           key={s.id}
           swatch={s}
-          selected={current.kind === "color" && sameHex(current.hex, s.hex)}
+          tabStop={i === stop}
+          selected={isSel(s)}
           disabled={disabled}
           onPick={() => onApply({ kind: "color", hex: s.hex })}
           testId={`bg-colour-${s.id}`}
@@ -284,10 +306,15 @@ const PAPERS: readonly { id: TextureId; t: Texture }[] = TEXTURE_IDS.flatMap((id
 function PaperTab({ current, disabled, onApply }: BackgroundPickerViewProps) {
   const texture = current.kind === "texture" ? current : null;
   const tint = texture?.tint ?? null;
+  const paperStop = rovingTabStop(PAPERS.map(({ t }) => ({ checked: texture?.textureId === t.id })));
+  const tintStop = rovingTabStop([
+    { checked: texture !== null && tint === null },
+    ...TINT_SWATCHES.map((s) => ({ checked: sameHex(tint, s.hex) })),
+  ]);
   return (
     <div className="flex flex-col gap-3">
-      <div role="radiogroup" aria-label="Paper" className="grid grid-cols-3 gap-2 p-1" data-testid="bg-textures">
-        {PAPERS.map(({ id: textureId, t }) => {
+      <div role="radiogroup" aria-label="Paper" onKeyDown={onRadioGroupKeyDown} className="grid grid-cols-3 gap-2 p-1" data-testid="bg-textures">
+        {PAPERS.map(({ id: textureId, t }, i) => {
           const selected = texture?.textureId === t.id;
           return (
             <button
@@ -296,6 +323,7 @@ function PaperTab({ current, disabled, onApply }: BackgroundPickerViewProps) {
               role="radio"
               aria-checked={selected}
               aria-label={t.label}
+              tabIndex={i === paperStop ? 0 : -1}
               disabled={disabled}
               // Picking another paper keeps the tint the user chose.
               onClick={() => onApply({ kind: "texture", textureId, ...(tint ? { tint } : {}) })}
@@ -315,12 +343,13 @@ function PaperTab({ current, disabled, onApply }: BackgroundPickerViewProps) {
       <fieldset className="flex min-w-0 flex-col gap-2" disabled={disabled || !texture}>
         <legend className="mb-2 text-sm font-semibold">Tint</legend>
         {!texture ? <p className="text-xs text-muted-foreground">Pick a paper first.</p> : null}
-        <div role="radiogroup" aria-label="Tint" className="grid grid-cols-5 gap-3 p-1 sm:grid-cols-9" data-testid="bg-tints">
+        <div role="radiogroup" aria-label="Tint" onKeyDown={onRadioGroupKeyDown} className="grid grid-cols-5 gap-3 p-1 sm:grid-cols-9" data-testid="bg-tints">
           <button
             type="button"
             role="radio"
             aria-checked={texture !== null && tint === null}
             aria-label="No tint"
+            tabIndex={tintStop === 0 ? 0 : -1}
             onClick={() => texture && onApply({ kind: "texture", textureId: texture.textureId })}
             className={cn(
               "flex aspect-square w-full min-w-0 items-center justify-center rounded-full border border-black/15 bg-white text-[10px] leading-none font-medium text-neutral-600 disabled:opacity-40",
@@ -330,10 +359,11 @@ function PaperTab({ current, disabled, onApply }: BackgroundPickerViewProps) {
           >
             None
           </button>
-          {TINT_SWATCHES.map((s) => (
+          {TINT_SWATCHES.map((s, i) => (
             <SwatchButton
               key={s.id}
               swatch={s}
+              tabStop={tintStop === i + 1}
               label={`${s.label} tint`}
               selected={sameHex(tint, s.hex)}
               disabled={disabled || !texture}
@@ -350,6 +380,11 @@ function PaperTab({ current, disabled, onApply }: BackgroundPickerViewProps) {
 function PhotoTab({ current, photos, disabled, onApply, onFade }: BackgroundPickerViewProps) {
   const id = useId();
   const photo = current.kind === "photo" ? current : null;
+  const photoStop = rovingTabStop(photos.map((p) => ({ checked: photo?.photoId === p.id })));
+  const veilStop = rovingTabStop(VEIL_SWATCHES.map((s) => ({ checked: photo !== null && sameHex(photo.veilColor, s.hex) })));
+  // Light veils (dark text) start at 60 % so captions stay readable (N4).
+  const minFade = photo ? fadeMin(photo.veilColor) : FADE_MIN;
+  const fade = photo ? Math.max(photo.veil, minFade) : 0.75;
   return (
     <div className="flex flex-col gap-3">
       {photos.length === 0 ? (
@@ -357,8 +392,8 @@ function PhotoTab({ current, photos, disabled, onApply, onFade }: BackgroundPick
           No photos yet.
         </p>
       ) : (
-        <div role="radiogroup" aria-label="Background photo" className="grid max-h-56 grid-cols-4 gap-2 overflow-y-auto p-1 sm:grid-cols-5" data-testid="bg-photos">
-          {photos.map((p) => {
+        <div role="radiogroup" aria-label="Background photo" onKeyDown={onRadioGroupKeyDown} className="grid max-h-56 grid-cols-4 gap-2 overflow-y-auto p-1 sm:grid-cols-5" data-testid="bg-photos">
+          {photos.map((p, i) => {
             const selected = photo?.photoId === p.id;
             const src = p.thumbUrl ?? p.webUrl;
             return (
@@ -368,6 +403,7 @@ function PhotoTab({ current, photos, disabled, onApply, onFade }: BackgroundPick
                 role="radio"
                 aria-checked={selected}
                 aria-label={selected ? "Current background photo" : "Use this photo as the background"}
+                tabIndex={i === photoStop ? 0 : -1}
                 disabled={disabled}
                 onClick={() => onApply(photoBackground(p.id, current))}
                 className={cn(
@@ -404,11 +440,12 @@ function PhotoTab({ current, photos, disabled, onApply, onFade }: BackgroundPick
           <input
             id={`${id}-fade`}
             type="range"
-            min={FADE_MIN}
+            min={minFade}
             max={FADE_MAX}
             step={FADE_STEP}
-            value={photo?.veil ?? 0.75}
-            onChange={(e) => photo && onFade({ ...photo, veil: clampFade(Number(e.target.value)) })}
+            value={fade}
+            aria-valuetext={fadeLabel(fade)}
+            onChange={(e) => photo && onFade({ ...photo, veil: clampFade(Number(e.target.value), minFade) })}
             className="h-11 w-full accent-primary disabled:opacity-40"
             data-testid="bg-fade"
           />
@@ -417,15 +454,16 @@ function PhotoTab({ current, photos, disabled, onApply, onFade }: BackgroundPick
           <span className="text-sm font-semibold" id={`${id}-veil`}>
             Fade colour
           </span>
-          <div role="radiogroup" aria-labelledby={`${id}-veil`} className="grid grid-cols-6 gap-3 p-1" data-testid="bg-veil-colours">
-            {VEIL_SWATCHES.map((s) => (
+          <div role="radiogroup" aria-labelledby={`${id}-veil`} onKeyDown={onRadioGroupKeyDown} className="grid grid-cols-6 gap-3 p-1" data-testid="bg-veil-colours">
+            {VEIL_SWATCHES.map((s, i) => (
               <SwatchButton
                 key={s.id}
                 swatch={s}
+                tabStop={i === veilStop}
                 label={`${s.label} fade`}
                 selected={photo !== null && sameHex(photo.veilColor, s.hex)}
                 disabled={disabled || !photo}
-                onPick={() => photo && onApply({ ...photo, veilColor: s.hex })}
+                onPick={() => photo && onApply(withVeilColor(photo, s.hex))}
                 testId={`bg-veil-${s.id}`}
               />
             ))}

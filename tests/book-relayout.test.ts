@@ -416,3 +416,80 @@ describe("relayoutDoc — user caption on a page re-fitted to one photo (D-031)"
     expect(relayoutDoc(r.doc, photos, OPTS).changed).toBe(false);
   });
 });
+
+describe("relayoutDoc — photo backgrounds (M10a review B1, D-062)", () => {
+  const BG = "44444444-4444-4444-8444-444444444444";
+  const BG2 = "55555555-5555-4555-8555-555555555555";
+  const photoBg = (photoId: string) => ({ kind: "photo" as const, photoId, veil: 0.75, veilColor: "#FFFFFF" });
+  const WITH_BG = [...BASE, ph(BG, L, "2026-10-12T15:00:00"), ph(BG2, P, "2026-10-14T13:00:00")];
+  // BG and BG2 sit on a page; BG is also the book default, BG2 a page override on p1.
+  function bgDoc(): BookDoc {
+    const d = aiDoc();
+    d.pages.push(page("p5", "c1", "one-landscape", [BG]), page("p6", "c2", "one-portrait", [BG2]));
+    d.style = { ...d.style, background: photoBg(BG) };
+    d.pages[0] = { ...d.pages[0], background: { ...photoBg(BG2), source: "user" } };
+    return d;
+  }
+  const expectValidBg = (doc: BookDoc, photos: RelayoutPhoto[]) => {
+    const parsed = parseBookDoc(doc);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const kept = new Set(photos.filter((p) => p.status === "kept").map((p) => p.id));
+    expect(validateBookDoc(parsed.doc, { photoIds: kept, backgroundPhotoIds: new Set(photos.map((p) => p.id)), maxPages: 20 })).toEqual([]);
+  };
+
+  it("a dropped photo used as book + page background survives Update album (slots removed, backgrounds kept)", () => {
+    const photos = drop(WITH_BG, BG, BG2);
+    const r = relayoutDoc(bgDoc(), photos, OPTS);
+    expect(r.changed).toBe(true);
+    expect(photoIdsOf(r.doc)).not.toContain(BG);
+    expect(photoIdsOf(r.doc)).not.toContain(BG2);
+    expect(r.doc.style.background).toEqual(photoBg(BG));
+    expect(r.doc.pages.find((p) => p.id === "p1")?.background).toEqual({ ...photoBg(BG2), source: "user" });
+    expectValidBg(r.doc, photos);
+  });
+
+  it("a background photo that was already dropped keeps working on later passes (no-op)", () => {
+    const d = aiDoc();
+    d.style = { ...d.style, background: photoBg(BG) };
+    d.pages[1] = { ...d.pages[1], background: { ...photoBg(BG), source: "user" } };
+    const photos = drop(WITH_BG, BG);
+    // BG2 is kept but not on a page → it gets added; BG stays a background only.
+    const r = relayoutDoc(d, photos, OPTS);
+    expect(r.doc.style.background).toEqual(photoBg(BG));
+    expect(r.doc.pages[1].background).toEqual({ ...photoBg(BG), source: "user" });
+    expectValidBg(r.doc, photos);
+    const again = relayoutDoc(r.doc, photos, OPTS);
+    expect(again.changed).toBe(false);
+    expect(again.doc).toBe(r.doc);
+  });
+
+  it("a deleted background photo → backgrounds removed (book default white, override gone), relayout succeeds", () => {
+    const photos = WITH_BG.filter((p) => p.id !== BG && p.id !== BG2);
+    const r = relayoutDoc(bgDoc(), photos, OPTS);
+    expect(r.changed).toBe(true);
+    expect(r.doc.style.background).toEqual({ kind: "color", hex: "#FFFFFF" });
+    const p1 = r.doc.pages.find((p) => p.id === "p1");
+    expect(p1 && "background" in p1).toBe(false);
+    expectValidBg(r.doc, photos);
+  });
+
+  it("a deleted background-only photo (on no page) alone is a change", () => {
+    const d = aiDoc();
+    d.pages[2] = { ...d.pages[2], background: { ...photoBg(BG), source: "ai" } };
+    const r = relayoutDoc(d, BASE, OPTS);
+    expect(r.changed).toBe(true);
+    expect(r.added + r.removed).toBe(0);
+    expect(r.doc.pages[2].background).toBeUndefined();
+    expect(r.doc.pages[2].slots).toEqual(d.pages[2].slots);
+  });
+
+  it("non-photo backgrounds are untouched", () => {
+    const d = aiDoc();
+    d.style = { ...d.style, background: { kind: "texture", textureId: "kraft" } };
+    d.pages[0] = { ...d.pages[0], background: { kind: "color", hex: "#1E2A47", source: "user" } };
+    const r = relayoutDoc(d, BASE, OPTS);
+    expect(r.changed).toBe(false);
+    expect(r.doc).toBe(d);
+  });
+});

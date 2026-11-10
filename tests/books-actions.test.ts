@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   createBook: vi.fn(),
   deletePhoto: vi.fn(),
   deleteUnfinished: vi.fn(),
+  stripPhotoFromBookDoc: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 
@@ -23,7 +24,7 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: async () => mocks.user }));
-vi.mock("@/lib/db/books", () => ({ createBook: mocks.createBook }));
+vi.mock("@/lib/db/books", () => ({ createBook: mocks.createBook, stripPhotoFromBookDoc: mocks.stripPhotoFromBookDoc }));
 vi.mock("@/lib/db/photos", () => ({
   deletePhoto: mocks.deletePhoto,
   deleteUnfinished: mocks.deleteUnfinished,
@@ -57,7 +58,8 @@ async function run(fields: Record<string, string | undefined>) {
 beforeEach(() => {
   mocks.user = { id: "11111111-1111-4111-8111-111111111111" };
   mocks.createBook.mockReset().mockResolvedValue({ id: BOOK_ID });
-  mocks.deletePhoto.mockReset().mockResolvedValue(undefined);
+  mocks.deletePhoto.mockReset().mockResolvedValue(null);
+  mocks.stripPhotoFromBookDoc.mockReset().mockResolvedValue("updated");
   mocks.deleteUnfinished.mockReset().mockResolvedValue(0);
   mocks.revalidatePath.mockReset();
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -143,6 +145,33 @@ describe("deletePhotoAction / deleteUnfinishedAction", () => {
 
     expect(await deleteUnfinishedAction(BOOK_ID)).toEqual({ ok: true });
     expect(mocks.deleteUnfinished).toHaveBeenCalledWith(BOOK_ID);
+  });
+
+  it("strips the deleted photo from the doc of the row's own book (not the client's id)", async () => {
+    const OWN = "44444444-4444-4444-8444-444444444444";
+    mocks.deletePhoto.mockResolvedValue(OWN);
+    expect(await deletePhotoAction(PHOTO_ID, BOOK_ID)).toEqual({ ok: true });
+    expect(mocks.stripPhotoFromBookDoc).toHaveBeenCalledWith(OWN, PHOTO_ID);
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/books/${OWN}/edit`);
+  });
+
+  it("no row deleted → no doc write", async () => {
+    mocks.deletePhoto.mockResolvedValue(null);
+    expect(await deletePhotoAction(PHOTO_ID, BOOK_ID)).toEqual({ ok: true });
+    expect(mocks.stripPhotoFromBookDoc).not.toHaveBeenCalled();
+  });
+
+  it("a failing doc cleanup still reports the delete as done", async () => {
+    mocks.deletePhoto.mockResolvedValue(BOOK_ID);
+    mocks.stripPhotoFromBookDoc.mockRejectedValue(new Error("Failed to save book doc (500)"));
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(await deletePhotoAction(PHOTO_ID, BOOK_ID)).toEqual({ ok: true });
+      expect(mocks.revalidatePath).toHaveBeenCalledWith(`/books/${BOOK_ID}/upload`);
+      expect(spy).toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("rejects malformed ids without touching the db", async () => {

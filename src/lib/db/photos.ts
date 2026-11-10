@@ -104,24 +104,27 @@ export async function countPhotos(bookId: string): Promise<number> {
  * Deletes one photo: its storage objects (original/web/thumb, nulls skipped),
  * then the row. No-op when the id is malformed or the row isn't visible
  * (missing or not the caller's — RLS). Throws PhotosQueryError and keeps the
- * row when storage removal fails.
+ * row when storage removal fails. Returns the deleted row's book id (null on a
+ * no-op) so the caller can strip the photo from books.doc
+ * (stripPhotoFromBookDoc, M10a review S3) — this module never writes the doc.
  */
-export async function deletePhoto(photoId: string): Promise<void> {
-  if (!isUuid(photoId)) return;
+export async function deletePhoto(photoId: string): Promise<string | null> {
+  if (!isUuid(photoId)) return null;
   const supabase = await createClient();
 
   const { data: row, error: loadError } = await supabase
     .from("photos")
-    .select("id, original_path, web_path, thumb_path")
+    .select("id, book_id, original_path, web_path, thumb_path")
     .eq("id", photoId)
     .maybeSingle();
   if (loadError) throw new PhotosQueryError("load photo", loadError.code);
-  if (!row) return;
+  if (!row) return null;
 
   await removeObjects(supabase, pathsOf([row]), "remove photo files");
 
   const { error: deleteError } = await supabase.from("photos").delete().eq("id", row.id);
   if (deleteError) throw new PhotosQueryError("delete photo", deleteError.code);
+  return row.book_id;
 }
 
 /**

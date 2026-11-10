@@ -25,12 +25,18 @@ import {
   backgroundPhotoCandidates,
   clampFade,
   currentBackground,
+  fadeMin,
   initialTab,
   isSuggested,
+  keepsPageOverrides,
+  LIGHT_VEIL_FADE_MIN,
   photoBackground,
+  planBookBackground,
   TINT_SWATCHES,
   VEIL_SWATCHES,
+  withVeilColor,
 } from "@/lib/editor/background-picker";
+import { nextRadioIndex, rovingTabStop, trapFocusIndex } from "@/lib/editor/roving";
 import { DEV_DROPPED_BG_PHOTO_UUID, devEditorData, devTransport, withDevBackgroundPhotos } from "@/lib/editor/dev-fixture";
 import { editorReducer, initEditorState, type EditorPosition } from "@/lib/editor/store";
 import type { EditorShellPhoto } from "@/lib/editor/types";
@@ -407,5 +413,114 @@ describe("Background tool", () => {
     expect(cover).toContain('data-scope="book"');
     expect(cover).toContain('data-testid="bg-panel-color"');
     expect(cover).not.toContain("bg-reset");
+  });
+});
+
+// ---- M10a review fixes (S1, N4, N5) ---------------------------------------------------------------
+
+describe("Whole book adjustments keep page overrides (S1)", () => {
+  const bookPhoto = (doc: BookDoc, bg: Background = PHOTO) => setBookBackground(doc, bg);
+
+  it("fade / veil colour of the same book photo → keep overrides, no warning", () => {
+    const doc = setPageBackground(bookPhoto(devPreviewDoc()), 1, LINEN);
+    expect(planBookBackground(doc, { ...PHOTO, veil: 0.6 })).toEqual({ keepPageOverrides: true, replaced: 0 });
+    expect(planBookBackground(doc, { ...PHOTO, veilColor: "#1E2A47" })).toEqual({ keepPageOverrides: true, replaced: 0 });
+    const out = setBookBackground(doc, { ...PHOTO, veil: 0.6 }, { keepPageOverrides: true });
+    expect(out.pages[1].background).toEqual({ ...LINEN, source: "user" });
+    expect(out.style.background).toEqual({ ...PHOTO, veil: 0.6 });
+  });
+
+  it("a new photo, colour or paper replaces them (warning count)", () => {
+    const doc = setPageBackground(bookPhoto(devPreviewDoc()), 1, LINEN);
+    expect(planBookBackground(doc, { ...PHOTO, photoId: DROPPED })).toEqual({ keepPageOverrides: false, replaced: 1 });
+    expect(planBookBackground(doc, NAVY)).toEqual({ keepPageOverrides: false, replaced: 1 });
+    // Book default not a photo yet: picking one replaces.
+    const plain = setPageBackground(devPreviewDoc(), 1, LINEN);
+    expect(planBookBackground(plain, PHOTO)).toEqual({ keepPageOverrides: false, replaced: 1 });
+    expect(keepsPageOverrides(NAVY, PHOTO)).toBe(false);
+    expect(keepsPageOverrides(PHOTO, { ...PHOTO, veil: 0.9 })).toBe(true);
+  });
+
+  it("Whole book note says fade changes keep page backgrounds when the book shows a photo", () => {
+    const h = html({ scope: "book", overrideCount: 2, adjustKeepsOverrides: true, tab: "photo", current: PHOTO });
+    expect(h).toContain("A new background also replaces the background of 2 pages that have its own.");
+    expect(h).toContain("Changing the fade keeps them.");
+    expect(html({ scope: "book", overrideCount: 1 })).toContain("Also replaces the background of 1 page that has its own.");
+  });
+});
+
+describe("fade minimum for light veils (N4)", () => {
+  it("light veils (dark text) start at 60 %, dark veils at 50 %", () => {
+    expect(LIGHT_VEIL_FADE_MIN).toBe(0.6);
+    expect(fadeMin("#FFFFFF")).toBe(0.6);
+    expect(fadeMin(VEIL_SWATCHES.find((s) => s.id === "cream")!.hex)).toBe(0.6);
+    expect(fadeMin("#1E2A47")).toBe(0.5);
+    expect(fadeMin(VEIL_SWATCHES.find((s) => s.id === "black")!.hex)).toBe(0.5);
+    expect(clampFade(0.5, 0.6)).toBe(0.6);
+    expect(clampFade(0.7, 0.6)).toBe(0.7);
+  });
+
+  it("switching to a light veil raises the fade; dark keeps it; a new photo is clamped too", () => {
+    const dark = { ...PHOTO, veil: 0.5, veilColor: "#1E2A47" } as const;
+    expect(withVeilColor(dark, "#FFFFFF")).toEqual({ ...dark, veilColor: "#FFFFFF", veil: 0.6 });
+    expect(withVeilColor({ ...PHOTO, veil: 0.8 }, "#000000")).toEqual({ ...PHOTO, veil: 0.8, veilColor: "#000000" });
+    expect(photoBackground(DROPPED, { ...PHOTO, veil: 0.5 })).toMatchObject({ veil: 0.6, veilColor: "#FFFFFF" });
+    expect(photoBackground(DROPPED, dark)).toMatchObject({ veil: 0.5 });
+  });
+
+  it("slider min follows the veil colour", () => {
+    expect(html({ tab: "photo", current: { ...PHOTO, veilColor: "#FFFFFF" } })).toMatch(/type="range" min="0.6" max="0.9"/);
+    expect(html({ tab: "photo", current: { ...PHOTO, veilColor: "#1E2A47" } })).toMatch(/type="range" min="0.5" max="0.9"/);
+  });
+});
+
+describe("picker keyboard + screen reader (N5)", () => {
+  it("fade slider has aria-valuetext as a percent", () => {
+    expect(html({ tab: "photo", current: { ...PHOTO, veil: 0.75 } })).toMatch(/type="range"[^>]*aria-valuetext="75%"/);
+  });
+
+  it("each radio group has exactly one tab stop: the checked radio, else the first enabled", () => {
+    const groups = (h: string) =>
+      h.split('role="radiogroup"').slice(1).map((chunk) => {
+        const end = chunk.search(/role="(radiogroup|tablist|tabpanel)"|<fieldset|<\/fieldset>/);
+        const g = end > 0 ? chunk.slice(0, end) : chunk;
+        return { zero: (g.match(/tabindex="0"/g) ?? []).length, radios: (g.match(/role="radio"/g) ?? []).length };
+      });
+    const colour = html({ tab: "color", current: NAVY });
+    expect(colour).toMatch(/aria-checked="true" aria-label="Navy" tabindex="0"/);
+    for (const g of groups(colour)) if (g.radios > 0) expect(g.zero).toBe(1);
+    const paper = html({ tab: "texture", current: { ...LINEN, tint: TINT_SWATCHES[0].hex } });
+    for (const g of groups(paper)) if (g.radios > 0) expect(g.zero).toBe(1);
+    const photoTab = html({ tab: "photo", current: { kind: "color", hex: "#FFFFFF" } });
+    for (const g of groups(photoTab)) if (g.radios > 0) expect(g.zero).toBe(1);
+    // Cover: "This page" disabled → "Whole book" is the scope tab stop.
+    expect(html({ scopes: ["book"], scope: "book" })).toMatch(/aria-checked="true" tabindex="0"[^>]*data-testid="bg-scope-book"/);
+  });
+
+  it("rovingTabStop / nextRadioIndex: skips disabled, wraps, Home/End, ignores other keys", () => {
+    expect(rovingTabStop([{ checked: false }, { checked: true }])).toBe(1);
+    expect(rovingTabStop([{ checked: false, disabled: true }, { checked: false }])).toBe(1);
+    expect(rovingTabStop([{ checked: true, disabled: true }, { checked: false }])).toBe(1);
+    expect(rovingTabStop([])).toBe(-1);
+    const d = [false, true, false, false];
+    expect(nextRadioIndex(0, d, "ArrowRight")).toBe(2);
+    expect(nextRadioIndex(0, d, "ArrowDown")).toBe(2);
+    expect(nextRadioIndex(3, d, "ArrowRight")).toBe(0);
+    expect(nextRadioIndex(0, d, "ArrowLeft")).toBe(3);
+    expect(nextRadioIndex(2, d, "ArrowUp")).toBe(0);
+    expect(nextRadioIndex(2, d, "Home")).toBe(0);
+    expect(nextRadioIndex(0, d, "End")).toBe(3);
+    expect(nextRadioIndex(-1, d, "ArrowRight")).toBe(0);
+    expect(nextRadioIndex(0, d, "Enter")).toBeNull();
+    expect(nextRadioIndex(0, [true, true], "ArrowRight")).toBeNull();
+  });
+
+  it("trapFocusIndex cycles inside the sheet (N6)", () => {
+    expect(trapFocusIndex(0, 3, false)).toBe(1);
+    expect(trapFocusIndex(2, 3, false)).toBe(0);
+    expect(trapFocusIndex(0, 3, true)).toBe(2);
+    expect(trapFocusIndex(-1, 3, false)).toBe(0);
+    expect(trapFocusIndex(-1, 3, true)).toBe(2);
+    expect(trapFocusIndex(0, 0, false)).toBe(-1);
   });
 });

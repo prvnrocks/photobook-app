@@ -3,8 +3,12 @@
 // Bottom toolbar (mobile: last row of the full-height editor, safe-area aware; desktop: same row
 // under the page). Renders the registered tools for the current selection — see
 // ./tools/registry.ts for the extension point. Plus the panel host for the active tool.
+// 375 px (M10a): buttons size to their label (11 px, tight tracking, ≥ 44 px, ≤ 72 px on phones)
+// so the 7 "nothing selected" tools fit; on narrower screens the row scrolls and fade edges show
+// there is more.
 
 import { X } from "lucide-react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { EDIT_ERROR_COPY } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
 import { useEditor, type EditorContextValue } from "./editor-context";
@@ -17,9 +21,36 @@ export function toolbarHint(ctx: Pick<EditorContextValue, "readOnly" | "state">)
   return "No tools for this yet.";
 }
 
+/** Which ends of a horizontal scroller have hidden content (scroll affordance). */
+function useScrollEdges(ref: RefObject<HTMLElement | null>, deps: unknown) {
+  const [edges, setEdges] = useState({ start: false, end: false });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => {
+      const start = el.scrollLeft > 1;
+      const end = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+      setEdges((p) => (p.start === start && p.end === end ? p : { start, end }));
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    // The row and every tool button: content width changes don't resize the row itself.
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    for (const child of Array.from(el.children)) ro.observe(child);
+    return () => {
+      el.removeEventListener("scroll", update);
+      ro.disconnect();
+    };
+  }, [ref, deps]);
+  return edges;
+}
+
 export function EditorToolbar({ tools }: { tools: EditorTool[] }) {
   const ctx = useEditor();
   const { state, actions, activeTool } = ctx;
+  const rowRef = useRef<HTMLDivElement>(null);
+  const edges = useScrollEdges(rowRef, tools.map((t) => t.id).join(","));
 
   const onTool = (t: EditorTool) => {
     if (t.isDisabled?.(ctx)) return;
@@ -45,7 +76,12 @@ export function EditorToolbar({ tools }: { tools: EditorTool[] }) {
           </button>
         </div>
       ) : null}
-      <div className="mx-auto flex min-h-16 max-w-3xl items-stretch gap-1 overflow-x-auto px-2 py-1 [scrollbar-width:none]">
+      <div className="relative mx-auto max-w-3xl">
+      <div
+        ref={rowRef}
+        className="flex min-h-16 items-stretch gap-0.5 overflow-x-auto px-2 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        data-testid="editor-toolbar-row"
+      >
         {tools.length === 0 ? (
           <p className="flex flex-1 items-center justify-center px-2 text-center text-sm text-muted-foreground" data-testid="toolbar-hint">
             {toolbarHint(ctx)}
@@ -63,18 +99,40 @@ export function EditorToolbar({ tools }: { tools: EditorTool[] }) {
                 disabled={disabled}
                 aria-pressed={t.Panel ? active : undefined}
                 className={cn(
-                  "flex min-h-11 min-w-16 flex-1 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg px-2 text-xs font-medium",
+                  // Phones: as wide as the label (≥ 44 px tap target, ≤ 72 px); sm+: share the row.
+                  "flex min-h-11 min-w-11 max-w-[72px] flex-auto shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1",
+                  "text-[11px] leading-tight font-medium tracking-tight sm:max-w-none sm:min-w-16 sm:flex-1 sm:px-2 sm:text-xs sm:tracking-normal",
                   "outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40",
                   active ? "bg-primary text-primary-foreground" : "hover:bg-muted",
                 )}
                 data-testid={`editor-tool-${t.id}`}
               >
                 <Icon className="size-5" aria-hidden="true" />
-                <span className="max-w-20 truncate">{t.label}</span>
+                <span className="whitespace-nowrap">{t.label}</span>
               </button>
             );
           })
         )}
+      </div>
+      {/* Scroll affordance: fade the edge that has more tools behind it. */}
+      <div
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-background to-transparent transition-opacity",
+          edges.start ? "opacity-100" : "opacity-0",
+        )}
+        data-testid="toolbar-fade-start"
+        data-visible={edges.start ? "true" : "false"}
+      />
+      <div
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-background to-transparent transition-opacity",
+          edges.end ? "opacity-100" : "opacity-0",
+        )}
+        data-testid="toolbar-fade-end"
+        data-visible={edges.end ? "true" : "false"}
+      />
       </div>
     </div>
   );
@@ -122,6 +180,7 @@ export function EditorPanelHost({ tool }: { tool: EditorTool | null }) {
           "lg:static lg:z-auto lg:max-h-none lg:w-80 lg:shrink-0 lg:rounded-none lg:border-t-0 lg:border-l lg:pb-0 lg:shadow-none",
         )}
         data-testid={`editor-panel-${tool.id}`}
+        data-editor-panel=""
         data-docked={docked ? "true" : "false"}
       >
         <div className="flex shrink-0 items-center gap-2 border-b px-4">

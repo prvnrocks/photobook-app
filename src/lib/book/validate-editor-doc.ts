@@ -11,11 +11,22 @@
 // used as a faded background without being restored, and the same photo may also sit in a slot.
 // Another book's photo → foreign_photo. Background photos are NOT in placedPhotoIds, so saving
 // never marks a dropped photo kept just because it is a background.
+// A texture tint must be one of the light catalogue swatches (BACKGROUND_SWATCHES with ink
+// "dark"), the same list the picker offers: a dark multiply tint turns paper into mud and breaks
+// the texture's declared ink → invalid_doc.
+//
+// Pinned until M10b (review S2): format, style.designStyle and pages[].side must equal the saved
+// doc's values (absent saved doc → A5_PORTRAIT / classic / no side; a page the saved doc doesn't
+// have → no side). The editor has no UI for them yet, so a change can only come from a crafted
+// request → invalid_doc.
+// TODO(M10b): books.format / books.design_style (migration 1900) own format and style; validate
+// against those columns instead of the saved doc, and let spread layouts set `side`.
 
+import { BACKGROUND_SWATCHES } from "@/lib/design/backgrounds";
 import { clipCodePoints } from "@/lib/text/clip";
 import { isCaptionFont } from "./fonts";
 import { BOOK_TITLE_MAX_CODE_POINTS } from "./options";
-import { DocMetaSchema, parseBookDoc, validateBookDoc } from "./schema";
+import { DEFAULT_DESIGN_STYLE, DocMetaSchema, parseBookDoc, validateBookDoc } from "./schema";
 import type { BookDoc, DocMeta } from "./types";
 
 export type EditorDocErrorCode =
@@ -83,6 +94,26 @@ function savedStyleFont(savedDoc: unknown): string | null {
   return typeof font === "string" ? font : null;
 }
 
+/** Tints a paper texture may use: the light swatches (dark ink), upper-case #RRGGBB. */
+export const TEXTURE_TINTS: ReadonlySet<string> = new Set(
+  BACKGROUND_SWATCHES.filter((s) => s.ink === "dark").map((s) => s.hex.toUpperCase()),
+);
+
+function tintOk(bg: { kind: string; tint?: string } | null | undefined): boolean {
+  return bg?.kind !== "texture" || bg.tint === undefined || TEXTURE_TINTS.has(bg.tint.toUpperCase());
+}
+
+/** format / designStyle / page sides the client may not change yet (S2, until M10b). */
+function pinnedFieldsUnchanged(doc: BookDoc, savedDoc: unknown): boolean {
+  const saved = parseBookDoc(savedDoc);
+  const format = saved.ok ? saved.doc.format : "A5_PORTRAIT";
+  const style = (saved.ok ? saved.doc.style.designStyle : undefined) ?? DEFAULT_DESIGN_STYLE;
+  if (doc.format !== format) return false;
+  if ((doc.style.designStyle ?? DEFAULT_DESIGN_STYLE) !== style) return false;
+  const savedSides = new Map<string, string | undefined>(saved.ok ? saved.doc.pages.map((p) => [p.id, p.side]) : []);
+  return doc.pages.every((p) => p.side === savedSides.get(p.id));
+}
+
 export function validateEditorDoc(input: unknown, ctx: EditorDocContext): EditorDocResult {
   // Page limit first, so a free book with 21+ pages gets the specific code even when the
   // count is also above the schema's absolute maximum.
@@ -93,6 +124,7 @@ export function validateEditorDoc(input: unknown, ctx: EditorDocContext): Editor
   if (!parsed.ok) return { ok: false, code: "invalid_doc" };
   const doc = parsed.doc;
   if (doc.pages.length > ctx.maxPages) return { ok: false, code: "page_limit" };
+  if (!pinnedFieldsUnchanged(doc, ctx.savedDoc)) return { ok: false, code: "invalid_doc" };
 
   // Photo ownership + single use (the cover photo may repeat once on a page).
   const placed = new Set<string>();
@@ -115,6 +147,7 @@ export function validateEditorDoc(input: unknown, ctx: EditorDocContext): Editor
   const bgPhotos = [doc.style.background, ...doc.pages.map((p) => p.background)];
   for (const bg of bgPhotos) {
     if (bg?.kind === "photo" && !ctx.photoIds.has(bg.photoId)) return { ok: false, code: "foreign_photo" };
+    if (!tintOk(bg)) return { ok: false, code: "invalid_doc" };
   }
 
   // Caption fonts: must be an editor font, unless the page keeps its already-saved font.

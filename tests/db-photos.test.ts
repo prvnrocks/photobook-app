@@ -92,6 +92,14 @@ describe("deletePhoto", () => {
     expect(fake.state.deleteFilters[0]).toEqual([["eq:id", P]]);
   });
 
+  it("returns the deleted row's book id (null on a no-op) for the doc cleanup", async () => {
+    fake.state.selectResults.push({ data: { ...row(P), book_id: B }, error: null });
+    expect(await deletePhoto(P)).toBe(B);
+    fake.state.selectResults.push({ data: null, error: null });
+    expect(await deletePhoto(P)).toBeNull();
+    expect(await deletePhoto("not-a-uuid")).toBeNull();
+  });
+
   it("skips null paths", async () => {
     fake.state.selectResults.push({ data: row(P, { original_path: null, thumb_path: null }), error: null });
     await deletePhoto(P);

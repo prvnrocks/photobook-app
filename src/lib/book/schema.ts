@@ -280,6 +280,13 @@ export function upgradeV1(v1: z.infer<typeof BookDocV1Schema>): z.infer<typeof B
 export interface ValidateOptions {
   /** Ids of the book's photos that may be placed (e.g. status = ready, not excluded). */
   photoIds: Set<string>;
+  /**
+   * Ids a photo background (book default or page override) may use. Default = photoIds.
+   * Wider than photoIds where a user may pick an AI-dropped photo as a faded background (D-062):
+   * Update album passes every ready photo (kept + dropped) here and only kept ones in photoIds.
+   * AI-built docs keep the default (AI background suggestions must use kept photos only).
+   */
+  backgroundPhotoIds?: ReadonlySet<string>;
   maxPages: number;
 }
 
@@ -287,12 +294,13 @@ export interface ValidateOptions {
  * Semantic checks on a shape-valid doc: layouts exist and match role, slot count == photoCount,
  * photos exist and are used at most once in pages (the cover photo may appear once more),
  * page count ≤ maxPages, chapter/page ids unique, chapterIds exist, photo backgrounds (book
- * default and page overrides) use a known photo — a background photo may also be on a page.
+ * default and page overrides) use a known photo (backgroundPhotoIds, default photoIds) — a
+ * background photo may also be on a page.
  * Returns [] when valid. Issue strings contain indices and layout ids only — no user data.
  */
 export function validateBookDoc(
   doc: z.infer<typeof BookDocSchema>,
-  { photoIds, maxPages }: ValidateOptions,
+  { photoIds, backgroundPhotoIds = photoIds, maxPages }: ValidateOptions,
 ): string[] {
   const issues: string[] = [];
 
@@ -303,7 +311,7 @@ export function validateBookDoc(
     issues.push("cover: unknown photo");
   }
 
-  if (doc.style.background.kind === "photo" && !photoIds.has(doc.style.background.photoId)) {
+  if (doc.style.background.kind === "photo" && !backgroundPhotoIds.has(doc.style.background.photoId)) {
     issues.push("style.background: unknown photo");
   }
 
@@ -327,7 +335,7 @@ export function validateBookDoc(
     if (page.chapterId !== null && !chapterIds.has(page.chapterId)) {
       issues.push(`${at}: unknown chapter`);
     }
-    if (page.background?.kind === "photo" && !photoIds.has(page.background.photoId)) {
+    if (page.background?.kind === "photo" && !backgroundPhotoIds.has(page.background.photoId)) {
       issues.push(`${at}.background: unknown photo`);
     }
 

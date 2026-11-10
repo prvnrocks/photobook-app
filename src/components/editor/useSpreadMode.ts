@@ -1,8 +1,10 @@
 "use client";
 
 // Facing-pages editing (M10a A9) from the md breakpoint (768 px) up; phones edit one page at a
-// time. Server render + first client render are single-page (mobile-first), then the media query
-// takes over.
+// time. The server can't know the width, so server render + hydration report `null` ("not known
+// yet"); EditorShell then renders the single-page carousel for phones and a spread-shaped
+// placeholder for md+ with CSS (`md:hidden` / `hidden md:flex`), so neither size flashes the
+// wrong layout (N7). Client-side navigations read the media query straight away.
 
 import { useSyncExternalStore } from "react";
 
@@ -19,13 +21,16 @@ function getSnapshot(): boolean {
   return typeof window !== "undefined" && !!window.matchMedia && window.matchMedia(SPREAD_MEDIA_QUERY).matches;
 }
 
-function getServerSnapshot(): boolean {
-  return false;
+function getServerSnapshot(): null {
+  return null;
 }
 
-/** True when the editor shows two facing pages; `force` overrides the media query (tests/dev). */
-export function useSpreadMode(force?: "single" | "spread"): boolean {
-  const matches = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+/**
+ * true = two facing pages, false = one page, null = not known yet (server render / hydration).
+ * `force` overrides the media query (tests/dev) and is never null.
+ */
+export function useSpreadMode(force?: "single" | "spread"): boolean | null {
+  const matches = useSyncExternalStore<boolean | null>(subscribe, getSnapshot, getServerSnapshot);
   if (force === "single") return false;
   if (force === "spread") return true;
   return matches;

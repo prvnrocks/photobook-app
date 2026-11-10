@@ -5,7 +5,10 @@ import "server-only";
 // those columns are server-only from migration 0900 on (D-036): writeDocIfEmpty,
 // saveDocIfRev and the AI pipeline section at the bottom (see there).
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { serializeDoc } from "@/lib/book/doc-version";
 import { isAiReplaceableDoc, isReplaceableDoc } from "@/lib/book/replaceable";
+import { parseBookDoc } from "@/lib/book/schema";
+import { stripPhotoFromDoc } from "@/lib/book/strip-photos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Json, Tables } from "@/lib/supabase/database.types";
@@ -286,6 +289,48 @@ export async function saveDocIfRev(
     .maybeSingle();
   if (readError) throw new BooksQueryError("save book doc", readError.code);
   return { ok: false, reason: existing ? "conflict" : "not_found" };
+}
+
+export type StripPhotoResult = "updated" | "unchanged" | "conflict" | "not_found";
+
+/**
+ * After a photo was deleted (M10a review S3): removes every reference to it from books.doc —
+ * cover/slot photoId → null, photo backgrounds using it removed (book default → white colour,
+ * page override → removed; stripPhotoFromDoc). Read-modify-write guarded by doc_rev exactly like
+ * the editor save (saveDocIfRev), retried once on a conflict; meta, title and page_count stay as
+ * they are (a cleanup is not a user edit). The doc_rev bump makes an editor that is open in
+ * another tab get 409 on its next save ("Changed in another tab – Reload"), so it reloads the
+ * cleaned doc instead of re-sending the deleted id (which would 422 foreign_photo).
+ *
+ * `{}`, unparsable docs and docs that don't reference the photo → "unchanged" (no write). Before
+ * migration 0900 (doc_rev null) nothing is written ("unchanged"): there is no safe guard.
+ * Reads under RLS (getMyBook = ownership), writes with the admin client + owner filter.
+ * Call only AFTER the photo row is gone, so no save can put the id back in between.
+ */
+export async function stripPhotoFromBookDoc(bookId: string, photoId: string): Promise<StripPhotoResult> {
+  if (!isUuid(bookId) || !isUuid(photoId)) return "not_found";
+  const user = await getCurrentUser();
+  if (!user) return "not_found";
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const book = await getMyBook(bookId);
+    if (!book) return "not_found";
+    if (book.doc_rev === null) return "unchanged";
+    const parsed = parseBookDoc(book.doc);
+    if (!parsed.ok) return "unchanged";
+    const stripped = stripPhotoFromDoc(parsed.doc, photoId);
+    if (!stripped.changed) return "unchanged";
+    const saved = await saveDocIfRev(
+      book.id,
+      user.id,
+      serializeDoc(stripped.doc) as unknown as Json,
+      stripped.doc.pages.length,
+      book.doc_rev,
+    );
+    if (saved.ok) return "updated";
+    if (saved.reason === "not_found") return "not_found";
+    // conflict: the doc changed since we read it → reload and retry once
+  }
+  return "conflict";
 }
 
 // ---------------------------------------------------------------------------

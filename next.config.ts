@@ -23,6 +23,16 @@ export const PRINT_ROUTE_HEADERS = [
   { key: "Referrer-Policy", value: "no-referrer" },
 ];
 
+/**
+ * Headers for our own design assets under public/design (M10a textures; later stickers/fonts).
+ * File names are NOT content-hashed, so no `immutable`: a day fresh, then a week of
+ * stale-while-revalidate. Regenerated files keep their names — after changing one, rename it
+ * (or accept up to ~1 day of stale caches).
+ */
+export const DESIGN_ASSET_HEADERS = [
+  { key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" },
+];
+
 const nextConfig: NextConfig = {
   // Pin the workspace root to this repo. Without it Next picks up a stray
   // lockfile in a parent folder and infers the wrong root for file tracing.
@@ -39,6 +49,7 @@ const nextConfig: NextConfig = {
     return [
       { source: "/b/:path*", headers: PUBLIC_BOOK_HEADERS },
       { source: "/print/:path*", headers: PRINT_ROUTE_HEADERS },
+      { source: "/design/:path*", headers: DESIGN_ASSET_HEADERS },
     ];
   },
 };

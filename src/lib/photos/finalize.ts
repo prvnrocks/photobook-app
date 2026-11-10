@@ -132,7 +132,10 @@ function referencedPhotoIds(doc: unknown): Set<string> | null {
   if (parsed.doc.cover.photoId) ids.add(parsed.doc.cover.photoId);
   for (const page of parsed.doc.pages) {
     for (const slot of page.slots) if (slot.photoId) ids.add(slot.photoId);
+    if (page.background?.kind === "photo") ids.add(page.background.photoId);
   }
+  // Photo backgrounds (M10a) count too: a missing one makes the doc stale as well.
+  if (parsed.doc.style.background.kind === "photo") ids.add(parsed.doc.style.background.photoId);
   return ids;
 }
 

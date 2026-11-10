@@ -23,6 +23,8 @@ const ROOT = path.join(__dirname, "..");
 const SCRIPT = path.join(ROOT, "scripts", "gen-textures.mjs");
 const PUBLIC = path.join(ROOT, "public");
 const TEX_DIR = path.join(PUBLIC, "design", "textures");
+/** Committed manifest — outside public/ (review N8), so it is never served. */
+const MANIFEST = path.join(ROOT, "scripts", "textures-manifest.json");
 const BUDGET_BYTES = 2.5 * 1024 * 1024;
 const ORIENTATIONS: Orientation[] = ["portrait", "landscape"];
 // Full A5 sheet incl. 3 mm bleed per side.
@@ -42,8 +44,10 @@ interface Manifest {
 }
 
 const sha = (p: string) => createHash("sha256").update(readFileSync(p)).digest("hex");
-const readManifest = (dir: string) => JSON.parse(readFileSync(path.join(dir, "manifest.json"), "utf8")) as Manifest;
-const gen = (out: string) => execFileSync(process.execPath, [SCRIPT, "--out", out], { cwd: ROOT, stdio: "pipe" });
+const readManifest = (file: string) => JSON.parse(readFileSync(file, "utf8")) as Manifest;
+const runManifest = (out: string) => path.join(out, "manifest.json");
+const gen = (out: string) =>
+  execFileSync(process.execPath, [SCRIPT, "--out", out, "--manifest", runManifest(out)], { cwd: ROOT, stdio: "pipe" });
 const dpi = (px: number, mm: number) => px / (mm / 25.4);
 
 let tmp: string;
@@ -57,10 +61,10 @@ afterAll(() => {
 
 describe("scripts/gen-textures.mjs", () => {
   it("is deterministic: a fresh run reproduces the committed files byte for byte", { timeout: 120_000 }, async () => {
-    const committed = readManifest(TEX_DIR);
+    const committed = readManifest(MANIFEST);
     const a = path.join(tmp, "a");
     gen(a);
-    const run = readManifest(a);
+    const run = readManifest(runManifest(a));
     const names = run.files.map((f) => f.name).sort();
     expect(names).toEqual(committed.files.map((f) => f.name).sort());
     // Hashes on disk equal the manifest.
@@ -76,7 +80,7 @@ describe("scripts/gen-textures.mjs", () => {
       // on this build must still agree.
       const b = path.join(tmp, "b");
       gen(b);
-      expect(readManifest(b).files).toEqual(run.files);
+      expect(readManifest(runManifest(b)).files).toEqual(run.files);
     }
   });
 });
@@ -84,7 +88,7 @@ describe("scripts/gen-textures.mjs", () => {
 describe("committed textures", () => {
   it("every TEXTURES entry has its files on disk, and nothing else is committed", () => {
     expect(TEXTURES.map((t) => t.id)).toEqual([...TEXTURE_IDS]);
-    const expected = new Set<string>(["manifest.json"]);
+    const expected = new Set<string>();
     for (const t of TEXTURES) {
       for (const o of ORIENTATIONS) {
         for (const target of ["screen", "print"] as const) {
@@ -99,6 +103,9 @@ describe("committed textures", () => {
       }
     }
     expect(new Set(readdirSync(TEX_DIR))).toEqual(expected);
+    // The manifest lives in scripts/, not public/ (not served), and lists exactly these files.
+    expect(existsSync(path.join(TEX_DIR, "manifest.json"))).toBe(false);
+    expect(new Set(readManifest(MANIFEST).files.map((f) => f.name))).toEqual(expected);
   });
 
   it(`stays within the ${BUDGET_BYTES / 1024 / 1024} MB budget (incl. LICENSE.md)`, () => {
@@ -201,6 +208,15 @@ describe("committed textures", () => {
 });
 
 describe("serving", () => {
+  it("/design/* is cacheable but not immutable (file names aren't content-hashed)", async () => {
+    const { default: nextConfig, DESIGN_ASSET_HEADERS } = await import("../next.config");
+    const rules = await nextConfig.headers!();
+    expect(rules.find((r) => r.source === "/design/:path*")?.headers).toEqual(DESIGN_ASSET_HEADERS);
+    expect(DESIGN_ASSET_HEADERS).toEqual([
+      { key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" },
+    ]);
+  });
+
   it("texture files skip the auth middleware (static, cacheable, reachable by the print renderer)", async () => {
     const { config } = await import("@/middleware");
     for (const t of TEXTURES) {

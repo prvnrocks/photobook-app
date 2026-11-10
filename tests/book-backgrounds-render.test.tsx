@@ -258,10 +258,43 @@ describe("print: no CSS filter anywhere (A7 guard)", () => {
         const html = renderToStaticMarkup(<PrintDocument doc={doc} photos={shown} captionLang="ar" sheets={sheets} />);
         expect(html).toContain("data-bg=");
         expect(html).not.toMatch(/filter/i);
+        expect(tailwindFilterClasses(html)).toEqual([]);
       }
     }
   });
+
+  it("the Tailwind class check catches filter utilities (incl. variants, arbitrary values, negatives)", () => {
+    const html = [
+      'class="blur-sm md:grayscale"',
+      'class="hover:drop-shadow-lg sepia brightness-50"',
+      'class="contrast-125 saturate-[.5] -hue-rotate-15 invert backdrop-blur"',
+      'class="blur grayscale-0 invert-0 backdrop-brightness-75"',
+      'class="h-full w-full object-cover shadow-md text-neutral-800 rounded-sm"',
+    ].join("");
+    expect(tailwindFilterClasses(html)).toEqual([
+      "blur-sm", "md:grayscale", "hover:drop-shadow-lg", "sepia", "brightness-50", "contrast-125",
+      "saturate-[.5]", "-hue-rotate-15", "invert", "backdrop-blur", "blur", "grayscale-0", "invert-0",
+      "backdrop-brightness-75",
+    ]);
+  });
 });
+
+/**
+ * Tailwind utilities that compile to `filter` / `backdrop-filter` (blur, drop-shadow, grayscale,
+ * sepia, brightness, contrast, saturate, hue-rotate, invert, backdrop-*), found in class
+ * attributes — the CSS itself isn't in static markup, so `/filter/` alone can't see them.
+ */
+function tailwindFilterClasses(html: string): string[] {
+  const FILTER_UTILITY = /^-?(blur|drop-shadow|grayscale|sepia|brightness|contrast|saturate|hue-rotate|invert|backdrop)(-|$)/;
+  const found: string[] = [];
+  for (const m of html.matchAll(/class="([^"]*)"/g)) {
+    for (const token of m[1].split(/\s+/)) {
+      const utility = token.slice(token.lastIndexOf(":") + 1).replace(/^!/, "");
+      if (FILTER_UTILITY.test(utility)) found.push(token);
+    }
+  }
+  return found;
+}
 
 describe("print photo ids + image plan", () => {
   const PLAN_PHOTOS = [

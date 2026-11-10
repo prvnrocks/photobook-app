@@ -272,6 +272,24 @@ MomentCaptions = { momentId: string, heading: string,
 }
 ```
 
+### v2 (M10a, D-062)
+Schema: `src/lib/book/schema.ts`; versions: `src/lib/book/doc-version.ts`. `parseBookDoc` accepts v1 or
+v2 and always returns v2 (v1 upgrades 1:1: hex → `{kind:"color"}`, `designStyle: "classic"`). Writers store
+`serializeDoc(doc)`: **v1 whenever no v2 feature is used** (existing books stay byte-identical), else v2.
+Differences from v1:
+- `"version": 2`; `"format": "A5_PORTRAIT" | "A5_LANDSCAPE"` (landscape = M10b).
+- `style.background` is a Background union (strict objects):
+  `{kind:"color", hex}` · `{kind:"texture", textureId, tint?}` (texture ids from `src/lib/design/backgrounds.ts`;
+  editor saves only accept light-swatch tints) · `{kind:"photo", photoId, veil 0.5–0.9, veilColor}` (faded photo,
+  no blur; any ready photo of the book, kept or dropped).
+- `style.designStyle?`: `classic | modern | geometric | scrapbook` (absent = classic).
+- `pages[].background?`: page override = a Background + `source: "ai" | "user"` (AI never overwrites `user`);
+  absent/null = book default. `pages[].side?`: `left | right` (spread halves, M10b).
+- Up to 12 slots per page (v1: 8).
+- v2 features: non-portrait format, non-colour book background, non-classic style, any page background or
+  side, > 8 slots. Until M10b the editor save keeps `format`, `designStyle` and `side` as stored.
+- Deleting a photo clears its slots/cover and removes backgrounds using it (book default → white).
+
 ## Layout definition (`src/lib/layouts/two-vertical.ts`)
 ```ts
 export const twoVertical: Layout = {

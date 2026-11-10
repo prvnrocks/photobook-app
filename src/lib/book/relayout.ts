@@ -28,8 +28,13 @@
 //    (generator, version, runId, userEdited) are kept as they are.
 // 5. Cover: kept as is when its photo is still kept; otherwise (or when null) the best photo on
 //    the pages — portrait first, then sharpest, largest, smallest id — or null when none is left.
-// 6. No change → the input doc object is returned with changed:false.
-// The result is checked with parseBookDoc + validateBookDoc (photoIds = kept, maxPages = cap);
+// 6. Backgrounds (M10a, D-062): a photo background may use any ready photo of the book, kept or
+//    dropped, so dropping a background photo on review keeps the background. A background whose
+//    photo no longer exists at all (deleted) is removed: book default → white colour, page
+//    override → removed (stripMissingBackgrounds). That alone counts as a change.
+// 7. No change → the input doc object is returned with changed:false.
+// The result is checked with parseBookDoc + validateBookDoc (photoIds = kept, backgroundPhotoIds =
+// every photo passed in, maxPages = cap);
 // a failure throws RelayoutError (issue strings only, no user data) — the caller keeps the
 // current album and reports a generic error.
 
@@ -40,6 +45,7 @@ import { bestPageLayout } from "@/lib/layouts/fit";
 import { clipText } from "@/lib/text/clip";
 import type { CaptionLang } from "./options";
 import { parseBookDoc, validateBookDoc } from "./schema";
+import { stripMissingBackgrounds } from "./strip-photos";
 import type { BookDoc, BookPage, Chapter, Crop, Slot } from "./types";
 
 export interface RelayoutPhoto {
@@ -288,16 +294,23 @@ export function relayoutDoc(doc: BookDoc, photos: readonly RelayoutPhoto[], opts
   }
   const coverChanged = coverId !== doc.cover.photoId;
 
-  // ---- 6. result -----------------------------------------------------------------------------
-  if (removed === 0 && added === 0 && !coverChanged) {
+  // ---- 6. backgrounds ------------------------------------------------------------------------
+  const exists = (id: string) => byId.has(id);
+  const bgChanged = stripMissingBackgrounds(doc, exists).changed;
+
+  // ---- 7. result -----------------------------------------------------------------------------
+  if (removed === 0 && added === 0 && !coverChanged && !bgChanged) {
     return { doc, changed: false, added: 0, removed: 0, skipped };
   }
-  const out: BookDoc = { ...doc, cover: { ...doc.cover, photoId: coverId }, chapters, pages };
+  const out = stripMissingBackgrounds(
+    { ...doc, cover: { ...doc.cover, photoId: coverId }, chapters, pages },
+    exists,
+  ).doc;
 
   const parsed = parseBookDoc(out);
   if (!parsed.ok) throw new RelayoutError(parsed.issues);
   const keptIds = new Set([...byId.values()].filter((p) => p.status === "kept").map((p) => p.id));
-  const issues = validateBookDoc(parsed.doc, { photoIds: keptIds, maxPages });
+  const issues = validateBookDoc(parsed.doc, { photoIds: keptIds, backgroundPhotoIds: new Set(byId.keys()), maxPages });
   if (issues.length) throw new RelayoutError(issues);
   return { doc: parsed.doc, changed: true, added, removed, skipped };
 }

@@ -4,14 +4,17 @@
 // current page (cover alone, then pages [0,1], [2,3], … — the flipbook's pairing, see
 // src/lib/editor/spreads.ts), swipe or arrows between spreads, tap a page to jump to it in the
 // editor (closes the sheet). Pages render through the shared <BookPage> in "view" mode.
+// Modal (N6): Tab / Shift+Tab cycle inside the sheet; on close focus returns to whatever opened
+// it (the carousel's "Spread" button).
 
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { BookPage } from "@/components/book/BookPage";
 import { pageAspectStyle } from "@/lib/book/format-style";
 import { editorSpreads, spreadAspectRatio, spreadCounterLabel, spreadOfPosition, type EditorSpread } from "@/lib/editor/spreads";
 import type { RenderPhotos } from "@/lib/book/render";
 import type { BookDoc } from "@/lib/book/types";
+import { trapFocusIndex } from "@/lib/editor/roving";
 import type { EditorPosition } from "@/lib/editor/store";
 import { useEditor } from "./editor-context";
 import { BOOK_SHADOW, FOLD_GRADIENT } from "./EditorSpread";
@@ -19,7 +22,16 @@ import { BOOK_SHADOW, FOLD_GRADIENT } from "./EditorSpread";
 /** Spreads within this many of the shown one render their pages. */
 const WINDOW = 1;
 
-export function SpreadPreviewSheet({ onClose }: { onClose: () => void }) {
+const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])';
+
+/** Tabbable elements inside `root`, skipping inert (off-screen) spreads. */
+function tabbables(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+    (el) => el.tabIndex >= 0 && !el.closest("[inert]") && !el.closest('[aria-hidden="true"]'),
+  );
+}
+
+export function SpreadPreviewSheet({ onClose, returnFocus }: { onClose: () => void; returnFocus?: RefObject<HTMLElement | null> }) {
   const { state, actions, photos, book } = useEditor();
   const { doc } = state;
   const spreads = editorSpreads(doc);
@@ -27,7 +39,21 @@ export function SpreadPreviewSheet({ onClose }: { onClose: () => void }) {
   const [shown, setShown] = useState(() => spreadOfPosition(state.page));
   const scroller = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const initial = useRef(shown);
+
+  // Return focus on close: to `returnFocus` (iOS Safari doesn't focus a tapped button), else to
+  // whatever had focus when the sheet opened.
+  const [opener] = useState<HTMLElement | null>(() =>
+    typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null,
+  );
+  useEffect(() => {
+    const target = returnFocus;
+    return () => {
+      const el = target?.current ?? opener;
+      if (el?.isConnected) el.focus({ preventScroll: true });
+    };
+  }, [opener, returnFocus]);
 
   // Open on the current page's spread (before paint, no animation).
   useLayoutEffect(() => {
@@ -56,6 +82,15 @@ export function SpreadPreviewSheet({ onClose }: { onClose: () => void }) {
   // Escape closes; arrows move between spreads (and don't reach the editor's own arrow keys).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Tab") {
+        const root = dialogRef.current;
+        if (!root) return;
+        const list = tabbables(root);
+        const to = trapFocusIndex(list.indexOf(document.activeElement as HTMLElement), list.length, e.shiftKey);
+        e.preventDefault();
+        list[to]?.focus();
+        return;
+      }
       if (e.key === "Escape") onClose();
       else if (e.key === "ArrowLeft") go(-1);
       else if (e.key === "ArrowRight") go(1);
@@ -90,6 +125,7 @@ export function SpreadPreviewSheet({ onClose }: { onClose: () => void }) {
         className="fixed inset-0 z-30 bg-black/40"
       />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Spread preview"

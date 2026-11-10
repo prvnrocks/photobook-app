@@ -13,6 +13,7 @@ import {
   BACKGROUND_VEIL_MIN,
   DEFAULT_BACKGROUND_VEIL,
   DEFAULT_VEIL_COLOR,
+  inkForHex,
   swatchById,
   type BackgroundSwatch,
 } from "@/lib/design/backgrounds";
@@ -104,18 +105,53 @@ export function backgroundPhotoCandidates(photos: readonly EditorShellPhoto[]): 
   return [...ok.filter((p) => p.status === "kept"), ...ok.filter((p) => p.status !== "kept")];
 }
 
-/** Snap a fade value into range and onto the slider step (2 decimals, no float noise). */
-export function clampFade(v: number): number {
+/**
+ * Lowest fade the slider offers over a LIGHT veil (white / cream → dark text): a 50 % light veil
+ * over a busy photo leaves dark captions hard to read. Dark veils (white text) keep FADE_MIN.
+ * UI-only clamp (M10a N4); the save validator still accepts BACKGROUND_VEIL_MIN.
+ */
+export const LIGHT_VEIL_FADE_MIN = 0.6;
+
+/** Slider minimum for a veil colour: LIGHT_VEIL_FADE_MIN for light veils, else FADE_MIN. */
+export function fadeMin(veilColor: string): number {
+  return inkForHex(veilColor) === "dark" ? LIGHT_VEIL_FADE_MIN : FADE_MIN;
+}
+
+/** Snap a fade value into [min, FADE_MAX] and onto the slider step (2 decimals, no float noise). */
+export function clampFade(v: number, min: number = FADE_MIN): number {
   if (!Number.isFinite(v)) return DEFAULT_BACKGROUND_VEIL;
   const snapped = Math.round(v / FADE_STEP) * FADE_STEP;
-  return Math.round(Math.min(FADE_MAX, Math.max(FADE_MIN, snapped)) * 100) / 100;
+  return Math.round(Math.min(FADE_MAX, Math.max(min, snapped)) * 100) / 100;
 }
 
 /** A photo background for `photoId`, keeping fade + veil colour of the current photo background. */
 export function photoBackground(photoId: string, current: Background): Background {
   return current.kind === "photo"
-    ? { kind: "photo", photoId, veil: current.veil, veilColor: current.veilColor }
+    ? { kind: "photo", photoId, veil: clampFade(current.veil, fadeMin(current.veilColor)), veilColor: current.veilColor }
     : { kind: "photo", photoId, veil: DEFAULT_BACKGROUND_VEIL, veilColor: DEFAULT_VEIL_COLOR };
+}
+
+/** The photo background with another veil colour; the fade rises to that colour's minimum. */
+export function withVeilColor(photo: Extract<Background, { kind: "photo" }>, veilColor: string): Background {
+  return { ...photo, veilColor, veil: clampFade(photo.veil, fadeMin(veilColor)) };
+}
+
+/**
+ * "Whole book" edits that only adjust the existing book photo background (same photo — fade or
+ * veil colour) keep the pages' own backgrounds: no silent clearing while dragging the slider.
+ * Any other change (new photo, colour, paper) replaces them (with the warning + Undo toast).
+ */
+export function keepsPageOverrides(bookBackground: Background, next: Background): boolean {
+  return bookBackground.kind === "photo" && next.kind === "photo" && bookBackground.photoId === next.photoId;
+}
+
+/**
+ * How a "Whole book" pick applies: keep page overrides (an adjustment of the same photo) or
+ * replace them; `replaced` = pages that lose their own background (> 0 → warning toast).
+ */
+export function planBookBackground(doc: BookDoc, next: Background): { keepPageOverrides: boolean; replaced: number } {
+  if (keepsPageOverrides(doc.style.background, next)) return { keepPageOverrides: true, replaced: 0 };
+  return { keepPageOverrides: false, replaced: doc.pages.filter((p) => p.background != null).length };
 }
 
 /** Fade as a whole percent for labels ("75%"). */

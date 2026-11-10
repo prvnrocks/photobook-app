@@ -331,6 +331,10 @@ Rollback levers (fastest first):
 - **Bad deploy** → Vercel → Deployments → pick the last good Production deployment → **Instant Rollback**
   (or "Promote to Production"). Takes seconds, no rebuild. While rolled back, new pushes to `main` do not go
   live automatically until you promote again. Rolling back code does not touch env vars or the database.
+  **Rolling back past M10a (book doc v2, D-062)**: books stored as v2 (paper texture or photo background,
+  any page background, landscape, a non-classic style) break on older code — the editor says the doc is
+  invalid, `/b/<slug>` shows "unavailable" (v2 published snapshot), PDF export fails. Colour-only books are
+  stored as v1 and are unaffected. Prefer fixing forward once users have picked textures/photo backgrounds.
 - **Migrations are additive** — never "roll back" by dropping schema. Older code runs against the newer schema
   (1700 note: the old webhook may 500 once on `fulfilled_after_review_order`; Stripe's retry is a 200
   duplicate and the book is paid either way). Fix forward with a new migration.

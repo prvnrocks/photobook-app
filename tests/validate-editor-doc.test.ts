@@ -245,3 +245,71 @@ describe("validateEditorDoc — title + meta", () => {
     expect(JSON.stringify(d)).toBe(snapshot);
   });
 });
+
+describe("validateEditorDoc — pinned until M10b: format, designStyle, page sides (review S2)", () => {
+  it("unchanged values pass (saved v2 landscape / modern / sides are kept as they are)", () => {
+    const saved: BookDoc = {
+      ...devPreviewDoc(),
+      format: "A5_LANDSCAPE",
+      style: { ...devPreviewDoc().style, designStyle: "modern" },
+      pages: devPreviewDoc().pages.map((p, i) => (i === 0 ? { ...p, side: "left" as const } : p)),
+    };
+    expect(validateEditorDoc(saved, ctx({ savedDoc: saved })).ok).toBe(true);
+    expect(validateEditorDoc(devPreviewDoc(), ctx()).ok).toBe(true);
+  });
+
+  it("changing format → invalid_doc", () => {
+    expect(validateEditorDoc({ ...devPreviewDoc(), format: "A5_LANDSCAPE" }, ctx())).toEqual({ ok: false, code: "invalid_doc" });
+  });
+
+  it("changing designStyle → invalid_doc; absent = classic on either side", () => {
+    const d = devPreviewDoc();
+    expect(validateEditorDoc({ ...d, style: { ...d.style, designStyle: "scrapbook" } }, ctx())).toEqual({ ok: false, code: "invalid_doc" });
+    const noStyle = { ...d.style };
+    delete noStyle.designStyle;
+    expect(validateEditorDoc({ ...d, style: noStyle }, ctx({ savedDoc: { ...d, style: { ...d.style, designStyle: "classic" } } })).ok).toBe(true);
+  });
+
+  it("adding a side to a page, or a new page with a side → invalid_doc", () => {
+    const d = devPreviewDoc();
+    const sided = { ...d, pages: d.pages.map((p, i) => (i === 1 ? { ...p, side: "right" as const } : p)) };
+    expect(validateEditorDoc(sided, ctx())).toEqual({ ok: false, code: "invalid_doc" });
+    // Saved with a side, client removes it → also a change.
+    expect(validateEditorDoc(d, ctx({ savedDoc: sided }))).toEqual({ ok: false, code: "invalid_doc" });
+    const added = addPage(d, 0, "one-portrait", 100);
+    const newId = added.pages[1].id;
+    const addedSided = { ...added, pages: added.pages.map((p) => (p.id === newId ? { ...p, side: "left" as const } : p)) };
+    expect(validateEditorDoc(addedSided, ctx())).toEqual({ ok: false, code: "invalid_doc" });
+  });
+
+  it("legacy / empty saved doc → baseline A5_PORTRAIT, classic, no sides", () => {
+    expect(validateEditorDoc(devPreviewDoc(), ctx({ savedDoc: {} })).ok).toBe(true);
+    expect(validateEditorDoc({ ...devPreviewDoc(), format: "A5_LANDSCAPE" }, ctx({ savedDoc: {} }))).toEqual({ ok: false, code: "invalid_doc" });
+  });
+});
+
+describe("validateEditorDoc — texture tint must be a light swatch (review N9)", () => {
+  const withTint = (tint: string | undefined, where: "book" | "page") => {
+    const d = devPreviewDoc();
+    const bg = { kind: "texture" as const, textureId: "kraft" as const, ...(tint === undefined ? {} : { tint }) };
+    return where === "book"
+      ? { ...d, style: { ...d.style, background: bg } }
+      : { ...d, pages: d.pages.map((p, i) => (i === 0 ? { ...p, background: { ...bg, source: "user" as const } } : p)) };
+  };
+
+  it("light swatches (any case) and no tint pass, on the book default and on a page", () => {
+    for (const where of ["book", "page"] as const) {
+      for (const tint of [undefined, "#FFFFFF", "#CAD6C1", "#cad6c1", "#F5EEDC", "#CFCBC4"]) {
+        expect(validateEditorDoc(withTint(tint, where), ctx()).ok, `${where} ${tint}`).toBe(true);
+      }
+    }
+  });
+
+  it("dark swatches and off-catalogue colours → invalid_doc", () => {
+    for (const where of ["book", "page"] as const) {
+      for (const tint of ["#1E2A47", "#111111", "#A65A3F", "#CAD6C2", "#000000"]) {
+        expect(validateEditorDoc(withTint(tint, where), ctx()), `${where} ${tint}`).toEqual({ ok: false, code: "invalid_doc" });
+      }
+    }
+  });
+});

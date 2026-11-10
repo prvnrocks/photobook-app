@@ -4,6 +4,8 @@ import { EndCard } from "@/components/viewer/EndCard";
 import { APP_NAME } from "@/lib/brand";
 import { devViewerBackground, devViewerDoc, devViewerPageCount } from "@/lib/viewer/dev-fixture";
 import { endCardModel, hexLuminance } from "@/lib/viewer/end-card";
+import { BACKGROUND_SWATCHES, inkFor, multiplyHex, textureById } from "@/lib/design/backgrounds";
+import type { Background } from "@/lib/book/types";
 
 const noop = () => {};
 
@@ -32,6 +34,32 @@ describe("endCardModel (D-054)", () => {
     expect(hexLuminance("#000000")).toBe(0);
     expect(hexLuminance("#ffffff")).toBeCloseTo(1);
     expect(hexLuminance("#fff")).toBeNull();
+  });
+  it("ink follows inkFor — the same rule as the pages (N3)", () => {
+    // Every catalogue swatch: card text is white exactly when page captions are white.
+    for (const s of BACKGROUND_SWATCHES) {
+      const bg: Background = { kind: "color", hex: s.hex };
+      expect(endCardModel({ title: "x", styleFont: "Inter", background: bg }).dark, s.id).toBe(inkFor(bg) === "light");
+      expect(endCardModel({ title: "x", styleFont: "Inter", background: s.hex }).dark, s.id).toBe(inkFor(s.hex) === "light");
+    }
+    // Mid-tone where the old 0.18-luminance cut disagreed with the pages' contrast rule.
+    expect(hexLuminance("#7C7C7C")).toBeGreaterThan(0.18);
+    expect(inkFor("#7C7C7C")).toBe("light");
+    expect(endCardModel({ title: "x", styleFont: "Inter", background: "#7C7C7C" }).dark).toBe(true);
+  });
+  it("paper and photo backgrounds: plain card colour + the pages' ink", () => {
+    const linen = textureById("linen")!;
+    const paper = endCardModel({ title: "x", styleFont: "Inter", background: { kind: "texture", textureId: "linen" } });
+    expect(paper.background).toBe(linen.baseHex);
+    expect(paper.dark).toBe(linen.ink === "light");
+    const tinted: Background = { kind: "texture", textureId: "linen", tint: "#CAD6C1" };
+    const t = endCardModel({ title: "x", styleFont: "Inter", background: tinted });
+    expect(t.background).toBe(multiplyHex(linen.baseHex, "#CAD6C1"));
+    expect(t.dark).toBe(inkFor(tinted) === "light");
+    const navyVeil: Background = { kind: "photo", photoId: "11111111-1111-4111-8111-111111111111", veil: 0.7, veilColor: "#1E2A47" };
+    expect(endCardModel({ title: "x", styleFont: "Inter", background: navyVeil })).toMatchObject({ background: "#1E2A47", dark: true });
+    const whiteVeil: Background = { ...navyVeil, veilColor: "#FFFFFF" };
+    expect(endCardModel({ title: "x", styleFont: "Inter", background: whiteVeil })).toMatchObject({ background: "#FFFFFF", dark: false });
   });
 });
 

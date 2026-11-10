@@ -402,6 +402,18 @@ describe("finalizeBook", () => {
     expect((await fin(BOOK, { db: missing, geocoder: makeGeocoder() }))?.docStale).toBe(true);
   });
 
+  it("reports docStale when a photo background's photo is gone (M10a)", async () => {
+    const { db: db1, book } = makeDb({ photos: [photo(1), photo(2)] });
+    await fin(BOOK, { db: db1, geocoder: makeGeocoder() });
+    const parsed = parseBookDoc(book.doc);
+    if (!parsed.ok) throw new Error("fixture");
+    const withBg = { ...parsed.doc, style: { ...parsed.doc.style, background: { kind: "photo" as const, photoId: pid(9), veil: 0.7, veilColor: "#FFFFFF" } } };
+    const { db: missing } = makeDb({ photos: [photo(1), photo(2)], doc: withBg });
+    expect((await fin(BOOK, { db: missing, geocoder: makeGeocoder() }))?.docStale).toBe(true);
+    const { db: present } = makeDb({ photos: [photo(1), photo(2), photo(9)], doc: withBg });
+    expect((await fin(BOOK, { db: present, geocoder: makeGeocoder() }))?.docStale).toBe(false);
+  });
+
   it("ignores pending photos", async () => {
     const { db, photos } = makeDb({
       photos: [

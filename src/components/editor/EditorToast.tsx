@@ -8,9 +8,12 @@
 //   - `dismissOnEdit: true`: the doc on screen when the toast first renders is the snapshot,
 // so its Undo can only ever undo the edit it announced. <EditorToastHost /> is mounted once by
 // EditorShell.
+// Position: above the toolbar; while a tool panel is open on a phone (docked under the page or a
+// bottom sheet, both marked data-editor-panel) the toast sits just above the panel so it never
+// covers the panel's controls (M10a). Desktop (lg, side panel) keeps the default spot.
 
 import { X } from "lucide-react";
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { BookDoc } from "@/lib/book/types";
 import { useEditor } from "./editor-context";
 
@@ -68,11 +71,46 @@ export function useEditorToast(): EditorToast | null {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
+/** Panels sit beside the page from this width (EditorPanelHost lg:static). */
+const SIDE_PANEL_QUERY = "(min-width: 1024px)";
+/** Gap between the toast and the panel's top edge (px). */
+const PANEL_GAP = 8;
+
+/**
+ * Bottom offset (px) that keeps the toast just above an open bottom panel, or null for the
+ * default position (no panel, or the panel is at the side). Exported for tests.
+ */
+export function toastBottomAbovePanel(panelTop: number | null, viewportHeight: number, sidePanel: boolean): number | null {
+  if (panelTop === null || sidePanel || !Number.isFinite(panelTop)) return null;
+  return Math.max(0, Math.round(viewportHeight - panelTop)) + PANEL_GAP;
+}
+
 export function EditorToastHost() {
   const toast = useEditorToast();
-  const { state } = useEditor();
+  const { state, activeTool } = useEditor();
   const doc = state.doc;
   const seen = useRef<{ id: number; doc: BookDoc } | null>(null);
+  const [bottom, setBottom] = useState<number | null>(null);
+
+  // Follow the open panel (opening/closing a tool, panel height changes, rotation).
+  useLayoutEffect(() => {
+    if (!toast) return;
+    const panel = document.querySelector<HTMLElement>("[data-editor-panel]");
+    const measure = () => {
+      const side = window.matchMedia?.(SIDE_PANEL_QUERY).matches ?? false;
+      const top = panel?.isConnected ? panel.getBoundingClientRect().top : null;
+      const next = toastBottomAbovePanel(top, window.innerHeight, side);
+      setBottom((p) => (p === next ? p : next));
+    };
+    measure();
+    const ro = panel ? new ResizeObserver(measure) : null;
+    if (panel) ro?.observe(panel);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [toast, activeTool]);
 
   // Snapshot the doc when a toast appears; a later doc change dismisses dismissOnEdit toasts.
   useEffect(() => {
@@ -105,6 +143,9 @@ export function EditorToastHost() {
       role="status"
       aria-live="polite"
       className="pointer-events-none fixed inset-x-0 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-50 flex justify-center px-3"
+      style={toast && bottom !== null ? { bottom } : undefined}
+      data-testid="editor-toast-host"
+      data-above-panel={toast && bottom !== null ? "true" : "false"}
     >
       {toast ? (
         <div

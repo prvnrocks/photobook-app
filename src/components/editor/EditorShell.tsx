@@ -23,7 +23,8 @@ import { EditorDoneButton } from "./EditorDoneButton";
 import { EditorPublishChip } from "./EditorPublishChip";
 import { EditorToastHost } from "./EditorToast";
 import { EditorPanelHost, EditorToolbar } from "./EditorToolbar";
-import { PageCarousel } from "./PageCarousel";
+import { PageCarousel, SpreadCarouselPlaceholder } from "./PageCarousel";
+import { cn } from "@/lib/utils";
 import { PageStrip } from "./PageStrip";
 import { SaveBanner, SaveStatus } from "./SaveStatus";
 import { autoOpenTool, EDITOR_TOOLS, visibleTools } from "./tools/registry";
@@ -55,7 +56,9 @@ function isTypingTarget(t: EventTarget | null): boolean {
 }
 
 export function EditorShell({ data, transport: transportProp, tools: toolsProp, backHref = "/dashboard", finish, paymentsEnabled = false, layout }: EditorShellProps) {
-  const spread = useSpreadMode(layout);
+  // null until the screen width is known (server render + hydration) — see the render below.
+  const spreadMode = useSpreadMode(layout);
+  const spread = spreadMode === true;
   const [transport] = useState(() => transportProp ?? httpEditorTransport(data.book.id));
   const saveEnabled = data.canSave && data.docRev !== null;
   const { state, actions } = useEditorStore(data.doc, { readOnly: !saveEnabled });
@@ -211,10 +214,24 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
 
         {/* Column on mobile so a docked panel (on-page text editing) sits under the page. */}
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-          <PageStrip className={spread ? "hidden w-44 shrink-0 lg:block" : "hidden w-36 shrink-0 lg:block"} />
+          {spreadMode === null ? (
+            // lg+ is always spread mode: keep the spread strip's width until the strip can render.
+            <div aria-hidden="true" className="hidden w-44 shrink-0 border-r bg-muted/30 lg:block" />
+          ) : (
+            <PageStrip className={spread ? "hidden w-44 shrink-0 lg:block" : "hidden w-36 shrink-0 lg:block"} />
+          )}
           <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-            {/* Remount on mode change: item indexes mean pages in one mode and spreads in the other. */}
-            <PageCarousel key={spread ? "spread" : "single"} />
+            {/* Remount on mode change: item indexes mean pages in one mode and spreads in the other.
+                Width unknown (SSR/hydration): phones get the real single-page carousel, md+ a
+                spread-shaped placeholder — no single → spread flash on desktop (N7). */}
+            {spread ? (
+              <PageCarousel key="spread" />
+            ) : (
+              <div className={cn("flex min-h-0 flex-1 flex-col", spreadMode === null && "md:hidden")} data-testid="single-carousel-wrap">
+                <PageCarousel key="single" />
+              </div>
+            )}
+            {spreadMode === null ? <SpreadCarouselPlaceholder className="hidden md:flex" /> : null}
             <EditorToolbar tools={shown} />
           </main>
           <EditorPanelHost tool={active} />

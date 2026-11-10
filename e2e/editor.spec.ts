@@ -904,6 +904,78 @@ test.describe("facing pages (/dev-editor)", () => {
       await settle(page);
       expect(await overflow(page)).toBeLessThanOrEqual(0);
     });
+
+    test("spread sheet traps focus (Tab / Shift+Tab) and returns it to the Spread button (N6)", async ({ page }) => {
+      await page.goto(`/dev-editor`);
+      await expect(page.getByTestId("editor-shell")).toBeVisible();
+      await page.getByTestId("carousel-next").click();
+      await expect(counter(page)).toHaveText("1 / 6");
+      await settle(page);
+      await page.getByTestId("view-spread").click();
+      const sheet = page.getByTestId("spread-preview");
+      await expect(sheet).toBeVisible();
+      await expect(page.getByTestId("spread-preview-close")).toBeFocused();
+      const inside = () => page.evaluate(() => !!document.activeElement?.closest('[data-testid="spread-preview"]'));
+      for (let i = 0; i < 8; i++) {
+        await page.keyboard.press("Tab");
+        expect(await inside(), `Tab ${i + 1} stays in the sheet`).toBe(true);
+      }
+      for (let i = 0; i < 8; i++) {
+        await page.keyboard.press("Shift+Tab");
+        expect(await inside(), `Shift+Tab ${i + 1} stays in the sheet`).toBe(true);
+      }
+      // Tab from the close button wraps around: forward from the last element lands on the first.
+      await page.getByTestId("spread-preview-close").focus();
+      await page.keyboard.press("Shift+Tab");
+      await expect(page.getByTestId("spread-preview-next")).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(page.getByTestId("spread-preview-close")).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(sheet).toHaveCount(0);
+      await expect(page.getByTestId("view-spread")).toBeFocused();
+      // Closing by tapping a page returns focus too.
+      await page.getByTestId("view-spread").click();
+      await sheet.locator('[data-testid="spread-preview-item"][aria-hidden="false"] [data-testid="spread-preview-page"]').first().click();
+      await expect(sheet).toHaveCount(0);
+      await expect(page.getByTestId("view-spread")).toBeFocused();
+    });
+  });
+
+  test.describe("first paint at 1024 × 768 (N7)", () => {
+    test.use({ viewport: { width: 1024, height: 768 } });
+
+    test("never shows the single-page carousel before the spread; no hydration warnings", async ({ page, request }) => {
+      // Server HTML: the single carousel is md:hidden and a spread-shaped placeholder shows on md+.
+      const html = await (await request.get(`/dev-editor`)).text();
+      expect(html).toContain('data-testid="spread-placeholder"');
+      const logs: string[] = [];
+      page.on("console", (m) => {
+        if (m.type() === "error" || m.type() === "warning") logs.push(m.text());
+      });
+      await page.addInitScript(() => {
+        const w = window as unknown as { __singleSeen?: boolean; __placeholderSeen?: boolean };
+        w.__singleSeen = false;
+        w.__placeholderSeen = false;
+        const check = () => {
+          const single = document.querySelector<HTMLElement>('[data-testid="page-carousel"][data-mode="single"]');
+          if (single && single.getBoundingClientRect().width > 0) w.__singleSeen = true;
+          const ph = document.querySelector<HTMLElement>('[data-testid="spread-placeholder"]');
+          if (ph && ph.getBoundingClientRect().width > 0) w.__placeholderSeen = true;
+        };
+        // Checked once per frame (what can be painted), from the first frame on.
+        const loop = () => {
+          check();
+          if (performance.now() < 5000) requestAnimationFrame(loop);
+        };
+        requestAnimationFrame(loop);
+      });
+      await page.goto(`/dev-editor`);
+      await expect(carousel(page)).toHaveAttribute("data-mode", "spread");
+      await expect(page.getByTestId("spread-placeholder")).toHaveCount(0);
+      await page.waitForTimeout(300);
+      expect(await page.evaluate(() => (window as unknown as { __singleSeen?: boolean }).__singleSeen)).toBe(false);
+      expect(logs.filter((l) => /hydrat|did not match|server rendered/i.test(l)), "no hydration warnings").toEqual([]);
+    });
   });
 });
 
@@ -1068,5 +1140,171 @@ test.describe("backgrounds at 375 px (/dev-editor?bg=1)", () => {
     saved = await lastSave(page);
     expect((saved?.stored.pages as { background?: { veil?: number } }[])[1].background?.veil).toBe(0.8);
     expect(await overflow(page)).toBeLessThanOrEqual(0);
+  });
+
+  // ---- M10a review fixes --------------------------------------------------------------------
+
+  const KEPT_UUID = "00000000-0000-4000-8000-0000000000f5";
+
+  /** Nothing selected on page 1: the 6 real tools (Layout … Upgrade), then /dev-editor's 2 demo tools. */
+  async function page1Tools(page: Page) {
+    await page.goto(`/dev-editor?bg=1`);
+    await expect(page.getByTestId("editor-shell")).toBeVisible();
+    await settle(page);
+    await page.getByTestId("carousel-next").click();
+    await expect(counter(page)).toHaveText("1 / 6");
+    await settle(page);
+    return page.locator('[data-testid^="editor-tool-"]');
+  }
+
+  /** Hide /dev-editor's demo tools so the row is exactly what the real editor shows. */
+  const HIDE_DEV_TOOLS = '[data-testid^="editor-tool-dev-"]{display:none!important}';
+
+  test("toolbar at 375: every real tool on screen without scrolling, labels unclipped, no page overflow", async ({ page }) => {
+    const tools = await page1Tools(page);
+    const devTools = await page.addStyleTag({ content: HIDE_DEV_TOOLS });
+    const visible = page.locator('[data-testid^="editor-tool-"]:not([data-testid^="editor-tool-dev-"])');
+    const ids = await visible.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.replace("editor-tool-", "")));
+    expect(ids).toEqual(["layout", "background", "pages", "add-page", "page-menu", "upgrade"]);
+    await expect(page.getByTestId("toolbar-fade-end")).toHaveAttribute("data-visible", "false");
+    for (let i = 0; i < ids.length; i++) {
+      const t = visible.nth(i);
+      const box = (await t.boundingBox())!;
+      expect(box.width, ids[i]).toBeGreaterThanOrEqual(44);
+      expect(box.width, ids[i]).toBeLessThanOrEqual(72);
+      expect(box.x, ids[i]).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width, ids[i]).toBeLessThanOrEqual(W);
+      // Label fits its button (no clipping / overflow).
+      const fits = await t.evaluate((el) => {
+        const label = el.querySelector("span")!;
+        const b = el.getBoundingClientRect();
+        const l = label.getBoundingClientRect();
+        return l.left >= b.left - 0.5 && l.right <= b.right + 0.5;
+      });
+      expect(fits, `label fits: ${ids[i]}`).toBe(true);
+    }
+    expect(await overflow(page)).toBeLessThanOrEqual(0);
+    await shot(page, "375-toolbar");
+    // With the 2 demo tools too (8 tools) the row scrolls: fade edge, last tool reachable.
+    await devTools.evaluate((el) => (el as HTMLElement).remove());
+    await expect(page.getByTestId("toolbar-fade-end")).toHaveAttribute("data-visible", "true");
+    expect(await overflow(page)).toBeLessThanOrEqual(0);
+    await shot(page, "375-toolbar-scroll");
+    const lastTool = tools.last();
+    await page.getByTestId("editor-toolbar-row").evaluate((el) => el.scrollTo({ left: el.scrollWidth, behavior: "instant" }));
+    const box = (await lastTool.boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(W);
+    await expect(page.getByTestId("toolbar-fade-start")).toHaveAttribute("data-visible", "true");
+    await expect(page.getByTestId("toolbar-fade-end")).toHaveAttribute("data-visible", "false");
+    expect(await overflow(page)).toBeLessThanOrEqual(0);
+  });
+
+  test.describe("at 320 px", () => {
+    test.use({ viewport: { width: 320, height: 700 } });
+
+    test("toolbar: the row scrolls with a fade edge, every real tool reachable, no page overflow", async ({ page }) => {
+      const tools = await page1Tools(page);
+      await page.addStyleTag({ content: HIDE_DEV_TOOLS });
+      expect(await overflow(page)).toBeLessThanOrEqual(0);
+      for (const id of ["layout", "background", "pages", "add-page", "page-menu", "upgrade"]) {
+        const t = page.getByTestId(`editor-tool-${id}`);
+        await t.scrollIntoViewIfNeeded();
+        const box = (await t.boundingBox())!;
+        expect(box.x, id).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width, id).toBeLessThanOrEqual(320);
+      }
+      expect(await tools.count()).toBeGreaterThanOrEqual(6);
+      expect(await overflow(page)).toBeLessThanOrEqual(0);
+    });
+  });
+
+  test("Whole book: fade / veil colour keep page backgrounds (no toast); a new photo replaces them; toast sits above the panel", async ({ page }) => {
+    await page.goto(`/dev-editor?bg=1`);
+    await expect(page.getByTestId("editor-shell")).toBeVisible();
+    await settle(page);
+    // Page 2 → Linen (this page).
+    await page.getByTestId("carousel-next").click();
+    await page.getByTestId("carousel-next").click();
+    await expect(counter(page)).toHaveText("2 / 6");
+    await settle(page);
+    await page.getByTestId("editor-tool-background").click();
+    await page.getByTestId("bg-tab-texture").click();
+    await page.getByTestId("bg-texture-linen").click();
+    await expect(page.locator('[data-testid="page-strip"] [data-bg-texture="linen"]')).toHaveCount(1);
+
+    // Whole book → a photo: replaces the linen page → warning toast, placed above the docked panel.
+    await page.getByTestId("bg-scope-book").click();
+    await page.getByTestId("bg-tab-photo").click();
+    await page.locator(`[data-testid="bg-photo"][data-photo-id="${KEPT_UUID}"]`).click();
+    const toast = page.getByTestId("editor-toast");
+    await expect(toast).toContainText("Whole book updated (1 page lost");
+    await expect(page.getByTestId("editor-toast-host")).toHaveAttribute("data-above-panel", "true");
+    const toastBox = (await toast.boundingBox())!;
+    const panelBox = (await panel(page).boundingBox())!;
+    expect(toastBox.y + toastBox.height).toBeLessThanOrEqual(panelBox.y + 1);
+    expect(await overflow(page)).toBeLessThanOrEqual(0);
+    await shot(page, "375-toast-above-panel");
+    await page.locator('[data-testid="editor-toast"] button[aria-label="Dismiss"]').click();
+    await expect(toast).toHaveCount(0);
+
+    // Linen again on page 2 (This page), then adjust the book photo's fade + veil colour.
+    await page.getByTestId("bg-scope-page").click();
+    await page.getByTestId("bg-tab-texture").click();
+    await page.getByTestId("bg-texture-linen").click();
+    await expect(page.locator('[data-testid="page-strip"] [data-bg-texture="linen"]')).toHaveCount(1);
+    await page.getByTestId("bg-scope-book").click();
+    await page.getByTestId("bg-tab-photo").click();
+    await expect(page.getByTestId("bg-replace-note")).toContainText("Changing the fade keeps them.");
+    // N4/N5: white veil → slider starts at 60 %, value text in percent.
+    const fade = page.getByTestId("bg-fade");
+    await expect(fade).toHaveAttribute("min", "0.6");
+    await fade.fill("0.85");
+    await expect(fade).toHaveAttribute("aria-valuetext", "85%");
+    await expect(page.locator('[data-testid="page-strip"] [data-bg-texture="linen"]')).toHaveCount(1);
+    await page.getByTestId("bg-veil-navy").click();
+    await expect(fade).toHaveAttribute("min", "0.5");
+    await expect(page.locator('[data-testid="page-strip"] [data-bg-texture="linen"]')).toHaveCount(1);
+    await expect(toast).toHaveCount(0);
+    await waitSaved(page);
+    const saved = await lastSave(page);
+    expect(saved?.stored.style).toMatchObject({ background: { kind: "photo", photoId: KEPT_UUID, veil: 0.85, veilColor: "#1E2A47" } });
+    expect((saved?.stored.pages as { background?: unknown }[])[1].background).toEqual({ kind: "texture", textureId: "linen", source: "user" });
+
+    // A different photo for the whole book replaces the linen page again (with the toast).
+    await page.locator(`[data-testid="bg-photo"][data-photo-id="${DROPPED_UUID}"]`).click();
+    await expect(toast).toContainText("1 page lost");
+    await expect(page.locator('[data-testid="page-strip"] [data-bg-texture="linen"]')).toHaveCount(0);
+  });
+
+  test("radio groups: one tab stop, arrow keys move + select (N5)", async ({ page }) => {
+    await page.goto(`/dev-editor?bg=1`);
+    await expect(page.getByTestId("editor-shell")).toBeVisible();
+    await settle(page);
+    await page.getByTestId("carousel-next").click();
+    await expect(counter(page)).toHaveText("1 / 6");
+    await settle(page);
+    await page.getByTestId("editor-tool-background").click();
+    const colours = page.getByTestId("bg-colours");
+    await expect(colours.locator('[tabindex="0"]')).toHaveCount(1);
+    const checked = colours.locator('[aria-checked="true"]');
+    await checked.focus();
+    const before = await checked.getAttribute("data-testid");
+    await page.keyboard.press("ArrowRight");
+    const after = colours.locator('[aria-checked="true"]');
+    await expect(after).not.toHaveAttribute("data-testid", before!);
+    await expect(after).toBeFocused();
+    await expect(colours.locator('[tabindex="0"]')).toHaveCount(1);
+    // The arrow key stayed in the group: the editor did not flip pages.
+    await expect(counter(page)).toHaveText("1 / 6");
+    await page.keyboard.press("Home");
+    await expect(page.getByTestId("bg-colour-white")).toBeFocused();
+    await expect(page.getByTestId("bg-colour-white")).toHaveAttribute("aria-checked", "true");
+    await page.keyboard.press("End");
+    await expect(page.getByTestId("bg-colour-black")).toHaveAttribute("aria-checked", "true");
+    // Scope group: ArrowRight → Whole book.
+    await page.getByTestId("bg-scope-page").focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByTestId("bg-scope-book")).toBeFocused();
+    await expect(page.getByTestId("bg-scope-book")).toHaveAttribute("aria-checked", "true");
   });
 });

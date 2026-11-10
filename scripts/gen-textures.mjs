@@ -4,7 +4,10 @@
 // sharp (librsvg). Fixed seeds → identical bytes on every run with the same sharp/libvips build.
 // Released CC0 1.0 — see public/design/LICENSE.md.
 //
-//   node scripts/gen-textures.mjs [--out <dir>]      (default: public/design/textures)
+//   node scripts/gen-textures.mjs [--out <dir>] [--manifest <file>]
+//     --out       image directory (default: public/design/textures)
+//     --manifest  manifest path (default: scripts/textures-manifest.json — kept out of public/,
+//                 it is build metadata, not something to serve)
 //
 // Outputs per texture:
 //   tile  (paper-cream, paper-white, linen, kraft): seamless 512×512 px tile. librsvg ignores
@@ -16,11 +19,11 @@
 //         covering the A5 sheet incl. bleed (portrait 154×216 mm, landscape 216×154 mm).
 //         <id>-<orientation>.jpg (print) = 910×1276 / 1276×910 px → 150 dpi at full sheet;
 //         <id>-<orientation>.webp (screen) = 1200 px on the long edge.
-// Also writes manifest.json (files, pixel sizes, bytes, sha256, sharp/libvips versions).
+// Also writes the manifest (files, pixel sizes, bytes, sha256, sharp/libvips versions).
 
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import sharp from "sharp";
 
 export const TILE_PX = 512;
@@ -235,7 +238,9 @@ export function makeSeamless({ data, info }) {
 
 const fromRaw = ({ data, info }) => sharp(data, { raw: info });
 
-export async function generate(outDir) {
+export const DEFAULT_MANIFEST = "scripts/textures-manifest.json";
+
+export async function generate(outDir, manifestPath = resolve(DEFAULT_MANIFEST)) {
   mkdirSync(outDir, { recursive: true });
   const files = [];
   const write = async (name, buf) => {
@@ -282,7 +287,8 @@ export async function generate(outDir) {
     washPrintDpi: WASH_PRINT_DPI,
     files,
   };
-  writeFileSync(join(outDir, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
+  mkdirSync(dirname(manifestPath), { recursive: true });
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
   return manifest;
 }
 
@@ -290,8 +296,10 @@ const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(new URL(i
 if (isMain) {
   const i = process.argv.indexOf("--out");
   const out = resolve(i > 0 ? process.argv[i + 1] : "public/design/textures");
+  const mi = process.argv.indexOf("--manifest");
+  const manifestPath = resolve(mi > 0 ? process.argv[mi + 1] : DEFAULT_MANIFEST);
   const t0 = Date.now();
-  const m = await generate(out);
+  const m = await generate(out, manifestPath);
   const total = m.files.reduce((s, f) => s + f.bytes, 0);
   for (const f of m.files) console.log(`${f.name.padEnd(36)} ${f.width}x${f.height}  ${(f.bytes / 1024).toFixed(1)} KB`);
   console.log(`total ${(total / 1024).toFixed(1)} KB in ${Date.now() - t0} ms → ${out}`);
