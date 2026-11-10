@@ -1679,18 +1679,230 @@ describe("migrations: M6 review S2 unlock tuning (1100)", () => {
     expect(flat.indexOf(`revoke all on function ${FN}`)).toBeLessThan(flat.indexOf(`grant execute on function ${FN}`));
   });
 
-  it("rls_check.sql covers clear_unlock_attempt (grants + behaviour) and counts 106 checks", () => {
+  it("rls_check.sql covers clear_unlock_attempt (grants + behaviour)", () => {
     const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
     expect(rls).toContain("20261111001100_unlock_tuning.sql");
     expect(rls).toContain("RLS FAIL [clear_unlock_attempt grants]");
     expect(rls).toContain("RLS FAIL [anon clear_unlock_attempt]");
     expect(rls).toContain("RLS FAIL [authenticated clear_unlock_attempt]");
     expect(rls).toContain("RLS FAIL [clear_unlock_attempt flow]");
-    expect(rls).toContain("RLS OK — all 106 checks passed");
+    // the total check count is pinned by the latest milestone suite (1300)
   });
 
   it("database.types.ts declares clear_unlock_attempt (hand-edited)", () => {
     const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
     expect(types).toMatch(/clear_unlock_attempt: \{\s*Args: \{ p_book: string; p_ip_hash: string \}\s*Returns: boolean/);
+  });
+});
+
+describe("migrations: Milestone 7 payments (1200)", () => {
+  const name = "20261112001200_payments.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const ws = (s: string) => s.replace(/\s+/g, " ");
+  const flat = ws(sql);
+  const fns = matchesAll(/create\s+(?:or\s+replace\s+)?function\s+([\w.]+)\s*\(([\s\S]*?)\bas\s+\$\$([\s\S]*?)\$\$/, sql).map(
+    (x) => ({ name: x[1], header: x[2], body: x[3] }),
+  );
+  const FULFIL = "public.fulfill_book_checkout";
+  const RECORD = "public.record_stripe_order_event";
+  const fulfil = fns.find((x) => x.name === FULFIL);
+  const record = fns.find((x) => x.name === RECORD);
+  const SIG = {
+    [FULFIL]: "(text, text, text, text, uuid, uuid, integer, text, boolean)",
+    [RECORD]: "(text, text, text, text, text, boolean)",
+  } as const;
+
+  it("exists, sorts right after 1100 and only adds (no drops except the widened status check)", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files.indexOf(name)).toBe(files.indexOf("20261111001100_unlock_tuning.sql") + 1);
+    expect(matchesAll(/\bdrop\b/, sql)).toHaveLength(1);
+    expect(flat).toContain("alter table public.orders drop constraint orders_status_check;");
+    expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
+    expect(sql).not.toMatch(/function\s+private\.protect_book_columns/);
+    expect(sql).not.toMatch(/\bcreate\s+policy\b/);
+  });
+
+  it("orders: payment intent (unique), paid_at, refunded_at, livemode; widened statuses; one pending per book", () => {
+    expect(flat).toMatch(
+      /alter table public\.orders add column stripe_payment_intent_id text, add column paid_at timestamptz, add column refunded_at timestamptz, add column livemode boolean;/,
+    );
+    expect(flat).toContain("add constraint orders_stripe_payment_intent_id_key unique (stripe_payment_intent_id);");
+    expect(flat).toContain(
+      "add constraint orders_status_check check ( status in ('pending', 'paid', 'failed', 'expired', 'refunded', 'disputed') );",
+    );
+    expect(flat).toContain("create unique index orders_one_pending_per_book on public.orders (book_id) where status = 'pending';");
+    // grants on orders unchanged: no new table grants in this migration
+    expect(sql).not.toMatch(/\b(grant|revoke)\s+[a-z_\s,()]+\s+on\s+(?:table\s+)?public\./);
+  });
+
+  it("private.stripe_events: RLS on, no policies, nothing for public/anon/authenticated, service_role only", () => {
+    expect(flat).toMatch(
+      /create table private\.stripe_events \( id text primary key, type text not null, created_at timestamptz not null default now\(\), processed_at timestamptz,/,
+    );
+    expect(flat).toContain("alter table private.stripe_events enable row level security;");
+    expect(flat).toContain("revoke all on table private.stripe_events from public, anon, authenticated;");
+    expect(flat).toContain("revoke all on schema private from public, anon, authenticated;");
+    expect(flat).toContain("grant select, insert, update on table private.stripe_events to service_role;");
+    const grants = matchesAll(/grant\s+[a-z_\s,]+\s+on\s+(?:table\s+)?private\.stripe_events\s+to\s+([a-z_, ]+?)\s*;/, sql).map((g) => g[1].trim());
+    expect(grants).toEqual(["service_role"]);
+    expect(all).not.toMatch(/grant\s+usage\s+on\s+schema\s+private\s+to\s+[a-z_, ]*\b(anon|authenticated|public)\b/);
+  });
+
+  it.each([FULFIL, RECORD])("%s: SECURITY INVOKER, search_path '', returns text (replaced in 1300)", (fn) => {
+    const f = fns.find((x) => x.name === fn);
+    expect(f, `${fn} missing`).toBeDefined();
+    expect(ws(f!.header)).toMatch(/\) returns text language plpgsql volatile security invoker set search_path = '' ?$/);
+    expect(f!.header).not.toMatch(/security\s+definer/);
+  });
+
+  it.each([FULFIL, RECORD])("%s: EXECUTE revoked from public/anon/authenticated, granted to service_role only", (fn) => {
+    const sig = SIG[fn as keyof typeof SIG];
+    expect(flat).toContain(`revoke all on function ${fn}${sig} from public, anon, authenticated;`);
+    const grants = matchesAll(new RegExp(`grant execute on function ${esc(fn)}\\s*\\([^)]*\\)\\s+to\\s+([a-z_, ]+?)\\s*;`), sql).map((g) =>
+      g[1].trim(),
+    );
+    expect(grants).toEqual(["service_role"]);
+    // 1200 + the re-assert in 1300; every grant across all migrations goes to service_role only
+    expect(matchesAll(new RegExp(`grant execute on function ${esc(fn)}\\b`))).toHaveLength(2);
+    expect(
+      matchesAll(new RegExp(`grant execute on function ${esc(fn)}\\s*\\([^)]*\\)\\s+to\\s+([a-z_, ]+?)\\s*;`)).map((g) => g[1].trim()),
+    ).toEqual(["service_role", "service_role"]);
+    expect(flat.indexOf(`revoke all on function ${fn}`)).toBeLessThan(flat.indexOf(`grant execute on function ${fn}`));
+  });
+
+  it("fulfill_book_checkout: signature, 22023 on bad args, dedupe first, then order upsert + entitlement", () => {
+    expect(ws(fulfil!.header).trim()).toMatch(
+      /^p_event_id text, p_event_type text, p_session_id text, p_payment_intent text, p_book_id uuid, p_user_id uuid, p_amount integer, p_currency text, p_livemode boolean \)/,
+    );
+    const body = ws(fulfil!.body);
+    expect(body).toContain("raise exception 'invalid_argument' using errcode = '22023';");
+    const dedupe = body.indexOf("insert into private.stripe_events (id, type) values (p_event_id, p_event_type) on conflict (id) do nothing returning id into v_inserted;");
+    expect(dedupe).toBeGreaterThan(0);
+    expect(body).toContain("if v_inserted is null then return 'duplicate'; end if;");
+    expect(body.indexOf("insert into public.orders")).toBeGreaterThan(dedupe);
+    expect(body).toMatch(/where b\.id = p_book_id and b\.user_id = p_user_id for update;/);
+    expect(body).toContain("on conflict (stripe_session_id) do update");
+    expect(body).toContain("set is_paid = true, max_pages = 100, expires_at = null where b.id = v_book and b.user_id = p_user_id;");
+    for (const r of ["'fulfilled'", "'already_paid'", "'book_missing'", "'duplicate'"]) expect(body).toContain(`return ${r};`);
+  });
+
+  it("record_stripe_order_event: dedupe via stripe_events, never touches books, only the 4 statuses", () => {
+    expect(ws(record!.header).trim()).toMatch(
+      /^p_event_id text, p_event_type text, p_session_id text, p_payment_intent text, p_status text, p_livemode boolean \)/,
+    );
+    const body = ws(record!.body);
+    expect(body).toContain("p_status not in ('expired', 'failed', 'refunded', 'disputed')");
+    expect(body).toContain("on conflict (id) do nothing returning id into v_inserted;");
+    expect(body).not.toMatch(/public\.books|is_paid/);
+    expect(body).toContain("refunded_at = case when v_new = 'refunded' then coalesce(o.refunded_at, now()) else o.refunded_at end");
+    for (const r of ["'updated'", "'unchanged'", "'order_missing'", "'duplicate'"]) expect(body).toContain(`return ${r};`);
+  });
+
+  it("rls_check.sql covers payments (grants, stripe_events, guard, fulfil, replay, mismatch, refund, one pending)", () => {
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain(name);
+    for (const tag of [
+      "payments rpc grants",
+      "authenticated fulfill_book_checkout",
+      "authenticated record_stripe_order_event",
+      "stripe_events",
+      "orders insert",
+      "orders update",
+      "payments guard",
+      "fulfil",
+      "fulfil replay",
+      "fulfil mismatch",
+      "refund",
+      "one pending",
+      "order events",
+      "payments args",
+    ]) {
+      expect(rls).toContain(`RLS FAIL [${tag}]`);
+    }
+    // the total check count is pinned by the latest milestone suite (1300)
+  });
+
+  it("database.types.ts declares the orders columns and both RPCs (hand-edited)", () => {
+    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
+    expect(types.match(/stripe_payment_intent_id\??: string \| null/g)).toHaveLength(3);
+    expect(types.match(/paid_at\??: string \| null/g)).toHaveLength(3);
+    expect(types.match(/refunded_at\??: string \| null/g)).toHaveLength(3);
+    expect(types.match(/livemode\??: boolean \| null/g)).toHaveLength(3);
+    expect(types).toMatch(/fulfill_book_checkout: \{\s*Args: \{[\s\S]*?p_book_id: string[\s\S]*?\}\s*Returns: string/);
+    expect(types).toMatch(/record_stripe_order_event: \{\s*Args: \{[\s\S]*?p_status: string\s*\}\s*Returns: string/);
+  });
+});
+
+describe("migrations: Milestone 7 payments review (1300)", () => {
+  const name = "20261112001300_payments_review.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const ws = (s: string) => s.replace(/\s+/g, " ");
+  const flat = ws(sql);
+  const fns = matchesAll(/create\s+(?:or\s+replace\s+)?function\s+([\w.]+)\s*\(([\s\S]*?)\bas\s+\$\$([\s\S]*?)\$\$/, sql).map(
+    (x) => ({ name: x[1], header: x[2], body: x[3] }),
+  );
+  const FULFIL = "public.fulfill_book_checkout";
+  const RECORD = "public.record_stripe_order_event";
+  const fulfil = fns.find((x) => x.name === FULFIL);
+  const record = fns.find((x) => x.name === RECORD);
+  const SIG = {
+    [FULFIL]: "(text, text, text, text, uuid, uuid, integer, text, boolean)",
+    [RECORD]: "(text, text, text, text, text, boolean)",
+  } as const;
+
+  it("exists, sorts right after 1200, only drops+re-adds the status check (1200 untouched)", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files.indexOf(name)).toBe(files.indexOf("20261112001200_payments.sql") + 1);
+    expect(matchesAll(/\bdrop\b/, sql)).toHaveLength(1);
+    expect(flat).toContain("alter table public.orders drop constraint orders_status_check;");
+    expect(flat).toContain(
+      "add constraint orders_status_check check ( status in ('pending', 'paid', 'failed', 'expired', 'refunded', 'disputed', 'needs_review') );",
+    );
+    expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
+    expect(sql).not.toMatch(/\bcreate\s+policy\b/);
+    expect(sql).not.toMatch(/\b(grant|revoke)\s+[a-z_\s,()]+\s+on\s+(?:table\s+)?(public|private)\./);
+  });
+
+  it.each([FULFIL, RECORD])("%s: same signature, SECURITY INVOKER, search_path '', returns text, latest definition", (fn) => {
+    const f = fns.find((x) => x.name === fn);
+    expect(f, `${fn} missing`).toBeDefined();
+    expect(latestFunction(fn)!.body).toBe(f!.body);
+    expect(ws(f!.header)).toMatch(/\) returns text language plpgsql volatile security invoker set search_path = '' ?$/);
+    expect(f!.header).not.toMatch(/security\s+definer/);
+    const sig = SIG[fn as keyof typeof SIG];
+    expect(flat).toContain(`revoke all on function ${fn}${sig} from public, anon, authenticated;`);
+    const grants = matchesAll(new RegExp(`grant execute on function ${esc(fn)}\\s*\\([^)]*\\)\\s+to\\s+([a-z_, ]+?)\\s*;`), sql).map((g) =>
+      g[1].trim(),
+    );
+    expect(grants).toEqual(["service_role"]);
+    expect(flat.indexOf(`revoke all on function ${fn}`)).toBeLessThan(flat.indexOf(`grant execute on function ${fn}`));
+  });
+
+  it("record_stripe_order_event: accepts needs_review only from pending / expired / failed, never touches books", () => {
+    const body = ws(record!.body);
+    expect(body).toContain("p_status not in ('expired', 'failed', 'refunded', 'disputed', 'needs_review')");
+    expect(body).toContain("when p_status = 'needs_review' and v_status in ('pending', 'expired', 'failed') then 'needs_review'");
+    expect(body).not.toMatch(/public\.books|is_paid/);
+    for (const r of ["'updated'", "'unchanged'", "'order_missing'", "'duplicate'"]) expect(body).toContain(`return ${r};`);
+  });
+
+  it("fulfill_book_checkout: already_paid_other_session, skips the no-op books update, keeps 1200 semantics", () => {
+    const body = ws(fulfil!.body);
+    expect(body).toContain("raise exception 'invalid_argument' using errcode = '22023';");
+    expect(body.indexOf("on conflict (id) do nothing returning id into v_inserted;")).toBeLessThan(body.indexOf("insert into public.orders"));
+    expect(body).toContain("if not (v_was_paid and v_max_pages = 100 and v_expires is null) then update public.books as b");
+    expect(body).toContain("o2.stripe_session_id is distinct from p_session_id and o2.status in ('paid', 'disputed')");
+    for (const r of ["'fulfilled'", "'already_paid'", "'already_paid_other_session'", "'book_missing'", "'duplicate'"]) {
+      expect(body).toContain(`return ${r};`);
+    }
+  });
+
+  it("rls_check.sql covers the review fixes and counts 121 checks", () => {
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain(name);
+    for (const tag of ["needs_review", "double payment", "fulfil no-op"]) expect(rls).toContain(`RLS FAIL [${tag}]`);
+    expect(rls).toContain("RLS OK — all 121 checks passed");
   });
 });

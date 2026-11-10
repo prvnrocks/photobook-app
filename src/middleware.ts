@@ -7,7 +7,8 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Everything except static assets, image optimiser, favicon and image files.
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|heic)$).*)",
+    // Everything except the Stripe webhook (raw-body, signature-verified, no cookies/session),
+    // static assets, image optimiser, favicon and image files.
+    "/((?!api/stripe/webhook|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|heic)$).*)",
   ],
 };

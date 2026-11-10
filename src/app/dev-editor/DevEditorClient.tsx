@@ -4,10 +4,11 @@
 // exercise the toolbar extension point (dev-only route).
 
 import { Eraser, PanelBottom, Type } from "lucide-react";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { EditorShell } from "@/components/editor/EditorShell";
 import { EDITOR_TOOLS } from "@/components/editor/tools/registry";
 import type { EditorTool } from "@/components/editor/tools/types";
+import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
 import { replacePhoto, setCover } from "@/lib/book/edit-ops";
 import { devEditorData, devTransport, type DevAiMode, type DevSaveMode } from "@/lib/editor/dev-fixture";
 import { withDevPagesData } from "@/lib/editor/dev-pages-fixture";
@@ -55,16 +56,25 @@ export function DevEditorClient({
   ai = "off",
   pages = null,
   published = false,
+  paymentsEnabled = false,
 }: {
   mode: DevSaveMode;
   ai?: DevAiMode;
   pages?: number | null;
   published?: boolean;
+  paymentsEnabled?: boolean;
 }) {
   const [data] = useState(() => {
     const d = withDevPagesData(devEditorData(mode, ai), pages);
     return published ? { ...d, publishedRev: d.docRev } : d;
   });
   const [transport] = useState(() => devTransport(mode));
-  return <EditorShell data={data} transport={transport} tools={TOOLS} backHref="/dev-editor" />;
+  return (
+    <>
+      <EditorShell data={data} transport={transport} tools={TOOLS} backHref="/dev-editor" paymentsEnabled={paymentsEnabled} />
+      <Suspense fallback={null}>
+        <UpgradeCancelledNotice floating />
+      </Suspense>
+    </>
+  );
 }

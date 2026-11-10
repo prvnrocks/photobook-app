@@ -1,25 +1,27 @@
 "use client";
 
-// "Upgrade this book" sheet (M5 Task 11, D-037 #3): before M7 wires Stripe Checkout it only
-// explains the paid tier and shows a disabled "Coming soon" button. It never changes the doc
-// (editsDoc: false — also shown in read-only mode).
+// "Upgrade this book" sheet (M5 Task 11, D-037 #3; M7 T6): explains the paid tier and starts the
+// AED 39 Stripe Checkout via <UpgradeButton> (disabled + "Payments unavailable" when the server
+// has no Stripe keys). It never changes the doc (editsDoc: false — also shown in read-only mode).
 //
 // Reuse:
 // - Open it from any tool / panel: `openUpgrade(ctx)` (or ctx.openTool(UPGRADE_TOOL_ID)).
 //   The tool stays visible while it is open, whatever the selection.
-// - Or embed the body directly: <UpgradeSheet reason="rewrites" />.
+// - Or embed the body directly: <UpgradeSheet reason="rewrites" ctx={ctx} />.
 // Paid status comes from the server (books.is_paid via the editor loader) — never set client-side.
 
 import { Gem } from "lucide-react";
 import { LIMITS } from "@/lib/ai/limits";
 import { selectionKind } from "@/lib/editor/store";
+import { UpgradeButton } from "@/components/upgrade/UpgradeButton";
+import { UPGRADE } from "@/lib/pricing";
 import type { EditorContextValue } from "./editor-context";
 import type { EditorTool } from "./tools/types";
 
 export const UPGRADE_TOOL_ID = "upgrade";
 
-/** Price copy (CLAUDE.md: AED 39 one-time per book). M7 replaces the button with Stripe Checkout. */
-export const UPGRADE_PRICE_LABEL = "AED 39";
+/** Price copy (CLAUDE.md: AED 39 one-time per book). */
+export const UPGRADE_PRICE_LABEL = UPGRADE.label;
 
 /** Why the sheet opened — picks the first line. */
 export type UpgradeReason = "pages" | "rewrites" | "general";
@@ -35,7 +37,11 @@ export function upgradeReasonCopy(reason: UpgradeReason, freeMaxPages: number = 
   }
 }
 
-export function UpgradeSheet({ reason = "general" }: { reason?: UpgradeReason }) {
+export type UpgradeSheetCtx = Pick<EditorContextValue, "book" | "paymentsEnabled"> & {
+  save?: Pick<EditorContextValue["save"], "flush">;
+};
+
+export function UpgradeSheet({ reason = "general", ctx }: { reason?: UpgradeReason; ctx: UpgradeSheetCtx }) {
   const lead = upgradeReasonCopy(reason);
   return (
     <div className="flex flex-col gap-4" data-testid="upgrade-sheet">
@@ -62,25 +68,27 @@ export function UpgradeSheet({ reason = "general" }: { reason?: UpgradeReason })
       <p className="text-2xl font-semibold" data-testid="upgrade-price">
         {UPGRADE_PRICE_LABEL}
       </p>
-      <button
-        type="button"
-        disabled
-        aria-describedby="upgrade-soon"
-        className="flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
-        data-testid="upgrade-button"
-      >
-        Upgrade · Coming soon
-      </button>
-      <p id="upgrade-soon" className="text-center text-xs text-muted-foreground">
-        Payments are coming soon. Your book keeps its free features until then.
-      </p>
+      {ctx.book.isPaid ? (
+        <p className="text-sm text-emerald-800" data-testid="upgrade-already-paid">
+          This book is already upgraded.
+        </p>
+      ) : (
+        <UpgradeButton
+          bookId={ctx.book.id}
+          returnTo={`/books/${ctx.book.id}/edit`}
+          isPaid={ctx.book.isPaid}
+          paymentsEnabled={ctx.paymentsEnabled === true}
+          onBeforeStart={ctx.save?.flush}
+          testId="upgrade-button"
+        />
+      )}
     </div>
   );
 }
 
 function UpgradePanel({ ctx }: { ctx: EditorContextValue }) {
   const atLimit = ctx.state.doc.pages.length >= ctx.book.maxPages;
-  return <UpgradeSheet reason={atLimit ? "pages" : "general"} />;
+  return <UpgradeSheet reason={atLimit ? "pages" : "general"} ctx={ctx} />;
 }
 
 /** Toolbar entry: free books only; visible with nothing selected, and whenever it is open. */

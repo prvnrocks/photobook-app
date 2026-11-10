@@ -17,6 +17,32 @@ async function noHorizontalOverflow(page: Page) {
   expect(sw).toBeLessThanOrEqual(cw);
 }
 
+/**
+ * Upgrade button follows the server's isPaymentsEnabled() (Stripe keys in the dev server env).
+ * E2E_PAYMENTS=1 / 0 pins the expectation; unset → it must be consistent with the rendered flag.
+ */
+async function expectUpgradeState(page: Page, testId: string): Promise<boolean> {
+  const wrap = page.getByTestId(`${testId}-wrap`);
+  await expect(wrap).toBeVisible();
+  const on = (await wrap.getAttribute("data-payments")) === "on";
+  if (process.env.E2E_PAYMENTS === "1") expect(on, "payments should be enabled (keys set)").toBe(true);
+  if (process.env.E2E_PAYMENTS === "0") expect(on, "payments should be disabled (no keys)").toBe(false);
+  const btn = page.getByTestId(testId);
+  await expect(btn).toContainText("AED 39");
+  await expect(btn).not.toContainText(/coming soon/i);
+  if (on) {
+    await expect(btn).toBeEnabled();
+    await expect(page.getByTestId(`${testId}-unavailable`)).toHaveCount(0);
+  } else {
+    await expect(btn).toBeDisabled();
+    await expect(page.getByTestId(`${testId}-unavailable`)).toHaveText("Payments unavailable");
+  }
+  const box = (await btn.boundingBox())!;
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  expect(box.x + box.width).toBeLessThanOrEqual(VIEWPORT.width);
+  return on;
+}
+
 const STATES = ["draft", "draft-paid", "empty", "page_limit", "invalid_doc", "live", "live-paid", "changes", "password", "expired", "unpublished"];
 
 test("every state fits 375 px without horizontal overflow", async ({ page }) => {
@@ -84,7 +110,43 @@ test("expired: upgrade copy, no publish, no password field", async ({ page }) =>
   await expect(page.getByTestId("publish-expired")).toContainText("This free link has expired — Upgrade to bring it back");
   await expect(page.getByTestId("publish-button")).toHaveCount(0);
   await expect(page.getByTestId("password-section")).toHaveCount(0);
-  await expect(page.getByTestId("publish-upgrade")).toBeDisabled();
+  await expectUpgradeState(page, "publish-upgrade");
+});
+
+test("upgrade (free notice): 'Upgrade this book — AED 39', enabled iff payments on; tap without a session → sign in", async ({ page }) => {
+  await open(page, "draft");
+  const on = await expectUpgradeState(page, "publish-upgrade");
+  await expect(page.getByTestId("publish-upgrade")).toHaveText("Upgrade this book — AED 39");
+  await noHorizontalOverflow(page);
+  if (on) {
+    // The real server action runs; the dev fixture has no session → unauthenticated.
+    await page.getByTestId("publish-upgrade").click();
+    await expect(page.getByTestId("publish-upgrade-message")).toContainText("Please sign in again");
+    await expect(page.getByTestId("publish-upgrade-message").getByRole("link", { name: "Sign in" })).toHaveAttribute(
+      "href",
+      /^\/login\?next=%2Fbooks%2F/,
+    );
+    await expect(page.getByTestId("publish-upgrade")).toBeEnabled();
+    await noHorizontalOverflow(page);
+  }
+  // Paid books: no upgrade button anywhere.
+  await open(page, "live-paid");
+  await expect(page.getByTestId("publish-upgrade")).toHaveCount(0);
+});
+
+test("?upgrade=cancelled: 'Payment cancelled' notice, param removed from the URL, dismissible", async ({ page }) => {
+  await page.goto("/dev-publish?state=draft&upgrade=cancelled");
+  const notice = page.getByTestId("upgrade-cancelled");
+  await expect(notice).toContainText("Payment cancelled");
+  await expect(page).toHaveURL(/\/dev-publish\?state=draft$/);
+  await noHorizontalOverflow(page);
+  const dismiss = page.getByTestId("upgrade-cancelled-dismiss");
+  expect((await dismiss.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await dismiss.click();
+  await expect(notice).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByTestId("publish-panel")).toBeVisible();
+  await expect(notice).toHaveCount(0);
 });
 
 test("unpublished (was live): Publish keeps the same link and expiry copy", async ({ page }) => {

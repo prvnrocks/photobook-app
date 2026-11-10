@@ -1,32 +1,58 @@
 // /b/[slug] when a free link has expired (D-002, D-039). Everyone sees the expiry + "Create your
-// own"; the signed-in owner also sees "Upgrade to bring it back" (payments arrive in M7 — shown
-// as coming soon) and a link back to the editor. No title or cover for anyone (D-040).
+// own"; the signed-in owner also sees "Upgrade to bring it back — AED 39" (M7 T6: live Stripe
+// Checkout, disabled + "Payments unavailable" without Stripe keys), the "Payment cancelled" notice
+// after a cancelled Checkout, and a link back to the editor. No title or cover for anyone (D-040).
+// The book id reaches client props only in the owner branch (like the editor link).
 
 import Link from "next/link";
+import { Suspense } from "react";
+import { UpgradeButton } from "@/components/upgrade/UpgradeButton";
+import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
+import { UPGRADE } from "@/lib/pricing";
 import { CREATE_YOURS_HREF } from "@/lib/viewer/share";
 import { VIEWER_PRIMARY_LINK, VIEWER_SECONDARY_LINK, ViewerMessage } from "./ViewerMessage";
 
-export function ExpiredBook({ isOwner, editorHref }: { isOwner: boolean; editorHref?: string | null }) {
+export type ExpiredBookUpgrade = {
+  bookId: string;
+  /** /b/{slug} — Stripe's cancel URL returns here. */
+  returnTo: string;
+  /** isPaymentsEnabled() from the server. */
+  paymentsEnabled: boolean;
+};
+
+export function ExpiredBook({
+  isOwner,
+  editorHref,
+  upgrade,
+}: {
+  isOwner: boolean;
+  editorHref?: string | null;
+  /** Owner only. */
+  upgrade?: ExpiredBookUpgrade | null;
+}) {
   return (
     <ViewerMessage title="This photobook has expired" testId="expired-book">
       {isOwner ? (
         <>
+          <Suspense fallback={null}>
+            <UpgradeCancelledNotice />
+          </Suspense>
           <p className="text-sm text-neutral-600">
             Free links stay open for 30 days. Your book is still safe in your account — upgrade it to bring the link
             back for good.
           </p>
-          <button
-            type="button"
-            disabled
-            aria-describedby="upgrade-soon"
-            className={`${VIEWER_PRIMARY_LINK} cursor-not-allowed opacity-60`}
-            data-testid="expired-upgrade"
-          >
-            Upgrade to bring it back
-          </button>
-          <p id="upgrade-soon" className="-mt-2 text-xs text-neutral-500">
-            Coming soon
-          </p>
+          {upgrade ? (
+            <UpgradeButton
+              bookId={upgrade.bookId}
+              returnTo={upgrade.returnTo}
+              // Only free links expire.
+              isPaid={false}
+              paymentsEnabled={upgrade.paymentsEnabled}
+              variant="viewer"
+              label={`Upgrade to bring it back — ${UPGRADE.label}`}
+              testId="expired-upgrade"
+            />
+          ) : null}
           {editorHref ? (
             <Link href={editorHref} className={VIEWER_SECONDARY_LINK} data-testid="expired-open-editor">
               Open in editor

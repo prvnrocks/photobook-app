@@ -223,3 +223,47 @@ describe("AI boundaries (M3)", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+// --- M7 T2 additions ---------------------------------------------------------
+
+describe("payments boundaries (M7)", () => {
+  it('no "use client" file imports stripe, src/lib/stripe or src/lib/payments/*', () => {
+    const offenders = walk(SRC)
+      .filter((f) => hasUseClientDirective(readFileSync(f, "utf8")))
+      .flatMap((f) =>
+        importSpecifiers(readFileSync(f, "utf8"))
+          .filter((s) => /^stripe(\/|$)|(^|\/)lib\/stripe$|(^|\/)lib\/payments(\/|$)/.test(s))
+          .map((s) => `${rel(f)} -> ${s}`),
+      );
+    expect(offenders).toEqual([]);
+  });
+
+  it("the stripe SDK is value-imported only by src/lib/stripe.ts (type-only imports allowed)", () => {
+    const importers = walk(SRC)
+      .filter((f) =>
+        /^\s*import\s+(?!type\b)[^'";]*from\s+["']stripe["']|import\(\s*["']stripe["']\s*\)|require\(\s*["']stripe["']\s*\)/m.test(
+          readFileSync(f, "utf8"),
+        ),
+      )
+      .map(rel);
+    expect(importers).toEqual(["src/lib/stripe.ts"]);
+    // session.ts imports stripe types only — and the regex must not mistake that for a value import.
+    expect(readFileSync(join(SRC, "lib", "payments", "session.ts"), "utf8")).toMatch(/^import type Stripe from "stripe";$/m);
+  });
+
+  it("STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET are only referenced in src/lib/stripe.ts", () => {
+    const matches = walk(SRC)
+      .filter((f) => /STRIPE_(SECRET_KEY|WEBHOOK_SECRET)/.test(readFileSync(f, "utf8")))
+      .map(rel);
+    expect(matches).toEqual(["src/lib/stripe.ts"]);
+  });
+
+  it.each(["src/lib/pricing.ts", "src/lib/payments/session.ts"])(
+    "%s stays secret-free (no server-only, no process.env, no stripe client)",
+    (file) => {
+      const src = readFileSync(join(ROOT, file), "utf8");
+      expect(src).not.toMatch(/["']server-only["']|process\.env|from\s+["']@\/lib\/stripe["']/);
+      expect(src).not.toMatch(/^\s*import\s+(?!type\b)[^'";]*from\s+["']stripe["']/m);
+    },
+  );
+});

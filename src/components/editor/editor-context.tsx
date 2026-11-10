@@ -14,6 +14,8 @@ import type { EditorPhotos } from "./usePhotoUrls";
 
 export interface EditorContextValue {
   book: EditorShellBook;
+  /** isPaymentsEnabled() from the server page (Stripe keys configured); absent = false. */
+  paymentsEnabled?: boolean;
   state: EditorState;
   actions: EditorActions;
   /** All upload-finished photos of the book (kept + dropped) with fresh URLs + RenderPhotos maps. */

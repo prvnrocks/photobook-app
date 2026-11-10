@@ -7,7 +7,7 @@
 // <PublishPanel> wires next/navigation; <PublishPanelView> takes `refresh` so it renders without
 // an app router (unit tests, dev fixture).
 
-import { ExternalLink, Gem, Loader2, Send } from "lucide-react";
+import { ExternalLink, Loader2, Send } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useState, useTransition } from "react";
@@ -17,8 +17,8 @@ import type {
   SetBookPasswordResult,
   UnpublishBookResult,
 } from "@/app/books/[id]/publish/actions";
+import { UpgradeButtonView } from "@/components/upgrade/UpgradeButton";
 import { ShareButtons } from "@/components/viewer/ShareButtons";
-import { UPGRADE_PRICE_LABEL } from "@/components/editor/UpgradeSheet";
 import {
   blockReasonCopy,
   EXPIRED_COPY,
@@ -42,6 +42,8 @@ export type PublishPanelProps = {
   title: string;
   state: PublishState;
   actions: PublishActions;
+  /** isPaymentsEnabled() from the server page (Stripe keys configured). */
+  paymentsEnabled: boolean;
 };
 
 type Message = { tone: "ok" | "error"; text: string; signIn?: boolean };
@@ -62,6 +64,7 @@ export function PublishPanelView({
   title,
   state,
   actions,
+  paymentsEnabled,
   refresh,
   refreshing = false,
   now,
@@ -126,6 +129,17 @@ export function PublishPanelView({
   const expiry = expiryLabel({ isPaid: state.isPaid, expiresAt: state.expiresAt, expired: state.expired, now });
   const blocked = state.canPublishReason;
   const publishLabel = state.published ? "Publish changes" : "Publish";
+  const upgrade = (variant: "primary" | "outline") => (
+    <UpgradeButtonView
+      bookId={bookId}
+      returnTo={`/books/${bookId}/publish`}
+      isPaid={state.isPaid}
+      paymentsEnabled={paymentsEnabled}
+      variant={variant}
+      testId="publish-upgrade"
+      refresh={refresh}
+    />
+  );
 
   return (
     <div className="flex flex-col gap-4" data-testid="publish-panel" data-state={state.expired ? "expired" : live ? "published" : "unpublished"}>
@@ -158,7 +172,7 @@ export function PublishPanelView({
         <section className="flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4" data-testid="publish-expired">
           <p className="text-base font-semibold text-amber-900">{EXPIRED_COPY}</p>
           <p className="text-sm text-amber-900/80">You can still edit your book. Upgrading makes the link permanent.</p>
-          <UpgradeButton />
+          {upgrade("primary")}
         </section>
       ) : live && state.url ? (
         <section className="flex flex-col gap-3 rounded-xl border p-4" data-testid="publish-live">
@@ -222,7 +236,7 @@ export function PublishPanelView({
       {!state.isPaid && !state.expired ? (
         <section className="flex flex-col gap-3 rounded-xl bg-muted/50 p-4" data-testid="publish-free-notice">
           <p className="text-sm">{FREE_NOTICE_COPY}</p>
-          <UpgradeButton />
+          {upgrade("outline")}
         </section>
       ) : null}
 
@@ -268,15 +282,5 @@ function BlockNotice({ text }: { text: string }) {
     <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="publish-blocked">
       {text}
     </p>
-  );
-}
-
-/** Stripe Checkout lands in M7; until then a disabled "coming soon" button. */
-function UpgradeButton() {
-  return (
-    <button type="button" disabled className={`${OUTLINE} w-full`} data-testid="publish-upgrade">
-      <Gem className="size-4" aria-hidden="true" />
-      Upgrade · {UPGRADE_PRICE_LABEL} (coming soon)
-    </button>
   );
 }

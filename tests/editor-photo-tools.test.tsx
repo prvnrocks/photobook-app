@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { EditorShell } from "@/components/editor/EditorShell";
 import type { EditorContextValue } from "@/components/editor/editor-context";
 import type { EditorPhotos } from "@/components/editor/usePhotoUrls";
@@ -18,6 +18,9 @@ import { defaultPickerTab, groupPickerPhotos, layoutChangeNotice } from "@/lib/e
 import { initEditorState, type EditorPosition, type EditorSelection } from "@/lib/editor/store";
 import type { EditorShellPhoto } from "@/lib/editor/types";
 import { layoutsByRole } from "@/lib/layouts";
+
+// The editor registry → UpgradeSheet → UpgradeButton imports the upgrade server action (server-only).
+vi.mock("@/app/books/[id]/upgrade/actions", () => ({ startUpgradeCheckout: vi.fn() }));
 
 const data = devEditorData("ok");
 

@@ -271,7 +271,11 @@ export type Database = {
           created_at: string
           currency: string
           id: string
+          livemode: boolean | null
+          paid_at: string | null
+          refunded_at: string | null
           status: string
+          stripe_payment_intent_id: string | null
           stripe_session_id: string | null
           type: string
           user_id: string | null
@@ -282,7 +286,11 @@ export type Database = {
           created_at?: string
           currency?: string
           id?: string
+          livemode?: boolean | null
+          paid_at?: string | null
+          refunded_at?: string | null
           status?: string
+          stripe_payment_intent_id?: string | null
           stripe_session_id?: string | null
           type: string
           user_id?: string | null
@@ -293,7 +301,11 @@ export type Database = {
           created_at?: string
           currency?: string
           id?: string
+          livemode?: boolean | null
+          paid_at?: string | null
+          refunded_at?: string | null
           status?: string
+          stripe_payment_intent_id?: string | null
           stripe_session_id?: string | null
           type?: string
           user_id?: string | null
@@ -482,6 +494,20 @@ export type Database = {
         }
         Returns: Json
       }
+      fulfill_book_checkout: {
+        Args: {
+          p_amount: number
+          p_book_id: string
+          p_currency: string
+          p_event_id: string
+          p_event_type: string
+          p_livemode: boolean
+          p_payment_intent: string | null
+          p_session_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       get_published_book: {
         Args: { p_slug: string }
         Returns: {
@@ -498,6 +524,17 @@ export type Database = {
           slug: string
           title: string
         }[]
+      }
+      record_stripe_order_event: {
+        Args: {
+          p_event_id: string
+          p_event_type: string
+          p_livemode: boolean
+          p_payment_intent: string | null
+          p_session_id: string | null
+          p_status: string
+        }
+        Returns: string
       }
       release_agent_run: {
         Args: { p_run_id: string; p_token: string }

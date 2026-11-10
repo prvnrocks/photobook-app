@@ -3,12 +3,14 @@
 // `?ai=off|replay|limit` the AI caption state (Task 10).
 // `?published=1` marks the fixture as published at rev 1 → header "Publish changes" after a save (M6 T8).
 // `?pages=20` grows the fixture to 20 pages in 3 chapters (free-limit checks, Task 11).
+// Upgrade sheet: enabled when the server has Stripe keys (M7 T6); `?upgrade=cancelled` → cancel notice.
 // 404s in production builds (incl. Vercel previews, which run NODE_ENV=production).
 
 import type { Viewport } from "next";
 import { notFound } from "next/navigation";
 import { DEV_AI_MODES, DEV_SAVE_MODES, type DevAiMode, type DevSaveMode } from "@/lib/editor/dev-fixture";
 import { parseDevPages } from "@/lib/editor/dev-pages-fixture";
+import { isPaymentsEnabled } from "@/lib/stripe";
 import { DevEditorClient } from "./DevEditorClient";
 
 export const dynamic = "force-dynamic";
@@ -25,5 +27,5 @@ export default async function DevEditorPage({
   const q = params.save;
   const mode = (DEV_SAVE_MODES as readonly string[]).includes(String(q)) ? (q as DevSaveMode) : "ok";
   const ai = (DEV_AI_MODES as readonly string[]).includes(String(params.ai)) ? (params.ai as DevAiMode) : "off";
-  return <DevEditorClient mode={mode} ai={ai} pages={parseDevPages(params.pages)} published={params.published === "1"} />;
+  return <DevEditorClient mode={mode} ai={ai} pages={parseDevPages(params.pages)} published={params.published === "1"} paymentsEnabled={isPaymentsEnabled()} />;
 }

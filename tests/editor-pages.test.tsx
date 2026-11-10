@@ -28,6 +28,13 @@ import {
   type EditorState,
 } from "@/lib/editor/store";
 
+// The editor registry → UpgradeSheet → UpgradeButton imports the upgrade server action (server-only).
+vi.mock("@/app/books/[id]/upgrade/actions", () => ({ startUpgradeCheckout: vi.fn() }));
+vi.mock("next/navigation", async (orig) => ({
+  ...(await orig<typeof import("next/navigation")>()),
+  useRouter: () => ({ refresh: vi.fn(), replace: vi.fn() }),
+}));
+
 const FREE = { isPaid: false, maxPages: 20 };
 const PAID = { isPaid: true, maxPages: 100 };
 
@@ -206,18 +213,39 @@ describe("tool visibility", () => {
 });
 
 describe("render smoke", () => {
-  it("UpgradeSheet: price, features, disabled Coming soon button", () => {
-    const html = renderToStaticMarkup(<UpgradeSheet reason="pages" />);
+  it("UpgradeSheet: price, features, live Upgrade button (payments on)", () => {
+    const book = devEditorData("ok").book;
+    const html = renderToStaticMarkup(<UpgradeSheet reason="pages" ctx={{ book, paymentsEnabled: true }} />);
     expect(html).toContain("Upgrade this book");
     expect(html).toContain("AED 39");
     expect(html).toContain("Up to 100 pages");
     expect(html).toContain("No watermark");
     expect(html).toContain("PDF download");
     expect(html).toContain("Permanent link");
-    expect(html).toMatch(/<button[^>]*disabled[^>]*data-testid="upgrade-button"/);
-    expect(html).toContain("Coming soon");
+    expect(html).toContain("Upgrade this book — AED 39");
+    expect(html).toMatch(/<button type="button" class="[^"]*" data-testid="upgrade-button"/); // no disabled=""
+    expect(html).not.toContain("Coming soon");
+    expect(html).not.toContain("upgrade-button-unavailable");
     expect(html).toContain(upgradeReasonCopy("pages")!);
     expect(upgradeReasonCopy("general")).toBeNull();
+  });
+
+  it("UpgradeSheet: payments off → disabled + Payments unavailable; absent flag counts as off", () => {
+    const book = devEditorData("ok").book;
+    for (const paymentsEnabled of [false, undefined]) {
+      const html = renderToStaticMarkup(<UpgradeSheet reason="rewrites" ctx={{ book, paymentsEnabled }} />);
+      expect(html).toMatch(/<button type="button" disabled=""[^>]*data-testid="upgrade-button"/);
+      expect(html).toContain('data-testid="upgrade-button-unavailable"');
+      expect(html).toContain("Payments unavailable");
+      expect(html).not.toMatch(/coming soon/i);
+    }
+  });
+
+  it("UpgradeSheet: paid book → no button", () => {
+    const book = { ...devEditorData("ok").book, isPaid: true };
+    const html = renderToStaticMarkup(<UpgradeSheet ctx={{ book, paymentsEnabled: true }} />);
+    expect(html).not.toContain('data-testid="upgrade-button"');
+    expect(html).toContain('data-testid="upgrade-already-paid"');
   });
 
   it("PagesSheet: one sortable tile per page with move buttons, count label", () => {
