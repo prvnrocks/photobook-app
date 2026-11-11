@@ -1,7 +1,8 @@
 // Dev-only font sheet (M10b A3): every registry face with Latin + Arabic samples through the real
 // font-family chains (bookFontFamily), plus the modern style roles. `?mode=print` wraps it in the
 // print font classes with A5 @page CSS for page.pdf checks (Type0 only, Arabic in the Arabic face);
-// default = screen faces (<BookFonts>). 404s in production builds.
+// default = screen faces (<BookFonts>). `?sheet=m10c` shows only the M10c Geometric + Scrapbook
+// specimen (m10c-specimen.tsx, docs/design/m10c-type.png). 404s in production builds.
 
 import { notFound } from "next/navigation";
 import type { CSSProperties } from "react";
@@ -9,6 +10,7 @@ import { BookFonts } from "@/components/book/BookFonts";
 import { PRINT_FONT_CLASSES } from "@/components/print/print-fonts";
 import { BOOK_FONT_NAMES, BOOK_FONTS, bookFontFamily, type BookFontName } from "@/lib/book/fonts";
 import { roleFont, TEXT_ROLES } from "@/lib/design/styles";
+import { M10cSpecimen } from "./m10c-specimen";
 
 export const dynamic = "force-dynamic";
 
@@ -49,13 +51,17 @@ export default async function DevFonts({ searchParams }: { searchParams: Promise
   if (process.env.NODE_ENV === "production") notFound();
   const sp = await searchParams;
   const print = sp.mode === "print";
+  const onlyM10c = sp.sheet === "m10c";
   const faces = BOOK_FONT_NAMES.flatMap((f) => [
     ...BOOK_FONTS[f].weights.map((w) => ({ f, w, italic: false })),
     ...(BOOK_FONTS[f].italic ? [{ f, w: 400, italic: true }] : []),
   ]);
   const m10b = faces.filter((x) => BOOK_FONTS[x.f].screenConst);
   const classic = faces.filter((x) => !BOOK_FONTS[x.f].screenConst);
-  const sheets = (
+  const specimen = <M10cSpecimen Sheet={Sheet} />;
+  const sheets = onlyM10c ? (
+    specimen
+  ) : (
     <>
       <Sheet>
         <h1 className="mb-[2mm] font-sans text-[4mm] font-semibold">M10b faces (1/3)</h1>
@@ -94,6 +100,7 @@ export default async function DevFonts({ searchParams }: { searchParams: Promise
           </p>
         ))}
       </Sheet>
+      {specimen}
     </>
   );
   if (print) {

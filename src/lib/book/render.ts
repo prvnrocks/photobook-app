@@ -72,6 +72,8 @@ export interface RenderTypography {
   fontWeight: number;
   fontStyle: "normal" | "italic";
   textTransform?: "uppercase";
+  /** Latin-only tracking from the style token (M10c); absent for classic / modern. */
+  letterSpacing?: string;
 }
 
 export interface RenderCaption extends RenderText {
@@ -393,7 +395,12 @@ function spreadSlot(
 // --- Text panels ---------------------------------------------------------------------------------
 
 function typographyOf(f: ReturnType<typeof roleFont>): RenderTypography {
-  return { fontWeight: f.fontWeight, fontStyle: f.fontStyle, ...(f.textTransform ? { textTransform: f.textTransform } : {}) };
+  return {
+    fontWeight: f.fontWeight,
+    fontStyle: f.fontStyle,
+    ...(f.textTransform ? { textTransform: f.textTransform } : {}),
+    ...(f.letterSpacing ? { letterSpacing: f.letterSpacing } : {}),
+  };
 }
 
 function boundText(doc: BookDoc, bind: TextBinding, owner: BookPage | null): string {
