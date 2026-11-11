@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { EmptyState } from "@/components/app/EmptyState";
+import { Notice, type NoticeTone } from "@/components/app/Notice";
+import { PageHeader } from "@/components/app/PageHeader";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { CaptionsPreview } from "@/components/review/CaptionsPreview";
 import { ReviewBody } from "@/components/review/ReviewBody";
@@ -26,14 +29,23 @@ import {
   rebuildsLeft,
   rebuildVariant,
   reviewBanner,
+  type ReviewBanner,
   type ReviewTilePhoto,
 } from "@/lib/review/ui";
-import { cn } from "@/lib/utils";
 import { confirmAlbumAction, togglePhotoAction, updateAlbumAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "Review your photos" };
+
+/** Simple-rules fallbacks are worth a look (warn); the rest is information. */
+const BANNER_TONE: Record<Exclude<ReviewBanner, null>, NoticeTone> = {
+  building: "info",
+  ai_off: "info",
+  partial: "warn",
+  captions_missing: "info",
+  failed: "warn",
+};
 
 export default async function ReviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -91,35 +103,36 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   return (
     <>
       <AppHeader displayName={displayName} />
-      <main className="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-6 px-4 py-6">
-        <p dir="auto" className="truncate text-sm text-muted-foreground" data-testid="review-book-title">
-          {book.title || "Untitled book"}
-        </p>
+      <main className="mx-auto flex w-full max-w-app min-w-0 flex-col gap-stack px-gutter pt-6 sm:pb-10">
+        <PageHeader
+          step="review"
+          title="Review your photos"
+          description={
+            <span className="block truncate" data-testid="review-book-title">
+              {book.title || "Untitled book"}
+            </span>
+          }
+        />
 
         {banner ? (
-          <div
-            className={cn(
-              "flex flex-col gap-2 rounded-xl border p-4 text-base",
-              banner === "building" ? "border-primary/40 bg-primary/5" : "bg-muted/50",
-            )}
+          <Notice
+            tone={BANNER_TONE[banner]}
             data-testid={`review-banner-${banner}`}
+            title={BANNER_COPY[banner]}
+            action={
+              banner === "building" ? (
+                <Link
+                  href={`/books/${book.id}/build`}
+                  className={buttonVariants({ variant: "default", size: "touch" })}
+                  data-testid="review-go-build"
+                >
+                  See progress
+                </Link>
+              ) : null
+            }
           >
-            <p>{BANNER_COPY[banner]}</p>
-            {captionsNote ? (
-              <p className="text-sm text-muted-foreground" data-testid="review-banner-captions-note">
-                {captionsNote}
-              </p>
-            ) : null}
-            {banner === "building" ? (
-              <Link
-                href={`/books/${book.id}/build`}
-                className={cn(buttonVariants({ variant: "default" }), "h-11 self-start px-4 text-base")}
-                data-testid="review-go-build"
-              >
-                See progress
-              </Link>
-            ) : null}
-          </div>
+            {captionsNote ? <span data-testid="review-banner-captions-note">{captionsNote}</span> : null}
+          </Notice>
         ) : null}
 
         <ReviewBody
@@ -137,16 +150,16 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
             activeRun ? null : <CaptionsPreview preview={captionsPreview} captionLang={book.caption_lang} />
           }
           empty={
-            <div className="flex flex-col gap-3 rounded-xl border border-dashed p-6 text-center" data-testid="review-no-photos">
-              <h1 className="text-xl font-semibold">No photos yet</h1>
-              <p className="text-base text-muted-foreground">Add some photos and we&apos;ll pick the best ones.</p>
-              <Link
-                href={`/books/${book.id}/upload`}
-                className={cn(buttonVariants({ variant: "default" }), "h-11 self-center px-4 text-base")}
-              >
-                Add photos
-              </Link>
-            </div>
+            <EmptyState
+              data-testid="review-no-photos"
+              title="No photos yet"
+              description="Add some photos and we'll pick the best ones."
+              action={
+                <Link href={`/books/${book.id}/upload`} className={buttonVariants({ variant: "default", size: "cta" })}>
+                  Add photos
+                </Link>
+              }
+            />
           }
         />
       </main>

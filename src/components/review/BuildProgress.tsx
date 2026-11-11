@@ -3,11 +3,13 @@
 // done and replaces the URL with the review screen. Never blocks the user: every stop state
 // links to the review screen, where the rule album already exists.
 // Only ids and counts are sent; nothing about photos is logged.
+import { Check, Circle, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useWakeLock, useWarnOnLeave } from "@/components/upload/use-keep-awake";
 import { useThrottledValue } from "@/components/upload/use-throttled-value";
+import { Notice } from "@/components/app/Notice";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { track } from "@/lib/analytics/client";
 import { msBucket } from "@/lib/analytics/events";
@@ -21,6 +23,7 @@ import {
 } from "@/lib/runs/client";
 import { abortableSleep, DriveWaker, driveRun } from "@/lib/runs/drive";
 import { limitCopy, newerSnapshot, stageCopy, type ProgressSnapshot } from "@/lib/runs/stage-copy";
+import { buildChecklist, type ChecklistStepState } from "@/lib/runs/build-checklist";
 import { cn } from "@/lib/utils";
 
 export type BuildProgressProps = {
@@ -58,9 +61,11 @@ const ERROR_COPY: Record<StopError, string> = {
   run_failed: "We couldn't finish with AI. Your photos are safe — open the review to continue.",
 };
 
-const boxClass = "rounded-xl border p-4 text-base break-words";
-const warnBox = `${boxClass} border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-50`;
-const buttonClass = "h-11 w-full px-4 text-base";
+const STEP_STATE_SR: Record<ChecklistStepState, string> = {
+  done: "done",
+  current: "in progress",
+  todo: "not started",
+};
 
 export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }: BuildProgressProps) {
   const router = useRouter();
@@ -237,23 +242,34 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
 
   if (status.kind === "user_edited") {
     return (
-      <div className={cn(boxClass, "flex flex-col gap-3 bg-card")} data-testid="build-user-edited">
-        <p>You&apos;ve edited this album, so we won&apos;t replace it.</p>
-        <Link href={reviewHref} className={cn(buttonVariants(), buttonClass)} data-testid="build-to-review">
-          Back to your album
-        </Link>
+      <div data-testid="build-user-edited">
+        <Notice
+          tone="info"
+          title="You've edited this album, so we won't replace it."
+          action={
+            <Link href={reviewHref} className={cn(buttonVariants({ size: "cta" }))} data-testid="build-to-review">
+              Back to your album
+            </Link>
+          }
+        />
       </div>
     );
   }
 
   if (status.kind === "limit") {
     return (
-      <div className={cn(warnBox, "flex flex-col gap-3")} data-testid="build-limit" data-limit={status.limit}>
-        <p>{limitCopy(status.limit, isPaid, dailyCap)}</p>
-        <p className="text-sm">Your draft album is ready to look at and change.</p>
-        <Link href={reviewHref} className={cn(buttonVariants(), buttonClass)} data-testid="build-to-review">
-          See your album
-        </Link>
+      <div data-testid="build-limit" data-limit={status.limit}>
+        <Notice
+          tone="warn"
+          title={limitCopy(status.limit, isPaid, dailyCap)}
+          action={
+            <Link href={reviewHref} className={cn(buttonVariants({ size: "cta" }))} data-testid="build-to-review">
+              See your album
+            </Link>
+          }
+        >
+          Your draft album is ready to look at and change.
+        </Notice>
       </div>
     );
   }
@@ -261,30 +277,31 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
   if (status.kind === "error") {
     const { error } = status;
     return (
-      <div
-        className={cn(boxClass, "flex flex-col gap-3 border-destructive/30 bg-destructive/10")}
-        data-testid="build-error"
-        data-error={error}
-      >
-        <p className="text-destructive">{ERROR_COPY[error]}</p>
-        {error === "signed_out" ? (
-          <Link href={loginHref} className={cn(buttonVariants(), buttonClass)} data-testid="build-sign-in">
-            Sign in
-          </Link>
-        ) : (
-          <>
-            <Button type="button" onClick={begin} className={buttonClass} data-testid="build-retry">
-              Try again
-            </Button>
-            <Link
-              href={reviewHref}
-              className={cn(buttonVariants({ variant: "outline" }), buttonClass)}
-              data-testid="build-to-review"
-            >
-              See your album
-            </Link>
-          </>
-        )}
+      <div data-testid="build-error" data-error={error}>
+        <Notice
+          tone="error"
+          title={ERROR_COPY[error]}
+          action={
+            error === "signed_out" ? (
+              <Link href={loginHref} className={cn(buttonVariants({ size: "cta" }))} data-testid="build-sign-in">
+                Sign in
+              </Link>
+            ) : (
+              <>
+                <Button type="button" size="cta" onClick={begin} data-testid="build-retry">
+                  Try again
+                </Button>
+                <Link
+                  href={reviewHref}
+                  className={cn(buttonVariants({ variant: "outline", size: "cta" }))}
+                  data-testid="build-to-review"
+                >
+                  See your album
+                </Link>
+              </>
+            )
+          }
+        />
       </div>
     );
   }
@@ -292,16 +309,24 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
   // running | leaving
   const leaving = status.kind === "leaving";
   const percent = leaving ? 100 : copy.percent;
+  const steps = buildChecklist(snap.state, snap.progress, leaving);
   return (
-    <section className="flex min-w-0 flex-col gap-3 rounded-xl border bg-card p-4" data-testid="build-progress" data-state={snap.state}>
-      <p className="text-base font-medium" data-testid="build-stage">
-        {leaving ? "Your album is ready" : copy.text}
-      </p>
-      {copy.detail && !leaving ? (
-        <p className="text-sm text-muted-foreground" data-testid="build-capped">
-          {copy.detail}
+    <section
+      className="flex min-w-0 flex-col gap-4 rounded-2xl border border-border bg-card p-gutter shadow-card sm:p-6"
+      data-testid="build-progress"
+      data-state={snap.state}
+      aria-labelledby="build-stage"
+    >
+      <div className="flex min-w-0 flex-col gap-1">
+        <p id="build-stage" className="type-h2 break-words text-foreground" data-testid="build-stage">
+          {leaving ? "Your album is ready" : copy.text}
         </p>
-      ) : null}
+        {copy.detail && !leaving ? (
+          <p className="type-small text-muted-foreground" data-testid="build-capped">
+            {copy.detail}
+          </p>
+        ) : null}
+      </div>
       <div
         role="progressbar"
         aria-label="Building your album"
@@ -312,18 +337,62 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
         data-testid="build-bar"
       >
         <div
-          className="h-full rounded-full bg-primary transition-[width] duration-500 motion-reduce:transition-none"
+          className="h-full rounded-full bg-accent-strong transition-[width] duration-500 motion-reduce:transition-none"
           style={{ width: `${percent}%` }}
         />
       </div>
+
+      {/* Stages the server has reported — never a timer (src/lib/runs/build-checklist.ts). */}
+      <ol className="flex flex-col gap-1" aria-label="Build steps" data-testid="build-checklist">
+        {steps.map((s) => (
+          <li
+            key={s.id}
+            className="flex min-h-11 min-w-0 items-center gap-3"
+            data-testid={`build-step-${s.id}`}
+            data-state={s.state}
+            aria-current={s.state === "current" ? "step" : undefined}
+          >
+            <span
+              aria-hidden="true"
+              className={cn(
+                "flex size-7 shrink-0 items-center justify-center rounded-full",
+                s.state === "done" && "bg-primary text-primary-foreground",
+                s.state === "current" && "bg-accent-strong/10 text-accent-strong",
+                s.state === "todo" && "text-input",
+              )}
+            >
+              {s.state === "done" ? (
+                <Check className="size-4" />
+              ) : s.state === "current" ? (
+                <LoaderCircle className="size-5 animate-spin motion-reduce:animate-none" />
+              ) : (
+                <Circle className="size-5" />
+              )}
+            </span>
+            <span
+              className={cn(
+                "type-small min-w-0 flex-1 break-words",
+                s.state === "todo" ? "text-muted-foreground" : "font-medium text-foreground",
+              )}
+            >
+              {s.label}
+              <span className="sr-only"> ({STEP_STATE_SR[s.state]})</span>
+            </span>
+            {s.count ? (
+              <span className="type-small shrink-0 tabular-nums text-muted-foreground">{s.count}</span>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+
       {status.kind === "running" && status.reconnecting ? (
-        <p className="text-sm text-muted-foreground" data-testid="build-reconnecting">
+        <p className="type-small text-warning" data-testid="build-reconnecting">
           Connection lost — reconnecting…
         </p>
       ) : null}
-      <p className="text-sm text-muted-foreground">
-        Keep this screen open. If you leave, we&apos;ll carry on when you come back.
-      </p>
+      <Notice tone="info" title="Keep this screen open">
+        If you leave, we&apos;ll carry on when you come back.
+      </Notice>
       <p className="sr-only" role="status" aria-live="polite">
         {announced}
       </p>

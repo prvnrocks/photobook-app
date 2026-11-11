@@ -1,13 +1,16 @@
 "use client";
 
-// Review screen body (M3 + D-028): grid, sticky "Update album" bar, secondary AI rebuild and the
-// Continue form (confirmAlbumAction: Memory Keeper + redirect to the editor, D-032) / Add photos
-// link. A user-edited album shows only "Continue in the editor" (D-037 #2). Tracks which keep / drop choices aren't in the album yet
+// Review screen body (M3 + D-028, M11 T12): grid, captions, secondary "Rebuild with AI" / Add photos,
+// and one sticky ActionBar with the way forward — "Continue to editor" (confirmAlbumAction: Memory
+// Keeper + redirect to the editor, D-032), plus "Update album" only while choices are pending. A user-edited album shows only "Continue in the editor" (D-037 #2). Tracks which keep / drop choices aren't in the album yet
 // (unsyncedPhotoIds over the grid's optimistic state and the album's photo ids from the server).
+import { ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
+import { ActionBar } from "@/components/app/ActionBar";
+import { Notice } from "@/components/app/Notice";
 import { RebuildButton } from "@/components/review/RebuildButton";
 import { ReviewGrid, type ToggleResult } from "@/components/review/ReviewGrid";
 import { UpdateAlbumBar } from "@/components/review/UpdateAlbumBar";
@@ -52,6 +55,9 @@ type ReviewBodyProps = {
 };
 
 const TOAST_MS = 4000;
+
+/** The main way forward from review (M11 T12). */
+const CONTINUE_LABEL = "Continue to editor";
 
 export function ReviewBody({
   bookId,
@@ -127,72 +133,82 @@ export function ReviewBody({
     }
   }, [pending, refreshing, current, unsynced, updateAlbum, bookId, router]);
 
+  const editedPanel = userEdited && !building;
+  // Toasts sit above the sticky bar (taller while it carries the Update album row).
+  const toastBottom = showBar
+    ? "bottom-[calc(11rem+env(safe-area-inset-bottom))]"
+    : "bottom-[calc(5.5rem+env(safe-area-inset-bottom))]";
+
   return (
     <>
+      {editedPanel ? (
+        <Notice tone="info" title={EDITED_ALBUM_COPY.title} data-testid="review-edited">
+          {EDITED_ALBUM_COPY.body}
+        </Notice>
+      ) : null}
+
       {photos.length === 0 ? (
         empty
       ) : (
-        <ReviewGrid photos={photos} aiUsed={aiUsed} toggle={toggle} onPhotosChange={setCurrent} raiseToast={showBar} />
+        <ReviewGrid photos={photos} aiUsed={aiUsed} toggle={toggle} onPhotosChange={setCurrent} toastClassName={toastBottom} />
       )}
 
       {captions}
 
-      <div className="flex flex-col gap-3 border-t pt-4">
-        {userEdited && !building ? (
-          <div className="flex flex-col gap-3 rounded-xl border bg-muted/50 p-4" data-testid="review-edited">
-            <p className="text-base font-medium">{EDITED_ALBUM_COPY.title}</p>
-            <p className="text-sm text-muted-foreground">{EDITED_ALBUM_COPY.body}</p>
-            <Link
-              href={editorHref(bookId)}
-              className={cn(buttonVariants({ variant: "default" }), "h-12 w-full text-base")}
-              data-testid="review-open-editor"
-            >
-              {EDITED_ALBUM_COPY.button}
-            </Link>
-          </div>
-        ) : null}
+      {/* Secondary actions: re-plan with AI, add photos. Never the main way forward. */}
+      <section className="flex min-w-0 flex-col gap-3 border-t border-border pt-stack" aria-label="More options">
         {rebuild && photos.length > 0 && !userEdited ? (
           <RebuildButton bookId={bookId} variant={rebuild.variant} rebuildsLeft={rebuild.rebuildsLeft} />
         ) : null}
+        <Link
+          href={`/books/${bookId}/upload`}
+          className={cn(buttonVariants({ variant: "ghost", size: "touch" }), "w-full")}
+          data-testid="review-add-photos"
+        >
+          <Plus data-icon="inline-start" aria-hidden="true" />
+          Add more photos
+        </Link>
+      </section>
+
+      {/* Primary: one way forward, sticky on phones. "Update album" joins it only while choices
+          aren't in the album yet (D-028); an edited album only offers the editor (D-037 #2). */}
+      <ActionBar label="Next step" className="sm:flex-col sm:items-stretch sm:*:w-full" data-testid="review-actions">
         {showBar ? (
-          <p
-            id="review-continue-note"
-            className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-50"
-            data-testid="review-continue-warning"
-          >
-            {CONTINUE_UNSYNCED_NOTE}
-          </p>
+          <UpdateAlbumBar
+            count={unsynced.length}
+            pending={pending || refreshing}
+            error={error}
+            onUpdate={onUpdate}
+            note={
+              <p id="review-continue-note" className="type-small text-muted-foreground" data-testid="review-continue-warning">
+                {CONTINUE_UNSYNCED_NOTE}
+              </p>
+            }
+          />
         ) : null}
-        {userEdited && !building ? null : (
+        {editedPanel ? (
+          <Link
+            href={editorHref(bookId)}
+            className={buttonVariants({ variant: "default", size: "cta" })}
+            data-testid="review-open-editor"
+          >
+            {EDITED_ALBUM_COPY.button}
+          </Link>
+        ) : (
           <form action={confirm} className="flex flex-col">
             <ContinueButton outline={showBar} describedBy={showBar ? "review-continue-note" : undefined} />
           </form>
         )}
-        <Link
-          href={`/books/${bookId}/upload`}
-          className={cn(buttonVariants({ variant: "ghost" }), "h-11 w-full text-base")}
-          data-testid="review-add-photos"
-        >
-          Add more photos
-        </Link>
-      </div>
-
-      {showBar ? (
-        <>
-          {/* Room so the sticky bar never covers the last links. */}
-          <div aria-hidden className="h-[calc(6rem+env(safe-area-inset-bottom))] shrink-0" />
-          <UpdateAlbumBar count={unsynced.length} pending={pending || refreshing} error={error} onUpdate={onUpdate} />
-        </>
-      ) : null}
+      </ActionBar>
 
       <div
         role="status"
         aria-live="polite"
-        className="pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-4"
+        className={cn("pointer-events-none fixed inset-x-0 z-40 flex justify-center px-gutter sm:bottom-8", toastBottom)}
       >
         {toast ? (
           <p
-            className="pointer-events-auto max-w-sm rounded-lg bg-foreground px-4 py-3 text-base text-background shadow-lg"
+            className="type-small pointer-events-auto max-w-sm rounded-xl bg-primary px-4 py-3 text-primary-foreground shadow-lift"
             data-testid="update-album-toast"
           >
             {toast}
@@ -208,13 +224,14 @@ function ContinueButton({ outline, describedBy }: { outline: boolean; describedB
   return (
     <Button
       type="submit"
+      size="cta"
       variant={outline ? "outline" : "default"}
-      className="h-12 w-full text-base"
       disabled={pending}
       aria-describedby={describedBy}
       data-testid="review-continue"
     >
-      {pending ? "Saving…" : "Continue"}
+      {pending ? "Saving…" : CONTINUE_LABEL}
+      {pending ? null : <ArrowRight data-icon="inline-end" className="rtl:rotate-180" aria-hidden="true" />}
     </Button>
   );
 }

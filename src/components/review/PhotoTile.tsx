@@ -49,8 +49,8 @@ export function PhotoTile({ photo, index, busy, moved, onTap, onThumbError }: Ph
       data-state={kept ? "kept" : "dropped"}
       className={cn(
         "relative block aspect-square w-full min-w-0 overflow-hidden rounded-lg bg-muted outline-none",
-        "focus-visible:ring-3 focus-visible:ring-ring focus-visible:ring-offset-2",
-        kept ? "ring-2 ring-primary" : "ring-1 ring-border",
+        "focus-visible:ring-3 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        kept ? "ring-2 ring-primary" : "ring-1 ring-input/50",
         busy && "cursor-progress",
       )}
     >
@@ -83,7 +83,7 @@ export function PhotoTile({ photo, index, busy, moved, onTap, onThumbError }: Ph
 
       {kept ? (
         <span
-          className="absolute end-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow"
+          className="absolute end-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-card"
           aria-hidden
         >
           <Check className="size-4" />
@@ -92,7 +92,7 @@ export function PhotoTile({ photo, index, busy, moved, onTap, onThumbError }: Ph
 
       {photo.userOverride ? (
         <span
-          className="absolute start-1.5 top-1.5 size-2.5 rounded-full bg-amber-500 ring-2 ring-background"
+          className="absolute start-1.5 top-1.5 size-3 rounded-full bg-accent-strong ring-2 ring-card"
           title="You changed this"
           data-testid="review-user-dot"
           aria-hidden
@@ -101,12 +101,12 @@ export function PhotoTile({ photo, index, busy, moved, onTap, onThumbError }: Ph
 
       <span id={chipId} className="absolute inset-x-1 bottom-1 flex flex-wrap justify-start gap-1">
         {!kept ? (
-          <span className="max-w-full rounded-md bg-background/90 px-1.5 py-0.5 text-xs leading-tight break-words font-medium text-foreground" data-testid="review-reason">
+          <span className="max-w-full rounded-md bg-card/95 px-1.5 py-0.5 text-xs leading-tight break-words font-medium text-foreground shadow-card" data-testid="review-reason">
             {reasonLabel(photo.dropReason)}
           </span>
         ) : null}
         {photo.dupGroup != null && !(photo.dropReason === "duplicate" && !kept) ? (
-          <span className="max-w-full rounded-md bg-background/90 px-1.5 py-0.5 text-xs leading-tight break-words text-muted-foreground" data-testid="review-dup">
+          <span className="max-w-full rounded-md bg-card/95 px-1.5 py-0.5 text-xs leading-tight break-words text-muted-foreground shadow-card" data-testid="review-dup">
             Possible duplicate
           </span>
         ) : null}

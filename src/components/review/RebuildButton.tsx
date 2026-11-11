@@ -6,10 +6,10 @@
 // we stay here and refresh.
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   REBUILD_LABELS,
-  rebuildHint,
   rebuildTrigger,
   requestRebuild,
   type RebuildVariant,
@@ -21,6 +21,12 @@ type RebuildButtonProps = {
   /** Live AI rebuilds left for this book; null = not limited here (rule / replay mode). */
   rebuildsLeft: number | null;
 };
+
+/** "2 rebuilds left" (M11 T12); null when rebuilds aren't counted here (rule / replay mode). */
+export function rebuildsLeftCopy(left: number | null): string | null {
+  if (left === null) return null;
+  return left === 1 ? "1 rebuild left" : `${Math.max(0, left)} rebuilds left`;
+}
 
 export function RebuildButton({ bookId, variant, rebuildsLeft }: RebuildButtonProps) {
   const router = useRouter();
@@ -53,28 +59,41 @@ export function RebuildButton({ bookId, variant, rebuildsLeft }: RebuildButtonPr
     }
   }
 
+  const leftCopy = usesRebuild ? rebuildsLeftCopy(rebuildsLeft) : null;
+  const hint = outOfRebuilds
+    ? "You've used all the AI rebuilds for this book. You can still keep or drop photos."
+    : variant === "ai_off"
+      ? "Builds the album again from the photos you kept."
+      : usesRebuild
+        ? "Re-plans the whole story with AI. Your keep / drop choices stay."
+        : "Your keep / drop choices stay as they are.";
+
   return (
-    <div className="flex min-w-0 flex-col gap-2" data-testid="rebuild">
+    <div className="flex min-w-0 flex-col gap-1.5" data-testid="rebuild">
       <Button
         type="button"
         variant="outline"
-        className="h-12 w-full text-base"
+        size="touch"
+        className="w-full"
         disabled={working || outOfRebuilds}
         onClick={onClick}
         data-testid="rebuild-button"
         aria-describedby="rebuild-hint"
       >
+        {variant === "ai_off" ? null : <Sparkles data-icon="inline-start" aria-hidden="true" />}
         {working ? (variant === "ai_off" ? "Rebuilding…" : "Starting…") : REBUILD_LABELS[variant]}
       </Button>
 
-      <p id="rebuild-hint" className="text-sm text-muted-foreground" data-testid="rebuild-hint">
-        {outOfRebuilds
-          ? "You've used all the AI rebuilds for this book. You can still keep or drop photos."
-          : variant === "ai_off"
-            ? "Builds the album again from the photos you kept."
-            : usesRebuild
-              ? rebuildHint(rebuildsLeft)
-              : "Your keep / drop choices stay as they are."}
+      <p id="rebuild-hint" className="type-small text-muted-foreground" data-testid="rebuild-hint">
+        {hint}
+        {leftCopy && !outOfRebuilds ? (
+          <>
+            {" "}
+            <span className="font-medium text-foreground" data-testid="rebuild-left">
+              {leftCopy}
+            </span>
+          </>
+        ) : null}
       </p>
 
       {variant === "ai_off" ? (
@@ -82,26 +101,29 @@ export function RebuildButton({ bookId, variant, rebuildsLeft }: RebuildButtonPr
           <Button
             type="button"
             variant="ghost"
-            className="h-11 w-full text-base"
+            size="touch"
+            className="w-full"
             disabled
             aria-describedby="ai-off-hint"
             data-testid="try-ai-disabled"
           >
             Try AI again
           </Button>
-          <p id="ai-off-hint" className="text-center text-sm text-muted-foreground">
+          <p id="ai-off-hint" className="type-small text-center text-muted-foreground">
             AI isn&apos;t available yet.
           </p>
         </div>
       ) : null}
 
-      <p role="status" aria-live="polite" className="text-base">
+      <p role="status" aria-live="polite" className="type-small">
         {message ? (
           <span className="text-destructive" data-testid="rebuild-error">
             {message}
           </span>
         ) : done && !refreshing ? (
-          <span data-testid="rebuild-done">Album rebuilt.</span>
+          <span className="text-success" data-testid="rebuild-done">
+            Album rebuilt.
+          </span>
         ) : null}
       </p>
     </div>

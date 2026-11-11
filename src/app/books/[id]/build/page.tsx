@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { PageHeader } from "@/components/app/PageHeader";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { BuildProgress } from "@/components/review/BuildProgress";
 import { limitsFor } from "@/lib/ai/limits";
@@ -39,24 +40,23 @@ export default async function BuildPage({
   return (
     <>
       <AppHeader displayName={displayName} />
-      <main className="mx-auto w-full max-w-md px-4 py-6">
-        <h1 className="text-2xl font-semibold">Building your album</h1>
-        <p
-          dir="auto"
-          className="mt-1 text-base text-muted-foreground break-words"
-          data-testid="build-book-title"
-        >
-          {book.title || "Untitled book"}
-        </p>
-        <div className="mt-6">
-          <BuildProgress
-            bookId={book.id}
-            activeRunId={active?.id ?? null}
-            trigger={trigger}
-            isPaid={book.is_paid}
-            dailyCap={limitsFor(book.is_paid).maxLiveBuildsPerUserPerDay}
-          />
-        </div>
+      <main className="mx-auto flex w-full max-w-app min-w-0 flex-col gap-stack px-gutter py-6 sm:py-10">
+        <PageHeader
+          step="build"
+          title="Building your album"
+          description={
+            <span className="break-words" data-testid="build-book-title">
+              {book.title || "Untitled book"}
+            </span>
+          }
+        />
+        <BuildProgress
+          bookId={book.id}
+          activeRunId={active?.id ?? null}
+          trigger={trigger}
+          isPaid={book.is_paid}
+          dailyCap={limitsFor(book.is_paid).maxLiveBuildsPerUserPerDay}
+        />
       </main>
     </>
   );

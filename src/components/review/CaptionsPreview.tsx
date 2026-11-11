@@ -26,15 +26,15 @@ export function CaptionsPreview({ preview, captionLang }: CaptionsPreviewProps) 
   if (!model) return null;
 
   return (
-    <details className="group min-w-0 rounded-xl border" data-testid="captions-preview">
+    <details className="group min-w-0 rounded-2xl border border-border bg-card shadow-card" data-testid="captions-preview">
       <summary
-        className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-3 text-base font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"
+        className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 py-3 text-base font-medium text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"
       >
         <span data-testid="captions-count">Captions ({model.count})</span>
-        <ChevronDown aria-hidden className="size-5 shrink-0 transition-transform group-open:rotate-180" />
+        <ChevronDown aria-hidden className="size-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none" />
       </summary>
 
-      <div className="flex min-w-0 flex-col gap-5 border-t px-4 py-4">
+      <div className="flex min-w-0 flex-col gap-5 border-t border-border px-4 py-4">
         {model.missing > 0 ? (
           <p className="text-sm text-muted-foreground" data-testid="captions-missing">
             {missingCaptionsCopy(model.missing)}
@@ -57,7 +57,7 @@ export function CaptionsPreview({ preview, captionLang }: CaptionsPreviewProps) 
               {group.items.map((item, ii) => {
                 const attrs = captionTextAttrs(item.text, captionLang);
                 return (
-                  <li key={ii} className="min-w-0 rounded-lg bg-muted/50 px-3 py-2" data-testid="captions-item">
+                  <li key={ii} className="min-w-0 rounded-lg bg-secondary/60 px-3 py-2" data-testid="captions-item">
                     <p
                       dir="auto"
                       lang={attrs.lang}
@@ -86,7 +86,7 @@ function ChapterTitle({ title, captionLang }: { title: string; captionLang: stri
     <h3
       dir="auto"
       lang={attrs.lang}
-      className={cn("text-base font-semibold break-words", attrs.arabicFont && "font-arabic")}
+      className={cn("text-lg font-semibold break-words", attrs.arabicFont ? "font-arabic" : "font-display")}
     >
       {title}
     </h3>

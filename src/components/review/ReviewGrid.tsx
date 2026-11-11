@@ -28,8 +28,8 @@ type ReviewGridProps = {
   toggle: (photoId: string, keep: boolean) => Promise<ToggleResult>;
   /** Called with the photos incl. optimistic choices whenever they change (must be stable). */
   onPhotosChange?: (photos: ReviewTilePhoto[]) => void;
-  /** Lift the toast above a sticky bottom bar. */
-  raiseToast?: boolean;
+  /** Bottom offset classes for the toast (keeps it above the review ActionBar). */
+  toastClassName?: string;
 };
 
 type Choice = Pick<ReviewTilePhoto, "status" | "dropReason" | "userOverride">;
@@ -39,7 +39,7 @@ const TOAST_MS = 4000;
 /** Signed thumb URLs expire after 10 min; re-sign (router.refresh) at most this often. */
 const RESIGN_MIN_GAP_MS = 60_000;
 
-export function ReviewGrid({ photos, aiUsed, toggle, onPhotosChange, raiseToast = false }: ReviewGridProps) {
+export function ReviewGrid({ photos, aiUsed, toggle, onPhotosChange, toastClassName = "bottom-4" }: ReviewGridProps) {
   const router = useRouter();
   const [overrides, setOverrides] = useState<Map<string, Choice>>(() => new Map());
   const [pending, setPending] = useState<Set<string>>(() => new Set());
@@ -134,15 +134,15 @@ export function ReviewGrid({ photos, aiUsed, toggle, onPhotosChange, raiseToast 
   return (
     <section className="flex min-w-0 flex-col gap-4" aria-labelledby="review-heading" data-testid="review-grid">
       <div>
-        <h1 id="review-heading" className="text-2xl font-semibold" data-testid="review-header" aria-live="polite">
+        <h2 id="review-heading" className="type-h2 text-foreground" data-testid="review-header" aria-live="polite">
           {headerCopy({ aiUsed, kept, total: merged.length })}
-        </h1>
-        <p className="mt-1 text-base text-muted-foreground">
+        </h2>
+        <p className="type-small mt-1 text-muted-foreground">
           Tap a photo to keep it or take it out. Your choices are never changed by AI.
         </p>
       </div>
 
-      <div role="tablist" aria-label="Photos" className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
+      <div role="tablist" aria-label="Photos" className="grid grid-cols-2 gap-1 rounded-xl bg-secondary p-1">
         {TABS.map((t) => {
           const selected = tab === t;
           return (
@@ -161,8 +161,8 @@ export function ReviewGrid({ photos, aiUsed, toggle, onPhotosChange, raiseToast 
               onKeyDown={onTabKey}
               data-testid={`review-tab-${t}`}
               className={cn(
-                "min-h-11 rounded-lg px-3 text-base font-medium outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50",
-                selected ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
+                "min-h-11 rounded-lg px-3 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-secondary",
+                selected ? "bg-card text-foreground shadow-card" : "text-muted-foreground hover:text-foreground",
               )}
             >
               {t === "kept" ? "Kept" : "Dropped"}{" "}
@@ -176,7 +176,7 @@ export function ReviewGrid({ photos, aiUsed, toggle, onPhotosChange, raiseToast 
 
       <div role="tabpanel" id="review-panel" aria-labelledby={`review-tab-${tab}`} data-testid="review-panel">
         {shown.length === 0 ? (
-          <p className="rounded-xl border border-dashed p-6 text-center text-base text-muted-foreground" data-testid="review-empty-tab">
+          <p className="type-small rounded-xl border border-dashed border-input/60 bg-card p-6 text-center text-muted-foreground" data-testid="review-empty-tab">
             {tab === "kept" ? "No photos kept yet. Open Dropped to add some back." : "Nothing dropped — every photo is in your album."}
           </p>
         ) : (
@@ -201,13 +201,13 @@ export function ReviewGrid({ photos, aiUsed, toggle, onPhotosChange, raiseToast 
         role="status"
         aria-live="polite"
         className={cn(
-          "pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4",
-          raiseToast ? "bottom-[calc(7rem+env(safe-area-inset-bottom))]" : "bottom-4",
+          "pointer-events-none fixed inset-x-0 z-40 flex justify-center px-gutter sm:bottom-8",
+          toastClassName,
         )}
       >
         {toast ? (
           <p
-            className="pointer-events-auto max-w-sm rounded-lg bg-foreground px-4 py-3 text-base text-background shadow-lg"
+            className="type-small pointer-events-auto max-w-sm rounded-xl bg-primary px-4 py-3 text-primary-foreground shadow-lift"
             data-testid="review-toast"
           >
             {toast}
