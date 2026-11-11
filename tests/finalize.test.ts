@@ -365,6 +365,17 @@ describe("finalizeBook", () => {
     expect(r?.pages).toBeGreaterThan(0);
   });
 
+  it("geometric / scrapbook book (no layouts yet) → no fallback album, doc stays {}, counts still returned (M10b A19 S1)", async () => {
+    for (const style of ["geometric", "scrapbook"]) {
+      const { db, book, calls } = makeDb({ photos: Array.from({ length: 5 }, (_, i) => photo(i + 1)) });
+      book.design_style = style;
+      const r = await fin(BOOK, { db, geocoder: makeGeocoder() });
+      expect(r).toMatchObject({ photos: 5, wroteDoc: false, pages: 0 });
+      expect(calls.writeDoc).toBe(0);
+      expect(book.doc).toEqual({});
+    }
+  });
+
   it("never overwrites a non-empty doc (and doesn't even try)", async () => {
     const existing = { version: 1, mine: true };
     const { db, book, calls } = makeDb({ photos: [photo(1)], doc: existing });

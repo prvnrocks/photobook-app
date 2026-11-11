@@ -1,42 +1,48 @@
-// Removing references to photos that no longer exist from a book doc (M10a review B1 / S3).
-// Pure, no I/O. Safe on client and server.
+// Removing references to photos that no longer exist from a book doc (M10a review B1 / S3,
+// M10b A19 review S2). Pure, no I/O. Safe on client and server.
 //
-// - stripMissingBackgrounds: photo backgrounds whose photo is gone. Book default → white colour
-//   (no earlier colour is stored), page override → removed (page falls back to the book default).
-// - stripPhotoFromDoc: everything that points at one deleted photo — cover/slot photoId → null
-//   (pages and layouts stay as they are, an empty slot is valid), plus its backgrounds as above.
-// Both return the input object unchanged (changed:false) when nothing references the photo(s).
+// - stripMissingBackgrounds (strip-backgrounds.ts, re-exported): photo backgrounds whose photo is
+//   gone. Book default → white colour, page override → removed.
+// - stripPhotoFromDoc: everything that points at one deleted photo. The cover photo → null; its
+//   backgrounds go as above; and the pages that held it REFLOW per D-028 rule 1 (M10b A19),
+//   reusing relayout's removal step (removeSlotPhotos):
+//     · a page that loses its photo refits to the best smaller layout of the book's format + style
+//       (photo order + crops kept, page id kept; an AI caption goes when the page is re-fitted,
+//       D-031 — a user caption is kept, preferring layouts with a caption area);
+//     · a spread that loses a photo becomes a smaller spread of the style when every photo fits
+//       (one-photo spread only for a panorama), else its twins / the halves that still hold photos;
+//     · a page / spread left with no photos and no user caption is removed (a spread as one unit);
+//       with a user caption it stays (single page: emptied slots; spread: its caption half's twin);
+//     · chapters that lose all their pages are removed; then repairSpreads (D-064) re-aligns any
+//       later spread pushed onto a right-hand page (split into twins, photos + captions kept).
+//   Safety: if the reflow would lose any user caption, produce an invalid doc, or the design has
+//   no layouts (UnsupportedDesignError, geometric / scrapbook rows), the doc falls back to the
+//   M10a behaviour — slot photoId → null, pages untouched — so a photo delete never fails.
+// Both return the input object unchanged (changed:false) when nothing references the photo.
 
-import type { Background, BookDoc } from "./types";
+import { removeSlotPhotos, type RelayoutPhoto } from "./relayout";
+import { parseBookDoc, validateBookDoc } from "./schema";
+import { repairSpreads } from "./spreads";
+import { stripMissingBackgrounds, type StripResult } from "./strip-backgrounds";
+import type { BookDoc, BookPage } from "./types";
 
-/** Book default that replaces a removed photo background. */
-export const FALLBACK_BOOK_BACKGROUND: Background = { kind: "color", hex: "#FFFFFF" };
+export { FALLBACK_BOOK_BACKGROUND, stripMissingBackgrounds, type StripResult } from "./strip-backgrounds";
 
-export interface StripResult {
-  doc: BookDoc;
-  changed: boolean;
+/** Pixel size (and date) of a remaining photo, for orientation fitting. Unknown ids fit any slot. */
+export interface StripPhotoDims {
+  id: string;
+  width: number | null;
+  height: number | null;
+  takenAt?: string | null;
 }
 
-/** Drops photo backgrounds (book default + page overrides) whose photo `exists` rejects. */
-export function stripMissingBackgrounds(doc: BookDoc, exists: (photoId: string) => boolean): StripResult {
-  let changed = false;
-  let style = doc.style;
-  if (style.background.kind === "photo" && !exists(style.background.photoId)) {
-    style = { ...style, background: { ...FALLBACK_BOOK_BACKGROUND } };
-    changed = true;
-  }
-  const pages = doc.pages.map((page) => {
-    if (page.background?.kind !== "photo" || exists(page.background.photoId)) return page;
-    changed = true;
-    const rest = { ...page };
-    delete rest.background;
-    return rest;
-  });
-  return changed ? { doc: { ...doc, style, pages }, changed } : { doc, changed };
+export interface StripPhotoResult extends StripResult {
+  /** True when pages were re-laid out (false: nothing on pages, or the null-out fallback). */
+  reflowed: boolean;
 }
 
-/** Removes every reference to `photoId`: cover/slots → null, its backgrounds removed. */
-export function stripPhotoFromDoc(doc: BookDoc, photoId: string): StripResult {
+/** The M10a behaviour: cover/slot photoId → null (layouts unchanged), backgrounds removed. */
+function nullOut(doc: BookDoc, photoId: string): StripResult {
   let changed = false;
   let cover = doc.cover;
   if (cover.photoId === photoId) {
@@ -51,4 +57,97 @@ export function stripPhotoFromDoc(doc: BookDoc, photoId: string): StripResult {
   const bg = stripMissingBackgrounds({ ...doc, cover, pages }, (id) => id !== photoId);
   if (!changed && !bg.changed) return { doc, changed: false };
   return { doc: bg.doc, changed: true };
+}
+
+/** Sequential page ids ("p7") that don't clash with existing ones. */
+function pageIdAllocator(pages: readonly BookPage[]): () => string {
+  const taken = new Set(pages.map((p) => p.id));
+  let n = pages.length + 1;
+  return () => {
+    while (taken.has(`p${n}`)) n++;
+    const id = `p${n}`;
+    taken.add(id);
+    return id;
+  };
+}
+
+/** User caption texts with multiplicity (sorted) — the reflow must keep every one. */
+function userCaptions(doc: BookDoc): string[] {
+  return doc.pages
+    .flatMap((p) => (p.caption?.source === "user" ? [p.caption.text] : []))
+    .sort();
+}
+
+const positive = (v: number | null | undefined) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 1);
+
+/**
+ * Removes every reference to `photoId` and reflows the pages that held it (see the file header).
+ * `photos` = the book's remaining photos with their pixel sizes (orientation fitting); a photo
+ * missing from it counts as square (fits any slot).
+ */
+export function stripPhotoFromDoc(doc: BookDoc, photoId: string, photos: readonly StripPhotoDims[] = []): StripPhotoResult {
+  const onPages = doc.pages.some((p) => p.slots.some((s) => s.photoId === photoId));
+  if (!onPages) return { ...nullOut(doc, photoId), reflowed: false };
+  try {
+    const reflowed = reflow(doc, photoId, photos);
+    if (reflowed) return { doc: reflowed, changed: true, reflowed: true };
+  } catch {
+    // UnsupportedDesignError (no layouts for the style) or any unexpected layout gap → fallback.
+  }
+  return { ...nullOut(doc, photoId), reflowed: false };
+}
+
+function reflow(doc: BookDoc, photoId: string, photos: readonly StripPhotoDims[]): BookDoc | null {
+  const dims = new Map(photos.map((p) => [p.id, p]));
+  const photo = (id: string): RelayoutPhoto => {
+    const d = dims.get(id);
+    return {
+      id,
+      width: positive(d?.width),
+      height: positive(d?.height),
+      takenAt: d?.takenAt ?? null,
+      status: "kept",
+      place: null,
+      dupGroup: null,
+      blurScore: null,
+    };
+  };
+  const design = { format: doc.format, designStyle: doc.style.designStyle ?? "classic" };
+  const removal = removeSlotPhotos(doc, {
+    keep: (id) => id !== photoId,
+    photo,
+    design,
+    nextPageId: pageIdAllocator(doc.pages),
+    keepUserCaptionPages: true,
+  });
+
+  // Chapters that lost all their pages go (as Update album, D-028 rule 4).
+  const hadPages = new Set(doc.pages.map((p) => p.chapterId));
+  const hasPages = new Set(removal.pages.map((p) => p.chapterId));
+  const chapters = doc.chapters.filter((c) => !hadPages.has(c.id) || hasPages.has(c.id));
+  const cover = doc.cover.photoId === photoId ? { ...doc.cover, photoId: null } : doc.cover;
+
+  const bg = stripMissingBackgrounds({ ...doc, cover, chapters, pages: removal.pages }, (id) => id !== photoId);
+  const out = repairSpreads(bg.doc).doc;
+
+  // Never lose a user caption; never write a doc that fails validation.
+  const before = userCaptions(doc);
+  const after = userCaptions(out);
+  if (before.length !== after.length || before.some((t, i) => t !== after[i])) return null;
+  const parsed = parseBookDoc(out);
+  if (!parsed.ok) return null;
+  const slotIds = new Set<string>();
+  for (const p of doc.pages) for (const s of p.slots) if (s.photoId !== null && s.photoId !== photoId) slotIds.add(s.photoId);
+  if (doc.cover.photoId !== null && doc.cover.photoId !== photoId) slotIds.add(doc.cover.photoId);
+  const bgIds = new Set<string>(slotIds);
+  for (const b of [doc.style.background, ...doc.pages.map((p) => p.background)]) {
+    if (b?.kind === "photo" && b.photoId !== photoId) bgIds.add(b.photoId);
+  }
+  const issues = validateBookDoc(parsed.doc, {
+    photoIds: slotIds,
+    backgroundPhotoIds: bgIds,
+    maxPages: Math.max(1, doc.pages.length),
+  });
+  if (issues.length > 0) return null;
+  return out; // validated; untouched pages stay the same objects
 }

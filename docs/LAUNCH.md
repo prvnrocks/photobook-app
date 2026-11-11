@@ -92,7 +92,7 @@ code that signs cookies/tokens**, **Vercel Pro before live Stripe keys** (D-053:
 ### 1.7 Others
 - [ ] Anthropic Console: production API key (`ANTHROPIC_API_KEY`), monthly spend limit in the Console as a
       second breaker behind `AI_DAILY_BUDGET_USD`.
-- [ ] Mapbox: production token (`MAPBOX_TOKEN`), URL-restricted is not possible for server use — keep it secret.
+- [ ] Mapbox: production token (`MAPBOX_TOKEN`), URL-restricted is not possible for server use — keep it secret. **2026-11-11: usage limit reached / token invalid — place names currently off (photos get no place; app works). Fix the plan + token before launch.**
 
 ---
 
@@ -341,6 +341,15 @@ Rollback levers (fastest first):
   any page background, landscape, a non-classic style) break on older code — the editor says the doc is
   invalid, `/b/<slug>` shows "unavailable" (v2 published snapshot), PDF export fails. Colour-only books are
   stored as v1 and are unaffected. Prefer fixing forward once users have picked textures/photo backgrounds.
+- **PDF renderer version (M10b: `PDF_RENDERER_VERSION` 2 → 3, `src/lib/pdf/rules.ts`)** — bumped because the
+  print fonts changed (Arabic inside Latin captions now prints in Cairo, not a system fallback) and merged PDFs
+  dedupe images across chunks. A ready PDF is reused only for the same version, so after the M10b deploy each
+  paid book's **next "Download PDF" renders once more** (shows "Preparing your PDF…" like a first export, then
+  downloads; the older file is removed and its row kept as `superseded`, as for any re-export). Nothing
+  re-renders on its own — no batch job, no AI calls, only Chromium time per request, and each re-render counts
+  toward the per-user daily export cap (20 / 24 h). Rolling the code back to M10a: books never re-exported on
+  M10b still reuse their version-2 PDF; books re-exported on M10b render once more on request (the M10a code
+  ignores version-3 rows) — no DB change either way.
 - **Migrations are additive** — never "roll back" by dropping schema. Older code runs against the newer schema
   (1700 note: the old webhook may 500 once on `fulfilled_after_review_order`; Stripe's retry is a 200
   duplicate and the book is paid either way). Fix forward with a new migration.

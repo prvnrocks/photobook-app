@@ -96,6 +96,8 @@ export function invalidSaveCopy(code: string): string {
       return "The same photo is used twice. Change one of them to keep saving.";
     case "invalid_font":
       return "A caption font isn't supported. Pick another font to keep saving.";
+    case "unsupported_design":
+      return "This book's design style isn't available yet, so it can't be saved.";
     case "too_large":
       return "This album is too big to save — try removing a page.";
     default:

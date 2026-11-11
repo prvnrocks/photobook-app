@@ -103,3 +103,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-11, viewer) page-flip stretch+autoSize reads block height as integer offsetHeight → fractional page widths → 1 px fold seam: size stf__wrapper from your box (h-full, pb-0) and round box height up.
 - (2026-11-11, e2e) When a form default changes, grep every live spec that creates through that form for style-specific assumptions (v1, layout ids, Playfair).
 - (2026-11-11, e2e) git archive scratch copies lack supabase/.temp — symlink it so --linked cleanup works.
+- (2026-11-11, schema) When a DB enum allows values the code can't lay out yet, raise one typed 'unsupported' error at layout entry points and refuse in each writer — never remap (doc must agree with column).

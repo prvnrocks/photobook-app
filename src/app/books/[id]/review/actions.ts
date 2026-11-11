@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { learnFromBook } from "@/lib/ai/learn-from-book";
 import { autolayout } from "@/lib/autolayout";
-import { bookDesignOf, withBookDesign } from "@/lib/book/book-design";
+import { bookDesignOf, isSupportedDesign, isUnsupportedDesignError, withBookDesign } from "@/lib/book/book-design";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { CAPTION_LANGS, OCCASIONS, type CaptionLang, type Occasion } from "@/lib/book/options";
 import { relayoutDoc, type RelayoutPhoto } from "@/lib/book/relayout";
@@ -53,14 +53,16 @@ export async function togglePhotoAction(
 
 export type UpdateAlbumResult =
   | { ok: true; changed: boolean; pages: number }
-  | { ok: false; error: "signed_out" | "not_found" | "user_edited" | "busy" | "failed" };
+  | { ok: false; error: "signed_out" | "not_found" | "user_edited" | "busy" | "unsupported_design" | "failed" };
 
 /**
  * "Update album" (D-028): re-lays out the current album after review keep/drop changes with the
  * rule-based filler (relayoutDoc) — AI chapters, title and order kept, dropped photos removed,
  * newly kept photos added by time. A `{}` doc gets a fresh rule album. Free and unlimited: no AI
  * call, no agent_runs row, not counted against any limit. Refused while a run is active (busy) or
- * when the album was edited by the user (user_edited). Logs error codes only, never photo data.
+ * when the album was edited by the user (user_edited). A design style without layouts
+ * (geometric / scrapbook rows, M10b A19 review S1) → unsupported_design, nothing written.
+ * Logs error codes only, never photo data.
  */
 export async function updateAlbumAction(bookId: string): Promise<UpdateAlbumResult> {
   const user = await getCurrentUser();
@@ -70,6 +72,7 @@ export async function updateAlbumAction(bookId: string): Promise<UpdateAlbumResu
   try {
     const mine = await getMyBook(bookId);
     if (!mine) return { ok: false, error: "not_found" };
+    if (!isSupportedDesign(bookDesignOf(mine))) return { ok: false, error: "unsupported_design" };
     if (await getActiveRunForBook(mine.id)) return { ok: false, error: "busy" };
 
     for (let attempt = 1; attempt <= 2; attempt++) {
@@ -102,6 +105,7 @@ export async function updateAlbumAction(bookId: string): Promise<UpdateAlbumResu
     }
     return { ok: false, error: "busy" };
   } catch (err) {
+    if (isUnsupportedDesignError(err)) return { ok: false, error: "unsupported_design" };
     console.error(`[review] update album failed (${errorCodeOf(err)})`);
     return { ok: false, error: "failed" };
   }

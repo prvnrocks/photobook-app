@@ -62,7 +62,7 @@
 // safe album is returned instead (the user must always get an album).
 
 import { limitsFor } from "@/lib/ai/limits";
-import { DEFAULT_BOOK_DESIGN, type BookDesign } from "@/lib/book/book-design";
+import { assertSupportedDesign, DEFAULT_BOOK_DESIGN, type BookDesign } from "@/lib/book/book-design";
 import { orientationOf as formatOrientation } from "@/lib/book/format";
 import { BOOK_TITLE_MAX_CODE_POINTS, type CaptionLang, type Occasion } from "@/lib/book/options";
 import { DocMetaSchema, parseBookDoc, validateBookDoc } from "@/lib/book/schema";
@@ -147,6 +147,9 @@ interface Group {
 export function autolayout(photos: AutoPhoto[], opts: AutolayoutOptions): BookDoc {
   const maxPages = limitsFor(opts.isPaid).maxPages;
   const design = opts.design ?? DEFAULT_BOOK_DESIGN;
+  // M10b A19 (review S1): a style without layouts (geometric / scrapbook rows inserted directly)
+  // throws the typed UnsupportedDesignError here, before any page is built; callers refuse cleanly.
+  assertSupportedDesign(design);
   const kept = dedupe(photos, opts.dupGroups).sort(byTime);
 
   let doc = build(kept, opts, design, maxPages, makeFiller(design, true));
@@ -583,7 +586,9 @@ export function fillPages(
     .sort(byTime);
   // Single pages only (no spreads): the caller inserts these between existing pages, where the
   // page index parity is not known — repairSpreads handles later spreads.
-  const fill = makeFiller(opts.design ?? DEFAULT_BOOK_DESIGN, false);
+  const design = opts.design ?? DEFAULT_BOOK_DESIGN;
+  assertSupportedDesign(design);
+  const fill = makeFiller(design, false);
   return fill(ps, 0, opts.opener ?? false, opts.prevLayout ?? null).map((pg) => ({
     layout: pg.layout,
     photoIds: pg.photos.map((p) => p.id),

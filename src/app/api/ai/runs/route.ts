@@ -12,6 +12,8 @@
 //   429 { error: 'limit', limit: 'daily_builds' | 'rebuilds' | 'analysed_photos' | 'rate' | 'budget_exhausted' }
 //       ('rate' also sets Retry-After in seconds; 'budget_exhausted' = D-059 global daily AI budget
 //       used up — live mode only, no run created, nothing counted, the rule album stays)
+//   422 { error: 'unsupported_design' } — books.design_style has no layouts yet (M10b A19 review S1;
+//       geometric / scrapbook rows only exist when inserted directly — the New book form refuses them)
 //   500 { error: 'server_error' }
 // Logs carry error codes only — never ids, run data or photo data.
 import { type NextRequest } from "next/server";
@@ -88,6 +90,8 @@ export async function POST(request: NextRequest) {
         return json({ error: "user_edited" }, 409);
       case "limit":
         return json({ error: "limit", limit: result.limit ?? "daily_builds" }, 429);
+      case "unsupported_design":
+        return json({ error: "unsupported_design" }, 422);
       case "not_found":
       default:
         return json({ error: "not_found" }, 404);

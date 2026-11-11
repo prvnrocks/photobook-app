@@ -4,7 +4,7 @@
 // layoutsFor(format, style, role) — validateBookDoc rejects any other format or style.
 // Default design = classic A5 portrait (the M1–M10a catalogue, in the same order → identical picks).
 
-import type { BookDesign } from "@/lib/book/book-design";
+import { assertSupportedDesign, type BookDesign } from "@/lib/book/book-design";
 import { DEFAULT_FORMAT, pageMm } from "@/lib/book/format";
 import { layoutsFor } from "@/lib/book/spreads";
 import type { Layout } from "@/lib/book/types";
@@ -40,6 +40,7 @@ export interface BestLayoutOptions {
  */
 export function bestPageLayout(orients: readonly FitOrientation[], opts: BestLayoutOptions = {}): string | null {
   const design = opts.design ?? DEFAULT_DESIGN;
+  assertSupportedDesign(design); // typed UnsupportedDesignError (geometric / scrapbook: no layouts yet)
   const sized = layoutsFor(design.format, design.designStyle, opts.role ?? "page").filter(
     (l) => l.photoCount === orients.length,
   );
@@ -59,6 +60,7 @@ export function bestPageLayout(orients: readonly FitOrientation[], opts: BestLay
  * prefers that orientation, else the first. Classic A5 portrait → "cover".
  */
 export function bestCoverLayout(design: BookDesign = DEFAULT_DESIGN, orient: FitOrientation | null = null): string {
+  assertSupportedDesign(design);
   const covers = layoutsFor(design.format, design.designStyle, "cover");
   const ones = covers.filter((l) => l.photoCount === 1);
   const pool = ones.length > 0 ? ones : covers;
@@ -73,6 +75,7 @@ export function bestCoverLayout(design: BookDesign = DEFAULT_DESIGN, orient: Fit
  * largest slot (catalogue order on ties) — "full-page" for classic A5 portrait.
  */
 export function fullPageLayout(design: BookDesign = DEFAULT_DESIGN): string {
+  assertSupportedDesign(design);
   const singles = layoutsFor(design.format, design.designStyle, "page").filter((l) => l.photoCount === 1);
   const pool = singles.some((l) => l.caption === null) ? singles.filter((l) => l.caption === null) : singles;
   let best: Layout | undefined;

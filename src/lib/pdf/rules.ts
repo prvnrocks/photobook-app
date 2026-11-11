@@ -20,9 +20,12 @@ export const PRINT_TOKEN_TTL_SECONDS = 300;
  * N1 (M8 review): version of the PDF renderer output. Bump whenever a change makes earlier PDFs
  * look different (fonts, encoder, layout maths): create_export_job reuses a ready PDF only when
  * its renderer_version matches. 1 = pre-review rows (migration 1500 default); 2 = static print
- * fonts (no Type3) + baseline JPEG encoder.
+ * fonts (no Type3) + baseline JPEG encoder; 3 = M10b (A3 print faces without the Arial/Times
+ * fallback → Arabic inside Latin captions prints in Cairo; spreads; cross-chunk image dedupe incl.
+ * SMask/ICC). Effect of a bump: the next "Download PDF" of a paid book renders once more (a new
+ * export row, counted in EXPORT_DAILY_CAP); nothing re-renders on its own — see docs/LAUNCH.md §8.
  */
-export const PDF_RENDERER_VERSION = 2;
+export const PDF_RENDERER_VERSION = 3;
 /** Size fallback (M8 T12): when the merged PDF exceeds the 50 MB bucket limit, re-render once
  * with every print image planned at this dpi and encoded at this JPEG quality. */
 export const SIZE_FALLBACK_DPI = 250;

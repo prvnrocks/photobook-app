@@ -61,7 +61,7 @@ import {
   type Tone,
 } from "@/lib/book/options";
 import { docOrigin, isAiReplaceableDoc, isEmptyDoc } from "@/lib/book/replaceable";
-import { bookDesignOf, withBookDesign } from "@/lib/book/book-design";
+import { bookDesignOf, isSupportedDesign, isUnsupportedDesignError, withBookDesign } from "@/lib/book/book-design";
 import { serializeDoc } from "@/lib/book/doc-version";
 import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import type { BookDoc } from "@/lib/book/types";
@@ -278,7 +278,11 @@ export type StartResult =
   | { ok: true; runId: string; mode: RunMode; state: RunState }
   | {
       ok: false;
-      error: "not_found" | "already_running" | "user_edited" | "limit";
+      /**
+       * 'unsupported_design' (M10b A19, review S1): books.design_style has no layouts yet
+       * (geometric / scrapbook rows inserted directly) — refused before any run row or model call.
+       */
+      error: "not_found" | "already_running" | "user_edited" | "limit" | "unsupported_design";
       /**
        * Set when error = 'limit'. 'analysed_photos' is never a start error today: photos over
        * maxAnalyzedPhotos are rule-curated and reported as progress.photosCapped.
@@ -842,6 +846,7 @@ export class OrchestratorError extends Error {
 
 function errorCodeOf(e: unknown): string {
   if (e instanceof OrchestratorError) return e.code;
+  if (isUnsupportedDesignError(e)) return e.code; // 'unsupported_design
   const code = isObj(e) && typeof e.code === "string" && /^[\w-]{1,32}$/.test(e.code) ? e.code : null;
   return code ? `internal_${code}` : "internal_error";
 }
@@ -876,6 +881,8 @@ export async function startRun(input: StartInput, deps: OrchestratorDeps = defau
   const book = await deps.getBookForRun(input.bookId);
   if (!book || book.user_id !== input.userId) return { ok: false, error: "not_found" };
   if (!isAiReplaceableDoc(book.doc)) return { ok: false, error: "user_edited" }; // D-018 + D-031
+  // Review S1: no layouts for this style → nothing to build; no run row, no model call, no cost.
+  if (!isSupportedDesign(bookDesignOf(book))) return { ok: false, error: "unsupported_design" };
 
   const aiMode = deps.resolveMode();
   const transport = aiMode === "off" ? null : deps.transportFor(aiMode);
@@ -1092,6 +1099,9 @@ async function tick(runId: string, token: string, t0: number, budgetMs: number, 
         bookStatus: null,
       });
     }
+    // Review S1: a run queued for a style without layouts (startRun refuses new ones) fails
+    // cleanly here, before any model call: state failed, error_code 'unsupported_design'.
+    if (!isSupportedDesign(bookDesignOf(book))) throw new OrchestratorError("unsupported_design");
     const photos = (await deps.listPhotosForCuration(book.id)).map(toCurationPhoto);
     let cursor = parseCursor(run.cursor);
     if (!cursor && run.state === "queued" && isBlankCursor(run.cursor)) {

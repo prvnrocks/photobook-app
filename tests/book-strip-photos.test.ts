@@ -34,29 +34,33 @@ function doc(): BookDoc {
 }
 
 describe("stripPhotoFromDoc", () => {
-  it("cover + slots → null, layouts and page count unchanged", () => {
+  // M10b A19 (review S2): pages that held the photo reflow (D-028 rule 1) instead of keeping an
+  // empty slot — see tests/book-strip-reflow.test.ts for spreads and captions.
+  it("cover → null; the page refits to a one-photo layout with the photo left (id kept)", () => {
     const d = doc();
     const r = stripPhotoFromDoc(d, A);
     expect(r.changed).toBe(true);
+    expect(r.reflowed).toBe(true);
     expect(r.doc.cover.photoId).toBeNull();
-    expect(r.doc.pages[0].slots.map((s) => s.photoId)).toEqual([null, B]);
-    expect(r.doc.pages.map((p) => p.layout)).toEqual(["two-vertical", "one-portrait"]);
+    expect(r.doc.pages[0].id).toBe("p1");
+    expect(r.doc.pages[0].slots.map((s) => s.photoId)).toEqual([B]);
+    expect(["full-page", "one-portrait"]).toContain(r.doc.pages[0].layout);
     expect(r.doc.pages[1]).toBe(d.pages[1]);
     expect(validateBookDoc(r.doc, { photoIds: new Set([B, C]), maxPages: 20 })).toEqual([]);
     expect(d.cover.photoId).toBe(A); // input not mutated
   });
 
-  it("book default background using the photo → white colour; the slot is emptied too", () => {
+  it("book default background using the photo → white colour; the page refits", () => {
     const r = stripPhotoFromDoc(doc(), B);
     expect(r.doc.style.background).toEqual(FALLBACK_BOOK_BACKGROUND);
-    expect(r.doc.pages[0].slots.map((s) => s.photoId)).toEqual([A, null]);
+    expect(r.doc.pages[0].slots.map((s) => s.photoId)).toEqual([A]);
     expect(r.doc.pages[0].background).toEqual({ ...photoBg(C), source: "user" });
   });
 
-  it("page override using the photo → removed (falls back to the book default)", () => {
+  it("page override using the photo → removed; a page left empty without a user caption goes", () => {
     const r = stripPhotoFromDoc(doc(), C);
     expect("background" in r.doc.pages[0]).toBe(false);
-    expect(r.doc.pages[1].slots[0].photoId).toBeNull();
+    expect(r.doc.pages.map((p) => p.id)).toEqual(["p1"]);
     expect(r.doc.style.background).toEqual(photoBg(B));
     expect(parseBookDoc(serializeDoc(r.doc)).ok).toBe(true);
   });
@@ -64,7 +68,7 @@ describe("stripPhotoFromDoc", () => {
   it("unrelated photo → same object, changed:false", () => {
     const d = doc();
     const r = stripPhotoFromDoc(d, "44444444-4444-4444-8444-444444444444");
-    expect(r).toEqual({ doc: d, changed: false });
+    expect(r).toEqual({ doc: d, changed: false, reflowed: false });
     expect(r.doc).toBe(d);
   });
 

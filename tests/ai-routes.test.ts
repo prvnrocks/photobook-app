@@ -195,6 +195,11 @@ describe("POST /api/ai/runs", () => {
     expect(mocks.startRun).toHaveBeenCalledTimes(2);
   });
 
+  it("422 unsupported_design when the book's style has no layouts (M10b A19, review S1)", async () => {
+    mocks.startRun.mockResolvedValue({ ok: false, error: "unsupported_design" });
+    await expectShape(await call(), 422, { error: "unsupported_design" });
+  });
+
   it("409 already_running with the active run id (or null)", async () => {
     mocks.startRun.mockResolvedValue({ ok: false, error: "already_running" });
     mocks.getActiveRunForBook.mockResolvedValue({ id: RUN2, progress: { x: SECRET } });

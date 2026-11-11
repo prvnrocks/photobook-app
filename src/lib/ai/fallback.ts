@@ -179,7 +179,10 @@ export interface RuleAlbumOptions {
   design?: AutolayoutOptions["design"];
 }
 
-/** Rule-based album for an AI run (doc.meta.runId = runId, generator 'rule'). */
+/**
+ * Rule-based album for an AI run (doc.meta.runId = runId, generator 'rule'). Throws the typed
+ * UnsupportedDesignError (book-design.ts) for a design style without layouts — callers refuse.
+ */
 export function ruleAlbum(photos: AutoPhoto[], opts: RuleAlbumOptions, runId: string | null): BookDoc {
   return autolayout(photos, { ...opts, runId });
 }

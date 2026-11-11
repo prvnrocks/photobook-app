@@ -241,3 +241,13 @@ describe("reuseDecision", () => {
     expect(reuseDecision(rows, 3, NOW)).toEqual({ action: "reuse_ready", id: "done" });
   });
 });
+
+describe("PDF_RENDERER_VERSION (M10b A19, review N3)", async () => {
+  const { PDF_RENDERER_VERSION } = await import("@/lib/pdf/rules");
+  it("is 3 after the M10b print-font fallback + image dedupe changes (cached v2 PDFs re-render on request)", () => {
+    expect(PDF_RENDERER_VERSION).toBe(3);
+    expect(Number.isInteger(PDF_RENDERER_VERSION)).toBe(true);
+    expect(PDF_RENDERER_VERSION).toBeGreaterThanOrEqual(1);
+    expect(PDF_RENDERER_VERSION).toBeLessThanOrEqual(1000); // exports_renderer_version_check
+  });
+});

@@ -9,7 +9,8 @@ import { bookDesignOf, withBookDesign } from "@/lib/book/book-design";
 import { serializeDoc } from "@/lib/book/doc-version";
 import { isAiReplaceableDoc, isReplaceableDoc } from "@/lib/book/replaceable";
 import { BookFormatSchema, DesignStyleSchema, parseBookDoc } from "@/lib/book/schema";
-import { stripPhotoFromDoc } from "@/lib/book/strip-photos";
+import { stripPhotoFromDoc, type StripPhotoDims } from "@/lib/book/strip-photos";
+import { listPhotoDims } from "@/lib/db/photos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Json, Tables } from "@/lib/supabase/database.types";
@@ -328,8 +329,10 @@ export type StripPhotoResult = "updated" | "unchanged" | "conflict" | "not_found
 
 /**
  * After a photo was deleted (M10a review S3): removes every reference to it from books.doc —
- * cover/slot photoId → null, photo backgrounds using it removed (book default → white colour,
- * page override → removed; stripPhotoFromDoc). Read-modify-write guarded by doc_rev exactly like
+ * cover photoId → null, photo backgrounds using it removed (book default → white colour, page
+ * override → removed), and the pages that held it reflow (M10b A19, D-028 rule 1: refit to a
+ * smaller layout of the book's format + style, empty pages/spreads removed unless they carry a
+ * user caption, repairSpreads; fallback = slot photoId → null; stripPhotoFromDoc). Read-modify-write guarded by doc_rev exactly like
  * the editor save (saveDocIfRev), retried once on a conflict; meta, title and page_count stay as
  * they are (a cleanup is not a user edit). The doc_rev bump makes an editor that is open in
  * another tab get 409 on its next save ("Changed in another tab – Reload"), so it reloads the
@@ -350,10 +353,23 @@ export async function stripPhotoFromBookDoc(bookId: string, photoId: string): Pr
     if (book.doc_rev === null) return "unchanged";
     const parsed = parseBookDoc(book.doc);
     if (!parsed.ok) return "unchanged";
-    const stripped = stripPhotoFromDoc(parsed.doc, photoId);
+    // D-063: the doc carries the book's columns BEFORE the reflow, so refits use the book's
+    // format + style (no-op once they agree).
+    const stamped = withBookDesign(parsed.doc, bookDesignOf(book));
+    // Reflow (M10b A19) needs the remaining photos' sizes — only when a page held the photo.
+    // Best effort: without sizes every photo counts as square (still a valid reflow).
+    const onPages = stamped.pages.some((p) => p.slots.some((s) => s.photoId === photoId));
+    let dims: StripPhotoDims[] = [];
+    if (onPages) {
+      try {
+        dims = await listPhotoDims(book.id);
+      } catch {
+        dims = [];
+      }
+    }
+    const stripped = stripPhotoFromDoc(stamped, photoId, dims);
     if (!stripped.changed) return "unchanged";
-    // D-063: the stored doc always carries the book's columns (no-op once they agree).
-    const doc = withBookDesign(stripped.doc, bookDesignOf(book));
+    const doc = stripped.doc;
     const saved = await saveDocIfRev(
       book.id,
       user.id,

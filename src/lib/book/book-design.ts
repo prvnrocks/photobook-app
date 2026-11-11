@@ -27,6 +27,44 @@ export interface BookDesign {
 
 export const DEFAULT_BOOK_DESIGN: Readonly<BookDesign> = { format: DEFAULT_FORMAT, designStyle: DEFAULT_DESIGN_STYLE };
 
+// --- Supported designs (M10b A19, review S1) ------------------------------------------------------
+// The schema + DB accept every DESIGN_STYLES value (geometric / scrapbook are reserved for M10c, and
+// a row with one can be inserted directly through PostgREST — the New book form refuses them), but
+// the layout catalogue only has classic + modern layouts. Every doc WRITER that lays pages out
+// (autolayout, fillPages, relayoutDoc, planToDoc / prunePlan, photo-delete reflow, cover / full-page
+// picks) calls assertSupportedDesign first and throws the typed UnsupportedDesignError, which each
+// caller turns into a clean refusal (finalize: no fallback album; AI start: 422; a queued run:
+// failed with error_code 'unsupported_design'; Update album: error; editor save: 422). The style is
+// never remapped: the stored doc must keep agreeing with books.design_style (rls_check).
+// Extend this list in the same change that ships a style's layouts (a test checks every supported
+// style × format has a cover, a one-photo page and a full-page layout).
+
+export const SUPPORTED_DESIGN_STYLES = ["classic", "modern"] as const satisfies readonly DesignStyle[];
+
+export function isSupportedDesign(design: BookDesign): boolean {
+  return (SUPPORTED_DESIGN_STYLES as readonly string[]).includes(design.designStyle);
+}
+
+/** A writer was asked to lay out a book whose design style has no layouts yet. Message has ids only. */
+export class UnsupportedDesignError extends Error {
+  readonly code = "unsupported_design" as const;
+  readonly design: BookDesign;
+  constructor(design: BookDesign) {
+    super(`unsupported_design ${design.format}/${design.designStyle}`);
+    this.name = "UnsupportedDesignError";
+    this.design = design;
+  }
+}
+
+/** Throws UnsupportedDesignError unless `design` has a layout catalogue. */
+export function assertSupportedDesign(design: BookDesign): void {
+  if (!isSupportedDesign(design)) throw new UnsupportedDesignError(design);
+}
+
+export function isUnsupportedDesignError(e: unknown): e is UnsupportedDesignError {
+  return e instanceof UnsupportedDesignError;
+}
+
 /** The design a stored doc names (parseBookDoc upgrades v1 → classic portrait); default when unparsable / `{}`. */
 export function designOfDoc(doc: unknown): BookDesign {
   const parsed = parseBookDoc(doc);

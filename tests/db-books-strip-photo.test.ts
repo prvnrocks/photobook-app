@@ -73,6 +73,8 @@ const v2Doc = (bgPhoto: string) => ({
   style: { background: { kind: "photo", photoId: bgPhoto, veil: 0.75, veilColor: "#FFFFFF" }, designStyle: "classic", font: "Playfair" },
   meta: { generator: "rule", generatorVersion: 1, runId: null, userEdited: true },
 });
+/** listPhotoDims result (RLS photos select) — read only when a page held the photo (M10b A19 reflow). */
+const dimsRows = { data: [{ id: Q, width: 1000, height: 1500, taken_at: null }], error: null };
 const bookRow = (doc: unknown, rev: number | null = 4) => ({ data: { id: BOOK, doc, doc_rev: rev, max_pages: 20 }, error: null });
 
 beforeEach(() => {
@@ -83,10 +85,12 @@ beforeEach(() => {
 
 describe("stripPhotoFromBookDoc", () => {
   it("reads under RLS, writes the stripped doc (v1 when no v2 feature remains) guarded by doc_rev + owner", async () => {
-    fake.state.results.push(bookRow(v2Doc(P)), { data: [{ doc_rev: 5, updated_at: TS }], error: null });
+    fake.state.results.push(bookRow(v2Doc(P)), dimsRows, { data: [{ doc_rev: 5, updated_at: TS }], error: null });
     expect(await stripPhotoFromBookDoc(BOOK, P)).toBe("updated");
-    const [read, write] = fake.state.chains;
+    const [read, dims, write] = fake.state.chains;
     expect(read).toMatchObject({ client: "user", table: "books", op: "select" });
+    expect(dims).toMatchObject({ client: "user", table: "photos", op: "select" });
+    expect(dims.calls).toContainEqual(["eq", "book_id", BOOK]);
     expect(write).toMatchObject({ client: "admin", table: "books", op: "update" });
     expect(write.calls).toEqual([
       ["eq", "id", BOOK],
@@ -100,8 +104,11 @@ describe("stripPhotoFromBookDoc", () => {
     // Background photo gone → white colour → nothing v2 left → stored as v1.
     expect(payload.doc.version).toBe(1);
     expect((payload.doc.style as { background: string }).background).toBe("#FFFFFF");
-    const slots = (payload.doc.pages as { slots: { photoId: string | null }[] }[])[0].slots;
-    expect(slots.map((s) => s.photoId)).toEqual([null, Q]);
+    // M10b A19: the page refits to a one-photo layout with the photo left (portrait Q), id kept.
+    const pg = (payload.doc.pages as { id: string; layout: string; slots: { photoId: string | null }[] }[])[0];
+    expect(pg.id).toBe("p1");
+    expect(pg.slots.map((s) => s.photoId)).toEqual([Q]);
+    expect(["full-page", "one-portrait"]).toContain(pg.layout);
     // meta kept as is (a cleanup is not a user edit)
     expect(payload.doc.meta).toEqual(v2Doc(P).meta);
   });
@@ -109,9 +116,11 @@ describe("stripPhotoFromBookDoc", () => {
   it("retries once on a conflict with a fresh read", async () => {
     fake.state.results.push(
       bookRow(v2Doc(P), 4),
+      dimsRows,
       { data: [], error: null },
       { data: { id: BOOK }, error: null }, // still exists → conflict
       bookRow(v2Doc(P), 6),
+      dimsRows,
       { data: [{ doc_rev: 7, updated_at: TS }], error: null },
     );
     expect(await stripPhotoFromBookDoc(BOOK, P)).toBe("updated");
@@ -122,7 +131,7 @@ describe("stripPhotoFromBookDoc", () => {
 
   it("two conflicts → 'conflict' (no third write)", async () => {
     for (let i = 0; i < 2; i++) {
-      fake.state.results.push(bookRow(v2Doc(P), 4 + i), { data: [], error: null }, { data: { id: BOOK }, error: null });
+      fake.state.results.push(bookRow(v2Doc(P), 4 + i), dimsRows, { data: [], error: null }, { data: { id: BOOK }, error: null });
     }
     expect(await stripPhotoFromBookDoc(BOOK, P)).toBe("conflict");
     expect(fake.state.chains.filter((c) => c.op === "update")).toHaveLength(2);
@@ -142,6 +151,14 @@ describe("stripPhotoFromBookDoc", () => {
       expect(await stripPhotoFromBookDoc(BOOK, photoId)).toBe("unchanged");
       expect(fake.state.chains.filter((c) => c.op === "update")).toHaveLength(0);
     }
+  });
+
+  it("photo dims query failing → still reflows (photos count as square)", async () => {
+    fake.state.results.push(bookRow(v2Doc(P)), { data: null, error: { code: "57014" } }, { data: [{ doc_rev: 5, updated_at: TS }], error: null });
+    expect(await stripPhotoFromBookDoc(BOOK, P)).toBe("updated");
+    const write = fake.state.chains.find((c) => c.op === "update");
+    const pages = (write?.payload as { doc: { pages: { slots: { photoId: string | null }[] }[] } }).doc.pages;
+    expect(pages[0].slots.map((s) => s.photoId)).toEqual([Q]);
   });
 
   it("missing book, signed out, malformed ids → not_found", async () => {

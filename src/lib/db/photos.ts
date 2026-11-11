@@ -536,6 +536,24 @@ export async function listReviewPhotos(bookId: string): Promise<ReviewPhoto[]> {
 // Editor (M5, D-036 / D-037 (4)). PUT /api/books/[id]/doc checks ownership
 // with getMyBook (RLS) before calling these.
 
+/**
+ * Pixel size + date of every upload-ready photo of the book (RLS client), for the photo-delete
+ * reflow (stripPhotoFromBookDoc → stripPhotoFromDoc, M10b A19). [] for a malformed id.
+ */
+export async function listPhotoDims(
+  bookId: string,
+): Promise<{ id: string; width: number | null; height: number | null; takenAt: string | null }[]> {
+  if (!isUuid(bookId)) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("photos")
+    .select("id, width, height, taken_at")
+    .eq("book_id", bookId)
+    .eq("upload_state", "ready");
+  if (error) throw new PhotosQueryError("list photo dims", error.code);
+  return data.map((r) => ({ id: r.id, width: r.width, height: r.height, takenAt: r.taken_at }));
+}
+
 export type PlaceablePhoto = { id: string; status: string };
 
 /**

@@ -196,6 +196,7 @@ export const REBUILD_MESSAGES = {
   aiBreak: AI_BREAK_COPY,
   signedOut: "Please sign in again.",
   notFound: "That book wasn't found.",
+  unsupportedDesign: "This book's design style isn't available yet.",
   generic: "Something went wrong. Please try again.",
   offline: "You seem to be offline. Check your connection and try again.",
 } as const;
@@ -332,7 +333,7 @@ export function changedPhotosCopy(n: number): string {
 /** Result of updateAlbumAction (src/app/books/[id]/review/actions.ts). */
 export type UpdateAlbumResult =
   | { ok: true; changed: boolean; pages: number }
-  | { ok: false; error: "signed_out" | "not_found" | "user_edited" | "busy" | "failed" };
+  | { ok: false; error: "signed_out" | "not_found" | "user_edited" | "busy" | "unsupported_design" | "failed" };
 
 export type UpdateAlbumOutcome =
   | { kind: "updated"; toast: string }
@@ -345,6 +346,7 @@ export const UPDATE_ALBUM_MESSAGES = {
   busy: "Your album is still being built — try again in a moment.",
   signedOut: "Please sign in again.",
   notFound: "That book wasn't found.",
+  unsupportedDesign: "This book's design style isn't available yet.",
   generic: "We couldn't update your album. Please try again.",
 } as const;
 
@@ -373,6 +375,8 @@ export function updateAlbumOutcome(bookId: string, result: UpdateAlbumResult | n
       };
     case "not_found":
       return { kind: "error", error, message: UPDATE_ALBUM_MESSAGES.notFound, link: null };
+    case "unsupported_design":
+      return { kind: "error", error, message: UPDATE_ALBUM_MESSAGES.unsupportedDesign, link: null };
     default:
       return { kind: "error", error: "failed", message: UPDATE_ALBUM_MESSAGES.generic, link: null };
   }

@@ -247,7 +247,7 @@ describe("POST /api/books/[id]/pdf", () => {
       docRev: 3,
       doc: mocks.book!.doc,
       captionLang: "ar",
-      rendererVersion: 2,
+      rendererVersion: 3, // PDF_RENDERER_VERSION (M10b A19 N3)
       dailyCap: 20,
       staleSeconds: 360,
     });

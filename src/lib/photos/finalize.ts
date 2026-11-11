@@ -21,7 +21,7 @@ import "server-only";
 import { autolayout, type AutoPhoto } from "@/lib/autolayout";
 import { limitsFor } from "@/lib/ai/limits";
 import { CAPTION_LANGS, OCCASIONS, type CaptionLang, type Occasion } from "@/lib/book/options";
-import { bookDesignOf, withBookDesign } from "@/lib/book/book-design";
+import { bookDesignOf, isSupportedDesign, withBookDesign } from "@/lib/book/book-design";
 import { serializeDoc } from "@/lib/book/doc-version";
 import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import type { BookDoc } from "@/lib/book/types";
@@ -275,10 +275,14 @@ export async function finalizeBook(
   let pages = book.page_count;
   const readyIds = new Set(photos.map((p) => p.id));
 
-  if (isEmptyDoc(book.doc)) {
+  // D-063: format + design style from books.format / books.design_style (M10b A6).
+  const design = bookDesignOf(book);
+  if (isEmptyDoc(book.doc) && !isSupportedDesign(design)) {
+    // Review S1 (M10b A19): a style without layouts (geometric / scrapbook row inserted directly)
+    // gets no fallback album — the doc stays {} and finalize still reports its counts (no 500).
+    console.error("[finalize] fallback album skipped (unsupported_design)");
+  } else if (isEmptyDoc(book.doc)) {
     const isPaid = book.is_paid;
-    // D-063: format + design style from books.format / books.design_style (M10b A6).
-    const design = bookDesignOf(book);
     const doc: BookDoc = withBookDesign(
       autolayout(photos.map(toAutoPhoto), {
         occasion: asOccasion(book.occasion),

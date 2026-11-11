@@ -2,7 +2,7 @@
 // resolution warnings for spread slots, spread-aware print photo ids (chunk boundaries) and the
 // cross-chunk image dedupe in mergePdfs.
 
-import { PDFDocument, PDFName, PDFRawStream } from "pdf-lib";
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef } from "pdf-lib";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { printSlotSizeMm, spreadBleedRect } from "@/lib/book/bleed";
@@ -260,6 +260,97 @@ describe("mergePdfs image dedupe across chunks", () => {
     };
     expect(xobjRef(1)).toBe(xobjRef(2)); // pano on chunk 0 sheet 2 and chunk 1 sheet 1
     expect(xobjRef(0)).not.toBe(xobjRef(1));
+  });
+
+  // M10b A19 (review N1): sub-streams (SMask / ICC) are compared by their real bytes, and the
+  // duplicates' orphaned SMask / ICC objects are deleted.
+  async function png(seed: number): Promise<Buffer> {
+    const raw = Buffer.alloc(32 * 24 * 4);
+    for (let i = 0; i < raw.length; i++) raw[i] = (i * 13 + seed * 71) & 255;
+    return sharp(raw, { raw: { width: 32, height: 24, channels: 4 } }).png().toBuffer();
+  }
+  async function pngChunk(images: Buffer[]): Promise<Uint8Array> {
+    const d = await PDFDocument.create();
+    for (const img of images) {
+      const page = d.addPage([437.04, 612]);
+      const e = await d.embedPng(img);
+      page.drawImage(e, { x: 0, y: 0, width: 437.04, height: 612 });
+    }
+    return d.save();
+  }
+  const allObjects = (d: PDFDocument) => d.context.enumerateIndirectObjects();
+
+  it("an image with an SMask in two chunks → ONE image + ONE SMask; no orphaned SMask left", async () => {
+    const a = await png(1);
+    const merged = await mergePdfs([await pngChunk([a]), await pngChunk([a])]);
+    const out = await PDFDocument.load(merged.bytes);
+    const imgs = imageStreams(out);
+    expect(imgs).toHaveLength(2); // the image + its SMask (both Subtype Image)
+    const withMask = imgs.filter(([, o]) => (o as PDFRawStream).dict.get(PDFName.of("SMask")) !== undefined);
+    expect(withMask).toHaveLength(1);
+  });
+
+  /**
+   * One page per entry: an image whose ColorSpace is [/ICCBased <icc>] — same image bytes; a string
+   * entry = a new ICC object with those bytes, a number = reuse the ICC object of that entry.
+   */
+  async function iccDoc(iccs: (string | number)[]): Promise<PDFDocument> {
+    const d = await PDFDocument.create();
+    const pixels = new Uint8Array(4 * 4 * 3).fill(200);
+    const made: PDFRef[] = [];
+    for (const spec of iccs) {
+      const icc =
+        typeof spec === "number" ? made[spec] : d.context.register(d.context.stream(new TextEncoder().encode(spec), { N: 3 }));
+      made.push(icc);
+      const img = d.context.register(
+        d.context.stream(pixels, {
+          Type: "XObject",
+          Subtype: "Image",
+          Width: 4,
+          Height: 4,
+          BitsPerComponent: 8,
+          ColorSpace: d.context.obj([PDFName.of("ICCBased"), icc]),
+        }),
+      );
+      const page = d.addPage([437.04, 612]);
+      page.node.setXObject(PDFName.of("Im0"), img);
+    }
+    return d;
+  }
+  const iccStreams = (d: PDFDocument) =>
+    allObjects(d).filter(([, o]) => o instanceof PDFRawStream && o.dict.get(PDFName.of("N")) !== undefined);
+
+  it("identical ICC bytes: images fold AND the duplicate's ICC object is deleted (orphan)", async () => {
+    const d = await iccDoc(["ICC-PROFILE-AAAA", "ICC-PROFILE-AAAA"]);
+    expect(imageStreams(d)).toHaveLength(2);
+    expect(iccStreams(d)).toHaveLength(2);
+    expect(dedupeImages(d.context)).toBe(2); // 1 duplicate image + 1 orphaned ICC
+    expect(imageStreams(d)).toHaveLength(1);
+    expect(iccStreams(d)).toHaveLength(1);
+    const ref = (i: number) => String(d.getPage(i).node.Resources()!.lookup(PDFName.of("XObject"), PDFDict).get(PDFName.of("Im0")));
+    expect(ref(0)).toBe(ref(1));
+  });
+
+  it("same image bytes but a different ICC (same length) → NOT folded", async () => {
+    const d = await iccDoc(["ICC-PROFILE-AAAA", "ICC-PROFILE-BBBB"]);
+    expect(dedupeImages(d.context)).toBe(0);
+    expect(imageStreams(d)).toHaveLength(2);
+    expect(iccStreams(d)).toHaveLength(2);
+  });
+
+  it("a shared ICC still used by a kept image is never deleted", async () => {
+    // Images 0 and 1 share ONE ICC object; image 2 has its own copy with the same bytes.
+    const d = await iccDoc(["ICC-PROFILE-AAAA", 0, "ICC-PROFILE-AAAA"]);
+    expect(iccStreams(d)).toHaveLength(2);
+    // Images 1 and 2 fold into image 0; the shared ICC is still referenced → kept; image 2's copy goes.
+    expect(dedupeImages(d.context)).toBe(3); // 2 duplicate images + 1 orphaned ICC
+    expect(iccStreams(d)).toHaveLength(1);
+    const img = d.context.lookup(
+      d.getPage(0).node.Resources()!.lookup(PDFName.of("XObject"), PDFDict).get(PDFName.of("Im0")) as PDFRef,
+    ) as PDFRawStream;
+    const cs = img.dict.lookup(PDFName.of("ColorSpace"), PDFArray);
+    expect(d.context.lookup(cs.get(1))).toBeInstanceOf(PDFRawStream);
+    expect(await d.save()).toBeInstanceOf(Uint8Array);
   });
 
   it("dedupeImages is a no-op without duplicates", async () => {

@@ -27,9 +27,9 @@
 
 import { BACKGROUND_SWATCHES } from "@/lib/design/backgrounds";
 import { clipCodePoints } from "@/lib/text/clip";
-import { isCaptionFont } from "./fonts";
+import { isBookFont } from "./fonts";
 import { BOOK_TITLE_MAX_CODE_POINTS } from "./options";
-import { designOfDoc, withBookDesign, type BookDesign } from "./book-design";
+import { designOfDoc, isSupportedDesign, withBookDesign, type BookDesign } from "./book-design";
 import { DocMetaSchema, parseBookDoc, validateBookDoc } from "./schema";
 import type { BookDoc, DocMeta } from "./types";
 
@@ -38,7 +38,8 @@ export type EditorDocErrorCode =
   | "page_limit"
   | "foreign_photo"
   | "duplicate_photo"
-  | "invalid_font";
+  | "invalid_font"
+  | "unsupported_design";
 
 export interface EditorDocContext {
   /** Ids of the book's upload-ready photos (kept AND dropped). */
@@ -118,10 +119,15 @@ export function validateEditorDoc(input: unknown, ctx: EditorDocContext): Editor
   const rawPages = (input as { pages?: unknown } | null)?.pages;
   if (Array.isArray(rawPages) && rawPages.length > ctx.maxPages) return { ok: false, code: "page_limit" };
 
+  // Review S1 (M10b A19): a book whose design style has no layouts yet (geometric / scrapbook rows
+  // inserted directly) can never hold a valid doc → a typed refusal instead of invalid_doc.
+  const design = ctx.design ?? designOfDoc(ctx.savedDoc);
+  if (!isSupportedDesign(design)) return { ok: false, code: "unsupported_design" };
+
   const parsed = parseBookDoc(input);
   if (!parsed.ok) return { ok: false, code: "invalid_doc" };
   // D-063: format + design style always come from the book row, never from the client.
-  const doc = withBookDesign(parsed.doc, ctx.design ?? designOfDoc(ctx.savedDoc));
+  const doc = withBookDesign(parsed.doc, design);
   if (doc.pages.length > ctx.maxPages) return { ok: false, code: "page_limit" };
 
   // Photo ownership + single use (the cover photo may repeat once on a page).
@@ -148,17 +154,21 @@ export function validateEditorDoc(input: unknown, ctx: EditorDocContext): Editor
     if (!tintOk(bg)) return { ok: false, code: "invalid_doc" };
   }
 
-  // Caption fonts: must be an editor font, unless the page keeps its already-saved font.
+  // Caption fonts: must be a registry face (M5 four + the M10b OFL faces, isBookFont), unless the
+  // page keeps its already-saved font. M10b A19 (review B1): the v2 faces are accepted for every
+  // book — a modern book's first user caption is Cormorant/Amiri (newCaptionFont), and D-065 offers
+  // the pairs to classic books too; any v2 face simply makes the stored doc v2 (usesV2Features),
+  // while a classic book with only M5 faces stays v1.
   // Caption `source` is not checked: a client-sent source 'ai' is harmless, because the stored
   // doc always gets meta.userEdited = true (forcedMeta), which alone blocks every AI overwrite
   // (isAiReplaceableDoc) — and an accepted ✨ rewrite is saved as 'user' by the editor (D-037 #1).
   const savedFonts = savedCaptionFonts(ctx.savedDoc);
   for (const page of doc.pages) {
-    if (!page.caption || isCaptionFont(page.caption.font)) continue;
+    if (!page.caption || isBookFont(page.caption.font)) continue;
     if (savedFonts.get(page.id) !== page.caption.font) return { ok: false, code: "invalid_font" };
   }
-  // Book font (style.font): same rule — an editor font, or the saved doc's unchanged style font.
-  if (!isCaptionFont(doc.style.font) && savedStyleFont(ctx.savedDoc) !== doc.style.font) {
+  // Book font (style.font): same rule — a registry face, or the saved doc's unchanged style font.
+  if (!isBookFont(doc.style.font) && savedStyleFont(ctx.savedDoc) !== doc.style.font) {
     return { ok: false, code: "invalid_font" };
   }
 

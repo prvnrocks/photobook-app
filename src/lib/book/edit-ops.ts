@@ -27,7 +27,7 @@ import { getLayout } from "@/lib/layouts";
 import { clipCodePoints, clipText, stripLoneSurrogates } from "@/lib/text/clip";
 import { clampCrop, DEFAULT_CROP } from "./crop";
 import { styleCaptionFont } from "@/lib/design/styles";
-import { DEFAULT_ARABIC_CAPTION_FONT, defaultCaptionFont, type CaptionFont } from "./fonts";
+import { DEFAULT_ARABIC_CAPTION_FONT, defaultCaptionFont, type BookFontName } from "./fonts";
 import { BOOK_TITLE_MAX_CODE_POINTS } from "./options";
 import { BackgroundSchema } from "./schema";
 import { isSpreadLayout, layoutsFor, repairSpreads, splitSpreadAt, spreadStartOf } from "./spreads";
@@ -518,7 +518,7 @@ export function newCaptionFont(doc: Pick<BookDoc, "style">, text: string, captio
  * Change the caption font. No caption → no-op. Styling is a user edit, so source becomes "user"
  * (the AI must not overwrite a caption the user has styled).
  */
-export function setCaptionFont(doc: BookDoc, pageIdx: number, font: CaptionFont): BookDoc {
+export function setCaptionFont(doc: BookDoc, pageIdx: number, font: BookFontName): BookDoc {
   const page = pageAt(doc, pageIdx);
   if (!page.caption || page.caption.font === font) return doc;
   return withPage(doc, pageIdx, { ...page, caption: { ...page.caption, font, source: "user" } });

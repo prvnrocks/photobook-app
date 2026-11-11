@@ -312,3 +312,82 @@ describe("validateEditorDoc — texture tint must be a light swatch (review N9)"
     }
   });
 });
+
+// M10b A19 (review B1): the v2 OFL faces are accepted as caption / book fonts for every book.
+describe("validateEditorDoc — M10b fonts (review B1)", async () => {
+  const { devSampleDoc, SAMPLE_PHOTO_COUNT } = await import("@/lib/book/dev-sample");
+  const { usesV2Features, serializeDoc } = await import("@/lib/book/doc-version");
+  const { getLayout } = await import("@/lib/layouts");
+  const SAMPLE_IDS = new Set(["d0", ...Array.from({ length: SAMPLE_PHOTO_COUNT }, (_, i) => `sp${i}`)]);
+  const modernCtx = (savedDoc: unknown): EditorDocContext => ({
+    photoIds: SAMPLE_IDS,
+    maxPages: 100,
+    savedDoc,
+    design: { format: "A5_PORTRAIT", designStyle: "modern" },
+  });
+  /** The modern sample with no captions at all (a fresh AI-less album). */
+  function uncaptioned(): BookDoc {
+    const d = devSampleDoc("modern-portrait");
+    return { ...d, pages: d.pages.map((p) => ({ ...p, caption: null })) };
+  }
+  const captionable = (d: BookDoc) =>
+    d.pages.findIndex((p) => p.side !== "right" && getLayout(p.layout)?.caption);
+
+  it("modern book: the first user caption (Cormorant / Amiri via newCaptionFont) saves ok", () => {
+    const saved = uncaptioned();
+    const idx = captionable(saved);
+    expect(idx).toBeGreaterThanOrEqual(0);
+    const en = setCaption(saved, idx, "A day by the sea");
+    expect(en.pages[idx].caption?.font).toBe("Cormorant");
+    expect(validateEditorDoc(en, modernCtx(saved)).ok).toBe(true);
+    const ar = setCaption(saved, idx, "يوم على البحر");
+    expect(ar.pages[idx].caption?.font).toBe("Amiri");
+    expect(validateEditorDoc(ar, modernCtx(saved)).ok).toBe(true);
+  });
+
+  it("modern book: a caption on a NEW page id (not in the saved doc) with a v2 face saves ok", () => {
+    const saved = uncaptioned();
+    const idx = captionable(saved);
+    const d = setCaption(saved, idx, "Hello");
+    const renamed = { ...d, pages: d.pages.map((p, i) => (i === idx ? { ...p, id: "brand-new" } : p)) };
+    expect(validateEditorDoc(renamed, modernCtx(saved)).ok).toBe(true);
+  });
+
+  it("every M10b face is accepted as a caption font and as style.font", () => {
+    for (const f of ["Cormorant", "Amiri", "Bebas", "Lalezar", "GreatVibes", "ArefRuqaa"] as const) {
+      const base = devPreviewDoc();
+      const idx = base.pages.findIndex((p) => p.caption);
+      const d = setCaptionFont(base, idx, f);
+      expect(validateEditorDoc(d, ctx({ savedDoc: {} })).ok).toBe(true);
+      const s = { ...base, style: { ...base.style, font: f } };
+      expect(validateEditorDoc(s, ctx({ savedDoc: {} })).ok).toBe(true);
+    }
+  });
+
+  it("classic book stays v1 with M5 faces; choosing a v2 face makes it v2", () => {
+    const base = devPreviewDoc();
+    const idx = base.pages.findIndex((p) => p.caption);
+    const plain = setCaption(base, idx, "Still classic");
+    const r1 = validateEditorDoc(plain, ctx());
+    expect(r1.ok).toBe(true);
+    if (r1.ok) {
+      expect(usesV2Features(r1.doc)).toBe(false);
+      expect((serializeDoc(r1.doc) as { version: number }).version).toBe(1);
+    }
+    const pair = setCaptionFont(plain, idx, "Cormorant");
+    const r2 = validateEditorDoc(pair, ctx());
+    expect(r2.ok).toBe(true);
+    if (r2.ok) {
+      expect(usesV2Features(r2.doc)).toBe(true);
+      expect((serializeDoc(r2.doc) as { version: number }).version).toBe(2);
+    }
+  });
+
+  it("an unknown font is still invalid_font", () => {
+    const saved = uncaptioned();
+    const idx = captionable(saved);
+    const d = setCaption(saved, idx, "x");
+    const bad = { ...d, pages: d.pages.map((p, i) => (i === idx ? { ...p, caption: { ...p.caption!, font: "Comic" } } : p)) };
+    expect(validateEditorDoc(bad, modernCtx(saved))).toEqual({ ok: false, code: "invalid_font" });
+  });
+});

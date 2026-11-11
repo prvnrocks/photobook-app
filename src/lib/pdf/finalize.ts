@@ -21,6 +21,8 @@
 // sheets 20/21 —, a paper texture, a background photo) would be stored once PER CHUNK. After the
 // copy, byte-identical image XObjects (same dict incl. SMask/colour space, same stream bytes) are
 // folded into one object and every reference is re-pointed — lossless, nothing is re-encoded.
+// Equality is confirmed on the real bytes of the image AND of every stream it references (SMask,
+// ICC); the duplicates' now-unreferenced SMask / ICC objects are deleted as well (M10b A19 N1).
 
 import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef, PDFStream, type PDFContext, type PDFObject } from "pdf-lib";
 import { APP_NAME } from "@/lib/brand";
@@ -163,11 +165,72 @@ function isImageStream(o: PDFObject | undefined): o is PDFRawStream {
 }
 
 /**
+ * Structural equality of two PDF objects, following references: dicts by keys + values, arrays
+ * item by item, raw streams by dict AND byte-for-byte contents (so an image's SMask / ICC /
+ * any referenced sub-stream is compared by its real bytes, never by hash alone — M10b A19 N1).
+ * `pairs` guards cycles (a pair under comparison counts as equal).
+ */
+function deepSame(context: PDFContext, a: PDFObject | undefined, b: PDFObject | undefined, depth: number, pairs: Set<string>): boolean {
+  if (a === b) return true;
+  if (a === undefined || b === undefined) return false;
+  if (depth > 16) return false;
+  if (a instanceof PDFRef || b instanceof PDFRef) {
+    if (!(a instanceof PDFRef && b instanceof PDFRef)) return false;
+    const pair = `${a.toString()}|${b.toString()}`;
+    if (pairs.has(pair)) return true;
+    pairs.add(pair);
+    return deepSame(context, context.lookup(a), context.lookup(b), depth + 1, pairs);
+  }
+  if (a instanceof PDFRawStream || b instanceof PDFRawStream) {
+    if (!(a instanceof PDFRawStream && b instanceof PDFRawStream)) return false;
+    return sameBytes(a.contents, b.contents) && deepSame(context, a.dict, b.dict, depth + 1, pairs);
+  }
+  if (a instanceof PDFStream || b instanceof PDFStream) return false; // generated streams: never folded
+  if (a instanceof PDFDict || b instanceof PDFDict) {
+    if (!(a instanceof PDFDict && b instanceof PDFDict)) return false;
+    const ea = a.entries();
+    if (ea.length !== b.entries().length) return false;
+    return ea.every(([k, v]) => deepSame(context, v, b.get(k), depth + 1, pairs));
+  }
+  if (a instanceof PDFArray || b instanceof PDFArray) {
+    if (!(a instanceof PDFArray && b instanceof PDFArray)) return false;
+    if (a.size() !== b.size()) return false;
+    return a.asArray().every((v, i) => deepSame(context, v, b.get(i), depth + 1, pairs));
+  }
+  return a.toString() === b.toString();
+}
+
+/** Every indirect ref reachable from `o` (following refs, dicts, arrays and stream dicts). */
+function collectRefs(context: PDFContext, o: PDFObject | undefined, out: Set<string>, depth = 0): void {
+  if (o === undefined || depth > 64) return;
+  if (o instanceof PDFRef) {
+    const k = o.toString();
+    if (out.has(k)) return;
+    out.add(k);
+    collectRefs(context, context.lookup(o), out, depth + 1);
+  } else if (o instanceof PDFDict) {
+    for (const [, v] of o.entries()) collectRefs(context, v, out, depth + 1);
+  } else if (o instanceof PDFArray) {
+    for (const v of o.asArray()) collectRefs(context, v, out, depth + 1);
+  } else if (o instanceof PDFStream) {
+    collectRefs(context, o.dict, out, depth + 1);
+  }
+}
+
+const refOf = (key: string): PDFRef => {
+  const [num, gen] = key.split(" ");
+  return PDFRef.of(Number(num), Number(gen));
+};
+
+/**
  * Folds byte-identical image XObjects into one object (see header). Keys are canonical: dict
  * entries sorted, references replaced by the referenced object's own key (SMask / ICC streams by
  * dict + length + hash), so two copies of the same image from different chunks — whose SMask refs
- * differ — get equal keys. Candidates with equal keys are compared byte-for-byte before folding.
- * Exported for tests. Returns the number of objects removed.
+ * differ — get equal keys. The key only buckets: candidates with equal keys are confirmed by
+ * deepSame (image bytes AND every referenced sub-stream's bytes). After re-pointing, objects that
+ * only the removed duplicates referenced (their SMask / ICC streams) and that are no longer
+ * reachable from the document are deleted too (M10b A19 N1). Exported for tests. Returns the
+ * number of objects removed (duplicates + orphans).
  */
 export function dedupeImages(context: PDFContext): number {
   const memo = new Map<string, string>();
@@ -203,7 +266,7 @@ export function dedupeImages(context: PDFContext): number {
     if (!isImageStream(obj)) continue;
     const key = keyOf(ref, 0);
     const bucket = canonical.get(key) ?? [];
-    const same = bucket.find((c) => sameBytes(c.stream.contents, obj.contents));
+    const same = bucket.find((c) => deepSame(context, c.ref, ref, 0, new Set()));
     if (same) remap.set(ref.toString(), same.ref);
     else {
       bucket.push({ ref, stream: obj });
@@ -234,10 +297,24 @@ export function dedupeImages(context: PDFContext): number {
       fix(o.dict, depth + 1);
     }
   };
+  // Objects the duplicates reference (SMask, ICC, …): orphan candidates once they are gone.
+  const candidates = new Set<string>();
+  for (const key of remap.keys()) collectRefs(context, context.lookup(refOf(key)), candidates);
+  for (const key of remap.keys()) candidates.delete(key);
+
   for (const [, obj] of context.enumerateIndirectObjects()) fix(obj, 0);
-  for (const key of remap.keys()) {
-    const [num, gen] = key.split(" ");
-    context.delete(PDFRef.of(Number(num), Number(gen)));
+  for (const key of remap.keys()) context.delete(refOf(key));
+
+  let orphans = 0;
+  if (candidates.size > 0) {
+    const reachable = new Set<string>();
+    const t = context.trailerInfo;
+    for (const root of [t.Root, t.Info, t.Encrypt, t.ID]) collectRefs(context, root as PDFObject | undefined, reachable);
+    for (const key of candidates) {
+      if (reachable.has(key) || remap.has(key)) continue;
+      context.delete(refOf(key));
+      orphans++;
+    }
   }
-  return remap.size;
+  return remap.size + orphans;
 }

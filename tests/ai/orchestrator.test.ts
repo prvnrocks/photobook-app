@@ -1862,3 +1862,33 @@ describe("orchestrator — book design (M10b A11)", () => {
     for (const p of doc.pages) expect(getLayout(p.layout)).toMatchObject({ format: "A5_LANDSCAPE", style: "modern" });
   });
 });
+
+describe("orchestrator — unsupported design style (M10b A19, review S1)", () => {
+  for (const mode of ["replay", "off"] as const) {
+    it(`startRun (${mode}) refuses a geometric/scrapbook book: no run row, no model call, doc untouched`, async () => {
+      for (const style of ["geometric", "scrapbook"]) {
+        const { db, transport, deps } = setup(photos150().slice(0, 10), { book: { design_style: style }, mode });
+        const r = await orch.startRun({ bookId: BOOK, userId: USER, trigger: "build" }, deps);
+        expect(r).toEqual({ ok: false, error: "unsupported_design" });
+        expect(db.createCalls).toHaveLength(0);
+        expect(db.runs.size).toBe(0);
+        expect(transport.calls).toHaveLength(0);
+        expect(db.book.doc).toEqual({});
+      }
+    });
+  }
+
+  it("a queued run whose book has no layouts fails cleanly on its first tick (failed + unsupported_design, never stuck)", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 10));
+    const s = await start(deps);
+    db.book = { ...db.book, design_style: "scrapbook" };
+    const last = await orch.advance(s.runId, {}, deps);
+    expect(last).toMatchObject({ state: "failed", done: true, aiStatus: "failed", errorCode: "unsupported_design" });
+    expect(transport.calls).toHaveLength(0);
+    expect(db.runs.get(s.runId)).toMatchObject({ state: "failed", error_code: "unsupported_design" });
+    expect(db.book.ai_status).toBe("failed");
+    expect(db.book.doc).toEqual({});
+    // A later tick sees a finished run.
+    expect(await orch.advance(s.runId, {}, deps)).toMatchObject({ state: "failed", done: true });
+  });
+});

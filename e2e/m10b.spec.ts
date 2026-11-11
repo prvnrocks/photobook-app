@@ -22,7 +22,9 @@
  *      page without a next page, and 19 + 1 = 20 fits. The refusal is unit-tested: tests/edit-ops-spreads.)
  *   c. Real editor: apply m-l-spread-panorama on a left page → saved 200, stored v2 with side left/right.
  *      Tampering: PUT the stored doc with format A5_PORTRAIT / designStyle classic → stored doc still
- *      A5_LANDSCAPE / modern (columns); right half without `side` → 422 invalid_doc, nothing stored
+ *      A5_LANDSCAPE / modern (columns); right half without `side` → 422 invalid_doc, nothing stored.
+ *      A19 (review B1): type the first caption on a captionable page with none → saves 200, stored
+ *      font Cormorant (modern style face)
  *   d. Done → publish → anonymous viewer at 375 (each half its own page, data-spread-side left/right)
  *      and 1280 (both halves facing) — no horizontal overflow, landscape page ratio
  *   e. signed checkout → paid → Download PDF → pdf-analyze + pdf-inspect: pages = doc + cover, MediaBox
@@ -545,6 +547,32 @@ test("c. editor: panorama spread on a left page → v2 with sides; client format
   expect(afterT2.doc_rev).toBe(afterT1.doc_rev);
   expect(afterT2.doc.pages[panoIdx + 1].side).toBe("right");
   console.log(`[c] panorama at ${panoIdx}; misaligned PUT → ${t2.status} ${t2.body}`);
+
+  // M10b A19 (review B1): the FIRST user caption in a modern book gets the style face (Cormorant /
+  // Amiri, newCaptionFont) and must save 200 (was 422 invalid_font). Make sure a single page with a
+  // caption area has no caption (service-role write), then type one in the editor.
+  const CAPTIONABLE = ["m-l-one", "m-l-one-text", "m-l-two", "m-l-three", "m-l-three-b", "m-l-three-row", "m-l-four", "m-l-two-land"];
+  const capIdx = afterT2.doc.pages.findIndex((p) => CAPTIONABLE.includes(p.layout) && p.side === undefined);
+  expect(capIdx).toBeGreaterThanOrEqual(0);
+  const cleared = structuredClone(afterT2.doc);
+  cleared.pages[capIdx].caption = null;
+  await writeDoc(cleared, afterT2.doc_rev);
+  saves.length = 0;
+  await openEditorAt(page, capIdx + 1);
+  const capPage = cur(page).locator(`[data-testid="spread-page"][data-page-idx="${capIdx}"]`);
+  await capPage.getByTestId("caption-target").click();
+  const input = page.getByTestId("caption-input");
+  await expect(input).toBeVisible();
+  await input.fill("Sunset over the dunes");
+  await expect(capPage.getByTestId("page-caption")).toHaveText("Sunset over the dunes");
+  await saved(page);
+  await page.keyboard.press("Escape");
+  expect(saves.length).toBeGreaterThan(0);
+  expect(saves.every((s) => s === 200)).toBe(true);
+  const afterCap = await bookRow();
+  expect(afterCap.doc.pages[capIdx].caption).toMatchObject({ text: "Sunset over the dunes", font: "Cormorant", source: "user" });
+  console.log(`[c] first user caption on page ${capIdx} → saves ${saves.join(",")}`);
+  await page.goto("about:blank");
 });
 
 async function viewSpread(browser: Browser, viewport: { width: number; height: number }, mobile: boolean, leftIdx: number) {

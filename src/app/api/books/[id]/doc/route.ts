@@ -16,7 +16,8 @@
 //   404 { error: 'not_found' }                           — bad id / missing / not the caller's
 //   409 { error: 'conflict' }                            — baseRev is not the stored doc_rev
 //   413 { error: 'too_large' }
-//   422 { error: 'invalid_doc' | 'page_limit' | 'foreign_photo' | 'duplicate_photo' | 'invalid_font' }
+//   422 { error: 'invalid_doc' | 'page_limit' | 'foreign_photo' | 'duplicate_photo' | 'invalid_font'
+//               | 'unsupported_design' }                 — design style without layouts (M10b A19 S1)
 //   503 { error: 'saving_unavailable' }                  — migration 0900 not applied
 //   500 { error: 'server_error' }
 // Logs carry error codes only — never ids or doc contents.
