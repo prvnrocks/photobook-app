@@ -27,7 +27,7 @@ import type { PrintImageLoader } from "./images";
 import { printTokenExpiry, signPrintToken } from "./print-token";
 import { PRINT_TOKEN_HEADER } from "./print-token-source";
 import { assetPhotoId, classifyRequest } from "./request-routing";
-import { CHUNK_SHEETS, chunkRanges } from "./rules";
+import { CHUNK_SHEETS, chunkRanges, isValidChunkPlan, type SheetRange } from "./rules";
 
 /** Budget for one chunk from navigation until the page reports ready. */
 export const CHUNK_READY_TIMEOUT_MS = 60_000;
@@ -263,8 +263,14 @@ export interface RenderBookOptions {
   bypassSecret?: string | null;
   /** Per-chunk navigation + ready budget. Default CHUNK_READY_TIMEOUT_MS. */
   chunkTimeoutMs?: number;
-  /** Sheets per chunk. Default CHUNK_SHEETS (tests use smaller chunks). */
+  /** Sheets per chunk. Default CHUNK_SHEETS (tests use smaller chunks). Ignored when `ranges` is given. */
   chunkSheets?: number;
+  /**
+   * Chunk plan (M10b B1: print-doc.ts printChunkRanges — sheet AND image caps, spread pairs kept
+   * together). Must cover sheets 0..sheetCount-1 contiguously (isValidChunkPlan), else
+   * navigation_failed. Default: chunkRanges(sheetCount, chunkSheets).
+   */
+  ranges?: readonly SheetRange[];
   /** Reuse a caller's browser (not closed here; on abort only its tabs close). Default: launch one and close it in finally. */
   browser?: Browser;
   /** Test hooks: browser launch / close (default launchBrowser / closeBrowser). */
@@ -272,7 +278,7 @@ export interface RenderBookOptions {
   close?: (browser: Browser) => Promise<void>;
   /** Clock for token expiry (epoch ms). */
   now?: () => number;
-  /** Called after chunk k (index into chunkRanges) has rendered — prefetch release hook. */
+  /** Called after chunk k (index into the chunk plan) has rendered — prefetch release hook. */
   onChunkDone?: (k: number) => void;
   /** Filled with phase timings (ms) when given. */
   timings?: RenderTimings;
@@ -307,8 +313,8 @@ export const RENDER_PARALLEL_CHUNKS = 1;
  */
 export async function renderBook(opts: RenderBookOptions): Promise<Buffer[]> {
   const origin = normalizeOrigin(opts.origin);
-  const ranges = chunkRanges(opts.sheetCount, opts.chunkSheets ?? CHUNK_SHEETS);
-  if (ranges.length === 0) throw new PdfRenderError("navigation_failed");
+  const ranges = opts.ranges ?? chunkRanges(opts.sheetCount, opts.chunkSheets ?? CHUNK_SHEETS);
+  if (ranges.length === 0 || !isValidChunkPlan(ranges, opts.sheetCount)) throw new PdfRenderError("navigation_failed");
   const now = opts.now ?? Date.now;
   const bypassSecret =
     opts.bypassSecret !== undefined ? opts.bypassSecret : process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() || null;

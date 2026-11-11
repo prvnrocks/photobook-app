@@ -160,8 +160,9 @@ describe("runExport", () => {
       loader: LOADER,
     });
     expect(Object.keys(renderOpts).sort()).toEqual(
-      ["bookId", "docRev", "exportId", "loader", "onChunkDone", "origin", "sheetCount", "signal", "timings"].sort(),
+      ["bookId", "docRev", "exportId", "loader", "onChunkDone", "origin", "ranges", "sheetCount", "signal", "timings"].sort(),
     );
+    expect(renderOpts.ranges).toEqual([{ from: 0, to: 2 }]); // one chunk plan for prefetch + renderer
     expect(renderOpts.signal).toBeInstanceOf(AbortSignal);
     expect(mocks.createPrintImageLoader.mock.calls[0][2].signal).toBe(renderOpts.signal);
     // prefetch on by default: all three photos queued (one chunk), released after it renders

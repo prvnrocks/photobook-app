@@ -4,6 +4,7 @@
 import type { RenderPhotos } from "@/lib/book/render";
 import { getLayout } from "@/lib/layouts";
 import { printAssetUrl } from "./print-assets";
+import { CHUNK_MAX_IMAGES, CHUNK_SHEETS, type SheetRange } from "./rules";
 
 /** One print sheet: the cover or an index into doc.pages. */
 export type PrintSheetTarget = "cover" | number;
@@ -117,4 +118,87 @@ export function printPhotoIds(
     }
   }
   return [...ids];
+}
+
+/**
+ * Sheet units that must share a chunk: the cover, single pages, orphaned halves = one sheet
+ * each; a spread pair (left half followed by its matching right half — same pairing rule as
+ * pagePhotoIds) = two sheets. Inclusive sheet ranges in order.
+ */
+function sheetUnits(pages: readonly PhotoIdsPage[]): SheetRange[] {
+  const units: SheetRange[] = [{ from: 0, to: 0 }];
+  for (let i = 0; i < pages.length; i++) {
+    const page = pages[i];
+    const next = pages[i + 1];
+    const isPair =
+      page.side === "left" &&
+      !!page.layout &&
+      getLayout(page.layout)?.role === "spread" &&
+      next?.side === "right" &&
+      next.layout === page.layout;
+    if (isPair) {
+      units.push({ from: i + 1, to: i + 2 });
+      i++;
+    } else {
+      units.push({ from: i + 1, to: i + 1 });
+    }
+  }
+  return units;
+}
+
+export interface ChunkPlanOptions {
+  /** Max sheets per chunk (default CHUNK_SHEETS). */
+  maxSheets?: number;
+  /** Max distinct print images per chunk (default CHUNK_MAX_IMAGES). */
+  maxImages?: number;
+  /** Only these photo ids are downloaded (e.g. plan.has) — others don't count. Default: all. */
+  planned?: (photoId: string) => boolean;
+}
+
+/**
+ * Render chunks for a doc (M10b B1): consecutive sheet ranges holding at most `maxSheets` sheets
+ * AND at most `maxImages` distinct print images (content + background photos the sheets show,
+ * printPhotoIds), filled greedily in sheet order. A spread pair is never split across chunks
+ * (unless maxSheets < 2), so its halves render in one tab from one print copy; a right half can
+ * still start a chunk only when it is orphaned (renders background only) — pagePhotoIds keeps
+ * handling straddling halves anyway. A single unit with more than `maxImages` images still gets
+ * its own chunk (cannot be split further). Same result for the prefetch schedule and renderBook:
+ * compute once per pass and pass it to both.
+ */
+export function printChunkRanges(
+  doc: { cover: { photoId: string | null }; pages: readonly PhotoIdsPage[]; style?: { background?: BackgroundRef } },
+  opts: ChunkPlanOptions = {},
+): SheetRange[] {
+  const maxSheets = Number.isSafeInteger(opts.maxSheets) && (opts.maxSheets as number) >= 1 ? (opts.maxSheets as number) : CHUNK_SHEETS;
+  const maxImages = Number.isSafeInteger(opts.maxImages) && (opts.maxImages as number) >= 1 ? (opts.maxImages as number) : CHUNK_MAX_IMAGES;
+  const planned = opts.planned ?? (() => true);
+
+  // Units wider than the sheet cap (a pair with maxSheets 1) fall back to single sheets.
+  const units = sheetUnits(doc.pages).flatMap((u) =>
+    u.to - u.from + 1 <= maxSheets ? [u] : Array.from({ length: u.to - u.from + 1 }, (_, k) => ({ from: u.from + k, to: u.from + k })),
+  );
+
+  const out: SheetRange[] = [];
+  let cur: SheetRange | null = null;
+  let ids = new Set<string>();
+  for (const u of units) {
+    const targets = printSheetTargets(doc.pages.length, u.from, u.to) ?? [];
+    const unitIds = printPhotoIds(doc, targets).filter(planned);
+    if (cur) {
+      const added = unitIds.filter((id) => !ids.has(id)).length;
+      if (u.to - cur.from + 1 > maxSheets || ids.size + added > maxImages) {
+        out.push(cur);
+        cur = null;
+      }
+    }
+    if (!cur) {
+      cur = { from: u.from, to: u.to };
+      ids = new Set(unitIds);
+    } else {
+      cur.to = u.to;
+      for (const id of unitIds) ids.add(id);
+    }
+  }
+  if (cur) out.push(cur);
+  return out;
 }

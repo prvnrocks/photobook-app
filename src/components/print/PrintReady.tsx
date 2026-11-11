@@ -1,9 +1,17 @@
 "use client";
 // Sets window.__PRINT_READY__ once every image on the page has decoded (or failed) and the
-// fonts are ready, capped at 20 s (src/lib/pdf/print-ready.ts). Renders nothing.
+// fonts are ready, capped at 20 s + 0.3 s per distinct image, ≤ 45 s (src/lib/pdf/print-ready.ts
+// printReadyTimeoutMs — M10b B1: image-heavy chunks need longer to download). Renders nothing.
 
 import { useEffect } from "react";
-import { backgroundImageSources, publishPrintReady, waitForPrintReady, type PrintReadyGlobals } from "@/lib/pdf/print-ready";
+import {
+  backgroundImageSources,
+  distinctImageCount,
+  printReadyTimeoutMs,
+  publishPrintReady,
+  waitForPrintReady,
+  type PrintReadyGlobals,
+} from "@/lib/pdf/print-ready";
 
 export function PrintReady() {
   useEffect(() => {
@@ -17,9 +25,11 @@ export function PrintReady() {
       img.src = src;
       return img;
     });
+    const images = [...Array.from(document.images), ...cssImages];
     void waitForPrintReady({
-      images: [...Array.from(document.images), ...cssImages],
+      images,
       fontsReady: document.fonts ? document.fonts.ready : Promise.resolve(),
+      timeoutMs: printReadyTimeoutMs(distinctImageCount(images)),
     }).then((r) => publishPrintReady(w, r));
   }, []);
   return null;

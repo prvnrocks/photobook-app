@@ -103,16 +103,19 @@ describe("spread bleed at the fold", () => {
 describe("print image plan for spreads", () => {
   it("plans spread photos (previously skipped → unknown_photo) from the whole spread box at 300 dpi", () => {
     const d = doc(P, [...spread("s", "m-p-spread-panorama", ["pano"])]);
-    const plan = planPrintImages(d, [{ id: "pano", width: 8000, height: 4000 }]);
+    // 7:5 ≈ the box aspect → ~3571 px wide: above the single-page cap, inside the spread cap.
+    const plan = planPrintImages(d, [{ id: "pano", width: 7000, height: 5000 }]);
     const box = printSlotSizeMm("m-p-spread-panorama", 0, P)!; // 302 × 216 mm
-    const need = neededPx(8000, 4000, box.w, box.h, 1, 300); // height-limited: 216 mm → 2551 px
+    const need = neededPx(7000, 5000, box.w, box.h, 1, 300); // height-limited: 216 mm → 2551 px
+    expect(need.w).toBeGreaterThan(PRINT_MAX_LONG_EDGE);
+    expect(need.w).toBeLessThan(PRINT_MAX_LONG_EDGE * SPREAD_LONG_EDGE_FACTOR);
     expect(plan.get("pano")).toEqual({ width: Math.round(need.w), height: Math.round(need.h) });
     // ≥ 300 dpi on both axes of the box
     const t = plan.get("pano")!;
     expect(effectiveDpi(t.width, t.height, box.w, box.h)).toBeGreaterThanOrEqual(299.9);
   });
 
-  it("a 2:1 panorama gets the 2× long-edge cap (single pages keep PRINT_MAX_LONG_EDGE)", () => {
+  it("a 3:1 panorama gets the spread long-edge cap (single pages keep PRINT_MAX_LONG_EDGE)", () => {
     const d = doc(L, spread("s", "m-l-spread-panorama", ["pano"]));
     const plan = planPrintImages(d, [{ id: "pano", width: 12000, height: 4000 }]);
     const box = printSlotSizeMm("m-l-spread-panorama", 0, L)!; // 426 × 154 mm
@@ -120,8 +123,15 @@ describe("print image plan for spreads", () => {
     expect(need.w).toBeGreaterThan(PRINT_MAX_LONG_EDGE);
     const t = plan.get("pano")!;
     expect(Math.max(t.width, t.height)).toBeLessThanOrEqual(PRINT_MAX_LONG_EDGE * SPREAD_LONG_EDGE_FACTOR);
-    expect(t.width).toBe(Math.round(need.w)); // 5031 px fits under 6000 → full 300 dpi
-    expect(effectiveDpi(t.width, t.height, box.w, box.h)).toBeGreaterThanOrEqual(299.9);
+    expect(SPREAD_LONG_EDGE_FACTOR).toBe(1.5);
+    // needed > 4500 px cap → capped at 4500 (aspect kept) (M10b memory measurement)
+    expect(need.w).toBeGreaterThan(PRINT_MAX_LONG_EDGE * SPREAD_LONG_EDGE_FACTOR);
+    expect(t.width).toBe(PRINT_MAX_LONG_EDGE * SPREAD_LONG_EDGE_FACTOR);
+    expect(t.height).toBe(1500);
+    // 3:1 in a 2.77:1 box is height-limited (need 5457 px wide) → 300 × 4500 / need.w ≈ 247 dpi
+    const dpi = effectiveDpi(t.width, t.height, box.w, box.h);
+    expect(dpi).toBeCloseTo((300 * 4500) / need.w, 1);
+    expect(dpi).toBeGreaterThan(240);
 
     const single1 = doc(L, [single("p", "m-l-full-bleed", ["pano"])]);
     const s = planPrintImages(single1, [{ id: "pano", width: 12000, height: 4000 }]).get("pano")!;
@@ -148,14 +158,14 @@ describe("print image plan for spreads", () => {
 
   it("a photo used on a spread and on a single page gets the larger need and the spread cap", () => {
     const d = doc(P, [...spread("s", "m-p-spread-panorama", ["x"]), single("p", "m-p-two-stack", ["x", null])]);
-    const plan = planPrintImages(d, [{ id: "x", width: 8000, height: 4000 }]);
+    const plan = planPrintImages(d, [{ id: "x", width: 7000, height: 5000 }]);
     const box = printSlotSizeMm("m-p-spread-panorama", 0, P)!;
-    const need = neededPx(8000, 4000, box.w, box.h, 1, 300);
+    const need = neededPx(7000, 5000, box.w, box.h, 1, 300);
     expect(need.w).toBeGreaterThan(PRINT_MAX_LONG_EDGE); // only the spread cap allows this
     expect(plan.get("x")).toEqual({ width: Math.round(need.w), height: Math.round(need.h) });
   });
 
-  it("unknown-size spread photo gets a 2× max box", () => {
+  it("unknown-size spread photo gets a SPREAD_LONG_EDGE_FACTOR × max box", () => {
     const d = doc(P, spread("s", "m-p-spread-panorama", ["u"]));
     const m = PRINT_MAX_LONG_EDGE * SPREAD_LONG_EDGE_FACTOR;
     expect(planPrintImages(d, [{ id: "u", width: null, height: null }]).get("u")).toEqual({ width: m, height: m });

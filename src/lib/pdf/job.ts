@@ -60,12 +60,10 @@ import { mergePdfs } from "./finalize";
 import { planPrintImages, type PlanOptions } from "./image-plan";
 import { createPrintImageLoader, PRINT_JPEG_QUALITY, PrintImageError } from "./images";
 import { chunkPhotoSchedule, PREFETCH_WINDOW_CHUNKS, startPrefetch } from "./prefetch";
-import { printPhotoIds, type PrintSheetTarget } from "./print-doc";
+import { printChunkRanges, printPhotoIds, type PrintSheetTarget } from "./print-doc";
 import { renderBook, type RenderTimings } from "./render-pdf";
 import {
   canExport,
-  chunkRanges,
-  CHUNK_SHEETS,
   EXPORT_DAILY_CAP,
   EXPORT_STALE_SECONDS,
   PDF_DEADLINE_MS,
@@ -380,6 +378,9 @@ async function renderPass(ctx: RenderContext, pass: RenderPass): Promise<{ bytes
     signal,
   });
   const sheetCount = doc.pages.length + 1;
+  // One chunk plan for prefetch AND renderer (M10b B1): ≤ CHUNK_SHEETS sheets and ≤
+  // CHUNK_MAX_IMAGES distinct print images per chunk, spread pairs never split.
+  const ranges = printChunkRanges(doc, { planned: (id) => plan.has(id) });
   const tPlanned = Date.now();
   timings.plan = tPlanned - tPlan;
   timings.images = -1;
@@ -389,7 +390,7 @@ async function renderPass(ctx: RenderContext, pass: RenderPass): Promise<{ bytes
   let onChunkDone: ((k: number) => void) | undefined;
   let stopPrefetch: (() => void) | undefined;
   if (opts.prefetch !== false) {
-    const schedule = chunkPhotoSchedule(doc, chunkRanges(sheetCount, CHUNK_SHEETS), (id) => plan.has(id));
+    const schedule = chunkPhotoSchedule(doc, ranges, (id) => plan.has(id));
     const controller = startPrefetch(loader, schedule, PREFETCH_WINDOW_CHUNKS);
     // Promises taken now (cache hits on what prefetch queued) — never get() after a release.
     const firstWindow = schedule.uses.slice(0, PREFETCH_WINDOW_CHUNKS).flat();
@@ -410,6 +411,7 @@ async function renderPass(ctx: RenderContext, pass: RenderPass): Promise<{ bytes
       exportId: ctx.exportId,
       docRev: ctx.docRev,
       sheetCount,
+      ranges,
       loader,
       onChunkDone,
       timings: timings.renderer,

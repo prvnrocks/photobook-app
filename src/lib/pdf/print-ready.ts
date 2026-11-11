@@ -18,8 +18,36 @@ export function backgroundImageSources(root: { querySelectorAll(sel: string): It
   return [...out];
 }
 
-/** Hard cap: after this the page reports ready anyway, flagged as a timeout. */
+/** Hard cap: after this the page reports ready anyway, flagged as a timeout. Base for printReadyTimeoutMs. */
 export const PRINT_READY_TIMEOUT_MS = 20_000;
+/** M10b B1: extra cap per distinct image on the page (downloads + encodes dominate, ~5 images/s on 2 GB). */
+export const PRINT_READY_PER_IMAGE_MS = 300;
+/**
+ * Upper bound of the scaled cap. Must stay below render-pdf.ts CHUNK_READY_TIMEOUT_MS (60 s,
+ * navigation + ready) so the page reports a typed timeout before the renderer gives up; the
+ * export deadline (rules.ts PDF_DEADLINE_MS, 270 s) bounds the whole job anyway.
+ */
+export const PRINT_READY_MAX_TIMEOUT_MS = 45_000;
+
+/**
+ * Print-ready cap for a page showing `distinctImages` images: PRINT_READY_TIMEOUT_MS +
+ * PRINT_READY_PER_IMAGE_MS each, at most PRINT_READY_MAX_TIMEOUT_MS (60 images → 38 s; ≥ 84 → 45 s).
+ * Invalid / negative counts → the base cap.
+ */
+export function printReadyTimeoutMs(distinctImages: number): number {
+  const n = Number.isFinite(distinctImages) && distinctImages > 0 ? Math.floor(distinctImages) : 0;
+  return Math.min(PRINT_READY_MAX_TIMEOUT_MS, PRINT_READY_TIMEOUT_MS + n * PRINT_READY_PER_IMAGE_MS);
+}
+
+/** Distinct non-empty image URLs (an <img> per spread half shares one URL → one download). */
+export function distinctImageCount(images: Iterable<{ currentSrc?: string; src?: string }>): number {
+  const urls = new Set<string>();
+  for (const img of images) {
+    const u = img.currentSrc || img.src;
+    if (u) urls.add(u);
+  }
+  return urls.size;
+}
 
 export interface PrintReadyResult {
   /** "image" when at least one image failed to load/decode. */

@@ -17,8 +17,13 @@
 // (spreadBleedRect: bleed on the outer edges only, never at the fold). Both halves are then
 // printed from the SAME print copy (one URL → one PDF image XObject, finalize dedupes it across
 // chunks). The long-edge cap scales with the box: a spread box is two pages wide, so it gets
-// 2 × maxLongEdge (a full portrait panorama needs 3567 px at 300 dpi; a landscape one 5031 px) —
-// otherwise a panorama would print at ~250 / ~180 dpi while single pages keep 300.
+// SPREAD_LONG_EDGE_FACTOR × maxLongEdge = 4500 px (a full portrait panorama needs 3567 px at
+// 300 dpi → full 300 dpi; a landscape one 5031 px → ~268 dpi) instead of ~250 / ~180 dpi at the
+// single-page cap. Factor 1.5, not 2 (M10b final memory measurement, 100-page Modern landscape
+// book of 6000×4000 originals): 2 × let spread copies stay at the full 6000 px (~+300 MB Node
+// peak, ~+29 MB PDF — a book that fitted after the size fallback became too_large); 1.5 trims
+// the copy to 56 % of the pixels. Single-page uses (≤ 3000 px from 6000 px originals) keep
+// libvips' JPEG shrink-on-load (factor ≥ 2) in encodePrintImage.
 
 import { bleedRect, printSlotSizeMm, spreadBleedRect } from "@/lib/book/bleed";
 import { clampCrop, DEFAULT_CROP } from "@/lib/book/crop";
@@ -53,8 +58,8 @@ export const PRINT_DPI = 300;
 /** Faded photo backgrounds: full sheet under a veil — 150 dpi is plenty (A7: washes at 150). */
 export const BACKGROUND_PRINT_DPI = 150;
 export const PRINT_MAX_LONG_EDGE = 3000;
-/** Long-edge cap multiplier for a photo printed across a spread (box = 2 page widths). */
-export const SPREAD_LONG_EDGE_FACTOR = 2;
+/** Long-edge cap multiplier for a photo printed across a spread (box = 2 page widths); see header. */
+export const SPREAD_LONG_EDGE_FACTOR = 1.5;
 
 const finitePos = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 
@@ -152,7 +157,7 @@ function usesOf(doc: BookDoc): Use[] {
 /**
  * Target px for every photo the doc shows, sized for the print boxes of `doc.format`. Photos the doc references but `photos` lacks are
  * skipped (the renderer shows an empty slot). A photo with unknown size gets a
- * maxLongEdge × maxLongEdge box (2 × for a spread use; resize "inside", never enlarged).
+ * maxLongEdge × maxLongEdge box (SPREAD_LONG_EDGE_FACTOR × for a spread use; resize "inside", never enlarged).
  */
 export function planPrintImages(
   doc: BookDoc,

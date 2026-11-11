@@ -49,6 +49,19 @@ export const PDF_MAX_DURATION_SECONDS = 300;
 export const PDF_DEADLINE_MS = (PDF_MAX_DURATION_SECONDS - 30) * 1000;
 /** D-052: sheets per Chromium render chunk. */
 export const CHUNK_SHEETS = 20;
+/**
+ * M10b B1: distinct print images per chunk (print-doc.ts printChunkRanges), on top of the
+ * CHUNK_SHEETS cap. Measured (100-page Modern landscape book, 6000×4000 originals, real POST /pdf,
+ * ≤ 2 GB hint → 8 images in flight): a 20-sheet chunk of 10 grid spreads (~120 distinct photos)
+ * was still downloading when the 20 s print-ready cap fired (render_timeout; with 12 in flight it
+ * rendered) — i.e. well under ~6 images/s settle on a 2 GB function, less on Hobby's 1 vCPU. 60
+ * halves the worst chunk, so it settles in ~half the time of the failing one even at the base cap
+ * and with ~2× margin under the image-scaled cap (print-ready.ts printReadyTimeoutMs: 20 s +
+ * 0.3 s/image → 38 s at 60). It also halves Chromium's decoded-bitmap peak for such a chunk.
+ * Typical chunks (≤ 3 photos/sheet) are unaffected; a 500-photo book adds at most ~8 chunks
+ * (~1–2 s navigation + page.pdf each) — the downloads themselves cost the same either way.
+ */
+export const CHUNK_MAX_IMAGES = 60;
 /** Highest valid sheet index: cover + the paid page cap. */
 export const MAX_SHEET_INDEX = LIMITS.paid.maxPages;
 
@@ -109,6 +122,20 @@ export function isValidSheetRange(from: unknown, to: unknown): boolean {
     to <= MAX_SHEET_INDEX &&
     to - from < CHUNK_SHEETS
   );
+}
+
+/**
+ * True when `ranges` is a usable chunk plan for `sheetCount` sheets: non-empty, every range
+ * isValidSheetRange, contiguous from sheet 0 through sheetCount - 1 in order (no gaps, no overlap).
+ */
+export function isValidChunkPlan(ranges: readonly SheetRange[], sheetCount: number): boolean {
+  if (!Number.isSafeInteger(sheetCount) || sheetCount < 1 || ranges.length === 0) return false;
+  let next = 0;
+  for (const r of ranges) {
+    if (!r || !isValidSheetRange(r.from, r.to) || r.from !== next) return false;
+    next = r.to + 1;
+  }
+  return next === sheetCount;
 }
 
 type DateInput = Date | string | null | undefined;
