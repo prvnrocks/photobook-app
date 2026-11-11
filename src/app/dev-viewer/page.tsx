@@ -1,7 +1,7 @@
 // Dev-only: the flipbook with fixture data, for 375 px / spread checks without auth or Supabase.
 // `?paid=0|1`, `?lang=en|ar` and `?pages=1..100` (default 12), `?bg=RRGGBB` (page background) are passed through for the viewer chrome tasks (watermark, footer,
 // end card). `?format=landscape` renders the fixture as an A5 landscape book (M10a A3; portrait layouts until M10b).
-// `?sample=modern-portrait|modern-landscape` (M10b A13) shows a modern sample book instead (spreads, text panels,
+// `?sample=modern-portrait|modern-landscape` (M10c: also geometric-|scrapbook-portrait|landscape, `-ar` for Arabic) (M10b A13) shows a modern sample book instead (spreads, text panels,
 // sliced cover; src/lib/book/dev-sample.ts); `pages`/`bg`/`format` are ignored then.
 // 404s in production builds (incl. Vercel previews, which run NODE_ENV=production).
 

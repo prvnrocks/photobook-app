@@ -7,7 +7,8 @@ import { devPreviewDoc, devPreviewPhotos } from "@/lib/book/dev-preview";
 import { devSampleDoc, devSamplePhotos, parseDevSample } from "@/lib/book/dev-sample";
 import { SampleBook } from "./SampleBook";
 
-// `?sample=modern-portrait|modern-landscape` (M10b A9): a modern sample book as open spreads
+// `?sample=modern-portrait|modern-landscape` (M10b A9; M10c: geometric-|scrapbook-portrait|landscape[-ar]):
+// a sample book as open spreads
 // (cover alone, then page pairs; spread layouts meet at the fold), one page per row below md.
 // Add `&mode=edit` for edit-mode markup.
 
@@ -20,7 +21,7 @@ export default async function DevBookPagePreview({
   const sp = await searchParams;
   const sample = parseDevSample(sp.sample);
   if (sample) {
-    return <SampleBook doc={devSampleDoc(sample)} photos={devSamplePhotos()} mode={sp.mode === "edit" ? "edit" : "view"} title={sample} />;
+    return <SampleBook doc={devSampleDoc(sample)} photos={devSamplePhotos()} mode={sp.mode === "edit" ? "edit" : "view"} title={sample} captionLang={sample.endsWith("-ar") ? "ar" : "en"} />;
   }
   const doc = devPreviewDoc();
   const photos = devPreviewPhotos();

@@ -4,7 +4,8 @@
 // Colour docs stay byte-identical to M9 — proven by tests/golden (not regenerated).
 // M10c: the guard also covers shaped / tilted / framed slots, decorations and label plates — the
 // test-only M10c layouts are added to the catalogue and a doc using all of them is printed over
-// every background kind.
+// every background kind. M10c T8c: and every geometric / scrapbook dev sample (EN + AR), i.e.
+// every real layout of the two styles.
 
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -20,6 +21,7 @@ import {
   parseDevBackgrounds,
   withDevBackgrounds,
 } from "@/lib/book/dev-preview";
+import { devSampleDoc, devSamplePhotos, M10C_SAMPLES } from "@/lib/book/dev-sample";
 import { sheetMm } from "@/lib/book/format";
 import { colorInk, resolveBackground, type RenderPhotos } from "@/lib/book/render";
 import type { Background, BookDoc, BookFormat, PageBackground } from "@/lib/book/types";
@@ -288,6 +290,24 @@ describe("print: no CSS filter anywhere (A7 guard)", () => {
       expect(html).not.toMatch(/filter/i);
       expect(html).not.toMatch(/<(image|text|filter|foreignObject)\b/);
       expect(tailwindFilterClasses(html)).toEqual([]);
+    }
+  });
+
+  it("M10c dev samples (every geometric + scrapbook layout, EN + AR, all backgrounds): print has no `filter`", () => {
+    const ph = devSamplePhotos();
+    const shown = printRenderPhotos(Object.entries(ph).map(([id, p]) => ({ id, width: p?.width ?? null, height: p?.height ?? null })));
+    for (const sample of M10C_SAMPLES) {
+      for (const bg of [null, cream, blushWash, tintedKraft, navy] as const) {
+        const base = devSampleDoc(sample);
+        const doc = bg ? { ...base, style: { ...base.style, background: bg } } : base;
+        const sheets = printSheetTargets(doc.pages.length, 0, doc.pages.length)!;
+        const lang = sample.endsWith("-ar") ? "ar" : "en";
+        const html = renderToStaticMarkup(<PrintDocument doc={doc} photos={shown} captionLang={lang} sheets={sheets} />);
+        expect(html).toContain(sample.startsWith("geometric") ? "clip-path:polygon(" : 'data-slot-frame="polaroid"');
+        expect(html).not.toMatch(/filter/i);
+        expect(html).not.toMatch(/<(image|text|filter|foreignObject)\b/);
+        expect(tailwindFilterClasses(html)).toEqual([]);
+      }
     }
   });
 

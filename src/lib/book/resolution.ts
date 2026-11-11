@@ -8,8 +8,14 @@
 // dpi. The slot always belongs to the spread's LEFT page (right halves store slots []): editor
 // callers pass the owner page (BookPage renderSlotOverlay ownerPage), never the right half.
 
+//
+// Shaped / tilted / framed slots (M10c T8c): the visible photo is photoRectOf (slot minus frame
+// inset, slot-geometry.ts), so layoutSlotMm measures that rect — the same box render.ts cover-fits
+// and the print plan sizes. Rotation doesn't change it (the photo is rotated with its slot).
+
 import { getLayout } from "@/lib/layouts";
 import { pageMm } from "./format";
+import { photoRectOf } from "./slot-geometry";
 import type { BookFormat, Rect } from "./types";
 
 export const LOW_RES_DPI = 150;
@@ -27,13 +33,17 @@ export function slotSizeMm(rect: Pick<Rect, "w" | "h">, format?: BookFormat | nu
 }
 
 /**
- * Slot size in mm for `layoutId` slot `slotIdx` (cover, page or spread layout — spread boxes span
- * both pages) on `format`; null if unknown. Trim size, no bleed (the warning is about the visible
- * photo; the print plan sizes the bleed box, book/bleed.ts printSlotSizeMm).
+ * Photo size in mm for `layoutId` slot `slotIdx` (cover, page or spread layout — spread boxes span
+ * both pages) on `format`: the slot's photo rect (photoRectOf — the slot itself unless framed).
+ * null if unknown. Trim size, no bleed (the warning is about the visible photo; the print plan
+ * sizes the bleed box, book/bleed.ts printSlotSizeMm).
  */
 export function layoutSlotMm(layoutId: string, slotIdx: number, format?: BookFormat | null): SlotMm | null {
-  const rect = getLayout(layoutId)?.slots[slotIdx];
-  return rect ? slotSizeMm(rect, format) : null;
+  const layout = getLayout(layoutId);
+  const slot = layout?.slots[slotIdx];
+  if (!layout || !slot) return null;
+  if (!slot.frame || slot.frame.kind === "none") return slotSizeMm(slot, format);
+  return slotSizeMm(photoRectOf(layout, slotIdx, format ?? layout.format) ?? slot, format ?? layout.format);
 }
 
 const finitePos = (v: number | null | undefined): v is number =>

@@ -84,7 +84,7 @@ export function DevEditorClient({
   bg?: boolean;
   /** `?bg=1&bgveil=light50`: page 1 has a photo background under a white 50 % veil (M10b A4). */
   lightVeil?: boolean;
-  /** `?sample=modern-portrait|modern-landscape`: modern sample book with spreads (M10b A15). */
+  /** `?sample=modern-portrait|modern-landscape` (M10c: also geometric-|scrapbook-portrait|landscape, `-ar` for Arabic): modern sample book with spreads (M10b A15). */
   sample?: DevSample | null;
 }) {
   const [data] = useState(() => {

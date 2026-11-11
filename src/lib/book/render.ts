@@ -24,7 +24,7 @@ import {
   type ResolvedStickerPath,
   type StickerId,
 } from "@/lib/design/stickers";
-import { bleedRect, spreadBleedRect } from "./bleed";
+import { bleedRect, slotBleeds, spreadBleedRect } from "./bleed";
 import { pageMm, type SizeMm } from "./format";
 import { slotSizeMm } from "./resolution";
 import type { TEXT_BINDINGS } from "./schema";
@@ -348,6 +348,12 @@ export function cropBoxStyle(s: CropStyle): { left: string; top: string; width: 
   return { left: `${s.left}%`, top: `${s.top}%`, width: `${s.width}%`, height: `${s.height}%` };
 }
 
+/** Does slot `i` run into the print bleed? No layout (split-strip cover) → yes, as before M10c. */
+function bleeds(layout: Layout | undefined, i: number): boolean {
+  const def = layout?.slots[i];
+  return !def || slotBleeds(def);
+}
+
 function renderSlot(
   index: number,
   layoutRect: Rect,
@@ -358,7 +364,8 @@ function renderSlot(
   layout?: Layout,
 ): RenderSlot {
   // Slot rects are % of the doc format's trim page, so bleed and crop use that page's mm.
-  const rect = ctx.bleed ? bleedRect(layoutRect, pageMm(ctx.format)).pct : layoutRect;
+  // Framed / tilted slots never bleed (book/bleed.ts slotBleeds — same rule as the print plan).
+  const rect = ctx.bleed && bleeds(layout, index) ? bleedRect(layoutRect, pageMm(ctx.format)).pct : layoutRect;
   const look = layout ? slotLook(layout, index, rect, ctx.format) : undefined;
   const p = photoId !== null && Object.prototype.hasOwnProperty.call(photos, photoId) ? photos[photoId] : undefined;
   if (!p || !p.url) return { index, rect, photoId, photo: null, ...(look ? { look } : {}) };
@@ -601,7 +608,7 @@ function spreadSlot(
 ): RenderSlot {
   // One box across both halves (bleed only on the spread's outer edges): crop maths on the whole
   // box, so a photo crossing the fold lines up exactly on the two pages.
-  const full = ctx.bleed ? spreadBleedRect(layoutRect, pageMm(ctx.format)).pct : layoutRect;
+  const full = ctx.bleed && bleeds(layout, index) ? spreadBleedRect(layoutRect, pageMm(ctx.format)).pct : layoutRect;
   const rect = shiftRect(full, offset);
   // Look CSS is relative to the box, so the half's shift doesn't change it.
   const look = layout ? slotLook(layout, index, full, ctx.format) : undefined;

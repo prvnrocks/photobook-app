@@ -82,7 +82,7 @@ export default async function DevPrintPreview({
   if (process.env.NODE_ENV === "production") notFound();
   const sp = await searchParams;
   const guides = sp.guides !== "0";
-  // `?sample=modern-portrait|modern-landscape` (M10b A9): the modern sample book instead of the fixture.
+  // `?sample=modern-portrait|modern-landscape` (M10c: also geometric-|scrapbook-portrait|landscape, `-ar` for Arabic) (M10b A9): the modern sample book instead of the fixture.
   const sample = parseDevSample(sp.sample);
   const format = sample ? devSampleDoc(sample).format : parseDevFormat(sp.format);
   const bgKind = parseDevBackgrounds(sp.bg);

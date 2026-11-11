@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { printSlotSizeMm } from "@/lib/book/bleed";
+import { printSlotSizeMm, slotBleeds } from "@/lib/book/bleed";
 import { effectiveDpi } from "@/lib/book/resolution";
 import { LAYOUTS } from "@/lib/layouts";
 import type { BookDoc, BookPage } from "@/lib/book/types";
@@ -40,9 +40,11 @@ describe("printBoxMm", () => {
 });
 
 describe("parity with the renderer (book/bleed.ts)", () => {
-  it("printBoxMm at the default bleed equals printSlotSizeMm for every layout slot", () => {
+  it("printBoxMm at the default bleed equals printSlotSizeMm for every bleeding layout slot", () => {
     for (const l of LAYOUTS) {
       l.slots.forEach((rect, i) => {
+        // M10c framed / tilted slots print their photo rect, never bled (tests/m10c-print-plumbing).
+        if (!slotBleeds(rect)) return;
         const r = printSlotSizeMm(l, i)!;
         const b = printBoxMm(rect, undefined, undefined, l.role === "spread");
         expect(b.w).toBeCloseTo(r.w, 9);

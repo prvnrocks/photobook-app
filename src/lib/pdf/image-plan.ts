@@ -24,6 +24,10 @@
 // peak, ~+29 MB PDF — a book that fitted after the size fallback became too_large); 1.5 trims
 // the copy to 56 % of the pixels. Single-page uses (≤ 3000 px from 6000 px originals) keep
 // libvips' JPEG shrink-on-load (factor ≥ 2) in encodePrintImage.
+//
+// Shaped / tilted / framed slots (M10c T8c): printSlotSizeMm sizes them — framed and tilted
+// slots from photoRectOf (slot minus frame inset, no bleed), polygons from their bleed box (the
+// render box clipPathFor clips), so the print copy matches what render.ts cover-fits.
 
 import { bleedRect, printSlotSizeMm, spreadBleedRect } from "@/lib/book/bleed";
 import { clampCrop, DEFAULT_CROP } from "@/lib/book/crop";
@@ -79,11 +83,15 @@ export function printBoxMm(
   return { w: sheetMm.w, h: sheetMm.h };
 }
 
-/** Box the photo must cover in the PDF: the renderer's printSlotSizeMm for the default bleed. */
+/**
+ * Box the photo must cover in the PDF: the renderer's printSlotSizeMm (any `bleedMm`) — the
+ * photo rect (photoRectOf) of a framed / tilted slot, never bled; the bleed box otherwise.
+ * Rotation: a tilted photo is cover-fitted to its UNROTATED photo rect and rotated with the slot
+ * as one vector transform, so sizing from that rect gives ≥ dpi along the rotated photo's axes
+ * (the axis-aligned bounds of the tilted box would only over-allocate pixels).
+ */
 function slotBoxMm(layout: Layout, slotIndex: number, bleedMm: number, format: BookFormat): { w: number; h: number } | null {
-  if (bleedMm === BLEED_MM) return printSlotSizeMm(layout, slotIndex, format);
-  const rect = layout.slots[slotIndex];
-  return rect ? printBoxMm(rect, bleedMm, format, layout.role === "spread") : null;
+  return printSlotSizeMm(layout, slotIndex, format, bleedMm);
 }
 
 /**

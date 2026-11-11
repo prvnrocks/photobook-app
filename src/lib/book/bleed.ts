@@ -11,10 +11,21 @@
 // bigger box's centre. The trim window shows almost the same framing as the viewer (the box is
 // only 3 mm larger per touching side). The image plan must size print copies for the extended
 // box: use printSlotSizeMm().
+//
+// Shaped / tilted / framed slots (M10c T8c): the photo box is photoRectOf() (slot minus frame
+// inset, slot-geometry.ts — the single source shared with render, crop and low-res). A FRAMED or
+// TILTED slot never bleeds (slotBleeds: the frame / tilt is the design, and layout validation keeps
+// them inside the safe zone anyway), so its print box is the photo rect itself at trim size.
+// Polygon slots bleed like rects (the render box is bleed-extended and clipPathFor carries the
+// shape's edges into the bleed); rounded / circle / ellipse never reach the trim (EDGE_GAP_MM).
+// Rotation never changes the box the photo covers: the photo is cover-fitted to the UNROTATED
+// photo rect and the whole slot is rotated as one vector transform (no resampling in the PDF), so
+// px per printed mm along the photo's own axes = px per mm of the unrotated rect.
 
 import { BLEED_MM, getLayout } from "@/lib/layouts";
 import { pageMm as formatPageMm } from "./format";
-import type { BookFormat, Layout, Rect } from "./types";
+import { photoRectOf } from "./slot-geometry";
+import type { BookFormat, Layout, LayoutSlotDef, Rect } from "./types";
 
 /** A slot edge within this many % of a trim edge counts as touching it. */
 export const EDGE_EPS_PCT = 0.01;
@@ -89,19 +100,37 @@ export function spreadBleedRect(rect: Rect, pageMm: PageMm = formatPageMm(), ble
 }
 
 /**
- * Printed size in mm of `slotIndex` of a layout (object or id), including bleed extension —
- * the box the photo must cover in the PDF, on a page of `format` (default portrait). Spread slots
- * use spreadBleedRect (whole box across both halves, no bleed at the fold). null for an unknown
- * layout / slot.
+ * May this slot run into the print bleed? false for framed (border / polaroid) and tilted slots —
+ * a frame stays a frame on paper. Every M1–M10b slot → true (unchanged behaviour).
+ */
+export function slotBleeds(slot: Pick<LayoutSlotDef, "frame" | "rotate">): boolean {
+  return !(slot.frame && slot.frame.kind !== "none") && !slot.rotate;
+}
+
+/**
+ * Printed size in mm of `slotIndex` of a layout (object or id) — the box the photo must cover in
+ * the PDF, on a page of `format` (default portrait), with `bleedMm` (default BLEED_MM) on sides
+ * touching a trim edge. Spread slots use spreadBleedRect (whole box across both halves, no bleed
+ * at the fold). Framed / tilted slots: photoRectOf at trim size (no bleed; see header). null for
+ * an unknown layout / slot.
  */
 export function printSlotSizeMm(
   layout: Layout | string,
   slotIndex: number,
   format?: BookFormat | null,
+  bleedMm: number = BLEED_MM,
 ): { w: number; h: number } | null {
   const l = typeof layout === "string" ? getLayout(layout) : layout;
   const rect = l?.slots[slotIndex];
   if (!rect) return null;
-  const { sheetMm } = l.role === "spread" ? spreadBleedRect(rect, formatPageMm(format)) : bleedRect(rect, formatPageMm(format));
+  if (!slotBleeds(rect)) {
+    // Frame mm → % and % → mm on the same page (the doc's format, else the layout's own).
+    const f = format ?? l.format;
+    const page = formatPageMm(f);
+    const photo = photoRectOf(l, slotIndex, f) ?? rect;
+    return { w: (photo.w / 100) * page.w, h: (photo.h / 100) * page.h };
+  }
+  const page = formatPageMm(format);
+  const { sheetMm } = l.role === "spread" ? spreadBleedRect(rect, page, bleedMm) : bleedRect(rect, page, bleedMm);
   return { w: sheetMm.w, h: sheetMm.h };
 }

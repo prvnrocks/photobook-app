@@ -8,7 +8,7 @@
 // `?bg=1` adds uuid photos (kept + AI-dropped) for photo backgrounds and runs the real save
 // validator in the stub save; the stored JSON lands in window.__devEditorLastSave (M10a A8).
 // `?bg=1&bgveil=light50`: page 1 has a photo background under a white 50 % veil (M10b A4).
-// `?sample=modern-portrait|modern-landscape` swaps in a modern sample book with spreads (M10b A15).
+// `?sample=modern-portrait|modern-landscape` (M10c: also geometric-|scrapbook-portrait|landscape, `-ar` for Arabic) swaps in a modern sample book with spreads (M10b A15).
 // Upgrade sheet: enabled when the server has Stripe keys (M7 T6); `?upgrade=cancelled` → cancel notice.
 // 404s in production builds (incl. Vercel previews, which run NODE_ENV=production).
 

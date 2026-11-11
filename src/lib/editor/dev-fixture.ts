@@ -134,7 +134,7 @@ export function devTransport(mode: DevSaveMode, opts: DevTransportOptions = {}):
 }
 
 /**
- * `?sample=modern-portrait|modern-landscape` (M10b A15): the editor on a modern sample book with
+ * `?sample=modern-portrait|modern-landscape` (M10c: also geometric-|scrapbook-portrait|landscape, `-ar` for Arabic) (M10b A15): the editor on a modern sample book with
  * spreads (src/lib/book/dev-sample.ts) — its sp* placeholder photos as kept photos, d0 on the cover.
  */
 export function withDevSampleBook(data: EditorShellData, sample: DevSample): EditorShellData {
