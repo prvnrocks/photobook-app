@@ -127,7 +127,7 @@ describe("public viewer state screens (T17)", () => {
   for (const [name, html, title] of screens) {
     it(`${name}: serif EmptyState title on paper, no raw neutral colours`, () => {
       expect(html).toContain(title);
-      expect(html).toMatch(/<h2 dir="auto" class="type-h2/);
+      expect(html).toMatch(/<h1 dir="auto" class="type-h2/);
       expect(html).toContain("bg-background");
       expect(html).not.toMatch(/neutral-\d|red-\d|amber-\d/);
     });
