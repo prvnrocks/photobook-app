@@ -239,6 +239,31 @@ describe("fit helpers per design", () => {
     }
   });
 
+  it("modern landscape: 2 landscape photos → m-l-two-land (bestPageLayout and autolayout)", () => {
+    const design: BookDesign = { format: "A5_LANDSCAPE", designStyle: "modern" };
+    expect(bestPageLayout(["landscape", "landscape"], { design })).toBe("m-l-two-land");
+    expect(bestPageLayout(["landscape", "landscape"], { design, preferCaption: true })).toBe("m-l-two-land");
+    expect(bestPageLayout(["portrait", "portrait"], { design })).toBe("m-l-two");
+    const land = (id: string, hour: number): AutoPhoto => ({
+      id,
+      width: 4000,
+      height: 2667,
+      takenAt: `2026-10-12T${String(hour).padStart(2, "0")}:00:00+04:00`,
+      dateSource: "exif",
+      place: null,
+      status: "kept",
+      dupGroup: null,
+      blurScore: 100,
+    });
+    for (const isPaid of [false, true]) {
+      const doc = autolayout([land("a", 9), land("b", 10)], { ...BASE, isPaid, design });
+      expectValidDoc(doc, new Set(["a", "b"]), limitsFor(isPaid).maxPages);
+      expect(doc.pages).toHaveLength(1);
+      expect(doc.pages[0].layout).toBe("m-l-two-land");
+      expect(doc.pages[0].slots.map((s) => s.photoId)).toEqual(["a", "b"]);
+    }
+  });
+
   it("bestCoverLayout / fullPageLayout stay in the design", () => {
     expect(bestCoverLayout()).toBe("cover");
     expect(fullPageLayout()).toBe("full-page");

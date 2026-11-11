@@ -80,6 +80,31 @@ describe("landscape catalogue", () => {
     }
   });
 
+  it("m-l-two-land: two ≈3:2 landscape photos side by side, centred in m-l-two's photo area, same caption band", () => {
+    const l = getLayout("m-l-two-land")!;
+    const two = getLayout("m-l-two")!;
+    expect([l.role, l.style, l.format, l.photoCount]).toEqual(["page", "modern", "A5_LANDSCAPE", 2]);
+    expect(l.prefers).toEqual(["landscape", "landscape"]);
+    // appended last: the catalogue order is append-only (AI catalogue / prompt cache)
+    expect(MODERN_LANDSCAPE_LAYOUTS.at(-1)).toBe(l);
+    const [a, b] = l.slots;
+    for (const s of l.slots) {
+      const ratio = xMm(s.w) / yMm(s.h);
+      expect(ratio).toBeGreaterThanOrEqual(1.4);
+      expect(ratio).toBeLessThanOrEqual(1.6);
+    }
+    expect(a.y).toBeCloseTo(b.y, 6); // side by side, same row
+    expect(a.h).toBeCloseTo(b.h, 6);
+    expect(xMm(b.x - (a.x + a.w))).toBeCloseTo(2.5, 1); // 2.5 mm gutter
+    expect(xMm(a.x)).toBeCloseTo(6, 1); // 6 mm outer margins
+    expect(PAGE.w - xMm(b.x + b.w)).toBeCloseTo(6, 1);
+    // vertically centred in m-l-two's photo area
+    const area = two.slots[0];
+    expect(a.y - area.y).toBeCloseTo(area.y + area.h - (a.y + a.h), 2);
+    expect(l.caption).toEqual(two.caption);
+    expect(l.caption!.y).toBeGreaterThan(a.y + a.h);
+  });
+
   it("modern covers place coverTitle + coverSubtitle inside the cover's title block", () => {
     for (const l of layoutsFor("A5_LANDSCAPE", "modern", "cover")) {
       expect(l.texts!.map((t) => t.bind)).toEqual(["coverTitle", "coverSubtitle"]);

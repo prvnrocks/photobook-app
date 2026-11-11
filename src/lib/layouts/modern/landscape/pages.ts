@@ -182,3 +182,23 @@ export const modernLandscapeSix: Layout = {
   ],
   caption: null,
 };
+
+/**
+ * Two wide photos side by side (≈ 3:2 each), vertically centred in the same photo area as the
+ * captioned grids (6 → 124 mm), caption band below. The landscape counterpart of m-l-two, so a
+ * short chapter of landscape photos doesn't fall back to one photo per page.
+ */
+export const modernLandscapeTwoLand: Layout = {
+  id: "m-l-two-land",
+  name: "2 wide photos side by side",
+  role: "page",
+  style: "modern",
+  format: "A5_LANDSCAPE",
+  photoCount: 2,
+  prefers: ["landscape", "landscape"],
+  slots: [
+    { x: 2.857, y: 21.959, w: 46.548, h: 43.919 }, // 6 32.5 97.75×65 mm (1.504)
+    { x: 50.595, y: 21.959, w: 46.548, h: 43.919 }, // 106.25 32.5 97.75×65 mm
+  ],
+  caption: { ...CAPTION_BAND },
+};
