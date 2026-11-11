@@ -33,6 +33,7 @@
 import { limitsFor } from "@/lib/ai/limits";
 import { fingerprint as defaultFingerprint } from "@/lib/image/fingerprint";
 import type { ProcessedPhoto } from "@/lib/image/process-photo";
+import { isPhotoColor } from "@/lib/image/color";
 import { PhotoRejectError, type PhotoRejectReason } from "@/lib/image/resize";
 import { isUuid } from "@/lib/uuid";
 import { mapUploadDbError, type DbErrorLike } from "./errors";
@@ -160,6 +161,13 @@ export type QueueEvent =
 
 export interface UploadQueue {
   add(files: File[]): void;
+  /**
+   * M10c: photo id → "#rrggbb" of photos uploaded by this queue whose colour hasn't been handed
+   * to finalize yet (photos.color is server-written, so it travels in the finalize POST body).
+   */
+  colors(): Record<string, string>;
+  /** Drops colours finalize has accepted (call after a successful finalize). */
+  forgetColors(ids: string[]): void;
   start(): Promise<QueueSummary>;
   pause(): void;
   resume(): void;
@@ -277,6 +285,8 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
   let paused = false;
   let cancelled = false;
   let running: Promise<QueueSummary> | null = null;
+  /** Uploaded photo id → colour, until finalize took it (M10c). Never emitted in events. */
+  const colorById = new Map<string, string>();
 
   // --- wake signal (pause/resume, new items, cancel) ---
   let waiters: (() => void)[] = [];
@@ -528,6 +538,7 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
     pendingIds.delete(photoId);
     pendingByFp.delete(item.fp);
     readyFps.add(item.fp);
+    if (isPhotoColor(p.color)) colorById.set(photoId, p.color);
     uploaded += 1;
     emit({ type: "photo", key: item.key, status: "uploaded", photoId });
     progress();
@@ -613,6 +624,12 @@ export function createUploadQueue(deps: UploadQueueDeps): UploadQueue {
           pendingAdds -= 1;
           wake();
         });
+    },
+    colors() {
+      return Object.fromEntries(colorById);
+    },
+    forgetColors(ids: string[]) {
+      for (const id of ids) colorById.delete(id);
     },
     start() {
       running ??= run().finally(() => {

@@ -15,6 +15,7 @@ import { Notice } from "@/components/app/Notice";
 import { Button } from "@/components/ui/button";
 import { track } from "@/lib/analytics/client";
 import {
+  colorsBody,
   finalizeWithPlaces,
   type FinalizeError,
   type FinalizeResult,
@@ -189,8 +190,12 @@ export function Uploader(props: UploaderProps) {
     finalizeAbortRef.current?.abort();
     const controller = new AbortController();
     finalizeAbortRef.current = controller;
+    // M10c: colours of this queue's uploads ride along (server-written photos.color).
+    const queue = queueRef.current;
+    const colors = colorsBody(queue?.colors()) ?? {};
     // Waits on 429 (Retry-After) and spaces follow-ups inside; phase stays "finalizing".
-    const outcome = await finalizeWithPlaces(bookId, undefined, { signal: controller.signal });
+    const outcome = await finalizeWithPlaces(bookId, undefined, { signal: controller.signal, colors });
+    if (outcome.ok) queue?.forgetColors(Object.keys(colors));
     if (unmountedRef.current || controller.signal.aborted) return;
     if (outcome.ok) {
       setFinalize(outcome.result);

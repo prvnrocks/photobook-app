@@ -46,6 +46,7 @@ function processed(f: File): ProcessedPhoto {
     height: 3000,
     phash: "0123456789abcdef",
     blurScore: 123.5,
+    color: "#8a7f72",
     original: {
       blob: new Blob(["o"]),
       mime: isPng ? "image/png" : "image/jpeg",
@@ -664,4 +665,24 @@ describe("createUploadQueue", () => {
     await run(h, [file("secret-name-0"), file("secret-name-1")]);
     expect(JSON.stringify(h.events)).not.toContain("secret-name");
   });
+
+  it("M10c: collects colours of uploaded photos until forgotten; never in events", async () => {
+    const h = harness();
+    const base = h.deps.process;
+    h.deps.process = async (f) => {
+      const p = await base(f);
+      return { ...p, color: f.name === "b" ? null : f.name === "c" ? "#ABCDEF" : "#8a7f72" };
+    };
+    const q = createUploadQueue(h.deps);
+    q.add([file("a"), file("b"), file("c")]);
+    await q.start();
+    const ids = photoEvents(h).flatMap((e) => (e.status === "uploaded" ? [e.photoId] : []));
+    expect(ids).toHaveLength(3);
+    // Only the valid lowercase colour of "a" is kept (b: null, c: uppercase → dropped).
+    expect(q.colors()).toEqual({ [ids[0]]: "#8a7f72" });
+    expect(JSON.stringify(h.events)).not.toContain("#8a7f72");
+    q.forgetColors([ids[0]]);
+    expect(q.colors()).toEqual({});
+  });
 });
+

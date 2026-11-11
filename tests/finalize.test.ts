@@ -45,6 +45,7 @@ function photo(n: number, o: Partial<FakePhoto> = {}): FakePhoto {
     status: "kept",
     dup_group: null,
     place_checked_at: null,
+    color: null,
     upload_state: "ready",
     ...o,
   };
@@ -81,6 +82,7 @@ function makeDb(initial: {
     claims: 0,
     reserved: [] as { want: number; cap: number; granted: number }[],
     setPlaceChecked: [] as [string, string[], string][],
+    setColors: [] as [string, Map<string, string>][],
   };
   let tick = 1;
   let lastRun: number | null = null;
@@ -121,6 +123,11 @@ function makeDb(initial: {
     async setDupGroup(_id, ids, value) {
       calls.setDupGroup.push([[...ids], value]);
       for (const p of photos) if (ids.includes(p.id)) p.dup_group = value;
+    },
+    async setColors(id, colors) {
+      calls.setColors.push([id, new Map(colors)]);
+      // Same filters as setPhotosColor: this book, colour still null.
+      for (const p of photos) if (id === BOOK && p.color === null && colors.has(p.id)) p.color = colors.get(p.id)!;
     },
     async setPlace(_id, ids, place) {
       calls.setPlace++;
@@ -474,5 +481,55 @@ describe("finalizeBook", () => {
       expect(text).not.toContain(s);
     }
     expect(r).toMatchObject({ photos: 3, withDate: 3, withGps: 2, withPlace: 2 });
+  });
+});
+
+describe("finalizeBook — photo colours (M10c)", () => {
+  const HEX = "#8a7f72";
+
+  it("writes colours only for this book's ready photos whose colour is null", async () => {
+    const { db, photos, calls } = makeDb({
+      photos: [
+        photo(1),
+        photo(2, { color: "#112233" }), // existing colour → never overwritten
+        photo(3, { upload_state: "pending" }), // not ready → ignored
+        photo(4),
+      ],
+    });
+    const foreign = "33333333-3333-4333-8333-333333333333"; // another book's photo
+    const r = await finalizeBook(BOOK, { db, geocoder: makeGeocoder() }, {
+      colors: { [pid(1)]: HEX, [pid(2)]: "#aaaaaa", [pid(3)]: HEX, [foreign]: HEX, [pid(4)]: "#405060" },
+    });
+    expect(r).not.toBeNull();
+    expect(calls.setColors).toHaveLength(1);
+    const [bookId, written] = calls.setColors[0];
+    expect(bookId).toBe(BOOK);
+    expect([...written.entries()]).toEqual([
+      [pid(1), HEX],
+      [pid(4), "#405060"],
+    ]);
+    expect(photos.map((p) => p.color)).toEqual([HEX, "#112233", null, "#405060"]);
+  });
+
+  it("skips malformed colours defensively and makes no write when nothing applies", async () => {
+    const { db, calls } = makeDb({ photos: [photo(1, { color: "#010203" }), photo(2)] });
+    await finalizeBook(BOOK, { db, geocoder: makeGeocoder() }, { colors: { [pid(1)]: HEX, [pid(2)]: "#ABCDEF" } });
+    expect(calls.setColors).toHaveLength(0);
+    await finalizeBook(BOOK, { db, geocoder: makeGeocoder() });
+    expect(calls.setColors).toHaveLength(0);
+  });
+
+  it("a colour write failure doesn't fail finalize and logs a code only", async () => {
+    const { db } = makeDb({ photos: [photo(1)] });
+    db.setColors = async () => {
+      throw Object.assign(new Error(`boom ${pid(1)} ${HEX}`), { code: "PGRST301" });
+    };
+    const r = await fin(BOOK, { db, geocoder: makeGeocoder() });
+    expect(r).not.toBeNull();
+    const r2 = await finalizeBook(BOOK, { db, geocoder: makeGeocoder() }, { colors: { [pid(1)]: HEX } });
+    expect(r2).toMatchObject({ photos: 1 });
+    expect(logs).toContain("[finalize] photo colours not saved (PGRST301)");
+    expect(logs.join("\n")).not.toContain(HEX);
+    expect(logs.join("\n")).not.toContain(pid(1));
   });
 });

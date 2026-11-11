@@ -49,6 +49,11 @@ export interface CurationPhoto {
   userOverride: boolean;
   /** photos.ai jsonb as stored (any shape; checked with needsCuration()). */
   ai: unknown;
+  /**
+   * M10c photos.color ("#rrggbb"). null = not known yet → the Curator computes it from the thumb
+   * it loads (backfill); undefined = caller didn't load the column (no backfill).
+   */
+  color?: string | null;
 }
 
 export interface RuleDecision {

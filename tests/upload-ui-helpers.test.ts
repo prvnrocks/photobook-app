@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   callFinalize,
+  colorsBody,
   FOLLOW_UP_GAP_MS,
   finalizeWithPlaces,
   parseRetryAfter,
@@ -253,3 +254,44 @@ describe("summary text", () => {
     expect(skippedLines({})).toEqual([]);
   });
 });
+
+describe("finalize colours (M10c)", () => {
+  const P1 = "00000000-0000-4000-8000-000000000001";
+  const P2 = "00000000-0000-4000-8000-000000000002";
+
+  it("colorsBody keeps valid entries only, caps at 500, null when empty", () => {
+    expect(colorsBody(undefined)).toBeNull();
+    expect(colorsBody({})).toBeNull();
+    expect(colorsBody({ [P1]: "#8a7f72", [P2]: "#ABCDEF", "x": "#123456" })).toEqual({ [P1]: "#8a7f72" });
+    const many = Object.fromEntries(
+      Array.from({ length: 600 }, (_, i) => [`00000000-0000-4000-8000-${String(i).padStart(12, "0")}`, "#123456"]),
+    );
+    expect(Object.keys(colorsBody(many)!)).toHaveLength(500);
+  });
+
+  it("first call (and its 429 retry) carries the JSON body; follow-ups and colour-less calls send none", async () => {
+    const { sleep } = fakeClock();
+    const inits: (RequestInit | undefined)[] = [];
+    const responses = [limited("1"), json(result({ placesPending: 2 })), json(result({ placesPending: 0 }))];
+    const f = vi.fn(async (_i: string, init?: RequestInit) => {
+      inits.push(init);
+      return responses.shift()!;
+    });
+    const out = await finalizeWithPlaces(BOOK, f, { sleep, random: () => 0, colors: { [P1]: "#8a7f72" } });
+    expect(out.ok).toBe(true);
+    expect(inits).toHaveLength(3);
+    for (const init of inits.slice(0, 2)) {
+      expect(JSON.parse(String(init?.body))).toEqual({ colors: { [P1]: "#8a7f72" } });
+      expect(init?.headers).toEqual({ "content-type": "application/json" });
+    }
+    expect(inits[2]?.body).toBeUndefined();
+
+    const g = vi.fn(async (_i: string, init?: RequestInit) => {
+      inits.push(init);
+      return json(result());
+    });
+    await callFinalize(BOOK, g, {});
+    expect(inits.at(-1)?.body).toBeUndefined();
+  });
+});
+

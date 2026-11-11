@@ -117,3 +117,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-11, ui) Check contrast numerically before using a suggested colour: #128C4A gives white text only 4.31:1; #0F7A40 gives 5.41:1.
 - (2026-11-11, test) A route loading.tsx makes waitForURL resolve before content — wait for the skeleton status to disappear or a content testid. Replay build ticks need a test-side response delay to observe checklist states. ai-auth cleanup leaves orphan replay agent_runs — delete them after gates.
 - (2026-11-11, next) Importing anything from a module that imports a "use client" package (ui/button → @base-ui/react/button) ships it to the importing server page's client bundle — keep pure class recipes (cva) in their own file (src/components/ui/button-variants.ts).
+- (2026-11-11, next) A route.ts may only export route fields (handlers, runtime, maxDuration…) — next build fails otherwise; keep zod body schemas in a lib module.

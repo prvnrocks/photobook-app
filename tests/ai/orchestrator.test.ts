@@ -65,6 +65,7 @@ function photoRow(n: number, over: Partial<CurationPhotoRow> = {}): CurationPhot
     user_override: false,
     original_mime: "image/jpeg",
     camera: "Apple iPhone 15",
+    color: null,
     ...over,
   };
 }
@@ -1892,3 +1893,43 @@ describe("orchestrator — unsupported design style (M10b A19, review S1)", () =
     expect(await orch.advance(s.runId, {}, deps)).toMatchObject({ state: "failed", done: true });
   });
 });
+
+describe("orchestrator — photo colour backfill (M10c)", () => {
+  it("stores colours computed from Curator thumbs for photos without one, never overwrites, by book id", async () => {
+    const rows = Array.from({ length: 12 }, (_, i) => photoRow(i + 1, i === 0 ? { color: "#112233" } : {}));
+    const { db, deps } = setup(rows);
+    const writes: [string, Map<string, string>][] = [];
+    deps.colorFromThumb = async (b64) => (Buffer.from(b64, "base64").toString().startsWith("img:") ? "#8a7f72" : null);
+    deps.setPhotosColor = async (bookId, colors) => {
+      writes.push([bookId, new Map(colors)]);
+      for (const p of db.photos) if (p.color === null && colors.has(p.id)) p.color = colors.get(p.id)!;
+    };
+    const started = await start(deps);
+    const { last } = await runToEnd(deps, started.runId);
+    expect(last).toMatchObject({ state: "done" });
+    expect(writes.length).toBeGreaterThan(0);
+    for (const [bookId] of writes) expect(bookId).toBe(BOOK);
+    const written = new Map(writes.flatMap(([, m]) => [...m]));
+    expect(written.has(pid(1))).toBe(false); // already had a colour
+    expect(written.size).toBe(11);
+    expect(db.photos.map((p) => p.color)).toEqual(["#112233", ...Array(11).fill("#8a7f72")]);
+    // Never in agent_steps.
+    expect(JSON.stringify(db.steps)).not.toContain("#8a7f72");
+  });
+
+  it("a failed colour write doesn't fail the run (code-only log)", async () => {
+    const { deps } = setup(Array.from({ length: 4 }, (_, i) => photoRow(i + 1)));
+    deps.colorFromThumb = async () => "#8a7f72";
+    deps.setPhotosColor = async () => {
+      throw Object.assign(new Error("nope #8a7f72"), { code: "42501" });
+    };
+    const errSpy = consoleSpies[3]; // ["log", "info", "warn", "error", "debug"]
+    errSpy.mockImplementation(() => undefined);
+    const started = await start(deps);
+    const { last } = await runToEnd(deps, started.runId);
+    expect(last).toMatchObject({ state: "done" });
+    expect(errSpy).toHaveBeenCalledWith("[orchestrator] photo colours not saved (42501)");
+    errSpy.mockClear(); // afterEach asserts console stayed silent otherwise
+  });
+});
+

@@ -180,6 +180,8 @@ export type FinalizePhotoRow = {
   status: string;
   dup_group: number | null;
   place_checked_at: string | null;
+  /** Muted dominant colour "#rrggbb" (M10c), server-written; null = not known yet. */
+  color: string | null;
 };
 
 /** Every `ready` photo of the book with the columns finalize needs. [] for a malformed id. */
@@ -189,7 +191,7 @@ export async function listReadyPhotosForFinalize(bookId: string): Promise<Finali
   const { data, error } = await supabase
     .from("photos")
     .select(
-      "id, width, height, taken_at, date_source, lat, lng, place, phash, blur_score, status, dup_group, place_checked_at",
+      "id, width, height, taken_at, date_source, lat, lng, place, phash, blur_score, status, dup_group, place_checked_at, color",
     )
     .eq("book_id", bookId)
     .eq("upload_state", "ready")
@@ -266,6 +268,54 @@ export async function setPhotosPlaceChecked(
   }
 }
 
+/** Parallel update requests in setPhotosColor (one per distinct colour, ≤100 ids each). */
+export const COLOR_WRITE_CONCURRENCY = 6;
+const PHOTO_COLOR_DB_RE = /^#[0-9a-f]{6}$/;
+
+/**
+ * M10c: sets photos.color (server-only column, 1900 guard) for photos of the book that have NO
+ * colour yet — never overwrites. Entries with a malformed id or colour are skipped. Batched per
+ * colour value (≤100 ids per request), ≤ COLOR_WRITE_CONCURRENCY requests in flight. Admin client:
+ * callers MUST have checked ownership of the book first (finalize: getMyBook under RLS;
+ * orchestrator: getBookForRun) — and the book_id filter means a foreign photo id matches nothing.
+ * Never logs ids or colours.
+ */
+export async function setPhotosColor(
+  bookId: string,
+  colors: ReadonlyMap<string, string> | Readonly<Record<string, string>>,
+): Promise<void> {
+  if (!isUuid(bookId)) return;
+  const entries = colors instanceof Map ? [...colors] : Object.entries(colors);
+  const byColor = new Map<string, string[]>();
+  for (const [id, hex] of entries) {
+    if (!isUuid(id) || typeof hex !== "string" || !PHOTO_COLOR_DB_RE.test(hex)) continue;
+    const list = byColor.get(hex);
+    if (list) list.push(id);
+    else byColor.set(hex, [id]);
+  }
+  const jobs: [string, string[]][] = [];
+  for (const [hex, ids] of byColor) for (const batch of chunks([...new Set(ids)])) jobs.push([hex, batch]);
+  if (jobs.length === 0) return;
+
+  const admin = createAdminClient();
+  let next = 0;
+  let failure: string | undefined | null = null;
+  const worker = async () => {
+    while (next < jobs.length && failure === null) {
+      const [hex, batch] = jobs[next++];
+      const { error } = await admin
+        .from("photos")
+        .update({ color: hex })
+        .eq("book_id", bookId)
+        .is("color", null)
+        .in("id", batch);
+      if (error) failure = error.code;
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(COLOR_WRITE_CONCURRENCY, jobs.length) }, worker));
+  if (failure !== null) throw new PhotosQueryError("update photo colours", failure);
+}
+
 // ---------------------------------------------------------------------------
 // AI pipeline (M3, D-018 / D-027).
 //
@@ -292,6 +342,8 @@ export type CurationPhotoRow = {
   user_override: boolean;
   original_mime: string | null;
   camera: string | null;
+  /** M10c: null → the Curator computes it from the thumb it loads (backfill for older photos). */
+  color: string | null;
 };
 
 /** Ready photos of the book for the Curator, by taken_at then id. Admin client. */
@@ -300,7 +352,7 @@ export async function listPhotosForCuration(bookId: string): Promise<CurationPho
   const { data, error } = await createAdminClient()
     .from("photos")
     .select(
-      "id, thumb_path, width, height, taken_at, date_source, place, dup_group, blur_score, ai, status, drop_reason, user_override, original_mime, camera",
+      "id, thumb_path, width, height, taken_at, date_source, place, dup_group, blur_score, ai, status, drop_reason, user_override, original_mime, camera, color",
     )
     .eq("book_id", bookId)
     .eq("upload_state", "ready")

@@ -27,12 +27,15 @@ const COUNTS = {
   docStale: false,
 };
 
-function req(headers: Record<string, string> = { origin: "http://localhost:3000" }) {
+function req(headers: Record<string, string> = { origin: "http://localhost:3000" }, body?: string) {
   return new NextRequest(`http://localhost:3000/api/books/${ID}/finalize`, {
     method: "POST",
     headers: { host: "localhost:3000", ...headers },
+    ...(body === undefined ? {} : { body }),
   });
 }
+const ORIGIN = { origin: "http://localhost:3000", "content-type": "application/json" };
+const P1 = "00000000-0000-4000-8000-000000000001";
 const ctx = (id = ID) => ({ params: Promise.resolve({ id }) });
 
 let errors: string[];
@@ -105,7 +108,7 @@ describe("POST /api/books/[id]/finalize", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(await res.json()).toEqual(COUNTS);
-    expect(mocks.finalizeBook).toHaveBeenCalledWith(ID);
+    expect(mocks.finalizeBook).toHaveBeenCalledWith(ID, {}, { colors: undefined });
   });
 
   it("429 with Retry-After when finalize is rate limited", async () => {
@@ -134,5 +137,60 @@ describe("POST /api/books/[id]/finalize", () => {
     expect(body).toMatchObject({ error: "server_error" });
     expect(JSON.stringify(body)).not.toContain("boom");
     expect(errors).toEqual(["[finalize] failed (PGRST116)"]);
+  });
+
+  it("passes validated photo colours to finalize (M10c)", async () => {
+    mocks.finalizeBook.mockResolvedValue(COUNTS);
+    const colors = { [P1]: "#8a7f72" };
+    const res = await route.POST(req(ORIGIN, JSON.stringify({ colors })), ctx());
+    expect(res.status).toBe(200);
+    expect(mocks.finalizeBook).toHaveBeenCalledWith(ID, {}, { colors });
+  });
+
+  it("an empty body / empty object means no colours", async () => {
+    mocks.finalizeBook.mockResolvedValue(COUNTS);
+    expect((await route.POST(req(ORIGIN, ""), ctx())).status).toBe(200);
+    expect((await route.POST(req(ORIGIN, "{}"), ctx())).status).toBe(200);
+    expect(mocks.finalizeBook).toHaveBeenLastCalledWith(ID, {}, { colors: undefined });
+  });
+
+  it.each([
+    ["bad hex", { colors: { [P1]: "#12345" } }],
+    ["uppercase hex", { colors: { [P1]: "#ABCDEF" } }],
+    ["named colour", { colors: { [P1]: "red" } }],
+    ["non-uuid key", { colors: { "../x": "#123456" } }],
+    ["unknown top-level key", { colors: {}, extra: 1 }],
+    ["colors not an object", { colors: ["#123456"] }],
+    [
+      "more than 500 entries",
+      {
+        colors: Object.fromEntries(
+          Array.from({ length: 501 }, (_, i) => [`00000000-0000-4000-8000-${String(i).padStart(12, "0")}`, "#123456"]),
+        ),
+      },
+    ],
+  ])("400 invalid_body for %s (no finalize call)", async (_name, body) => {
+    const res = await route.POST(req(ORIGIN, JSON.stringify(body)), ctx());
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: "invalid_body" });
+    expect(mocks.finalizeBook).not.toHaveBeenCalled();
+  });
+
+  it("400 for malformed JSON, 413 for an oversized body; body never echoed or logged", async () => {
+    const bad = await route.POST(req(ORIGIN, `{"colors": {"${P1}": "#8a7f72"`), ctx());
+    expect(bad.status).toBe(400);
+    expect(JSON.stringify(await bad.json())).not.toContain(P1);
+    const big = await route.POST(req(ORIGIN, JSON.stringify({ colors: { [P1]: "#8a7f72" }, pad: "x".repeat(70_000) })), ctx());
+    expect(big.status).toBe(413);
+    expect(mocks.finalizeBook).not.toHaveBeenCalled();
+    expect(errors).toEqual([]);
+  });
+
+  it("exactly 500 entries are accepted", async () => {
+    mocks.finalizeBook.mockResolvedValue(COUNTS);
+    const colors = Object.fromEntries(
+      Array.from({ length: 500 }, (_, i) => [`00000000-0000-4000-8000-${String(i).padStart(12, "0")}`, "#123456"]),
+    );
+    expect((await route.POST(req(ORIGIN, JSON.stringify({ colors })), ctx())).status).toBe(200);
   });
 });

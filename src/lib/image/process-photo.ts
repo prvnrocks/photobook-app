@@ -3,6 +3,7 @@
 // kill tabs quickly. Never log the result (dates, GPS, camera are user data).
 import type { PhotoMeta } from "./exif";
 import { laplacianVariance } from "./blur";
+import { dominantColor } from "./color";
 import { extForMime, isRejectedType, type StoredMime } from "./dimensions";
 import { fingerprint } from "./fingerprint";
 import { dhash, toGrayscale } from "./phash";
@@ -30,6 +31,8 @@ export interface ProcessedPhoto {
   phash: string;
   /** Laplacian variance of the thumb; low = blurry. */
   blurScore: number;
+  /** Muted dominant colour of the thumb, "#rrggbb" (M10c), or null. Sent to finalize, never logged. */
+  color: string | null;
   original: { blob: Blob; mime: StoredMime; bytes: number; ext: "jpg" | "png" | "webp" };
   web: { blob: Blob; ext: "jpg"; width: number; height: number };
   thumb: { blob: Blob; ext: "jpg"; width: number; height: number };
@@ -63,9 +66,11 @@ export async function processPhoto(file: File): Promise<ProcessedPhoto> {
     releaseCanvas(web.canvas);
 
     // 4. Hashes from the thumb pixels.
-    const gray = toGrayscale(readPixels(thumb.canvas), thumb.width, thumb.height);
+    const rgba = readPixels(thumb.canvas);
+    const gray = toGrayscale(rgba, thumb.width, thumb.height);
     const phash = dhash(gray, thumb.width, thumb.height);
     const blurScore = laplacianVariance(gray, thumb.width, thumb.height);
+    const color = dominantColor(rgba, thumb.width, thumb.height, 4);
 
     return {
       meta,
@@ -74,6 +79,7 @@ export async function processPhoto(file: File): Promise<ProcessedPhoto> {
       height: original.height,
       phash,
       blurScore,
+      color,
       original: { blob: original.blob, mime: original.mime, bytes: original.bytes, ext: extForMime(original.mime) },
       web: { blob: web.blob, ext: "jpg", width: web.width, height: web.height },
       thumb: { blob: thumb.blob, ext: "jpg", width: thumb.width, height: thumb.height },

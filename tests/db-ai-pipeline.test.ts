@@ -562,7 +562,7 @@ describe("photos: curation", () => {
     const [c] = fake.state.chains;
     expect(c.calls).toContainEqual(["eq", "book_id", B]);
     expect(c.calls).toContainEqual(["eq", "upload_state", "ready"]);
-    for (const col of ["thumb_path", "user_override", "ai", "dup_group", "blur_score", "camera", "original_mime"]) {
+    for (const col of ["thumb_path", "user_override", "ai", "dup_group", "blur_score", "camera", "original_mime", "color"]) {
       expect(String(c.calls[0][1])).toContain(col);
     }
   });

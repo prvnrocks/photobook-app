@@ -4,6 +4,9 @@
 // The route allows one run per book per 10 s and answers 429 + Retry-After
 // otherwise; we wait and retry (at most MAX_WAITS times per call) and space
 // follow-up calls at least FOLLOW_UP_GAP_MS apart.
+// M10c: the first logical call may carry { colors: { photoId: "#rrggbb" } } (photos.color is
+// server-written); follow-ups send no body. Colours are never logged.
+import { isPhotoColor } from "@/lib/image/color";
 import type { FinalizeResult } from "@/lib/photos/finalize";
 import { isUuid } from "@/lib/uuid";
 
@@ -27,6 +30,24 @@ export const MAX_WAITS = 2;
 export const RETRY_JITTER_MS = 300;
 /** Server allows one run per book per 10 s; follow-ups wait a bit longer. */
 export const FOLLOW_UP_GAP_MS = 10_500;
+/** Max colour entries per finalize body (the route rejects more). */
+export const MAX_COLORS_PER_CALL = 500;
+
+export type PhotoColors = Record<string, string>;
+
+/** Valid entries only (uuid key, lowercase #rrggbb), at most MAX_COLORS_PER_CALL. */
+export function colorsBody(colors: PhotoColors | undefined): PhotoColors | null {
+  if (!colors) return null;
+  const out: PhotoColors = {};
+  let n = 0;
+  for (const [id, hex] of Object.entries(colors)) {
+    if (n >= MAX_COLORS_PER_CALL) break;
+    if (!isUuid(id) || !isPhotoColor(hex)) continue;
+    out[id] = hex;
+    n++;
+  }
+  return n > 0 ? out : null;
+}
 
 const NUMBER_KEYS = [
   "photos",
@@ -65,14 +86,17 @@ export function parseRetryAfter(header: string | null, now: number = Date.now())
 export async function callFinalize(
   bookId: string,
   fetchImpl: FetchLike = (i, init) => fetch(i, init),
+  colors?: PhotoColors,
 ): Promise<FinalizeOutcome> {
   if (!isUuid(bookId)) return { ok: false, error: "not_found" };
+  const body = colorsBody(colors);
   let res: Response;
   try {
     res = await fetchImpl(`/api/books/${bookId}/finalize`, {
       method: "POST",
       credentials: "same-origin",
       cache: "no-store",
+      ...(body ? { headers: { "content-type": "application/json" }, body: JSON.stringify({ colors: body }) } : {}),
     });
   } catch {
     return { ok: false, error: "failed" };
@@ -100,6 +124,8 @@ export type FinalizeOptions = {
   random?: () => number;
   /** Stop issuing calls once aborted (screen left). */
   signal?: AbortSignal;
+  /** M10c: photo colours for the first call (and its 429 retries); follow-ups send none. */
+  colors?: PhotoColors;
 };
 
 const defaultSleep: SleepFn = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -111,12 +137,13 @@ async function callWithWaits(
   sleep: SleepFn,
   random: () => number,
   signal: AbortSignal | undefined,
+  colors?: PhotoColors,
 ): Promise<FinalizeOutcome> {
-  let out = await callFinalize(bookId, fetchImpl);
+  let out = await callFinalize(bookId, fetchImpl, colors);
   for (let waits = 0; waits < MAX_WAITS && !out.ok && out.error === "rate_limited"; waits++) {
     await sleep(out.retryAfterMs + Math.floor(random() * RETRY_JITTER_MS));
     if (signal?.aborted) return out;
-    out = await callFinalize(bookId, fetchImpl);
+    out = await callFinalize(bookId, fetchImpl, colors);
   }
   return out;
 }
@@ -131,8 +158,8 @@ export async function finalizeWithPlaces(
   fetchImpl?: FetchLike,
   opts: FinalizeOptions = {},
 ): Promise<FinalizeOutcome> {
-  const { extraRuns = 2, sleep = defaultSleep, random = Math.random, signal } = opts;
-  const first = await callWithWaits(bookId, fetchImpl, sleep, random, signal);
+  const { extraRuns = 2, sleep = defaultSleep, random = Math.random, signal, colors } = opts;
+  const first = await callWithWaits(bookId, fetchImpl, sleep, random, signal, colors);
   if (!first.ok) return first;
   let result = first.result;
   for (let i = 0; i < extraRuns && result.placesPending > 0; i++) {

@@ -293,3 +293,42 @@ describe("replay registration", () => {
     expect(curatorReplaySynth(meta, { ...ctx, scenario: "invalid" })).not.toHaveProperty("photos");
   });
 });
+
+describe("curateBatch — photo colour backfill (M10c)", () => {
+  const colorDeps = (seen: string[], fail = new Set<string>()): CuratorDeps => ({
+    loadThumbs: async (paths) => new Map(paths.filter((p) => !p.includes("/nothumb.")).map((p) => [p, Buffer.from(p).toString("base64")])),
+    colorOf: async (b64) => {
+      const path = Buffer.from(b64, "base64").toString();
+      seen.push(path);
+      if (fail.has(path)) throw new Error("bad jpeg");
+      return path.includes("/upper.") ? "#ABCDEF" : "#8a7f72";
+    },
+  });
+
+  it("computes colours only for photos with color null and a loaded thumb, from the same base64", async () => {
+    const seen: string[] = [];
+    const batch = [
+      photo("a", { color: null }),
+      photo("b", { color: "#112233" }), // has one → untouched
+      photo("c"), // column not loaded (undefined) → no backfill
+      photo("nothumb", { color: null }), // thumb not loadable
+      photo("upper", { color: null }), // invalid answer dropped
+      photo("bad", { color: null }), // decoder throws → stays null
+    ];
+    const out = await curateBatch(args(batch, replay(), { deps: colorDeps(seen, new Set(["u/b/bad.jpg"])) }));
+    expect(out.usedAi).toBe(true);
+    expect(seen.sort()).toEqual(["u/b/a.jpg", "u/b/bad.jpg", "u/b/upper.jpg"]);
+    expect([...out.colors!]).toEqual([["a", "#8a7f72"]]);
+    // Never in the step log.
+    expect(JSON.stringify(logger.rows)).not.toContain("#8a7f72");
+  });
+
+  it("colours come back even when the model call fails, and no colorOf → no colours key", async () => {
+    const out = await curateBatch(args([photo("a", { color: null })], replay("refusal"), { deps: colorDeps([]) }));
+    expect(out.usedAi).toBe(false);
+    expect(out.colors?.get("a")).toBe("#8a7f72");
+    const plain = await curateBatch(args([photo("a", { color: null })], replay()));
+    expect(plain).not.toHaveProperty("colors");
+  });
+});
+

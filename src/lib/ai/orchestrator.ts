@@ -81,6 +81,7 @@ import * as booksDb from "@/lib/db/books";
 import { getUserMemoryAdmin } from "@/lib/db/memory";
 import type { BookAiStatus, BookForRun, WriteDocResult } from "@/lib/db/books";
 import * as photosDb from "@/lib/db/photos";
+import { colorFromThumbBase64 } from "@/lib/image/color-server";
 import type { CurationPhotoRow, CurationWrite } from "@/lib/db/photos";
 import type { Json } from "@/lib/supabase/database.types";
 import { curateBatch, needsCuration, CURATOR_PROMPT_VERSION } from "./agents/curator";
@@ -201,6 +202,10 @@ export interface OrchestratorDeps {
   listPhotosForCuration(bookId: string): Promise<CurationPhotoRow[]>;
   writeCuration(bookId: string, rows: CurationWrite[]): Promise<void>;
   loadThumbBase64(paths: string[]): Promise<Map<string, string>>;
+  /** M10c colour backfill: base64 thumb → "#rrggbb" | null. Missing → no backfill. */
+  colorFromThumb?(thumbBase64: string): Promise<string | null>;
+  /** M10c: photos.color for photos of the book whose colour is still null (never overwrites). */
+  setPhotosColor?(bookId: string, colors: Map<string, string>): Promise<void>;
   // runs
   /** Atomic: one active run per book + daily / rebuild caps (when `enforce`) + insert. */
   createRunCapped(input: CreateRunCappedInput): Promise<CreateRunCappedResult>;
@@ -247,6 +252,8 @@ export function defaultDeps(): OrchestratorDeps {
     listPhotosForCuration: photosDb.listPhotosForCuration,
     writeCuration: photosDb.writeCuration,
     loadThumbBase64: photosDb.loadThumbBase64,
+    colorFromThumb: colorFromThumbBase64,
+    setPhotosColor: photosDb.setPhotosColor,
     createRunCapped: agentRunsDb.createRunCapped,
     claimRun: agentRunsDb.claimRun,
     releaseRun: agentRunsDb.releaseRun,
@@ -660,6 +667,7 @@ export function toCurationPhoto(r: CurationPhotoRow): CurationPhoto {
     dropReason: isDropReason(r.drop_reason) ? r.drop_reason : null,
     userOverride: r.user_override === true,
     ai: r.ai,
+    color: r.color,
   };
 }
 
@@ -1348,7 +1356,10 @@ async function curatorWave(c: Tick, indices: number[]): Promise<void> {
         aliasOf,
         transport,
         logger: c.logger,
-        deps: { loadThumbs: c.deps.loadThumbBase64 },
+        deps: {
+          loadThumbs: c.deps.loadThumbBase64,
+          ...(c.deps.colorFromThumb && c.deps.setPhotosColor ? { colorOf: c.deps.colorFromThumb } : {}),
+        },
         retry: stepRetry(c),
       }),
     })),
@@ -1372,6 +1383,7 @@ async function curatorWave(c: Tick, indices: number[]): Promise<void> {
     await c.deps.writeCuration(c.book.id, rows);
     applyRows(c.photos, rows);
   }
+  await storeBackfilledColors(c, outcomes);
 
   for (const { bi, result } of outcomes.sort((x, y) => x.bi - y.bi)) {
     c.cursor.batchesDone.push(bi);
@@ -1383,6 +1395,28 @@ async function curatorWave(c: Tick, indices: number[]): Promise<void> {
     }
   }
   await save(c);
+}
+
+/**
+ * M10c: colours the Curator computed from thumbs (photos whose color was null) → photos.color.
+ * Runs after the lease check, like writeCuration. Not fatal: a failure leaves the colours null
+ * (logged by code only — never ids or colours).
+ */
+async function storeBackfilledColors(c: Tick, outcomes: WaveOutcome[]): Promise<void> {
+  if (!c.deps.setPhotosColor) return;
+  const colors = new Map<string, string>();
+  for (const { result } of outcomes) for (const [id, hex] of result?.colors ?? []) colors.set(id, hex);
+  if (colors.size === 0) return;
+  try {
+    await c.deps.setPhotosColor(c.book.id, colors);
+    for (const p of c.photos) {
+      const hex = colors.get(p.id);
+      if (hex && p.color == null) p.color = hex;
+    }
+  } catch (err) {
+    const code = err && typeof err === "object" && "code" in err ? String(err.code) : "unknown";
+    console.error(`[orchestrator] photo colours not saved (${code.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32)})`);
+  }
 }
 
 /** Rule decisions for a whole batch without a call (its attempts were used up by dead ticks). */

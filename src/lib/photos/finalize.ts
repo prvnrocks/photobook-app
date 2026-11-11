@@ -4,6 +4,8 @@ import "server-only";
 //   1b. rate limit: one run per book per FINALIZE_MIN_INTERVAL_S (atomic claim in
 //      private.finalize_runs) → { rateLimited, retryAfterSeconds } (route → 429)
 //   2. load ready photos (pending ones are ignored)
+//   2b. M10c: photo colours sent by the uploader → photos.color, only for this book's ready
+//      photos whose colour is still null (ids of other books / pending photos are ignored)
 //   3. duplicate groups → write only changed dup_group values, batched per value
 //   4. GPS clusters for photos without a place that were not tried in the last
 //      PLACE_RECHECK_MS → reverse geocode ≤ MAX_CLUSTERS_PER_RUN clusters per run and
@@ -12,7 +14,7 @@ import "server-only";
 //      every attempted cluster whatever the result (so failures aren't retried forever)
 //   5. fallback album: only when books.doc is {} (conditional update, see writeDocIfEmpty)
 //   6. return counts only
-// Writes of server-only photo columns (dup_group, place, place_checked_at) and the
+// Writes of server-only photo columns (dup_group, place, place_checked_at, color) and the
 // rate-limit RPCs use the admin client (src/lib/db/photos.ts, finalize-runs.ts) — only
 // after step 1 proved ownership, always filtered by book_id.
 // Idempotent: a re-run with nothing new makes no geocoder calls and no writes.
@@ -31,6 +33,7 @@ import {
   listReadyPhotosForFinalize,
   setPhotosDupGroup,
   setPhotosPlace,
+  setPhotosColor,
   setPhotosPlaceChecked,
   type FinalizePhotoRow,
 } from "@/lib/db/photos";
@@ -39,6 +42,7 @@ import {
   reverseGeocodeMany,
   type ReverseGeocoder,
 } from "@/lib/geo/reverse-geocode";
+import { PHOTO_COLOR_RE } from "@/lib/image/color";
 import { groupDuplicates } from "@/lib/photos/dupes";
 import { clusterPoints } from "@/lib/photos/geo-cluster";
 import type { Json } from "@/lib/supabase/database.types";
@@ -63,6 +67,8 @@ export type FinalizeDb = {
   listReadyPhotos(bookId: string): Promise<FinalizePhotoRow[]>;
   setDupGroup(bookId: string, ids: string[], dupGroup: number | null): Promise<void>;
   setPlace(bookId: string, ids: string[], place: string): Promise<void>;
+  /** photos.color for photos of the book whose colour is null (never overwrites). */
+  setColors(bookId: string, colors: Map<string, string>): Promise<void>;
   writeDocIfEmpty(
     bookId: string,
     doc: Json,
@@ -113,7 +119,14 @@ export const defaultFinalizeDb: FinalizeDb = {
   listReadyPhotos: listReadyPhotosForFinalize,
   setDupGroup: setPhotosDupGroup,
   setPlace: setPhotosPlace,
+  setColors: setPhotosColor,
   writeDocIfEmpty,
+};
+
+/** Request input beyond the book id (already validated by the route). */
+export type FinalizeInput = {
+  /** M10c: photo id → "#rrggbb" computed by the uploader from the thumb. */
+  colors?: Readonly<Record<string, string>>;
 };
 
 export function isEmptyDoc(doc: unknown): boolean {
@@ -175,6 +188,7 @@ const hasGps = (p: FinalizePhotoRow) => p.lat !== null && p.lng !== null;
 export async function finalizeBook(
   bookId: string,
   deps: FinalizeDeps = {},
+  input: FinalizeInput = {},
 ): Promise<FinalizeResult | FinalizeRateLimited | null> {
   const db = deps.db ?? defaultFinalizeDb;
   const now = deps.now ?? Date.now;
@@ -189,6 +203,26 @@ export async function finalizeBook(
 
   // 2. Ready photos only (copies, so later steps can update them in memory).
   const photos = (await db.listReadyPhotos(book.id)).map((p) => ({ ...p }));
+
+  // 2b. Photo colours (M10c): only this book's ready photos without a colour.
+  if (input.colors) {
+    const byId = new Map(photos.map((p) => [p.id, p]));
+    const colors = new Map<string, string>();
+    for (const [id, hex] of Object.entries(input.colors)) {
+      const p = byId.get(id);
+      if (p && p.color === null && PHOTO_COLOR_RE.test(hex)) colors.set(id, hex);
+    }
+    if (colors.size > 0) {
+      // Not fatal: the Curator backfills missing colours from the thumb later.
+      try {
+        await db.setColors(book.id, colors);
+        for (const [id, hex] of colors) byId.get(id)!.color = hex;
+      } catch (err) {
+        const code = err && typeof err === "object" && "code" in err ? String(err.code) : "unknown";
+        console.error(`[finalize] photo colours not saved (${code.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32)})`);
+      }
+    }
+  }
 
   // 3. Duplicate groups — write only changed values, one batch per new value.
   const groups = groupDuplicates(

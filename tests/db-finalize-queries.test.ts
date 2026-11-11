@@ -54,8 +54,15 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => fake.admin }))
 vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: async () => ({ id: "u" }) }));
 
 const { writeDocIfEmpty, BooksQueryError } = await import("@/lib/db/books");
-const { listReadyPhotosForFinalize, setPhotosDupGroup, setPhotosPlace, setPhotosPlaceChecked, PLACE_MAX } =
-  await import("@/lib/db/photos");
+const {
+  listReadyPhotosForFinalize,
+  setPhotosColor,
+  setPhotosDupGroup,
+  setPhotosPlace,
+  setPhotosPlaceChecked,
+  PhotosQueryError,
+  PLACE_MAX,
+} = await import("@/lib/db/photos");
 const { claimFinalizeRun, reserveGeocodeCalls, FinalizeRunsQueryError } = await import(
   "@/lib/db/finalize-runs"
 );
@@ -114,6 +121,7 @@ describe("finalize photo queries", () => {
     expect(c.calls).toContainEqual(["eq", "upload_state", "ready"]);
     expect(String(c.calls[0][1])).toContain("dup_group");
     expect(String(c.calls[0][1])).toContain("place_checked_at");
+    expect(String(c.calls[0][1])).toContain("color");
     expect(c.client).toBe("user"); // reads stay under RLS
   });
 
@@ -197,3 +205,48 @@ describe("finalize run RPCs (admin client)", () => {
     expect(fake.state.rpcs).toHaveLength(2);
   });
 });
+
+describe("setPhotosColor (M10c)", () => {
+  it("admin update per colour value, filtered by book_id and color IS NULL, ≤100 ids per request", async () => {
+    const all = ids(130);
+    const colors = new Map<string, string>(all.map((id, i) => [id, i < 120 ? "#8a7f72" : "#405060"]));
+    await setPhotosColor(B, colors);
+    expect(fake.state.chains).toHaveLength(3);
+    for (const c of fake.state.chains) {
+      expect(c).toMatchObject({ client: "admin", table: "photos", op: "update" }); // 1900 guard: server-only
+      expect(c.calls).toContainEqual(["eq", "book_id", B]);
+      expect(c.calls).toContainEqual(["is", "color", null]); // never overwrite
+    }
+    const byColor = fake.state.chains.map((c) => [
+      (c.payload as { color: string }).color,
+      (c.calls.find((x) => x[0] === "in")?.[2] as string[]).length,
+    ]);
+    expect(byColor.sort()).toEqual([
+      ["#405060", 10],
+      ["#8a7f72", 100],
+      ["#8a7f72", 20],
+    ]);
+  });
+
+  it("skips malformed ids / colours and a malformed book id; accepts a plain record", async () => {
+    const [a, b2] = ids(2);
+    await setPhotosColor(B, { [a]: "#ABCDEF", "not-a-uuid": "#123456", [b2]: "#123456" });
+    expect(fake.state.chains).toHaveLength(1);
+    expect(fake.state.chains[0].payload).toEqual({ color: "#123456" });
+    expect(fake.state.chains[0].calls).toContainEqual(["in", "id", [b2]]);
+    fake.state.chains = [];
+    await setPhotosColor("nope", { [a]: "#123456" });
+    await setPhotosColor(B, {});
+    expect(fake.state.chains).toHaveLength(0);
+  });
+
+  it("throws PhotosQueryError with the code only", async () => {
+    fake.state.results.push({ data: null, error: { code: "42501" } });
+    const [a] = ids(1);
+    const err = await setPhotosColor(B, { [a]: "#123456" }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PhotosQueryError);
+    expect(String((err as Error).message)).not.toContain(a);
+    expect(String((err as Error).message)).not.toContain("#123456");
+  });
+});
+

@@ -12,6 +12,10 @@
 //    decision; per dup group ≥ 1 photo stays kept; user_override photos keep their current
 //    status (their AI notes are still returned so they can be stored).
 //  - Privacy (D-027): the step log holds only alias → keep/dropReason/quality/scene/coverWorthy.
+//  - M10c colour backfill: for photos whose `color` is null and whose thumb loaded, `deps.colorOf`
+//    (sharp on the base64 already in hand) computes the muted dominant colour; results come back
+//    in `colors` for the orchestrator to store after its lease check. Never logged, never sent
+//    to the model; a failure just leaves the colour null.
 
 import { z } from "zod";
 import { AGENT_TIMEOUT_MS, EFFORT } from "../client";
@@ -65,6 +69,8 @@ export interface CuratorResult {
 /** Thumb loader: storage path → base64 JPEG. Missing entries = not loadable (rule result). */
 export interface CuratorDeps {
   loadThumbs(paths: string[]): Promise<Map<string, string>>;
+  /** M10c: base64 JPEG thumb → "#rrggbb" (or null). Missing → no colour backfill. */
+  colorOf?(thumbBase64: string): Promise<string | null>;
 }
 
 export interface CurateBatchArgs {
@@ -90,6 +96,8 @@ export interface CurateBatchResult {
   failure?: { code: StepErrorCode; retryable: boolean };
   /** USD of the step (0 when no call was made). */
   costUsd: number;
+  /** M10c: photo id → colour computed from its thumb, for photos whose color was null. */
+  colors?: Map<string, string>;
 }
 
 /** Output budget per batch (Opus 5.5 thinks at effort low; ~120 tokens of JSON per photo). */
@@ -194,6 +202,7 @@ export async function curateBatch(args: CurateBatchArgs): Promise<CurateBatchRes
   // Thumbnails (only photos with an alias and a loadable thumb go to the model).
   const paths = photos.map((p) => p.thumbPath).filter((x): x is string => !!x);
   const thumbs = paths.length ? await args.deps.loadThumbs([...new Set(paths)]) : new Map<string, string>();
+  const colors = await backfillColors(photos, thumbs, args.deps);
   const items: Array<CuratorPromptItem & { photo: CurationPhoto }> = [];
   for (const p of photos) {
     const alias = aliasOf.get(p.id);
@@ -213,7 +222,7 @@ export async function curateBatch(args: CurateBatchArgs): Promise<CurateBatchRes
       thumbBase64: data,
     });
   }
-  if (items.length === 0) return { results: allRule(), usedAi: false, costUsd: 0 };
+  if (items.length === 0) return { results: allRule(), usedAi: false, costUsd: 0, ...colors };
 
   const aliases = items.map((i) => i.alias);
   const hints: Record<string, CuratorReplayHint> = {};
@@ -257,7 +266,7 @@ export async function curateBatch(args: CurateBatchArgs): Promise<CurateBatchRes
   });
 
   if (!step.ok) {
-    return { results: allRule(), usedAi: false, failure: { code: step.code, retryable: step.retryable }, costUsd: step.costUsd };
+    return { results: allRule(), usedAi: false, failure: { code: step.code, retryable: step.retryable }, costUsd: step.costUsd, ...colors };
   }
 
   const byAlias = new Map(step.data.photos.map((p) => [p.photoId, p]));
@@ -275,7 +284,33 @@ export async function curateBatch(args: CurateBatchArgs): Promise<CurateBatchRes
   }
 
   ensureGroupKeepers(photos, results);
-  return { results, usedAi: true, costUsd: step.costUsd };
+  return { results, usedAi: true, costUsd: step.costUsd, ...colors };
+}
+
+const HEX_COLOR_RE = /^#[0-9a-f]{6}$/;
+
+/** M10c: colours for photos with color === null and a loaded thumb. `{}` when nothing to report. */
+async function backfillColors(
+  photos: CurationPhoto[],
+  thumbs: Map<string, string>,
+  deps: CuratorDeps,
+): Promise<{ colors?: Map<string, string> }> {
+  const colorOf = deps.colorOf;
+  if (!colorOf) return {};
+  const todo = photos.filter((p) => p.color === null && p.thumbPath && thumbs.has(p.thumbPath));
+  if (todo.length === 0) return {};
+  const colors = new Map<string, string>();
+  await Promise.all(
+    todo.map(async (p) => {
+      try {
+        const hex = await colorOf(thumbs.get(p.thumbPath!)!);
+        if (typeof hex === "string" && HEX_COLOR_RE.test(hex)) colors.set(p.id, hex);
+      } catch {
+        // undecodable thumb → colour stays null
+      }
+    }),
+  );
+  return colors.size > 0 ? { colors } : {};
 }
 
 /**
