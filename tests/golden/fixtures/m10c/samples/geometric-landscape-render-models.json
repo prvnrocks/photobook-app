@@ -1,0 +1,3288 @@
+{
+  "cover": {
+    "screen": {
+      "kind": "cover",
+      "layoutId": "g-l-cover",
+      "knownLayout": true,
+      "slot": {
+        "index": 0,
+        "rect": {
+          "x": 38.0952,
+          "y": 0,
+          "w": 61.9048,
+          "h": 100,
+          "shape": {
+            "kind": "polygon",
+            "points": [
+              [
+                18.462,
+                0
+              ],
+              [
+                100,
+                0
+              ],
+              [
+                100,
+                100
+              ],
+              [
+                0,
+                100
+              ]
+            ]
+          }
+        },
+        "photoId": "d0",
+        "photo": {
+          "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23c2410c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed0%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+          "style": {
+            "width": 100,
+            "height": 117.11718918918919,
+            "left": 0,
+            "top": -8.558594594594595
+          }
+        },
+        "look": {
+          "shape": "polygon",
+          "clipPath": "polygon(18.462% 0%, 100% 0%, 100% 100%, 0% 100%)"
+        }
+      },
+      "textRect": {
+        "x": 5.7143,
+        "y": 29.7297,
+        "w": 28.5714,
+        "h": 37.8379
+      },
+      "title": {
+        "text": "Lanes & Light",
+        "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif",
+        "sizeCqw": 4.9333
+      },
+      "subtitle": {
+        "text": "A week away · 2026",
+        "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif"
+      },
+      "textScale": 0.7048,
+      "panels": [
+        {
+          "bind": "coverTitle",
+          "role": "title",
+          "rect": {
+            "x": 5.7143,
+            "y": 29.7297,
+            "w": 28.5714,
+            "h": 29.7298
+          },
+          "text": "Lanes & Light",
+          "align": "left",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 7.1429,
+          "lineHeight": 1.1,
+          "typography": {
+            "fontWeight": 600,
+            "fontStyle": "normal",
+            "letterSpacing": "0.01em"
+          }
+        },
+        {
+          "bind": "coverSubtitle",
+          "role": "year",
+          "rect": {
+            "x": 5.7143,
+            "y": 60.8108,
+            "w": 28.5714,
+            "h": 6.7568
+          },
+          "text": "A week away · 2026",
+          "align": "left",
+          "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+          "fontSizeCqw": 2.1905,
+          "lineHeight": 1.25,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal",
+            "letterSpacing": "0.16em"
+          }
+        }
+      ]
+    },
+    "bleed": {
+      "kind": "cover",
+      "layoutId": "g-l-cover",
+      "knownLayout": true,
+      "slot": {
+        "index": 0,
+        "rect": {
+          "x": 38.0952,
+          "y": -2.027027027027027,
+          "w": 63.333371428571425,
+          "h": 104.05405405405406
+        },
+        "photoId": "d0",
+        "photo": {
+          "url": "https://print-assets.invalid/d0.jpg",
+          "style": {
+            "width": 100,
+            "height": 115.15158441558442,
+            "left": 0,
+            "top": -7.575792207792212
+          }
+        },
+        "look": {
+          "shape": "polygon",
+          "clipPath": "polygon(18.4114% 0%, 100% 0%, 100% 100%, -0.3658% 100%)"
+        }
+      },
+      "textRect": {
+        "x": 5.7143,
+        "y": 29.7297,
+        "w": 28.5714,
+        "h": 37.8379
+      },
+      "title": {
+        "text": "Lanes & Light",
+        "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif",
+        "sizeCqw": 4.9333
+      },
+      "subtitle": {
+        "text": "A week away · 2026",
+        "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif"
+      },
+      "textScale": 0.7048,
+      "panels": [
+        {
+          "bind": "coverTitle",
+          "role": "title",
+          "rect": {
+            "x": 5.7143,
+            "y": 29.7297,
+            "w": 28.5714,
+            "h": 29.7298
+          },
+          "text": "Lanes & Light",
+          "align": "left",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 7.1429,
+          "lineHeight": 1.1,
+          "typography": {
+            "fontWeight": 600,
+            "fontStyle": "normal",
+            "letterSpacing": "0.01em"
+          }
+        },
+        {
+          "bind": "coverSubtitle",
+          "role": "year",
+          "rect": {
+            "x": 5.7143,
+            "y": 60.8108,
+            "w": 28.5714,
+            "h": 6.7568
+          },
+          "text": "A week away · 2026",
+          "align": "left",
+          "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+          "fontSizeCqw": 2.1905,
+          "lineHeight": 1.25,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal",
+            "letterSpacing": "0.16em"
+          }
+        }
+      ]
+    }
+  },
+  "pages": [
+    {
+      "index": 0,
+      "screen": {
+        "kind": "page",
+        "pageId": "s0",
+        "layoutId": "g-l-one-band",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 66.6667,
+              "h": 100,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    100,
+                    0
+                  ],
+                  [
+                    82.949,
+                    100
+                  ],
+                  [
+                    0,
+                    100
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp0",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%230f766e%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed1%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 158.5218112197478,
+                "height": 100,
+                "left": -29.2609056098739,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 0%, 82.949% 100%, 0% 100%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 71.4286,
+            "y": 54.0541,
+            "w": 22.8571,
+            "h": 29.7297
+          },
+          "caption": {
+            "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+          "align": "left",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 71.4286,
+              "y": 32.4324,
+              "w": 22.8571,
+              "h": 9.4595
+            },
+            "text": "Old town walks",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.8095,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 71.4286,
+              "y": 44.5946,
+              "w": 20,
+              "h": 5.4054
+            },
+            "text": "3 Nov 2026",
+            "align": "center",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 2.1905,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            },
+            "plate": {
+              "art": {
+                "stickerId": "plate-label",
+                "viewBox": "0 0 140 30",
+                "preserveAspectRatio": "none",
+                "paths": [
+                  {
+                    "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+                    "fill": "#235A5E"
+                  },
+                  {
+                    "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+                    "fill": "none",
+                    "stroke": "rgba(83, 126, 129, 0.9)",
+                    "strokeWidth": 0.7
+                  },
+                  {
+                    "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+                    "fill": "#709496"
+                  },
+                  {
+                    "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+                    "fill": "rgba(255, 255, 255, 0.5)"
+                  }
+                ]
+              },
+              "textBox": {
+                "x": 11,
+                "y": 12,
+                "w": 78,
+                "h": 76
+              },
+              "ink": "light"
+            }
+          }
+        ],
+        "decorations": [
+          {
+            "kind": "sticker",
+            "rect": {
+              "x": 71.4286,
+              "y": 22.973,
+              "w": 4.7619,
+              "h": 6.7567
+            },
+            "layer": "over",
+            "art": {
+              "stickerId": "photo-corner",
+              "viewBox": "0 0 40 40",
+              "preserveAspectRatio": "xMidYMid meet",
+              "paths": [
+                {
+                  "d": "M0 2A2 2 0 0 1 2 0H40L0 40Z",
+                  "fill": "#235A5E"
+                },
+                {
+                  "d": "M36 2.6L2.6 36",
+                  "fill": "none",
+                  "stroke": "rgba(145, 173, 175, 0.55)",
+                  "strokeWidth": 1,
+                  "strokeLinecap": "round"
+                },
+                {
+                  "d": "M6 0.8H34",
+                  "fill": "none",
+                  "stroke": "rgba(255, 255, 255, 0.18)",
+                  "strokeWidth": 1.2,
+                  "strokeLinecap": "round"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s0",
+        "layoutId": "g-l-one-band",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": -1.4285714285714286,
+              "y": -2.027027027027027,
+              "w": 68.09527142857142,
+              "h": 104.05405405405406
+            },
+            "photoId": "sp0",
+            "photo": {
+              "url": "https://print-assets.invalid/sp0.jpg",
+              "style": {
+                "width": 161.4879174895134,
+                "height": 100,
+                "left": -30.743958744756696,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100.3384% 0%, 82.9683% 100%, 0% 100%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 71.4286,
+            "y": 54.0541,
+            "w": 22.8571,
+            "h": 29.7297
+          },
+          "caption": {
+            "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+          "align": "left",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 71.4286,
+              "y": 32.4324,
+              "w": 22.8571,
+              "h": 9.4595
+            },
+            "text": "Old town walks",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.8095,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 71.4286,
+              "y": 44.5946,
+              "w": 20,
+              "h": 5.4054
+            },
+            "text": "3 Nov 2026",
+            "align": "center",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 2.1905,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            },
+            "plate": {
+              "art": {
+                "stickerId": "plate-label",
+                "viewBox": "0 0 140 30",
+                "preserveAspectRatio": "none",
+                "paths": [
+                  {
+                    "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+                    "fill": "#235A5E"
+                  },
+                  {
+                    "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+                    "fill": "none",
+                    "stroke": "rgba(83, 126, 129, 0.9)",
+                    "strokeWidth": 0.7
+                  },
+                  {
+                    "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+                    "fill": "#709496"
+                  },
+                  {
+                    "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+                    "fill": "rgba(255, 255, 255, 0.5)"
+                  }
+                ]
+              },
+              "textBox": {
+                "x": 11,
+                "y": 12,
+                "w": 78,
+                "h": 76
+              },
+              "ink": "light"
+            }
+          }
+        ],
+        "decorations": [
+          {
+            "kind": "sticker",
+            "rect": {
+              "x": 71.4286,
+              "y": 22.973,
+              "w": 4.7619,
+              "h": 6.7567
+            },
+            "layer": "over",
+            "art": {
+              "stickerId": "photo-corner",
+              "viewBox": "0 0 40 40",
+              "preserveAspectRatio": "xMidYMid meet",
+              "paths": [
+                {
+                  "d": "M0 2A2 2 0 0 1 2 0H40L0 40Z",
+                  "fill": "#235A5E"
+                },
+                {
+                  "d": "M36 2.6L2.6 36",
+                  "fill": "none",
+                  "stroke": "rgba(145, 173, 175, 0.55)",
+                  "strokeWidth": 1,
+                  "strokeLinecap": "round"
+                },
+                {
+                  "d": "M6 0.8H34",
+                  "fill": "none",
+                  "stroke": "rgba(255, 255, 255, 0.18)",
+                  "strokeWidth": 1.2,
+                  "strokeLinecap": "round"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "index": 1,
+      "screen": {
+        "kind": "page",
+        "pageId": "s1",
+        "layoutId": "g-l-two-diag",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 55.467,
+              "h": 83.7838,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    100,
+                    0
+                  ],
+                  [
+                    82.83,
+                    100
+                  ],
+                  [
+                    0,
+                    100
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp1",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231d4ed8%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed2%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 106.45542480428088,
+                "height": 100,
+                "left": -3.2277124021404404,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 0%, 82.83% 100%, 0% 100%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 47.3902,
+              "y": 0,
+              "w": 52.6098,
+              "h": 83.7838,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    18.103,
+                    0
+                  ],
+                  [
+                    100,
+                    0
+                  ],
+                  [
+                    100,
+                    100
+                  ],
+                  [
+                    0,
+                    100
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp2",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23a21caf%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed3%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 118.79629958781297,
+                "left": 0,
+                "top": -9.398149793906484
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(18.103% 0%, 100% 0%, 100% 100%, 0% 100%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 5.7143,
+            "y": 87.8378,
+            "w": 88.5714,
+            "h": 8.1081
+          },
+          "caption": {
+            "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+          "align": "center",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s1",
+        "layoutId": "g-l-two-diag",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": -1.4285714285714286,
+              "y": -2.027027027027027,
+              "w": 56.89557142857142,
+              "h": 85.81082702702703
+            },
+            "photoId": "sp1",
+            "photo": {
+              "url": "https://print-assets.invalid/sp1.jpg",
+              "style": {
+                "width": 106.2933377524571,
+                "height": 100,
+                "left": -3.146668876228553,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100.405% 0%, 83.2611% 100%, 0% 100%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 47.3902,
+              "y": -2.027027027027027,
+              "w": 54.038371428571416,
+              "h": 85.81082702702703
+            },
+            "photoId": "sp2",
+            "photo": {
+              "url": "https://print-assets.invalid/sp2.jpg",
+              "style": {
+                "width": 100,
+                "height": 119.13969402084518,
+                "left": 0,
+                "top": -9.569847010422592
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(18.0508% 0%, 100% 0%, 100% 100%, 0% 100%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 5.7143,
+            "y": 87.8378,
+            "w": 88.5714,
+            "h": 8.1081
+          },
+          "caption": {
+            "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+          "align": "center",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        }
+      }
+    },
+    {
+      "index": 2,
+      "screen": {
+        "kind": "page",
+        "pageId": "s2",
+        "layoutId": "g-l-spread-band",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 55.467,
+              "h": 83.7838,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    100,
+                    0
+                  ],
+                  [
+                    82.83,
+                    100
+                  ],
+                  [
+                    0,
+                    100
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp3",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%234d7c0f%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed4%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 159.63325181522904,
+                "height": 100,
+                "left": -29.816625907614522,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 0%, 82.83% 100%, 0% 100%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 47.3902,
+              "y": 0,
+              "w": 51.8955,
+              "h": 83.7838,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    18.352,
+                    0
+                  ],
+                  [
+                    100,
+                    0
+                  ],
+                  [
+                    100,
+                    100
+                  ],
+                  [
+                    0,
+                    100
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp4",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23b45309%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed5%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 113.78179317318549,
+                "height": 100,
+                "left": -6.890896586592746,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(18.352% 0%, 100% 0%, 100% 100%, 0% 100%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 5.7143,
+            "y": 87.8378,
+            "w": 88.5714,
+            "h": 8.1081
+          },
+          "caption": {
+            "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+          "align": "center",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "spread": {
+          "side": "left",
+          "ownerIndex": 2
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s2",
+        "layoutId": "g-l-spread-band",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": -1.4285714285714286,
+              "y": -2.027027027027027,
+              "w": 56.89557142857142,
+              "h": 85.81082702702703
+            },
+            "photoId": "sp3",
+            "photo": {
+              "url": "https://print-assets.invalid/sp3.jpg",
+              "style": {
+                "width": 159.39019719206314,
+                "height": 100,
+                "left": -29.69509859603157,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100.405% 0%, 83.2611% 100%, 0% 100%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 47.3902,
+              "y": -2.027027027027027,
+              "w": 51.8955,
+              "h": 85.81082702702703
+            },
+            "photoId": "sp4",
+            "photo": {
+              "url": "https://print-assets.invalid/sp4.jpg",
+              "style": {
+                "width": 116.53457795909455,
+                "height": 100,
+                "left": -8.267288979547274,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(18.796% 0%, 100% 0%, 100% 100%, 0% 100%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 5.7143,
+            "y": 87.8378,
+            "w": 88.5714,
+            "h": 8.1081
+          },
+          "caption": {
+            "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+          "align": "center",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "spread": {
+          "side": "left",
+          "ownerIndex": 2
+        }
+      }
+    },
+    {
+      "index": 3,
+      "screen": {
+        "kind": "page",
+        "pageId": "s3",
+        "layoutId": "g-l-spread-band",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 2,
+            "rect": {
+              "x": 0.7142999999999944,
+              "y": 0,
+              "w": 65.9524,
+              "h": 100,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    100,
+                    0
+                  ],
+                  [
+                    82.765,
+                    100
+                  ],
+                  [
+                    0,
+                    100
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp5",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23be123c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed6%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 124.77481081081083,
+                "left": 0,
+                "top": -12.387405405405417
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 0%, 82.765% 100%, 0% 100%)"
+            }
+          }
+        ],
+        "caption": null,
+        "spread": {
+          "side": "right",
+          "ownerIndex": 2
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 71.42859999999999,
+              "y": 32.4324,
+              "w": 22.8571,
+              "h": 9.4595
+            },
+            "text": "The long drive",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.8095,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 71.42859999999999,
+              "y": 44.5946,
+              "w": 20,
+              "h": 5.4054
+            },
+            "text": "5 Nov 2026",
+            "align": "center",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 2.1905,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            },
+            "plate": {
+              "art": {
+                "stickerId": "plate-label",
+                "viewBox": "0 0 140 30",
+                "preserveAspectRatio": "none",
+                "paths": [
+                  {
+                    "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+                    "fill": "#235A5E"
+                  },
+                  {
+                    "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+                    "fill": "none",
+                    "stroke": "rgba(83, 126, 129, 0.9)",
+                    "strokeWidth": 0.7
+                  },
+                  {
+                    "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+                    "fill": "#709496"
+                  },
+                  {
+                    "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+                    "fill": "rgba(255, 255, 255, 0.5)"
+                  }
+                ]
+              },
+              "textBox": {
+                "x": 11,
+                "y": 12,
+                "w": 78,
+                "h": 76
+              },
+              "ink": "light"
+            }
+          }
+        ],
+        "decorations": [
+          {
+            "kind": "sticker",
+            "rect": {
+              "x": 71.42859999999999,
+              "y": 22.973,
+              "w": 4.7619,
+              "h": 6.7567
+            },
+            "layer": "over",
+            "art": {
+              "stickerId": "photo-corner",
+              "viewBox": "0 0 40 40",
+              "preserveAspectRatio": "xMidYMid meet",
+              "paths": [
+                {
+                  "d": "M0 2A2 2 0 0 1 2 0H40L0 40Z",
+                  "fill": "#235A5E"
+                },
+                {
+                  "d": "M36 2.6L2.6 36",
+                  "fill": "none",
+                  "stroke": "rgba(145, 173, 175, 0.55)",
+                  "strokeWidth": 1,
+                  "strokeLinecap": "round"
+                },
+                {
+                  "d": "M6 0.8H34",
+                  "fill": "none",
+                  "stroke": "rgba(255, 255, 255, 0.18)",
+                  "strokeWidth": 1.2,
+                  "strokeLinecap": "round"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s3",
+        "layoutId": "g-l-spread-band",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 2,
+            "rect": {
+              "x": 0.7142999999999944,
+              "y": -2.027027027027027,
+              "w": 65.9524,
+              "h": 104.05405405405406
+            },
+            "photoId": "sp5",
+            "photo": {
+              "url": "https://print-assets.invalid/sp5.jpg",
+              "style": {
+                "width": 100,
+                "height": 119.91345454545457,
+                "left": 0,
+                "top": -9.956727272727285
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100.3494% 0%, 82.4156% 100%, 0% 100%)"
+            }
+          }
+        ],
+        "caption": null,
+        "spread": {
+          "side": "right",
+          "ownerIndex": 2
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 71.42859999999999,
+              "y": 32.4324,
+              "w": 22.8571,
+              "h": 9.4595
+            },
+            "text": "The long drive",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.8095,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 71.42859999999999,
+              "y": 44.5946,
+              "w": 20,
+              "h": 5.4054
+            },
+            "text": "5 Nov 2026",
+            "align": "center",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 2.1905,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            },
+            "plate": {
+              "art": {
+                "stickerId": "plate-label",
+                "viewBox": "0 0 140 30",
+                "preserveAspectRatio": "none",
+                "paths": [
+                  {
+                    "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+                    "fill": "#235A5E"
+                  },
+                  {
+                    "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+                    "fill": "none",
+                    "stroke": "rgba(83, 126, 129, 0.9)",
+                    "strokeWidth": 0.7
+                  },
+                  {
+                    "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+                    "fill": "#709496"
+                  },
+                  {
+                    "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+                    "fill": "rgba(255, 255, 255, 0.5)"
+                  }
+                ]
+              },
+              "textBox": {
+                "x": 11,
+                "y": 12,
+                "w": 78,
+                "h": 76
+              },
+              "ink": "light"
+            }
+          }
+        ],
+        "decorations": [
+          {
+            "kind": "sticker",
+            "rect": {
+              "x": 71.42859999999999,
+              "y": 22.973,
+              "w": 4.7619,
+              "h": 6.7567
+            },
+            "layer": "over",
+            "art": {
+              "stickerId": "photo-corner",
+              "viewBox": "0 0 40 40",
+              "preserveAspectRatio": "xMidYMid meet",
+              "paths": [
+                {
+                  "d": "M0 2A2 2 0 0 1 2 0H40L0 40Z",
+                  "fill": "#235A5E"
+                },
+                {
+                  "d": "M36 2.6L2.6 36",
+                  "fill": "none",
+                  "stroke": "rgba(145, 173, 175, 0.55)",
+                  "strokeWidth": 1,
+                  "strokeLinecap": "round"
+                },
+                {
+                  "d": "M6 0.8H34",
+                  "fill": "none",
+                  "stroke": "rgba(255, 255, 255, 0.18)",
+                  "strokeWidth": 1.2,
+                  "strokeLinecap": "round"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "screen": {
+        "kind": "page",
+        "pageId": "s4",
+        "layoutId": "g-l-two-circle",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 62.8571,
+              "h": 100,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    100,
+                    0
+                  ],
+                  [
+                    100,
+                    47.652
+                  ],
+                  [
+                    96.82,
+                    50.855
+                  ],
+                  [
+                    94.34,
+                    54.517
+                  ],
+                  [
+                    92.64,
+                    58.517
+                  ],
+                  [
+                    91.775,
+                    62.726
+                  ],
+                  [
+                    91.775,
+                    67.004
+                  ],
+                  [
+                    92.64,
+                    71.212
+                  ],
+                  [
+                    94.34,
+                    75.213
+                  ],
+                  [
+                    96.82,
+                    78.875
+                  ],
+                  [
+                    100,
+                    82.078
+                  ],
+                  [
+                    100,
+                    100
+                  ],
+                  [
+                    0,
+                    100
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp6",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23334155%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed7%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 168.12939241618784,
+                "height": 100,
+                "left": -34.06469620809392,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 0%, 100% 47.652%, 96.82% 50.855%, 94.34% 54.517%, 92.64% 58.517%, 91.775% 62.726%, 91.775% 67.004%, 92.64% 71.212%, 94.34% 75.213%, 96.82% 78.875%, 100% 82.078%, 100% 100%, 0% 100%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 59.0476,
+              "y": 43.2432,
+              "w": 30.4762,
+              "h": 43.2433,
+              "shape": {
+                "kind": "circle"
+              }
+            },
+            "photoId": "sp7",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23c2410c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed8%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100.00009999996875,
+                "height": 100,
+                "left": -0.00004999998437682507,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "circle",
+              "borderRadius": "50%"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 66.6667,
+            "y": 27.027,
+            "w": 27.619,
+            "h": 12.1622
+          },
+          "caption": {
+            "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+          "align": "left",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 66.6667,
+              "y": 8.1081,
+              "w": 27.619,
+              "h": 9.4595
+            },
+            "text": "The long drive",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.8095,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 66.6667,
+              "y": 18.9189,
+              "w": 27.619,
+              "h": 4.7297
+            },
+            "text": "5 Nov 2026",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 2.1905,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            }
+          }
+        ]
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s4",
+        "layoutId": "g-l-two-circle",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": -1.4285714285714286,
+              "y": -2.027027027027027,
+              "w": 64.28567142857143,
+              "h": 104.05405405405406
+            },
+            "photoId": "sp6",
+            "photo": {
+              "url": "https://print-assets.invalid/sp6.jpg",
+              "style": {
+                "width": 171.05776963225114,
+                "height": 100,
+                "left": -35.52888481612557,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 0%, 100% 47.7435%, 96.8907% 50.8217%, 94.4658% 54.341%, 92.8036% 58.1852%, 91.9578% 62.2302%, 91.9578% 66.3415%, 92.8036% 70.3856%, 94.4658% 74.2307%, 96.8907% 77.75%, 100% 80.8282%, 100% 100%, 0% 100%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 59.0476,
+              "y": 43.2432,
+              "w": 30.4762,
+              "h": 43.2433
+            },
+            "photoId": "sp7",
+            "photo": {
+              "url": "https://print-assets.invalid/sp7.jpg",
+              "style": {
+                "width": 100.00009999996875,
+                "height": 100,
+                "left": -0.00004999998437682507,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "circle",
+              "borderRadius": "50%"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 66.6667,
+            "y": 27.027,
+            "w": 27.619,
+            "h": 12.1622
+          },
+          "caption": {
+            "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+          "align": "left",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 66.6667,
+              "y": 8.1081,
+              "w": 27.619,
+              "h": 9.4595
+            },
+            "text": "The long drive",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.8095,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 66.6667,
+              "y": 18.9189,
+              "w": 27.619,
+              "h": 4.7297
+            },
+            "text": "5 Nov 2026",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 2.1905,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "index": 5,
+      "screen": {
+        "kind": "page",
+        "pageId": "s5",
+        "layoutId": "g-l-three-diamond",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 4.7619,
+              "y": 14.8649,
+              "w": 32.381,
+              "h": 45.9459,
+              "shape": {
+                "kind": "diamond"
+              }
+            },
+            "photoId": "sp8",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%230f766e%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed9%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 133.33366274542746,
+                "left": 0,
+                "top": -16.66683137271373
+              }
+            },
+            "look": {
+              "shape": "diamond",
+              "clipPath": "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 21.9625,
+              "y": 39.2712,
+              "w": 32.381,
+              "h": 45.9459,
+              "shape": {
+                "kind": "diamond"
+              }
+            },
+            "photoId": "sp9",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231d4ed8%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed10%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 149.95276917194346,
+                "height": 100,
+                "left": -24.97638458597173,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "diamond",
+              "clipPath": "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 39.1632,
+              "y": 14.8649,
+              "w": 32.3809,
+              "h": 45.9459,
+              "shape": {
+                "kind": "diamond"
+              }
+            },
+            "photoId": "sp10",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23a21caf%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed11%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100.0000617648058,
+                "height": 100,
+                "left": -0.000030882402903387174,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "diamond",
+              "clipPath": "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 76.1905,
+            "y": 48.6486,
+            "w": 18.0952,
+            "h": 35.1352
+          },
+          "caption": {
+            "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+          "align": "left",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 76.1905,
+              "y": 27.027,
+              "w": 18.0952,
+              "h": 9.4595
+            },
+            "text": "Last evening",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.5048,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 76.1905,
+              "y": 38.5135,
+              "w": 18.0952,
+              "h": 4.7297
+            },
+            "text": "8 Nov 2026",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 2.1905,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            }
+          }
+        ]
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s5",
+        "layoutId": "g-l-three-diamond",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 4.7619,
+              "y": 14.8649,
+              "w": 32.381,
+              "h": 45.9459
+            },
+            "photoId": "sp8",
+            "photo": {
+              "url": "https://print-assets.invalid/sp8.jpg",
+              "style": {
+                "width": 100,
+                "height": 133.33366274542746,
+                "left": 0,
+                "top": -16.66683137271373
+              }
+            },
+            "look": {
+              "shape": "diamond",
+              "clipPath": "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 21.9625,
+              "y": 39.2712,
+              "w": 32.381,
+              "h": 45.9459
+            },
+            "photoId": "sp9",
+            "photo": {
+              "url": "https://print-assets.invalid/sp9.jpg",
+              "style": {
+                "width": 149.95276917194346,
+                "height": 100,
+                "left": -24.97638458597173,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "diamond",
+              "clipPath": "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 39.1632,
+              "y": 14.8649,
+              "w": 32.3809,
+              "h": 45.9459
+            },
+            "photoId": "sp10",
+            "photo": {
+              "url": "https://print-assets.invalid/sp10.jpg",
+              "style": {
+                "width": 100.0000617648058,
+                "height": 100,
+                "left": -0.000030882402903387174,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "diamond",
+              "clipPath": "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 76.1905,
+            "y": 48.6486,
+            "w": 18.0952,
+            "h": 35.1352
+          },
+          "caption": {
+            "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+          "align": "left",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 76.1905,
+              "y": 27.027,
+              "w": 18.0952,
+              "h": 9.4595
+            },
+            "text": "Last evening",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.5048,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 76.1905,
+              "y": 38.5135,
+              "w": 18.0952,
+              "h": 4.7297
+            },
+            "text": "8 Nov 2026",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 2.1905,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "index": 6,
+      "screen": {
+        "kind": "page",
+        "pageId": "s6",
+        "layoutId": "g-l-four-petals",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 5.7143,
+              "y": 6.7568,
+              "w": 27.8571,
+              "h": 42.2297,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    73.6
+                  ],
+                  [
+                    1.511,
+                    59.241
+                  ],
+                  [
+                    5.986,
+                    45.434
+                  ],
+                  [
+                    13.252,
+                    32.71
+                  ],
+                  [
+                    23.031,
+                    21.557
+                  ],
+                  [
+                    34.947,
+                    12.404
+                  ],
+                  [
+                    48.541,
+                    5.602
+                  ],
+                  [
+                    63.292,
+                    1.414
+                  ],
+                  [
+                    78.632,
+                    0
+                  ],
+                  [
+                    91.453,
+                    0
+                  ],
+                  [
+                    97.497,
+                    2.343
+                  ],
+                  [
+                    100,
+                    8
+                  ],
+                  [
+                    100,
+                    100
+                  ],
+                  [
+                    8.547,
+                    100
+                  ],
+                  [
+                    2.503,
+                    97.657
+                  ],
+                  [
+                    0,
+                    92
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp11",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%234d7c0f%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed12%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 124.79989585912668,
+                "left": 0,
+                "top": -12.39994792956334
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 73.6%, 1.511% 59.241%, 5.986% 45.434%, 13.252% 32.71%, 23.031% 21.557%, 34.947% 12.404%, 48.541% 5.602%, 63.292% 1.414%, 78.632% 0%, 91.453% 0%, 97.497% 2.343%, 100% 8%, 100% 100%, 8.547% 100%, 2.503% 97.657%, 0% 92%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 35,
+              "y": 6.7568,
+              "w": 27.8571,
+              "h": 42.2297,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    8
+                  ],
+                  [
+                    2.503,
+                    2.343
+                  ],
+                  [
+                    8.547,
+                    0
+                  ],
+                  [
+                    21.368,
+                    0
+                  ],
+                  [
+                    36.708,
+                    1.414
+                  ],
+                  [
+                    51.459,
+                    5.602
+                  ],
+                  [
+                    65.053,
+                    12.404
+                  ],
+                  [
+                    76.969,
+                    21.557
+                  ],
+                  [
+                    86.748,
+                    32.71
+                  ],
+                  [
+                    94.014,
+                    45.434
+                  ],
+                  [
+                    98.489,
+                    59.241
+                  ],
+                  [
+                    100,
+                    73.6
+                  ],
+                  [
+                    100,
+                    92
+                  ],
+                  [
+                    97.497,
+                    97.657
+                  ],
+                  [
+                    91.453,
+                    100
+                  ],
+                  [
+                    0,
+                    100
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp12",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23b45309%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed13%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 160.20647945959553,
+                "height": 100,
+                "left": -30.103239729797764,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 8%, 2.503% 2.343%, 8.547% 0%, 21.368% 0%, 36.708% 1.414%, 51.459% 5.602%, 65.053% 12.404%, 76.969% 21.557%, 86.748% 32.71%, 94.014% 45.434%, 98.489% 59.241%, 100% 73.6%, 100% 92%, 97.497% 97.657%, 91.453% 100%, 0% 100%)"
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 5.7143,
+              "y": 51.0135,
+              "w": 27.8571,
+              "h": 42.2297,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    8
+                  ],
+                  [
+                    2.503,
+                    2.343
+                  ],
+                  [
+                    8.547,
+                    0
+                  ],
+                  [
+                    100,
+                    0
+                  ],
+                  [
+                    100,
+                    92
+                  ],
+                  [
+                    97.497,
+                    97.657
+                  ],
+                  [
+                    91.453,
+                    100
+                  ],
+                  [
+                    78.632,
+                    100
+                  ],
+                  [
+                    63.292,
+                    98.586
+                  ],
+                  [
+                    48.541,
+                    94.398
+                  ],
+                  [
+                    34.947,
+                    87.596
+                  ],
+                  [
+                    23.031,
+                    78.443
+                  ],
+                  [
+                    13.252,
+                    67.29
+                  ],
+                  [
+                    5.986,
+                    54.566
+                  ],
+                  [
+                    1.511,
+                    40.759
+                  ],
+                  [
+                    0,
+                    26.4
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp13",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23be123c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed14%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 106.83769598961777,
+                "height": 99.99999999999999,
+                "left": -3.4188479948088855,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 8%, 2.503% 2.343%, 8.547% 0%, 100% 0%, 100% 92%, 97.497% 97.657%, 91.453% 100%, 78.632% 100%, 63.292% 98.586%, 48.541% 94.398%, 34.947% 87.596%, 23.031% 78.443%, 13.252% 67.29%, 5.986% 54.566%, 1.511% 40.759%, 0% 26.4%)"
+            }
+          },
+          {
+            "index": 3,
+            "rect": {
+              "x": 35,
+              "y": 51.0135,
+              "w": 27.8571,
+              "h": 42.2297,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    91.453,
+                    0
+                  ],
+                  [
+                    97.497,
+                    2.343
+                  ],
+                  [
+                    100,
+                    8
+                  ],
+                  [
+                    100,
+                    26.4
+                  ],
+                  [
+                    98.489,
+                    40.759
+                  ],
+                  [
+                    94.014,
+                    54.566
+                  ],
+                  [
+                    86.748,
+                    67.29
+                  ],
+                  [
+                    76.969,
+                    78.443
+                  ],
+                  [
+                    65.053,
+                    87.596
+                  ],
+                  [
+                    51.459,
+                    94.398
+                  ],
+                  [
+                    36.708,
+                    98.586
+                  ],
+                  [
+                    21.368,
+                    100
+                  ],
+                  [
+                    8.547,
+                    100
+                  ],
+                  [
+                    2.503,
+                    97.657
+                  ],
+                  [
+                    0,
+                    92
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp14",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23334155%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed15%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 124.79989585912668,
+                "left": 0,
+                "top": -12.39994792956334
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 91.453% 0%, 97.497% 2.343%, 100% 8%, 100% 26.4%, 98.489% 40.759%, 94.014% 54.566%, 86.748% 67.29%, 76.969% 78.443%, 65.053% 87.596%, 51.459% 94.398%, 36.708% 98.586%, 21.368% 100%, 8.547% 100%, 2.503% 97.657%, 0% 92%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 68.5714,
+            "y": 52.7027,
+            "w": 25.7143,
+            "h": 31.0811
+          },
+          "caption": null,
+          "text": "",
+          "align": "left",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 68.5714,
+              "y": 31.0811,
+              "w": 25.7143,
+              "h": 9.4594
+            },
+            "text": "Last evening",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.8095,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 68.5714,
+              "y": 42.5676,
+              "w": 25.7143,
+              "h": 4.7297
+            },
+            "text": "8 Nov 2026",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 2.1905,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            }
+          }
+        ]
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s6",
+        "layoutId": "g-l-four-petals",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 5.7143,
+              "y": 6.7568,
+              "w": 27.8571,
+              "h": 42.2297
+            },
+            "photoId": "sp11",
+            "photo": {
+              "url": "https://print-assets.invalid/sp11.jpg",
+              "style": {
+                "width": 100,
+                "height": 124.79989585912668,
+                "left": 0,
+                "top": -12.39994792956334
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 73.6%, 1.511% 59.241%, 5.986% 45.434%, 13.252% 32.71%, 23.031% 21.557%, 34.947% 12.404%, 48.541% 5.602%, 63.292% 1.414%, 78.632% 0%, 91.453% 0%, 97.497% 2.343%, 100% 8%, 100% 100%, 8.547% 100%, 2.503% 97.657%, 0% 92%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 35,
+              "y": 6.7568,
+              "w": 27.8571,
+              "h": 42.2297
+            },
+            "photoId": "sp12",
+            "photo": {
+              "url": "https://print-assets.invalid/sp12.jpg",
+              "style": {
+                "width": 160.20647945959553,
+                "height": 100,
+                "left": -30.103239729797764,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 8%, 2.503% 2.343%, 8.547% 0%, 21.368% 0%, 36.708% 1.414%, 51.459% 5.602%, 65.053% 12.404%, 76.969% 21.557%, 86.748% 32.71%, 94.014% 45.434%, 98.489% 59.241%, 100% 73.6%, 100% 92%, 97.497% 97.657%, 91.453% 100%, 0% 100%)"
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 5.7143,
+              "y": 51.0135,
+              "w": 27.8571,
+              "h": 42.2297
+            },
+            "photoId": "sp13",
+            "photo": {
+              "url": "https://print-assets.invalid/sp13.jpg",
+              "style": {
+                "width": 106.83769598961777,
+                "height": 99.99999999999999,
+                "left": -3.4188479948088855,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 8%, 2.503% 2.343%, 8.547% 0%, 100% 0%, 100% 92%, 97.497% 97.657%, 91.453% 100%, 78.632% 100%, 63.292% 98.586%, 48.541% 94.398%, 34.947% 87.596%, 23.031% 78.443%, 13.252% 67.29%, 5.986% 54.566%, 1.511% 40.759%, 0% 26.4%)"
+            }
+          },
+          {
+            "index": 3,
+            "rect": {
+              "x": 35,
+              "y": 51.0135,
+              "w": 27.8571,
+              "h": 42.2297
+            },
+            "photoId": "sp14",
+            "photo": {
+              "url": "https://print-assets.invalid/sp14.jpg",
+              "style": {
+                "width": 100,
+                "height": 124.79989585912668,
+                "left": 0,
+                "top": -12.39994792956334
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 91.453% 0%, 97.497% 2.343%, 100% 8%, 100% 26.4%, 98.489% 40.759%, 94.014% 54.566%, 86.748% 67.29%, 76.969% 78.443%, 65.053% 87.596%, 51.459% 94.398%, 36.708% 98.586%, 21.368% 100%, 8.547% 100%, 2.503% 97.657%, 0% 92%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 68.5714,
+            "y": 52.7027,
+            "w": 25.7143,
+            "h": 31.0811
+          },
+          "caption": null,
+          "text": "",
+          "align": "left",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 68.5714,
+              "y": 31.0811,
+              "w": 25.7143,
+              "h": 9.4594
+            },
+            "text": "Last evening",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.8095,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 68.5714,
+              "y": 42.5676,
+              "w": 25.7143,
+              "h": 4.7297
+            },
+            "text": "8 Nov 2026",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 2.1905,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "index": 7,
+      "screen": {
+        "kind": "page",
+        "pageId": "s7",
+        "layoutId": "g-l-five-hex",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 4.7619,
+              "y": 17.3883,
+              "w": 25.7143,
+              "h": 31.5982,
+              "shape": {
+                "kind": "hexagon"
+              }
+            },
+            "photoId": "sp15",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%230f766e%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed1%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 129.8630567371924,
+                "height": 100,
+                "left": -14.931528368596204,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 4.7619,
+              "y": 51.0135,
+              "w": 25.7143,
+              "h": 31.5982,
+              "shape": {
+                "kind": "hexagon"
+              }
+            },
+            "photoId": "sp16",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231d4ed8%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed2%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 99.99999999999999,
+                "height": 115.47020639389825,
+                "left": 0,
+                "top": -7.735103196949126
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 25.2848,
+              "y": 34.2009,
+              "w": 25.7143,
+              "h": 31.5982,
+              "shape": {
+                "kind": "hexagon"
+              }
+            },
+            "photoId": "sp17",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23a21caf%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed3%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 99.99999999999999,
+                "height": 153.96027519186433,
+                "left": 0,
+                "top": -26.980137595932163
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 3,
+            "rect": {
+              "x": 45.8077,
+              "y": 17.3883,
+              "w": 25.7143,
+              "h": 31.5982,
+              "shape": {
+                "kind": "hexagon"
+              }
+            },
+            "photoId": "sp18",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%234d7c0f%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed4%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 129.8630567371924,
+                "height": 100,
+                "left": -14.931528368596204,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 4,
+            "rect": {
+              "x": 45.8077,
+              "y": 51.0135,
+              "w": 25.7143,
+              "h": 31.5982,
+              "shape": {
+                "kind": "hexagon"
+              }
+            },
+            "photoId": "sp19",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23b45309%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed5%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 99.99999999999999,
+                "height": 115.47020639389825,
+                "left": 0,
+                "top": -7.735103196949126
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 76.1905,
+            "y": 52.7027,
+            "w": 18.0952,
+            "h": 31.0811
+          },
+          "caption": {
+            "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+          "align": "left",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 76.1905,
+              "y": 31.0811,
+              "w": 18.0952,
+              "h": 9.4594
+            },
+            "text": "Last evening",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.5048,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 76.1905,
+              "y": 42.5676,
+              "w": 18.0952,
+              "h": 4.7297
+            },
+            "text": "8 Nov 2026",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 2.1905,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            }
+          }
+        ]
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s7",
+        "layoutId": "g-l-five-hex",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 4.7619,
+              "y": 17.3883,
+              "w": 25.7143,
+              "h": 31.5982
+            },
+            "photoId": "sp15",
+            "photo": {
+              "url": "https://print-assets.invalid/sp15.jpg",
+              "style": {
+                "width": 129.8630567371924,
+                "height": 100,
+                "left": -14.931528368596204,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 4.7619,
+              "y": 51.0135,
+              "w": 25.7143,
+              "h": 31.5982
+            },
+            "photoId": "sp16",
+            "photo": {
+              "url": "https://print-assets.invalid/sp16.jpg",
+              "style": {
+                "width": 99.99999999999999,
+                "height": 115.47020639389825,
+                "left": 0,
+                "top": -7.735103196949126
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 25.2848,
+              "y": 34.2009,
+              "w": 25.7143,
+              "h": 31.5982
+            },
+            "photoId": "sp17",
+            "photo": {
+              "url": "https://print-assets.invalid/sp17.jpg",
+              "style": {
+                "width": 99.99999999999999,
+                "height": 153.96027519186433,
+                "left": 0,
+                "top": -26.980137595932163
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 3,
+            "rect": {
+              "x": 45.8077,
+              "y": 17.3883,
+              "w": 25.7143,
+              "h": 31.5982
+            },
+            "photoId": "sp18",
+            "photo": {
+              "url": "https://print-assets.invalid/sp18.jpg",
+              "style": {
+                "width": 129.8630567371924,
+                "height": 100,
+                "left": -14.931528368596204,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 4,
+            "rect": {
+              "x": 45.8077,
+              "y": 51.0135,
+              "w": 25.7143,
+              "h": 31.5982
+            },
+            "photoId": "sp19",
+            "photo": {
+              "url": "https://print-assets.invalid/sp19.jpg",
+              "style": {
+                "width": 99.99999999999999,
+                "height": 115.47020639389825,
+                "left": 0,
+                "top": -7.735103196949126
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 76.1905,
+            "y": 52.7027,
+            "w": 18.0952,
+            "h": 31.0811
+          },
+          "caption": {
+            "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+          "align": "left",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 76.1905,
+              "y": 31.0811,
+              "w": 18.0952,
+              "h": 9.4594
+            },
+            "text": "Last evening",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.5048,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 76.1905,
+              "y": 42.5676,
+              "w": 18.0952,
+              "h": 4.7297
+            },
+            "text": "8 Nov 2026",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 2.1905,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "index": 8,
+      "screen": {
+        "kind": "page",
+        "pageId": "s8",
+        "layoutId": "g-l-two-stack",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 60.9524,
+              "h": 55.7388,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    100,
+                    0
+                  ],
+                  [
+                    90.981,
+                    86.765
+                  ],
+                  [
+                    0,
+                    100
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp20",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23be123c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed6%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 206.8852421497257,
+                "left": 0,
+                "top": -53.442621074862856
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 0%, 90.981% 86.765%, 0% 100%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 0,
+              "y": 50.4291,
+              "w": 55.22,
+              "h": 49.5709,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    14.818
+                  ],
+                  [
+                    100,
+                    0
+                  ],
+                  [
+                    89.796,
+                    100
+                  ],
+                  [
+                    0,
+                    100
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp21",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23334155%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed7%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 105.40752460589755,
+                "left": 0,
+                "top": -2.7037623029487747
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 14.818%, 100% 0%, 89.796% 100%, 0% 100%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 65.7143,
+            "y": 54.0541,
+            "w": 28.5714,
+            "h": 29.7297
+          },
+          "caption": {
+            "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+          "align": "left",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 65.7143,
+              "y": 32.4324,
+              "w": 28.5714,
+              "h": 9.4595
+            },
+            "text": "Last evening",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.8095,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 65.7143,
+              "y": 44.5946,
+              "w": 20.9524,
+              "h": 5.4054
+            },
+            "text": "8 Nov 2026",
+            "align": "center",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 2.1905,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            },
+            "plate": {
+              "art": {
+                "stickerId": "plate-label",
+                "viewBox": "0 0 140 30",
+                "preserveAspectRatio": "none",
+                "paths": [
+                  {
+                    "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+                    "fill": "#235A5E"
+                  },
+                  {
+                    "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+                    "fill": "none",
+                    "stroke": "rgba(83, 126, 129, 0.9)",
+                    "strokeWidth": 0.7
+                  },
+                  {
+                    "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+                    "fill": "#709496"
+                  },
+                  {
+                    "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+                    "fill": "rgba(255, 255, 255, 0.5)"
+                  }
+                ]
+              },
+              "textBox": {
+                "x": 11,
+                "y": 12,
+                "w": 78,
+                "h": 76
+              },
+              "ink": "light"
+            }
+          }
+        ],
+        "decorations": [
+          {
+            "kind": "sticker",
+            "rect": {
+              "x": 65.7143,
+              "y": 22.973,
+              "w": 4.7619,
+              "h": 6.7567
+            },
+            "layer": "over",
+            "art": {
+              "stickerId": "photo-corner",
+              "viewBox": "0 0 40 40",
+              "preserveAspectRatio": "xMidYMid meet",
+              "paths": [
+                {
+                  "d": "M0 2A2 2 0 0 1 2 0H40L0 40Z",
+                  "fill": "#235A5E"
+                },
+                {
+                  "d": "M36 2.6L2.6 36",
+                  "fill": "none",
+                  "stroke": "rgba(145, 173, 175, 0.55)",
+                  "strokeWidth": 1,
+                  "strokeLinecap": "round"
+                },
+                {
+                  "d": "M6 0.8H34",
+                  "fill": "none",
+                  "stroke": "rgba(255, 255, 255, 0.18)",
+                  "strokeWidth": 1.2,
+                  "strokeLinecap": "round"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s8",
+        "layoutId": "g-l-two-stack",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": -1.4285714285714286,
+              "y": -2.027027027027027,
+              "w": 62.38097142857142,
+              "h": 57.76582702702703
+            },
+            "photoId": "sp20",
+            "photo": {
+              "url": "https://print-assets.invalid/sp20.jpg",
+              "style": {
+                "width": 100,
+                "height": 204.3042749112493,
+                "left": 0,
+                "top": -52.152137455624654
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100.3694% 0%, 91.1875% 87.2294%, 0% 100.329%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": -1.4285714285714286,
+              "y": 50.4291,
+              "w": 56.64857142857143,
+              "h": 51.597927027027026
+            },
+            "photoId": "sp21",
+            "photo": {
+              "url": "https://print-assets.invalid/sp21.jpg",
+              "style": {
+                "width": 100,
+                "height": 103.88640659039675,
+                "left": 0,
+                "top": -1.9432032951983729
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 14.6042%, 100% 0%, 89.6466% 100%, 0% 100%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 65.7143,
+            "y": 54.0541,
+            "w": 28.5714,
+            "h": 29.7297
+          },
+          "caption": {
+            "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "Narrow lanes, warm stone walls, and the slow light of late afternoon.",
+          "align": "left",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 65.7143,
+              "y": 32.4324,
+              "w": 28.5714,
+              "h": 9.4595
+            },
+            "text": "Last evening",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.8095,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 65.7143,
+              "y": 44.5946,
+              "w": 20.9524,
+              "h": 5.4054
+            },
+            "text": "8 Nov 2026",
+            "align": "center",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 2.1905,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            },
+            "plate": {
+              "art": {
+                "stickerId": "plate-label",
+                "viewBox": "0 0 140 30",
+                "preserveAspectRatio": "none",
+                "paths": [
+                  {
+                    "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+                    "fill": "#235A5E"
+                  },
+                  {
+                    "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+                    "fill": "none",
+                    "stroke": "rgba(83, 126, 129, 0.9)",
+                    "strokeWidth": 0.7
+                  },
+                  {
+                    "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+                    "fill": "#709496"
+                  },
+                  {
+                    "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+                    "fill": "rgba(255, 255, 255, 0.5)"
+                  }
+                ]
+              },
+              "textBox": {
+                "x": 11,
+                "y": 12,
+                "w": 78,
+                "h": 76
+              },
+              "ink": "light"
+            }
+          }
+        ],
+        "decorations": [
+          {
+            "kind": "sticker",
+            "rect": {
+              "x": 65.7143,
+              "y": 22.973,
+              "w": 4.7619,
+              "h": 6.7567
+            },
+            "layer": "over",
+            "art": {
+              "stickerId": "photo-corner",
+              "viewBox": "0 0 40 40",
+              "preserveAspectRatio": "xMidYMid meet",
+              "paths": [
+                {
+                  "d": "M0 2A2 2 0 0 1 2 0H40L0 40Z",
+                  "fill": "#235A5E"
+                },
+                {
+                  "d": "M36 2.6L2.6 36",
+                  "fill": "none",
+                  "stroke": "rgba(145, 173, 175, 0.55)",
+                  "strokeWidth": 1,
+                  "strokeLinecap": "round"
+                },
+                {
+                  "d": "M6 0.8H34",
+                  "fill": "none",
+                  "stroke": "rgba(255, 255, 255, 0.18)",
+                  "strokeWidth": 1.2,
+                  "strokeLinecap": "round"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

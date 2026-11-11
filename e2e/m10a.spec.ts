@@ -21,7 +21,8 @@
  *      save route) → Publish changes → viewer 375 + 1280 pages are 210:148 → Download PDF → MediaBox
  *      612×437 pt, backgrounds still present
  *   f. review fix B1: service-role reset of meta.userEdited (+ portrait) → review screen drops the page-2
- *      background photo → Update album succeeds; the photo leaves every slot/cover, the page background
+ *      background photo; the user background makes the review show the edited-album panel (no Update
+ *      album bar, M10c T11) → updateAlbumAction via Next-Action succeeds; the photo leaves every slot/cover, the page background
  *      (photo, veil 0.8, source user) survives on the page that kept its companions
  *   g. review fix S3: book default also set to that photo (service role) → the real deletePhotoAction
  *      (POST with the Next-Action id from this build's .next manifest — no UI calls it yet) → photo row
@@ -673,10 +674,18 @@ test("f. B1: Update album keeps a page background whose photo was DROPPED on rev
     .poll(async () => (await admin.from("photos").select("status, user_override").eq("id", bgPhotoId).single()).data, { timeout: 15_000 })
     .toMatchObject({ status: "dropped", user_override: true });
 
-  await expect(page.getByTestId("update-album-bar")).toBeVisible({ timeout: 15_000 });
-  await page.getByTestId("update-album").click();
-  await expect(page.getByTestId("update-album-toast")).toHaveText("Album updated", { timeout: 30_000 });
-  await expect(page.getByTestId("update-album-error")).toHaveCount(0);
+  // M10c T11 (D-068): a user background counts as an edit on the review screen (albumEditedByUser →
+  // hasUserBackgrounds), so the UI offers only "Continue in the editor", never the Update album bar.
+  // The relayout itself (updateAlbumAction, refuses only meta.userEdited docs) is run via its
+  // Next-Action id, like g below: it must keep the user page background whose photo was dropped.
+  await expect(page.getByTestId("review-open-editor")).toBeVisible();
+  await expect(page.getByTestId("update-album-bar")).toHaveCount(0);
+  const res = await page.request.post(`/books/${bookId}/review`, {
+    headers: { "Next-Action": actionId("updateAlbumAction"), "Content-Type": "text/plain;charset=UTF-8", Accept: "text/x-component", Origin: baseURL },
+    data: JSON.stringify([bookId]),
+  });
+  expect(res.status()).toBe(200);
+  expect(await res.text()).toContain('"ok":true');
 
   const after = await bookRow();
   const pages = after.doc.pages as unknown as DocPage[];
@@ -694,12 +703,12 @@ test("f. B1: Update album keeps a page background whose photo was DROPPED on rev
   b1Done = true;
 });
 
-function deletePhotoActionId(): string {
+function actionId(name: "deletePhotoAction" | "updateAlbumAction"): string {
   const m = JSON.parse(readFileSync(path.join(REPO, ".next", "server", "server-reference-manifest.json"), "utf8")) as {
     node: Record<string, { exportedName?: string }>;
   };
-  const hit = Object.entries(m.node).find(([, v]) => v.exportedName === "deletePhotoAction");
-  if (!hit) throw new Error("deletePhotoAction not in the server-reference manifest (run next build in this copy)");
+  const hit = Object.entries(m.node).find(([, v]) => v.exportedName === name);
+  if (!hit) throw new Error(`${name} not in the server-reference manifest (run next build in this copy)`);
   return hit[0];
 }
 
@@ -719,7 +728,7 @@ test("g. S3: deletePhotoAction on a background photo strips it from the doc; edi
   // Next-Action id from this build's manifest and the signed-in user's cookies.
   const res = await page.request.post(`/books/${bookId}/upload`, {
     headers: {
-      "Next-Action": deletePhotoActionId(),
+      "Next-Action": actionId("deletePhotoAction"),
       "Content-Type": "text/plain;charset=UTF-8",
       Accept: "text/x-component",
       Origin: baseURL,

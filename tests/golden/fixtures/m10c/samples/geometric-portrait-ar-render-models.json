@@ -1,0 +1,3256 @@
+{
+  "cover": {
+    "screen": {
+      "kind": "cover",
+      "layoutId": "g-p-cover",
+      "knownLayout": true,
+      "slot": {
+        "index": 0,
+        "rect": {
+          "x": 0,
+          "y": 27.619,
+          "w": 100,
+          "h": 72.381,
+          "shape": {
+            "kind": "polygon",
+            "points": [
+              [
+                0,
+                19.737
+              ],
+              [
+                100,
+                0
+              ],
+              [
+                100,
+                100
+              ],
+              [
+                0,
+                100
+              ]
+            ]
+          }
+        },
+        "photoId": "d0",
+        "photo": {
+          "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23c2410c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed0%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+          "style": {
+            "width": 100,
+            "height": 129.8244759926693,
+            "left": 0,
+            "top": -14.912237996334653
+          }
+        },
+        "look": {
+          "shape": "polygon",
+          "clipPath": "polygon(0% 19.737%, 100% 0%, 100% 100%, 0% 100%)"
+        }
+      },
+      "textRect": {
+        "x": 8.1081,
+        "y": 7.619,
+        "w": 83.7838,
+        "h": 17.1429
+      },
+      "title": {
+        "text": "أزقة وضوء",
+        "lang": "ar",
+        "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif",
+        "sizeCqw": 7
+      },
+      "subtitle": {
+        "text": "أسبوع بعيدًا، ٢٠٢٦",
+        "lang": "ar",
+        "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif"
+      },
+      "panels": [
+        {
+          "bind": "coverTitle",
+          "role": "title",
+          "rect": {
+            "x": 8.1081,
+            "y": 7.619,
+            "w": 83.7838,
+            "h": 12.381
+          },
+          "text": "أزقة وضوء",
+          "lang": "ar",
+          "align": "left",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 10.1351,
+          "lineHeight": 1.1,
+          "typography": {
+            "fontWeight": 700,
+            "fontStyle": "normal"
+          }
+        },
+        {
+          "bind": "coverSubtitle",
+          "role": "year",
+          "rect": {
+            "x": 8.1081,
+            "y": 20.9524,
+            "w": 83.7838,
+            "h": 3.8095
+          },
+          "text": "أسبوع بعيدًا، ٢٠٢٦",
+          "lang": "ar",
+          "align": "left",
+          "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+          "fontSizeCqw": 3.1081,
+          "lineHeight": 1.25,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        }
+      ]
+    },
+    "bleed": {
+      "kind": "cover",
+      "layoutId": "g-p-cover",
+      "knownLayout": true,
+      "slot": {
+        "index": 0,
+        "rect": {
+          "x": -2.027027027027027,
+          "y": 27.619,
+          "w": 104.05405405405406,
+          "h": 73.80957142857143
+        },
+        "photoId": "d0",
+        "photo": {
+          "url": "https://print-assets.invalid/d0.jpg",
+          "style": {
+            "width": 100,
+            "height": 132.4730328130971,
+            "left": 0,
+            "top": -16.236516406548546
+          }
+        },
+        "look": {
+          "shape": "polygon",
+          "clipPath": "polygon(0% 19.7473%, 100% -0.3923%, 100% 100%, 0% 100%)"
+        }
+      },
+      "textRect": {
+        "x": 8.1081,
+        "y": 7.619,
+        "w": 83.7838,
+        "h": 17.1429
+      },
+      "title": {
+        "text": "أزقة وضوء",
+        "lang": "ar",
+        "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif",
+        "sizeCqw": 7
+      },
+      "subtitle": {
+        "text": "أسبوع بعيدًا، ٢٠٢٦",
+        "lang": "ar",
+        "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif"
+      },
+      "panels": [
+        {
+          "bind": "coverTitle",
+          "role": "title",
+          "rect": {
+            "x": 8.1081,
+            "y": 7.619,
+            "w": 83.7838,
+            "h": 12.381
+          },
+          "text": "أزقة وضوء",
+          "lang": "ar",
+          "align": "left",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 10.1351,
+          "lineHeight": 1.1,
+          "typography": {
+            "fontWeight": 700,
+            "fontStyle": "normal"
+          }
+        },
+        {
+          "bind": "coverSubtitle",
+          "role": "year",
+          "rect": {
+            "x": 8.1081,
+            "y": 20.9524,
+            "w": 83.7838,
+            "h": 3.8095
+          },
+          "text": "أسبوع بعيدًا، ٢٠٢٦",
+          "lang": "ar",
+          "align": "left",
+          "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+          "fontSizeCqw": 3.1081,
+          "lineHeight": 1.25,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        }
+      ]
+    }
+  },
+  "pages": [
+    {
+      "index": 0,
+      "screen": {
+        "kind": "page",
+        "pageId": "s0",
+        "layoutId": "g-p-one-band",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 100,
+              "h": 62.1283,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    100,
+                    0
+                  ],
+                  [
+                    100,
+                    100
+                  ],
+                  [
+                    0,
+                    77.006
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp0",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%230f766e%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed1%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 132.19122064895262,
+                "height": 100,
+                "left": -16.09561032447631,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 0%, 100% 100%, 0% 77.006%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 8.1081,
+            "y": 82.8571,
+            "w": 83.7838,
+            "h": 12.8572
+          },
+          "caption": {
+            "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+          "lang": "ar",
+          "align": "left",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 17.5676,
+              "y": 67.619,
+              "w": 74.3243,
+              "h": 6.6667
+            },
+            "text": "جولة في المدينة القديمة",
+            "lang": "ar",
+            "align": "left",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 8.1081,
+              "y": 76.1905,
+              "w": 32.4324,
+              "h": 3.8095
+            },
+            "text": "٣ نوفمبر ٢٠٢٦",
+            "lang": "ar",
+            "align": "center",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.1081,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            },
+            "plate": {
+              "art": {
+                "stickerId": "plate-label",
+                "viewBox": "0 0 140 30",
+                "preserveAspectRatio": "none",
+                "paths": [
+                  {
+                    "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+                    "fill": "#235A5E"
+                  },
+                  {
+                    "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+                    "fill": "none",
+                    "stroke": "rgba(83, 126, 129, 0.9)",
+                    "strokeWidth": 0.7
+                  },
+                  {
+                    "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+                    "fill": "#709496"
+                  },
+                  {
+                    "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+                    "fill": "rgba(255, 255, 255, 0.5)"
+                  }
+                ]
+              },
+              "textBox": {
+                "x": 11,
+                "y": 12,
+                "w": 78,
+                "h": 76
+              },
+              "ink": "light"
+            }
+          }
+        ],
+        "decorations": [
+          {
+            "kind": "sticker",
+            "rect": {
+              "x": 8.1081,
+              "y": 68.0952,
+              "w": 6.7568,
+              "h": 4.7619
+            },
+            "layer": "over",
+            "art": {
+              "stickerId": "photo-corner",
+              "viewBox": "0 0 40 40",
+              "preserveAspectRatio": "xMidYMid meet",
+              "paths": [
+                {
+                  "d": "M0 2A2 2 0 0 1 2 0H40L0 40Z",
+                  "fill": "#235A5E"
+                },
+                {
+                  "d": "M36 2.6L2.6 36",
+                  "fill": "none",
+                  "stroke": "rgba(145, 173, 175, 0.55)",
+                  "strokeWidth": 1,
+                  "strokeLinecap": "round"
+                },
+                {
+                  "d": "M6 0.8H34",
+                  "fill": "none",
+                  "stroke": "rgba(255, 255, 255, 0.18)",
+                  "strokeWidth": 1.2,
+                  "strokeLinecap": "round"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s0",
+        "layoutId": "g-p-one-band",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": -2.027027027027027,
+              "y": -1.4285714285714286,
+              "w": 104.05405405405406,
+              "h": 63.55687142857144
+            },
+            "photoId": "sp0",
+            "photo": {
+              "url": "https://print-assets.invalid/sp0.jpg",
+              "style": {
+                "width": 129.96207840893877,
+                "height": 100,
+                "left": -14.981039204469383,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 0%, 100% 100.4556%, 0% 77.0672%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 8.1081,
+            "y": 82.8571,
+            "w": 83.7838,
+            "h": 12.8572
+          },
+          "caption": {
+            "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+          "lang": "ar",
+          "align": "left",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 17.5676,
+              "y": 67.619,
+              "w": 74.3243,
+              "h": 6.6667
+            },
+            "text": "جولة في المدينة القديمة",
+            "lang": "ar",
+            "align": "left",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 8.1081,
+              "y": 76.1905,
+              "w": 32.4324,
+              "h": 3.8095
+            },
+            "text": "٣ نوفمبر ٢٠٢٦",
+            "lang": "ar",
+            "align": "center",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.1081,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            },
+            "plate": {
+              "art": {
+                "stickerId": "plate-label",
+                "viewBox": "0 0 140 30",
+                "preserveAspectRatio": "none",
+                "paths": [
+                  {
+                    "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+                    "fill": "#235A5E"
+                  },
+                  {
+                    "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+                    "fill": "none",
+                    "stroke": "rgba(83, 126, 129, 0.9)",
+                    "strokeWidth": 0.7
+                  },
+                  {
+                    "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+                    "fill": "#709496"
+                  },
+                  {
+                    "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+                    "fill": "rgba(255, 255, 255, 0.5)"
+                  }
+                ]
+              },
+              "textBox": {
+                "x": 11,
+                "y": 12,
+                "w": 78,
+                "h": 76
+              },
+              "ink": "light"
+            }
+          }
+        ],
+        "decorations": [
+          {
+            "kind": "sticker",
+            "rect": {
+              "x": 8.1081,
+              "y": 68.0952,
+              "w": 6.7568,
+              "h": 4.7619
+            },
+            "layer": "over",
+            "art": {
+              "stickerId": "photo-corner",
+              "viewBox": "0 0 40 40",
+              "preserveAspectRatio": "xMidYMid meet",
+              "paths": [
+                {
+                  "d": "M0 2A2 2 0 0 1 2 0H40L0 40Z",
+                  "fill": "#235A5E"
+                },
+                {
+                  "d": "M36 2.6L2.6 36",
+                  "fill": "none",
+                  "stroke": "rgba(145, 173, 175, 0.55)",
+                  "strokeWidth": 1,
+                  "strokeLinecap": "round"
+                },
+                {
+                  "d": "M6 0.8H34",
+                  "fill": "none",
+                  "stroke": "rgba(255, 255, 255, 0.18)",
+                  "strokeWidth": 1.2,
+                  "strokeLinecap": "round"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "index": 1,
+      "screen": {
+        "kind": "page",
+        "pageId": "s1",
+        "layoutId": "g-p-two-diag",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 100,
+              "h": 47.8426,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    100,
+                    0
+                  ],
+                  [
+                    100,
+                    100
+                  ],
+                  [
+                    0,
+                    70.14
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp1",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231d4ed8%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed2%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 147.30844577048586,
+                "left": 0,
+                "top": -23.65422288524293
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 0%, 100% 100%, 0% 70.14%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 0,
+              "y": 35.0145,
+              "w": 100,
+              "h": 44.9855,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    100,
+                    31.756
+                  ],
+                  [
+                    100,
+                    100
+                  ],
+                  [
+                    0,
+                    100
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp2",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23a21caf%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed3%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 208.88564974992823,
+                "left": 0,
+                "top": -54.44282487496412
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 31.756%, 100% 100%, 0% 100%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 6.7568,
+            "y": 83.8095,
+            "w": 86.4864,
+            "h": 11.9048
+          },
+          "caption": {
+            "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+          "lang": "ar",
+          "align": "center",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s1",
+        "layoutId": "g-p-two-diag",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": -2.027027027027027,
+              "y": -1.4285714285714286,
+              "w": 104.05405405405406,
+              "h": 49.27117142857143
+            },
+            "photoId": "sp1",
+            "photo": {
+              "url": "https://print-assets.invalid/sp1.jpg",
+              "style": {
+                "width": 100,
+                "height": 148.83618799208963,
+                "left": 0,
+                "top": -24.418093996044817
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 0%, 100% 100.5877%, 0% 70.418%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": -2.027027027027027,
+              "y": 35.0145,
+              "w": 104.05405405405406,
+              "h": 44.9855
+            },
+            "photoId": "sp2",
+            "photo": {
+              "url": "https://print-assets.invalid/sp2.jpg",
+              "style": {
+                "width": 100,
+                "height": 217.35398690195234,
+                "left": 0,
+                "top": -58.67699345097617
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% -0.6437%, 100% 32.3997%, 100% 100%, 0% 100%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 6.7568,
+            "y": 83.8095,
+            "w": 86.4864,
+            "h": 11.9048
+          },
+          "caption": {
+            "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+          "lang": "ar",
+          "align": "center",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        }
+      }
+    },
+    {
+      "index": 2,
+      "screen": {
+        "kind": "page",
+        "pageId": "s2",
+        "layoutId": "g-p-spread-band",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 98.9865,
+              "h": 47.6978,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    100,
+                    0
+                  ],
+                  [
+                    100,
+                    100
+                  ],
+                  [
+                    0,
+                    70.353
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp3",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%234d7c0f%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed4%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 102.5263560688963,
+                "height": 100,
+                "left": -1.2631780344481527,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 0%, 100% 100%, 0% 70.353%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 0,
+              "y": 35.0145,
+              "w": 98.9865,
+              "h": 44.9855,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    100,
+                    31.434
+                  ],
+                  [
+                    100,
+                    100
+                  ],
+                  [
+                    0,
+                    100
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp4",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23b45309%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed5%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 155.07644526728456,
+                "left": 0,
+                "top": -27.538222633642278
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 31.434%, 100% 100%, 0% 100%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 6.7568,
+            "y": 83.8095,
+            "w": 86.4864,
+            "h": 11.9048
+          },
+          "caption": {
+            "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+          "lang": "ar",
+          "align": "center",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "spread": {
+          "side": "left",
+          "ownerIndex": 2
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s2",
+        "layoutId": "g-p-spread-band",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": -2.027027027027027,
+              "y": -1.4285714285714286,
+              "w": 101.01352702702704,
+              "h": 49.12637142857143
+            },
+            "photoId": "sp3",
+            "photo": {
+              "url": "https://print-assets.invalid/sp3.jpg",
+              "style": {
+                "width": 103.47806397318216,
+                "height": 100,
+                "left": -1.7390319865910797,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 0%, 100% 100%, 0% 70.6257%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": -2.027027027027027,
+              "y": 35.0145,
+              "w": 101.01352702702704,
+              "h": 44.9855
+            },
+            "photoId": "sp4",
+            "photo": {
+              "url": "https://print-assets.invalid/sp4.jpg",
+              "style": {
+                "width": 100,
+                "height": 158.2520716992936,
+                "left": 0,
+                "top": -29.126035849646797
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% -0.6437%, 100% 31.434%, 100% 100%, 0% 100%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 6.7568,
+            "y": 83.8095,
+            "w": 86.4864,
+            "h": 11.9048
+          },
+          "caption": {
+            "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+          "lang": "ar",
+          "align": "center",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "spread": {
+          "side": "left",
+          "ownerIndex": 2
+        }
+      }
+    },
+    {
+      "index": 3,
+      "screen": {
+        "kind": "page",
+        "pageId": "s3",
+        "layoutId": "g-p-spread-band",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 2,
+            "rect": {
+              "x": 1.0134999999999934,
+              "y": 0,
+              "w": 98.9865,
+              "h": 62.1283,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    100,
+                    0
+                  ],
+                  [
+                    100,
+                    100
+                  ],
+                  [
+                    0,
+                    77.239
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp5",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23be123c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed6%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 149.71580699018918,
+                "left": 0,
+                "top": -24.85790349509459
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 0%, 100% 100%, 0% 77.239%)"
+            }
+          }
+        ],
+        "caption": null,
+        "spread": {
+          "side": "right",
+          "ownerIndex": 2
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 17.5676,
+              "y": 67.619,
+              "w": 74.3243,
+              "h": 6.6667
+            },
+            "text": "الطريق الطويل",
+            "lang": "ar",
+            "align": "left",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 8.108099999999993,
+              "y": 76.1905,
+              "w": 32.4324,
+              "h": 3.8095
+            },
+            "text": "٥ نوفمبر ٢٠٢٦",
+            "lang": "ar",
+            "align": "center",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.1081,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            },
+            "plate": {
+              "art": {
+                "stickerId": "plate-label",
+                "viewBox": "0 0 140 30",
+                "preserveAspectRatio": "none",
+                "paths": [
+                  {
+                    "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+                    "fill": "#235A5E"
+                  },
+                  {
+                    "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+                    "fill": "none",
+                    "stroke": "rgba(83, 126, 129, 0.9)",
+                    "strokeWidth": 0.7
+                  },
+                  {
+                    "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+                    "fill": "#709496"
+                  },
+                  {
+                    "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+                    "fill": "rgba(255, 255, 255, 0.5)"
+                  }
+                ]
+              },
+              "textBox": {
+                "x": 11,
+                "y": 12,
+                "w": 78,
+                "h": 76
+              },
+              "ink": "light"
+            }
+          }
+        ],
+        "decorations": [
+          {
+            "kind": "sticker",
+            "rect": {
+              "x": 8.108099999999993,
+              "y": 68.0952,
+              "w": 6.7568,
+              "h": 4.7619
+            },
+            "layer": "over",
+            "art": {
+              "stickerId": "photo-corner",
+              "viewBox": "0 0 40 40",
+              "preserveAspectRatio": "xMidYMid meet",
+              "paths": [
+                {
+                  "d": "M0 2A2 2 0 0 1 2 0H40L0 40Z",
+                  "fill": "#235A5E"
+                },
+                {
+                  "d": "M36 2.6L2.6 36",
+                  "fill": "none",
+                  "stroke": "rgba(145, 173, 175, 0.55)",
+                  "strokeWidth": 1,
+                  "strokeLinecap": "round"
+                },
+                {
+                  "d": "M6 0.8H34",
+                  "fill": "none",
+                  "stroke": "rgba(255, 255, 255, 0.18)",
+                  "strokeWidth": 1.2,
+                  "strokeLinecap": "round"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s3",
+        "layoutId": "g-p-spread-band",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 2,
+            "rect": {
+              "x": 1.0134999999999934,
+              "y": -1.4285714285714286,
+              "w": 101.01352702702704,
+              "h": 63.55687142857144
+            },
+            "photoId": "sp5",
+            "photo": {
+              "url": "https://print-assets.invalid/sp5.jpg",
+              "style": {
+                "width": 100,
+                "height": 149.34757719426838,
+                "left": 0,
+                "top": -24.67378859713419
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 0%, 100% 100.4556%, 0% 77.7506%)"
+            }
+          }
+        ],
+        "caption": null,
+        "spread": {
+          "side": "right",
+          "ownerIndex": 2
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 17.5676,
+              "y": 67.619,
+              "w": 74.3243,
+              "h": 6.6667
+            },
+            "text": "الطريق الطويل",
+            "lang": "ar",
+            "align": "left",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 8.108099999999993,
+              "y": 76.1905,
+              "w": 32.4324,
+              "h": 3.8095
+            },
+            "text": "٥ نوفمبر ٢٠٢٦",
+            "lang": "ar",
+            "align": "center",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.1081,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            },
+            "plate": {
+              "art": {
+                "stickerId": "plate-label",
+                "viewBox": "0 0 140 30",
+                "preserveAspectRatio": "none",
+                "paths": [
+                  {
+                    "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+                    "fill": "#235A5E"
+                  },
+                  {
+                    "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+                    "fill": "none",
+                    "stroke": "rgba(83, 126, 129, 0.9)",
+                    "strokeWidth": 0.7
+                  },
+                  {
+                    "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+                    "fill": "#709496"
+                  },
+                  {
+                    "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+                    "fill": "rgba(255, 255, 255, 0.5)"
+                  }
+                ]
+              },
+              "textBox": {
+                "x": 11,
+                "y": 12,
+                "w": 78,
+                "h": 76
+              },
+              "ink": "light"
+            }
+          }
+        ],
+        "decorations": [
+          {
+            "kind": "sticker",
+            "rect": {
+              "x": 8.108099999999993,
+              "y": 68.0952,
+              "w": 6.7568,
+              "h": 4.7619
+            },
+            "layer": "over",
+            "art": {
+              "stickerId": "photo-corner",
+              "viewBox": "0 0 40 40",
+              "preserveAspectRatio": "xMidYMid meet",
+              "paths": [
+                {
+                  "d": "M0 2A2 2 0 0 1 2 0H40L0 40Z",
+                  "fill": "#235A5E"
+                },
+                {
+                  "d": "M36 2.6L2.6 36",
+                  "fill": "none",
+                  "stroke": "rgba(145, 173, 175, 0.55)",
+                  "strokeWidth": 1,
+                  "strokeLinecap": "round"
+                },
+                {
+                  "d": "M6 0.8H34",
+                  "fill": "none",
+                  "stroke": "rgba(255, 255, 255, 0.18)",
+                  "strokeWidth": 1.2,
+                  "strokeLinecap": "round"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "screen": {
+        "kind": "page",
+        "pageId": "s4",
+        "layoutId": "g-p-two-circle",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 100,
+              "h": 60.9524,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    100,
+                    0
+                  ],
+                  [
+                    100,
+                    100
+                  ],
+                  [
+                    89.952,
+                    100
+                  ],
+                  [
+                    87.163,
+                    95.861
+                  ],
+                  [
+                    83.772,
+                    92.374
+                  ],
+                  [
+                    79.892,
+                    89.652
+                  ],
+                  [
+                    75.651,
+                    87.787
+                  ],
+                  [
+                    71.188,
+                    86.838
+                  ],
+                  [
+                    66.65,
+                    86.838
+                  ],
+                  [
+                    62.187,
+                    87.787
+                  ],
+                  [
+                    57.945,
+                    89.652
+                  ],
+                  [
+                    54.066,
+                    92.374
+                  ],
+                  [
+                    50.675,
+                    95.861
+                  ],
+                  [
+                    47.886,
+                    100
+                  ],
+                  [
+                    0,
+                    100
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp6",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23334155%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed7%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 129.68924238202587,
+                "height": 100,
+                "left": -14.844621191012934,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 0%, 100% 100%, 89.952% 100%, 87.163% 95.861%, 83.772% 92.374%, 79.892% 89.652%, 75.651% 87.787%, 71.188% 86.838%, 66.65% 86.838%, 62.187% 87.787%, 57.945% 89.652%, 54.066% 92.374%, 50.675% 95.861%, 47.886% 100%, 0% 100%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 45.9459,
+              "y": 54.2857,
+              "w": 45.946,
+              "h": 32.381,
+              "shape": {
+                "kind": "circle"
+              }
+            },
+            "photoId": "sp7",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23c2410c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed8%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100.00002941173011,
+                "height": 100,
+                "left": -0.000014705865055475442,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "circle",
+              "borderRadius": "50%"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 8.1081,
+            "y": 79.5238,
+            "w": 33.7838,
+            "h": 16.1905
+          },
+          "caption": {
+            "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+          "lang": "ar",
+          "align": "left",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 8.1081,
+              "y": 65.7143,
+              "w": 33.7838,
+              "h": 6.6667
+            },
+            "text": "الطريق الطويل",
+            "lang": "ar",
+            "align": "left",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 8.1081,
+              "y": 73.3333,
+              "w": 33.7838,
+              "h": 3.3334
+            },
+            "text": "٥ نوفمبر ٢٠٢٦",
+            "lang": "ar",
+            "align": "left",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.1081,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          }
+        ]
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s4",
+        "layoutId": "g-p-two-circle",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": -2.027027027027027,
+              "y": -1.4285714285714286,
+              "w": 104.05405405405406,
+              "h": 62.38097142857142
+            },
+            "photoId": "sp6",
+            "photo": {
+              "url": "https://print-assets.invalid/sp6.jpg",
+              "style": {
+                "width": 127.55757981474942,
+                "height": 100,
+                "left": -13.778789907374708,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 0%, 100% 100%, 88.3954% 100%, 85.7151% 95.9558%, 82.4562% 92.5486%, 78.7274% 89.889%, 74.6516% 88.0667%, 70.3625% 87.1394%, 66.0013% 87.1394%, 61.7122% 88.0667%, 57.6355% 89.889%, 53.9076% 92.5486%, 50.6487% 95.9558%, 47.9684% 100%, 0% 100%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 45.9459,
+              "y": 54.2857,
+              "w": 45.946,
+              "h": 32.381
+            },
+            "photoId": "sp7",
+            "photo": {
+              "url": "https://print-assets.invalid/sp7.jpg",
+              "style": {
+                "width": 100.00002941173011,
+                "height": 100,
+                "left": -0.000014705865055475442,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "circle",
+              "borderRadius": "50%"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 8.1081,
+            "y": 79.5238,
+            "w": 33.7838,
+            "h": 16.1905
+          },
+          "caption": {
+            "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+          "lang": "ar",
+          "align": "left",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 8.1081,
+              "y": 65.7143,
+              "w": 33.7838,
+              "h": 6.6667
+            },
+            "text": "الطريق الطويل",
+            "lang": "ar",
+            "align": "left",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 8.1081,
+              "y": 73.3333,
+              "w": 33.7838,
+              "h": 3.3334
+            },
+            "text": "٥ نوفمبر ٢٠٢٦",
+            "lang": "ar",
+            "align": "left",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.1081,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "index": 5,
+      "screen": {
+        "kind": "page",
+        "pageId": "s5",
+        "layoutId": "g-p-three-diamond",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 6.7568,
+              "y": 9.5238,
+              "w": 43.2432,
+              "h": 30.4762,
+              "shape": {
+                "kind": "diamond"
+              }
+            },
+            "photoId": "sp8",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%230f766e%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed9%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 133.33315833338807,
+                "left": 0,
+                "top": -16.666579166694035
+              }
+            },
+            "look": {
+              "shape": "diamond",
+              "clipPath": "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 29.8117,
+              "y": 25.7721,
+              "w": 43.2432,
+              "h": 30.4761,
+              "shape": {
+                "kind": "diamond"
+              }
+            },
+            "photoId": "sp9",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231d4ed8%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed10%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 149.9528444233224,
+                "height": 100,
+                "left": -24.976422211661202,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "diamond",
+              "clipPath": "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 52.8666,
+              "y": 42.0203,
+              "w": 43.2433,
+              "h": 30.4762,
+              "shape": {
+                "kind": "diamond"
+              }
+            },
+            "photoId": "sp10",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23a21caf%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed11%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 100.00009999996875,
+                "left": 0,
+                "top": -0.00004999998437682507
+              }
+            },
+            "look": {
+              "shape": "diamond",
+              "clipPath": "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 8.1081,
+            "y": 81.9048,
+            "w": 43.2433,
+            "h": 13.8095
+          },
+          "caption": {
+            "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+          "lang": "ar",
+          "align": "left",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 58.1081,
+              "y": 8.5714,
+              "w": 33.7838,
+              "h": 3.8096
+            },
+            "text": "٨ نوفمبر ٢٠٢٦",
+            "lang": "ar",
+            "align": "right",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.1081,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          },
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 8.1081,
+              "y": 73.8095,
+              "w": 43.2433,
+              "h": 6.6667
+            },
+            "text": "المساء الأخير",
+            "lang": "ar",
+            "align": "left",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          }
+        ]
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s5",
+        "layoutId": "g-p-three-diamond",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 6.7568,
+              "y": 9.5238,
+              "w": 43.2432,
+              "h": 30.4762
+            },
+            "photoId": "sp8",
+            "photo": {
+              "url": "https://print-assets.invalid/sp8.jpg",
+              "style": {
+                "width": 100,
+                "height": 133.33315833338807,
+                "left": 0,
+                "top": -16.666579166694035
+              }
+            },
+            "look": {
+              "shape": "diamond",
+              "clipPath": "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 29.8117,
+              "y": 25.7721,
+              "w": 43.2432,
+              "h": 30.4761
+            },
+            "photoId": "sp9",
+            "photo": {
+              "url": "https://print-assets.invalid/sp9.jpg",
+              "style": {
+                "width": 149.9528444233224,
+                "height": 100,
+                "left": -24.976422211661202,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "diamond",
+              "clipPath": "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 52.8666,
+              "y": 42.0203,
+              "w": 43.2433,
+              "h": 30.4762
+            },
+            "photoId": "sp10",
+            "photo": {
+              "url": "https://print-assets.invalid/sp10.jpg",
+              "style": {
+                "width": 100,
+                "height": 100.00009999996875,
+                "left": 0,
+                "top": -0.00004999998437682507
+              }
+            },
+            "look": {
+              "shape": "diamond",
+              "clipPath": "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 8.1081,
+            "y": 81.9048,
+            "w": 43.2433,
+            "h": 13.8095
+          },
+          "caption": {
+            "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+          "lang": "ar",
+          "align": "left",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 58.1081,
+              "y": 8.5714,
+              "w": 33.7838,
+              "h": 3.8096
+            },
+            "text": "٨ نوفمبر ٢٠٢٦",
+            "lang": "ar",
+            "align": "right",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.1081,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          },
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 8.1081,
+              "y": 73.8095,
+              "w": 43.2433,
+              "h": 6.6667
+            },
+            "text": "المساء الأخير",
+            "lang": "ar",
+            "align": "left",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "index": 6,
+      "screen": {
+        "kind": "page",
+        "pageId": "s6",
+        "layoutId": "g-p-four-petals",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 6.7568,
+              "y": 5.7143,
+              "w": 42.2297,
+              "h": 34.0476,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    69.93
+                  ],
+                  [
+                    1.537,
+                    56.287
+                  ],
+                  [
+                    6.09,
+                    43.169
+                  ],
+                  [
+                    13.482,
+                    31.079
+                  ],
+                  [
+                    23.431,
+                    20.482
+                  ],
+                  [
+                    35.554,
+                    11.785
+                  ],
+                  [
+                    49.385,
+                    5.323
+                  ],
+                  [
+                    64.393,
+                    1.344
+                  ],
+                  [
+                    80,
+                    0
+                  ],
+                  [
+                    92,
+                    0
+                  ],
+                  [
+                    97.657,
+                    2.048
+                  ],
+                  [
+                    100,
+                    6.993
+                  ],
+                  [
+                    100,
+                    100
+                  ],
+                  [
+                    8,
+                    100
+                  ],
+                  [
+                    2.343,
+                    97.952
+                  ],
+                  [
+                    0,
+                    93.007
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp11",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%234d7c0f%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed12%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 99.99999999999999,
+                "height": 116.55009970168749,
+                "left": 0,
+                "top": -8.275049850843743
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 69.93%, 1.537% 56.287%, 6.09% 43.169%, 13.482% 31.079%, 23.431% 20.482%, 35.554% 11.785%, 49.385% 5.323%, 64.393% 1.344%, 80% 0%, 92% 0%, 97.657% 2.048%, 100% 6.993%, 100% 100%, 8% 100%, 2.343% 97.952%, 0% 93.007%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 51.0135,
+              "y": 5.7143,
+              "w": 42.2297,
+              "h": 34.0476,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    6.993
+                  ],
+                  [
+                    2.343,
+                    2.048
+                  ],
+                  [
+                    8,
+                    0
+                  ],
+                  [
+                    20,
+                    0
+                  ],
+                  [
+                    35.607,
+                    1.344
+                  ],
+                  [
+                    50.615,
+                    5.323
+                  ],
+                  [
+                    64.446,
+                    11.785
+                  ],
+                  [
+                    76.569,
+                    20.482
+                  ],
+                  [
+                    86.518,
+                    31.079
+                  ],
+                  [
+                    93.91,
+                    43.169
+                  ],
+                  [
+                    98.463,
+                    56.287
+                  ],
+                  [
+                    100,
+                    69.93
+                  ],
+                  [
+                    100,
+                    93.007
+                  ],
+                  [
+                    97.657,
+                    97.952
+                  ],
+                  [
+                    92,
+                    100
+                  ],
+                  [
+                    0,
+                    100
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp12",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23b45309%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed13%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 171.5464165512452,
+                "height": 100,
+                "left": -35.77320827562259,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 6.993%, 2.343% 2.048%, 8% 0%, 20% 0%, 35.607% 1.344%, 50.615% 5.323%, 64.446% 11.785%, 76.569% 20.482%, 86.518% 31.079%, 93.91% 43.169%, 98.463% 56.287%, 100% 69.93%, 100% 93.007%, 97.657% 97.952%, 92% 100%, 0% 100%)"
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 6.7568,
+              "y": 41.1905,
+              "w": 42.2297,
+              "h": 34.0476,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    6.993
+                  ],
+                  [
+                    2.343,
+                    2.048
+                  ],
+                  [
+                    8,
+                    0
+                  ],
+                  [
+                    100,
+                    0
+                  ],
+                  [
+                    100,
+                    93.007
+                  ],
+                  [
+                    97.657,
+                    97.952
+                  ],
+                  [
+                    92,
+                    100
+                  ],
+                  [
+                    80,
+                    100
+                  ],
+                  [
+                    64.393,
+                    98.656
+                  ],
+                  [
+                    49.385,
+                    94.677
+                  ],
+                  [
+                    35.554,
+                    88.215
+                  ],
+                  [
+                    23.431,
+                    79.518
+                  ],
+                  [
+                    13.482,
+                    68.921
+                  ],
+                  [
+                    6.09,
+                    56.831
+                  ],
+                  [
+                    1.537,
+                    43.713
+                  ],
+                  [
+                    0,
+                    30.07
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp13",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23be123c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed14%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 114.40001653761162,
+                "height": 100,
+                "left": -7.20000826880581,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 6.993%, 2.343% 2.048%, 8% 0%, 100% 0%, 100% 93.007%, 97.657% 97.952%, 92% 100%, 80% 100%, 64.393% 98.656%, 49.385% 94.677%, 35.554% 88.215%, 23.431% 79.518%, 13.482% 68.921%, 6.09% 56.831%, 1.537% 43.713%, 0% 30.07%)"
+            }
+          },
+          {
+            "index": 3,
+            "rect": {
+              "x": 51.0135,
+              "y": 41.1905,
+              "w": 42.2297,
+              "h": 34.0476,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    92,
+                    0
+                  ],
+                  [
+                    97.657,
+                    2.048
+                  ],
+                  [
+                    100,
+                    6.993
+                  ],
+                  [
+                    100,
+                    30.07
+                  ],
+                  [
+                    98.463,
+                    43.713
+                  ],
+                  [
+                    93.91,
+                    56.831
+                  ],
+                  [
+                    86.518,
+                    68.921
+                  ],
+                  [
+                    76.569,
+                    79.518
+                  ],
+                  [
+                    64.446,
+                    88.215
+                  ],
+                  [
+                    50.615,
+                    94.677
+                  ],
+                  [
+                    35.607,
+                    98.656
+                  ],
+                  [
+                    20,
+                    100
+                  ],
+                  [
+                    8,
+                    100
+                  ],
+                  [
+                    2.343,
+                    97.952
+                  ],
+                  [
+                    0,
+                    93.007
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp14",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23334155%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed15%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 99.99999999999999,
+                "height": 116.55009970168749,
+                "left": 0,
+                "top": -8.275049850843743
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 92% 0%, 97.657% 2.048%, 100% 6.993%, 100% 30.07%, 98.463% 43.713%, 93.91% 56.831%, 86.518% 68.921%, 76.569% 79.518%, 64.446% 88.215%, 50.615% 94.677%, 35.607% 98.656%, 20% 100%, 8% 100%, 2.343% 97.952%, 0% 93.007%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 8.1081,
+            "y": 86.6667,
+            "w": 83.7838,
+            "h": 9.0476
+          },
+          "caption": null,
+          "text": "",
+          "align": "center",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 8.1081,
+              "y": 79.0476,
+              "w": 83.7838,
+              "h": 6.6667
+            },
+            "text": "المساء الأخير",
+            "lang": "ar",
+            "align": "center",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          }
+        ]
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s6",
+        "layoutId": "g-p-four-petals",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 6.7568,
+              "y": 5.7143,
+              "w": 42.2297,
+              "h": 34.0476
+            },
+            "photoId": "sp11",
+            "photo": {
+              "url": "https://print-assets.invalid/sp11.jpg",
+              "style": {
+                "width": 99.99999999999999,
+                "height": 116.55009970168749,
+                "left": 0,
+                "top": -8.275049850843743
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 69.93%, 1.537% 56.287%, 6.09% 43.169%, 13.482% 31.079%, 23.431% 20.482%, 35.554% 11.785%, 49.385% 5.323%, 64.393% 1.344%, 80% 0%, 92% 0%, 97.657% 2.048%, 100% 6.993%, 100% 100%, 8% 100%, 2.343% 97.952%, 0% 93.007%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 51.0135,
+              "y": 5.7143,
+              "w": 42.2297,
+              "h": 34.0476
+            },
+            "photoId": "sp12",
+            "photo": {
+              "url": "https://print-assets.invalid/sp12.jpg",
+              "style": {
+                "width": 171.5464165512452,
+                "height": 100,
+                "left": -35.77320827562259,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 6.993%, 2.343% 2.048%, 8% 0%, 20% 0%, 35.607% 1.344%, 50.615% 5.323%, 64.446% 11.785%, 76.569% 20.482%, 86.518% 31.079%, 93.91% 43.169%, 98.463% 56.287%, 100% 69.93%, 100% 93.007%, 97.657% 97.952%, 92% 100%, 0% 100%)"
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 6.7568,
+              "y": 41.1905,
+              "w": 42.2297,
+              "h": 34.0476
+            },
+            "photoId": "sp13",
+            "photo": {
+              "url": "https://print-assets.invalid/sp13.jpg",
+              "style": {
+                "width": 114.40001653761162,
+                "height": 100,
+                "left": -7.20000826880581,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 6.993%, 2.343% 2.048%, 8% 0%, 100% 0%, 100% 93.007%, 97.657% 97.952%, 92% 100%, 80% 100%, 64.393% 98.656%, 49.385% 94.677%, 35.554% 88.215%, 23.431% 79.518%, 13.482% 68.921%, 6.09% 56.831%, 1.537% 43.713%, 0% 30.07%)"
+            }
+          },
+          {
+            "index": 3,
+            "rect": {
+              "x": 51.0135,
+              "y": 41.1905,
+              "w": 42.2297,
+              "h": 34.0476
+            },
+            "photoId": "sp14",
+            "photo": {
+              "url": "https://print-assets.invalid/sp14.jpg",
+              "style": {
+                "width": 99.99999999999999,
+                "height": 116.55009970168749,
+                "left": 0,
+                "top": -8.275049850843743
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 92% 0%, 97.657% 2.048%, 100% 6.993%, 100% 30.07%, 98.463% 43.713%, 93.91% 56.831%, 86.518% 68.921%, 76.569% 79.518%, 64.446% 88.215%, 50.615% 94.677%, 35.607% 98.656%, 20% 100%, 8% 100%, 2.343% 97.952%, 0% 93.007%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 8.1081,
+            "y": 86.6667,
+            "w": 83.7838,
+            "h": 9.0476
+          },
+          "caption": null,
+          "text": "",
+          "align": "center",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 8.1081,
+              "y": 79.0476,
+              "w": 83.7838,
+              "h": 6.6667
+            },
+            "text": "المساء الأخير",
+            "lang": "ar",
+            "align": "center",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "index": 7,
+      "screen": {
+        "kind": "page",
+        "pageId": "s7",
+        "layoutId": "g-p-five-hex",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 4.3256,
+              "y": 29.2778,
+              "w": 35.1352,
+              "h": 21.4444,
+              "shape": {
+                "kind": "hexagon"
+              }
+            },
+            "photoId": "sp15",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%230f766e%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed1%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 129.86275499059695,
+                "height": 100,
+                "left": -14.931377495298477,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 4.3256,
+              "y": 52.1508,
+              "w": 35.1352,
+              "h": 21.4444,
+              "shape": {
+                "kind": "hexagon"
+              }
+            },
+            "photoId": "sp16",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231d4ed8%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed2%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 115.4704746982451,
+                "left": 0,
+                "top": -7.735237349122549
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 32.4324,
+              "y": 40.7143,
+              "w": 35.1352,
+              "h": 21.4444,
+              "shape": {
+                "kind": "hexagon"
+              }
+            },
+            "photoId": "sp17",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23a21caf%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed3%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 153.96063293099346,
+                "left": 0,
+                "top": -26.980316465496728
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 3,
+            "rect": {
+              "x": 60.5392,
+              "y": 29.2778,
+              "w": 35.1352,
+              "h": 21.4444,
+              "shape": {
+                "kind": "hexagon"
+              }
+            },
+            "photoId": "sp18",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%234d7c0f%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed4%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 129.86275499059695,
+                "height": 100,
+                "left": -14.931377495298477,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 4,
+            "rect": {
+              "x": 60.5392,
+              "y": 52.1508,
+              "w": 35.1352,
+              "h": 21.4444,
+              "shape": {
+                "kind": "hexagon"
+              }
+            },
+            "photoId": "sp19",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23b45309%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed5%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 115.4704746982451,
+                "left": 0,
+                "top": -7.735237349122549
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 8.1081,
+            "y": 79.0476,
+            "w": 83.7838,
+            "h": 15.2381
+          },
+          "caption": {
+            "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+          "lang": "ar",
+          "align": "center",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 8.1081,
+              "y": 10.4762,
+              "w": 83.7838,
+              "h": 6.6667
+            },
+            "text": "المساء الأخير",
+            "lang": "ar",
+            "align": "center",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 8.1081,
+              "y": 18.0952,
+              "w": 83.7838,
+              "h": 3.3334
+            },
+            "text": "٨ نوفمبر ٢٠٢٦",
+            "lang": "ar",
+            "align": "center",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.1081,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          }
+        ]
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s7",
+        "layoutId": "g-p-five-hex",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 4.3256,
+              "y": 29.2778,
+              "w": 35.1352,
+              "h": 21.4444
+            },
+            "photoId": "sp15",
+            "photo": {
+              "url": "https://print-assets.invalid/sp15.jpg",
+              "style": {
+                "width": 129.86275499059695,
+                "height": 100,
+                "left": -14.931377495298477,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 4.3256,
+              "y": 52.1508,
+              "w": 35.1352,
+              "h": 21.4444
+            },
+            "photoId": "sp16",
+            "photo": {
+              "url": "https://print-assets.invalid/sp16.jpg",
+              "style": {
+                "width": 100,
+                "height": 115.4704746982451,
+                "left": 0,
+                "top": -7.735237349122549
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 32.4324,
+              "y": 40.7143,
+              "w": 35.1352,
+              "h": 21.4444
+            },
+            "photoId": "sp17",
+            "photo": {
+              "url": "https://print-assets.invalid/sp17.jpg",
+              "style": {
+                "width": 100,
+                "height": 153.96063293099346,
+                "left": 0,
+                "top": -26.980316465496728
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 3,
+            "rect": {
+              "x": 60.5392,
+              "y": 29.2778,
+              "w": 35.1352,
+              "h": 21.4444
+            },
+            "photoId": "sp18",
+            "photo": {
+              "url": "https://print-assets.invalid/sp18.jpg",
+              "style": {
+                "width": 129.86275499059695,
+                "height": 100,
+                "left": -14.931377495298477,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          },
+          {
+            "index": 4,
+            "rect": {
+              "x": 60.5392,
+              "y": 52.1508,
+              "w": 35.1352,
+              "h": 21.4444
+            },
+            "photoId": "sp19",
+            "photo": {
+              "url": "https://print-assets.invalid/sp19.jpg",
+              "style": {
+                "width": 100,
+                "height": 115.4704746982451,
+                "left": 0,
+                "top": -7.735237349122549
+              }
+            },
+            "look": {
+              "shape": "hexagon",
+              "clipPath": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 8.1081,
+            "y": 79.0476,
+            "w": 83.7838,
+            "h": 15.2381
+          },
+          "caption": {
+            "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+          "lang": "ar",
+          "align": "center",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 8.1081,
+              "y": 10.4762,
+              "w": 83.7838,
+              "h": 6.6667
+            },
+            "text": "المساء الأخير",
+            "lang": "ar",
+            "align": "center",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 8.1081,
+              "y": 18.0952,
+              "w": 83.7838,
+              "h": 3.3334
+            },
+            "text": "٨ نوفمبر ٢٠٢٦",
+            "lang": "ar",
+            "align": "center",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.1081,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "index": 8,
+      "screen": {
+        "kind": "page",
+        "pageId": "s8",
+        "layoutId": "g-p-two-pair",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 51.6574,
+              "h": 51.1891,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    88.283,
+                    0
+                  ],
+                  [
+                    100,
+                    100
+                  ],
+                  [
+                    0,
+                    85.584
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp20",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23be123c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed6%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 105.4541785384559,
+                "height": 100,
+                "left": -2.727089269227953,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 88.283% 0%, 100% 100%, 0% 85.584%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 47.6386,
+              "y": 0,
+              "w": 52.3614,
+              "h": 58.0952,
+              "shape": {
+                "kind": "polygon",
+                "points": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    100,
+                    0
+                  ],
+                  [
+                    100,
+                    100
+                  ],
+                  [
+                    11.626,
+                    88.621
+                  ]
+                ]
+              }
+            },
+            "photoId": "sp21",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23334155%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed7%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 236.07073046459007,
+                "height": 100,
+                "left": -68.03536523229504,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 100% 0%, 100% 100%, 11.626% 88.621%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 8.1081,
+            "y": 77.1429,
+            "w": 83.7838,
+            "h": 18.5714
+          },
+          "caption": {
+            "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+          "lang": "ar",
+          "align": "left",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 17.5676,
+              "y": 61.9048,
+              "w": 74.3243,
+              "h": 6.6666
+            },
+            "text": "المساء الأخير",
+            "lang": "ar",
+            "align": "left",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 8.1081,
+              "y": 70.4762,
+              "w": 32.4324,
+              "h": 3.8095
+            },
+            "text": "٨ نوفمبر ٢٠٢٦",
+            "lang": "ar",
+            "align": "center",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.1081,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            },
+            "plate": {
+              "art": {
+                "stickerId": "plate-label",
+                "viewBox": "0 0 140 30",
+                "preserveAspectRatio": "none",
+                "paths": [
+                  {
+                    "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+                    "fill": "#235A5E"
+                  },
+                  {
+                    "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+                    "fill": "none",
+                    "stroke": "rgba(83, 126, 129, 0.9)",
+                    "strokeWidth": 0.7
+                  },
+                  {
+                    "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+                    "fill": "#709496"
+                  },
+                  {
+                    "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+                    "fill": "rgba(255, 255, 255, 0.5)"
+                  }
+                ]
+              },
+              "textBox": {
+                "x": 11,
+                "y": 12,
+                "w": 78,
+                "h": 76
+              },
+              "ink": "light"
+            }
+          }
+        ],
+        "decorations": [
+          {
+            "kind": "sticker",
+            "rect": {
+              "x": 8.1081,
+              "y": 62.381,
+              "w": 6.7568,
+              "h": 4.7619
+            },
+            "layer": "over",
+            "art": {
+              "stickerId": "photo-corner",
+              "viewBox": "0 0 40 40",
+              "preserveAspectRatio": "xMidYMid meet",
+              "paths": [
+                {
+                  "d": "M0 2A2 2 0 0 1 2 0H40L0 40Z",
+                  "fill": "#235A5E"
+                },
+                {
+                  "d": "M36 2.6L2.6 36",
+                  "fill": "none",
+                  "stroke": "rgba(145, 173, 175, 0.55)",
+                  "strokeWidth": 1,
+                  "strokeLinecap": "round"
+                },
+                {
+                  "d": "M6 0.8H34",
+                  "fill": "none",
+                  "stroke": "rgba(255, 255, 255, 0.18)",
+                  "strokeWidth": 1.2,
+                  "strokeLinecap": "round"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s8",
+        "layoutId": "g-p-two-pair",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": -2.027027027027027,
+              "y": -1.4285714285714286,
+              "w": 53.68442702702703,
+              "h": 52.61767142857142
+            },
+            "photoId": "sp20",
+            "photo": {
+              "url": "https://print-assets.invalid/sp20.jpg",
+              "style": {
+                "width": 104.30428374769511,
+                "height": 100,
+                "left": -2.1521418738475546,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(0% 0%, 88.4108% 0%, 100% 100%, 0% 85.4251%)"
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 47.6386,
+              "y": -1.4285714285714286,
+              "w": 54.38842702702703,
+              "h": 59.52377142857143
+            },
+            "photoId": "sp21",
+            "photo": {
+              "url": "https://print-assets.invalid/sp21.jpg",
+              "style": {
+                "width": 232.86117479920324,
+                "height": 100,
+                "left": -66.43058739960162,
+                "top": 0
+              }
+            },
+            "look": {
+              "shape": "polygon",
+              "clipPath": "polygon(-0.3106% 0%, 100% 0%, 100% 100.4865%, 11.1927% 88.8941%)"
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 8.1081,
+            "y": 77.1429,
+            "w": 83.7838,
+            "h": 18.5714
+          },
+          "caption": {
+            "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أزقة ضيقة وجدران دافئة وضوء العصر الهادئ",
+          "lang": "ar",
+          "align": "left",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 17.5676,
+              "y": 61.9048,
+              "w": 74.3243,
+              "h": 6.6666
+            },
+            "text": "المساء الأخير",
+            "lang": "ar",
+            "align": "left",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 8.1081,
+              "y": 70.4762,
+              "w": 32.4324,
+              "h": 3.8095
+            },
+            "text": "٨ نوفمبر ٢٠٢٦",
+            "lang": "ar",
+            "align": "center",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.1081,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            },
+            "plate": {
+              "art": {
+                "stickerId": "plate-label",
+                "viewBox": "0 0 140 30",
+                "preserveAspectRatio": "none",
+                "paths": [
+                  {
+                    "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+                    "fill": "#235A5E"
+                  },
+                  {
+                    "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+                    "fill": "none",
+                    "stroke": "rgba(83, 126, 129, 0.9)",
+                    "strokeWidth": 0.7
+                  },
+                  {
+                    "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+                    "fill": "#709496"
+                  },
+                  {
+                    "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+                    "fill": "rgba(255, 255, 255, 0.5)"
+                  }
+                ]
+              },
+              "textBox": {
+                "x": 11,
+                "y": 12,
+                "w": 78,
+                "h": 76
+              },
+              "ink": "light"
+            }
+          }
+        ],
+        "decorations": [
+          {
+            "kind": "sticker",
+            "rect": {
+              "x": 8.1081,
+              "y": 62.381,
+              "w": 6.7568,
+              "h": 4.7619
+            },
+            "layer": "over",
+            "art": {
+              "stickerId": "photo-corner",
+              "viewBox": "0 0 40 40",
+              "preserveAspectRatio": "xMidYMid meet",
+              "paths": [
+                {
+                  "d": "M0 2A2 2 0 0 1 2 0H40L0 40Z",
+                  "fill": "#235A5E"
+                },
+                {
+                  "d": "M36 2.6L2.6 36",
+                  "fill": "none",
+                  "stroke": "rgba(145, 173, 175, 0.55)",
+                  "strokeWidth": 1,
+                  "strokeLinecap": "round"
+                },
+                {
+                  "d": "M6 0.8H34",
+                  "fill": "none",
+                  "stroke": "rgba(255, 255, 255, 0.18)",
+                  "strokeWidth": 1.2,
+                  "strokeLinecap": "round"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
