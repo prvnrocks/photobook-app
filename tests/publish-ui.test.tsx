@@ -292,6 +292,9 @@ describe("dashboard publish chip", () => {
       published: true,
       photo_count: 30,
       user_edited: true,
+      format: "A5_PORTRAIT",
+      designStyle: "classic",
+      coverThumbUrl: null,
     };
     const html = renderToStaticMarkup(<BookList books={[book, { ...book, id: "x", published: false }]} now={NOW} />);
     expect(html).toContain("Published · expires 12 Dec");

@@ -40,6 +40,9 @@ const base: BookListItem = {
   published: false,
   photo_count: 30,
   user_edited: true,
+  format: "A5_PORTRAIT",
+  designStyle: "classic",
+  coverThumbUrl: null,
 };
 
 describe("deletion chip — dates", () => {

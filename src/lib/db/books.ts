@@ -8,9 +8,10 @@ import { getCurrentUser } from "@/lib/auth/current-user";
 import { bookDesignOf, withBookDesign } from "@/lib/book/book-design";
 import { serializeDoc } from "@/lib/book/doc-version";
 import { isAiReplaceableDoc, isReplaceableDoc } from "@/lib/book/replaceable";
-import { BookFormatSchema, DesignStyleSchema, parseBookDoc } from "@/lib/book/schema";
+import { DEFAULT_FORMAT } from "@/lib/book/format";
+import { BookFormatSchema, DEFAULT_DESIGN_STYLE, DesignStyleSchema, parseBookDoc } from "@/lib/book/schema";
 import { stripPhotoFromDoc, type StripPhotoDims } from "@/lib/book/strip-photos";
-import { listPhotoDims } from "@/lib/db/photos";
+import { listPhotoDims, PHOTOS_BUCKET, REVIEW_URL_TTL_SECONDS } from "@/lib/db/photos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Json, Tables } from "@/lib/supabase/database.types";
@@ -41,6 +42,16 @@ export type BookListItem = Pick<
   photo_count: number;
   /** doc.meta.userEdited === true (read as a JSON path, the doc itself is not loaded). */
   user_edited: boolean;
+  /** books.format (migration 1900, D-063); an unknown value reads as the column default. */
+  format: BookFormat;
+  /** books.design_style (migration 1900, D-063); an unknown value reads as the column default. */
+  designStyle: DesignStyle;
+  /**
+   * Signed URL (COVER_THUMB_TTL_SECONDS) of the 512px thumb of doc.cover.photoId, else of the
+   * first slot of the first page; null when the book has none or the photo is gone / not ready /
+   * not this book's / signing failed. Never makes the list fail.
+   */
+  coverThumbUrl: string | null;
 };
 
 export type MyBook = Pick<
@@ -97,7 +108,9 @@ export class BooksQueryError extends Error {
 /**
  * Books owned by the current user, most recently edited first. [] if signed out.
  * Also returns what the dashboard card needs to pick its route (src/lib/dashboard/card-target.ts):
- * ai_status, the count of ready photos (embedded count, filtered) and doc.meta.userEdited.
+ * ai_status, the count of ready photos (embedded count, filtered) and doc.meta.userEdited — and,
+ * for the card picture (M11 task 4), format / design style and a signed cover thumb URL
+ * (attachCoverThumbs: one photos lookup, ONE createSignedUrls call, all under RLS).
  */
 export async function listMyBooks(): Promise<BookListItem[]> {
   const user = await getCurrentUser();
@@ -111,21 +124,103 @@ export async function listMyBooks(): Promise<BookListItem[]> {
     .eq("photos.upload_state", "ready")
     .order("updated_at", { ascending: false });
   if (error) throw new BooksQueryError("list books", error.code);
-  return ((data ?? []) as unknown as BookListRow[]).map(toBookListItem);
+  const rows = (data ?? []) as unknown as BookListRow[];
+  const thumbs = await attachCoverThumbs(supabase, rows);
+  return rows.map((row) => toBookListItem(row, thumbs.get(row.id) ?? null));
 }
 
+// No pre-1900 retry for format / design_style: like published_doc (pre-1000), the list assumes
+// the migration is applied everywhere (M10b is deployed).
 const BOOK_LIST_COLUMNS =
-  "id, title, updated_at, page_count, published_at, is_paid, ai_status, slug, expires_at, draft_warning_sent_at, user_edited:doc->meta->userEdited, live:published_doc->version, photos(count)";
+  "id, title, updated_at, page_count, published_at, is_paid, ai_status, slug, expires_at, draft_warning_sent_at, format, design_style, user_edited:doc->meta->userEdited, live:published_doc->version, cover_photo:doc->cover->>photoId, first_photo:doc->pages->0->slots->0->>photoId, photos(count)";
 
-type BookListRow = Omit<BookListItem, "photo_count" | "user_edited" | "published"> & {
+/** Same lifetime as the other thumb-only list (review grid). */
+export const COVER_THUMB_TTL_SECONDS = REVIEW_URL_TTL_SECONDS;
+
+/** Ids per PostgREST `in` filter (keeps request URLs short; same as photos.ts). */
+const COVER_ID_CHUNK = 100;
+
+type BookListRow = Omit<
+  BookListItem,
+  "photo_count" | "user_edited" | "published" | "format" | "designStyle" | "coverThumbUrl"
+> & {
+  format: unknown;
+  design_style: unknown;
   user_edited: unknown;
   /** published_doc->version: null/absent when there is no live snapshot. */
   live: unknown;
+  /** doc->cover->>photoId / doc->pages->0->slots->0->>photoId (text or null). */
+  cover_photo: unknown;
+  first_photo: unknown;
   photos: { count: number }[] | null;
 };
 
-function toBookListItem(row: BookListRow): BookListItem {
+/** The photo id the card shows: the cover photo, else the first slot photo (both JSON paths). */
+function coverPhotoIdOf(row: BookListRow): string | null {
+  if (typeof row.cover_photo === "string" && isUuid(row.cover_photo)) return row.cover_photo;
+  if (typeof row.first_photo === "string" && isUuid(row.first_photo)) return row.first_photo;
+  return null;
+}
+
+/**
+ * book id → signed thumb URL for every book whose cover photo still exists, is ready, belongs to
+ * that book and has a thumb. RLS client throughout (photos_select_own + storage owner policies).
+ * Best effort: a failed lookup or signing call leaves every cover null instead of throwing —
+ * the dashboard must render without pictures rather than fail.
+ */
+async function attachCoverThumbs(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  rows: BookListRow[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const wanted = new Map<string, string>(); // book id → photo id
+  for (const row of rows) {
+    const photoId = coverPhotoIdOf(row);
+    if (photoId) wanted.set(row.id, photoId);
+  }
+  if (wanted.size === 0) return out;
+
+  try {
+    const ids = [...new Set(wanted.values())];
+    const photos = new Map<string, { book_id: string; thumb_path: string | null }>();
+    for (let i = 0; i < ids.length; i += COVER_ID_CHUNK) {
+      const { data, error } = await supabase
+        .from("photos")
+        .select("id, book_id, thumb_path")
+        .in("id", ids.slice(i, i + COVER_ID_CHUNK))
+        .eq("upload_state", "ready");
+      if (error || !data) return out;
+      for (const p of data) photos.set(p.id, { book_id: p.book_id, thumb_path: p.thumb_path });
+    }
+
+    const pathByBook = new Map<string, string>();
+    for (const [bookId, photoId] of wanted) {
+      const photo = photos.get(photoId);
+      if (photo && photo.book_id === bookId && photo.thumb_path) pathByBook.set(bookId, photo.thumb_path);
+    }
+    if (pathByBook.size === 0) return out;
+
+    const paths = [...new Set(pathByBook.values())];
+    const { data: signed, error: signError } = await supabase.storage
+      .from(PHOTOS_BUCKET)
+      .createSignedUrls(paths, COVER_THUMB_TTL_SECONDS);
+    if (signError || !signed) return out;
+    const urls = new Map<string, string>();
+    for (const s of signed) if (s.path && s.signedUrl && !s.error) urls.set(s.path, s.signedUrl);
+    for (const [bookId, path] of pathByBook) {
+      const url = urls.get(path);
+      if (url) out.set(bookId, url);
+    }
+  } catch {
+    return new Map();
+  }
+  return out;
+}
+
+function toBookListItem(row: BookListRow, coverThumbUrl: string | null): BookListItem {
   const count = Array.isArray(row.photos) ? row.photos[0]?.count : undefined;
+  const format = BookFormatSchema.safeParse(row.format);
+  const designStyle = DesignStyleSchema.safeParse(row.design_style);
   return {
     id: row.id,
     title: row.title,
@@ -140,6 +235,9 @@ function toBookListItem(row: BookListRow): BookListItem {
     published: row.live !== null && row.live !== undefined,
     photo_count: typeof count === "number" && Number.isFinite(count) ? count : 0,
     user_edited: row.user_edited === true,
+    format: format.success ? format.data : DEFAULT_FORMAT,
+    designStyle: designStyle.success ? designStyle.data : DEFAULT_DESIGN_STYLE,
+    coverThumbUrl,
   };
 }
 
