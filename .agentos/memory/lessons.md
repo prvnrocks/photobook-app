@@ -97,3 +97,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-11, layout) With 2-page units, compute the page budget by laying chapters out in order with real start indices and reuse them in the final fill; when refitting a spread change the layout id on both halves (repairSpreads matches halves by id).
 - (2026-11-11, render) Resolve spread halves inside the render model from doc.pages[i-1] (no new prop) — all callers work unchanged.
 - (2026-11-11, e2e) Once a form always sends a new column, a missing migration breaks every live e2e that creates through that form — probe the column read-only before planning e2e runs.
+- (2026-11-11, ai) To keep a cached prompt byte-identical while parameterising it, save the old text as a fixture before editing and compare exactly; keep default strings verbatim.

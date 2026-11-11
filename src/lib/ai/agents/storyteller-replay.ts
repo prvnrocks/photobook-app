@@ -12,10 +12,18 @@
 // - cover = coverWorthy photo, portrait/square first, highest quality, earliest
 // - place = a place from the moment's own photos, else null (never invented); title = user title
 //   or a neutral default
+// - design (M10b A11, meta.design; default classic A5 portrait = the rules above, unchanged):
+//   other designs fill pages with the design's own layouts (bestPageLayout({design})): opener
+//   single, then the 3- or 2-photo layout with the most orientation matches; modern books get at
+//   most one spread per moment of ≥ 8 photos, only where it starts on a left page (running page
+//   index even); if spreads would exceed maxPages the plan is rebuilt without them
 // scenario "invalid" → the first page gets an extra unknown alias ("p9999"): passes both schemas
 // but fails plan validation (wrong slot count + unknown photo), exercising the retry path.
 
 import { dayRange } from "@/lib/autolayout";
+import { DEFAULT_BOOK_DESIGN, type BookDesign } from "@/lib/book/book-design";
+import { layoutsFor } from "@/lib/book/spreads";
+import { bestPageLayout, fitScore } from "@/lib/layouts/fit";
 import type { AlbumPlanAi } from "../schemas";
 import { dubaiDay } from "../story";
 import type { ReplaySynth } from "../transport-replay";
@@ -68,6 +76,69 @@ export function fillMoment(photos: MetaPhoto[]): PlanPage[] {
   }
   return pages;
 }
+
+const isClassicPortrait = (d: BookDesign) => d.format === "A5_PORTRAIT" && d.designStyle === "classic";
+
+function designSingle(p: MetaPhoto, prev: string | null, design: BookDesign): PlanPage {
+  const singles = layoutsFor(design.format, design.designStyle, "page").filter((l) => l.photoCount === 1);
+  const ranked = singles.filter((l) => fitScore(l, [p.orientation]) === 1);
+  const pool = ranked.length ? ranked : singles;
+  const pick = pool.find((l) => l.id !== prev) ?? pool[0];
+  return { layoutId: pick.id, photoIds: [p.alias] };
+}
+
+/**
+ * Pages of one moment in a non-classic-portrait design. `startIndex` = book page index of the
+ * moment's first page (spreads only where it is even); `allowSpread` false → page layouts only.
+ */
+export function fillMomentDesign(photos: MetaPhoto[], design: BookDesign, startIndex = 0, allowSpread = true): PlanPage[] {
+  const q = [...photos];
+  const pages: PlanPage[] = [];
+  let at = startIndex;
+  let prev: string | null = null;
+  let spreadUsed = !allowSpread || photos.length < 8;
+  const spreads = layoutsFor(design.format, design.designStyle, "spread")
+    .filter((l) => l.photoCount > 1)
+    .sort((a, b) => b.photoCount - a.photoCount);
+  const push = (pg: PlanPage, span = 1) => {
+    pages.push(pg);
+    prev = pg.layoutId;
+    at += span;
+  };
+  if (q.length >= 3) push(designSingle(q.shift() as MetaPhoto, null, design));
+  while (q.length) {
+    if (!spreadUsed && at % 2 === 0) {
+      const sp = spreads.find((l) => l.photoCount <= q.length);
+      if (sp) {
+        const take = q.splice(0, sp.photoCount);
+        push({ layoutId: sp.id, photoIds: take.map((p) => p.alias) }, 2);
+        spreadUsed = true;
+        continue;
+      }
+    }
+    let best: { id: string; take: number; score: number } | null = null;
+    for (const take of [3, 2]) {
+      if (q.length < take) continue;
+      const orients = q.slice(0, take).map((p) => p.orientation);
+      const id = bestPageLayout(orients, { design });
+      if (!id || id === prev) continue;
+      const layout = layoutsFor(design.format, design.designStyle, "page").find((l) => l.id === id);
+      const score = layout ? fitScore(layout, orients) / take : 0;
+      if (!best || score > best.score) best = { id, take, score };
+    }
+    if (!best) {
+      push(designSingle(q.shift() as MetaPhoto, prev, design));
+      continue;
+    }
+    push({ layoutId: best.id, photoIds: q.splice(0, best.take).map((p) => p.alias) });
+  }
+  return pages;
+}
+
+const spanOf = (pages: PlanPage[], design: BookDesign) => {
+  const spreadIds = new Set(layoutsFor(design.format, design.designStyle, "spread").map((l) => l.id));
+  return pages.reduce((n, pg) => n + (spreadIds.has(pg.layoutId) ? 2 : 1), 0);
+};
 
 function groupByDay(photos: MetaPhoto[]): MetaPhoto[][] {
   const sorted = [...photos].sort((x, y) => {
@@ -126,7 +197,7 @@ function budgets(need: number[], maxPages: number): number[] {
   return b;
 }
 
-function pickCover(photos: MetaPhoto[]): MetaPhoto | undefined {
+function pickCover(photos: MetaPhoto[], against: "landscape" | "portrait" = "landscape"): MetaPhoto | undefined {
   const pool = photos.some((p) => p.cover) ? photos.filter((p) => p.cover) : photos;
   let best: MetaPhoto | undefined;
   for (const p of pool) {
@@ -134,8 +205,8 @@ function pickCover(photos: MetaPhoto[]): MetaPhoto | undefined {
       best = p;
       continue;
     }
-    const pp = p.orientation === "landscape" ? 1 : 0;
-    const bp = best.orientation === "landscape" ? 1 : 0;
+    const pp = p.orientation === against ? 1 : 0;
+    const bp = best.orientation === against ? 1 : 0;
     if (pp < bp || (pp === bp && p.quality > best.quality)) best = p;
   }
   return best;
@@ -149,26 +220,46 @@ function readMeta(meta: Record<string, unknown>): StorytellerScenarioMeta {
     userTitle: typeof m.userTitle === "string" ? m.userTitle : null,
     captionLang: m.captionLang === "ar" ? "ar" : "en",
     occasion: m.occasion ?? "other",
+    design:
+      m.design && typeof m.design === "object" && typeof m.design.format === "string" && typeof m.design.designStyle === "string"
+        ? m.design
+        : undefined,
   };
 }
 
 export function synthAlbumPlan(meta: StorytellerScenarioMeta): AlbumPlanAi {
+  const design = meta.design ?? DEFAULT_BOOK_DESIGN;
+  const classic = isClassicPortrait(design);
+  // Page-only fill used for the budget (spreads never need more pages than the pages they replace).
+  const fillPagesOnly = (g: MetaPhoto[]) => (classic ? fillMoment(g) : fillMomentDesign(g, design, 0, false));
   const ar = meta.captionLang === "ar";
   let groups = mergeTo(groupByDay(meta.photos), meta.maxPages);
-  const need = groups.map((g) => fillMoment(g).length);
+  const need = groups.map((g) => fillPagesOnly(g).length);
   if (need.reduce((a, b) => a + b, 0) > meta.maxPages) {
     const b = budgets(need, meta.maxPages);
     groups = groups.map((g, i) => {
       for (let k = g.length; k >= 1; k--) {
         const sample = bestK(g, k);
-        if (fillMoment(sample).length <= b[i]) return sample;
+        if (fillPagesOnly(sample).length <= b[i]) return sample;
       }
       return bestK(g, 1);
     });
   }
 
-  const moments = groups
-    .filter((g) => g.length > 0)
+  const nonEmpty = groups.filter((g) => g.length > 0);
+  const fillAll = (allowSpread: boolean): PlanPage[][] => {
+    if (classic) return nonEmpty.map((g) => fillMoment(g));
+    let at = 0;
+    return nonEmpty.map((g) => {
+      const pages = fillMomentDesign(g, design, at, allowSpread);
+      at += spanOf(pages, design);
+      return pages;
+    });
+  };
+  let filled = fillAll(true);
+  if (!classic && filled.reduce((n, p) => n + spanOf(p, design), 0) > meta.maxPages) filled = fillAll(false);
+
+  const moments = nonEmpty
     .map((g, i) => {
       const days = g.filter((p) => p.ms !== null).map((p) => dubaiDay(p.ms as number));
       const place = g.find((p) => p.place)?.place ?? null;
@@ -178,14 +269,14 @@ export function synthAlbumPlan(meta: StorytellerScenarioMeta): AlbumPlanAi {
         title,
         dateLabel: days.length ? dayRange(Math.min(...days), Math.max(...days)) : "",
         place,
-        pages: fillMoment(g),
+        pages: filled[i],
       };
     });
 
   return {
     title: meta.userTitle ?? (ar ? "حكايتنا" : "Our Story"),
     subtitle: "",
-    coverPhotoId: pickCover(meta.photos)?.alias ?? "p1",
+    coverPhotoId: pickCover(meta.photos, design.format === "A5_LANDSCAPE" ? "portrait" : "landscape")?.alias ?? "p1",
     moments,
   };
 }

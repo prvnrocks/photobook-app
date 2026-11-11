@@ -63,6 +63,18 @@ export function styleTokens(style: DesignStyle | null | undefined): StyleTokens 
   return (style && STYLE_TOKENS[style]) || CLASSIC;
 }
 
+/**
+ * The caption face a generator (rule autolayout, AI Storyteller/Caption Writer) writes into
+ * doc.style.font and AI caption.font for a book of `style` (M10b A11): the style's caption token,
+ * Arabic face when the book's caption language is Arabic. Classic → Playfair / Cairo, exactly as
+ * before M10b (classic docs stay byte-identical); modern → Cormorant / Amiri. caption.font overrides
+ * the style's face in the renderer, so a modern book must never get the classic faces here.
+ */
+export function styleCaptionFont(style: DesignStyle | null | undefined, captionLang: string | null | undefined): BookFontName {
+  const t = styleTokens(style).fonts.caption;
+  return captionLang === "ar" ? t.arabic : t.latin;
+}
+
 export interface ResolvedRoleFont {
   font: BookFontName;
   /** CSS font-family chain (face → Arabic/Latin partner → Cairo → Inter → generic). */

@@ -4,6 +4,7 @@ import { effectiveMaxPages } from "@/lib/ai/story";
 import { AlbumPlanStrictSchema, type AlbumPlan } from "@/lib/ai/schemas";
 import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import type { BookDoc } from "@/lib/book/types";
+import { getLayout } from "@/lib/layouts";
 import { aliasMaps, fixturePlan, RUN_ID, storyBook, storyPhotos } from "../helpers/story-fixtures";
 
 const photos = storyPhotos();
@@ -208,10 +209,23 @@ describe("planToDoc — book design from books.format / books.design_style (M10b
     expect(doc.style.designStyle).toBe("classic");
   });
 
-  it("stamps the given design and validates the plan's layouts against it (classic plan in a modern / landscape book → issues)", () => {
-    const modern = planToDoc(fixturePlan(), { ...base, design: { format: "A5_PORTRAIT", designStyle: "modern" } });
-    expect("issues" in modern && modern.issues.some((i) => i.includes("is classic, book is modern"))).toBe(true);
-    const landscape = planToDoc(fixturePlan(), { ...base, design: { format: "A5_LANDSCAPE", designStyle: "classic" } });
-    expect("issues" in landscape && landscape.issues.some((i) => i.includes("book is A5_LANDSCAPE"))).toBe(true);
+  it("stamps the given design; a classic plan in a modern / landscape book is re-fitted to the book's own layouts (M10b A11)", () => {
+    for (const design of [
+      { format: "A5_PORTRAIT", designStyle: "modern" },
+      { format: "A5_LANDSCAPE", designStyle: "classic" },
+      { format: "A5_LANDSCAPE", designStyle: "modern" },
+    ] as const) {
+      const doc = okDoc(fixturePlan(), { design } as Partial<typeof base>);
+      expect(doc.format).toBe(design.format);
+      expect(doc.style.designStyle).toBe(design.designStyle);
+      for (const p of doc.pages) {
+        const l = getLayout(p.layout);
+        expect(l?.format).toBe(design.format);
+        expect(l?.style).toBe(design.designStyle);
+      }
+      expect(getLayout(doc.cover.layout)).toMatchObject({ role: "cover", format: design.format, style: design.designStyle });
+      // Same photos in the same order as the classic plan.
+      expect(doc.pages.flatMap((p) => p.slots.map((s) => s.photoId))).toEqual(okDoc().pages.flatMap((p) => p.slots.map((s) => s.photoId)));
+    }
   });
 });

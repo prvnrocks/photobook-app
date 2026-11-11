@@ -1441,6 +1441,7 @@ async function storytellerStep(c: Tick): Promise<void> {
     logger: c.logger,
     previousIssues: c.cursor.issues.length ? c.cursor.issues : undefined,
     memory: c.cursor.memory,
+    design: bookDesignOf(c.book),
     retry: stepRetry(c),
   });
   c.heavyDone = true;
@@ -2134,7 +2135,7 @@ async function validateAndSave(c: Tick): Promise<AdvanceResult> {
     const photos = storyPhotosOf(c.photos);
     const aliasToId = aliasToIdMap(c.cursor);
     // Photos the user removed while the run was going leave the plan; the rest of it is kept.
-    const pruned = prunePlan(album.plan, { aliasToId, photos });
+    const pruned = prunePlan(album.plan, { aliasToId, photos, design: bookDesignOf(c.book) });
     const out = planToDoc(pruned.plan, {
       aliasToId,
       photos,

@@ -70,6 +70,7 @@ import { layoutsFor } from "@/lib/book/spreads";
 import type { BookDoc, BookPage, Chapter, Crop, DocMeta, Layout } from "@/lib/book/types";
 import { COVER_LAYOUT_ID } from "@/lib/layouts";
 import { bestCoverLayout, fitsSlot, fullPageLayout, slotAspectMm } from "@/lib/layouts/fit";
+import { styleCaptionFont } from "@/lib/design/styles";
 import { clipCodePoints, clipText } from "@/lib/text/clip";
 
 export interface AutoPhoto {
@@ -198,7 +199,7 @@ function build(kept: P[], opts: AutolayoutOptions, design: BookDesign, maxPages:
     style: {
       background: { kind: "color", hex: "#FFFFFF" },
       designStyle: design.designStyle,
-      font: opts.captionLang === "ar" ? "Cairo" : "Playfair",
+      font: styleCaptionFont(design.designStyle, opts.captionLang),
     },
     meta: ruleMeta(opts),
   };

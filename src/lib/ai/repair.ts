@@ -65,10 +65,10 @@ export function momentIdOfKey(key: string): string | null {
   return MOMENT_ID_RE.test(m) ? m : null;
 }
 
-/** True when the page's layout has a caption area. */
-export function isCaptionable(page: Pick<BookDoc["pages"][number], "layout">): boolean {
+/** True when the page's layout has a caption area (a spread: its left half only, never the right). */
+export function isCaptionable(page: Pick<BookDoc["pages"][number], "layout" | "side">): boolean {
   const l = getLayout(page.layout);
-  return Boolean(l && l.caption !== null);
+  return Boolean(l && l.caption !== null && !(l.role === "spread" && page.side !== "left"));
 }
 
 export type CoverCandidate = Pick<StoryPhoto, "id" | "keep" | "takenAt"> & {

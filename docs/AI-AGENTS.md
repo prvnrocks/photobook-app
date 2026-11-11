@@ -42,6 +42,16 @@ and every decision must be explainable to the user ("why was this photo dropped?
 | — | **Rewriter** | one caption + instruction (shorter / tone / translate) + user memory | `{ text }` | low | on demand in editor |
 | ⑥ | **Memory Keeper** | diff between AI draft and the user's final book | updates to `user_memory` | low | on publish |
 
+**Storyteller per book design (v5, M10b A11).** The system prompt + layout catalogue is a pure function of
+the book's design (books.format × books.design_style) → one stable cached prefix per design (4 today); the
+classic A5 portrait text is byte-identical to v4 (fixture tests/fixtures/ai/storyteller/system-v4-classic-portrait.txt).
+Modern catalogues list spread layouts: one `pages[]` entry, occupies 2 pages (counts 2 toward maxPages), must start on
+a left page. Code (plan-to-doc): layouts of another design are re-fitted with bestPageLayout({design}) or reported
+(retry → rule album); a spread expands to the page pair (left owns slots + caption, right empty), repairSpreads splits
+misaligned spreads into twins; cover = bestCoverLayout(design, cover orientation). Caption keys count both halves; only
+the left half of a spread is captionable. AI caption font / style.font = the style's caption face (classic
+Playfair/Cairo, modern Cormorant/Amiri).
+
 Schemas `PhotoAnalysis`, `AlbumPlan`, `MomentCaptions` are defined in docs/PLAN.md. New ones:
 
 ```ts

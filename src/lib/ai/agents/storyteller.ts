@@ -7,6 +7,7 @@
 import { AGENT_TIMEOUT_MS, EFFORT } from "../client";
 import { STORYTELLER_PROMPT_VERSION, storytellerSystem } from "../prompts/storyteller";
 import { runAgentStep, type RetryOptions, type StepLogger, type StepResult } from "../run-step";
+import { DEFAULT_BOOK_DESIGN, type BookDesign } from "@/lib/book/book-design";
 import { clipText } from "@/lib/text/clip";
 import { isEmptyMemory, memoryPromptBlock, sanitizeMemory } from "../memory";
 import {
@@ -46,6 +47,8 @@ export interface StorytellerScenarioMeta {
   userTitle: string | null;
   captionLang: StoryBook["captionLang"];
   occasion: StoryBook["occasion"];
+  /** books.format / books.design_style (M10b A11): the replay synthesiser plans with this design's layouts. */
+  design?: BookDesign;
 }
 
 export interface PlanAlbumArgs {
@@ -67,6 +70,11 @@ export interface PlanAlbumArgs {
    * system prompt is byte-identical with or without it. Optional; null/empty → no block.
    */
   memory?: UserMemory | null;
+  /**
+   * The book's format + design style (bookDesignOf(book), D-063): picks the system prompt +
+   * layout catalogue (one stable cached prefix per design). Default classic A5 portrait.
+   */
+  design?: BookDesign;
   retry?: RetryOptions;
 }
 
@@ -157,6 +165,7 @@ export function storytellerScenarioMeta(
   photos: readonly StoryPhoto[],
   book: StoryBook,
   aliasOf: ReadonlyMap<string, string>,
+  design: BookDesign = DEFAULT_BOOK_DESIGN,
 ): StorytellerScenarioMeta {
   return {
     photos: keptInStoryOrder(photos).map((p) => ({
@@ -171,6 +180,7 @@ export function storytellerScenarioMeta(
     userTitle: book.title?.trim() ? book.title.trim() : null,
     captionLang: book.captionLang,
     occasion: book.occasion,
+    design: { format: design.format, designStyle: design.designStyle },
   };
 }
 
@@ -193,18 +203,18 @@ export function planLogOutput(plan: AlbumPlan) {
 }
 
 export function buildStorytellerRequest(
-  args: Pick<PlanAlbumArgs, "photos" | "book" | "aliasOf" | "previousIssues" | "memory">,
+  args: Pick<PlanAlbumArgs, "photos" | "book" | "aliasOf" | "previousIssues" | "memory" | "design">,
 ): AgentRequest<AlbumPlanAi> {
   const kept = keptInStoryOrder(args.photos);
   return {
     agent: "storyteller",
-    system: storytellerSystem(),
+    system: storytellerSystem(args.design ?? DEFAULT_BOOK_DESIGN),
     messages: [{ role: "user", content: buildStorytellerUserMessage(args.photos, args.book, args.aliasOf, args.previousIssues, args.memory) }],
     schema: AlbumPlanAiSchema,
     effort: EFFORT.storyteller,
     maxTokens: storytellerMaxTokens(kept.length),
     timeoutMs: AGENT_TIMEOUT_MS.storyteller,
-    scenarioMeta: { ...storytellerScenarioMeta(args.photos, args.book, args.aliasOf) },
+    scenarioMeta: { ...storytellerScenarioMeta(args.photos, args.book, args.aliasOf, args.design ?? DEFAULT_BOOK_DESIGN) },
   };
 }
 

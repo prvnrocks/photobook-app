@@ -147,7 +147,7 @@ export const AlbumPlanAiSchema = z.object({
 
 const PlanPageStrictSchema = z.object({
   layoutId: z.string().regex(LAYOUT_ID_RE),
-  photoIds: z.array(alias).min(1).max(8),
+  photoIds: z.array(alias).min(1).max(12), // ≤ 12 = largest spread (doc slot cap)
 });
 
 const PlanMomentStrictSchema = z.object({

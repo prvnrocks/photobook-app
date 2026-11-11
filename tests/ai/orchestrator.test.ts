@@ -316,6 +316,7 @@ class FakeDb {
 class CountingTransport implements AgentTransport {
   readonly kind = "replay" as const;
   calls: Array<{ agent: AgentName; key: string; inFlight: number }> = [];
+  requests: Array<{ agent: AgentName; system: Parameters<AgentTransport["parse"]>[0]["system"] }> = [];
   inFlight = 0;
   /** Runs inside a call, after the fake latency (e.g. to steal the lease mid-call). */
   onCall: ((agent: AgentName, index: number) => void) | null = null;
@@ -327,6 +328,7 @@ class CountingTransport implements AgentTransport {
     const aliases = (req.scenarioMeta?.aliases as string[] | undefined) ?? [];
     this.inFlight++;
     this.calls.push({ agent: req.agent, key: aliases.join(","), inFlight: this.inFlight });
+    this.requests.push({ agent: req.agent, system: req.system });
     this.db.now += CALL_MS;
     try {
       const res = await this.inner.parse<T>(req);
@@ -1775,5 +1777,88 @@ describe("orchestrator — rewrite runs are never build runs (M5 review B1)", ()
     const { last } = await runToEnd(deps, s.runId);
     expect(last).toMatchObject({ state: "done", aiStatus: "ok" });
     expect(db.run(RW)).toMatchObject({ state: "rewriting", attempts: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// M10b A11 — Storyteller v5: AI album per book format + design style (replay, no network)
+
+const { isSpreadAligned } = await import("@/lib/book/spreads");
+const { storytellerSystemText } = await import("@/lib/ai/prompts/storyteller");
+
+describe("orchestrator — book design (M10b A11)", () => {
+  const DESIGNS = [
+    { format: "A5_PORTRAIT", designStyle: "modern" },
+    { format: "A5_LANDSCAPE", designStyle: "classic" },
+    { format: "A5_LANDSCAPE", designStyle: "modern" },
+  ] as const;
+
+  for (const design of DESIGNS) {
+    it(`${design.format}/${design.designStyle}: AI doc uses only that design, spreads aligned, captions on left halves in the style's face`, async () => {
+      const { db, transport, deps } = setup(photos150().slice(0, 60), {
+        book: { format: design.format, design_style: design.designStyle },
+      });
+      const s = await start(deps);
+      const { last } = await runToEnd(deps, s.runId);
+      expect(last).toMatchObject({ state: "done", aiStatus: "ok", errorCode: null });
+      const doc = docOf(db);
+      expect(doc.meta).toMatchObject({ generator: "ai" });
+      expect(doc.format).toBe(design.format);
+      expect(doc.style.designStyle).toBe(design.designStyle);
+      for (const id of [doc.cover.layout, ...doc.pages.map((p) => p.layout)]) {
+        expect(getLayout(id)).toMatchObject({ format: design.format, style: design.designStyle });
+      }
+      expect(getLayout(doc.cover.layout)?.role).toBe("cover");
+      expect(isSpreadAligned(doc)).toBe(true);
+      const kept = new Set(db.photos.filter((p) => p.status === "kept").map((p) => p.id));
+      expect(validateBookDoc(doc, { photoIds: kept, maxPages: 20 })).toEqual([]);
+
+      const halves = doc.pages.filter((p) => p.side !== undefined);
+      if (design.designStyle === "modern") expect(halves.length).toBeGreaterThan(0);
+      else expect(halves).toHaveLength(0);
+      for (const p of doc.pages.filter((x) => x.side === "right")) {
+        expect(p.caption).toBeNull();
+        expect(p.slots).toEqual([]);
+      }
+      const font = design.designStyle === "modern" ? "Cormorant" : "Playfair";
+      expect(doc.style.font).toBe(font);
+      const captions = doc.pages.flatMap((p) => (p.caption ? [p.caption] : []));
+      expect(captions.length).toBeGreaterThan(0);
+      expect(captions.every((c) => c.font === font)).toBe(true);
+
+      // The Storyteller got this design's system text (one stable cache prefix per design).
+      const story = transport.requests.find((r) => r.agent === "storyteller");
+      expect(story?.system[0].text).toBe(storytellerSystemText(design));
+    });
+  }
+
+  it("agent_steps logging unchanged: same Storyteller input-summary keys / output shape as a classic book", async () => {
+    const run = async (book: Partial<BookForRun>) => {
+      const { db, deps } = setup(photos150().slice(0, 30), { book });
+      const s = await start(deps);
+      await runToEnd(deps, s.runId);
+      return db.steps.find((x) => x.agent === "storyteller") as AgentStepRecord;
+    };
+    const classic = await run({});
+    const modern = await run({ format: "A5_LANDSCAPE", design_style: "modern" });
+    expect(Object.keys(modern.inputSummary as object).sort()).toEqual(Object.keys(classic.inputSummary as object).sort());
+    expect(Object.keys(modern.output as object).sort()).toEqual(Object.keys(classic.output as object).sort());
+    expect(modern).toMatchObject({ agent: "storyteller", stepKey: "storyteller", status: "ok", attempt: 1 });
+  });
+
+  it("Storyteller refusal in a modern landscape book → rule album in that design", async () => {
+    const { db, deps } = setup(photos150().slice(0, 40), {
+      book: { format: "A5_LANDSCAPE", design_style: "modern" },
+      scenarioFor: (agent) => (agent === "storyteller" ? "refusal" : "ok"),
+    });
+    const s = await start(deps);
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "partial", errorCode: "storyteller_refusal" });
+    const doc = docOf(db);
+    expect(doc.meta?.generator).toBe("rule");
+    expect(doc.format).toBe("A5_LANDSCAPE");
+    expect(doc.style.designStyle).toBe("modern");
+    expect(isSpreadAligned(doc)).toBe(true);
+    for (const p of doc.pages) expect(getLayout(p.layout)).toMatchObject({ format: "A5_LANDSCAPE", style: "modern" });
   });
 });

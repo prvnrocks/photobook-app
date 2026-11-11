@@ -9,12 +9,21 @@
 //
 // Only pages whose layout has a caption area are captioned (getLayout(id).caption != null), and a
 // caption with source 'user' is never touched.
+//
+// Spreads (M10b A11, D-064): a spread is stored as a page pair (left owns slots + caption, right is
+// an empty placeholder). Both halves count as pages of the chapter (k advances by 2), the LEFT half
+// is captionable when the spread layout has a caption area, the RIGHT half never is. A plan entry
+// with a spread layout expands the same way, so plan keys and doc keys agree.
+//
+// Caption font: the book style's caption face (styleCaptionFont: classic Playfair/Cairo as before,
+// modern Cormorant/Amiri) — caption.font overrides the style face in the renderer.
 
 import { dayRange } from "@/lib/autolayout";
 import type { CaptionLang } from "@/lib/book/options";
 import { parseBookDoc } from "@/lib/book/schema";
 import type { BookDoc, Caption } from "@/lib/book/types";
 import { getLayout } from "@/lib/layouts";
+import { styleCaptionFont } from "@/lib/design/styles";
 import { clipText } from "@/lib/text/clip";
 import { buildCaptionContext, checkCaption, type CaptionCheckContext, type CaptionIssue } from "./caption-check";
 import { LIMITS, MAX_CAPTION_PAGES_PER_BATCH } from "./limits";
@@ -66,7 +75,7 @@ export interface CaptionBatchOptions {
   maxBatches?: number;
 }
 
-type SourcePage = { layout: string; photoIds: string[]; userCaption: boolean; bookPageIndex: number };
+type SourcePage = { layout: string; photoIds: string[]; userCaption: boolean; bookPageIndex: number; side?: "left" | "right" };
 type SourceMoment = { momentId: string; title: string; dateLabel: string; place: string | null; pages: SourcePage[] };
 
 /**
@@ -96,7 +105,13 @@ function momentsOf(src: BookDoc | AlbumPlan): SourceMoment[] {
         title: m.title,
         dateLabel: m.dateLabel,
         place: m.place,
-        pages: m.pages.map((pg) => ({ layout: pg.layoutId, photoIds: [...pg.photoIds], userCaption: false, bookPageIndex: n++ })),
+        pages: m.pages.flatMap((pg): SourcePage[] => {
+          if (getLayout(pg.layoutId)?.role !== "spread") {
+            return [{ layout: pg.layoutId, photoIds: [...pg.photoIds], userCaption: false, bookPageIndex: n++ }];
+          }
+          const left: SourcePage = { layout: pg.layoutId, photoIds: [...pg.photoIds], userCaption: false, bookPageIndex: n++, side: "left" };
+          return [left, { layout: pg.layoutId, photoIds: [], userCaption: false, bookPageIndex: n++, side: "right" }];
+        }),
       }));
   }
   const momentOf = momentIdsOfChapters(src);
@@ -117,19 +132,23 @@ function momentsOf(src: BookDoc | AlbumPlan): SourceMoment[] {
       photoIds: p.slots.map((s) => s.photoId).filter((id): id is string => typeof id === "string"),
       userCaption: p.caption?.source === "user",
       bookPageIndex: i,
+      ...(p.side ? { side: p.side } : {}),
     });
   });
   return out;
 }
 
-const hasCaptionArea = (layoutId: string) => {
+/** A single page with a caption area, or the LEFT half of a spread whose layout has one. */
+export function hasCaptionArea(layoutId: string, side?: "left" | "right"): boolean {
   const l = getLayout(layoutId);
-  return Boolean(l && l.role === "page" && l.caption);
-};
+  if (!l || !l.caption) return false;
+  if (l.role === "page") return true;
+  return l.role === "spread" && side === "left";
+}
 
 /** Pages the Caption Writer may caption: layout with a caption area, not a user caption. */
 export function countCaptionablePages(src: BookDoc | AlbumPlan): number {
-  return momentsOf(src).reduce((n, m) => n + m.pages.filter((p) => !p.userCaption && hasCaptionArea(p.layout)).length, 0);
+  return momentsOf(src).reduce((n, m) => n + m.pages.filter((p) => !p.userCaption && hasCaptionArea(p.layout, p.side)).length, 0);
 }
 
 /**
@@ -164,7 +183,7 @@ export function captionBatches(src: BookDoc | AlbumPlan, opts: CaptionBatchOptio
   for (const m of momentsOf(src)) {
     const pages = m.pages
       .map((p, pageIndex) => ({ p, pageIndex }))
-      .filter(({ p }) => !p.userCaption && hasCaptionArea(p.layout));
+      .filter(({ p }) => !p.userCaption && hasCaptionArea(p.layout, p.side));
     if (pages.length === 0) {
       current = current ?? open();
       if (!current) break;
@@ -310,7 +329,8 @@ export function groundStoryText(
 
 /**
  * Write AI captions/headings into a doc (new object; input untouched). Captions: only pages with a
- * caption area and no user caption; font Cairo for ar else Playfair, centred, source 'ai'.
+ * caption area (spreads: left half only) and no user caption; font = the book style's caption face
+ * (styleCaptionFont: classic Cairo for ar else Playfair), centred, source 'ai'.
  * Headings replace chapter titles only when they pass checkHeading. If the result would not parse
  * as a BookDoc, the input doc is returned unchanged.
  */
@@ -320,7 +340,7 @@ export function applyCaptions(
   headings: ReadonlyMap<string, string>,
   opts: ApplyCaptionsOptions,
 ): BookDoc {
-  const font = opts.lang === "ar" ? "Cairo" : "Playfair";
+  const font = styleCaptionFont(doc.style.designStyle, opts.lang);
   const ctx = headingContext(opts.ctx ?? docCaptionContext(doc, opts.lang), doc.chapters.length);
   const perChapter = new Map<string, number>();
   const momentOf = momentIdsOfChapters(doc);
@@ -330,7 +350,7 @@ export function applyCaptions(
     if (!momentId) return page;
     const pageIndex = perChapter.get(momentId) ?? 0;
     perChapter.set(momentId, pageIndex + 1);
-    if (page.caption?.source === "user" || !hasCaptionArea(page.layout)) return page;
+    if (page.caption?.source === "user" || !hasCaptionArea(page.layout, page.side)) return page;
     const raw = results.get(captionKey(momentId, pageIndex));
     if (typeof raw !== "string") return page;
     const text = cleanCaptionText(raw, AI_TEXT_LIMITS.caption);
