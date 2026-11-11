@@ -123,3 +123,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-11, layouts) A gap at the fold belongs on the spread page only; twin single pages keep full bleed. Grep tests for a layout id before changing its geometry (print tests hard-code sizes).
 - (2026-11-11, pdf) Print shadows: offset sibling with flat rgba fill + CSS translate (after rotate) — never a blurred box-shadow (soft mask).
 - (2026-11-11, test) Keep a refusal path tested after it loses its last real trigger via a vi.mock toggle (tests/fixtures/simulated-unsupported-style.ts); freeze hash goldens for every existing design before changing shared fitters.
+- (2026-11-11, claude-api) SDK zodOutputFormat turns z.enum into a described string — the grammar doesn't enforce it; use strings + validate ids in code.
