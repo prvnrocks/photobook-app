@@ -312,7 +312,7 @@ export async function finalizeBook(
   // D-063: format + design style from books.format / books.design_style (M10b A6).
   const design = bookDesignOf(book);
   if (isEmptyDoc(book.doc) && !isSupportedDesign(design)) {
-    // Review S1 (M10b A19): a style without layouts (geometric / scrapbook row inserted directly)
+    // Review S1 (M10b A19): a style without layouts (none since M10c T10; row inserted directly)
     // gets no fallback album — the doc stays {} and finalize still reports its counts (no 500).
     console.error("[finalize] fallback album skipped (unsupported_design)");
   } else if (isEmptyDoc(book.doc)) {

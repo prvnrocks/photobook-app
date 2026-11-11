@@ -58,6 +58,22 @@
 //    - cover: the style's one-photo cover whose slot fits the cover photo (bestCoverLayout);
 //      the cover photo prefers the format's orientation (portrait books portrait, landscape
 //      books landscape). The minimal album uses the design's full-page layout (fullPageLayout).
+// 10. Shape-aware styles (M10c T10: geometric, scrapbook — SHAPE_AWARE_STYLES in layouts/fit) use
+//    rule 9 with these changes (classic + modern output byte-identical, frozen by
+//    tests/autolayout-classic-golden.test.ts + tests/autolayout-design-golden.test.ts):
+//    - fitting is on the VISIBLE photo area (fit.ts slotFit: frame inset removed, shape clip
+//      applied): a round slot (circle / hexagon / diamond / petal) misses a photo more than
+//      ROUND_STRETCH_MAX away from its visible aspect even when it says "any"; photos are assigned
+//      to a page's slots by the fewest misses, then the smallest total aspect distance (exact
+//      search, ≤ 6 slots); singles rank by that distance too.
+//    - spreads (never on an odd index, never two in a row, one per started 20 chapter photos, in
+//      chapters of ≥ SPREAD_MOMENT_MIN photos): the photos may come from the next photoCount + 2
+//      of the chapter (contiguous first, skipped ones stay queued in order), at most ⌊n/4⌋
+//      misses. Chapters of ≥ LARGE_SPREAD_MOMENT photos try the largest spread first and then
+//      alternate (scrapbook: wall, hero, wall …); smaller chapters only the smallest (scrapbook
+//      hero, geometric band). No panorama spreads (the styles have none).
+//    - cover photo: the orientation the style's cover slot asks for (or shows, for an "any"
+//      slot), else the format's (coverPhotoOrientation).
 // The result is checked with parseBookDoc + validateBookDoc; if that ever fails, a minimal
 // safe album is returned instead (the user must always get an album).
 
@@ -69,7 +85,16 @@ import { DocMetaSchema, parseBookDoc, validateBookDoc } from "@/lib/book/schema"
 import { layoutsFor } from "@/lib/book/spreads";
 import type { BookDoc, BookPage, Chapter, Crop, DocMeta, Layout } from "@/lib/book/types";
 import { COVER_LAYOUT_ID } from "@/lib/layouts";
-import { bestCoverLayout, fitsSlot, fullPageLayout, slotAspectMm } from "@/lib/layouts/fit";
+import {
+  bestCoverLayout,
+  coverPhotoOrientation,
+  fitsSlot,
+  fullPageLayout,
+  isShapeAware,
+  shapeCost,
+  shapeMiss,
+  slotAspectMm,
+} from "@/lib/layouts/fit";
 import { styleCaptionFont } from "@/lib/design/styles";
 import { clipCodePoints, clipText } from "@/lib/text/clip";
 
@@ -147,7 +172,7 @@ interface Group {
 export function autolayout(photos: AutoPhoto[], opts: AutolayoutOptions): BookDoc {
   const maxPages = limitsFor(opts.isPaid).maxPages;
   const design = opts.design ?? DEFAULT_BOOK_DESIGN;
-  // M10b A19 (review S1): a style without layouts (geometric / scrapbook rows inserted directly)
+  // M10b A19 (review S1): a style without layouts (none since M10c T10; unknown styles)
   // throws the typed UnsupportedDesignError here, before any page is built; callers refuse cleanly.
   assertSupportedDesign(design);
   const kept = dedupe(photos, opts.dupGroups).sort(byTime);
@@ -186,7 +211,10 @@ function build(kept: P[], opts: AutolayoutOptions, design: BookDesign, maxPages:
   });
 
   const classic = isClassicPortrait(design);
-  const coverPhoto = pickCover(kept, classic ? "portrait" : formatOrientation(design.format));
+  const coverPhoto = pickCover(
+    kept,
+    classic ? "portrait" : (coverPhotoOrientation(design) ?? formatOrientation(design.format)),
+  );
   return {
     version: 2,
     format: design.format,
@@ -634,9 +662,17 @@ export const PANORAMA_RATIO = 2.0;
 export const SPREAD_MOMENT_MIN = 7;
 /** One grid/mosaic spread per started block of this many chapter photos. */
 const PHOTOS_PER_SPREAD = 20;
+/** Shape-aware styles (rule 10): chapter size from which the largest spread is tried first. */
+export const LARGE_SPREAD_MOMENT = 12;
+/** Shape-aware styles (rule 10): how far past a spread's photo count its photos may be picked. */
+const SPREAD_LOOKAHEAD = 2;
+/** Weight of one orientation miss against aspect distance in the shape-aware slot assignment. */
+const MISS_WEIGHT = 1000;
 
 interface Catalogue {
   design: BookDesign;
+  /** Rule 10: fit on the visible photo area (geometric / scrapbook). */
+  shaped: boolean;
   singles: readonly Layout[];
   /** Page layouts with ≥ 2 photos by photo count, catalogue order. */
   multis: ReadonlyMap<number, readonly Layout[]>;
@@ -661,6 +697,7 @@ function catalogueOf(design: BookDesign): Catalogue {
   }
   return {
     design,
+    shaped: isShapeAware(design),
     singles: pages.filter((l) => l.photoCount === 1),
     multis,
     panoramas: spreads.filter((l) => l.photoCount === 1),
@@ -679,7 +716,8 @@ function catalogueOf(design: BookDesign): Catalogue {
  * squares; the remaining slots ("any" + unmatched) take the rest in time order. `misses` = slots
  * whose preference the assigned photo doesn't fit.
  */
-function assignSlots(layout: Layout, photos: P[]): { order: P[]; misses: number } {
+function assignSlots(cat: Catalogue, layout: Layout, photos: P[]): { order: P[]; misses: number } {
+  if (cat.shaped) return assignShaped(layout, photos, cat.design);
   const prefs = layout.prefers;
   const used = photos.map(() => false);
   const order: (P | undefined)[] = prefs.map(() => undefined);
@@ -704,10 +742,66 @@ function assignSlots(layout: Layout, photos: P[]): { order: P[]; misses: number 
   return { order: filled, misses };
 }
 
+/**
+ * Rule 10: photos → slots with the fewest shape-aware misses, then the smallest total aspect
+ * distance (exact: dynamic programming over photo subsets, ≤ 6 slots → ≤ 64 states; ties keep the
+ * earlier photo in the earlier slot). `photos.length` may exceed the slot count only in tests;
+ * extra photos stay unassigned.
+ */
+function assignShaped(layout: Layout, photos: P[], design: BookDesign): { order: P[]; misses: number } {
+  const k = Math.min(layout.prefers.length, photos.length);
+  const n = photos.length;
+  const miss: boolean[][] = [];
+  const cost: number[][] = [];
+  for (let s = 0; s < k; s++) {
+    miss.push(photos.map((p) => shapeMiss(layout, s, p, design.format)));
+    cost.push(photos.map((p) => shapeCost(layout, s, p, design.format)));
+  }
+  const size = 1 << n;
+  const best = new Float64Array(size).fill(Infinity);
+  const from = new Int32Array(size).fill(-1);
+  best[0] = 0;
+  const bits = (m: number) => {
+    let c = 0;
+    for (let x = m; x; x &= x - 1) c++;
+    return c;
+  };
+  let end = -1;
+  for (let mask = 0; mask < size; mask++) {
+    if (best[mask] === Infinity) continue;
+    const s = bits(mask);
+    if (s === k) {
+      if (end < 0 || best[mask] < best[end] - 1e-9) end = mask;
+      continue;
+    }
+    for (let j = 0; j < n; j++) {
+      if (mask & (1 << j)) continue;
+      const next = mask | (1 << j);
+      const v = best[mask] + (miss[s][j] ? MISS_WEIGHT : 0) + cost[s][j];
+      if (v < best[next] - 1e-9) {
+        best[next] = v;
+        from[next] = j;
+      }
+    }
+  }
+  const order: P[] = new Array(k);
+  let misses = 0;
+  for (let mask = end, s = k - 1; s >= 0; s--) {
+    const j = from[mask];
+    order[s] = photos[j];
+    if (miss[s][j]) misses++;
+    mask &= ~(1 << j);
+  }
+  return { order, misses };
+}
+
 function genericSingle(cat: Catalogue, p: P, prev: string | null): PagePlan {
-  const fitting = cat.singles.filter((l) => fitsSlot(l.prefers[0] ?? "any", p.orient));
+  const misses = (l: Layout) =>
+    cat.shaped ? shapeMiss(l, 0, p, cat.design.format) : !fitsSlot(l.prefers[0] ?? "any", p.orient);
+  const fitting = cat.singles.filter((l) => !misses(l));
   const pool = fitting.length > 0 ? fitting : cat.singles;
-  const dist = (l: Layout) => Math.abs(Math.log(slotAspectMm(cat.design, l.slots[0]) / p.ratio));
+  const dist = (l: Layout) =>
+    cat.shaped ? shapeCost(l, 0, p, cat.design.format) : Math.abs(Math.log(slotAspectMm(cat.design, l.slots[0]) / p.ratio));
   const ranked = pool
     .map((l, i) => ({ l, i, d: dist(l) }))
     .sort((a, b) => a.d - b.d || a.i - b.i)
@@ -732,10 +826,10 @@ function genericCandidates(cat: Catalogue, q: P[], chapterSize: number): { layou
       // Short chapters: 4-photo pages only when every slot asks for an orientation (no grids).
       if (k > 3 && chapterSize < LONG_CHAPTER && l.prefers.every((p) => p === "any")) continue;
       const take = Array.from({ length: k }, (_, i) => i);
-      const a = assignSlots(l, take.map((i) => q[i]));
+      const a = assignSlots(cat, l, take.map((i) => q[i]));
       if (a.misses === 0) out.push({ layout: l.id, take, order: a.order });
       else if (k === 2 && q.length >= 3) {
-        const b = assignSlots(l, [q[0], q[2]]);
+        const b = assignSlots(cat, l, [q[0], q[2]]);
         if (b.misses === 0) skips.push({ layout: l.id, take: [0, 2], order: b.order });
       }
     }
@@ -743,18 +837,83 @@ function genericCandidates(cat: Catalogue, q: P[], chapterSize: number): { layou
   return [...out, ...skips];
 }
 
-/** A spread for the head of the queue, or null (caller checks the even page index). */
-function spreadFor(cat: Catalogue, q: P[], chapterSize: number, bigLeft: number): { plan: PagePlan; take: number; big: boolean } | null {
+const firstK = (k: number) => Array.from({ length: k }, (_, i) => i);
+
+/**
+ * A spread for the head of the queue, or null (caller checks the even page index). `take` = queue
+ * indices consumed; `used` = big spreads already placed in this chapter.
+ */
+function spreadFor(
+  cat: Catalogue,
+  q: P[],
+  chapterSize: number,
+  bigLeft: number,
+  used: number,
+): { plan: PagePlan; take: number[]; big: boolean } | null {
+  if (cat.shaped) return shapedSpreadFor(cat, q, chapterSize, bigLeft, used);
   const head = q[0];
   if (head && head.ratio >= PANORAMA_RATIO && cat.panoramas[0]) {
-    return { plan: { layout: cat.panoramas[0].id, photos: [head], spread: true }, take: 1, big: false };
+    return { plan: { layout: cat.panoramas[0].id, photos: [head], spread: true }, take: [0], big: false };
   }
   if (bigLeft <= 0 || chapterSize < SPREAD_MOMENT_MIN) return null;
   for (const l of cat.bigSpreads) {
     if (q.length < l.photoCount) continue;
-    const a = assignSlots(l, q.slice(0, l.photoCount));
+    const a = assignSlots(cat, l, q.slice(0, l.photoCount));
     if (a.misses <= Math.floor(l.photoCount / 4)) {
-      return { plan: { layout: l.id, photos: a.order, spread: true }, take: l.photoCount, big: true };
+      return { plan: { layout: l.id, photos: a.order, spread: true }, take: firstK(l.photoCount), big: true };
+    }
+  }
+  return null;
+}
+
+/** k-subsets of 0..n-1 in lexicographic order (the contiguous head [0..k-1] first). */
+function combinations(n: number, k: number): number[][] {
+  const out: number[][] = [];
+  const cur: number[] = [];
+  const walk = (from: number) => {
+    if (cur.length === k) {
+      out.push([...cur]);
+      return;
+    }
+    for (let i = from; i <= n - (k - cur.length); i++) {
+      cur.push(i);
+      walk(i + 1);
+      cur.pop();
+    }
+  };
+  walk(0);
+  return out;
+}
+
+/** Rule 10 spread choice (geometric / scrapbook). */
+function shapedSpreadFor(
+  cat: Catalogue,
+  q: P[],
+  chapterSize: number,
+  bigLeft: number,
+  used: number,
+): { plan: PagePlan; take: number[]; big: true } | null {
+  if (bigLeft <= 0 || chapterSize < SPREAD_MOMENT_MIN || cat.bigSpreads.length === 0) return null;
+  const large = chapterSize >= LARGE_SPREAD_MOMENT;
+  const smallest = cat.bigSpreads[0].photoCount;
+  const pool = large ? cat.bigSpreads : cat.bigSpreads.filter((l) => l.photoCount === smallest);
+  const ordered = large && used % 2 === 0 ? [...pool].reverse() : pool;
+  for (const l of ordered) {
+    const k = l.photoCount;
+    if (q.length < k) continue;
+    const allowed = Math.floor(k / 4);
+    let pick: { take: number[]; order: P[]; misses: number } | null = null;
+    for (const take of combinations(Math.min(q.length, k + SPREAD_LOOKAHEAD), k)) {
+      const a = assignSlots(
+        cat,
+        l,
+        take.map((i) => q[i]),
+      );
+      if (!pick || a.misses < pick.misses) pick = { take, order: a.order, misses: a.misses };
+      if (a.misses === 0) break;
+    }
+    if (pick && pick.misses <= allowed) {
+      return { plan: { layout: l.id, photos: pick.order, spread: true }, take: pick.take, big: true };
     }
   }
   return null;
@@ -774,7 +933,8 @@ function genericFill(
   let pos = start;
   let prev = prevLayout;
   let lastSpread = false;
-  let bigLeft = allowSpreads ? Math.ceil(n / PHOTOS_PER_SPREAD) : 0;
+  const bigTotal = allowSpreads ? Math.ceil(n / PHOTOS_PER_SPREAD) : 0;
+  let bigLeft = bigTotal;
   const push = (pl: PagePlan) => {
     pages.push(pl);
     pos += pl.spread ? 2 : 1;
@@ -783,9 +943,10 @@ function genericFill(
   };
   const trySpread = (): boolean => {
     if (!allowSpreads || pos % 2 !== 0 || lastSpread || cat.spreads.length === 0) return false;
-    const s = spreadFor(cat, q, n, bigLeft);
+    const s = spreadFor(cat, q, n, bigLeft, bigTotal - bigLeft);
     if (!s) return false;
-    q.splice(0, s.take);
+    const taken = new Set(s.take);
+    for (let i = q.length - 1; i >= 0; i--) if (taken.has(i)) q.splice(i, 1);
     if (s.big) bigLeft--;
     push(s.plan);
     return true;

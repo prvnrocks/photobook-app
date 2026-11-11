@@ -61,7 +61,7 @@ export type UpdateAlbumResult =
  * newly kept photos added by time. A `{}` doc gets a fresh rule album. Free and unlimited: no AI
  * call, no agent_runs row, not counted against any limit. Refused while a run is active (busy) or
  * when the album was edited by the user (user_edited). A design style without layouts
- * (geometric / scrapbook rows, M10b A19 review S1) → unsupported_design, nothing written.
+ * (none since M10c T10; M10b A19 review S1) → unsupported_design, nothing written.
  * Logs error codes only, never photo data.
  */
 export async function updateAlbumAction(bookId: string): Promise<UpdateAlbumResult> {

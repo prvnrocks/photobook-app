@@ -119,7 +119,7 @@ export function validateEditorDoc(input: unknown, ctx: EditorDocContext): Editor
   const rawPages = (input as { pages?: unknown } | null)?.pages;
   if (Array.isArray(rawPages) && rawPages.length > ctx.maxPages) return { ok: false, code: "page_limit" };
 
-  // Review S1 (M10b A19): a book whose design style has no layouts yet (geometric / scrapbook rows
+  // Review S1 (M10b A19): a book whose design style has no layouts yet (none since M10c T10; rows
   // inserted directly) can never hold a valid doc → a typed refusal instead of invalid_doc.
   const design = ctx.design ?? designOfDoc(ctx.savedDoc);
   if (!isSupportedDesign(design)) return { ok: false, code: "unsupported_design" };

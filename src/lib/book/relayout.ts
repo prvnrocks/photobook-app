@@ -46,7 +46,7 @@
 //    result is always spread-aligned. Classic A5 portrait docs have no spreads: output unchanged.
 // The removal step (rules 1 + 8) is exported as removeSlotPhotos: the photo-delete reflow
 // (strip-photos.ts, M10b A19) reuses it, with keepUserCaptionPages so a user caption never goes.
-// A design style without layouts (geometric / scrapbook, M10c) throws UnsupportedDesignError.
+// A design style without layouts (none since M10c T10; kept for unknown styles) throws UnsupportedDesignError.
 // The result is checked with parseBookDoc + validateBookDoc (photoIds = kept, backgroundPhotoIds =
 // every photo passed in, maxPages = cap);
 // a failure throws RelayoutError (issue strings only, no user data) — the caller keeps the
@@ -55,7 +55,7 @@
 import { dayRange, fillPages, PANORAMA_RATIO, parseTime } from "@/lib/autolayout";
 import { dubaiDay, effectiveMaxPages, orientationOf, placeKey } from "@/lib/ai/story";
 import { getLayout } from "@/lib/layouts";
-import { bestPageLayout, fitScore } from "@/lib/layouts/fit";
+import { bestPageLayout, designFitScore } from "@/lib/layouts/fit";
 import { assertSupportedDesign, type BookDesign } from "./book-design";
 import { clipText } from "@/lib/text/clip";
 import type { CaptionLang } from "./options";
@@ -407,12 +407,14 @@ export function removeSlotPhotos(doc: BookDoc, opts: RemoveSlotPhotosOptions): R
         continue;
       }
       const orients = left.map((s) => orient(s.photoId as string));
-      const smaller = bestPageLayout(orients, { preferCaption: userCaption, design, role: "spread" });
+      const ratios = left.map((s) => ratioOf(photo(s.photoId as string)));
+      const smaller = bestPageLayout(orients, { preferCaption: userCaption, design, role: "spread", ratios });
       const smallerLayout = smaller ? getLayout(smaller) : undefined;
-      // Only a spread every photo fits; a one-photo spread only for a real panorama.
+      // Only a spread every photo fits (shape-aware for geometric / scrapbook, M10c T10); a
+      // one-photo spread only for a real panorama.
       const smallerOk =
         smallerLayout !== undefined &&
-        fitScore(smallerLayout, orients) === orients.length &&
+        designFitScore(smallerLayout, orients, design, ratios) === orients.length &&
         (orients.length > 1 || ratioOf(photo(left[0].photoId as string)) >= PANORAMA_RATIO);
       if (smallerOk && right) {
         pages.push(refit(page, smallerLayout.id, left), { ...right, layout: smallerLayout.id });
@@ -484,7 +486,7 @@ function fitSingles(
   // so Update album never loses the user's words (D-031).
   const layoutId = bestPageLayout(
     left.map((s) => orient(s.photoId as string)),
-    { preferCaption: page.caption?.source === "user", design },
+    { preferCaption: page.caption?.source === "user", design, ratios: left.map((s) => ratioOf(photo(s.photoId as string))) },
   );
   if (layoutId) return [refit(page, layoutId, left)];
   // More photos left than any layout holds (e.g. a big spread half): split.

@@ -6,6 +6,10 @@ vi.mock("@/lib/supabase/server", () => ({
     throw new Error("real client must not be used in finalize tests");
   },
 }));
+vi.mock("@/lib/book/book-design", async (orig) =>
+  (await import("./fixtures/simulated-unsupported-style")).withSimulatedUnsupported(await orig()),
+);
+const { simulateUnsupported } = await import("./fixtures/simulated-unsupported-style");
 
 const {
   finalizeBook,
@@ -372,14 +376,37 @@ describe("finalizeBook", () => {
     expect(r?.pages).toBeGreaterThan(0);
   });
 
-  it("geometric / scrapbook book (no layouts yet) → no fallback album, doc stays {}, counts still returned (M10b A19 S1)", async () => {
-    for (const style of ["geometric", "scrapbook"]) {
+  it("a style without layouts (simulated) → no fallback album, doc stays {}, counts still returned (M10b A19 S1)", async () => {
+    simulateUnsupported(["scrapbook"]);
+    try {
       const { db, book, calls } = makeDb({ photos: Array.from({ length: 5 }, (_, i) => photo(i + 1)) });
-      book.design_style = style;
+      book.design_style = "scrapbook";
       const r = await fin(BOOK, { db, geocoder: makeGeocoder() });
       expect(r).toMatchObject({ photos: 5, wroteDoc: false, pages: 0 });
       expect(calls.writeDoc).toBe(0);
       expect(book.doc).toEqual({});
+    } finally {
+      simulateUnsupported([]);
+    }
+  });
+
+  it("geometric / scrapbook books get a fallback album in their own format + style (M10c T10)", async () => {
+    for (const format of ["A5_PORTRAIT", "A5_LANDSCAPE"]) {
+      for (const style of ["geometric", "scrapbook"]) {
+        const { db, book, calls } = makeDb({ photos: Array.from({ length: 12 }, (_, i) => photo(i + 1)) });
+        book.design_style = style;
+        book.format = format;
+        const r = await fin(BOOK, { db, geocoder: makeGeocoder() });
+        expect(r?.wroteDoc, `${format}/${style}`).toBe(true);
+        expect(calls.writeDoc).toBe(1);
+        const parsed = parseBookDoc(book.doc);
+        expect(parsed.ok).toBe(true);
+        if (!parsed.ok) continue;
+        expect(parsed.doc.format).toBe(format);
+        expect(parsed.doc.style.designStyle).toBe(style);
+        const ids = new Set(Array.from({ length: 12 }, (_, i) => pid(i + 1)));
+        expect(validateBookDoc(parsed.doc, { photoIds: ids, maxPages: 20 })).toEqual([]);
+      }
     }
   });
 

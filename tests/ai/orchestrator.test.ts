@@ -3,6 +3,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/book/book-design", async (orig) =>
+  (await import("../fixtures/simulated-unsupported-style")).withSimulatedUnsupported(await orig()),
+);
+import { simulateUnsupported } from "../fixtures/simulated-unsupported-style";
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => {
     throw new Error("real client must not be used in orchestrator tests");
@@ -1864,10 +1868,13 @@ describe("orchestrator — book design (M10b A11)", () => {
   });
 });
 
-describe("orchestrator — unsupported design style (M10b A19, review S1)", () => {
+describe("orchestrator — unsupported design style (M10b A19, review S1; style without layouts simulated since M10c)", () => {
+  beforeEach(() => simulateUnsupported(["scrapbook"]));
+  afterEach(() => simulateUnsupported([]));
+
   for (const mode of ["replay", "off"] as const) {
-    it(`startRun (${mode}) refuses a geometric/scrapbook book: no run row, no model call, doc untouched`, async () => {
-      for (const style of ["geometric", "scrapbook"]) {
+    it(`startRun (${mode}) refuses a book whose style has no layouts: no run row, no model call, doc untouched`, async () => {
+      for (const style of ["scrapbook"]) {
         const { db, transport, deps } = setup(photos150().slice(0, 10), { book: { design_style: style }, mode });
         const r = await orch.startRun({ bookId: BOOK, userId: USER, trigger: "build" }, deps);
         expect(r).toEqual({ ok: false, error: "unsupported_design" });
@@ -1933,3 +1940,31 @@ describe("orchestrator — photo colour backfill (M10c)", () => {
   });
 });
 
+
+describe("orchestrator — geometric + scrapbook enabled (M10c T10; Storyteller tuning is T12)", () => {
+  const NEW_DESIGNS = [
+    { format: "A5_PORTRAIT", designStyle: "geometric" },
+    { format: "A5_LANDSCAPE", designStyle: "geometric" },
+    { format: "A5_PORTRAIT", designStyle: "scrapbook" },
+    { format: "A5_LANDSCAPE", designStyle: "scrapbook" },
+  ] as const;
+
+  for (const design of NEW_DESIGNS) {
+    it(`${design.format}/${design.designStyle}: a replay build finishes with a valid, aligned album in that design`, async () => {
+      const { db, deps } = setup(photos150().slice(0, 60), { book: { format: design.format, design_style: design.designStyle } });
+      const s = await start(deps);
+      expect(s.ok).toBe(true);
+      const { last } = await runToEnd(deps, s.runId);
+      expect(last).toMatchObject({ state: "done" });
+      const doc = docOf(db);
+      expect(doc.format).toBe(design.format);
+      expect(doc.style.designStyle).toBe(design.designStyle);
+      for (const id of [doc.cover.layout, ...doc.pages.map((p) => p.layout)]) {
+        expect(getLayout(id)).toMatchObject({ format: design.format, style: design.designStyle });
+      }
+      expect(isSpreadAligned(doc)).toBe(true);
+      const kept = new Set(db.photos.filter((p) => p.status === "kept").map((p) => p.id));
+      expect(validateBookDoc(doc, { photoIds: kept, maxPages: 20 })).toEqual([]);
+    });
+  }
+});

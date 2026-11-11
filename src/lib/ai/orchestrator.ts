@@ -287,7 +287,7 @@ export type StartResult =
       ok: false;
       /**
        * 'unsupported_design' (M10b A19, review S1): books.design_style has no layouts yet
-       * (geometric / scrapbook rows inserted directly) — refused before any run row or model call.
+       * (none since M10c T10; rows inserted directly) — refused before any run row or model call.
        */
       error: "not_found" | "already_running" | "user_edited" | "limit" | "unsupported_design";
       /**

@@ -16,7 +16,7 @@
 //     · chapters that lose all their pages are removed; then repairSpreads (D-064) re-aligns any
 //       later spread pushed onto a right-hand page (split into twins, photos + captions kept).
 //   Safety: if the reflow would lose any user caption, produce an invalid doc, or the design has
-//   no layouts (UnsupportedDesignError, geometric / scrapbook rows), the doc falls back to the
+//   no layouts (UnsupportedDesignError — none since M10c T10), the doc falls back to the
 //   M10a behaviour — slot photoId → null, pages untouched — so a photo delete never fails.
 // Both return the input object unchanged (changed:false) when nothing references the photo.
 

@@ -3,6 +3,10 @@ import { parseBookDoc } from "@/lib/book/schema";
 import type { BookDoc } from "@/lib/book/types";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/book/book-design", async (orig) =>
+  (await import("./fixtures/simulated-unsupported-style")).withSimulatedUnsupported(await orig()),
+);
+import { simulateUnsupported } from "./fixtures/simulated-unsupported-style";
 
 const mocks = vi.hoisted(() => ({
   user: null as { id: string } | null,
@@ -171,12 +175,13 @@ describe("updateAlbumAction — guards", () => {
   });
 });
 
-describe("updateAlbumAction — unsupported design (M10b A19, review S1)", () => {
-  it("a geometric / scrapbook book → unsupported_design, no admin read, nothing written, no log", async () => {
-    for (const style of ["geometric", "scrapbook"]) {
-      mocks.getMyBook.mockResolvedValue({ id: BOOK, doc: {}, format: "A5_PORTRAIT", design_style: style });
-      expect(await updateAlbumAction(BOOK)).toEqual({ ok: false, error: "unsupported_design" });
-    }
+describe("updateAlbumAction — unsupported design (M10b A19, review S1; style without layouts simulated since M10c)", () => {
+  beforeEach(() => simulateUnsupported(["scrapbook"]));
+  afterEach(() => simulateUnsupported([]));
+
+  it("a book whose style has no layouts → unsupported_design, no admin read, nothing written, no log", async () => {
+    mocks.getMyBook.mockResolvedValue({ id: BOOK, doc: {}, format: "A5_PORTRAIT", design_style: "scrapbook" });
+    expect(await updateAlbumAction(BOOK)).toEqual({ ok: false, error: "unsupported_design" });
     expect(mocks.getBookForRun).not.toHaveBeenCalled();
     expect(mocks.writeDocIfReplaceable).not.toHaveBeenCalled();
     expect(logs).toEqual([]);
