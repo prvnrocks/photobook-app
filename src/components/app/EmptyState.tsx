@@ -27,19 +27,22 @@ export type EmptyStateProps = {
   /** Replaces the default open-book drawing. */
   art?: ReactNode;
   className?: string;
+  /** 1 when the empty state is the whole page (e.g. /b state screens); default 2. */
+  headingLevel?: 1 | 2;
   "data-testid"?: string;
 };
 
-export function EmptyState({ title, description, action, art, className, ...rest }: EmptyStateProps) {
+export function EmptyState({ title, description, action, art, className, headingLevel = 2, ...rest }: EmptyStateProps) {
+  const Heading = headingLevel === 1 ? "h1" : "h2";
   return (
     <section
       data-testid={rest["data-testid"]}
       className={cn("flex flex-col items-center rounded-2xl border border-border bg-card px-6 py-10 text-center shadow-card", className)}
     >
       {art ?? <OpenBookArt />}
-      <h2 dir="auto" className="type-h2 mt-5 text-foreground">
+      <Heading dir="auto" className="type-h2 mt-5 text-foreground">
         {title}
-      </h2>
+      </Heading>
       {description ? (
         <p dir="auto" className="type-small mt-2 max-w-xs text-muted-foreground">
           {description}

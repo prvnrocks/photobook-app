@@ -32,7 +32,7 @@ export function ViewerMessage({
       data-testid={testId}
     >
       <main className="mx-auto flex w-full max-w-sm min-w-0 flex-1 flex-col justify-center px-gutter py-10">
-        <EmptyState title={title} description={description} art={art} action={children} className="break-words" />
+        <EmptyState title={title} description={description} art={art} action={children} headingLevel={1} className="break-words" />
       </main>
       <footer className="px-4 pb-4 text-center">
         <Link

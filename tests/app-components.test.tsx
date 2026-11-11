@@ -152,3 +152,12 @@ describe("PageHeader testid props (M11 follow-up)", () => {
     expect(html).not.toContain('data-testid="t-id"');
   });
 });
+
+describe("EmptyState headingLevel", () => {
+  it("renders h2 by default and h1 when asked", () => {
+    expect(renderToStaticMarkup(<EmptyState title="A" />)).toContain("<h2");
+    const h1 = renderToStaticMarkup(<EmptyState title="A" headingLevel={1} />);
+    expect(h1).toContain("<h1");
+    expect(h1).not.toContain("<h2");
+  });
+});
