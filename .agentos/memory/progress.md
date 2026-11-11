@@ -146,3 +146,9 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - main fast-forwarded f1a5626 → d922e15 and pushed (via the resumed PDF builder at the user's request); prod alpha serves the new build (new texture asset 200). Migration 1900 was already remote; no db push.
 - PDF_RENDERER_VERSION 3 → each paid book's next PDF re-renders once (counts toward the daily export cap).
 - Post-deploy: real prod PDF check (Arabic + new fonts on Vercel Linux Chromium) — see runs/m10.md.
+
+## 2026-11-11 — Milestone 11 (App UX polish) — built + approved, awaiting deploy
+- App screens take the book look (D-067): paper palette, Playfair headings, 44 px buttons, shared PageHeader/StepProgress/Notice/EmptyState/Loading/Toast; account menu; loading skeletons + not-found/error pages.
+- Flow fixes: New book grouped + truthful "fixed at creation" copy; upload drop zone; AI build checklist from real run states; review single "Continue to editor" hierarchy; editor docked Layout/Replace pickers + coach line; publish WhatsApp-first (green, user choice) + free vs upgraded card; PDF/payment states; viewer state screens; dashboard real cover thumbs.
+- Gate PASS: 5347 vitest, goldens unchanged, book render parity 0 px (112 captures), e2e/m11 375 spec, all live specs; first-load JS ≤ +3 kB vs pre-M11. Reviewer APPROVED.
+- NEXT: user "deploy" → merge m11-ux-polish to main (no migration). Then M10c.

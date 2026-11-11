@@ -184,14 +184,15 @@ Plan + decisions: `.agentos/runs/m10.md`, D-062. Three shippable phases.
 
 ## Milestone 11 — App UX polish (before M10c)
 App screens take on the book look (Classic serif / Modern clean); app chrome only — BookPage, print and layouts unchanged. Plan: `.agentos/runs/m11.md`, D-067.
-- [ ] Design foundation: app tokens (paper palette, Playfair display + Inter/Cairo body, radius, shadow, spacing), 44 px buttons, shared PageHeader / StepProgress / Notice / EmptyState / Loading / Toast; style board signed off (docs/design/m11-style-board-*.png)
-- [ ] App shell: header + account menu, loading skeletons on every signed-in route, app not-found + error pages
-- [ ] Landing, login, settings, dashboard (book cards with cover thumbnails), New book form (grouped, correct "fixed at creation" copy)
-- [ ] Upload → AI build (real-stage checklist) → Review (one clear Continue / Update album / Rebuild hierarchy), step progress across the flow
-- [ ] Editor on a phone: docked Layout + Replace pickers (page stays visible), clearer toolbar, one-time hint, consistent sheets/toasts
-- [ ] Publish & share (WhatsApp first, free vs paid card), upgrade/payment states, PDF download, public viewer chrome
-- [ ] e2e/m11.spec.ts: every screen at 375 px — no sideways scroll, ≥ 44 px targets, visible focus, AA contrast
+- [x] Design foundation: app tokens (paper palette, Playfair display + Inter/Cairo body, radius, shadow, spacing), 44 px buttons, shared PageHeader / StepProgress / Notice / EmptyState / Loading / Toast; style board signed off (docs/design/m11-style-board-*.png)
+- [x] App shell: header + account menu, loading skeletons on every signed-in route, app not-found + error pages
+- [x] Landing, login, settings, dashboard (book cards with cover thumbnails), New book form (grouped, correct "fixed at creation" copy)
+- [x] Upload → AI build (real-stage checklist) → Review (one clear Continue / Update album / Rebuild hierarchy), step progress across the flow
+- [x] Editor on a phone: docked Layout + Replace pickers (page stays visible), clearer toolbar, one-time hint, consistent sheets/toasts
+- [x] Publish & share (WhatsApp first, free vs paid card), upgrade/payment states, PDF download, public viewer chrome
+- [x] e2e/m11.spec.ts: every screen at 375 px — no sideways scroll, ≥ 44 px targets, visible focus, AA contrast
 **Done when:** on a 375 px phone a new user goes landing → login → new book → upload → AI build → review → edit → publish → share → upgrade → PDF in one consistent Classic/Modern look, always knows the next step, never scrolls sideways; m9 + m10b goldens and the print pixel baseline are unchanged, analytics events still fire, all live specs are green.
+> M11 (2026-11-11): built (5 parallel builders after style-board sign-off), reviewed APPROVED (fixes applied), gate PASS: 5347 vitest, goldens unchanged, book render parity 0 px over 112 captures, e2e/m11 375 a11y spec, all live specs green (upload-auth only Mapbox). First-load JS within +3 kB of pre-M11 (/ −3). WhatsApp button green (user). NOT deployed.
 
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
