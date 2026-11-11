@@ -25,6 +25,7 @@ import { ChevronLeft, ChevronRight, LayoutGrid } from "lucide-react";
 import { useRef, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { BookPage } from "@/components/book/BookPage";
 import { movePage } from "@/lib/book/edit-ops";
+import { designLabel } from "@/lib/design/defaults";
 import type { BookPage as DocPage } from "@/lib/book/types";
 import { movePageById, pageCountLabel, positionAfterMove } from "@/lib/editor/pages";
 import { cn } from "@/lib/utils";
@@ -109,6 +110,11 @@ export function PagesSheet({ ctx, close }: EditorPanelProps) {
           {pageCountLabel(pages.length, book.maxPages)}
         </span>
         {readOnly ? " · Tap a page to open it." : " · Hold and drag to reorder, or use the arrows. Tap a page to open it."}
+      </p>
+      {/* D-063: shape + style are fixed at creation — shown, never editable here. */}
+      <p className="text-xs text-muted-foreground" data-testid="editor-book-design">
+        <span className="sr-only">Book shape and style (set when the book was created): </span>
+        {designLabel(state.doc.format, state.doc.style.designStyle)}
       </p>
       <DndContext
         sensors={sensors}

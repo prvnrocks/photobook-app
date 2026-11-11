@@ -1,7 +1,7 @@
 // State shapes for the books server actions (useActionState). Lives outside the
 // "use server" file because those may only export async functions.
 
-export type NewBookField = "title" | "occasion" | "tone" | "captionLang";
+export type NewBookField = "title" | "occasion" | "tone" | "captionLang" | "format" | "designStyle";
 
 export type NewBookFormState = {
   ok: boolean;

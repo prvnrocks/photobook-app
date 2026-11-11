@@ -9,6 +9,7 @@ import {
   titleLength,
   type NewBookFormState,
 } from "@/app/books/form-state";
+import { ShapePreview, StylePreview } from "@/components/books/DesignPreview";
 import { Button } from "@/components/ui/button";
 import {
   CAPTION_LANG_LABELS,
@@ -21,6 +22,18 @@ import {
   type Occasion,
   type Tone,
 } from "@/lib/book/options";
+import type { BookFormat } from "@/lib/book/types";
+import {
+  DEFAULT_FORM_FORMAT,
+  DESIGN_STYLE_HINTS,
+  DESIGN_STYLE_LABELS,
+  effectiveStyle,
+  FORM_DESIGN_STYLES,
+  FORM_FORMATS,
+  FORMAT_HINTS,
+  FORMAT_SHORT_LABELS,
+  type FormDesignStyle,
+} from "@/lib/design/defaults";
 import { effectiveTone, newBookInitialState, SETTINGS_COPY, showFromMemoryHint } from "@/lib/settings/ui";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +52,10 @@ const OCCASION_EMOJI: Record<Occasion, string> = {
 // Visually hidden radio + styled label; focus ring follows keyboard focus.
 const chipClass =
   "relative inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-background px-4 text-base select-none transition-colors hover:bg-muted has-checked:border-primary has-checked:bg-primary has-checked:text-primary-foreground has-focus-visible:ring-3 has-focus-visible:ring-ring/50";
+
+// Picture card radio (Shape / Style): whole card is the hit target.
+const cardClass =
+  "relative flex min-h-11 min-w-0 cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-border bg-background p-3 text-center select-none transition-colors hover:bg-muted has-checked:border-primary has-checked:bg-primary/5 has-checked:ring-1 has-checked:ring-primary has-focus-visible:ring-3 has-focus-visible:ring-ring/50";
 
 const srOnlyInput = "absolute inset-0 cursor-pointer opacity-0";
 
@@ -89,6 +106,10 @@ export function NewBookForm({ initialTone, initialLang, fromMemory = false }: Ne
   const [manualTone, setManualTone] = useState<Tone | null>(initial.manualTone);
   const [captionLang, setCaptionLang] = useState<CaptionLang>(initial.captionLang);
   const [title, setTitle] = useState("");
+  const [format, setFormat] = useState<BookFormat>(DEFAULT_FORM_FORMAT);
+  // null = follow the occasion's default style (D-065); set once the user picks one.
+  const [manualStyle, setManualStyle] = useState<FormDesignStyle | null>(null);
+  const designStyle = effectiveStyle(manualStyle, occasion);
 
   const tone: Tone = effectiveTone(manualTone, occasion);
   // Hint only while a remembered value is still selected and differs from the default.
@@ -109,6 +130,9 @@ export function NewBookForm({ initialTone, initialLang, fromMemory = false }: Ne
     toneErr: "new-book-tone-error",
     langErr: "new-book-lang-error",
     titleErr: "new-book-title-error",
+    formatErr: "new-book-format-error",
+    styleErr: "new-book-style-error",
+    designNote: `${uid}-design-note`,
     titleHint: `${uid}-title-hint`,
     titleCount: `${uid}-title-count`,
   };
@@ -211,6 +235,71 @@ export function NewBookForm({ initialTone, initialLang, fromMemory = false }: Ne
           ))}
         </div>
         <FieldError id={ids.langErr} message={fe.captionLang} />
+      </fieldset>
+
+      <fieldset
+        className="flex min-w-0 flex-col gap-3"
+        aria-describedby={cn(ids.designNote, fe.format && ids.formatErr)}
+      >
+        <legend className="mb-1 text-base font-medium">Page shape</legend>
+        <p id={ids.designNote} className="text-sm text-muted-foreground">
+          Shape and style are set when the book is created.
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {FORM_FORMATS.map((id) => (
+            <label key={id} className={cardClass}>
+              <input
+                type="radio"
+                name="format"
+                value={id}
+                checked={format === id}
+                onChange={() => setFormat(id)}
+                aria-describedby={`${uid}-format-${id}-hint`}
+                className={srOnlyInput}
+                data-testid={`format-${id}`}
+              />
+              <ShapePreview format={id} />
+              <span className="flex min-w-0 flex-col items-center gap-0.5 leading-tight">
+                <span className="text-base font-medium">{FORMAT_SHORT_LABELS[id]}</span>
+                <span id={`${uid}-format-${id}-hint`} className="text-xs text-muted-foreground">
+                  {FORMAT_HINTS[id]}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+        <FieldError id={ids.formatErr} message={fe.format} />
+      </fieldset>
+
+      <fieldset
+        className="flex min-w-0 flex-col gap-3"
+        aria-describedby={fe.designStyle ? ids.styleErr : undefined}
+      >
+        <legend className="mb-3 text-base font-medium">Design style</legend>
+        <div className="grid grid-cols-2 gap-2">
+          {FORM_DESIGN_STYLES.map((id) => (
+            <label key={id} className={cardClass}>
+              <input
+                type="radio"
+                name="designStyle"
+                value={id}
+                checked={designStyle === id}
+                onChange={() => setManualStyle(id)}
+                aria-describedby={`${uid}-style-${id}-hint`}
+                className={srOnlyInput}
+                data-testid={`style-${id}`}
+              />
+              <StylePreview style={id} format={format} />
+              <span className="flex min-w-0 flex-col items-center gap-0.5 leading-tight">
+                <span className="text-base font-medium">{DESIGN_STYLE_LABELS[id]}</span>
+                <span id={`${uid}-style-${id}-hint`} className="text-xs text-muted-foreground">
+                  {DESIGN_STYLE_HINTS[id]}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+        <FieldError id={ids.styleErr} message={fe.designStyle} />
       </fieldset>
 
       <div className="flex min-w-0 flex-col gap-2">

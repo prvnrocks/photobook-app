@@ -659,3 +659,35 @@ test("0500 column guards live: server-only columns reset, ready insert refused",
   const n = await admin.from("photos").select("id", { count: "exact", head: true }).eq("book_id", book1);
   expect(n.count).toBe(ACCEPTED);
 });
+
+// M10b A12 (D-063 / D-065): shape + style chosen on the New book form are stored on the row.
+// Needs migration 1900 (books.format / books.design_style) on the project — probed read-only;
+// skipped with a note when it isn't applied (never applied from here).
+test("new book form at 375px: Landscape + Classic → row format A5_LANDSCAPE / design_style classic", async () => {
+  const probe = await admin.from("books").select("format, design_style").limit(1);
+  test.skip(
+    !!probe.error,
+    `migration 1900 not applied on this project (${probe.error?.code ?? "?"}) — books.format/design_style missing`,
+  );
+
+  await page.goto("/books/new");
+  // Defaults: Portrait + Modern.
+  await expect(page.getByTestId("format-A5_PORTRAIT")).toBeChecked();
+  await expect(page.getByTestId("style-modern")).toBeChecked();
+  const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  expect(noOverflow).toBe(true);
+
+  await page.getByRole("radio", { name: /Landscape/ }).check();
+  await page.getByRole("radio", { name: /Classic/ }).check();
+  await page.locator("label", { has: page.getByTestId("occasion-family") }).click();
+  // Picking an occasion after a manual style keeps the user's style.
+  await expect(page.getByTestId("style-classic")).toBeChecked();
+  await expect(page.getByTestId("format-A5_LANDSCAPE")).toBeChecked();
+
+  await page.getByTestId("create-book").click();
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
+  const id = new URL(page.url()).pathname.split("/")[2];
+  const { data, error } = await admin.from("books").select("format, design_style").eq("id", id).single();
+  if (error) throw new Error(`books select failed (${error.code})`);
+  expect(data).toEqual({ format: "A5_LANDSCAPE", design_style: "classic" });
+});

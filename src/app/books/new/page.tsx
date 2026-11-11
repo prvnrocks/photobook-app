@@ -35,7 +35,7 @@ export default async function NewBookPage() {
           New book
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Tell us a little about it — you can change everything later.
+          Tell us a little about it — you can change most of this later.
         </p>
         <div className="mt-6">
           <NewBookForm initialTone={initialTone} initialLang={initialLang} fromMemory={fromMemory} />

@@ -6,10 +6,12 @@ import { z } from "zod";
 import { withAnalyticsFlash } from "@/lib/analytics/flash";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { CAPTION_LANGS, OCCASIONS, TONES } from "@/lib/book/options";
+import { BookFormatSchema, DesignStyleSchema } from "@/lib/book/schema";
 import { deleteBookCompletely } from "@/lib/cleanup/delete-book";
 import type { DeleteBookActionResult } from "@/lib/dashboard/delete-book";
 import { createBook, stripPhotoFromBookDoc } from "@/lib/db/books";
 import { deletePhoto, deleteUnfinished } from "@/lib/db/photos";
+import { DEFAULT_FORM_FORMAT, defaultStyleFor, isFormDesignStyle } from "@/lib/design/defaults";
 import { isUuid } from "@/lib/uuid";
 import {
   cleanTitle,
@@ -37,14 +39,32 @@ const NewBookSchema = z.object({
   occasion: z.enum(OCCASIONS, { error: "Please choose an occasion." }),
   tone: z.enum(TONES, { error: "Please choose a tone." }),
   captionLang: z.enum(CAPTION_LANGS, { error: "Please choose a caption language." }),
+  // D-063: fixed at creation. Absent (a form rendered before M10b) → portrait / the occasion's
+  // default style; any value sent must be in the enum, and the style one the form offers (D-065).
+  format: z.preprocess(
+    absentToUndefined,
+    z.enum(BookFormatSchema.options, { error: "Please choose a shape." }).optional(),
+  ),
+  designStyle: z.preprocess(
+    absentToUndefined,
+    z
+      .enum(DesignStyleSchema.options, { error: "Please choose a style." })
+      .refine(isFormDesignStyle, { error: "That style is coming soon. Please choose Modern or Classic." })
+      .optional(),
+  ),
 });
 
-const FIELDS: readonly NewBookField[] = ["title", "occasion", "tone", "captionLang"];
+function absentToUndefined(v: unknown): unknown {
+  return v === null ? undefined : v;
+}
+
+const FIELDS: readonly NewBookField[] = ["title", "occasion", "tone", "captionLang", "format", "designStyle"];
 
 /**
  * Creates a book. Form fields: `title` (optional), `occasion`, `tone`,
- * `captionLang`. On success redirects to /books/<id>/upload (never returns);
- * signed out → /login?next=/books/new.
+ * `captionLang`, `format` + `designStyle` (D-063, fixed at creation; absent → portrait / the
+ * occasion's default style; geometric/scrapbook refused until M10c, D-065). On success
+ * redirects to /books/<id>/upload (never returns); signed out → /login?next=/books/new.
  */
 export async function createBookAction(
   _prevState: NewBookFormState,
@@ -58,6 +78,8 @@ export async function createBookAction(
     occasion: formData.get("occasion"),
     tone: formData.get("tone"),
     captionLang: formData.get("captionLang"),
+    format: formData.get("format"),
+    designStyle: formData.get("designStyle"),
   });
   if (!parsed.success) {
     const fieldErrors: NewBookFormState["fieldErrors"] = {};
@@ -72,7 +94,12 @@ export async function createBookAction(
 
   let id: string;
   try {
-    ({ id } = await createBook(parsed.data));
+    const { format, designStyle, ...rest } = parsed.data;
+    ({ id } = await createBook({
+      ...rest,
+      format: format ?? DEFAULT_FORM_FORMAT,
+      designStyle: designStyle ?? defaultStyleFor(rest.occasion),
+    }));
   } catch (err) {
     console.error("[books] create failed:", err instanceof Error ? err.message : "unknown");
     return { ok: false, error: MSG_CREATE_FAILED };

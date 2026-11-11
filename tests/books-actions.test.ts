@@ -67,14 +67,34 @@ beforeEach(() => {
 
 describe("createBookAction", () => {
   it("creates the book and redirects to its upload page", async () => {
-    const r = await run(valid);
+    const r = await run({ ...valid, format: "A5_LANDSCAPE", designStyle: "classic" });
     expect(r.redirect).toBe(`/books/${BOOK_ID}/upload`);
     expect(mocks.createBook).toHaveBeenCalledWith({
       title: "Our trip",
       occasion: "travel",
       tone: "fun",
       captionLang: "en",
+      format: "A5_LANDSCAPE",
+      designStyle: "classic",
     });
+  });
+
+  it("absent shape / style (pre-M10b form) → portrait + the occasion's default style (modern)", async () => {
+    const r = await run(valid);
+    expect(r.redirect).toBe(`/books/${BOOK_ID}/upload`);
+    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ format: "A5_PORTRAIT", designStyle: "modern" });
+  });
+
+  it("passes portrait + modern through", async () => {
+    await run({ ...valid, format: "A5_PORTRAIT", designStyle: "modern" });
+    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ format: "A5_PORTRAIT", designStyle: "modern" });
+  });
+
+  it.each(["geometric", "scrapbook"])("refuses %s for now with a friendly error (D-065)", async (designStyle) => {
+    const r = await run({ ...valid, format: "A5_PORTRAIT", designStyle });
+    expect(r.redirect).toBeNull();
+    expect(r.state?.fieldErrors?.designStyle).toMatch(/coming soon/i);
+    expect(mocks.createBook).not.toHaveBeenCalled();
   });
 
   it("redirects signed-out users to login without creating", async () => {
@@ -90,6 +110,12 @@ describe("createBookAction", () => {
     ["tone", { tone: "sad" }],
     ["captionLang", { captionLang: "fr" }],
     ["captionLang", { captionLang: undefined }],
+    ["format", { format: "A4_PORTRAIT" }],
+    ["format", { format: "" }],
+    ["format", { format: "a5_landscape" }],
+    ["designStyle", { designStyle: "brutalist" }],
+    ["designStyle", { designStyle: "" }],
+    ["designStyle", { designStyle: "Modern" }],
   ] as const)("rejects a bad %s", async (field, patch) => {
     const r = await run({ ...valid, ...patch });
     expect(r.redirect).toBeNull();
