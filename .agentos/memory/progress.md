@@ -152,3 +152,7 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - Flow fixes: New book grouped + truthful "fixed at creation" copy; upload drop zone; AI build checklist from real run states; review single "Continue to editor" hierarchy; editor docked Layout/Replace pickers + coach line; publish WhatsApp-first (green, user choice) + free vs upgraded card; PDF/payment states; viewer state screens; dashboard real cover thumbs.
 - Gate PASS: 5347 vitest, goldens unchanged, book render parity 0 px (112 captures), e2e/m11 375 spec, all live specs; first-load JS ≤ +3 kB vs pre-M11. Reviewer APPROVED.
 - NEXT: user "deploy" → merge m11-ux-polish to main (no migration). Then M10c.
+
+## 2026-11-11 — Milestone 11 — deployed
+- main fast-forwarded d922e15 → 97bcbd8 on user's "deploy"; prod alpha live after ~165 s (theme-color #fbf8f2). Signed-out smoke OK (/, /login, /privacy 200; /books 307 → login; unknown /b 404; /dev-style + /dev-print 404). No migration.
+- NEXT: user phone check of the new flow; then M10c (geometric + scrapbook styles).

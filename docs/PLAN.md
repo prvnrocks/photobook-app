@@ -192,7 +192,7 @@ App screens take on the book look (Classic serif / Modern clean); app chrome onl
 - [x] Publish & share (WhatsApp first, free vs paid card), upgrade/payment states, PDF download, public viewer chrome
 - [x] e2e/m11.spec.ts: every screen at 375 px — no sideways scroll, ≥ 44 px targets, visible focus, AA contrast
 **Done when:** on a 375 px phone a new user goes landing → login → new book → upload → AI build → review → edit → publish → share → upgrade → PDF in one consistent Classic/Modern look, always knows the next step, never scrolls sideways; m9 + m10b goldens and the print pixel baseline are unchanged, analytics events still fire, all live specs are green.
-> M11 (2026-11-11): built (5 parallel builders after style-board sign-off), reviewed APPROVED (fixes applied), gate PASS: 5347 vitest, goldens unchanged, book render parity 0 px over 112 captures, e2e/m11 375 a11y spec, all live specs green (upload-auth only Mapbox). First-load JS within +3 kB of pre-M11 (/ −3). WhatsApp button green (user). NOT deployed.
+> M11 (2026-11-11): built (5 parallel builders after style-board sign-off), reviewed APPROVED (fixes applied), gate PASS: 5347 vitest, goldens unchanged, book render parity 0 px over 112 captures, e2e/m11 375 a11y spec, all live specs green (upload-auth only Mapbox). First-load JS within +3 kB of pre-M11 (/ −3). WhatsApp button green (user). Deployed 2026-11-11 (main 97bcbd8).
 
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
