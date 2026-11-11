@@ -12,7 +12,7 @@ import { applyCaptions, captionBatches, countCaptionablePages, hasCaptionArea } 
 import { fitPlanToDesign, planPageCount, planToDoc, prunePlan, validatePlanAgainstPhotos } from "@/lib/ai/plan-to-doc";
 import { layoutCatalogue, storytellerSystem, storytellerSystemText } from "@/lib/ai/prompts/storyteller";
 import { isCaptionable, pageCaptionKeys } from "@/lib/ai/repair";
-import type { AlbumPlan } from "@/lib/ai/schemas";
+import { AlbumPlanAiSchema, AlbumPlanBackgroundsAiSchema, type AlbumPlan } from "@/lib/ai/schemas";
 import type { StoryPhoto } from "@/lib/ai/story";
 import type { BookDesign } from "@/lib/book/book-design";
 import { validateBookDoc } from "@/lib/book/schema";
@@ -56,7 +56,9 @@ describe("Storyteller v5 system prompt per design", () => {
       const own = new Set(
         (["page", "spread", "cover"] as const).flatMap((r) => layoutsFor(d.format, d.designStyle, r).map((l) => l.id)),
       );
-      const listed = new Set([...text.matchAll(/^- ([a-z0-9-]+) · /gm)].map((m) => m[1]));
+      // v6: the BACKGROUNDS list (modern) uses the same "- id · " shape — count layouts only.
+      const layoutsPart = text.split("\nBACKGROUNDS (")[0];
+      const listed = new Set([...layoutsPart.matchAll(/^- ([a-z0-9-]+) · /gm)].map((m) => m[1]));
       expect(listed).toEqual(own);
       expect(text).not.toMatch(/maxPages: \d|kept photos: \d/);
     }
@@ -92,9 +94,14 @@ describe("Storyteller v5 system prompt per design", () => {
     const modern = buildStorytellerRequest({ ...base, design: MODERN_LANDSCAPE });
     expect(classic.system[0].text).toBe(storytellerSystemText());
     expect(modern.system[0].text).toBe(storytellerSystemText(MODERN_LANDSCAPE));
-    expect(modern.messages).toEqual(classic.messages); // user message unchanged
+    // v6 (M10c T12): modern photo lines carry the photo colour and modern uses the backgrounds
+    // schema (D-068); classic keeps the v5 user message + AlbumPlanAiSchema.
+    expect(modern.messages).not.toEqual(classic.messages);
+    expect(classic.messages[0].content).not.toContain("colour ");
+    expect(modern.messages[0].content).toContain("colour unknown");
     expect(modern.effort).toBe(classic.effort);
-    expect(modern.schema).toBe(classic.schema);
+    expect(classic.schema).toBe(AlbumPlanAiSchema);
+    expect(modern.schema).toBe(AlbumPlanBackgroundsAiSchema);
     expect(modern.maxTokens).toBe(classic.maxTokens);
     expect(modern.scenarioMeta).toMatchObject({ design: MODERN_LANDSCAPE });
   });

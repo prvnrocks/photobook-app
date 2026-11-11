@@ -17,6 +17,11 @@
 //   single, then the 3- or 2-photo layout with the most orientation matches; modern books get at
 //   most one spread per moment of ≥ 8 photos, only where it starts on a left page (running page
 //   index even); if spreads would exceed maxPages the plan is rebuilt without them
+// - backgrounds (v6, modern / geometric / scrapbook only; classic output unchanged): book =
+//   the T11 colour vote over the photos' colours (meta.photos[].color) as a catalogue id; each
+//   even-numbered moment (m2, m4, …) that opens with a single page gets the vote over its own
+//   photos, other moments null; scrapbook moments of ≥ 2 pages instead get "faded-photo" with the
+//   first photo of their second page (a kept photo of the same moment, never on the opener)
 // scenario "invalid" → the first page gets an extra unknown alias ("p9999"): passes both schemas
 // but fails plan validation (wrong slot count + unknown photo), exercising the retry path.
 
@@ -24,6 +29,9 @@ import { dayRange } from "@/lib/autolayout";
 import { DEFAULT_BOOK_DESIGN, type BookDesign } from "@/lib/book/book-design";
 import { layoutsFor } from "@/lib/book/spreads";
 import { bestPageLayout, fitScore } from "@/lib/layouts/fit";
+import { swatchById } from "@/lib/design/backgrounds";
+import { FADED_PHOTO_ID, suggestBookBackground, suggestsBackgrounds } from "@/lib/design/background-suggest";
+import type { Background } from "@/lib/book/types";
 import type { AlbumPlanAi } from "../schemas";
 import { dubaiDay } from "../story";
 import type { ReplaySynth } from "../transport-replay";
@@ -227,7 +235,48 @@ function readMeta(meta: Record<string, unknown>): StorytellerScenarioMeta {
   };
 }
 
+/** Catalogue id of a rule Background (swatch by hex, texture by id). */
+function idOfBackground(bg: Background): string | null {
+  if (bg.kind === "texture") return bg.textureId;
+  if (bg.kind !== "color") return null;
+  const hex = bg.hex.toUpperCase();
+  for (const id of ["white", "cream", "warm-sand", "blush", "butter", "sage", "sky", "lavender", "stone"]) {
+    if (swatchById(id)?.hex.toUpperCase() === hex) return id;
+  }
+  return null;
+}
+
+/** v6 background picks added to a synthesised plan (styles with AI backgrounds only). */
+function withBackgrounds(plan: AlbumPlanAi, meta: StorytellerScenarioMeta, design: BookDesign): AlbumPlanAi {
+  const style = design.designStyle;
+  if (!suggestsBackgrounds(style)) return plan;
+  const colourOf = new Map(meta.photos.map((p) => [p.alias, p.color ?? null]));
+  const spreadIds = new Set(layoutsFor(design.format, style, "spread").map((l) => l.id));
+  const scrapbook = style === "scrapbook";
+  const moments = plan.moments.map((m, i) => {
+    const opensWithSpread = spreadIds.has(m.pages[0]?.layoutId ?? "");
+    let backgroundId: string | null = null;
+    let backgroundPhotoId: string | null = null;
+    if (!opensWithSpread) {
+      if (scrapbook && m.pages.length >= 2 && m.pages[1].photoIds[0]) {
+        backgroundId = FADED_PHOTO_ID;
+        backgroundPhotoId = m.pages[1].photoIds[0];
+      } else if (i % 2 === 1) {
+        const own = m.pages.flatMap((pg) => pg.photoIds.map((a) => colourOf.get(a) ?? null));
+        backgroundId = idOfBackground(suggestBookBackground(style, own));
+      }
+    }
+    return scrapbook ? { ...m, backgroundId, backgroundPhotoId } : { ...m, backgroundId };
+  });
+  const book = idOfBackground(suggestBookBackground(style, meta.photos.map((p) => p.color ?? null)));
+  return { ...plan, bookBackgroundId: book, moments };
+}
+
 export function synthAlbumPlan(meta: StorytellerScenarioMeta): AlbumPlanAi {
+  return withBackgrounds(synthLayoutPlan(meta), meta, meta.design ?? DEFAULT_BOOK_DESIGN);
+}
+
+function synthLayoutPlan(meta: StorytellerScenarioMeta): AlbumPlanAi {
   const design = meta.design ?? DEFAULT_BOOK_DESIGN;
   const classic = isClassicPortrait(design);
   // Page-only fill used for the budget (spreads never need more pages than the pages they replace).

@@ -145,6 +145,82 @@ export const AlbumPlanAiSchema = z.object({
   ),
 });
 
+// Storyteller v6 (M10c T12, D-068): background picks — only for the styles that get AI
+// backgrounds (modern, geometric, scrapbook; classic keeps AlbumPlanAiSchema unchanged). Ids are
+// plain strings like layoutId: code checks them against AI_BACKGROUND_CATALOGUE[style]
+// (plan-to-doc backgroundPicksOf); an invalid pick never fails the plan, it falls back to the
+// rule suggestion (src/lib/design/background-suggest.ts).
+
+const bookBackgroundField = z
+  .string()
+  .nullable()
+  .describe("A background id from the BACKGROUNDS list for the whole book, or null to let the app choose.");
+const momentBackgroundField = z
+  .string()
+  .nullable()
+  .describe("A background id from the BACKGROUNDS list for this moment's first page, or null to keep the book background.");
+
+const planPageAi = z.object({
+  layoutId: z.string().describe("A layout id from the catalogue."),
+  photoIds: z.array(z.string()).describe("Aliases, exactly as many as the layout has slots."),
+});
+const planMomentAiBase = {
+  id: z.string().describe('Moment id "m1", "m2", ... in order.'),
+  title: z.string().describe("Chapter title, at most 60 characters."),
+  dateLabel: z.string().describe("Derived from photo dates only, e.g. 12 Oct 2026."),
+  place: z.string().nullable().describe("Only a place given in the metadata, else null. Never invent places."),
+  pages: z.array(planPageAi),
+};
+const planTopAiBase = {
+  title: z.string().describe("Album title, at most 60 characters."),
+  subtitle: z.string().describe("Short subtitle, e.g. dates. Use an empty string if none."),
+  coverPhotoId: z.string().describe("Alias of the cover photo."),
+};
+
+/** Modern + Geometric: book background + one background per moment opener (catalogue ids). */
+export const AlbumPlanBackgroundsAiSchema = z.object({
+  ...planTopAiBase,
+  bookBackgroundId: bookBackgroundField,
+  moments: z.array(z.object({ ...planMomentAiBase, backgroundId: momentBackgroundField })),
+});
+
+/** Scrapbook: as above + the alias of the photo behind a "faded-photo" moment opener. */
+export const AlbumPlanScrapbookAiSchema = z.object({
+  ...planTopAiBase,
+  bookBackgroundId: bookBackgroundField,
+  moments: z.array(
+    z.object({
+      ...planMomentAiBase,
+      backgroundId: momentBackgroundField,
+      backgroundPhotoId: z
+        .string()
+        .nullable()
+        .describe('Alias of a photo on another page of this moment when backgroundId is "faded-photo", else null.'),
+    }),
+  ),
+});
+
+/** The AI-facing plan schema for a book's design style (one stable schema per style). */
+export function albumPlanAiSchemaFor(style: string | null | undefined): z.ZodType<AlbumPlanAi> {
+  if (style === "scrapbook") return AlbumPlanScrapbookAiSchema as z.ZodType<AlbumPlanAi>;
+  if (style === "modern" || style === "geometric") return AlbumPlanBackgroundsAiSchema as z.ZodType<AlbumPlanAi>;
+  return AlbumPlanAiSchema as z.ZodType<AlbumPlanAi>;
+}
+
+const BACKGROUND_ID_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+/**
+ * Lenient background id: an id-shaped string stays, null stays null (the AI chose none), anything
+ * else (absent, wrong type, junk) → undefined = "no pick" → rule fallback. Never fails the plan.
+ */
+const strictBackgroundId = z
+  .unknown()
+  .transform((v): string | null | undefined => (v === null ? null : typeof v === "string" && BACKGROUND_ID_RE.test(v.trim()) ? v.trim() : undefined))
+  .optional();
+const strictBackgroundAlias = z
+  .unknown()
+  .transform((v): string | null => (typeof v === "string" && PHOTO_ALIAS_RE.test(v.trim()) ? v.trim() : null))
+  .optional();
+
 const PlanPageStrictSchema = z.object({
   layoutId: z.string().regex(LAYOUT_ID_RE),
   photoIds: z.array(alias).min(1).max(12), // ≤ 12 = largest spread (doc slot cap)
@@ -156,6 +232,10 @@ const PlanMomentStrictSchema = z.object({
   dateLabel: storedText(AI_TEXT_LIMITS.dateLabel, false),
   place: nullableStoredText(AI_TEXT_LIMITS.place),
   pages: z.array(PlanPageStrictSchema).min(1),
+  /** v6: catalogue id for the moment's first page (null = none, undefined = no pick → rules). */
+  backgroundId: strictBackgroundId,
+  /** v6 scrapbook: alias of the faded-photo background (only read with backgroundId "faded-photo"). */
+  backgroundPhotoId: strictBackgroundAlias,
 });
 
 export const AlbumPlanStrictSchema = z
@@ -166,6 +246,8 @@ export const AlbumPlanStrictSchema = z
       .refine((v) => v.length > 0, { message: "empty" }),
     subtitle: storedText(AI_TEXT_LIMITS.subtitle, false),
     coverPhotoId: alias,
+    /** v6: catalogue id for the book background (null = let the app choose, undefined = no pick). */
+    bookBackgroundId: strictBackgroundId,
     moments: z.array(PlanMomentStrictSchema).min(1).max(100),
   })
   .refine((p) => uniqueBy(p.moments, (m) => m.id), { message: "duplicate moment id", path: ["moments"] })
@@ -174,7 +256,11 @@ export const AlbumPlanStrictSchema = z
     path: ["moments"],
   });
 
-export type AlbumPlanAi = z.infer<typeof AlbumPlanAiSchema>;
+/** Any style's AI plan: the classic shape + the optional v6 background fields. */
+export type AlbumPlanAi = z.infer<typeof AlbumPlanAiSchema> & {
+  bookBackgroundId?: string | null;
+  moments: Array<z.infer<typeof AlbumPlanAiSchema>["moments"][number] & { backgroundId?: string | null; backgroundPhotoId?: string | null }>;
+};
 export type AlbumPlan = z.infer<typeof AlbumPlanStrictSchema>;
 
 // ---------------------------------------------------------------------------- ③ Caption Writer (M4)

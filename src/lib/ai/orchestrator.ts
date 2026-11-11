@@ -717,6 +717,9 @@ function storyPhotosOf(photos: CurationPhoto[]): StoryPhoto[] {
     place: p.place,
     keep: p.status === "kept",
     analysis: analysisOf(p.ai),
+    // M10c T12: photos.color → Storyteller photo lines (backgrounds styles) + background rules.
+    color: p.color ?? null,
+    blurScore: p.blurScore,
   }));
 }
 

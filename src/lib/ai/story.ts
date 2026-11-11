@@ -33,6 +33,20 @@ export interface StoryPhoto {
   keep: boolean;
   /** null when the photo was not analysed (e.g. a failed Curator batch). */
   analysis: StoryAnalysis | null;
+  /**
+   * photos.color (M10c T4: muted dominant colour "#rrggbb"; null/absent = unknown). Sent in the
+   * Storyteller photo lines of styles with AI backgrounds (user message only, never logged) and used
+   * by the background rules. User data — never put it in agent_steps or analytics.
+   */
+  color?: string | null;
+  /** photos.blur_score (higher = sharper); the faded-photo rule prefers sharp photos. */
+  blurScore?: number | null;
+}
+
+const HEX_RE = /^#[0-9A-Fa-f]{6}$/;
+/** A valid "#RRGGBB" colour (upper case) or null. */
+export function colourOf(p: Pick<StoryPhoto, "color">): string | null {
+  return typeof p.color === "string" && HEX_RE.test(p.color) ? p.color.toUpperCase() : null;
 }
 
 export interface StoryBook {

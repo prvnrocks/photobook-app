@@ -8,10 +8,11 @@ import { AGENT_TIMEOUT_MS, EFFORT } from "../client";
 import { STORYTELLER_PROMPT_VERSION, storytellerSystem } from "../prompts/storyteller";
 import { runAgentStep, type RetryOptions, type StepLogger, type StepResult } from "../run-step";
 import { DEFAULT_BOOK_DESIGN, type BookDesign } from "@/lib/book/book-design";
+import { suggestsBackgrounds } from "@/lib/design/background-suggest";
 import { clipText } from "@/lib/text/clip";
 import { isEmptyMemory, memoryPromptBlock, sanitizeMemory } from "../memory";
 import {
-  AlbumPlanAiSchema,
+  albumPlanAiSchemaFor,
   AlbumPlanStrictSchema,
   type AlbumPlan,
   type AlbumPlanAi,
@@ -19,6 +20,7 @@ import {
 } from "../schemas";
 import {
   byStoryTime,
+  colourOf,
   effectiveMaxPages,
   formatLocal,
   orientationOf,
@@ -42,6 +44,8 @@ export interface StorytellerScenarioMeta {
     quality: number;
     cover: boolean;
     place: string | null;
+    /** photos.color ("#RRGGBB") or null — replay only, for synthesised background picks (v6). */
+    color?: string | null;
   }>;
   maxPages: number;
   userTitle: string | null;
@@ -105,8 +109,12 @@ export function keptInStoryOrder(photos: readonly StoryPhoto[]): StoryPhoto[] {
   return photos.filter((p) => p.keep).sort(byStoryTime);
 }
 
-/** `p7 · 2026-10-12 18:22 · portrait · q8 · scene portrait · mood joyful · cover yes · place null · "…"` */
-export function photoLine(alias: string, p: StoryPhoto): string {
+/**
+ * `p7 · 2026-10-12 18:22 · portrait · q8 · scene portrait · mood joyful · cover yes · place null · "…"`
+ * With `withColour` (styles with AI backgrounds, v6) a `colour #RRGGBB` / `colour unknown` field
+ * goes before the description. The colour is user data: only in this USER message, never logged.
+ */
+export function photoLine(alias: string, p: StoryPhoto, withColour = false): string {
   const a = p.analysis;
   const place = p.place && oneLine(p.place) ? `"${clipText(oneLine(p.place), 80)}"` : "null";
   const parts = [
@@ -118,6 +126,7 @@ export function photoLine(alias: string, p: StoryPhoto): string {
     `mood ${a?.mood ?? "unknown"}`,
     `cover ${a?.coverWorthy ? "yes" : "no"}`,
     `place ${place}`,
+    ...(withColour ? [`colour ${colourOf(p) ?? "unknown"}`] : []),
     `"${a ? firstWords(a.description, MAX_DESCRIPTION_WORDS) || "no description" : "not analysed"}"`,
   ];
   return parts.join(" · ");
@@ -130,8 +139,10 @@ export function buildStorytellerUserMessage(
   aliasOf: ReadonlyMap<string, string>,
   previousIssues?: readonly string[],
   memory?: UserMemory | null,
+  design: BookDesign = DEFAULT_BOOK_DESIGN,
 ): string {
   const kept = keptInStoryOrder(photos);
+  const withColour = suggestsBackgrounds(design.designStyle);
   const memoryBlock = memory ? memoryPromptBlock(memory) : "";
   const userTitle = book.title && oneLine(book.title) ? `"${oneLine(book.title)}"` : "null";
   const lines = [
@@ -145,7 +156,7 @@ export function buildStorytellerUserMessage(
     ...(memoryBlock ? ["", memoryBlock] : []),
     "",
     "PHOTOS (time order, undated last)",
-    ...kept.map((p) => photoLine(aliasOf.get(p.id) as string, p)),
+    ...kept.map((p) => photoLine(aliasOf.get(p.id) as string, p, withColour)),
   ];
   if (previousIssues && previousIssues.length) {
     const shown = previousIssues.slice(0, MAX_RETRY_ISSUES).map((i) => `- ${clipText(i.replace(/\s+/g, " ").trim(), 200)}`);
@@ -175,6 +186,7 @@ export function storytellerScenarioMeta(
       quality: p.analysis ? Math.round(p.analysis.quality) : 5,
       cover: p.analysis?.coverWorthy ?? false,
       place: p.place?.trim() ? p.place.trim() : null,
+      color: colourOf(p),
     })),
     maxPages: effectiveMaxPages(book),
     userTitle: book.title?.trim() ? book.title.trim() : null,
@@ -189,14 +201,19 @@ export function storytellerMaxTokens(keptCount: number): number {
   return Math.min(16_000, 6_000 + 50 * keptCount);
 }
 
-/** Privacy-safe projection for agent_steps.output (D-027): structure only, no titles/places. */
+/**
+ * Privacy-safe projection for agent_steps.output (D-027): structure only, no titles/places/colours.
+ * v6 background picks are catalogue ids + an alias (bookBg null for classic / no pick).
+ */
 export function planLogOutput(plan: AlbumPlan) {
   return {
     cover: plan.coverPhotoId,
+    bookBg: plan.bookBackgroundId ?? null,
     pageCount: plan.moments.reduce((n, m) => n + m.pages.length, 0),
     moments: plan.moments.map((m) => ({
       id: m.id,
       hasPlace: m.place !== null,
+      ...(m.backgroundId !== undefined ? { bg: m.backgroundId, ...(m.backgroundPhotoId ? { bgPhoto: m.backgroundPhotoId } : {}) } : {}),
       pages: m.pages.map((pg) => ({ l: pg.layoutId, p: pg.photoIds })),
     })),
   };
@@ -206,15 +223,16 @@ export function buildStorytellerRequest(
   args: Pick<PlanAlbumArgs, "photos" | "book" | "aliasOf" | "previousIssues" | "memory" | "design">,
 ): AgentRequest<AlbumPlanAi> {
   const kept = keptInStoryOrder(args.photos);
+  const design = args.design ?? DEFAULT_BOOK_DESIGN;
   return {
     agent: "storyteller",
-    system: storytellerSystem(args.design ?? DEFAULT_BOOK_DESIGN),
-    messages: [{ role: "user", content: buildStorytellerUserMessage(args.photos, args.book, args.aliasOf, args.previousIssues, args.memory) }],
-    schema: AlbumPlanAiSchema,
+    system: storytellerSystem(design),
+    messages: [{ role: "user", content: buildStorytellerUserMessage(args.photos, args.book, args.aliasOf, args.previousIssues, args.memory, design) }],
+    schema: albumPlanAiSchemaFor(design.designStyle),
     effort: EFFORT.storyteller,
     maxTokens: storytellerMaxTokens(kept.length),
     timeoutMs: AGENT_TIMEOUT_MS.storyteller,
-    scenarioMeta: { ...storytellerScenarioMeta(args.photos, args.book, args.aliasOf, args.design ?? DEFAULT_BOOK_DESIGN) },
+    scenarioMeta: { ...storytellerScenarioMeta(args.photos, args.book, args.aliasOf, design) },
   };
 }
 
@@ -240,6 +258,8 @@ export async function planAlbum(args: PlanAlbumArgs): Promise<StepResult<AlbumPl
       keptPhotos: kept.length,
       datedPhotos: kept.filter((p) => photoMs(p) !== null).length,
       photosWithPlace: kept.filter((p) => p.place?.trim()).length,
+      // v6: how many colours the prompt carried (a count only — never the colours, D-027).
+      photosWithColour: suggestsBackgrounds((args.design ?? DEFAULT_BOOK_DESIGN).designStyle) ? kept.filter((p) => colourOf(p) !== null).length : 0,
       maxPages: effectiveMaxPages(args.book),
       occasion: args.book.occasion,
       captionLang: args.book.captionLang,

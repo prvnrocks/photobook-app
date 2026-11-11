@@ -52,6 +52,27 @@ misaligned spreads into twins; cover = bestCoverLayout(design, cover orientation
 the left half of a spread is captionable. AI caption font / style.font = the style's caption face (classic
 Playfair/Cairo, modern Cormorant/Amiri).
 
+**Storyteller v6 (M10c T12, D-068).** 8 cached prefixes = {classic, modern, geometric, scrapbook} × {A5 portrait,
+landscape}. Classic texts are byte-identical to v5 (fixtures `system-v4-classic-portrait.txt`,
+`system-v5-classic-landscape.txt`); the modern prefix changed on purpose (backgrounds added, snapshots updated).
+Geometric/scrapbook catalogue lines are generated from the layout data and describe every slot in order (shape:
+angled cut / circle / diamond / hexagon, tilt, polaroid or bordered print, size, preferred orientation, "partly under
+slot N" for real scrapbook overlaps), the text panels (chapter title / date, "on a label") and whether a caption fits;
+style rules explain what shapes and tilt cost (round/diamond/hex slots want centred, square-ish subjects). Modern,
+geometric and scrapbook prefixes end with a BACKGROUNDS list (= `AI_BACKGROUND_CATALOGUE[style]`) and rule 14
+(book background + one background per moment opener, null when a moment opens with a spread); scrapbook adds rule 15
+(`faded-photo` + `backgroundPhotoId` = alias of a photo on ANOTHER page of the SAME moment). Their photo lines carry
+`colour #RRGGBB | unknown` (photos.color, user message only — never in the prefix, agent_steps or analytics;
+input summary logs only `photosWithColour`, a count). Schemas: classic `AlbumPlanAiSchema` (unchanged),
+modern/geometric `AlbumPlanBackgroundsAiSchema` (`bookBackgroundId`, moments[].`backgroundId`), scrapbook
+`AlbumPlanScrapbookAiSchema` (+ `backgroundPhotoId`); ids are plain strings, the strict schema turns junk into
+"no pick" and never fails a plan. plan-to-doc `backgroundPicksOf` keeps only catalogue ids of the book's style and a
+faded-photo alias that maps to a KEPT photo placed in the same moment (dropped / unknown / other-moment → rejected),
+then `applyBackgroundSuggestions(doc, photos, picks)` re-validates and fills every gap with the T11 rules (so an
+invalid pick = rule fallback, never a retry). User choices are never overwritten: fresh docs carry no user backgrounds,
+and a stored doc with `backgroundSource: "user"` / a user page background is not AI-replaceable (replaceable.ts).
+Cost: one cache write per prefix on first use, then reads; maxTokens/effort unchanged.
+
 Schemas `PhotoAnalysis`, `AlbumPlan`, `MomentCaptions` are defined in docs/PLAN.md. New ones:
 
 ```ts

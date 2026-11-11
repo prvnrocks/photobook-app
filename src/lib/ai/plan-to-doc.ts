@@ -20,6 +20,12 @@
 // null }, counts 2 toward maxPages, and repairSpreads then splits any spread that does not start
 // on a left page into its twin single pages (photos never dropped). The cover layout is the
 // style's cover for the cover photo's orientation (bestCoverLayout).
+//
+// Backgrounds (v6, M10c T12, D-068 — modern / geometric / scrapbook; classic untouched, stays v1):
+// the plan's background picks are mapped by backgroundPicksOf (catalogue ids of the book's style
+// only; a faded-photo alias → a KEPT photo placed in the same moment; a moment that opens with a
+// spread gets none) and handed to applyBackgroundSuggestions, which re-validates every pick and
+// fills anything missing or invalid with the T11 rules. An invalid pick never fails the plan.
 
 import { dayRange, DEFAULT_TITLES } from "@/lib/autolayout";
 import { DEFAULT_BOOK_DESIGN, type BookDesign } from "@/lib/book/book-design";
@@ -30,6 +36,16 @@ import { repairSpreads, SPREAD_PAGES } from "@/lib/book/spreads";
 import { getLayout } from "@/lib/layouts";
 import { bestCoverLayout, bestPageLayout, type FitOrientation } from "@/lib/layouts/fit";
 import { styleCaptionFont } from "@/lib/design/styles";
+import {
+  AI_BACKGROUND_CATALOGUE,
+  applyBackgroundSuggestions,
+  backgroundForId,
+  FADED_PHOTO_ID,
+  suggestsBackgrounds,
+  type AiBackgroundPicks,
+  type AiBackgroundStyle,
+  type SuggestPhoto,
+} from "@/lib/design/background-suggest";
 import { clipCodePoints, clipText } from "@/lib/text/clip";
 import { AI_TEXT_LIMITS, LAYOUT_ID_RE, PHOTO_ALIAS_RE, type AlbumPlan } from "./schemas";
 import { dubaiDay, effectiveMaxPages, orientationOf, photoMs, placeKey, type StoryBook, type StoryPhoto } from "./story";
@@ -209,6 +225,65 @@ function dateLabelFor(momentPhotos: StoryPhoto[]): string {
   return days.length ? clipText(dayRange(Math.min(...days), Math.max(...days)), AI_TEXT_LIMITS.dateLabel) : "";
 }
 
+/** StoryPhoto → the background rules' photo view (status from the final keep decision). */
+export function suggestPhotosOf(photos: readonly StoryPhoto[]): SuggestPhoto[] {
+  return photos.map((p) => ({
+    id: p.id,
+    status: p.keep ? "kept" : "dropped",
+    color: p.color ?? null,
+    width: p.width,
+    height: p.height,
+    blurScore: p.blurScore ?? null,
+  }));
+}
+
+export interface BackgroundPickOptions {
+  aliasToId: ReadonlyMap<string, string>;
+  photos: readonly StoryPhoto[];
+  design: BookDesign;
+  /** The doc built from `plan` (chapter c{n} = moment n-1), after repairSpreads. */
+  doc: Pick<BookDoc, "pages">;
+}
+
+/**
+ * The plan's background picks as AiBackgroundPicks (real photo ids, chapter ids). Only for styles
+ * with AI backgrounds ({} otherwise). Dropped from the picks (→ the rules decide): unknown /
+ * other-style ids, faded-photo outside the style catalogue or without a usable photo — the alias
+ * must map to a KEPT photo of the book placed on a page of the same moment (an alias of a dropped,
+ * unknown or other-moment photo is rejected, D-062). `null` (the AI chose none) is kept. A moment
+ * whose first page is a spread half gets null (a background on one half would stop at the fold).
+ * applyBackgroundSuggestions re-checks everything (opener page, coverage, kept).
+ */
+export function backgroundPicksOf(plan: AlbumPlan, { aliasToId, photos, design, doc }: BackgroundPickOptions): AiBackgroundPicks {
+  const style = design.designStyle;
+  if (!suggestsBackgrounds(style)) return {};
+  const byId = new Map(photos.map((p) => [p.id, p]));
+  const picks: { book?: string | null; chapters: Map<string, { id: string; photoId?: string | null } | null> } = { chapters: new Map() };
+  const book = plan.bookBackgroundId;
+  if (typeof book === "string" && backgroundForId(style, book)) picks.book = book;
+
+  plan.moments.forEach((m, mi) => {
+    const chapterId = `c${mi + 1}`;
+    const pick = m.backgroundId;
+    if (pick === undefined) return;
+    const opener = doc.pages.find((p) => p.chapterId === chapterId);
+    if (pick === null || opener?.side !== undefined) {
+      picks.chapters.set(chapterId, null);
+      return;
+    }
+    if (pick === FADED_PHOTO_ID) {
+      const alias = m.backgroundPhotoId;
+      const id = typeof alias === "string" ? aliasToId.get(alias) : undefined;
+      const photo = id === undefined ? undefined : byId.get(id);
+      const inMoment = typeof alias === "string" && m.pages.some((pg) => pg.photoIds.includes(alias));
+      if (photo?.keep && inMoment && (AI_BACKGROUND_CATALOGUE[style as AiBackgroundStyle] as readonly string[]).includes(FADED_PHOTO_ID)) picks.chapters.set(chapterId, { id: FADED_PHOTO_ID, photoId: photo.id });
+      return; // invalid faded pick → rules
+    }
+    if (backgroundForId(style, pick)) picks.chapters.set(chapterId, { id: pick });
+  });
+  return picks;
+}
+
 export function planToDoc(rawPlan: AlbumPlan, opts: PlanToDocOptions): PlanToDocResult {
   const { aliasToId, photos, book, runId, generatorVersion, design = DEFAULT_BOOK_DESIGN } = opts;
   const maxPages = effectiveMaxPages(book);
@@ -264,7 +339,14 @@ export function planToDoc(rawPlan: AlbumPlan, opts: PlanToDocOptions): PlanToDoc
   };
   // A spread the model put on a right-hand page splits into its twin single pages (same photos,
   // same chapter); the page count can only grow when a twin is too small (validated below).
-  const doc = repairSpreads(built).doc;
+  const repaired = repairSpreads(built).doc;
+  // v6 backgrounds (modern / geometric / scrapbook): AI picks, validated, gaps → T11 rules.
+  // Classic → the doc unchanged (still v1-serialisable).
+  const doc = applyBackgroundSuggestions(
+    repaired,
+    suggestPhotosOf(photos),
+    backgroundPicksOf(plan, { aliasToId, photos, design, doc: repaired }),
+  );
 
   const parsed = parseBookDoc(doc);
   if (!parsed.ok) return { issues: parsed.issues.map((i) => `doc: ${i}`) };

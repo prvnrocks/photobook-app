@@ -322,7 +322,11 @@ class FakeDb {
 class CountingTransport implements AgentTransport {
   readonly kind = "replay" as const;
   calls: Array<{ agent: AgentName; key: string; inFlight: number }> = [];
-  requests: Array<{ agent: AgentName; system: Parameters<AgentTransport["parse"]>[0]["system"] }> = [];
+  requests: Array<{
+    agent: AgentName;
+    system: Parameters<AgentTransport["parse"]>[0]["system"];
+    messages: Parameters<AgentTransport["parse"]>[0]["messages"];
+  }> = [];
   inFlight = 0;
   /** Runs inside a call, after the fake latency (e.g. to steal the lease mid-call). */
   onCall: ((agent: AgentName, index: number) => void) | null = null;
@@ -334,7 +338,7 @@ class CountingTransport implements AgentTransport {
     const aliases = (req.scenarioMeta?.aliases as string[] | undefined) ?? [];
     this.inFlight++;
     this.calls.push({ agent: req.agent, key: aliases.join(","), inFlight: this.inFlight });
-    this.requests.push({ agent: req.agent, system: req.system });
+    this.requests.push({ agent: req.agent, system: req.system, messages: req.messages });
     this.db.now += CALL_MS;
     try {
       const res = await this.inner.parse<T>(req);
@@ -1971,4 +1975,73 @@ describe("orchestrator — geometric + scrapbook enabled (M10c T10; Storyteller 
       expect(validateBookDoc(doc, { photoIds: kept, maxPages: 20 })).toEqual([]);
     });
   }
+});
+
+// M10c T12 — Storyteller v6: replay AI builds for geometric / scrapbook × orientation carry
+// catalogue backgrounds (AI picks validated, gaps → rules); colours reach the prompt, never the log.
+
+describe("orchestrator — Storyteller v6 backgrounds (M10c T12)", () => {
+  const NEW_DESIGNS = [
+    { format: "A5_PORTRAIT", designStyle: "geometric" },
+    { format: "A5_LANDSCAPE", designStyle: "geometric" },
+    { format: "A5_PORTRAIT", designStyle: "scrapbook" },
+    { format: "A5_LANDSCAPE", designStyle: "scrapbook" },
+  ] as const;
+  const COLOURS = ["#C9A27E", "#B88A6A", "#D4B48C", "#8A7F72"];
+
+  for (const design of NEW_DESIGNS) {
+    it(`${design.format}/${design.designStyle}: AI album validates, uses only that design, backgrounds from the catalogue (kept photos only)`, async () => {
+      const rows = photos150()
+        .slice(0, 60)
+        .map((r, i) => ({ ...r, color: COLOURS[i % COLOURS.length] }));
+      const { db, transport, deps } = setup(rows, { book: { format: design.format, design_style: design.designStyle } });
+      const s = await start(deps);
+      const { last } = await runToEnd(deps, s.runId);
+      expect(last).toMatchObject({ state: "done", aiStatus: "ok", errorCode: null });
+      const doc = docOf(db);
+      expect(doc.meta).toMatchObject({ generator: "ai", generatorVersion: 6 });
+      for (const id of [doc.cover.layout, ...doc.pages.map((p) => p.layout)]) {
+        expect(getLayout(id)).toMatchObject({ format: design.format, style: design.designStyle });
+      }
+      expect(isSpreadAligned(doc)).toBe(true);
+      const kept = new Set(db.photos.filter((p) => p.status === "kept").map((p) => p.id));
+      expect(validateBookDoc(doc, { photoIds: kept, maxPages: 20 })).toEqual([]);
+
+      expect(doc.style.backgroundSource).toBe("ai");
+      expect(isValidAiBackground(design.designStyle, doc.style.background, { scope: "book" })).toBe(true);
+      const withBg = doc.pages.filter((p) => p.background);
+      for (const p of withBg) {
+        expect(p.background?.source).toBe("ai");
+        if (p.background?.kind === "photo") {
+          expect(design.designStyle).toBe("scrapbook");
+          expect(kept.has(p.background.photoId)).toBe(true);
+          expect(p.slots.some((sl) => sl.photoId === (p.background as { photoId: string }).photoId)).toBe(false);
+        }
+      }
+      if (design.designStyle === "scrapbook") expect(withBg.some((p) => p.background?.kind === "photo")).toBe(true);
+
+      // The prompt carried the colours (user message); the step log carries none.
+      const story = transport.requests.find((r) => r.agent === "storyteller");
+      expect(story?.system[0].text).toBe(storytellerSystemText(design));
+      expect(String(story?.messages[0].content)).toContain("colour #C9A27E");
+      const step = db.steps.find((x) => x.agent === "storyteller") as AgentStepRecord;
+      const logged = JSON.stringify({ i: step.inputSummary, o: step.output });
+      for (const c of COLOURS) expect(logged.toUpperCase()).not.toContain(c);
+      expect(step.inputSummary).toMatchObject({ promptVersion: 6, photosWithColour: expect.any(Number) });
+    });
+  }
+
+  it("classic book: AI doc keeps the v5 white background with no backgroundSource (v1-serialisable)", async () => {
+    const rows = photos150().slice(0, 30).map((r) => ({ ...r, color: "#C9A27E" }));
+    const { db, transport, deps } = setup(rows);
+    const s = await start(deps);
+    await runToEnd(deps, s.runId);
+    const doc = docOf(db);
+    expect(doc.meta?.generator).toBe("ai");
+    expect(doc.style.background).toEqual({ kind: "color", hex: "#FFFFFF" });
+    expect(doc.style.backgroundSource).toBeUndefined();
+    expect(doc.pages.every((p) => p.background === undefined)).toBe(true);
+    const story = transport.requests.find((r) => r.agent === "storyteller");
+    expect(String(story?.messages[0].content)).not.toContain("colour ");
+  });
 });
