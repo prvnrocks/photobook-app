@@ -22,7 +22,7 @@ import { dayRange } from "@/lib/autolayout";
 import type { CaptionLang } from "@/lib/book/options";
 import { parseBookDoc } from "@/lib/book/schema";
 import type { BookDoc, Caption } from "@/lib/book/types";
-import { getLayout } from "@/lib/layouts";
+import { getLayout, hasCaptionArea } from "@/lib/layouts";
 import { styleCaptionFont } from "@/lib/design/styles";
 import { clipText } from "@/lib/text/clip";
 import { buildCaptionContext, checkCaption, type CaptionCheckContext, type CaptionIssue } from "./caption-check";
@@ -138,13 +138,7 @@ function momentsOf(src: BookDoc | AlbumPlan): SourceMoment[] {
   return out;
 }
 
-/** A single page with a caption area, or the LEFT half of a spread whose layout has one. */
-export function hasCaptionArea(layoutId: string, side?: "left" | "right"): boolean {
-  const l = getLayout(layoutId);
-  if (!l || !l.caption) return false;
-  if (l.role === "page") return true;
-  return l.role === "spread" && side === "left";
-}
+export { hasCaptionArea } from "@/lib/layouts";
 
 /** Pages the Caption Writer may caption: layout with a caption area, not a user caption. */
 export function countCaptionablePages(src: BookDoc | AlbumPlan): number {

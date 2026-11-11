@@ -200,3 +200,8 @@ Alternatives rejected: insert blank page (wastes 20/100 limit), block the action
 
 ## D-065 — M10b style + font scope (2026-11-11)
 Decision: New book form offers Modern (default for every occasion via DEFAULT_STYLE_BY_OCCASION) and Classic; Geometric/Scrapbook arrive in M10c. New OFL fonts offered as caption font pairs (Cormorant+Amiri, Bebas Neue+Lalezar, Great Vibes+Aref Ruqaa); any new font name is a v2 feature. M10a fonts/textures signed off "as is" by the user.
+
+## D-066 — Deleting a photo reflows its page (2026-11-11)
+- Decision: deleting a photo that is in the album refits that page/spread to a smaller layout of the same style (no empty slot), also in user-edited albums. AI captions on the refitted page go (D-031); user captions are never lost. A chapter whose last page empties is removed (as D-028 rule 4) — except in a user-edited album, where the delete falls back to the M10a empty-slot null-out so a user-typed chapter title is never lost. Any guard failure (caption loss, validation, page growth, unsupported style) → empty-slot fallback.
+- Why: empty slots after a delete looked broken (A19 S2); chapters carry no source field, so a user-renamed title can't be told apart from an AI one.
+- Alternatives rejected: always null-out (empty gaps); always drop empty chapters (loses user titles).

@@ -14,7 +14,7 @@ import { getBookForRun, getMyBook } from "@/lib/db/books";
 import { touchWarnedDraft } from "@/lib/db/draft-activity";
 import { listReviewPhotos } from "@/lib/db/photos";
 import { getMyProfile } from "@/lib/db/profiles";
-import { getLayout } from "@/lib/layouts";
+import { hasCaptionArea } from "@/lib/layouts";
 import {
   aiPicked,
   albumEditedByUser,
@@ -57,10 +57,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   const aiStatus = forRun?.ai_status ?? "idle";
   const aiAvailable = aiMode !== "off";
   // Captions preview: chapter titles/dates + caption text/source per page — no photo ids or URLs.
-  const captionsPreview = captionsPreviewOf(book.doc, (layoutId, side) => {
-    const l = getLayout(layoutId);
-    return !!l?.caption && (l.role !== "spread" || side === "left");
-  });
+  const captionsPreview = captionsPreviewOf(book.doc, hasCaptionArea);
   const missingCaptions = captionsPreviewModel(captionsPreview)?.missing ?? 0;
   const { generator } = docOrigin(book.doc);
   // Editor saves / user captions → review offers only "Continue in the editor" (D-037 #2).

@@ -846,7 +846,7 @@ export class OrchestratorError extends Error {
 
 function errorCodeOf(e: unknown): string {
   if (e instanceof OrchestratorError) return e.code;
-  if (isUnsupportedDesignError(e)) return e.code; // 'unsupported_design
+  if (isUnsupportedDesignError(e)) return e.code; // 'unsupported_design'
   const code = isObj(e) && typeof e.code === "string" && /^[\w-]{1,32}$/.test(e.code) ? e.code : null;
   return code ? `internal_${code}` : "internal_error";
 }

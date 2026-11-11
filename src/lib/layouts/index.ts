@@ -83,3 +83,11 @@ export const SHEET_MM = { w: PAGE_MM.w + 2 * BLEED_MM, h: PAGE_MM.h + 2 * BLEED_
 
 /** Safe zone (D-050): every caption / cover-text rect stays at least this far inside the trim. */
 export const SAFE_MM = 4;
+
+/** A single page with a caption area, or the LEFT half of a spread whose layout has one. */
+export function hasCaptionArea(layoutId: string, side?: "left" | "right"): boolean {
+  const l = getLayout(layoutId);
+  if (!l || !l.caption) return false;
+  if (l.role === "page") return true;
+  return l.role === "spread" && side === "left";
+}

@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 import { devSampleDoc, SAMPLE_PHOTO_COUNT } from "@/lib/book/dev-sample";
 import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
+import { markUserEdited } from "@/lib/book/edit-ops";
 import { spreadIssues } from "@/lib/book/spreads";
 import { stripPhotoFromDoc, type StripPhotoDims } from "@/lib/book/strip-photos";
 import type { BookDoc } from "@/lib/book/types";
@@ -127,6 +128,22 @@ describe("stripPhotoFromDoc reflow — single pages + captions", () => {
     const r = stripPhotoFromDoc(solo, gone, DIMS);
     expect(r.doc.chapters.map((c) => c.id)).not.toContain("c9");
     expectValid(r.doc, gone);
+  });
+
+  it("a user-edited album keeps the chapter (title may be user-typed): falls back to an empty slot", () => {
+    const d = modern();
+    const solo: BookDoc = {
+      ...d,
+      meta: markUserEdited(d).meta,
+      chapters: [...d.chapters, { id: "c9", title: "Our day at the beach", dateLabel: "", place: null }],
+      pages: d.pages.map((p, i) => (i === 12 ? { ...p, chapterId: "c9" } : p)),
+    };
+    const gone = solo.pages[12].slots[0].photoId as string;
+    const r = stripPhotoFromDoc(solo, gone, DIMS);
+    expect(r.reflowed).toBe(false);
+    expect(r.doc.chapters.find((c) => c.id === "c9")?.title).toBe("Our day at the beach");
+    expect(r.doc.pages).toHaveLength(solo.pages.length);
+    expect(slotIds(r.doc)).not.toContain(gone);
   });
 });
 

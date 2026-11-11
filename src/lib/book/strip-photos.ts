@@ -125,6 +125,9 @@ function reflow(doc: BookDoc, photoId: string, photos: readonly StripPhotoDims[]
   const hadPages = new Set(doc.pages.map((p) => p.chapterId));
   const hasPages = new Set(removal.pages.map((p) => p.chapterId));
   const chapters = doc.chapters.filter((c) => !hadPages.has(c.id) || hasPages.has(c.id));
+  // A user-edited album never loses a chapter (its title may be user-typed; chapters carry no
+  // source) — fall back to the M10a null-out, which keeps the page with an empty slot.
+  if (doc.meta?.userEdited === true && chapters.length < doc.chapters.length) return null;
   const cover = doc.cover.photoId === photoId ? { ...doc.cover, photoId: null } : doc.cover;
 
   const bg = stripMissingBackgrounds({ ...doc, cover, chapters, pages: removal.pages }, (id) => id !== photoId);
