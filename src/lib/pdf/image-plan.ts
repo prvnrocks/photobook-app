@@ -11,6 +11,14 @@
 // Background photos (M10a A6): a faded photo background cover-fits the whole bleed sheet
 // (sheetMm) under a ≥ 50 % veil, so it is planned at BACKGROUND_PRINT_DPI (150, like the texture
 // washes; capped by the pass dpi). A photo that is also in a slot gets the larger of both needs.
+//
+// Spreads (M10b A14): a spread's slots live on its LEFT page (x 0..200 across both halves; the
+// right half stores slots []), so each spread slot is ONE use sized from the whole spread box
+// (spreadBleedRect: bleed on the outer edges only, never at the fold). Both halves are then
+// printed from the SAME print copy (one URL → one PDF image XObject, finalize dedupes it across
+// chunks). The long-edge cap scales with the box: a spread box is two pages wide, so it gets
+// 2 × maxLongEdge (a full portrait panorama needs 3567 px at 300 dpi; a landscape one 5031 px) —
+// otherwise a panorama would print at ~250 / ~180 dpi while single pages keep 300.
 
 import { bleedRect, printSlotSizeMm, spreadBleedRect } from "@/lib/book/bleed";
 import { clampCrop, DEFAULT_CROP } from "@/lib/book/crop";
@@ -45,6 +53,8 @@ export const PRINT_DPI = 300;
 /** Faded photo backgrounds: full sheet under a veil — 150 dpi is plenty (A7: washes at 150). */
 export const BACKGROUND_PRINT_DPI = 150;
 export const PRINT_MAX_LONG_EDGE = 3000;
+/** Long-edge cap multiplier for a photo printed across a spread (box = 2 page widths). */
+export const SPREAD_LONG_EDGE_FACTOR = 2;
 
 const finitePos = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 
@@ -128,7 +138,9 @@ function usesOf(doc: BookDoc): Use[] {
   }
   for (const page of doc.pages) {
     const layout = getLayout(page.layout);
-    if (!layout || layout.role !== "page") continue; // renders blank
+    // Unknown / cover layouts render blank. Spread right halves store slots [] — the left page
+    // owns every slot, so each spread photo is counted once, at the whole spread box.
+    if (!layout || (layout.role !== "page" && layout.role !== "spread")) continue;
     layout.slots.forEach((_rect, i) => {
       const slot = page.slots[i];
       if (slot?.photoId) uses.push({ photoId: slot.photoId, layout, slotIndex: i, crop: slot.crop ?? DEFAULT_CROP });
@@ -140,7 +152,7 @@ function usesOf(doc: BookDoc): Use[] {
 /**
  * Target px for every photo the doc shows, sized for the print boxes of `doc.format`. Photos the doc references but `photos` lacks are
  * skipped (the renderer shows an empty slot). A photo with unknown size gets a
- * maxLongEdge × maxLongEdge box (resize "inside", never enlarged).
+ * maxLongEdge × maxLongEdge box (2 × for a spread use; resize "inside", never enlarged).
  */
 export function planPrintImages(
   doc: BookDoc,
@@ -153,13 +165,18 @@ export function planPrintImages(
 
   const byId = new Map(photos.map((p) => [p.id, p]));
   const need = new Map<string, { w: number; h: number }>();
+  /** photoId → its long-edge cap (largest over its uses: spread uses get SPREAD_LONG_EDGE_FACTOR ×). */
+  const capOf = new Map<string, number>();
   const plan: PrintImagePlan = new Map();
 
   for (const use of usesOf(doc)) {
     const photo = byId.get(use.photoId);
     if (!photo) continue;
+    const cap = use.layout.role === "spread" ? maxLongEdge * SPREAD_LONG_EDGE_FACTOR : maxLongEdge;
+    capOf.set(photo.id, Math.max(capOf.get(photo.id) ?? 0, cap));
     if (!finitePos(photo.width) || !finitePos(photo.height)) {
-      plan.set(photo.id, { width: maxLongEdge, height: maxLongEdge });
+      const c = capOf.get(photo.id)!;
+      plan.set(photo.id, { width: c, height: c });
       continue;
     }
     const box = slotBoxMm(use.layout, use.slotIndex, bleedMm, doc.format);
@@ -187,7 +204,7 @@ export function planPrintImages(
 
   for (const [id, n] of need) {
     const p = byId.get(id)!;
-    plan.set(id, capTarget(n, p.width as number, p.height as number, maxLongEdge));
+    plan.set(id, capTarget(n, p.width as number, p.height as number, capOf.get(id) ?? maxLongEdge));
   }
   return plan;
 }

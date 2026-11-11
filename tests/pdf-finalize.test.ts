@@ -130,7 +130,7 @@ describe("mergePdfs", () => {
       .enumerateIndirectObjects()
       .map(([, o]) => o)
       .filter((o): o is PDFRawStream => o instanceof PDFRawStream && o.dict.get(PDFName.of("Subtype")) === PDFName.of("Image"));
-    expect(images.length).toBe(2); // one per chunk; shared within a chunk
+    expect(images.length).toBe(1); // shared within a chunk, deduped across chunks (M10b A14)
     for (const img of images) {
       expect(img.dict.get(PDFName.of("Filter"))).toBe(PDFName.of("DCTDecode"));
       expect(Buffer.from(img.contents).equals(jpeg)).toBe(true);

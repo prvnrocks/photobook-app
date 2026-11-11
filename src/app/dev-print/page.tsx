@@ -8,6 +8,10 @@
 // DB or a token — for Playwright / page.pdf checks. Add `?printAssets=1` to point every photo at
 // the print-asset origin (as /print does; images then fail unless the client intercepts them).
 // `?bg=tile|wash|photo|mix` adds page backgrounds (M10a A6, see withDevBackgrounds).
+// PDF spread checks (M10b A14), with `?sample=` + `?sheets=`: `?lead=N` (0–60) prepends N single
+// full-bleed pages, so a spread can straddle the real 20-sheet chunk boundary (lead=14 puts the
+// panorama on sheets 19 | 20); `?scale=N` (1–8, with printAssets=1) multiplies the photos' pixel
+// sizes, simulating high-res originals so the print plan reaches 300 dpi on spreads.
 // 404s in production builds (incl. Vercel previews, which run NODE_ENV=production).
 
 import { notFound } from "next/navigation";
@@ -24,6 +28,7 @@ import {
 } from "@/lib/book/dev-preview";
 import { devSampleDoc, devSamplePhotos, parseDevSample } from "@/lib/book/dev-sample";
 import { pageMm, sheetMm, type SizeMm } from "@/lib/book/format";
+import type { BookDoc } from "@/lib/book/types";
 import { BLEED_MM, SAFE_MM } from "@/lib/layouts";
 import { printRenderPhotos, printSheetTargets } from "@/lib/pdf/print-doc";
 
@@ -50,6 +55,25 @@ function Guides({ sheet }: { sheet: SizeMm }) {
   );
 }
 
+function intParam(raw: unknown, min: number, max: number): number | null {
+  if (typeof raw !== "string" || !/^\d{1,3}$/.test(raw)) return null;
+  const n = Number(raw);
+  return n >= min && n <= max ? n : null;
+}
+
+/** `lead` single full-bleed pages before the sample's pages (spreads stay on even indices for even lead). */
+function withLeadPages(doc: BookDoc, lead: number): BookDoc {
+  const layout = doc.format === "A5_LANDSCAPE" ? "m-l-full-bleed" : "m-p-full";
+  const extra = Array.from({ length: lead }, (_, i) => ({
+    id: `lead${i}`,
+    chapterId: doc.pages[0]?.chapterId ?? null,
+    layout,
+    slots: [{ photoId: `sp${40 + (i % 20)}`, crop: { x: 0.5, y: 0.5, zoom: 1 } }],
+    caption: null,
+  }));
+  return { ...doc, pages: [...extra, ...doc.pages] };
+}
+
 export default async function DevPrintPreview({
   searchParams,
 }: {
@@ -62,7 +86,8 @@ export default async function DevPrintPreview({
   const sample = parseDevSample(sp.sample);
   const format = sample ? devSampleDoc(sample).format : parseDevFormat(sp.format);
   const bgKind = parseDevBackgrounds(sp.bg);
-  const base = sample ? devSampleDoc(sample) : devPreviewDoc(format);
+  const lead = sample ? intParam(sp.lead, 0, 60) : null;
+  const base = sample ? (lead ? withLeadPages(devSampleDoc(sample), lead) : devSampleDoc(sample)) : devPreviewDoc(format);
   const doc = bgKind ? withDevBackgrounds(base, bgKind) : base;
   const sheet = sheetMm(format);
   const trim = pageMm(format);
@@ -71,9 +96,16 @@ export default async function DevPrintPreview({
     const m = /^(\d{1,3})-(\d{1,3})$/.exec(sp.sheets);
     const sheets = m ? printSheetTargets(doc.pages.length, Number(m[1]), Number(m[2])) : null;
     if (!sheets) notFound();
+    const k = intParam(sp.scale, 1, 8) ?? 1;
     const shown =
       sp.printAssets === "1"
-        ? printRenderPhotos(Object.entries(photos).map(([id, p]) => ({ id, width: p?.width ?? null, height: p?.height ?? null })))
+        ? printRenderPhotos(
+            Object.entries(photos).map(([id, p]) => ({
+              id,
+              width: p?.width ? p.width * k : null,
+              height: p?.height ? p.height * k : null,
+            })),
+          )
         : photos;
     return <PrintDocument doc={doc} photos={shown} captionLang="ar" sheets={sheets} />;
   }

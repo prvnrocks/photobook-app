@@ -1,6 +1,12 @@
 // Print resolution check (D-037 (9)): warn below 150 dpi effective at A5 (either format), never block.
 // Pure. effective dpi = original px ÷ (slot mm × zoom ÷ 25.4) on the limiting axis after
 // cover-fit (the axis where the photo has the fewest px per printed mm).
+//
+// Spreads (M10b): spread slot rects are % of ONE page width with x running 0..200 across both
+// halves, so slotSizeMm / layoutSlotMm of a spread layout already give the whole box across the
+// fold — a panorama (w 200) is 2 page widths, i.e. needs 2× the pixels of a full page for the same
+// dpi. The slot always belongs to the spread's LEFT page (right halves store slots []): editor
+// callers pass the owner page (BookPage renderSlotOverlay ownerPage), never the right half.
 
 import { getLayout } from "@/lib/layouts";
 import { pageMm } from "./format";
@@ -20,7 +26,11 @@ export function slotSizeMm(rect: Pick<Rect, "w" | "h">, format?: BookFormat | nu
   return { w: (rect.w / 100) * page.w, h: (rect.h / 100) * page.h };
 }
 
-/** Slot size in mm for `layoutId` slot `slotIdx` (cover or page layout) on `format`; null if unknown. */
+/**
+ * Slot size in mm for `layoutId` slot `slotIdx` (cover, page or spread layout — spread boxes span
+ * both pages) on `format`; null if unknown. Trim size, no bleed (the warning is about the visible
+ * photo; the print plan sizes the bleed box, book/bleed.ts printSlotSizeMm).
+ */
 export function layoutSlotMm(layoutId: string, slotIdx: number, format?: BookFormat | null): SlotMm | null {
   const rect = getLayout(layoutId)?.slots[slotIdx];
   return rect ? slotSizeMm(rect, format) : null;

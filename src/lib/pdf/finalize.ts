@@ -15,8 +15,14 @@
 // Metadata: title,
 // producer/creator = APP_NAME and dates only — no author/subject/keywords (no PII), and nothing
 // from the chunks' own Info dictionaries (Chromium's <title>, "Skia/PDF") carries over.
+//
+// Image dedupe (M10b A14): Chromium embeds an image once per chunk PDF, but every chunk is copied
+// separately, so an image shown in two chunks (a spread whose halves straddle a chunk boundary —
+// sheets 20/21 —, a paper texture, a background photo) would be stored once PER CHUNK. After the
+// copy, byte-identical image XObjects (same dict incl. SMask/colour space, same stream bytes) are
+// folded into one object and every reference is re-pointed — lossless, nothing is re-encoded.
 
-import { PDFDocument } from "pdf-lib";
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef, PDFStream, type PDFContext, type PDFObject } from "pdf-lib";
 import { APP_NAME } from "@/lib/brand";
 import { orientationOf, sheetPt, trimPt } from "@/lib/book/format";
 import type { BookFormat } from "@/lib/book/types";
@@ -110,6 +116,7 @@ export async function mergePdfs(chunks: readonly Uint8Array[], opts: MergeOption
     }
     const pageCount = out.getPageCount();
     if (pageCount === 0) throw new PdfRenderError("merge_failed");
+    dedupeImages(out.context);
 
     const title = typeof opts.title === "string" ? clipCodePoints(opts.title.trim(), PDF_TITLE_MAX_CHARS) : "";
     out.setTitle(title || APP_NAME, { showInWindowTitleBar: true });
@@ -124,4 +131,113 @@ export async function mergePdfs(chunks: readonly Uint8Array[], opts: MergeOption
     if (e instanceof PdfRenderError) throw e;
     throw new PdfRenderError("merge_failed");
   }
+}
+
+// --- Image dedupe ---------------------------------------------------------------------------------
+
+/** cyrb53 (53-bit) over bytes — a bucketing hash; equal buckets are confirmed byte-for-byte. */
+function hash53(bytes: Uint8Array): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < bytes.length; i++) {
+    const c = bytes[i];
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+const SUBTYPE = PDFName.of("Subtype");
+const IMAGE = PDFName.of("Image");
+
+function isImageStream(o: PDFObject | undefined): o is PDFRawStream {
+  return o instanceof PDFRawStream && o.dict.get(SUBTYPE) === IMAGE;
+}
+
+/**
+ * Folds byte-identical image XObjects into one object (see header). Keys are canonical: dict
+ * entries sorted, references replaced by the referenced object's own key (SMask / ICC streams by
+ * dict + length + hash), so two copies of the same image from different chunks — whose SMask refs
+ * differ — get equal keys. Candidates with equal keys are compared byte-for-byte before folding.
+ * Exported for tests. Returns the number of objects removed.
+ */
+export function dedupeImages(context: PDFContext): number {
+  const memo = new Map<string, string>();
+  let unique = 0;
+  const keyOf = (o: PDFObject | undefined, depth: number): string => {
+    if (o === undefined) return "u";
+    if (depth > 8) return `x${unique++}`; // never equal → never folded
+    if (o instanceof PDFRef) {
+      const k = o.toString();
+      const hit = memo.get(k);
+      if (hit !== undefined) return hit;
+      memo.set(k, `x${unique++}`); // cycle guard while computing
+      const v = keyOf(context.lookup(o), depth + 1);
+      memo.set(k, v);
+      return v;
+    }
+    if (o instanceof PDFRawStream) return `S(${keyOf(o.dict, depth + 1)}|${o.contents.length}|${hash53(o.contents)})`;
+    if (o instanceof PDFStream) return `x${unique++}`; // decoded/generated streams: leave alone
+    if (o instanceof PDFDict) {
+      const entries = o
+        .entries()
+        .map(([k, v]) => `${k.toString()} ${keyOf(v, depth + 1)}`)
+        .sort();
+      return `<<${entries.join(" ")}>>`;
+    }
+    if (o instanceof PDFArray) return `[${o.asArray().map((v) => keyOf(v, depth + 1)).join(" ")}]`;
+    return o.toString();
+  };
+
+  const canonical = new Map<string, { ref: PDFRef; stream: PDFRawStream }[]>();
+  const remap = new Map<string, PDFRef>();
+  for (const [ref, obj] of context.enumerateIndirectObjects()) {
+    if (!isImageStream(obj)) continue;
+    const key = keyOf(ref, 0);
+    const bucket = canonical.get(key) ?? [];
+    const same = bucket.find((c) => sameBytes(c.stream.contents, obj.contents));
+    if (same) remap.set(ref.toString(), same.ref);
+    else {
+      bucket.push({ ref, stream: obj });
+      canonical.set(key, bucket);
+    }
+  }
+  if (remap.size === 0) return 0;
+
+  const fix = (o: PDFObject, depth: number): void => {
+    if (depth > 32) return;
+    if (o instanceof PDFDict) {
+      for (const [k, v] of o.entries()) {
+        if (v instanceof PDFRef) {
+          const to = remap.get(v.toString());
+          if (to) o.set(k, to);
+        } else fix(v, depth + 1);
+      }
+    } else if (o instanceof PDFArray) {
+      const items = o.asArray();
+      for (let i = 0; i < items.length; i++) {
+        const v = items[i];
+        if (v instanceof PDFRef) {
+          const to = remap.get(v.toString());
+          if (to) o.set(i, to);
+        } else fix(v, depth + 1);
+      }
+    } else if (o instanceof PDFStream) {
+      fix(o.dict, depth + 1);
+    }
+  };
+  for (const [, obj] of context.enumerateIndirectObjects()) fix(obj, 0);
+  for (const key of remap.keys()) {
+    const [num, gen] = key.split(" ");
+    context.delete(PDFRef.of(Number(num), Number(gen)));
+  }
+  return remap.size;
 }
