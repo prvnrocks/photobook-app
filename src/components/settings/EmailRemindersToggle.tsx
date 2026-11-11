@@ -11,6 +11,7 @@ import {
   remindersErrorCopy,
   type SetEmailRemindersResult,
 } from "@/lib/settings/account";
+import { Notice } from "@/components/app/Notice";
 import { cn } from "@/lib/utils";
 
 export function EmailRemindersToggle({
@@ -68,11 +69,11 @@ export function EmailRemindersToggleView({
   return (
     <section
       aria-labelledby="settings-reminders-heading"
-      className="flex min-w-0 flex-col gap-3 rounded-xl border p-4"
+      className="flex min-w-0 flex-col gap-3 rounded-2xl border border-border bg-card p-5 shadow-card"
       data-testid="settings-reminders"
     >
       <div className="flex min-w-0 items-center justify-between gap-3">
-        <h2 id="settings-reminders-heading" className="text-lg font-semibold">
+        <h2 id="settings-reminders-heading" className="type-h2 text-foreground">
           {ACCOUNT_COPY.remindersHeading}
         </h2>
         {initialOn === null ? null : (
@@ -85,12 +86,12 @@ export function EmailRemindersToggleView({
             aria-busy={pending}
             disabled={pending}
             onClick={toggle}
-            className="flex min-h-11 shrink-0 items-center gap-2 rounded-full px-1 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-60"
+            className="flex min-h-11 shrink-0 items-center gap-2 rounded-full px-1 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:opacity-60"
             data-testid="settings-reminders-toggle"
             data-state={on ? "on" : "off"}
           >
             <span
-              className="w-7 text-right text-muted-foreground"
+              className="w-7 text-end text-muted-foreground"
               aria-hidden="true"
             >
               {on ? ACCOUNT_COPY.remindersOn : ACCOUNT_COPY.remindersOff}
@@ -99,13 +100,13 @@ export function EmailRemindersToggleView({
               aria-hidden="true"
               className={cn(
                 "relative inline-flex h-7 w-12 items-center rounded-full transition-colors",
-                on ? "bg-primary" : "bg-muted-foreground/30",
+                on ? "bg-primary" : "bg-input",
               )}
             >
               <span
                 className={cn(
-                  "inline-block size-6 rounded-full bg-white shadow transition-transform",
-                  on ? "translate-x-[1.375rem]" : "translate-x-0.5",
+                  "inline-block size-6 rounded-full bg-card shadow-card transition-transform motion-reduce:transition-none",
+                  on ? "translate-x-[1.375rem] rtl:-translate-x-[1.375rem]" : "translate-x-0.5 rtl:-translate-x-0.5",
                 )}
               />
             </span>
@@ -123,12 +124,9 @@ export function EmailRemindersToggleView({
         </span>
       </p>
       {initialOn === null ? (
-        <p
-          className="text-sm text-destructive"
-          data-testid="settings-reminders-load-error"
-        >
+        <Notice tone="error" data-testid="settings-reminders-load-error">
           {ACCOUNT_COPY.remindersLoadError}
-        </p>
+        </Notice>
       ) : null}
       <div aria-live="polite">
         {message ? (
@@ -136,7 +134,7 @@ export function EmailRemindersToggleView({
             className={
               message.tone === "error"
                 ? "text-sm text-destructive"
-                : "text-sm text-muted-foreground"
+                : "text-sm text-success"
             }
             data-testid={
               message.tone === "error"

@@ -1,5 +1,6 @@
 // "What the AI has learned" section of /settings (D-032). Presentational: the page loads the
 // view; `view === undefined` means loading failed. Only friendly labels are shown, never raw prefs.
+import { Notice } from "@/components/app/Notice";
 import { SettingsClearButton } from "@/components/settings/SettingsClearButton";
 import {
   isMemoryViewEmpty,
@@ -27,7 +28,7 @@ function RowValue({ row }: { row: MemoryRow }) {
           <li
             key={`${i}-${v}`}
             dir="auto"
-            className="max-w-full rounded-full bg-muted px-2.5 py-0.5 text-sm break-words"
+            className="max-w-full rounded-full bg-secondary px-2.5 py-0.5 text-sm break-words text-secondary-foreground"
           >
             {v}
           </li>
@@ -47,27 +48,23 @@ export function SettingsMemory({ view }: { view: MemoryViewLike | null | undefin
   return (
     <section
       aria-labelledby="settings-memory-heading"
-      className="flex min-w-0 flex-col gap-4 rounded-xl border p-4"
+      className="flex min-w-0 flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-card"
       data-testid="settings-memory"
     >
-      <h2 id="settings-memory-heading" className="text-lg font-semibold">
+      <h2 id="settings-memory-heading" className="type-h2 text-foreground">
         {SETTINGS_COPY.memoryHeading}
       </h2>
       {failed ? (
-        <p
-          role="alert"
-          className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-          data-testid="settings-error"
-        >
+        <Notice tone="error" data-testid="settings-error">
           {SETTINGS_COPY.loadError}
-        </p>
+        </Notice>
       ) : empty ? (
         <p className="text-sm text-muted-foreground" data-testid="settings-empty">
           {SETTINGS_COPY.empty}
         </p>
       ) : (
         <div className="flex min-w-0 flex-col gap-3">
-          <dl className="flex min-w-0 flex-col divide-y" data-testid="settings-memory-list">
+          <dl className="flex min-w-0 flex-col divide-y divide-border" data-testid="settings-memory-list">
             {rows.map((row) => (
               <div
                 key={row.key}

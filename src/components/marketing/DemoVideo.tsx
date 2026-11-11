@@ -6,7 +6,7 @@ export function DemoVideo({ video }: { video: DemoVideoInfo }) {
   return (
     <section aria-label="Demo video" data-testid="section-demo" className="mx-auto w-full max-w-sm">
       <video
-        className="aspect-[375/812] w-full rounded-2xl bg-muted object-cover shadow-lg"
+        className="aspect-[375/812] w-full rounded-2xl bg-muted object-cover shadow-lift"
         poster={video.poster}
         muted
         playsInline

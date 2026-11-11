@@ -9,7 +9,16 @@ import { Pricing } from "@/components/marketing/Pricing";
 import { AccountDeletedNotice } from "@/components/settings/AccountDeletedNotice";
 import { buttonVariants } from "@/components/ui/button";
 import { APP_NAME } from "@/lib/brand";
-import { CTA_HREF, CTA_LABEL, HERO_CLAIM, HERO_SUBCOPY, LANDING_DESCRIPTION, LANDING_TITLE } from "@/lib/marketing/copy";
+import {
+  CTA_HREF,
+  CTA_LABEL,
+  CTA_NOTE,
+  HERO_CLAIM,
+  HERO_EYEBROW,
+  HERO_SUBCOPY,
+  LANDING_DESCRIPTION,
+  LANDING_TITLE,
+} from "@/lib/marketing/copy";
 import { getDemoVideo } from "@/lib/marketing/demo";
 import { EXAMPLE_BOOKS } from "@/lib/marketing/examples";
 import { cn } from "@/lib/utils";
@@ -26,38 +35,33 @@ export default function LandingPage() {
   const demo = getDemoVideo();
   return (
     <main className="flex flex-col">
-      <div className="px-4 sm:px-6">
+      <div className="px-gutter sm:px-6">
         <AccountDeletedNotice />
       </div>
-      <section
-        data-testid="section-hero"
-        className="bg-gradient-to-b from-amber-50 via-background to-background"
-      >
-        <div className="mx-auto grid w-full max-w-5xl items-center gap-10 px-4 pt-10 pb-12 sm:px-6 md:grid-cols-2 md:pt-16">
+      <section data-testid="section-hero" className="border-b border-border bg-gradient-to-b from-secondary/70 to-background">
+        <div className="mx-auto grid w-full max-w-wide items-center gap-10 px-gutter pt-10 pb-14 sm:px-6 md:grid-cols-2 md:pt-20 md:pb-20">
           <div className="flex min-w-0 flex-col gap-5">
-            <h1
-              data-testid="hero-heading"
-              className="font-heading text-[2rem] leading-tight font-semibold tracking-tight break-words sm:text-5xl"
-            >
+            <p className="type-eyebrow">{HERO_EYEBROW}</p>
+            <h1 data-testid="hero-heading" className="type-display break-words text-foreground lining-nums sm:text-5xl sm:leading-[1.08]">
               {HERO_CLAIM}
             </h1>
-            <p className="text-base text-muted-foreground sm:text-lg">{HERO_SUBCOPY}</p>
-            <div className="flex flex-col gap-2">
+            <p className="type-body text-muted-foreground sm:text-lg">{HERO_SUBCOPY}</p>
+            <div className="flex flex-col gap-2 pt-1">
               <Link
                 href={CTA_HREF}
                 data-testid="cta-create"
-                className={cn(buttonVariants({ size: "lg" }), "h-12 w-full px-6 text-base sm:w-auto sm:self-start")}
+                className={cn(buttonVariants({ variant: "accent", size: "cta" }), "sm:w-auto sm:self-start sm:px-8")}
               >
                 {CTA_LABEL}
               </Link>
-              <p className="text-sm text-muted-foreground">Free to try. No card needed.</p>
+              <p className="type-small text-muted-foreground">{CTA_NOTE}</p>
             </div>
           </div>
           <HeroIllustration />
         </div>
       </section>
 
-      <div className="mx-auto flex w-full max-w-5xl min-w-0 flex-col gap-16 px-4 pt-6 pb-16 sm:px-6">
+      <div className="mx-auto flex w-full max-w-wide min-w-0 flex-col gap-section px-gutter pt-section pb-16 sm:gap-16 sm:px-6">
         {demo ? <DemoVideo video={demo} /> : null}
         <HowItWorks />
         <ExampleBooks books={EXAMPLE_BOOKS} />

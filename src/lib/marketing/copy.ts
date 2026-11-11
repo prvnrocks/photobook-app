@@ -17,6 +17,10 @@ export const HERO_SUBCOPY =
   "Share it as a flipbook link that opens on any phone — perfect for WhatsApp — and download a print-quality PDF when you upgrade.";
 
 export const CTA_LABEL = "Start your book";
+/** Small line under the hero CTA. */
+export const CTA_NOTE = "Free to try. No card needed.";
+/** Tracked caps above the hero headline (M11). */
+export const HERO_EYEBROW = "AI photobooks · Flipbook links";
 /** Signed-in visitors skip the form: /login redirects straight to `next`. */
 export const CTA_HREF = "/login?next=%2Fbooks%2Fnew";
 

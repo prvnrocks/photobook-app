@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/LoginForm";
+import { SiteWordmark } from "@/components/marketing/Wordmark";
+import { APP_NAME } from "@/lib/brand";
 import { safeNextPath } from "@/lib/auth/redirect";
 import { getCurrentUser } from "@/lib/auth/current-user";
 
@@ -24,6 +26,9 @@ async function isSignedIn(): Promise<boolean> {
   }
 }
 
+const LEGAL_LINK =
+  "rounded-sm underline underline-offset-4 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring";
+
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
   const next = safeNextPath(first(params.next));
@@ -32,27 +37,31 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   if (await isSignedIn()) redirect(next);
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-sm min-w-0 flex-col gap-6 px-4 py-12 sm:px-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight break-words">
-          Sign in to Photobook
-        </h1>
-        <p className="text-base text-muted-foreground">
-          No password needed. We&apos;ll email you a link and a code.
+    <div className="flex min-h-dvh flex-col bg-gradient-to-b from-secondary/70 via-background to-background">
+      <div className="mx-auto flex h-14 w-full max-w-wide items-center px-gutter sm:px-6">
+        <SiteWordmark />
+      </div>
+      <main className="mx-auto flex w-full max-w-sm min-w-0 flex-1 flex-col gap-6 px-gutter pt-6 pb-12 sm:justify-center sm:pt-0">
+        <div className="flex min-w-0 flex-col gap-6 rounded-2xl border border-border bg-card px-5 py-7 shadow-lift sm:px-7">
+          <header className="flex flex-col gap-2">
+            <p className="type-eyebrow">Welcome</p>
+            <h1 className="type-h1 break-words text-foreground">Sign in to {APP_NAME}</h1>
+            <p className="type-body text-muted-foreground">No password needed. We&apos;ll email you a link and a code.</p>
+          </header>
+          <LoginForm next={next} error={error === "auth"} />
+        </div>
+        <p className="text-center text-xs text-muted-foreground" data-testid="login-legal">
+          By continuing you agree to the{" "}
+          <Link href="/terms" className={LEGAL_LINK}>
+            Terms
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className={LEGAL_LINK}>
+            Privacy Policy
+          </Link>
+          .
         </p>
-      </header>
-      <LoginForm next={next} error={error === "auth"} />
-      <p className="text-center text-xs text-muted-foreground" data-testid="login-legal">
-        By continuing you agree to the{" "}
-        <Link href="/terms" className="underline underline-offset-4">
-          Terms
-        </Link>{" "}
-        and{" "}
-        <Link href="/privacy" className="underline underline-offset-4">
-          Privacy Policy
-        </Link>
-        .
-      </p>
-    </main>
+      </main>
+    </div>
   );
 }

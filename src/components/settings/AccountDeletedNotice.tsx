@@ -4,6 +4,7 @@
 // query flag on mount (keeps the landing page static — no searchParams), then removes it from the URL.
 
 import { useEffect, useState } from "react";
+import { Notice } from "@/components/app/Notice";
 import { ACCOUNT_COPY, ACCOUNT_DELETED_PARAM, ACCOUNT_DELETED_VALUE } from "@/lib/settings/account";
 
 export function AccountDeletedNotice() {
@@ -19,12 +20,8 @@ export function AccountDeletedNotice() {
 
   if (!show) return null;
   return (
-    <p
-      role="status"
-      className="mx-auto mt-4 w-full max-w-5xl rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
-      data-testid="account-deleted-notice"
-    >
+    <Notice tone="success" className="mx-auto mt-4 w-full max-w-wide" data-testid="account-deleted-notice">
       {ACCOUNT_COPY.deletedNotice}
-    </p>
+    </Notice>
   );
 }

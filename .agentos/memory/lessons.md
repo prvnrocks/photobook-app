@@ -111,3 +111,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-11, test) Opening /books/[id]/build with a fresh load starts a new run — never visit it just to measure. Deleting a test user leaves its agent_runs (ids nulled): count before/after and remove your own orphans.
 - (2026-11-11, test) When app tokens change --background, full-page pixel compares of dev fixtures differ; compare per [data-page] element for book-render parity.
 - (2026-11-11, fonts) next/font var(--font-x) includes its "X Fallback" (Times, has Arabic) — in chains meant to reach Cairo, name the family directly then var(--font-cairo). Pixel gates after a body-background change: compare /dev-print?sheets= and page interiors, not full dev pages.
+- (2026-11-11, next) A route loading.tsx can't be caught by delaying the request with page.route and fast dev navigations skip it — screenshot the loading component from a scratch-only page.

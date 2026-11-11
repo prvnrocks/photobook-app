@@ -1,8 +1,10 @@
 "use client";
 
+import { MailCheck } from "lucide-react";
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { sendMagicLink, signInWithGoogle, verifyEmailCode } from "@/app/auth/actions";
+import { Notice } from "@/components/app/Notice";
 import { Button } from "@/components/ui/button";
 import { initialAuthFormState, type AuthFormState } from "@/lib/auth/form-state";
 import { cn } from "@/lib/utils";
@@ -11,9 +13,7 @@ const LINK_ERROR =
   "That sign-in link has expired or was already used. Request a new one below.";
 
 const inputClass =
-  "h-11 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive";
-
-const bigButton = "h-11 w-full text-base";
+  "h-12 w-full min-w-0 rounded-lg border border-input bg-card px-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 aria-invalid:border-destructive";
 
 type LoginFormProps = {
   /** Already sanitised with safeNextPath on the server. */
@@ -43,7 +43,8 @@ function SubmitButton({
       disabled={pending}
       aria-busy={pending}
       data-testid={testId}
-      className={cn(bigButton, className)}
+      size="cta"
+      className={className}
     >
       {pending ? pendingText : children}
     </Button>
@@ -52,13 +53,9 @@ function SubmitButton({
 
 function ErrorBanner({ message }: { message: string }) {
   return (
-    <p
-      role="alert"
-      data-testid="login-error"
-      className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm break-words text-destructive"
-    >
+    <Notice tone="error" data-testid="login-error" className="break-words">
       {message}
-    </p>
+    </Notice>
   );
 }
 
@@ -87,10 +84,13 @@ export function LoginForm({ next, error = false }: LoginFormProps) {
     <div className="flex w-full min-w-0 flex-col gap-6">
       {showCodeStep ? (
         <div className="flex flex-col gap-4">
-          <p className="text-base break-words" aria-live="polite">
-            Check your email — we sent a link and a 6-digit code to{" "}
-            <strong className="font-semibold break-all">{sendState.email}</strong>
-          </p>
+          <div aria-live="polite" className="flex items-start gap-3 rounded-xl border border-success-border bg-success-soft p-4">
+            <MailCheck className="mt-0.5 size-5 shrink-0 text-success" aria-hidden="true" />
+            <p className="type-small break-words text-foreground">
+              Check your email — we sent a link and a 6-digit code to{" "}
+              <strong className="font-semibold break-all">{sendState.email}</strong>
+            </p>
+          </div>
 
           <form action={verifyAction} className="flex flex-col gap-3">
             <input type="hidden" name="email" value={sendState.email} />
@@ -110,7 +110,7 @@ export function LoginForm({ next, error = false }: LoginFormProps) {
               data-testid="login-code"
               aria-invalid={verifyState.error ? true : undefined}
               aria-describedby={verifyState.error ? "login-code-error" : undefined}
-              className={cn(inputClass, "tracking-[0.3em]")}
+              className={cn(inputClass, "text-center font-mono text-lg tracking-[0.3em]")}
             />
             {verifyState.error ? (
               <div id="login-code-error">
@@ -126,7 +126,8 @@ export function LoginForm({ next, error = false }: LoginFormProps) {
             <Button
               type="button"
               variant="ghost"
-              className={cn(bigButton, "sm:flex-1")}
+              size="touch"
+              className="w-full text-base sm:flex-1"
               onClick={() => setDismissed(sendState)}
             >
               Use a different email
@@ -180,7 +181,7 @@ export function LoginForm({ next, error = false }: LoginFormProps) {
         <SubmitButton variant="outline" pendingText="Opening Google…" testId="login-google">
           Continue with Google
         </SubmitButton>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs leading-relaxed text-muted-foreground">
           Opening this from WhatsApp? Use email — Google sign-in may not work inside the
           WhatsApp browser.
         </p>

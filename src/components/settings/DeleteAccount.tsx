@@ -4,9 +4,10 @@
 // the server action signs out and redirects to "/?account=deleted" (it never returns); any returned
 // value is an error. <DeleteAccountView> takes the action as a prop (unit tests).
 
-import { Loader2 } from "lucide-react";
+import { Loader2, TriangleAlert } from "lucide-react";
 import { useState, useTransition } from "react";
 import { deleteAccountAction } from "@/app/settings/actions";
+import { Notice } from "@/components/app/Notice";
 import { Button } from "@/components/ui/button";
 import {
   ACCOUNT_COPY,
@@ -51,14 +52,15 @@ export function DeleteAccountView({
   return (
     <section
       aria-labelledby="settings-delete-heading"
-      className="flex min-w-0 flex-col gap-3 rounded-xl border border-destructive/40 p-4"
+      className="flex min-w-0 flex-col gap-3 rounded-2xl border border-destructive-border bg-destructive-soft/60 p-5"
       data-testid="settings-delete-account"
     >
-      <h2 id="settings-delete-heading" className="text-lg font-semibold text-destructive">
+      <h2 id="settings-delete-heading" className="flex items-center gap-2 type-h2 text-destructive">
+        <TriangleAlert className="size-5 shrink-0" aria-hidden="true" />
         {ACCOUNT_COPY.dangerHeading}
       </h2>
-      <p className="text-sm">{ACCOUNT_COPY.dangerDetail}</p>
-      <p className="text-sm text-muted-foreground">{ACCOUNT_COPY.dangerPayments}</p>
+      <p className="type-small text-foreground">{ACCOUNT_COPY.dangerDetail}</p>
+      <p className="type-small text-muted-foreground">{ACCOUNT_COPY.dangerPayments}</p>
       <form onSubmit={onSubmit} className="flex min-w-0 flex-col gap-3">
         <label htmlFor="settings-delete-confirm" className="text-sm font-medium">
           {ACCOUNT_COPY.confirmLabel}
@@ -74,22 +76,19 @@ export function DeleteAccountView({
           spellCheck={false}
           dir="ltr"
           disabled={pending}
-          className="h-11 w-full min-w-0 rounded-lg border bg-background px-3 text-base"
+          className="h-11 w-full min-w-0 rounded-lg border border-input bg-card px-3 text-base text-foreground outline-none focus-visible:border-destructive focus-visible:ring-2 focus-visible:ring-destructive/30"
           data-testid="settings-delete-input"
         />
         {error ? (
-          <p
-            role="alert"
-            className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-            data-testid="settings-delete-error"
-          >
+          <Notice tone="error" data-testid="settings-delete-error">
             {error}
-          </p>
+          </Notice>
         ) : null}
         <Button
           type="submit"
           variant="destructive"
-          className="h-11 w-full bg-destructive text-base text-white hover:bg-destructive/90 disabled:opacity-50"
+          size="touch"
+          className="w-full bg-destructive text-base text-white hover:bg-destructive/90 focus-visible:ring-destructive disabled:opacity-50"
           disabled={!confirmed || pending}
           aria-busy={pending}
           data-testid="settings-delete-button"

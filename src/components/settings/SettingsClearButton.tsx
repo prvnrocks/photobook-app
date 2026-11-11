@@ -5,6 +5,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { clearMemoryAction } from "@/app/settings/actions";
+import { Notice } from "@/components/app/Notice";
 import { Button } from "@/components/ui/button";
 import { clearOutcome, SETTINGS_COPY } from "@/lib/settings/ui";
 
@@ -59,7 +60,7 @@ export function SettingsClearButton({ hasMemory }: { hasMemory: boolean }) {
         <div
           role="group"
           aria-labelledby="settings-clear-question"
-          className="flex min-w-0 flex-col gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4"
+          className="flex min-w-0 flex-col gap-3 rounded-xl border border-destructive-border bg-destructive-soft p-4"
           data-testid="settings-clear-confirm"
         >
           <p id="settings-clear-question" className="text-base font-medium">
@@ -71,7 +72,8 @@ export function SettingsClearButton({ hasMemory }: { hasMemory: boolean }) {
               ref={cancelRef}
               type="button"
               variant="outline"
-              className="h-11 text-base"
+              size="touch"
+              className="text-base"
               disabled={pending}
               onClick={() => {
                 setError(null);
@@ -84,7 +86,8 @@ export function SettingsClearButton({ hasMemory }: { hasMemory: boolean }) {
             <Button
               type="button"
               variant="destructive"
-              className="h-11 text-base"
+              size="touch"
+              className="bg-destructive text-base text-white hover:bg-destructive/90"
               disabled={pending}
               aria-busy={pending}
               onClick={onConfirm}
@@ -99,7 +102,8 @@ export function SettingsClearButton({ hasMemory }: { hasMemory: boolean }) {
           ref={openRef}
           type="button"
           variant="outline"
-          className="h-11 w-full text-base"
+          size="touch"
+          className="w-full text-base"
           onClick={() => setPhase("confirm")}
           data-testid="settings-clear"
         >
@@ -107,13 +111,9 @@ export function SettingsClearButton({ hasMemory }: { hasMemory: boolean }) {
         </Button>
       )}
       {error ? (
-        <p
-          role="alert"
-          className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-          data-testid="settings-clear-error"
-        >
+        <Notice tone="error" data-testid="settings-clear-error">
           {error}
-        </p>
+        </Notice>
       ) : null}
     </div>
   );
