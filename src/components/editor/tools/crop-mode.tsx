@@ -144,7 +144,7 @@ export function CropPanel({ ctx, close }: EditorPanelProps) {
         onPointerUp={onPointerEnd}
         onPointerCancel={onPointerEnd}
         onKeyDown={onKeyDown}
-        className="relative cursor-grab touch-none overflow-hidden rounded-sm bg-neutral-200 outline-none select-none focus-visible:ring-4 focus-visible:ring-primary/60 active:cursor-grabbing"
+        className="relative cursor-grab touch-none overflow-hidden rounded-sm bg-muted outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card active:cursor-grabbing"
         style={{ aspectRatio: String(aspect), width: `min(100%, calc(36dvh * ${aspect}))` }}
         data-testid="crop-area"
       >
@@ -181,7 +181,7 @@ export function CropPanel({ ctx, close }: EditorPanelProps) {
       </label>
 
       {lowRes ? (
-        <p className="w-full max-w-sm rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="crop-low-res">
+        <p className="w-full max-w-sm rounded-md border border-warning-border bg-warning-soft px-3 py-2 text-xs text-foreground" data-testid="crop-low-res">
           This photo may look blurry when printed at this size.
         </p>
       ) : null}
@@ -190,7 +190,7 @@ export function CropPanel({ ctx, close }: EditorPanelProps) {
         <button
           type="button"
           onClick={() => apply({ ...DEFAULT_CROP })}
-          className="flex min-h-11 items-center justify-center gap-2 rounded-lg border text-sm font-medium hover:bg-muted"
+          className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-card text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
           data-testid="crop-reset"
         >
           <RotateCcw className="size-4" aria-hidden="true" />
@@ -199,7 +199,7 @@ export function CropPanel({ ctx, close }: EditorPanelProps) {
         <button
           type="button"
           onClick={close}
-          className="min-h-11 rounded-lg bg-primary text-sm font-medium text-primary-foreground"
+          className="min-h-11 rounded-lg bg-primary text-sm font-medium text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
           data-testid="crop-done"
         >
           Done

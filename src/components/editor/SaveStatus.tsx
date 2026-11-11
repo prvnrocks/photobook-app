@@ -34,16 +34,19 @@ export function saveStatusLabel(s: SaveState): string {
 
 const reload = () => window.location.reload();
 
+const BANNER_BUTTON =
+  "inline-flex min-h-11 items-center self-start rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-warning-soft";
+
 export function SaveStatus({ status }: { status: SaveState }) {
   const warn = status.kind !== "idle" && status.kind !== "saved" && status.kind !== "pending" && status.kind !== "saving";
   return (
     <span className="flex min-w-0 items-center gap-1 text-xs" aria-live="polite" data-testid="save-status" data-state={status.kind}>
-      <span className={cn("truncate", warn ? "text-amber-700" : "text-muted-foreground")}>{saveStatusLabel(status)}</span>
+      <span className={cn("truncate", warn ? "font-medium text-warning" : "text-muted-foreground")}>{saveStatusLabel(status)}</span>
       {status.kind === "conflict" ? (
         <button
           type="button"
           onClick={reload}
-          className="shrink-0 font-medium text-primary underline underline-offset-2"
+          className="relative shrink-0 rounded font-medium text-primary underline underline-offset-2 outline-none before:absolute before:-inset-3 before:content-[''] focus-visible:ring-2 focus-visible:ring-ring"
           data-testid="save-status-reload"
         >
           Reload
@@ -82,7 +85,7 @@ export function SaveBanner({ status, bookId }: { status: SaveState; bookId: stri
           <p>You&apos;ve been signed out, so changes aren&apos;t being saved.</p>
           <Link
             href={`/login?next=${encodeURIComponent(`/books/${bookId}/edit`)}`}
-            className="inline-flex min-h-11 items-center self-start rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
+            className={BANNER_BUTTON}
           >
             Sign in again
           </Link>
@@ -103,7 +106,7 @@ export function SaveBanner({ status, bookId }: { status: SaveState; bookId: stri
   return (
     <div
       role="status"
-      className="flex shrink-0 flex-col gap-2 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-950"
+      className="flex shrink-0 flex-col gap-2 border-b border-warning-border bg-warning-soft px-4 py-2.5 text-sm text-foreground"
       data-testid={`save-banner-${status.kind}`}
     >
       {body}
@@ -116,7 +119,7 @@ function BannerButton({ onClick, children, testId }: { onClick: () => void; chil
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex min-h-11 items-center self-start rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
+      className={BANNER_BUTTON}
       data-testid={testId}
     >
       {children}

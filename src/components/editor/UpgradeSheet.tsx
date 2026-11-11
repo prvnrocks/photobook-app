@@ -10,7 +10,7 @@
 // - Or embed the body directly: <UpgradeSheet reason="rewrites" ctx={ctx} />.
 // Paid status comes from the server (books.is_paid via the editor loader) — never set client-side.
 
-import { Gem } from "lucide-react";
+import { Check, Gem } from "lucide-react";
 import { LIMITS } from "@/lib/ai/limits";
 import { selectionKind } from "@/lib/editor/store";
 import { UpgradeButton } from "@/components/upgrade/UpgradeButton";
@@ -51,25 +51,27 @@ export function UpgradeSheet({ reason = "general", ctx }: { reason?: UpgradeReas
         </p>
       ) : null}
       <div className="flex items-start gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-strong/10 text-accent-strong">
           <Gem className="size-5" aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <p className="text-base font-semibold">Upgrade this book</p>
+          <p className="type-h2">Upgrade this book</p>
           <p className="text-sm text-muted-foreground">One-time payment, just for this book.</p>
         </div>
       </div>
-      <ul className="flex flex-col gap-1.5 text-sm">
-        <li>Up to {LIMITS.paid.maxPages} pages</li>
-        <li>No watermark</li>
-        <li>PDF download</li>
-        <li>Permanent link</li>
+      <ul className="flex flex-col gap-2 rounded-xl border border-border bg-secondary/50 p-3 text-sm">
+        {[`Up to ${LIMITS.paid.maxPages} pages`, "No watermark", "PDF download", "Permanent link"].map((item) => (
+          <li key={item} className="flex items-center gap-2">
+            <Check className="size-4 shrink-0 text-success" aria-hidden="true" />
+            {item}
+          </li>
+        ))}
       </ul>
-      <p className="text-2xl font-semibold" data-testid="upgrade-price">
+      <p className="font-display text-2xl font-semibold" data-testid="upgrade-price">
         {UPGRADE_PRICE_LABEL}
       </p>
       {ctx.book.isPaid ? (
-        <p className="text-sm text-emerald-800" data-testid="upgrade-already-paid">
+        <p className="text-sm font-medium text-success" data-testid="upgrade-already-paid">
           This book is already upgraded.
         </p>
       ) : (

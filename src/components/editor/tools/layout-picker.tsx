@@ -6,6 +6,8 @@
 // M10b A15: only layouts of the book's format + style (layoutsFor, D-063); two-page layouts in
 // their own group, disabled with the reason when planChangeLayout says they can't start here
 // (e.g. "Starts on a left page"); removing user captions asks first (confirmDropCaptions).
+// M11 T14: docked under the page on phones (dockOnMobile) so the page stays visible while choosing;
+// four diagrams per row keep each option ≥ 44 px at 375 px and more of them inside the 42dvh panel.
 
 import { LayoutTemplate } from "lucide-react";
 import { useState } from "react";
@@ -46,13 +48,13 @@ export function LayoutDiagram({ layout, format, className }: { layout: Layout; f
   const boxes: readonly Rect[] = layout.slices ?? layout.slots;
   return (
     <div
-      className={cn("relative aspect-[148/210] w-full rounded-sm border bg-white", className)}
+      className={cn("relative aspect-[148/210] w-full rounded-sm border border-border bg-white", className)}
       style={spread ? { aspectRatio: spreadAspectRatio(format) } : pageAspectStyle(format)}
       aria-hidden="true"
       data-kind={spread ? "spread" : undefined}
     >
       {boxes.map((r, i) => (
-        <div key={i} className="absolute rounded-[2px] bg-neutral-400" style={rectStyle(r, spread)} />
+        <div key={i} className="absolute rounded-[2px] bg-input/60" style={rectStyle(r, spread)} data-diagram-box="" />
       ))}
       {layout.caption ? (
         <div
@@ -60,11 +62,11 @@ export function LayoutDiagram({ layout, format, className }: { layout: Layout; f
           style={rectStyle(layout.caption, spread)}
           data-testid="layout-diagram-caption"
         >
-          <span className="block h-[2px] w-3/4 rounded bg-neutral-300" />
-          <span className="block h-[2px] w-1/2 rounded bg-neutral-300" />
+          <span className="block h-[2px] w-3/4 rounded bg-border" />
+          <span className="block h-[2px] w-1/2 rounded bg-border" />
         </div>
       ) : null}
-      {spread ? <div className="absolute inset-y-0 left-1/2 w-px bg-neutral-300" data-testid="layout-diagram-fold" /> : null}
+      {spread ? <div className="absolute inset-y-0 left-1/2 w-px bg-border" data-testid="layout-diagram-fold" /> : null}
     </div>
   );
 }
@@ -144,7 +146,7 @@ export function LayoutPickerPanel({ ctx, close }: EditorPanelProps) {
           <button
             type="button"
             onClick={() => setConfirm(null)}
-            className="min-h-11 flex-1 rounded-lg border px-4 text-sm font-medium hover:bg-muted"
+            className="min-h-11 flex-1 rounded-lg border border-border bg-card px-4 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
             data-testid="layout-confirm-cancel"
           >
             Cancel
@@ -152,7 +154,7 @@ export function LayoutPickerPanel({ ctx, close }: EditorPanelProps) {
           <button
             type="button"
             onClick={() => apply(confirm.layout, true)}
-            className="min-h-11 flex-1 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            className="min-h-11 flex-1 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
             data-testid="layout-confirm-apply"
           >
             Remove and apply
@@ -168,11 +170,11 @@ export function LayoutPickerPanel({ ctx, close }: EditorPanelProps) {
         {photosLabel(opts.placed)} on this {opts.onSpread ? "2-page spread" : "page"}. Photos move into the new layout in order.
       </p>
       {error ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800" data-testid="layout-error">
+        <p role="alert" className="rounded-lg border border-destructive-border bg-destructive-soft px-3 py-2 text-sm text-destructive" data-testid="layout-error">
           {error}
         </p>
       ) : null}
-      <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4" aria-label="One-page layouts">
+      <ul className="grid grid-cols-4 gap-2 sm:gap-3 lg:grid-cols-3" aria-label="One-page layouts">
         {opts.pages.map((o) => (
           <OptionButton key={o.layout.id} o={o} format={doc.format} onChoose={() => apply(o.layout, false)} />
         ))}
@@ -182,7 +184,7 @@ export function LayoutPickerPanel({ ctx, close }: EditorPanelProps) {
           <h3 id="layout-spreads-title" className="text-sm font-semibold">
             Across two pages
           </h3>
-          <ul className="grid grid-cols-2 gap-3" aria-label="Two-page layouts">
+          <ul className="grid grid-cols-2 gap-2 sm:gap-3" aria-label="Two-page layouts">
             {opts.spreads.map((o) => (
               <OptionButton key={o.layout.id} o={o} format={doc.format} onChoose={() => apply(o.layout, false)} />
             ))}
@@ -214,8 +216,8 @@ function OptionButton({ o, format, onChoose }: { o: LayoutOption; format: BookFo
         aria-pressed={o.current}
         aria-label={`${label}${o.current ? " (current)" : ""}`}
         className={cn(
-          "flex w-full flex-col items-stretch gap-1 rounded-lg p-1.5 text-left outline-none focus-visible:ring-4 focus-visible:ring-primary/60",
-          o.current ? "bg-primary/10 ring-2 ring-primary" : "hover:bg-muted",
+          "flex min-h-11 w-full flex-col items-stretch gap-1 rounded-lg p-1.5 text-start outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+          o.current ? "bg-secondary ring-2 ring-primary" : "hover:bg-muted",
           o.disabled && "cursor-not-allowed opacity-50 hover:bg-transparent",
         )}
         data-testid="layout-option"
@@ -232,7 +234,7 @@ function OptionButton({ o, format, onChoose }: { o: LayoutOption; format: BookFo
             <>
               {!l.caption ? <span data-testid="layout-no-caption">No caption</span> : null}
               {!l.caption && o.loses > 0 ? " · " : null}
-              {o.loses > 0 ? <span className="text-amber-700">−{photosLabel(o.loses)}</span> : null}
+              {o.loses > 0 ? <span className="font-medium text-warning">−{photosLabel(o.loses)}</span> : null}
             </>
           )}
         </span>
@@ -248,6 +250,8 @@ export const layoutPickerTool: EditorTool = {
   scopes: ["slot", "caption", "none"],
   order: 20,
   panelTitle: "Page layout",
+  // M11: the page stays visible above the panel on phones while choosing.
+  dockOnMobile: true,
   isAvailable: (ctx) => layoutTargetPage(ctx) !== null,
   Panel: LayoutPickerPanel,
 };

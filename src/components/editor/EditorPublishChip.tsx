@@ -30,7 +30,7 @@ export function EditorPublishChip({ bookId, settle }: { bookId: string; settle: 
         type="button"
         onClick={onClick}
         disabled={target !== null}
-        className="relative inline-flex shrink-0 items-center gap-1 self-start rounded-full before:absolute before:-inset-y-3 before:inset-x-0 before:content-[''] bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/15 disabled:opacity-60"
+        className="relative inline-flex shrink-0 items-center gap-1 self-start rounded-full border border-accent-strong/30 bg-accent-strong/10 px-2 py-0.5 text-xs font-medium text-accent-strong outline-none before:absolute before:-inset-y-3 before:inset-x-0 before:content-[''] hover:bg-accent-strong/15 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
         data-testid="editor-publish-changes"
       >
         <Send className="size-3" aria-hidden="true" />

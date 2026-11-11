@@ -560,11 +560,54 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
       })
       .toBe(true);
     await expectNoOverflow(page, "docked caption sheet");
-    // A slot tool still uses the floating sheet.
+    // M11 T14: Replace docks under the page too (the spot being filled stays visible); Crop keeps the sheet.
     await page.getByTestId("editor-panel-close").click();
     await cur(page).locator('[data-slot-index="0"] [data-testid="slot-target"]').click();
     await page.getByTestId("editor-tool-replace").click();
-    await expect(page.getByTestId("editor-panel-replace")).toHaveAttribute("data-docked", "false");
+    await expect(page.getByTestId("editor-panel-replace")).toHaveAttribute("data-docked", "true");
+    await page.getByTestId("editor-panel-close").click();
+    await page.getByTestId("editor-tool-crop").click();
+    await expect(page.getByTestId("editor-panel-crop")).toHaveAttribute("data-docked", "false");
+  });
+
+  test("M11: Layout picker docks under the page — page stays visible, options ≥ 44 px; coach line once", async ({ page }) => {
+    await open(page);
+    // One-time coach line: in the toolbar flow (never over the page), dismissible, remembered.
+    const coach = page.getByTestId("editor-coach");
+    await expect(coach).toContainText("Tap a photo to swap, crop or change its layout");
+    const cov = (await cur(page).boundingBox())!;
+    const cb = (await coach.boundingBox())!;
+    expect(cb.y).toBeGreaterThanOrEqual(cov.y + cov.height - 1);
+    await page.getByTestId("editor-coach-dismiss").click();
+    await expect(coach).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByTestId("editor-shell")).toBeVisible();
+    await expect(page.getByTestId("editor-toolbar")).toBeVisible();
+    await expect(coach).toHaveCount(0);
+    await settle(page);
+
+    await goToItem(page, 2);
+    await page.getByTestId("editor-tool-layout").click();
+    const panel = page.getByTestId("editor-panel-layout");
+    await expect(panel).toHaveAttribute("data-docked", "true");
+    await expect(page.getByTestId("editor-tool-layout")).toHaveAttribute("aria-pressed", "true");
+    const pageEl = cur(page).locator("[data-page]").first();
+    await expect
+      .poll(async () => {
+        const pg = (await pageEl.boundingBox())!;
+        const pn = (await panel.boundingBox())!;
+        return pg.height > 120 && pg.y >= 0 && pg.y + pg.height <= pn.y + 1;
+      })
+      .toBe(true);
+    const pn = (await panel.boundingBox())!;
+    expect(pn.height).toBeLessThanOrEqual(812 * 0.42 + 1);
+    for (const o of await page.getByTestId("layout-option").all()) {
+      const b = await o.boundingBox();
+      if (!b) continue;
+      expect(b.width).toBeGreaterThanOrEqual(44);
+      expect(b.height).toBeGreaterThanOrEqual(44);
+    }
+    await expectNoOverflow(page, "docked layout picker");
   });
 
   async function editCoverTitle(page: Page, title: string) {
@@ -622,7 +665,7 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
     await cur(page).getByTestId("caption-target").click();
     await expect(page.getByTestId("caption-input")).toBeVisible();
     await expectNoOverflow(page, "caption");
-    // The open sheet's backdrop covers the toolbar on mobile: close it, the selection stays.
+    // Close the open panel between tools (sheets have a backdrop over the toolbar); the selection stays.
     for (const tool of ["ai-caption", "caption-style", "chapter"]) {
       await page.getByTestId("editor-panel-close").click();
       const btn = page.getByTestId(`editor-tool-${tool}`);

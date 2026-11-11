@@ -36,20 +36,20 @@ export function PageStrip({ className }: { className?: string }) {
           aria-current={active ? "page" : undefined}
           aria-label={item === 0 ? "Cover" : `Page ${item}`}
           className={cn(
-            "block w-full rounded-sm outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-primary",
-            active ? "ring-2 ring-primary" : "ring-1 ring-black/10 hover:ring-black/30",
+            "block w-full rounded-sm outline-none ring-offset-2 ring-offset-muted focus-visible:ring-2 focus-visible:ring-ring",
+            active ? "ring-2 ring-primary" : "ring-1 ring-border hover:ring-input",
           )}
         >
           <BookPage doc={state.doc} page={pos} mode="view" photos={photos.thumbs} captionLang={book.captionLang} />
         </button>
-        <span className="mt-1 block text-center text-xs text-muted-foreground">{item === 0 ? "Cover" : item}</span>
+        <span className={cn("mt-1 block text-center text-xs", active ? "font-semibold text-foreground" : "text-muted-foreground")}>{item === 0 ? "Cover" : item}</span>
       </div>
     );
   };
 
   if (spread) {
     return (
-      <nav aria-label="Pages" className={cn("min-h-0 overflow-y-auto border-r bg-muted/30", className)} data-testid="page-strip" data-mode="spread">
+      <nav aria-label="Pages" className={cn("min-h-0 overflow-y-auto border-r border-border bg-muted/40", className)} data-testid="page-strip" data-mode="spread">
         <ol ref={listRef} className="flex flex-col gap-4 p-3">
           {editorSpreads(state.doc).map((sp, i) => (
             <li
@@ -73,7 +73,7 @@ export function PageStrip({ className }: { className?: string }) {
   }
 
   return (
-    <nav aria-label="Pages" className={cn("min-h-0 overflow-y-auto border-r bg-muted/30", className)} data-testid="page-strip">
+    <nav aria-label="Pages" className={cn("min-h-0 overflow-y-auto border-r border-border bg-muted/40", className)} data-testid="page-strip">
       <ol ref={listRef} className="flex flex-col gap-3 p-3">
         {Array.from({ length: count }, (_, item) => {
           const active = item === current;
@@ -85,13 +85,13 @@ export function PageStrip({ className }: { className?: string }) {
                 aria-current={active ? "page" : undefined}
                 aria-label={item === 0 ? "Cover" : `Page ${item}`}
                 className={cn(
-                  "block w-full rounded-sm outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-primary",
-                  active ? "ring-2 ring-primary" : "ring-1 ring-black/10 hover:ring-black/30",
+                  "block w-full rounded-sm outline-none ring-offset-2 ring-offset-muted focus-visible:ring-2 focus-visible:ring-ring",
+                  active ? "ring-2 ring-primary" : "ring-1 ring-border hover:ring-input",
                 )}
               >
                 <BookPage doc={state.doc} page={itemToPosition(item)} mode="view" photos={photos.thumbs} captionLang={book.captionLang} />
               </button>
-              <span className="mt-1 block text-center text-xs text-muted-foreground">{item === 0 ? "Cover" : item}</span>
+              <span className={cn("mt-1 block text-center text-xs", active ? "font-semibold text-foreground" : "text-muted-foreground")}>{item === 0 ? "Cover" : item}</span>
             </li>
           );
         })}

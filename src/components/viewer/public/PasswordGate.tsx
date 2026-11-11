@@ -10,7 +10,7 @@ import { Lock } from "lucide-react";
 import { unlockBookAction } from "@/app/b/[slug]/actions";
 import type { UnlockErrorCode } from "@/lib/publish/unlock-types";
 import { unlockErrorCopy } from "@/lib/viewer/unlock-copy";
-import { VIEWER_PRIMARY_LINK, ViewerMessage } from "./ViewerMessage";
+import { VIEWER_PRIMARY_LINK, ViewerMessage, ViewerMessageIcon } from "./ViewerMessage";
 
 export function PasswordGate({ slug }: { slug: string }) {
   const router = useRouter();
@@ -41,13 +41,18 @@ export function PasswordGate({ slug }: { slug: string }) {
   }
 
   return (
-    <ViewerMessage title="This photobook is private" testId="password-gate">
-      <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-neutral-100" aria-hidden>
-        <Lock className="size-5 text-neutral-700" />
-      </div>
-      <p className="text-sm text-neutral-600">Enter the password you were given to open it.</p>
-      <form onSubmit={onSubmit} className="flex flex-col gap-3 text-left" noValidate>
-        <label htmlFor="book-password" className="text-sm font-medium text-neutral-800">
+    <ViewerMessage
+      title="This photobook is private"
+      art={
+        <ViewerMessageIcon>
+          <Lock className="size-6" />
+        </ViewerMessageIcon>
+      }
+      description="Enter the password you were given to open it."
+      testId="password-gate"
+    >
+      <form onSubmit={onSubmit} className="flex flex-col gap-3 text-start" noValidate>
+        <label htmlFor="book-password" className="text-sm font-medium text-foreground">
           Password
         </label>
         <input
@@ -62,11 +67,11 @@ export function PasswordGate({ slug }: { slug: string }) {
           dir="auto"
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? "book-password-error" : undefined}
-          className="h-11 w-full rounded-lg border border-neutral-300 bg-white px-3 text-base text-neutral-900 outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10"
+          className="h-11 w-full rounded-lg border border-input bg-card px-3 text-base text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 aria-invalid:border-destructive"
           data-testid="password-input"
         />
         {error ? (
-          <p id="book-password-error" role="status" className="text-sm text-red-700" data-testid="password-error">
+          <p id="book-password-error" role="status" className="text-sm font-medium text-destructive" data-testid="password-error">
             {unlockErrorCopy(error)}
           </p>
         ) : null}

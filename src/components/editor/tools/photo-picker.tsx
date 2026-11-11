@@ -4,6 +4,7 @@
 // Tabs "In book / Not used / Dropped by AI" (src/lib/editor/photo-picker.ts). Picking a photo
 // that is already on another page swaps the two slots (replacePhoto does it); the cover uses
 // setCover. Placing an AI-dropped photo keeps it — the server marks it kept on save (D-037 4).
+// M11 T14: docked under the page on phones (dockOnMobile) so the spot being filled stays visible.
 
 import { ImageIcon, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -50,7 +51,7 @@ export function PhotoPickerPanel({ ctx, close }: EditorPanelProps) {
 
   return (
     <div className="flex flex-col gap-3" data-testid="photo-picker">
-      <div role="tablist" aria-label="Photos" className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1">
+      <div role="tablist" aria-label="Photos" className="grid grid-cols-3 gap-1 rounded-lg bg-secondary p-1">
         {PICKER_TABS.map((t) => (
           <button
             key={t.id}
@@ -59,8 +60,8 @@ export function PhotoPickerPanel({ ctx, close }: EditorPanelProps) {
             aria-selected={tab === t.id}
             onClick={() => setTab(t.id)}
             className={cn(
-              "min-h-11 min-w-0 rounded-md px-1 text-xs leading-tight font-medium",
-              tab === t.id ? "bg-background shadow-sm" : "text-muted-foreground",
+              "min-h-11 min-w-0 rounded-md px-1 text-xs leading-tight font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              tab === t.id ? "bg-card text-foreground shadow-card" : "text-muted-foreground hover:text-foreground",
             )}
             data-testid={`picker-tab-${t.id}`}
           >
@@ -74,7 +75,7 @@ export function PhotoPickerPanel({ ctx, close }: EditorPanelProps) {
           {meta.empty}
         </p>
       ) : (
-        <ul role="tabpanel" aria-label={meta.label} className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+        <ul role="tabpanel" aria-label={meta.label} className="grid grid-cols-4 gap-2 lg:grid-cols-3">
           {list.map((p) => (
             <li key={p.id}>
               <PhotoTile
@@ -92,7 +93,7 @@ export function PhotoPickerPanel({ ctx, close }: EditorPanelProps) {
         <button
           type="button"
           onClick={() => choose(null)}
-          className="flex min-h-11 items-center justify-center gap-2 rounded-lg border text-sm font-medium text-red-700 hover:bg-red-50"
+          className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-destructive-border text-sm font-medium text-destructive outline-none hover:bg-destructive-soft focus-visible:ring-2 focus-visible:ring-ring"
           data-testid="picker-remove"
         >
           <Trash2 className="size-4" aria-hidden="true" />
@@ -112,7 +113,7 @@ function PhotoTile({ photo, current, hint, onPick }: { photo: EditorShellPhoto; 
       disabled={current}
       aria-label={current ? "Current photo" : hint === "Swap" ? "Swap with this photo" : "Use this photo"}
       className={cn(
-        "relative block aspect-square w-full overflow-hidden rounded-md bg-neutral-100 outline-none focus-visible:ring-4 focus-visible:ring-primary/60",
+        "relative block aspect-square w-full overflow-hidden rounded-md bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
         current && "ring-4 ring-primary",
       )}
       data-testid="picker-photo"
@@ -122,10 +123,10 @@ function PhotoTile({ photo, current, hint, onPick }: { photo: EditorShellPhoto; 
         // eslint-disable-next-line @next/next/no-img-element -- short-lived signed URLs
         <img src={src} alt="" loading="lazy" decoding="async" draggable={false} className="absolute inset-0 size-full object-cover" />
       ) : (
-        <ImageIcon className="absolute inset-0 m-auto size-6 text-neutral-400" aria-hidden="true" />
+        <ImageIcon className="absolute inset-0 m-auto size-6 text-muted-foreground" aria-hidden="true" />
       )}
       {current || hint ? (
-        <span className="absolute inset-x-0 bottom-0 bg-black/55 py-0.5 text-center text-[11px] font-medium text-white">
+        <span className="absolute inset-x-0 bottom-0 bg-primary/75 py-0.5 text-center text-[11px] font-medium text-primary-foreground">
           {current ? "Current" : hint}
         </span>
       ) : null}
@@ -140,6 +141,8 @@ export const photoPickerTool: EditorTool = {
   scopes: ["slot", "cover"],
   order: 10,
   panelTitle: "Choose a photo",
+  // M11: the page stays visible above the panel on phones while choosing.
+  dockOnMobile: true,
   isAvailable: (ctx) => pickerTarget(ctx) !== null,
   Panel: PhotoPickerPanel,
 };

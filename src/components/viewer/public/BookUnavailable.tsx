@@ -7,8 +7,11 @@ import { VIEWER_SECONDARY_LINK, ViewerMessage } from "./ViewerMessage";
 
 export function BookUnavailable() {
   return (
-    <ViewerMessage title="This photobook can't be shown right now" testId="book-unavailable">
-      <p className="text-sm text-neutral-600">Please try again in a little while.</p>
+    <ViewerMessage
+      title="This photobook can't be shown right now"
+      description="Please try again in a little while."
+      testId="book-unavailable"
+    >
       <Link href={CREATE_YOURS_HREF} className={VIEWER_SECONDARY_LINK}>
         Create your own photobook
       </Link>

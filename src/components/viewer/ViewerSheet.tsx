@@ -46,22 +46,26 @@ export function ViewerSheet({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" data-testid={testId}>
-      <button type="button" aria-label="Close" className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <button type="button" aria-label="Close" tabIndex={-1} className="absolute inset-0 bg-primary/40" onClick={onClose} />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="relative flex max-h-[75dvh] w-full max-w-md flex-col rounded-t-2xl bg-white pb-[env(safe-area-inset-bottom)] shadow-xl outline-none sm:rounded-2xl sm:pb-0"
+        className="relative flex max-h-[75dvh] w-full max-w-md flex-col rounded-t-2xl bg-card pb-[env(safe-area-inset-bottom)] text-foreground shadow-lift outline-none sm:rounded-2xl sm:pb-0"
       >
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <h2 className="text-base font-semibold">{title}</h2>
+        {/* Grab handle (phones): this is a sheet. */}
+        <div aria-hidden="true" className="flex justify-center pt-2 sm:hidden">
+          <span className="h-1 w-10 rounded-full bg-input/40" />
+        </div>
+        <div className="flex items-center justify-between border-b border-border ps-4 pe-2 py-1.5 sm:py-2">
+          <h2 className="type-h2">{title}</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="-mr-2 flex size-10 items-center justify-center rounded-full text-neutral-600 hover:bg-neutral-100"
+            className="flex size-11 items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
             <X className="size-5" aria-hidden />
           </button>

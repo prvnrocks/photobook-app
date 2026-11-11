@@ -93,7 +93,7 @@ export function FullscreenButton({ active, onToggle, className }: { active: bool
       onClick={onToggle}
       aria-label={active ? "Exit fullscreen" : "Fullscreen"}
       aria-pressed={active}
-      className={`flex size-10 shrink-0 items-center justify-center rounded-full text-neutral-700 hover:bg-neutral-100 ${className ?? ""}`}
+      className={`flex size-11 shrink-0 items-center justify-center rounded-full text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring ${className ?? ""}`}
       data-testid="fullscreen-button"
     >
       {active ? <Minimize className="size-5" aria-hidden /> : <Maximize className="size-5" aria-hidden />}

@@ -4,7 +4,7 @@ import { pageCounterLabel, type FlipLayout } from "@/lib/viewer/pages";
 
 export function PageCounter({ layout, current, spread }: { layout: FlipLayout; current: number; spread: boolean }) {
   return (
-    <span className="min-w-[4.5rem] text-center text-sm text-neutral-700 tabular-nums" aria-live="polite" data-testid="page-counter">
+    <span className="min-w-[4.5rem] text-center text-sm text-foreground/80 tabular-nums" aria-live="polite" data-testid="page-counter">
       {pageCounterLabel(layout, current, spread)}
     </span>
   );

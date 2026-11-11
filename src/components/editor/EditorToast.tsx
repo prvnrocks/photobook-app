@@ -145,10 +145,10 @@ export function EditorToastHost() {
     >
       {toast ? (
         <div
-          className="pointer-events-auto flex w-full max-w-sm items-center gap-1 rounded-xl bg-neutral-900 py-1 pl-4 pr-1 text-sm text-white shadow-lg"
+          className="pointer-events-auto flex w-full max-w-sm items-center gap-1 rounded-xl bg-primary py-1 ps-4 pe-1 text-sm text-primary-foreground shadow-lift"
           data-testid="editor-toast"
         >
-          <p className="min-w-0 flex-1 py-2">{toast.message}</p>
+          <p dir="auto" className="min-w-0 flex-1 py-2">{toast.message}</p>
           {toast.action ? (
             <button
               type="button"
@@ -157,7 +157,7 @@ export function EditorToastHost() {
                 dismissEditorToast(toast.id);
                 run?.();
               }}
-              className="min-h-11 shrink-0 rounded-lg px-3 font-semibold text-amber-300 hover:bg-white/10"
+              className="min-h-11 shrink-0 rounded-lg px-3 font-semibold text-primary-foreground underline decoration-primary-foreground/50 underline-offset-4 outline-none hover:bg-primary-foreground/10 focus-visible:ring-2 focus-visible:ring-primary-foreground"
               data-testid="editor-toast-action"
             >
               {toast.action.label}
@@ -167,7 +167,7 @@ export function EditorToastHost() {
             type="button"
             onClick={() => dismissEditorToast(toast.id)}
             aria-label="Dismiss"
-            className="flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-white/10"
+            className="flex size-11 shrink-0 items-center justify-center rounded-lg text-primary-foreground/80 outline-none hover:bg-primary-foreground/10 hover:text-primary-foreground focus-visible:ring-2 focus-visible:ring-primary-foreground"
           >
             <X className="size-4" aria-hidden="true" />
           </button>

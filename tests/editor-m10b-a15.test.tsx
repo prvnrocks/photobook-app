@@ -154,7 +154,7 @@ describe("LayoutPickerPanel / LayoutDiagram render", () => {
     const cover = layoutsFor("A5_PORTRAIT", "modern", "cover").find((l) => l.slices);
     expect(cover).toBeDefined();
     const html = renderToStaticMarkup(<LayoutDiagram layout={cover!} />);
-    expect(html.match(/bg-neutral-400/g)).toHaveLength(cover!.slices!.length);
+    expect(html.match(/data-diagram-box=""/g)).toHaveLength(cover!.slices!.length);
   });
 
   it("layoutAppliedNotice joins own split, lost photos and reflow splits", () => {

@@ -75,7 +75,7 @@ export function EditorDoneButton({ bookId, settle, finish, fallbackHref }: Edito
         onClick={onDone}
         disabled={busy}
         aria-busy={busy}
-        className="flex h-11 shrink-0 items-center gap-1 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-70"
+        className="flex h-11 shrink-0 items-center gap-1.5 rounded-lg bg-primary ps-3 pe-3.5 text-sm font-medium text-primary-foreground shadow-card outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:opacity-70"
         data-testid="editor-done"
       >
         {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Check className="size-4" aria-hidden="true" />}
@@ -84,7 +84,7 @@ export function EditorDoneButton({ bookId, settle, finish, fallbackHref }: Edito
       <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 top-16 z-50 flex justify-center px-4">
         {error ? (
           <p
-            className="pointer-events-auto max-w-sm rounded-lg bg-foreground px-4 py-3 text-sm text-background shadow-lg"
+            className="pointer-events-auto max-w-sm rounded-xl bg-primary px-4 py-3 text-sm text-primary-foreground shadow-lift"
             data-testid="editor-done-error"
           >
             {error}

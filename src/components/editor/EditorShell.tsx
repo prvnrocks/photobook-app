@@ -50,6 +50,10 @@ export type EditorShellProps = {
   layout?: "single" | "spread";
 };
 
+/** Header icon buttons: 44 px, visible focus ring (M11 tokens). */
+const HEADER_ICON_BTN =
+  "flex size-11 shrink-0 items-center justify-center rounded-lg text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30 disabled:hover:bg-transparent";
+
 function isTypingTarget(t: EventTarget | null): boolean {
   if (!(t instanceof HTMLElement)) return false;
   return t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT";
@@ -167,17 +171,17 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
   return (
     <EditorContext.Provider value={ctx}>
       <div ref={rootRef} className="flex h-dvh flex-col overflow-hidden bg-background" data-testid="editor-shell" data-readonly={state.readOnly ? "true" : "false"}>
-        <header className="flex h-14 shrink-0 items-center gap-1 border-b px-1">
+        <header className="flex h-14 shrink-0 items-center gap-1 border-b border-border bg-card px-1">
           <Link
             href={backHref}
             aria-label="Back to my books"
-            className="flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-muted"
+            className={HEADER_ICON_BTN}
             data-testid="editor-back"
           >
             <ArrowLeft className="size-5" aria-hidden="true" />
           </Link>
           <div className="flex min-w-0 flex-1 flex-col leading-tight">
-            <h1 dir="auto" className="truncate text-sm font-semibold" data-testid="editor-title">
+            <h1 dir="auto" className="truncate font-display text-base font-semibold" data-testid="editor-title">
               {title}
             </h1>
             {/* 375 px: no room for both — the chip replaces "Saved ✓" only while everything is saved. */}
@@ -192,7 +196,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
             onClick={actions.undo}
             disabled={!canUndo(state)}
             aria-label="Undo"
-            className="flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-muted disabled:opacity-30"
+            className={HEADER_ICON_BTN}
             data-testid="editor-undo"
           >
             <Undo2 className="size-5" aria-hidden="true" />
@@ -202,7 +206,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
             onClick={actions.redo}
             disabled={!canRedo(state)}
             aria-label="Redo"
-            className="flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-muted disabled:opacity-30"
+            className={HEADER_ICON_BTN}
             data-testid="editor-redo"
           >
             <Redo2 className="size-5" aria-hidden="true" />
@@ -216,7 +220,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
           {spreadMode === null ? (
             // lg+ is always spread mode: keep the spread strip's width until the strip can render.
-            <div aria-hidden="true" className="hidden w-44 shrink-0 border-r bg-muted/30 lg:block" />
+            <div aria-hidden="true" className="hidden w-44 shrink-0 border-r border-border bg-muted/40 lg:block" />
           ) : (
             <PageStrip className={spread ? "hidden w-44 shrink-0 lg:block" : "hidden w-36 shrink-0 lg:block"} />
           )}

@@ -248,9 +248,9 @@ function PageTile({
         aria-current={current ? "page" : undefined}
         className={cn(
           "relative cursor-pointer touch-manipulation select-none rounded-sm outline-none [-webkit-touch-callout:none]",
-          "ring-offset-2 focus-visible:ring-2 focus-visible:ring-primary",
-          current ? "ring-2 ring-primary" : "ring-1 ring-black/10",
-          isDragging && "scale-105 opacity-90 shadow-lg",
+          "ring-offset-2 ring-offset-card focus-visible:ring-2 focus-visible:ring-ring",
+          current ? "ring-2 ring-primary" : "ring-1 ring-border",
+          isDragging && "scale-105 opacity-90 shadow-lift",
           !readOnly && "cursor-grab active:cursor-grabbing",
         )}
         data-testid="pages-thumb"
@@ -260,7 +260,7 @@ function PageTile({
             <BookPage key={k} doc={ctx.state.doc} page={unit.start + k} mode="view" photos={thumbs} captionLang={captionLang} />
           ))}
         </div>
-        <span className="pointer-events-none absolute left-1 top-1 rounded bg-black/60 px-1.5 text-xs font-medium text-white">
+        <span className="pointer-events-none absolute left-1 top-1 rounded bg-primary/85 px-1.5 text-xs font-medium text-primary-foreground">
           {spread ? `${n}–${n + 1}` : n}
         </span>
       </div>
@@ -271,7 +271,7 @@ function PageTile({
             onClick={onEarlier}
             disabled={unit.start === 0}
             aria-label={`Move ${name.toLowerCase()} earlier`}
-            className="flex size-11 items-center justify-center rounded-lg hover:bg-muted disabled:opacity-30"
+            className="flex size-11 items-center justify-center rounded-lg outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"
             data-testid="pages-move-earlier"
           >
             <ChevronLeft className="size-5" aria-hidden="true" />
@@ -281,7 +281,7 @@ function PageTile({
             onClick={onLater}
             disabled={last >= count - 1}
             aria-label={`Move ${name.toLowerCase()} later`}
-            className="flex size-11 items-center justify-center rounded-lg hover:bg-muted disabled:opacity-30"
+            className="flex size-11 items-center justify-center rounded-lg outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"
             data-testid="pages-move-later"
           >
             <ChevronRight className="size-5" aria-hidden="true" />

@@ -4,13 +4,14 @@
 // after a cancelled Checkout, and a link back to the editor. No title or cover for anyone (D-040).
 // The book id reaches client props only in the owner branch (like the editor link).
 
+import { Clock } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { UpgradeButton } from "@/components/upgrade/UpgradeButton";
 import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
 import { UPGRADE } from "@/lib/pricing";
 import { CREATE_YOURS_HREF } from "@/lib/viewer/share";
-import { VIEWER_PRIMARY_LINK, VIEWER_SECONDARY_LINK, ViewerMessage } from "./ViewerMessage";
+import { VIEWER_PRIMARY_LINK, VIEWER_SECONDARY_LINK, ViewerMessage, ViewerMessageIcon } from "./ViewerMessage";
 
 export type ExpiredBookUpgrade = {
   bookId: string;
@@ -31,16 +32,25 @@ export function ExpiredBook({
   upgrade?: ExpiredBookUpgrade | null;
 }) {
   return (
-    <ViewerMessage title="This photobook has expired" testId="expired-book">
+    <ViewerMessage
+      title="This photobook has expired"
+      art={
+        <ViewerMessageIcon>
+          <Clock className="size-6" />
+        </ViewerMessageIcon>
+      }
+      description={
+        isOwner
+          ? "Free links stay open for 30 days. Your book is still safe in your account — upgrade it to bring the link back for good."
+          : "The link to this book is no longer active. You can make a photobook of your own in a few minutes."
+      }
+      testId="expired-book"
+    >
       {isOwner ? (
         <>
           <Suspense fallback={null}>
             <UpgradeCancelledNotice />
           </Suspense>
-          <p className="text-sm text-neutral-600">
-            Free links stay open for 30 days. Your book is still safe in your account — upgrade it to bring the link
-            back for good.
-          </p>
           {upgrade ? (
             <UpgradeButton
               bookId={upgrade.bookId}
@@ -60,14 +70,9 @@ export function ExpiredBook({
           ) : null}
         </>
       ) : (
-        <>
-          <p className="text-sm text-neutral-600">
-            The link to this book is no longer active. You can make a photobook of your own in a few minutes.
-          </p>
-          <Link href={CREATE_YOURS_HREF} className={VIEWER_PRIMARY_LINK} data-testid="expired-create">
-            Create your own
-          </Link>
-        </>
+        <Link href={CREATE_YOURS_HREF} className={VIEWER_PRIMARY_LINK} data-testid="expired-create">
+          Create your own
+        </Link>
       )}
     </ViewerMessage>
   );

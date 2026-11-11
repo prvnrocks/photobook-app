@@ -35,6 +35,9 @@ import { EditorSpreadView } from "./EditorSpread";
 import { SpreadPreviewSheet } from "./SpreadPreviewSheet";
 
 const WINDOW = 2;
+/** Prev / next: 44 px round, visible focus ring (M11 tokens). */
+const NAV_BTN =
+  "flex size-11 items-center justify-center rounded-full text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30 disabled:hover:bg-transparent";
 /** Spread mode: spreads (two pages each) within this many of the current one render pages. */
 const SPREAD_WINDOW = 1;
 
@@ -163,7 +166,7 @@ export function PageCarousel() {
         className={cn(
           "flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
           // A desk under the open book.
-          spread && "bg-stone-100",
+          spread && "bg-muted",
         )}
         data-testid="page-carousel"
         data-mode={spread ? "spread" : "single"}
@@ -201,7 +204,7 @@ export function PageCarousel() {
                 {near ? (
                   <EditablePage page={position} priority={item === current} />
                 ) : (
-                  <div className="aspect-[148/210] w-full bg-neutral-100" style={aspectStyle} />
+                  <div className="aspect-[148/210] w-full bg-muted" style={aspectStyle} />
                 )}
               </div>
             </div>
@@ -214,7 +217,7 @@ export function PageCarousel() {
           onClick={prev}
           disabled={current === 0}
           aria-label={spread ? "Previous pages" : "Previous page"}
-          className="flex size-11 items-center justify-center rounded-full text-foreground disabled:opacity-30"
+          className={NAV_BTN}
           data-testid="carousel-prev"
         >
           <ChevronLeft className="size-5" aria-hidden="true" />
@@ -227,7 +230,7 @@ export function PageCarousel() {
           onClick={next}
           disabled={current >= count - 1}
           aria-label={spread ? "Next pages" : "Next page"}
-          className={cn("flex size-11 items-center justify-center rounded-full text-foreground disabled:opacity-30")}
+          className={NAV_BTN}
           data-testid="carousel-next"
         >
           <ChevronRight className="size-5" aria-hidden="true" />
@@ -239,7 +242,7 @@ export function PageCarousel() {
             onClick={() => setPreview(true)}
             disabled={pageCount === 0}
             aria-label="View spread"
-            className="absolute right-1 flex h-11 items-center gap-1 rounded-full px-2 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-30"
+            className="absolute right-1 flex h-11 items-center gap-1 rounded-full px-2 text-xs font-medium text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"
             data-testid="view-spread"
           >
             <BookOpen className="size-4" aria-hidden="true" />
@@ -266,8 +269,8 @@ export function SpreadCarouselPlaceholder({ className }: { className?: string })
   const aspect = current === 0 ? pageAspectStyle(state.doc.format) : { aspectRatio: spreadAspectRatio(state.doc.format) };
   return (
     <div className={cn("min-h-0 flex-1 flex-col", className)} aria-hidden="true" data-testid="spread-placeholder">
-      <div className="flex min-h-0 flex-1 items-center justify-center bg-stone-100 px-6 py-4">
-        <div className={cn("h-full max-w-full bg-neutral-50", current === 0 && "aspect-[148/210]")} style={aspect} />
+      <div className="flex min-h-0 flex-1 items-center justify-center bg-muted px-6 py-4">
+        <div className={cn("h-full max-w-full bg-card", current === 0 && "aspect-[148/210]")} style={aspect} />
       </div>
       <div className="flex h-11 shrink-0 items-center justify-center pb-1 text-sm tabular-nums text-muted-foreground">
         {spreadCounterLabel(current, pageCount)}

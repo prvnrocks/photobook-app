@@ -100,7 +100,7 @@ export function PageMenu({ ctx, close }: EditorPanelProps) {
           <button
             type="button"
             onClick={() => setConfirmDelete(false)}
-            className="min-h-11 flex-1 rounded-lg border px-4 text-sm font-medium hover:bg-muted"
+            className="min-h-11 flex-1 rounded-lg border border-border bg-card px-4 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
             data-testid="page-menu-confirm-cancel"
           >
             Cancel
@@ -108,7 +108,7 @@ export function PageMenu({ ctx, close }: EditorPanelProps) {
           <button
             type="button"
             onClick={doDelete}
-            className="min-h-11 flex-1 rounded-lg bg-red-700 px-4 text-sm font-medium text-white hover:bg-red-800"
+            className="min-h-11 flex-1 rounded-lg bg-destructive px-4 text-sm font-medium text-white outline-none hover:bg-destructive/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
             data-testid="page-menu-confirm-delete"
           >
             Delete 2 pages
@@ -147,8 +147,8 @@ export function PageMenu({ ctx, close }: EditorPanelProps) {
                     disabled={here || readOnly}
                     aria-current={here ? "true" : undefined}
                     className={cn(
-                      "flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm hover:bg-muted",
-                      here && "font-medium",
+                      "flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-start text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
+                      here && "bg-secondary font-medium",
                     )}
                     data-testid="page-menu-chapter"
                   >
@@ -173,7 +173,7 @@ export function PageMenu({ ctx, close }: EditorPanelProps) {
         type="button"
         onClick={onDelete}
         disabled={readOnly}
-        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-red-200 px-4 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-40"
+        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-destructive-border px-4 text-sm font-medium text-destructive outline-none hover:bg-destructive-soft focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
         data-testid="page-menu-delete"
       >
         <Trash2 className="size-4" aria-hidden="true" />

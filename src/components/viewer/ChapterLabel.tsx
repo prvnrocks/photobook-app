@@ -12,7 +12,7 @@ export function ChapterLabel({ chapter, className }: { chapter: ViewerChapter | 
       dir="auto"
       lang={arabic ? "ar" : undefined}
       style={labelFontStyle(chapter?.title ?? "")}
-      className={`truncate text-xs text-neutral-500 ${className ?? ""}`}
+      className={`truncate text-xs text-muted-foreground ${className ?? ""}`}
       data-testid="chapter-label"
       data-chapter-id={chapter?.id ?? ""}
     >

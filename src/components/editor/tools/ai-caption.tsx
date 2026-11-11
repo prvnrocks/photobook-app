@@ -1,6 +1,6 @@
 "use client";
 
-// ✨ AI caption menu (M5 Task 10, D-037 #1/#6). Sends the caption text on screen to
+// AI caption menu (M5 Task 10, D-037 #1/#6). Sends the caption text on screen to
 // POST /api/ai/rewrite (the server picks the target language), shows the result as a preview,
 // and only "Use this" changes the doc — as a 'user' caption (setCaption), so it's undoable and
 // never overwritten by AI later. The server's 429 is authoritative for the limit.
@@ -33,6 +33,9 @@ export function aiMenuBlockedReason(ctx: Pick<EditorContextValue, "ai" | "state"
   return null;
 }
 
+const PRIMARY_BTN =
+  "flex min-h-11 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card";
+
 export function rewritesLeftLabel(left: number): string {
   return `${left} ${left === 1 ? "rewrite" : "rewrites"} left`;
 }
@@ -59,7 +62,7 @@ function OptionButton({
       disabled={disabled}
       title={hint}
       className={cn(
-        "flex min-h-11 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium hover:bg-muted disabled:opacity-40",
+        "flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40",
         active && "border-primary",
       )}
       data-testid={testId}
@@ -142,7 +145,7 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
         <p
           dir="auto"
           lang={lang}
-          className="rounded-lg border bg-muted/40 px-3 py-2 text-base leading-snug break-words whitespace-pre-line"
+          className="rounded-lg border border-border bg-secondary/50 px-3 py-2 text-base leading-snug break-words whitespace-pre-line"
           style={{ fontFamily: captionFontFamily(lang === "ar" ? "Cairo" : "Playfair") }}
           data-testid="ai-preview"
         >
@@ -152,7 +155,7 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
           <button
             type="button"
             onClick={useThis}
-            className="flex min-h-11 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground"
+            className={PRIMARY_BTN}
             data-testid="ai-use-this"
           >
             Use this
@@ -160,7 +163,7 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
           <button
             type="button"
             onClick={() => setUi({ kind: "idle" })}
-            className="flex min-h-11 items-center justify-center rounded-lg border px-3 text-sm font-medium hover:bg-muted"
+            className="flex min-h-11 items-center justify-center rounded-lg border border-border bg-card px-3 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
             data-testid="ai-keep-mine"
           >
             Keep mine
@@ -180,13 +183,13 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
   return (
     <div className="flex flex-col gap-3" data-testid="ai-caption-menu" data-state={ui.kind}>
       {failure && failure !== "limit" ? (
-        <div role="status" className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="ai-caption-message">
+        <div role="status" className="flex flex-wrap items-center gap-2 rounded-lg border border-warning-border bg-warning-soft px-3 py-2 text-sm text-foreground" data-testid="ai-caption-message">
           <p className="flex-1">{REWRITE_FAILURE_COPY[failure]}</p>
           {last && (failure === "retry" || failure === "error" || failure === "busy") && !limitReached ? (
             <button
               type="button"
               onClick={() => void run(last)}
-              className="min-h-11 rounded-lg border border-amber-300 bg-white px-3 font-medium"
+              className="min-h-11 rounded-lg border border-warning-border bg-card px-3 font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
               data-testid="ai-try-again"
             >
               Try again
@@ -195,13 +198,13 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
         </div>
       ) : null}
       {limitReached ? (
-        <div className="flex flex-col gap-1 rounded-lg bg-muted px-3 py-2 text-sm" data-testid="ai-caption-limit">
+        <div className="flex flex-col gap-1 rounded-lg border border-border bg-secondary px-3 py-2 text-sm" data-testid="ai-caption-limit">
           <p className="font-medium">{REWRITE_FAILURE_COPY.limit}</p>
           {!ctx.book.isPaid && !showUpgrade ? (
             <button
               type="button"
               onClick={() => setShowUpgrade(true)}
-              className="mt-1 flex min-h-11 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground"
+              className={cn(PRIMARY_BTN, "mt-1")}
               data-testid="ai-upgrade"
             >
               Upgrade
@@ -252,10 +255,11 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
 
 export const aiCaptionTool: EditorTool = {
   id: "ai-caption",
-  label: "✨ AI",
+  // M11: the Sparkles icon carries the "magic"; no emoji in the label (matches the other tools).
+  label: "AI",
   icon: Sparkles,
   scopes: ["caption"],
   order: 31,
-  panelTitle: "✨ AI caption help",
+  panelTitle: "AI caption help",
   Panel: AiCaptionPanel,
 };

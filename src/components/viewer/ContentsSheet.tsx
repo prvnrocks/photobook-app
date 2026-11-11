@@ -24,9 +24,9 @@ export function ContentsSheet({
   return (
     <ViewerSheet open={open} onClose={onClose} title="Contents" testId="contents-sheet">
       {starts.length === 0 ? (
-        <p className="px-4 py-6 text-sm text-neutral-500">This book has no chapters.</p>
+        <p className="px-4 py-6 text-sm text-muted-foreground">This book has no chapters.</p>
       ) : (
-        <ol className="divide-y">
+        <ol className="divide-y divide-border">
           {starts.map((s) => {
             const arabic = isMainlyArabic(s.chapter.title);
             const active = s.chapter.id === currentChapterId;
@@ -34,7 +34,7 @@ export function ContentsSheet({
               <li key={s.chapter.id}>
                 <button
                   type="button"
-                  className={`flex min-h-12 w-full items-center gap-3 px-4 py-3 text-left hover:bg-neutral-50 ${active ? "bg-neutral-50" : ""}`}
+                  className={`relative flex min-h-12 w-full items-center gap-3 px-4 py-3 text-start outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${active ? "bg-secondary" : ""}`}
                   aria-current={active ? "true" : undefined}
                   data-testid="contents-item"
                   data-chapter-id={s.chapter.id}
@@ -45,17 +45,17 @@ export function ContentsSheet({
                       dir="auto"
                       lang={arabic ? "ar" : undefined}
                       style={labelFontStyle(s.chapter.title)}
-                      className="block truncate text-sm font-medium text-neutral-900"
+                      className={`block truncate text-sm text-foreground ${active ? "font-semibold" : "font-medium"}`}
                     >
                       {s.chapter.title}
                     </span>
                     {s.chapter.dateLabel ? (
-                      <span dir="auto" className="block truncate text-xs text-neutral-500">
+                      <span dir="auto" className="block truncate text-xs text-muted-foreground">
                         {s.chapter.dateLabel}
                       </span>
                     ) : null}
                   </span>
-                  <span className="shrink-0 text-xs text-neutral-400 tabular-nums">p. {s.firstPageIdx + 1}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">p. {s.firstPageIdx + 1}</span>
                 </button>
               </li>
             );

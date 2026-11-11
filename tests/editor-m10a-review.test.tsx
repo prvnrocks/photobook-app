@@ -20,7 +20,7 @@ describe("editor server render before the width is known (N7)", () => {
     // Cover first → the placeholder shows the cover alone with the page counter of spread mode.
     expect(html).toContain("aspect-[148/210]");
     // lg strip: same width as the spread strip, no single-mode strip yet.
-    expect(html).toContain("hidden w-44 shrink-0 border-r bg-muted/30 lg:block");
+    expect(html).toContain("hidden w-44 shrink-0 border-r border-border bg-muted/40 lg:block");
     expect(html).not.toContain('data-testid="page-strip"');
   });
 

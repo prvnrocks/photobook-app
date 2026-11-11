@@ -30,6 +30,9 @@ export function selectedCaptionPage(ctx: Pick<EditorContextValue, "state">) {
 
 let sessionSeq = 0;
 
+const SECONDARY_BTN =
+  "flex min-h-11 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40";
+
 function CaptionEditorPanel({ ctx }: EditorPanelProps) {
   const target = selectedCaptionPage(ctx);
   const [session] = useState(() => ++sessionSeq);
@@ -62,17 +65,17 @@ function CaptionEditorPanel({ ctx }: EditorPanelProps) {
         disabled={ctx.readOnly}
         placeholder="Write a caption…"
         onChange={(e) => onChange(e.target.value)}
-        className="w-full resize-none rounded-lg border bg-background px-3 py-2 text-base leading-snug outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        className="w-full resize-none rounded-lg border border-input/60 bg-card px-3 py-2 text-base leading-snug outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
         style={{ fontFamily }}
         aria-describedby={`${id}-count`}
         data-testid="caption-input"
       />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        <p id={`${id}-count`} className={cn("tabular-nums", info.full && "text-red-700")} data-testid="caption-count" aria-live="polite">
+        <p id={`${id}-count`} className={cn("tabular-nums", info.full && "font-medium text-destructive")} data-testid="caption-count" aria-live="polite">
           {info.label}
         </p>
         {info.long ? (
-          <p className="text-amber-700" data-testid="caption-long-hint">
+          <p className="text-warning" data-testid="caption-long-hint">
             {LONG_CAPTION_HINT}
           </p>
         ) : null}
@@ -81,7 +84,7 @@ function CaptionEditorPanel({ ctx }: EditorPanelProps) {
         <button
           type="button"
           onClick={() => ctx.openTool("ai-caption")}
-          className="flex min-h-11 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium hover:bg-muted"
+          className={SECONDARY_BTN}
           data-testid="caption-open-ai"
         >
           <Sparkles className="size-4" aria-hidden="true" /> AI help
@@ -90,7 +93,7 @@ function CaptionEditorPanel({ ctx }: EditorPanelProps) {
           type="button"
           onClick={() => ctx.openTool("caption-style")}
           disabled={!page.caption}
-          className="flex min-h-11 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium hover:bg-muted disabled:opacity-40"
+          className={SECONDARY_BTN}
           data-testid="caption-open-style"
         >
           <Palette className="size-4" aria-hidden="true" /> Font
@@ -149,7 +152,8 @@ export function FontPicker({
             onClick={() => onChange(f)}
             className={cn(
               "flex min-h-14 flex-col items-center justify-center rounded-lg border px-2 py-1 disabled:opacity-40",
-              selected ? "border-primary bg-primary/10 ring-2 ring-primary" : "hover:bg-muted",
+              "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+              selected ? "border-primary bg-secondary ring-2 ring-primary" : "border-border hover:bg-muted",
             )}
             style={{ fontFamily: captionFontFamily(f) }}
             data-testid={`font-${f}`}
@@ -187,7 +191,8 @@ export function AlignPicker({
           onClick={() => onChange(a)}
           className={cn(
             "flex size-11 items-center justify-center rounded-lg border disabled:opacity-40",
-            value === a ? "border-primary bg-primary/10 ring-2 ring-primary" : "hover:bg-muted",
+            "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+            value === a ? "border-primary bg-secondary ring-2 ring-primary" : "border-border hover:bg-muted",
           )}
           data-testid={`align-${a}`}
         >

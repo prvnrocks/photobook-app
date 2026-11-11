@@ -40,7 +40,7 @@ export type ViewerShellProps = {
 };
 
 const ICON_BTN =
-  "flex size-11 shrink-0 items-center justify-center rounded-full text-neutral-800 hover:bg-neutral-100 disabled:opacity-30 disabled:hover:bg-transparent";
+  "flex size-11 shrink-0 items-center justify-center rounded-full text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30 disabled:hover:bg-transparent";
 
 export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl, shareTitle }: ViewerShellProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -81,14 +81,14 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
     void fs.toggle();
   }, [fs]);
 
-  const bar = "bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85";
+  const bar = "border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/85";
   const overlayTop = pseudo ? "absolute inset-x-0 top-0 z-20 shadow-sm" : "";
   const overlayBottom = pseudo ? "absolute inset-x-0 bottom-0 z-20 shadow-sm" : "";
 
   return (
     <div
       ref={rootRef}
-      className={`flex h-dvh w-full flex-col overflow-hidden bg-neutral-100 ${pseudo ? "fixed inset-0 z-40" : "relative"}`}
+      className={`flex h-dvh w-full flex-col overflow-hidden bg-muted ${pseudo ? "fixed inset-0 z-40" : "relative"}`}
       data-testid="viewer-shell"
       data-paid={String(isPaid)}
       data-fullscreen={fs.mode}
@@ -100,7 +100,7 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
           data-testid="viewer-top-bar"
         >
           <div className="min-w-0 flex-1 py-1.5">
-            <h1 dir="auto" style={labelFontStyle(title)} className="truncate text-sm font-semibold text-neutral-900" data-testid="viewer-title">
+            <h1 dir="auto" style={labelFontStyle(title)} className="truncate font-display text-base font-semibold text-foreground" data-testid="viewer-title">
               {title}
             </h1>
             <ChapterLabel chapter={chapter} />
@@ -132,7 +132,7 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
             type="button"
             onClick={() => setChromeShown(true)}
             aria-label="Show controls"
-            className="absolute top-[max(0.5rem,env(safe-area-inset-top))] right-[max(0.5rem,env(safe-area-inset-right))] z-20 flex size-10 items-center justify-center rounded-full bg-black/45 text-white"
+            className="absolute top-[max(0.5rem,env(safe-area-inset-top))] right-[max(0.5rem,env(safe-area-inset-right))] z-20 flex size-11 items-center justify-center rounded-full bg-primary/70 text-primary-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             data-testid="show-controls"
           >
             <Ellipsis className="size-5" aria-hidden />

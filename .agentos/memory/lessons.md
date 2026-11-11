@@ -113,3 +113,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-11, fonts) next/font var(--font-x) includes its "X Fallback" (Times, has Arabic) — in chains meant to reach Cairo, name the family directly then var(--font-cairo). Pixel gates after a body-background change: compare /dev-print?sheets= and page interiors, not full dev pages.
 - (2026-11-11, next) A route loading.tsx can't be caught by delaying the request with page.route and fast dev navigations skip it — screenshot the loading component from a scratch-only page.
 - (2026-11-11, ui) Notice adds an sr-only tone prefix — put toHaveText testids on an inner element with only the message; never put user text in type-eyebrow (letter-spacing breaks Arabic joining).
+- (2026-11-11, test) Remove the Next dev overlay badge (nextjs-portal) before clicking in screenshot scripts; warm routes with curl on a cold scratch next dev or the first e2e run fails with goto timeouts.
