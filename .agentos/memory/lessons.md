@@ -101,3 +101,5 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-11, e2e) dnd-kit auto-scrolls a scrollable panel near its edge — scroll the source tile to block:start before dragging in e2e.
 - (2026-11-11, pdf) pdf-lib copyPages per chunk duplicates shared images — dedupe byte-identical XObjects after merging; per-sheet helpers reading page.slots must resolve spread right halves to the owner's slots.
 - (2026-11-11, viewer) page-flip stretch+autoSize reads block height as integer offsetHeight → fractional page widths → 1 px fold seam: size stf__wrapper from your box (h-full, pb-0) and round box height up.
+- (2026-11-11, e2e) When a form default changes, grep every live spec that creates through that form for style-specific assumptions (v1, layout ids, Playfair).
+- (2026-11-11, e2e) git archive scratch copies lack supabase/.temp — symlink it so --linked cleanup works.

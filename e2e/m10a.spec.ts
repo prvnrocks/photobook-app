@@ -16,7 +16,7 @@
  *   d. signed checkout.session.completed → paid → Download PDF → pdf-analyze + pdf-inspect: each texture
  *      tile JPEG embedded once (tiling pattern), background photo DCT on its page, veil = constant alpha,
  *      no Type3, no Chromium-rasterised (Flate) photo/page images, MediaBox portrait 437×612 pt
- *   e. landscape: service-role write of the same doc with format A5_LANDSCAPE (no UI until M10b; the
+ *   e. [skipped since M10b — superseded by e2e/m10b.spec.ts] landscape: service-role write of the same doc with format A5_LANDSCAPE (no UI until M10b; the
  *      books_set_doc_rev trigger bumps doc_rev, the write is guarded by the current doc_rev like the
  *      save route) → Publish changes → viewer 375 + 1280 pages are 210:148 → Download PDF → MediaBox
  *      612×437 pt, backgrounds still present
@@ -450,6 +450,9 @@ test("a. new book → upload → build (replay) → editor at 1024 shows facing 
   test.setTimeout(600_000);
   const t0 = Date.now();
   await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
+  // M10b A12: the form defaults to Modern; this gate is about a classic portrait book (v1 until a v2 feature).
+  await page.getByRole("radio", { name: /Classic/ }).check();
+  await expect(page.getByTestId("style-classic")).toBeChecked();
   await page.getByTestId("create-book").click();
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
   bookId = new URL(page.url()).pathname.split("/")[2];
@@ -580,6 +583,11 @@ test("d. signed checkout → paid → Download PDF: texture once, bg photo DCT, 
 
 test("e. landscape doc (service-role write) → Publish changes → viewer 210:148 at 375 + 1280 → PDF 612×437", async ({ browser }) => {
   test.skip(!paid, "needs test d");
+  // M10b A2/A6 (D-063): books.format is the authority and a doc may only use layouts of its own
+  // format, so a classic-portrait doc relabelled A5_LANDSCAPE is no longer a reachable (or valid)
+  // state. Real landscape books (form → landscape layouts → editor/viewer 210:148 → PDF 612×437)
+  // are covered by e2e/m10b.spec.ts a/d/e.
+  test.skip(true, "superseded by e2e/m10b.spec.ts (landscape is a book column + landscape layouts since M10b)");
   test.setTimeout(420_000);
   const before = await bookRow();
   const doc = { ...before.doc, format: "A5_LANDSCAPE" };
