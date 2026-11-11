@@ -256,7 +256,7 @@ export const scrapbookCoverPolaroid: Layout = {
     g.deco("sticker", "occasion-accent", ...pt(g.on(coverCard, 0.86, 0.86), -2, -4), 26, { rotate: 8 }),
     g.deco("sticker", "heart-kraft", ...g.on(coverCard, -0.98, 0.55), 15, { rotate: -14 }),
     g.deco("sticker", "sparkle", 17, 22, 11, { layer: "under" }),
-    g.deco("sticker", "leaf-sprig", 136, 40, 13, { rotate: 18, layer: "under" }),
+    g.deco("sticker", "leaf-sprig", 132, 41, 13, { rotate: 18, layer: "under" }), // tucked behind the card, clear of the safe line
   ],
 };
 

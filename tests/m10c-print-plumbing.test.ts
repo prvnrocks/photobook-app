@@ -75,6 +75,13 @@ describe("printSlotSizeMm on M10c layouts", () => {
     const band = printSlotSizeMm("g-p-one-band", 0, "A5_PORTRAIT")!;
     expect(band.w).toBe(154);
     expect(band.h).toBeCloseTo(3 + (getLayout("g-p-one-band")!.slots[0].h / 100) * 210, 9);
+    // The same photo as g-p-spread-band's right half stops 1.5 mm short of the fold (3 mm fold
+    // gutter, G1): +3 mm right and top only → 148 − 1.5 + 3.
+    const spreadBand = printSlotSizeMm("g-p-spread-band", 2, "A5_PORTRAIT")!;
+    expect(spreadBand.w).toBeCloseTo(149.5, 3);
+    expect(spreadBand.h).toBeCloseTo(band.h, 3);
+    // …and the left half's top photo bleeds left + top only (never into the fold).
+    expect(printSlotSizeMm("g-p-spread-band", 0, "A5_PORTRAIT")!.w).toBeCloseTo(149.5, 3);
   });
 
   it("a non-default bleed only changes bleeding slots", () => {
@@ -82,6 +89,8 @@ describe("printSlotSizeMm on M10c layouts", () => {
     expect(printSlotSizeMm(l, 0, l.format, 0)).toEqual(printSlotSizeMm(l, 0, l.format, 5));
     const g = getLayout("g-p-one-band")!;
     expect(printSlotSizeMm(g, 0, g.format, 5)!.w).toBe(158);
+    // Spread fold side never takes bleed: only the outer edge grows with it.
+    expect(printSlotSizeMm("g-p-spread-band", 2, "A5_PORTRAIT", 5)!.w).toBeCloseTo(148 - 1.5 + 5, 3);
   });
 });
 

@@ -26,25 +26,34 @@ const SLOPE = 30 / W;
 const HALF = verticalGap(GEO_GUTTER_MM / 2, SLOPE);
 /** Seam height (mm) at page x on the left page (right page: x + W). */
 const seam = (x: number) => 72 + SLOPE * x;
-
-const twoDiagTop: Pt[] = [
+/**
+ * The left page of the diagonal (g-p-two-diag) ends at x = `right`, the right page (g-p-one-band)
+ * starts at x = `left`. Single pages bleed on every trim edge (right = W, left = 0); the spread
+ * keeps the style's 3 mm gutter at the fold, 1.5 mm each side (G1 fix), so its halves differ from
+ * the twins only on the fold-facing edge.
+ */
+const FOLD_HALF = GEO_GUTTER_MM / 2;
+const twoDiagTopTo = (right: number): Pt[] => [
   [0, 0],
-  [W, 0],
-  [W, seam(W) - HALF],
+  [right, 0],
+  [right, seam(right) - HALF],
   [0, seam(0) - HALF],
 ];
-const twoDiagBottom: Pt[] = [
+const twoDiagBottomTo = (right: number): Pt[] => [
   [0, seam(0) + HALF],
-  [W, seam(W) + HALF],
-  [W, 168],
+  [right, seam(right) + HALF],
+  [right, 168],
   [0, 168],
 ];
-const oneBandPhoto: Pt[] = [
-  [0, 0],
+const oneBandFrom = (left: number): Pt[] => [
+  [left, 0],
   [W, 0],
   [W, seam(2 * W) - HALF],
-  [0, seam(W) - HALF],
+  [left, seam(W + left) - HALF],
 ];
+const twoDiagTop = twoDiagTopTo(W);
+const twoDiagBottom = twoDiagBottomTo(W);
+const oneBandPhoto = oneBandFrom(0);
 
 const TWO_DIAG_CAPTION = rect(10, 176, 138, 201);
 const ONE_BAND_TEXTS = {
@@ -250,7 +259,8 @@ export const geometricPortraitFiveHex: Layout = {
 /**
  * One diagonal across both pages: two photos split by it on the left page, one big photo above it
  * on the right, caption under the left page, chapter title + date under the right
- * (= g-p-two-diag + g-p-one-band; no shape crosses the fold).
+ * (= g-p-two-diag + g-p-one-band, except a 3 mm gutter at the fold, 1.5 mm each side:
+ * no photo crosses or touches the fold).
  */
 export const geometricPortraitSpreadBand: Layout = {
   id: "g-p-spread-band",
@@ -260,7 +270,7 @@ export const geometricPortraitSpreadBand: Layout = {
   format: "A5_PORTRAIT",
   photoCount: 3,
   prefers: ["landscape", "landscape", "landscape"],
-  slots: [poly(twoDiagTop), poly(twoDiagBottom), g.shift(poly(oneBandPhoto))],
+  slots: [poly(twoDiagTopTo(W - FOLD_HALF)), poly(twoDiagBottomTo(W - FOLD_HALF)), g.shift(poly(oneBandFrom(FOLD_HALF)))],
   caption: TWO_DIAG_CAPTION,
   twin: ["g-p-two-diag", "g-p-one-band"],
   texts: [

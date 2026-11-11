@@ -35,19 +35,28 @@ const twoDiagLeft: Pt[] = [
   [seam(BAND) - HALF, BAND],
   [0, BAND],
 ];
-const twoDiagRight: Pt[] = [
+/**
+ * g-l-two-diag's right photo ends at x = `right`, g-l-one-band's photo starts at x = `left`.
+ * Single pages bleed on every trim edge (right = W, left = 0); the spread keeps the style's 3 mm
+ * gutter at the fold, 1.5 mm each side (G1 fix), so its halves differ from the twins only on the
+ * fold-facing edge.
+ */
+const FOLD_HALF = GEO_GUTTER_MM / 2;
+const twoDiagRightTo = (right: number): Pt[] => [
   [seam(0) + HALF, 0],
-  [W, 0],
-  [W, BAND],
+  [right, 0],
+  [right, BAND],
   [seam(BAND) + HALF, BAND],
 ];
 /** g-l-one-band photo: bleeds top/left/bottom, right edge parallel to the two-diag seam. */
-const oneBandPhoto: Pt[] = [
-  [0, 0],
+const oneBandFrom = (left: number): Pt[] => [
+  [left, 0],
   [140, 0],
   [140 - SLOPE * H, H],
-  [0, H],
+  [left, H],
 ];
+const twoDiagRight = twoDiagRightTo(W);
+const oneBandPhoto = oneBandFrom(0);
 
 const TWO_DIAG_CAPTION = rect(12, 130, 198, 142);
 const ONE_BAND = {
@@ -249,7 +258,8 @@ export const geometricLandscapeFiveHex: Layout = {
 /**
  * Parallel slants across both pages: two photos split by a slanted seam on the left page, one big
  * photo with the same slant on the right, caption band under the left page, chapter title + date in
- * the right page's column (= g-l-two-diag + g-l-one-band; no shape crosses the fold).
+ * the right page's column (= g-l-two-diag + g-l-one-band, except a 3 mm gutter at the fold, 1.5 mm each side:
+ * no photo crosses or touches the fold).
  */
 export const geometricLandscapeSpreadBand: Layout = {
   id: "g-l-spread-band",
@@ -259,7 +269,7 @@ export const geometricLandscapeSpreadBand: Layout = {
   format: "A5_LANDSCAPE",
   photoCount: 3,
   prefers: ["portrait", "portrait", "portrait"],
-  slots: [poly(twoDiagLeft), poly(twoDiagRight), g.shift(poly(oneBandPhoto))],
+  slots: [poly(twoDiagLeft), poly(twoDiagRightTo(W - FOLD_HALF)), g.shift(poly(oneBandFrom(FOLD_HALF)))],
   caption: TWO_DIAG_CAPTION,
   twin: ["g-l-two-diag", "g-l-one-band"],
   texts: [

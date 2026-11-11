@@ -278,7 +278,30 @@ describe.each(ALL.filter((l) => l.role === "spread").map((l) => [l.id, l] as con
       expect(t.style).toBe("geometric");
       expect(t.format).toBe(l.format);
     }
-    expect(l.slots).toEqual([...left.slots, ...right.slots.map((s) => shifted(s, 100))]);
+    // Same slots, order and shapes as the twins side by side, except the fold-facing edge: the
+    // spread pulls it 1.5 mm back from the fold (3 mm gutter, G1); the twins bleed there.
+    const twinSlots = [...left.slots, ...right.slots.map((s) => shifted(s, 100))];
+    expect(l.slots).toHaveLength(twinSlots.length);
+    const page = pageMm(l.format);
+    const half = GEO_GUTTER_MM / 2;
+    l.slots.forEach((s, i) => {
+      const sp = slotPoly(l, s);
+      const tw = slotPoly(l, twinSlots[i]);
+      expect(sp, `slot ${i}`).toHaveLength(tw.length);
+      const onLeft = rectHalf(s) === "left";
+      sp.forEach((p, k) => {
+        const t = tw[k];
+        const atFold = Math.abs(t.x - page.w) < MM_EPS;
+        if (!atFold) {
+          expect(p.x, `slot ${i} pt ${k} x`).toBeCloseTo(t.x, 2);
+          expect(p.y, `slot ${i} pt ${k} y`).toBeCloseTo(t.y, 2);
+          return;
+        }
+        // Fold point → moved 1.5 mm off the fold, staying on the twin's edge line (y may follow the seam).
+        expect(p.x, `slot ${i} pt ${k} fold x`).toBeCloseTo(onLeft ? page.w - half : page.w + half, 2);
+        expect(Math.abs(p.y - t.y), `slot ${i} pt ${k} fold y`).toBeLessThan(1);
+      });
+    });
     expect(l.slots.map((s) => rectHalf(s))).toEqual([...left.slots.map(() => "left"), ...right.slots.map(() => "right")]);
     expect(l.caption).toEqual(left.caption);
     for (const t of l.texts ?? []) {
@@ -288,6 +311,31 @@ describe.each(ALL.filter((l) => l.role === "spread").map((l) => [l.id, l] as con
       expect(t).toEqual({ ...match!, box: shifted(match!.box, 100) });
     }
     expect(l.decorations ?? []).toEqual([...(left.decorations ?? []), ...(right.decorations ?? []).map((d) => ({ ...d, box: shifted(d.box, 100) }))]);
+  });
+
+  it(`keeps the style's ${GEO_GUTTER_MM} mm gutter at the fold: no photo crosses it, ${GEO_GUTTER_MM / 2} mm each side; twins stay full bleed (G1 fix)`, () => {
+    const page = pageMm(l.format);
+    const half = GEO_GUTTER_MM / 2;
+    const polys = l.slots.map((s) => slotPoly(l, s));
+    // Every photo stays on its own half, ≥ 1.5 mm clear of the fold line.
+    l.slots.forEach((s, i) => {
+      const xs = polys[i].map((p) => p.x);
+      if (rectHalf(s) === "left") expect(Math.max(...xs), `slot ${i}`).toBeLessThanOrEqual(page.w - half + MM_EPS);
+      else expect(Math.min(...xs), `slot ${i}`).toBeGreaterThanOrEqual(page.w + half - MM_EPS);
+    });
+    // Photos facing each other across the fold sit exactly one gutter apart (not more: the design
+    // still reads as one band across the spread).
+    const leftPolys = polys.filter((_, i) => rectHalf(l.slots[i]) === "left");
+    const rightPolys = polys.filter((_, i) => rectHalf(l.slots[i]) === "right");
+    const facing = leftPolys.flatMap((a) => rightPolys.map((b) => polyDist(a, b)));
+    expect(Math.min(...facing)).toBeGreaterThanOrEqual(GEO_GUTTER_MM - MM_EPS);
+    expect(Math.min(...facing)).toBeLessThanOrEqual(GEO_GUTTER_MM + MM_EPS);
+    // The twins stay full bleed on that side (a 1.5 mm strip on a single page's trim would look
+    // like a cutting error): left twin reaches its right trim, right twin its left trim.
+    const leftTwinMaxX = Math.max(...left.slots.flatMap((s) => slotPoly(left, s).map((p) => p.x)));
+    const rightTwinMinX = Math.min(...right.slots.flatMap((s) => slotPoly(right, s).map((p) => p.x)));
+    expect(leftTwinMaxX).toBeCloseTo(page.w, 2);
+    expect(rightTwinMinX).toBeCloseTo(0, 2);
   });
 
   it("a misaligned spread splits into exactly its twins, keeping every photo and the caption", () => {

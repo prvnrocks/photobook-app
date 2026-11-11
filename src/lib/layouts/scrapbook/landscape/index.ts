@@ -108,7 +108,7 @@ function threeRow(ox = 0, withCaption = true): Half {
     decorations: [
       ...cards.map((c, i) => g.tape(tapes[i], c, 0, -1, 24, i === 1 ? 3 : -3)),
       withCaption
-        ? g.deco("sticker", "sparkle", ox + 202, 10, 8)
+        ? g.deco("sticker", "sparkle", ox + 198, 10, 8)
         : g.deco("sticker", "heart-outline", ox + 105, 136, 9, { rotate: -8 }),
     ],
     texts: caption ? [captionText(caption)] : [],
@@ -116,7 +116,7 @@ function threeRow(ox = 0, withCaption = true): Half {
   };
 }
 
-/** Four bordered prints in a loose 2×2 on the left, a heart in the middle, caption on the right. */
+/** Four bordered prints in a loose 2×2 on the left, a heart in the middle; label, date tag and caption on the right. */
 function fourScatter(ox = 0, withCaption = true): Half {
   // With the caption column (64 mm wide): 56 mm squares on the left. Without (a spread's right
   // page): wider prints spread over the whole page.
@@ -132,7 +132,9 @@ function fourScatter(ox = 0, withCaption = true): Half {
     { x: x1 + 2, y: y2, w, h, rotate: 2.5, frame: BORDER },
     { x: x2, y: y2 - 2 + (withCaption ? 0 : 2), w, h, rotate: -2, frame: BORDER },
   ] as CardMm[]).map((c) => shift(c, ox));
-  const caption = withCaption ? g.rect(ox + 138, 40, 64, 66) : null;
+  // The right column always carries the chapter label + date tag above the caption (G1 fix: an
+  // empty caption must not leave the column bare).
+  const caption = withCaption ? g.rect(ox + 138, 56, 64, 56) : null;
   const tapes = ["tape-washi", "tape-kraft", "tape-kraft", "tape-washi"] as const;
   const mid = (x1 + w + x2) / 2;
   return {
@@ -145,7 +147,13 @@ function fourScatter(ox = 0, withCaption = true): Half {
         ? g.deco("sticker", "occasion-accent", ox + 176, 124, 18, { rotate: 8 })
         : g.deco("sticker", "sparkle", ox + 200, 16, 9),
     ],
-    texts: caption ? [captionText(caption, "start")] : [],
+    texts: caption
+      ? [
+          g.plate("chapterTitle", "plate-label", ox + 136, 16, 64, "chapter", 2),
+          g.plate("dateLabel", "plate-tag", ox + 140, 36, 44, "year", -3),
+          captionText(caption, "start"),
+        ]
+      : [],
     caption,
   };
 }
@@ -166,7 +174,8 @@ function fiveCollage(ox = 0): Half {
       g.tape("tape-striped", cards[4], 0, -1, 22, -3),
       g.deco("sticker", "star", ox + 116, 80, 10, { rotate: -12 }),
       ...g.corners(cards[1], 9),
-      g.deco("sticker", "heart-outline", ox + 74, 140, 8, { rotate: 10 }),
+      // Heart tucked in the gap between prints 3 and 4, well inside the 4 mm safe line.
+      g.deco("sticker", "heart-outline", ox + 74, 132, 8, { rotate: 10 }),
     ],
     texts: [],
     caption: null,

@@ -259,6 +259,22 @@ describe.each(ALL.map((l) => [l.id, l] as const))("%s", (_id, l) => {
       expect(Math.abs((t.box.w * page.w) / (t.box.h * page.h) - w / h) / (w / h)).toBeLessThan(0.01);
     }
   });
+
+  it("a caption column (caption taller than 30 % of the page) also carries the chapter title and date (G1: never bare when the caption is empty)", () => {
+    if (!l.caption || l.role === "cover" || l.caption.h < 30) return;
+    const half = halfOf(l, plain(l.caption));
+    const binds = texts.filter((t) => halfOf(l, plain(t.box)) === half).map((t) => t.bind);
+    expect(binds).toContain("chapterTitle");
+    expect(binds).toContain("dateLabel");
+  });
+
+  it("small stickers (not tape) sit ≥ 1.5 mm inside the 4 mm safe line (tilt included)", () => {
+    for (const d of decos.filter((x) => x.kind === "sticker")) {
+      const b = boundsOf(d.box, d.rotate, l.format);
+      const gaps = [b.x0 * page.w, b.y0 * page.h, (areaW - b.x1) * page.w, (100 - b.y1) * page.h].map((v) => v / 100);
+      for (const gap of gaps) expect(gap, `${d.id} ${JSON.stringify(d.box)}`).toBeGreaterThanOrEqual(SAFE_MM + 1.5 - MM_EPS);
+    }
+  });
 });
 
 // --- Spreads: twins + repair ---------------------------------------------------------------------
