@@ -441,7 +441,7 @@ function plainText(v: unknown): string {
  */
 export function captionsPreviewOf(
   doc: unknown,
-  hasCaptionArea: (layoutId: string) => boolean,
+  hasCaptionArea: (layoutId: string, side?: "left" | "right") => boolean,
 ): CaptionsPreviewDoc {
   const d = rec(doc);
   const chapters: CaptionsPreviewDoc["chapters"] = [];
@@ -463,7 +463,9 @@ export function captionsPreviewOf(
       const cap = rec(p.caption);
       const text = plainText(cap?.text);
       const source = PREVIEW_SOURCES.find((s) => s === cap?.source) ?? "ai";
-      const captionable = typeof p.layout === "string" && hasCaptionArea(p.layout);
+      const side = p.side === "left" || p.side === "right" ? p.side : undefined;
+      // Spread right halves share the layout id but never hold a caption (M10b).
+      const captionable = typeof p.layout === "string" && hasCaptionArea(p.layout, side);
       pages.push({ chapter, caption: cap && text ? { text, source } : null, captionable });
     }
   }

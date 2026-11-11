@@ -57,7 +57,10 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   const aiStatus = forRun?.ai_status ?? "idle";
   const aiAvailable = aiMode !== "off";
   // Captions preview: chapter titles/dates + caption text/source per page — no photo ids or URLs.
-  const captionsPreview = captionsPreviewOf(book.doc, (layoutId) => !!getLayout(layoutId)?.caption);
+  const captionsPreview = captionsPreviewOf(book.doc, (layoutId, side) => {
+    const l = getLayout(layoutId);
+    return !!l?.caption && (l.role !== "spread" || side === "left");
+  });
   const missingCaptions = captionsPreviewModel(captionsPreview)?.missing ?? 0;
   const { generator } = docOrigin(book.doc);
   // Editor saves / user captions → review offers only "Continue in the editor" (D-037 #2).
