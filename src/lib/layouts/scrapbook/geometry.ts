@@ -48,6 +48,11 @@ export interface DecoOpts {
 
 const round = (n: number) => Math.round(n * 10000) / 10000;
 const rad = (deg: number) => (deg * Math.PI) / 180;
+/** Degrees into (−180, 180] (schema bound for decoration rotate). */
+function normDeg(deg: number): number {
+  const d = ((deg % 360) + 360) % 360; // 0..360
+  return round(d > 180 ? d - 360 : d);
+}
 
 export interface ScrapGeo {
   page: SizeMm;
@@ -58,6 +63,12 @@ export interface ScrapGeo {
   /** Tape centred on point [x, y] of a card (after tilt), laid along the card's tilt + `turn`. */
   tape(id: StickerId, c: CardMm, u: number, v: number, w: number, turn?: number, tint?: string): LayoutDecoration;
   text(bind: LayoutText["bind"], x: number, y: number, w: number, h: number, font: LayoutText["font"], align: LayoutText["align"], rotate?: number): LayoutText;
+  /**
+   * A photo-corner set: four "photo-corner" stickers (artwork = top-left corner) holding the
+   * card's corners, turned 0 / 90 / 180 / −90° plus the card's tilt. Each `size` mm square box
+   * sits inside the card with its right angle on the card corner.
+   */
+  corners(c: CardMm, size: number, tint?: string): LayoutDecoration[];
   /** Label plate (aspect kept: h = w / plate aspect) with its bound text. */
   plate(bind: "chapterTitle" | "dateLabel", id: "plate-label" | "plate-tag", x: number, y: number, w: number, font: LayoutText["font"], rotate?: number, tint?: string): LayoutText;
 }
@@ -103,6 +114,20 @@ export function scrapGeo(format: BookFormat): ScrapGeo {
     tape: (id, c, u, v, w, turn = 0, tint) => {
       const [x, y] = on(c, u, v);
       return deco("tape", id, x, y, w, { rotate: round((c.rotate ?? 0) + turn), ...(tint ? { tint } : {}) });
+    },
+    corners: (c, size, tint) => {
+      const du = size / c.w;
+      const dv = size / c.h;
+      const turns: Array<[number, number, number]> = [
+        [-1 + du, -1 + dv, 0],
+        [1 - du, -1 + dv, 90],
+        [1 - du, 1 - dv, 180],
+        [-1 + du, 1 - dv, -90],
+      ];
+      return turns.map(([u, v, turn]) => {
+        const [x, y] = on(c, u, v);
+        return deco("sticker", "photo-corner", x, y, size, { rotate: normDeg(turn + (c.rotate ?? 0)), ...(tint ? { tint } : {}) });
+      });
     },
     text: (bind, x, y, w, h, font, align, rotate) => ({ bind, box: rect(x, y, w, h), align, font, ...(rotate ? { rotate } : {}) }),
     plate: (bind, id, x, y, w, font, rotate, tint) => ({

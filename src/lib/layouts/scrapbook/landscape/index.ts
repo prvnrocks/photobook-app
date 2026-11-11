@@ -134,7 +134,8 @@ function fourScatter(ox = 0, withCaption = true): Half {
   return {
     slots: cards.map(g.slot),
     decorations: [
-      ...cards.map((c, i) => g.tape(tapes[i], c, 0, -1, 22, i % 2 ? 4 : -4)),
+      // Three prints taped, the bottom-left one held by a photo-corner set.
+      ...cards.flatMap((c, i) => (i === 2 ? g.corners(c, 9) : [g.tape(tapes[i], c, 0, -1, 22, i % 2 ? 4 : -4)])),
       g.deco("sticker", "heart-kraft", ox + mid, withCaption ? 74 : 72, 12, { rotate: -8 }),
       withCaption
         ? g.deco("sticker", "occasion-accent", ox + 176, 124, 18, { rotate: 8 })
@@ -160,6 +161,7 @@ function fiveCollage(ox = 0): Half {
       g.tape("tape-washi", cards[0], -0.92, -0.9, 24, -36),
       g.tape("tape-striped", cards[4], 0, -1, 22, -3),
       g.deco("sticker", "star", ox + 116, 80, 10, { rotate: -12 }),
+      ...g.corners(cards[1], 9),
       g.deco("sticker", "heart-outline", ox + 74, 140, 8, { rotate: 10 }),
     ],
     texts: [],

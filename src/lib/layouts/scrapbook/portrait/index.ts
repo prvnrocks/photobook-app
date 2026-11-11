@@ -113,7 +113,8 @@ function fourPinned(ox = 0, withCaption = true): Half {
   return {
     slots: cards.map(g.slot),
     decorations: [
-      ...cards.map((c, i) => g.tape(tapes[i], c, 0, -1, 24, i % 2 ? 4 : -4)),
+      // Three prints taped, the bottom-left one held by a photo-corner set.
+      ...cards.flatMap((c, i) => (i === 2 ? g.corners(c, 9) : [g.tape(tapes[i], c, 0, -1, 24, i % 2 ? 4 : -4)])),
       g.deco("sticker", "heart-kraft", ox + 74, (top + h + row2) / 2 + 1, 13, { rotate: -8 }),
     ],
     texts: caption ? [captionText(caption)] : [],
@@ -136,7 +137,7 @@ function fiveCollage(ox = 0): Half {
     decorations: [
       g.tape("tape-striped", cards[1], 0.9, -0.94, 20, 38),
       g.tape("tape-washi", cards[4], 0, -1, 24, 3),
-      g.deco("sticker", "star", ox + 20, 118, 11, { rotate: -12 }),
+      ...g.corners(cards[3], 8),
       g.deco("sticker", "heart-outline", ox + 132, 120, 10, { rotate: 12 }),
     ],
     texts: [captionText(caption)],

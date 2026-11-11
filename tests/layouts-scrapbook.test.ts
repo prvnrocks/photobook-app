@@ -80,6 +80,11 @@ describe.each(SETS)("scrapbook $format catalogue", ({ format, prefix, layouts })
     expect(byRole("page").filter(usesAccent).length).toBeGreaterThanOrEqual(1);
   });
 
+  it("uses photo-corner sets on 2–3 layouts", () => {
+    const n = layouts.filter((l) => (l.decorations ?? []).some((d) => d.id === "photo-corner")).length;
+    expect(n).toBeGreaterThanOrEqual(2);
+  });
+
   it("has label plates (chapter title / date) on several pages and overlapping photos with z", () => {
     expect(layouts.filter((l) => (l.texts ?? []).some((t) => t.plate)).length).toBeGreaterThanOrEqual(3);
     expect(layouts.filter((l) => l.slots.some((s) => (s.z ?? 0) > 0)).length).toBeGreaterThanOrEqual(3);
@@ -197,9 +202,19 @@ describe.each(ALL.map((l) => [l.id, l] as const))("%s", (_id, l) => {
     }
   });
 
-  it(`≤ ${MAX_DECORATIONS_PER_PAGE} decorations and ≤ ${MAX_SHADOWS_PER_PAGE} soft shadows per page`, () => {
+  it(`≤ ${MAX_DECORATIONS_PER_PAGE} decorations (a photo-corner set = 1) and ≤ ${MAX_SHADOWS_PER_PAGE} soft shadows per page`, () => {
+    // A photo-corner set (4 "photo-corner" stickers on one print) counts as ONE decoration.
     const per = { left: 0, right: 0 };
-    for (const d of decos) per[halfOf(l, boundsOf(d.box, d.rotate, l.format))]++;
+    const corners = { left: 0, right: 0 };
+    for (const d of decos) {
+      const h = halfOf(l, boundsOf(d.box, d.rotate, l.format));
+      if (d.id === "photo-corner") corners[h]++;
+      else per[h]++;
+    }
+    for (const h of ["left", "right"] as const) {
+      expect(corners[h] % 4, `${h}: corners come in sets of 4`).toBe(0);
+      per[h] += corners[h] / 4;
+    }
     expect(per.left).toBeLessThanOrEqual(MAX_DECORATIONS_PER_PAGE);
     expect(per.right).toBeLessThanOrEqual(MAX_DECORATIONS_PER_PAGE);
     const shadows = { left: 0, right: 0 };
@@ -210,6 +225,24 @@ describe.each(ALL.map((l) => [l.id, l] as const))("%s", (_id, l) => {
     }
     expect(shadows.left).toBeLessThanOrEqual(MAX_SHADOWS_PER_PAGE);
     expect(shadows.right).toBeLessThanOrEqual(MAX_SHADOWS_PER_PAGE);
+  });
+
+  it("photo-corner sets: each set holds the 4 corners of one print, turned 0/90/180/−90° + its tilt", () => {
+    const set = decos.filter((d) => d.id === "photo-corner");
+    for (let k = 0; k < set.length; k += 4) {
+      const four = set.slice(k, k + 4);
+      const centres = four.map((d) => ({ x: d.box.x + d.box.w / 2, y: d.box.y + d.box.h / 2 }));
+      // The print whose box contains all four corner centres.
+      const owner = l.slots.find((s) => centres.every((c) => c.x > s.x - 1 && c.x < s.x + s.w + 1 && c.y > s.y - 1 && c.y < s.y + s.h + 1));
+      expect(owner, "corner set sits on a print").toBeDefined();
+      const tilt = owner!.rotate ?? 0;
+      four.forEach((d, i) => {
+        const want = [0, 90, 180, -90][i] + tilt;
+        const diff = ((((d.rotate ?? 0) - want) % 360) + 540) % 360 - 180;
+        expect(Math.abs(diff), `corner ${i}`).toBeLessThan(1e-3);
+        expect(d.layer).toBe("over");
+      });
+    }
   });
 
   it("stickers keep their natural aspect (tape/stickers; the accent box is square)", () => {
