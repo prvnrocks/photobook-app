@@ -178,6 +178,7 @@ Plan + decisions: `.agentos/runs/m10.md`, D-062. Three shippable phases.
 - [ ] M10b: landscape layouts, two-page spread layouts, modern style (split-strip cover, text panel, grids), new OFL fonts (script / display / serif + Arabic pairs), format + style on new books, AI per format/style (migration 1900, migration first)
 - [ ] M10c: geometric + scrapbook styles (shapes, frames, tilt, stickers), crop on shaped slots, AI-suggested backgrounds (kept photos only)
 **Done when:** a user builds a landscape or portrait book in any style with spreads and backgrounds that look the same in editor, flipbook and PDF.
+> M10b: migration 1900 applied to prod 2026-11-11 (rls 175).
 > M10a (2026-11-10): built, reviewed (APPROVED), live e2e/m10a 7/7, launch-smoke 7/7, editor 59/59, goldens byte-frozen. No migration. NOT deployed. Needs user sign-off on fonts/textures (docs/design/) before M10b.
 
 ## Milestone 10+ — After launch
