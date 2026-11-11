@@ -59,7 +59,7 @@
 import { dayRange, fillPages, PANORAMA_RATIO, parseTime } from "@/lib/autolayout";
 import { dubaiDay, effectiveMaxPages, orientationOf, placeKey } from "@/lib/ai/story";
 import { getLayout } from "@/lib/layouts";
-import { bestPageLayout, designFitScore } from "@/lib/layouts/fit";
+import { bestPageLayout, designFitScore, isShapeAware } from "@/lib/layouts/fit";
 import { pruneAiBackgrounds } from "@/lib/design/background-suggest";
 import { assertSupportedDesign, type BookDesign } from "./book-design";
 import { clipText } from "@/lib/text/clip";
@@ -449,7 +449,7 @@ export function removeSlotPhotos(doc: BookDoc, opts: RemoveSlotPhotosOptions): R
         };
         delete src.side;
         firstOut = false;
-        pages.push(...fitSingles(src, halves[h], design, orient, photo, nextPageId));
+        pages.push(...fitSingles(src, halves[h], design, orient, photo, nextPageId, pages[pages.length - 1]?.layout ?? null));
       }
       continue;
     }
@@ -457,7 +457,7 @@ export function removeSlotPhotos(doc: BookDoc, opts: RemoveSlotPhotosOptions): R
       if (keepCaption && userCaption) pages.push(emptied());
       continue;
     }
-    pages.push(...fitSingles(page, left, design, orient, photo, nextPageId));
+    pages.push(...fitSingles(page, left, design, orient, photo, nextPageId, pages[pages.length - 1]?.layout ?? null));
   }
   return { pages, removed, touched };
 }
@@ -480,6 +480,8 @@ function refit(page: BookPage, layoutId: string, slots: Slot[]): BookPage {
 /**
  * Rule 1 for one single page's remaining slots: the best page layout of the design for them
  * (caption-preferring when the user wrote the caption), else split with the filler.
+ * Shape-aware styles (geometric / scrapbook) don't repeat `prevLayout` (the page before) when an
+ * equally fitting layout exists; classic / modern ignore it (output unchanged).
  */
 function fitSingles(
   page: BookPage,
@@ -488,16 +490,23 @@ function fitSingles(
   orient: (id: string) => ReturnType<typeof orientationOf>,
   photo: (id: string) => RelayoutPhoto,
   nextPageId: () => string,
+  prevLayout: string | null,
 ): BookPage[] {
+  const avoid = isShapeAware(design) ? prevLayout : null;
   // A page with the user's caption re-fits onto a layout with a caption area when one exists,
   // so Update album never loses the user's words (D-031).
   const layoutId = bestPageLayout(
     left.map((s) => orient(s.photoId as string)),
-    { preferCaption: page.caption?.source === "user", design, ratios: left.map((s) => ratioOf(photo(s.photoId as string))) },
+    {
+      preferCaption: page.caption?.source === "user",
+      design,
+      ratios: left.map((s) => ratioOf(photo(s.photoId as string))),
+      avoid,
+    },
   );
   if (layoutId) return [refit(page, layoutId, left)];
   // More photos left than any layout holds (e.g. a big spread half): split.
-  return fillPages(left.map((s) => photo(s.photoId as string)), { prevLayout: null, design }).map((pg, i) => {
+  return fillPages(left.map((s) => photo(s.photoId as string)), { prevLayout: avoid, design }).map((pg, i) => {
     const slots = pg.photoIds.map((id) => left.find((s) => s.photoId === id) as Slot);
     return refit({ ...page, id: i === 0 ? page.id : nextPageId() }, pg.layout, slots);
   });

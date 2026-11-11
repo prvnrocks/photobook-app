@@ -15,7 +15,8 @@ import { isSpreadAligned, spreadIssues } from "@/lib/book/spreads";
 import { stripPhotoFromDoc, type StripPhotoDims } from "@/lib/book/strip-photos";
 import { photoRectOf } from "@/lib/book/slot-geometry";
 import { pageMm } from "@/lib/book/format";
-import type { BookDoc, Caption } from "@/lib/book/types";
+import { layoutsFor } from "@/lib/book/spreads";
+import type { BookDoc, Caption, Layout } from "@/lib/book/types";
 import { getLayout } from "@/lib/layouts";
 import {
   bestCoverLayout,
@@ -25,6 +26,7 @@ import {
   fullPageLayout,
   isShapeAware,
   ROUND_STRETCH_MAX,
+  shapeMiss,
   slotFit,
 } from "@/lib/layouts/fit";
 import { momentSet, rng, SET_SIZES } from "./fixtures/autolayout-sets";
@@ -470,5 +472,122 @@ describe("relayout and photo-delete reflow on scrapbook / geometric spreads", ()
     expectInDesign(gr.doc, { format: "A5_PORTRAIT", designStyle: "geometric" });
     expectValidDoc(gr.doc, keptIds(grv), 100);
     expect(new Set(placedIds(gr.doc))).toEqual(new Set(placedIds(gd).filter((id) => id !== drop)));
+  });
+});
+
+// --- no cloned-looking consecutive pages (M10c polish) ---------------------------------------------------
+
+describe("consecutive pages don't repeat a layout when an alternative exists (rule 10 look-ahead)", () => {
+  type FP = { orient: "portrait" | "landscape" | "square"; ratio: number };
+  const fp = (p: AutoPhoto): FP => {
+    const r = p.width > 0 && p.height > 0 ? p.width / p.height : 1;
+    return { ratio: r, orient: r >= 1.1 ? "landscape" : r <= 1 / 1.1 ? "portrait" : "square" };
+  };
+  const perms = <T,>(a: T[]): T[][] =>
+    a.length <= 1 ? [a] : a.flatMap((x, i) => perms([...a.slice(0, i), ...a.slice(i + 1)]).map((r) => [x, ...r]));
+  /** Some assignment of `ps` to the layout's slots has no shape-aware miss. */
+  const fits = (l: Layout, ps: FP[]) =>
+    l.photoCount === ps.length && perms(ps).some((o) => o.every((p, i) => !shapeMiss(l, i, p, l.format)));
+  const byTime = (a: AutoPhoto, b: AutoPhoto) => (a.takenAt ?? "~").localeCompare(b.takenAt ?? "~") || a.id.localeCompare(b.id);
+
+  /**
+   * Independent check: two consecutive multi-photo pages of one chapter with the same layout are a
+   * defect when their photos also fit two different zero-miss page layouts (head k photos + rest,
+   * or the q0 + q2 skip pair + rest — the splits the filler can make) that don't repeat the
+   * neighbouring pages either. Short chapters never take all-"any" grids (rule 9).
+   */
+  function avoidableRepeats(doc: BookDoc, photos: readonly AutoPhoto[], d: BookDesign): string[] {
+    const byId = new Map(photos.map((p) => [p.id, p]));
+    const pageLayouts = layoutsFor(d.format, d.designStyle, "page");
+    const owners = doc.pages.filter((p) => p.side !== "right");
+    const out: string[] = [];
+    for (let i = 0; i + 1 < owners.length; i++) {
+      const a = owners[i];
+      const b = owners[i + 1];
+      if (a.layout !== b.layout || a.chapterId !== b.chapterId || a.slots.length < 2) continue;
+      const chapterSize = doc.pages.filter((p) => p.chapterId === a.chapterId).reduce((n, p) => n + p.slots.length, 0);
+      const S = [...a.slots, ...b.slots].map((x) => byId.get(x.photoId as string) as AutoPhoto).sort(byTime);
+      const before = owners[i - 1]?.layout;
+      const after = owners[i + 2]?.layout;
+      const allowed = (l: Layout) => !(l.photoCount > 3 && chapterSize < 10 && l.prefers.every((p) => p === "any"));
+      const splits: [AutoPhoto[], AutoPhoto[]][] = [];
+      for (let k = 2; k <= S.length - 2; k++) splits.push([S.slice(0, k), S.slice(k)]);
+      if (S.length >= 4) splits.push([[S[0], S[2]], [S[1], ...S.slice(3)]]);
+      for (const [x, y] of splits) {
+        for (const l1 of pageLayouts) {
+          for (const l2 of pageLayouts) {
+            if (l1.id === l2.id || l1.id === before || l2.id === after || !allowed(l1) || !allowed(l2)) continue;
+            if (fits(l1, x.map(fp)) && fits(l2, y.map(fp))) out.push(`p${i + 1}–${i + 2} ${a.layout}×2 → ${l1.id} + ${l2.id}`);
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  it.each(DESIGNS)("T10 photo-set matrix %o: no avoidable repeat, albums valid", (design) => {
+    for (const n of SIZES) {
+      for (const seed of [21, 22]) {
+        const photos = momentSet(n, seed * 1000 + n);
+        for (const isPaid of [false, true]) {
+          const label = `${tag(design)} n=${n} seed=${seed} paid=${isPaid}`;
+          const doc = autolayout(photos, { ...BASE, isPaid, design });
+          expectValidDoc(doc, keptIds(photos), limitsFor(isPaid).maxPages, label);
+          expect(avoidableRepeats(doc, photos, design), label).toEqual([]);
+        }
+      }
+    }
+  });
+
+  it("the checker catches the repeats the greedy filler used to make (2+2 of one layout)", () => {
+    const d: BookDesign = { format: "A5_PORTRAIT", designStyle: "scrapbook" };
+    // Square + portrait twice: the greedy filler put both pairs on s-p-two-overlap; the squares
+    // also fit s-p-two-land together (skip pair) and the portraits s-p-two-overlap.
+    const P2 = [shot("a", 3000, 3000, 0), shot("b", ...P, 1)];
+    const P3 = [shot("c", 3000, 3000, 2), shot("d", ...P, 3)];
+    const doc = autolayout([...P2, ...P3], { ...BASE, isPaid: true, design: d });
+    const fake: BookDoc = {
+      ...doc,
+      pages: [
+        { id: "p1", chapterId: "c1", layout: "s-p-two-overlap", slots: P2.map((p) => ({ photoId: p.id, crop: { x: 0.5, y: 0.5, zoom: 1 } })), caption: null },
+        { id: "p2", chapterId: "c1", layout: "s-p-two-overlap", slots: P3.map((p) => ({ photoId: p.id, crop: { x: 0.5, y: 0.5, zoom: 1 } })), caption: null },
+      ],
+    };
+    expect(avoidableRepeats(fake, [...P2, ...P3], d).length).toBeGreaterThan(0);
+  });
+
+  it("scrapbook: 4 portrait-ish photos become 3 + 1 (or two different pairs), never two-overlap twice", () => {
+    const d: BookDesign = { format: "A5_PORTRAIT", designStyle: "scrapbook" };
+    const seq = (s: string) => [...s].map((c, i) => (c === "P" ? shot(`${s}${i}`, ...P, i) : shot(`${s}${i}`, 3000, 3000, i)));
+    // Before: s-p-two-overlap, s-p-two-overlap (same stickers, looked cloned).
+    expect(fillPages(seq("PPSP"), { design: d }).map((p) => [p.layout, p.photoIds.length])).toEqual([
+      ["s-p-three-pile", 3],
+      ["s-p-one-polaroid", 1],
+    ]);
+    expect(fillPages(seq("SPSP"), { design: d }).map((p) => p.layout)).toEqual(["s-p-two-land", "s-p-two-overlap"]);
+    // The previous page's layout (relayout appends to a chapter) counts too.
+    const after = ["s-p-two-land", ...fillPages(seq("SPSP"), { design: d, prevLayout: "s-p-two-land" }).map((p) => p.layout)];
+    expect(after.slice(1).length).toBe(2);
+    after.slice(1).forEach((id, i) => expect(id, after.join(" ")).not.toBe(after[i]));
+  });
+
+  it("geometric: 7 × 4:3 in a landscape book is one-band + three-diamond × 2 (was 1+2+3+1 with two one-band pages)", () => {
+    const photos = Array.from({ length: 7 }, (_, i) => shot(`f${i}`, ...L, i));
+    const doc = autolayout(photos, { ...BASE, isPaid: true, design: { format: "A5_LANDSCAPE", designStyle: "geometric" } });
+    // No 2-page split of the last 6 avoids the repeat without another one-photo page (only the
+    // diamond and the stack take 4:3 landscapes in a landscape book), so fewer pages wins.
+    expect(doc.pages.map((p) => p.layout)).toEqual(["g-l-one-band", "g-l-three-diamond", "g-l-three-diamond"]);
+    expectValidDoc(doc, keptIds(photos), 100);
+  });
+
+  it("bestPageLayout avoid: an equally fitting layout within tolerance replaces the page before's; never a worse fit; classic ignores it", () => {
+    const design: BookDesign = { format: "A5_PORTRAIT", designStyle: "geometric" };
+    const LL = ["landscape", "landscape"] as const;
+    expect(bestPageLayout([...LL], { design, ratios: [4 / 3, 4 / 3] })).toBe("g-p-two-circle");
+    expect(bestPageLayout([...LL], { design, ratios: [4 / 3, 4 / 3], avoid: "g-p-two-circle" })).toBe("g-p-two-diag");
+    // A panorama would miss the circle → the diagonal stays even when it repeats.
+    expect(bestPageLayout([...LL], { design, ratios: [4 / 3, 2.5], avoid: "g-p-two-diag" })).toBe("g-p-two-diag");
+    const classic = bestPageLayout(["portrait", "portrait"]);
+    expect(bestPageLayout(["portrait", "portrait"], { avoid: classic })).toBe(classic);
   });
 });

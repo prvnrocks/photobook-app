@@ -51,6 +51,12 @@ export interface BestLayoutOptions {
    * invalid entry → the orientation's typical aspect, see typicalRatio).
    */
   ratios?: readonly number[];
+  /**
+   * Shape-aware designs only: a layout id not to pick (the previous page's, so consecutive pages
+   * don't look cloned) when another layout fits as many photos with a total aspect cost within
+   * AVOID_COST_TOLERANCE of the best. Ignored for classic / modern.
+   */
+  avoid?: string | null;
 }
 
 /**
@@ -69,12 +75,24 @@ export function bestPageLayout(orients: readonly FitOrientation[], opts: BestLay
   if (isShapeAware(design)) {
     const photos = orients.map((o, i) => ({ orient: o, ratio: validRatio(opts.ratios?.[i]) ?? typicalRatio(o) }));
     let bestShaped: { id: string; score: number; cost: number } | null = null;
-    for (const l of pool) {
-      const score = shapeFitScore(l, photos, design.format);
-      const cost = shapeCostOf(l, photos, design.format);
-      if (!bestShaped || score > bestShaped.score || (score === bestShaped.score && cost < bestShaped.cost - COST_EPS)) {
-        bestShaped = { id: l.id, score, cost };
+    const scored = pool.map((l) => ({
+      id: l.id,
+      score: shapeFitScore(l, photos, design.format),
+      cost: shapeCostOf(l, photos, design.format),
+    }));
+    for (const c of scored) {
+      if (!bestShaped || c.score > bestShaped.score || (c.score === bestShaped.score && c.cost < bestShaped.cost - COST_EPS)) {
+        bestShaped = c;
       }
+    }
+    if (bestShaped && opts.avoid != null && bestShaped.id === opts.avoid) {
+      const top = bestShaped;
+      let alt: (typeof scored)[number] | null = null;
+      for (const c of scored) {
+        if (c.id === top.id || c.score !== top.score || c.cost > top.cost + AVOID_COST_TOLERANCE) continue;
+        if (!alt || c.cost < alt.cost - COST_EPS) alt = c;
+      }
+      if (alt) bestShaped = alt;
     }
     return bestShaped?.id ?? null;
   }
@@ -144,6 +162,8 @@ export const ROUND_STRETCH_MAX = 1.6;
 const ROUND_POLYGON_POINTS = 8;
 /** Cost ties closer than this keep catalogue order (float noise). */
 const COST_EPS = 1e-9;
+/** bestPageLayout `avoid`: how much more total aspect cost (Σ |ln(photo / slot aspect)|) an alternative may have. */
+export const AVOID_COST_TOLERANCE = 0.25;
 
 /** Typical aspect of a photo of orientation `o` when its real size is unknown (4:3 camera). */
 export function typicalRatio(o: FitOrientation): number {

@@ -74,6 +74,16 @@
 //      hero, geometric band). No panorama spreads (the styles have none).
 //    - cover photo: the orientation the style's cover slot asks for (or shows, for an "any"
 //      slot), else the format's (coverPhotoOrientation).
+//    - page choice looks ahead (shapedLookahead, M10c polish): the next page is the first page of
+//      the best path over the next LOOKAHEAD_PAGES pages, built from the zero-miss multi-photo
+//      candidates (skip pairs q0 + q2 always offered) and the head photo alone. Path cost =
+//      misses × LOOKAHEAD_MISS + one-photo pages + pages repeating the page before; ties → a path
+//      that ends the chapter in fewer pages (7 × 4:3 in a landscape geometric book: one-band +
+//      three-diamond × 2, not 1+2+3+1), then fewer repeats (2+2 of the same layout → 3+1), then
+//      rule 9 order. A spread the filler would place next ends a path. So consecutive pages only
+//      share a layout when every alternative costs a miss or an extra page. The chapter opener
+//      and spreads are unchanged. relayout's fitSingles passes the page before as `avoid` to
+//      bestPageLayout (shape-aware only).
 // The result is checked with parseBookDoc + validateBookDoc; if that ever fails, a minimal
 // safe album is returned instead (the user must always get an album).
 
@@ -828,7 +838,9 @@ function genericCandidates(cat: Catalogue, q: P[], chapterSize: number): { layou
       const take = Array.from({ length: k }, (_, i) => i);
       const a = assignSlots(cat, l, take.map((i) => q[i]));
       if (a.misses === 0) out.push({ layout: l.id, take, order: a.order });
-      else if (k === 2 && q.length >= 3) {
+      // Shape-aware styles also keep the skip pair when the head pair fits, so the look-ahead
+      // (rule 10) can pair q0 + q2 and leave q1 for a different next page.
+      if ((a.misses !== 0 || cat.shaped) && k === 2 && q.length >= 3) {
         const b = assignSlots(cat, l, [q[0], q[2]]);
         if (b.misses === 0) skips.push({ layout: l.id, take: [0, 2], order: b.order });
       }
@@ -935,6 +947,7 @@ function genericFill(
   let lastSpread = false;
   const bigTotal = allowSpreads ? Math.ceil(n / PHOTOS_PER_SPREAD) : 0;
   let bigLeft = bigTotal;
+  const memo: LookaheadMemo = { cands: new Map(), spreads: new Map() };
   const push = (pl: PagePlan) => {
     pages.push(pl);
     pos += pl.spread ? 2 : 1;
@@ -956,6 +969,13 @@ function genericFill(
 
   while (q.length) {
     if (trySpread()) continue;
+    if (cat.shaped) {
+      const move = shapedLookahead(cat, allowSpreads, { q, pos, prev, lastSpread, bigLeft }, n, bigTotal, memo);
+      const taken = new Set(move.take);
+      for (let i = q.length - 1; i >= 0; i--) if (taken.has(i)) q.splice(i, 1);
+      push({ layout: move.layout, photos: move.order });
+      continue;
+    }
     const cands = genericCandidates(cat, q, n);
     const pick = cands.find((c) => c.layout !== prev) ?? cands[0];
     if (!pick) {
@@ -967,6 +987,150 @@ function genericFill(
     push({ layout: pick.layout, photos: pick.order });
   }
   return pages;
+}
+
+/** Rule 10: pages the shape-aware filler looks ahead when it chooses the next page. */
+const LOOKAHEAD_PAGES = 3;
+/** Rule 10 look-ahead cost of one orientation miss (a single page that misses its slot). */
+const LOOKAHEAD_MISS = 100;
+
+interface FillState {
+  q: P[];
+  pos: number;
+  prev: string | null;
+  lastSpread: boolean;
+  bigLeft: number;
+}
+
+interface Move {
+  layout: string;
+  take: number[];
+  order: P[];
+  /** Look-ahead cost of this page: miss, one-photo page, repeat of the previous layout. */
+  misses: number;
+  single: boolean;
+}
+
+interface PathScore {
+  cost: number;
+  /** The path used up the chapter's queue. */
+  done: boolean;
+  pages: number;
+  repeats: number;
+  ranks: number[];
+}
+
+/** Per-chapter caches: candidates and spread checks depend only on the queue head (+ spread state). */
+interface LookaheadMemo {
+  cands: Map<string, Move[]>;
+  spreads: Map<string, boolean>;
+}
+
+const headKey = (q: readonly P[], len: number) =>
+  q
+    .slice(0, len)
+    .map((p) => p.id)
+    .join("\u0000");
+
+/** Moves for the next page: zero-miss multi-photo pages (rule 9 order), then the head photo alone. */
+function movesFor(cat: Catalogue, q: P[], chapterSize: number, prev: string | null, memo: LookaheadMemo): Move[] {
+  const key = `${headKey(q, cat.maxPerPage + 1)}\u0001${prev ?? ""}`;
+  const hit = memo.cands.get(key);
+  if (hit) return hit;
+  const moves: Move[] = genericCandidates(cat, q, chapterSize).map((c) => ({ ...c, misses: 0, single: false }));
+  const s = genericSingle(cat, q[0], prev);
+  const miss = shapeMiss(getLayoutOf(cat, s.layout), 0, q[0], cat.design.format);
+  moves.push({ layout: s.layout, take: [0], order: s.photos, misses: miss ? 1 : 0, single: true });
+  memo.cands.set(key, moves);
+  return moves;
+}
+
+function getLayoutOf(cat: Catalogue, id: string): Layout {
+  return cat.singles.find((l) => l.id === id) as Layout;
+}
+
+function spreadNext(
+  cat: Catalogue,
+  allowSpreads: boolean,
+  st: FillState,
+  chapterSize: number,
+  bigTotal: number,
+  memo: LookaheadMemo,
+): boolean {
+  if (!allowSpreads || st.pos % 2 !== 0 || st.lastSpread || cat.spreads.length === 0 || st.bigLeft <= 0) return false;
+  const maxK = Math.max(0, ...cat.bigSpreads.map((l) => l.photoCount)) + SPREAD_LOOKAHEAD;
+  const key = `${headKey(st.q, maxK)}\u0001${st.bigLeft}`;
+  let hit = memo.spreads.get(key);
+  if (hit === undefined) {
+    hit = spreadFor(cat, st.q, chapterSize, st.bigLeft, bigTotal - st.bigLeft) !== null;
+    memo.spreads.set(key, hit);
+  }
+  return hit;
+}
+
+/** Lower is better: cost, a path that finishes the chapter, its page count, repeats, catalogue rank. */
+function betterPath(a: PathScore, b: PathScore): boolean {
+  if (a.cost !== b.cost) return a.cost < b.cost;
+  if (a.done !== b.done) return a.done;
+  if (a.done && a.pages !== b.pages) return a.pages < b.pages;
+  if (a.repeats !== b.repeats) return a.repeats < b.repeats;
+  for (let i = 0; i < Math.min(a.ranks.length, b.ranks.length); i++) {
+    if (a.ranks[i] !== b.ranks[i]) return a.ranks[i] < b.ranks[i];
+  }
+  return a.ranks.length < b.ranks.length;
+}
+
+/**
+ * Rule 10 page choice: the first page of the best path over the next LOOKAHEAD_PAGES pages
+ * (exhaustive over zero-miss multi-photo pages + the head photo alone). Path cost = misses ×
+ * LOOKAHEAD_MISS + one-photo pages + pages repeating the previous page's layout; ties → a path
+ * that finishes the chapter in fewer pages → fewer repeats → rule 9 catalogue order. A spread
+ * the filler would place next ends the path (it breaks any repeat).
+ */
+function shapedLookahead(
+  cat: Catalogue,
+  allowSpreads: boolean,
+  start: FillState,
+  chapterSize: number,
+  bigTotal: number,
+  memo: LookaheadMemo,
+): Move {
+  let best: { score: PathScore; first: Move } | null = null;
+  const walk = (st: FillState, depth: number, acc: PathScore, first: Move | null) => {
+    const leaf =
+      depth === LOOKAHEAD_PAGES || st.q.length === 0 || (depth > 0 && spreadNext(cat, allowSpreads, st, chapterSize, bigTotal, memo));
+    if (leaf && first) {
+      const score = { ...acc, done: st.q.length === 0 };
+      if (!best || betterPath(score, best.score)) best = { score, first };
+      return;
+    }
+    if (best && acc.cost > best.score.cost) return; // costs only grow
+    const moves = movesFor(cat, st.q, chapterSize, st.prev, memo);
+    moves.forEach((m, rank) => {
+      const repeat = m.layout === st.prev ? 1 : 0;
+      const taken = new Set(m.take);
+      walk(
+        {
+          q: st.q.filter((_, i) => !taken.has(i)),
+          pos: st.pos + 1,
+          prev: m.layout,
+          lastSpread: false,
+          bigLeft: st.bigLeft,
+        },
+        depth + 1,
+        {
+          cost: acc.cost + m.misses * LOOKAHEAD_MISS + (m.single ? 1 : 0) + repeat,
+          done: false,
+          pages: acc.pages + 1,
+          repeats: acc.repeats + repeat,
+          ranks: [...acc.ranks, rank],
+        },
+        first ?? m,
+      );
+    });
+  };
+  walk(start, 0, { cost: 0, done: false, pages: 0, repeats: 0, ranks: [] }, null);
+  return (best as { score: PathScore; first: Move } | null)?.first ?? movesFor(cat, start.q, chapterSize, start.prev, memo)[0];
 }
 
 // ---------- 7. safety net ----------
