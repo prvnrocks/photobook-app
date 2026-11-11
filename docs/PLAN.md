@@ -175,10 +175,11 @@ planted bad caption in tests; a second book reflects the user's earlier tone/len
 ## Milestone 10 — Book design system (spreads, landscape, styles, backgrounds)
 Plan + decisions: `.agentos/runs/m10.md`, D-062. Three shippable phases.
 - [x] M10a: doc v2 (upgrade on read, v1 on write), portrait + landscape geometry, backgrounds (colour / own paper textures / faded photo; page or whole book) in editor, viewer and PDF, open-book (facing pages) editor ≥ 768 px + phone "View spread"
-- [ ] M10b: landscape layouts, two-page spread layouts, modern style (split-strip cover, text panel, grids), new OFL fonts (script / display / serif + Arabic pairs), format + style on new books, AI per format/style (migration 1900, migration first)
+- [x] M10b: landscape layouts, two-page spread layouts, modern style (split-strip cover, text panel, grids), new OFL fonts (script / display / serif + Arabic pairs), format + style on new books, AI per format/style (migration 1900, migration first)
 - [ ] M10c: geometric + scrapbook styles (shapes, frames, tilt, stickers), crop on shaped slots, AI-suggested backgrounds (kept photos only)
 **Done when:** a user builds a landscape or portrait book in any style with spreads and backgrounds that look the same in editor, flipbook and PDF.
 > M10b: migration 1900 applied to prod 2026-11-11 (rls 175).
+> M10b (2026-11-11): built, re-reviewed (APPROVED), live specs green (m10b 7/7, pdf 7/7, ai-auth 15/15, editor 62, editor-spreads 8, viewer 14, m10b-viewer 6, launch-smoke, m10a, publish-auth, payments, analytics), goldens (m9 byte-frozen + m10b). PDF chunks ≤20 sheets / ≤60 distinct images, spread cap 1.5×. NOT deployed. Post-deploy: one real prod PDF with Arabic + new fonts (no Type3 / missing glyphs) and a real-photo large-book size check.
 > M10a (2026-11-10): built, reviewed (APPROVED), live e2e/m10a 7/7, launch-smoke 7/7, editor 59/59, goldens byte-frozen. No migration. NOT deployed. Needs user sign-off on fonts/textures (docs/design/) before M10b.
 
 ## Milestone 10+ — After launch

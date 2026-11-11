@@ -133,3 +133,11 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - Tests: vitest 4014, e2e/m10a.spec.ts live 7/7, launch-smoke 7/7, editor 59/59, pdf 7/7. Run report .agentos/runs/m10.md.
 - NEEDS-HUMAN: font + texture sign-off (docs/design/), phone check of facing pages/spread sheet/backgrounds; A7 font fallback chains on Linux sparticuz Chromium (check after deploy).
 - Backlog: delete-photo strip should reflow pages (D-028) before any delete UI; published_doc keeps deleted photo refs until republish; picker polish (slider 60% display, keyboard commit, toast tracking, end-card ink parity). NEXT: deploy M10a (merge only), then M10b after design sign-off (migration 1900 first).
+
+## 2026-11-11 — Milestone 10b — built + approved, awaiting deploy
+- Landscape (classic 7, modern 16) + modern portrait (14) layouts, two-page spreads stored as page pairs (D-064), split-strip covers, text panels; 6 new OFL fonts; format + style on New book form (fixed after creation, D-063/D-065); Storyteller v5 per (format, style); migration 1900 applied (rls 175).
+- Photo delete reflows the page (D-066), user captions + user-edited chapters never lost; review preview ignores spread right halves; unsupported_design for geometric/scrapbook until M10c.
+- PDF: spread bleed, deep image dedupe, chunks ≤20 sheets/≤60 images (pairs whole), print-ready cap scales, spread cap 1.5×, PDF_RENDERER_VERSION 3.
+- Tests: 5197 vitest, goldens, all live specs green; reviewer APPROVED. Runs: .agentos/runs/m10.md.
+- Open risks: worst-case synthetic 100p panorama book too_large after fallback + ~2 GB local peak (real-photo check on prod); intermittent Supabase fetch hang (no deadline); Mapbox token/plan (NEEDS-HUMAN).
+- NEXT: user "deploy" → merge to main; post-deploy real PDF check (Arabic + new fonts, Type0 only). Then M10c (geometric + scrapbook, shaped-slot crop, AI backgrounds).
