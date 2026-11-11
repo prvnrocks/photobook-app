@@ -222,9 +222,11 @@ function SlotContent({ slot, mode, priority }: { slot: RenderSlot; mode: BookRen
 
 /**
  * M10c slot (T8a): the slot element carries the tilt (rotate about its centre), the shape
- * (border-radius or vector clip-path), the box-shadow and the frame colour; a frame's photo sits
- * in an inner box (photo rect = slot minus frame inset) with the crop applied to that box. Never
- * CSS filter. The edit overlay covers the whole slot (a tap on the frame means this photo).
+ * (border-radius or vector clip-path) and the frame colour; a frame's photo sits in an inner box
+ * (photo rect = slot minus frame inset) with the crop applied to that box. The shadow (G1) is a
+ * sibling drawn just before the slot: the same box, shape and tilt, offset down/right, flat
+ * translucent fill. Never CSS filter or box-shadow (blur → soft masks in the PDF). The edit
+ * overlay covers the whole slot (a tap on the frame means this photo).
  */
 function ShapedPhotoSlot({
   slot,
@@ -245,7 +247,6 @@ function ShapedPhotoSlot({
     ...rotateStyle(look.rotate),
     ...(look.borderRadius ? { borderRadius: look.borderRadius } : {}),
     ...(look.clipPath ? { clipPath: look.clipPath } : {}),
-    ...(look.boxShadow ? { boxShadow: look.boxShadow } : {}),
     ...(look.frame ? { background: look.frame.color } : {}),
   };
   const data: Record<`data-${string}`, string> = {
@@ -256,7 +257,25 @@ function ShapedPhotoSlot({
   if (look.frame) data["data-slot-frame"] = look.frame.kind;
   if (look.rotate) data["data-slot-rotate"] = String(look.rotate);
   const f = look.frame;
+  const sh = look.shadow;
   return (
+    <>
+      {sh ? (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute"
+          style={{
+            ...rectStyle(slot.rect),
+            // `translate` applies after the tilt, in page space: the offset is always down/right.
+            translate: sh.translate,
+            ...rotateStyle(look.rotate),
+            ...(look.borderRadius ? { borderRadius: look.borderRadius } : {}),
+            ...(look.clipPath ? { clipPath: look.clipPath } : {}),
+            background: sh.color,
+          }}
+          data-slot-shadow={String(slot.index)}
+        />
+      ) : null}
     <div className="absolute overflow-hidden" style={outer} {...data}>
       {f ? (
         <div
@@ -275,6 +294,7 @@ function ShapedPhotoSlot({
       )}
       {mode === "edit" ? overlay : null}
     </div>
+    </>
   );
 }
 

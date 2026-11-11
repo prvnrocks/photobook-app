@@ -59,7 +59,11 @@ describe("render model: slot look (T8a)", () => {
   it("polaroid: rotate, lifted shadow, frame colour, photo rect = photoRectOf, crop on the photo rect", () => {
     const s = byIndex(0);
     const pr = photoRectOf(TEST_M10C_PAGE, 0, "A5_PORTRAIT")!;
-    expect(s.look).toMatchObject({ rotate: -4, boxShadow: STYLE_TOKENS.scrapbook.shadows!.lifted });
+    const lifted = STYLE_TOKENS.scrapbook.shadows!.lifted;
+    // Drawn shadow: the token's mm offset as % of the slot box (CSS translate), flat colour.
+    const tx = Math.round(((lifted.dxMm / (0.5 * PAGE.w)) * 100) * 1e4) / 1e4;
+    const ty = Math.round(((lifted.dyMm / (0.36 * PAGE.h)) * 100) * 1e4) / 1e4;
+    expect(s.look).toMatchObject({ rotate: -4, shadow: { translate: `${tx}% ${ty}%`, color: lifted.color } });
     expect(s.look!.frame).toMatchObject({ kind: "polaroid", color: STYLE_TOKENS.scrapbook.palette!.frame });
     const f = s.look!.frame!.photo;
     expect(f.x).toBeCloseTo(((pr.x - 8) / 50) * 100, 3);
@@ -78,7 +82,8 @@ describe("render model: slot look (T8a)", () => {
     const w = 0.38 * PAGE.w;
     const h = 0.26 * PAGE.h;
     expect(s.look!.borderRadius).toBe(`${Math.round((4 / w) * 1e6) / 1e4}% / ${Math.round((4 / h) * 1e6) / 1e4}%`);
-    expect(s.look!.boxShadow).toBe(STYLE_TOKENS.scrapbook.shadows!.soft);
+    expect(s.look!.shadow!.color).toBe(STYLE_TOKENS.scrapbook.shadows!.soft.color);
+    expect(s.look!.shadow!.translate).toMatch(/^[\d.]+% [\d.]+%$/);
     expect(s.look!.frame).toMatchObject({ kind: "border", color: "#FFFFFF" });
     expect(s.look!.frame!.borderRadius).toMatch(/% \/ .*%$/);
     expect(s.look!.clipPath).toBeUndefined();
@@ -88,10 +93,11 @@ describe("render model: slot look (T8a)", () => {
     expect(byIndex(2).look).toEqual({ shape: "circle", borderRadius: "50%" });
   });
 
-  it("polygons: clip-path (screen = slot box), no box-shadow (clip-path would cut it)", () => {
+  it("polygons: clip-path (screen = slot box); the drawn shadow reuses it (no box-shadow)", () => {
     expect(byIndex(3).look!.clipPath).toBe(clipPathFor({ kind: "hexagon" }, TEST_M10C_PAGE.slots[3], TEST_M10C_PAGE.slots[3], PAGE));
     expect(byIndex(3).look!.clipPath).toMatch(/^polygon\(/);
-    expect(byIndex(4).look).toEqual({ shape: "diamond", clipPath: "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)" });
+    expect(byIndex(4).look).toMatchObject({ shape: "diamond", clipPath: "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)" });
+    expect(byIndex(4).look!.shadow!.color).toBe(STYLE_TOKENS.scrapbook.shadows!.soft.color);
     expect(byIndex(5).look!.clipPath).toMatch(/^polygon\(/);
   });
 
@@ -203,7 +209,10 @@ describe("markup (editor, flipbook and print share it)", () => {
       expect(h).toContain('data-slot-frame="polaroid"');
       expect(h).toContain('data-slot-rotate="-4"');
       expect(h).toContain("transform:rotate(-4deg)");
-      expect(h).toContain(`box-shadow:${STYLE_TOKENS.scrapbook.shadows!.lifted}`);
+      // Crisp drawn shadow: a sibling under the slot with the same tilt, no box-shadow / blur.
+      expect(h).toContain('data-slot-shadow="0"');
+      expect(h).toContain(`background:${STYLE_TOKENS.scrapbook.shadows!.lifted.color}`);
+      expect(h).not.toContain("box-shadow");
       expect(h).toContain('data-slot-shape="circle"');
       expect(h).toContain("border-radius:50%");
       expect(h).toContain("clip-path:polygon(");

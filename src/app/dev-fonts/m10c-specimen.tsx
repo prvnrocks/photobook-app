@@ -146,7 +146,9 @@ function GeometricVignette({ lang }: { lang: "en" | "ar" }) {
 function ScrapbookVignette({ lang }: { lang: "en" | "ar" }) {
   const s = SAMPLES[lang];
   const p = STYLE_TOKENS.scrapbook.palette!;
-  const sh = STYLE_TOKENS.scrapbook.shadows!;
+  const lifted = STYLE_TOKENS.scrapbook.shadows!.lifted;
+  // Specimen only: an unblurred box-shadow approximates the book's drawn shadow shape (BookPage draws a sibling).
+  const shadow = `${lifted.dxMm}mm ${lifted.dyMm}mm 0 ${lifted.color}`;
   const rtl = lang === "ar";
   const flip = (mm: number) => (rtl ? { right: `${mm}mm` } : { left: `${mm}mm` });
   return (
@@ -155,14 +157,14 @@ function ScrapbookVignette({ lang }: { lang: "en" | "ar" }) {
       style={{ position: "relative", width: "62mm", height: "88mm", background: `${p.background} url(/design/textures/paper-cream.webp) 0 0 / 40mm 40mm`, overflow: "hidden", boxShadow: "0 0.3mm 1.2mm rgba(0,0,0,.18)" }}
     >
       {/* polaroid 1 */}
-      <div style={{ position: "absolute", ...flip(5), top: "7mm", width: "34mm", height: "38mm", background: p.frame, boxShadow: sh.lifted, transform: `rotate(${rtl ? 3 : -3}deg)` }}>
+      <div style={{ position: "absolute", ...flip(5), top: "7mm", width: "34mm", height: "38mm", background: p.frame, boxShadow: shadow, transform: `rotate(${rtl ? 3 : -3}deg)` }}>
         <Photo i={0} style={{ left: "2mm", top: "2mm", width: "30mm", height: "28mm" }} />
       </div>
       <div style={{ position: "absolute", ...flip(13), top: "4mm", transform: `rotate(${rtl ? 6 : -6}deg)` }}>
         <Sticker id="tape-washi" tint={p.tape} w="18mm" />
       </div>
       {/* polaroid 2 */}
-      <div style={{ position: "absolute", ...flip(33), top: "20mm", width: "25mm", height: "29mm", background: p.frame, boxShadow: sh.lifted, transform: `rotate(${rtl ? -5 : 5}deg)` }}>
+      <div style={{ position: "absolute", ...flip(33), top: "20mm", width: "25mm", height: "29mm", background: p.frame, boxShadow: shadow, transform: `rotate(${rtl ? -5 : 5}deg)` }}>
         <Photo i={1} style={{ left: "1.6mm", top: "1.6mm", width: "21.8mm", height: "21mm" }} />
       </div>
       <div style={{ position: "absolute", ...flip(2.5), top: "40mm" }}>

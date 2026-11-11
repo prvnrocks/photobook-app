@@ -86,7 +86,8 @@ export interface RenderSlot {
 /**
  * How a shaped / tilted / framed slot is drawn (M10c T8a). All CSS strings are relative to the
  * slot box as rendered (`RenderSlot.rect`). Print-safe only: vector clip-path / border-radius,
- * rotate transform, box-shadow — never CSS filter (A7: it rasterises the photo and kills text).
+ * rotate transform, a drawn (unblurred) shadow shape — never CSS filter (A7: it rasterises the
+ * photo and kills text) and never box-shadow (blur prints as a soft mask; G1).
  */
 export interface RenderSlotLook {
   /** Shape kind when not a plain rect (data attribute, tests). */
@@ -95,10 +96,14 @@ export interface RenderSlotLook {
   rotate?: number;
   /** clip-path on the slot box (polygons; round shapes only when the box was bleed-extended). */
   clipPath?: string;
-  /** border-radius on the slot box (rounded / circle / ellipse: keeps box-shadow on the shape). */
+  /** border-radius on the slot box (rounded / circle / ellipse). */
   borderRadius?: string;
-  /** CSS box-shadow from the style's shadow token (omitted on polygons: clip-path would cut it). */
-  boxShadow?: string;
+  /**
+   * Crisp drawn shadow from the style's token: the slot box (same shape, rotation, frame outline)
+   * moved by `translate` (CSS translate, % of the slot box = the token's mm offset down/right) and
+   * filled `color`, painted just under the slot. Its own element — no box-shadow, no filter.
+   */
+  shadow?: { translate: string; color: string };
   /** Frame band: the slot box is painted `color`, the photo sits in `photo` (% of the slot box). */
   frame?: {
     kind: "border" | "polaroid";
@@ -180,7 +185,8 @@ export interface RenderTextPanel extends RenderText {
   role: TextRole;
   /** % of the page (spread halves: already shifted into this page). */
   rect: Rect;
-  align: "start" | "center" | "end";
+  /** Logical (classic / modern) or physical (geometric / scrapbook: panelAlign) text-align. */
+  align: RenderAlign;
   fontSizeCqw: number;
   lineHeight: number;
   typography: RenderTypography;
@@ -425,9 +431,14 @@ function slotLook(layout: Layout, i: number, renderRect: Rect, format: BookForma
     }
   }
   if (s.rotate) look.rotate = s.rotate;
-  if (s.shadow && s.shadow !== "none" && !look.clipPath) {
+  if (s.shadow && s.shadow !== "none") {
     const shadows = styleTokens(layout.style).shadows ?? STYLE_TOKENS.scrapbook.shadows;
-    if (shadows) look.boxShadow = shadows[s.shadow];
+    const t = shadows?.[s.shadow];
+    if (t) {
+      const wMm = (renderRect.w / 100) * page.w;
+      const hMm = (renderRect.h / 100) * page.h;
+      look.shadow = { translate: `${pct4((t.dxMm / wMm) * 100)} ${pct4((t.dyMm / hMm) * 100)}`, color: t.color };
+    }
   }
   if (s.frame && s.frame.kind !== "none") {
     const pr = photoRectOf(layout, i, format);
@@ -572,7 +583,24 @@ export function captionAlignOn(layout: Pick<Layout, "style" | "texts">, c: Pick<
   if (layout.style === "classic") return c?.align ?? "center";
   if (c?.source === "user") return c.align;
   const panel = layout.texts?.find((t) => t.bind === "pageCaption") ?? layout.texts?.find((t) => t.bind === "chapterTitle");
-  return panel?.align ?? "center";
+  return panelAlign(layout.style, panel?.align ?? "center");
+}
+
+/**
+ * Design styles whose text panels sit against layout artwork (accent shapes, rules, plates):
+ * their side is part of the design, so it must not flip with the script (M10c G1 fix).
+ */
+const SIDE_LOCKED_STYLES: ReadonlySet<string> = new Set(["geometric", "scrapbook"]);
+
+/**
+ * CSS text-align of a layout panel's `align` on `style`. Classic / modern keep the logical value
+ * (start/end follow dir="auto", markup frozen by goldens). Geometric / scrapbook use the physical
+ * side the layout was drawn for (start = left, end = right) so an Arabic chapter title stays next
+ * to its accent; dir="auto" still gives Arabic its shaping and word order.
+ */
+export function panelAlign(style: string | undefined, align: RenderAlign): RenderAlign {
+  if (!style || !SIDE_LOCKED_STYLES.has(style)) return align;
+  return align === "start" ? "left" : align === "end" ? "right" : align;
 }
 
 function shiftRect(r: Rect, offset: number): Rect {
@@ -686,7 +714,7 @@ function textPanels(
       rect,
       text,
       lang: captionTextAttrs(text, captionLang).lang,
-      align: t.align,
+      align: panelAlign(layout.style, t.align),
       fontFamily: f.fontFamily,
       fontSizeCqw: round4((sizeMm / page.w) * 100),
       lineHeight: PANEL_TYPE[t.font].lineHeight,

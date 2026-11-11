@@ -95,10 +95,15 @@ describe("style tokens (M10c T3)", () => {
       expect(isStickerId(p.plate.id)).toBe(true);
       expect(STICKERS[p.plate.id].kind).toBe("plate");
       const sh = STYLE_TOKENS[s].shadows!;
+      // Crisp drawn shadows (G1): offset down/right in mm, flat translucent black, nothing blurred.
       for (const v of [sh.soft, sh.lifted]) {
-        expect(v).toMatch(/mm/);
-        expect(v).not.toMatch(/filter|blur\(|drop-shadow/);
+        expect(v.dxMm).toBeGreaterThan(0);
+        expect(v.dyMm).toBeGreaterThan(0);
+        expect(v.dyMm).toBeLessThanOrEqual(2);
+        expect(v.color).toMatch(/^rgba\(0, 0, 0, 0\.\d+\)$/);
+        expect(Object.keys(v).sort()).toEqual(["color", "dxMm", "dyMm"]);
       }
+      expect(sh.lifted.dyMm).toBeGreaterThan(sh.soft.dyMm);
     }
     expect(STYLE_TOKENS.classic.palette).toBeUndefined();
     expect(STYLE_TOKENS.modern.palette).toBeUndefined();

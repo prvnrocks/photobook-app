@@ -59,10 +59,26 @@ export interface StylePalette {
   stickerTints: readonly string[];
 }
 
-/** Slot shadow presets as CSS box-shadow, in mm (never CSS filter: it rasterises in print). */
+/**
+ * A crisp drawn shadow (M10c G1 fix): a translucent copy of the slot shape (same box, shape,
+ * rotation, frame outline) offset down/right and painted just under the slot. No blur, no
+ * box-shadow, no CSS filter: Chromium prints blurred shadows as Luminosity soft masks that Apple
+ * PDF renderers (Preview, iOS) paint as a hard grey box; a flat rgba fill prints as plain vector
+ * with a constant alpha.
+ */
+export interface DrawnShadow {
+  /** Offset to the right, mm of the page. */
+  dxMm: number;
+  /** Offset down, mm of the page. */
+  dyMm: number;
+  /** Translucent black fill (CSS rgba). */
+  color: string;
+}
+
+/** Slot shadow presets (never CSS filter or blurred box-shadow: print rule D-062 + G1). */
 export interface StyleShadows {
-  soft: string;
-  lifted: string;
+  soft: DrawnShadow;
+  lifted: DrawnShadow;
 }
 
 export interface StyleTokens {
@@ -92,10 +108,10 @@ const MODERN_FONTS: Record<TextRole, RoleFontToken> = {
   caption: { latin: "Cormorant", arabic: "Amiri", weight: 400 },
 };
 
-// Small blur radii keep the print soft-mask small (each box-shadow = one mask per sheet; M10c risk).
+// Crisp drawn shadows (G1 sign-off): soft = paper lying flat, lifted = polaroid standing off the page.
 const SHADOWS: StyleShadows = {
-  soft: "0 0.35mm 1mm rgba(0, 0, 0, 0.16)",
-  lifted: "0.3mm 0.9mm 1.8mm rgba(0, 0, 0, 0.2), 0 0.15mm 0.4mm rgba(0, 0, 0, 0.12)",
+  soft: { dxMm: 0.7, dyMm: 0.9, color: "rgba(0, 0, 0, 0.14)" },
+  lifted: { dxMm: 1.1, dyMm: 1.5, color: "rgba(0, 0, 0, 0.17)" },
 };
 
 const GEOMETRIC: StyleTokens = {

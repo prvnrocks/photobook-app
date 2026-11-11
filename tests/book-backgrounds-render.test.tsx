@@ -284,7 +284,8 @@ describe("print: no CSS filter anywhere (A7 guard)", () => {
       const html = renderToStaticMarkup(<PrintDocument doc={doc} photos={shown} captionLang="en" sheets={sheets} />);
       expect(html).toContain("clip-path:polygon(");
       expect(html).toContain("transform:rotate(");
-      expect(html).toContain("box-shadow:");
+      expect(html).toContain("data-slot-shadow=");
+      expect(html).not.toContain("box-shadow");
       expect(html).toContain("data-decoration=");
       expect(html).toContain("data-text-plate=");
       expect(html).not.toMatch(/filter/i);
