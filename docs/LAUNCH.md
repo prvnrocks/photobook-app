@@ -341,6 +341,11 @@ Rollback levers (fastest first):
   any page background, landscape, a non-classic style) break on older code — the editor says the doc is
   invalid, `/b/<slug>` shows "unavailable" (v2 published snapshot), PDF export fails. Colour-only books are
   stored as v1 and are unaffected. Prefer fixing forward once users have picked textures/photo backgrounds.
+  **Rolling back past M10c (D-068)**: Geometric and Scrapbook books hit `unsupported_design` on M10b/M11 code
+  (editor save 422, AI runs refused, rule album not built) and their layouts (`g-*`, `s-*`) are unknown, so the
+  editor/viewer/PDF show them as invalid. Docs with `style.backgroundSource` (Modern/Geometric/Scrapbook books
+  built on M10c) fail the older schema. `photos.color` values written by M10c are ignored by older code. No
+  migration is involved; prefer fixing forward once users have made Geometric/Scrapbook books.
 - **PDF renderer version (M10b: `PDF_RENDERER_VERSION` 2 → 3, `src/lib/pdf/rules.ts`)** — bumped because the
   print fonts changed (Arabic inside Latin captions now prints in Cairo, not a system fallback) and merged PDFs
   dedupe images across chunks. A ready PDF is reused only for the same version, so after the M10b deploy each
