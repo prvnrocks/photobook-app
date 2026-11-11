@@ -182,6 +182,17 @@ Plan + decisions: `.agentos/runs/m10.md`, D-062. Three shippable phases.
 > M10b (2026-11-11): built, re-reviewed (APPROVED), live specs green (m10b 7/7, pdf 7/7, ai-auth 15/15, editor 62, editor-spreads 8, viewer 14, m10b-viewer 6, launch-smoke, m10a, publish-auth, payments, analytics), goldens (m9 byte-frozen + m10b). PDF chunks ≤20 sheets / ≤60 distinct images, spread cap 1.5×. Deployed 2026-11-11 (main d922e15). Post-deploy: one real prod PDF with Arabic + new fonts (no Type3 / missing glyphs) and a real-photo large-book size check.
 > M10a (2026-11-10): built, reviewed (APPROVED), live e2e/m10a 7/7, launch-smoke 7/7, editor 59/59, goldens byte-frozen. No migration. NOT deployed. Needs user sign-off on fonts/textures (docs/design/) before M10b.
 
+## Milestone 11 — App UX polish (before M10c)
+App screens take on the book look (Classic serif / Modern clean); app chrome only — BookPage, print and layouts unchanged. Plan: `.agentos/runs/m11.md`, D-067.
+- [ ] Design foundation: app tokens (paper palette, Playfair display + Inter/Cairo body, radius, shadow, spacing), 44 px buttons, shared PageHeader / StepProgress / Notice / EmptyState / Loading / Toast; style board signed off (docs/design/m11-style-board-*.png)
+- [ ] App shell: header + account menu, loading skeletons on every signed-in route, app not-found + error pages
+- [ ] Landing, login, settings, dashboard (book cards with cover thumbnails), New book form (grouped, correct "fixed at creation" copy)
+- [ ] Upload → AI build (real-stage checklist) → Review (one clear Continue / Update album / Rebuild hierarchy), step progress across the flow
+- [ ] Editor on a phone: docked Layout + Replace pickers (page stays visible), clearer toolbar, one-time hint, consistent sheets/toasts
+- [ ] Publish & share (WhatsApp first, free vs paid card), upgrade/payment states, PDF download, public viewer chrome
+- [ ] e2e/m11.spec.ts: every screen at 375 px — no sideways scroll, ≥ 44 px targets, visible focus, AA contrast
+**Done when:** on a 375 px phone a new user goes landing → login → new book → upload → AI build → review → edit → publish → share → upgrade → PDF in one consistent Classic/Modern look, always knows the next step, never scrolls sideways; m9 + m10b goldens and the print pixel baseline are unchanged, analytics events still fire, all live specs are green.
+
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
 - [ ] AI "story mode": a short paragraph per chapter; AI-picked background colours from the photos
