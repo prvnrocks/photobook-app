@@ -118,6 +118,7 @@ async function bookDoc(bookId: string): Promise<unknown> {
 async function createBookViaUi(): Promise<string> {
   await page.goto("/books/new");
   await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
+  await page.getByRole("radio", { name: /Modern/ }).check(); // D-068: travel now defaults to Geometric; this spec covers Modern.
   await expect(page.getByTestId("occasion-travel")).toBeChecked();
   await page.getByTestId("create-book").click();
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });

@@ -112,7 +112,7 @@ export function NewBookForm({ initialTone, initialLang, fromMemory = false }: Ne
   const [captionLang, setCaptionLang] = useState<CaptionLang>(initial.captionLang);
   const [title, setTitle] = useState("");
   const [format, setFormat] = useState<BookFormat>(DEFAULT_FORM_FORMAT);
-  // null = follow the occasion's default style (D-065); set once the user picks one.
+  // null = follow the occasion's default style (D-068); set once the user picks one.
   const [manualStyle, setManualStyle] = useState<FormDesignStyle | null>(null);
   const designStyle = effectiveStyle(manualStyle, occasion);
 

@@ -447,10 +447,11 @@ async function createBookAt(
   await page.goto(`${base}/books/new`);
   await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
   await expect(page.getByTestId("occasion-travel")).toBeChecked();
-  if (opts.style) {
-    // M10b A12: the form defaults to Modern (spreads → fewer captionable pages per photo).
-    await page.getByRole("radio", { name: opts.style === "classic" ? /Classic/ : /Modern/ }).check();
-    await expect(page.getByTestId(`style-${opts.style}`)).toBeChecked();
+  {
+    // D-068: travel defaults to Geometric; these specs cover Modern (default here) or Classic.
+    const style = opts.style ?? "modern";
+    await page.getByRole("radio", { name: style === "classic" ? /Classic/ : /Modern/ }).check();
+    await expect(page.getByTestId(`style-${style}`)).toBeChecked();
   }
   if (opts.tone) {
     await page.locator("label", { has: page.getByTestId(`tone-${opts.tone}`) }).click();
@@ -1220,6 +1221,7 @@ test("n. memory → new book prefilled (tone + hint); book 2 build gets memory; 
   await expect(page.getByTestId("tone-nostalgic")).toBeChecked();
   await expect(page.getByTestId("lang-en")).toBeChecked();
   await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
+  await page.getByRole("radio", { name: /Modern/ }).check(); // D-068: travel now defaults to Geometric; this spec covers Modern.
   // The remembered tone survives picking an occasion whose default differs (travel → fun).
   await expect(page.getByTestId("tone-nostalgic")).toBeChecked();
   await expect(page.getByTestId("new-book-from-memory")).toBeVisible();

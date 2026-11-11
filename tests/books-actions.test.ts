@@ -79,10 +79,19 @@ describe("createBookAction", () => {
     });
   });
 
-  it("absent shape / style (pre-M10b form) → portrait + the occasion's default style (modern)", async () => {
+  it("absent shape / style (pre-M10b form) → portrait + the occasion's default style (travel → geometric, D-068)", async () => {
     const r = await run(valid);
     expect(r.redirect).toBe(`/books/${BOOK_ID}/upload`);
-    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ format: "A5_PORTRAIT", designStyle: "modern" });
+    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ format: "A5_PORTRAIT", designStyle: "geometric" });
+  });
+
+  it.each([
+    ["wedding", "modern"],
+    ["baby", "scrapbook"],
+    ["other", "modern"],
+  ] as const)("absent style for %s → %s (D-068)", async (occasion, designStyle) => {
+    await run({ ...valid, occasion });
+    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ designStyle });
   });
 
   it("passes portrait + modern through", async () => {
@@ -90,11 +99,15 @@ describe("createBookAction", () => {
     expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ format: "A5_PORTRAIT", designStyle: "modern" });
   });
 
-  it.each(["geometric", "scrapbook"])("refuses %s for now with a friendly error (D-065)", async (designStyle) => {
-    const r = await run({ ...valid, format: "A5_PORTRAIT", designStyle });
-    expect(r.redirect).toBeNull();
-    expect(r.state?.fieldErrors?.designStyle).toMatch(/coming soon/i);
-    expect(mocks.createBook).not.toHaveBeenCalled();
+  it.each([
+    ["A5_PORTRAIT", "geometric"],
+    ["A5_LANDSCAPE", "geometric"],
+    ["A5_PORTRAIT", "scrapbook"],
+    ["A5_LANDSCAPE", "scrapbook"],
+  ] as const)("accepts %s + %s (M10c, D-068)", async (format, designStyle) => {
+    const r = await run({ ...valid, occasion: "wedding", format, designStyle });
+    expect(r.redirect).toBe(`/books/${BOOK_ID}/upload`);
+    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ format, designStyle });
   });
 
   it("redirects signed-out users to login without creating", async () => {
@@ -116,6 +129,7 @@ describe("createBookAction", () => {
     ["designStyle", { designStyle: "brutalist" }],
     ["designStyle", { designStyle: "" }],
     ["designStyle", { designStyle: "Modern" }],
+    ["designStyle", { designStyle: "Scrapbook" }],
   ] as const)("rejects a bad %s", async (field, patch) => {
     const r = await run({ ...valid, ...patch });
     expect(r.redirect).toBeNull();

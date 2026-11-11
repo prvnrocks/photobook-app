@@ -1,15 +1,15 @@
-// New book form design defaults + labels (M10b A12, D-063, D-065). Pure data, client-safe.
+// New book form design defaults + labels (M10b A12, D-063, D-065; M10c T13, D-068). Pure data,
+// client-safe.
 //
 // The form offers a shape (format) and a design style. Both are fixed at creation (D-063): the
-// editor only shows them (designLabel). M10b offers Modern + Classic only; geometric and scrapbook
-// exist in the schema but arrive in M10c (add them to FORM_DESIGN_STYLES and pick per occasion
-// in DEFAULT_STYLE_BY_OCCASION then).
+// editor only shows them (designLabel). M10c offers all four styles; each occasion picks its
+// default (D-068) until the user chooses one.
 
 import type { Occasion } from "@/lib/book/options";
 import type { BookFormat, DesignStyle } from "@/lib/book/types";
 
-/** Styles a user can pick on the New book form, in display order (D-065). */
-export const FORM_DESIGN_STYLES = ["modern", "classic"] as const satisfies readonly DesignStyle[];
+/** Styles a user can pick on the New book form, in display order (2×2 grid on phones; D-068). */
+export const FORM_DESIGN_STYLES = ["modern", "classic", "geometric", "scrapbook"] as const satisfies readonly DesignStyle[];
 export type FormDesignStyle = (typeof FORM_DESIGN_STYLES)[number];
 
 /** Shapes offered on the form, in display order (portrait first = default). */
@@ -17,13 +17,13 @@ export const FORM_FORMATS = ["A5_PORTRAIT", "A5_LANDSCAPE"] as const satisfies r
 
 export const DEFAULT_FORM_FORMAT: BookFormat = "A5_PORTRAIT";
 
-/** Default style per occasion (D-065): every occasion → modern for now; M10c refines. */
+/** Default style per occasion (D-068, replaces D-065's all-Modern). */
 export const DEFAULT_STYLE_BY_OCCASION: Record<Occasion, FormDesignStyle> = {
   wedding: "modern",
-  travel: "modern",
-  baby: "modern",
-  graduation: "modern",
-  family: "modern",
+  travel: "geometric",
+  baby: "scrapbook",
+  graduation: "geometric",
+  family: "scrapbook",
   other: "modern",
 };
 
@@ -69,6 +69,8 @@ export const DESIGN_STYLE_LABELS: Record<DesignStyle, string> = {
 export const DESIGN_STYLE_HINTS: Record<FormDesignStyle, string> = {
   modern: "Edge-to-edge photos, script titles",
   classic: "Framed photos, simple captions",
+  geometric: "Bold shapes, clean colour blocks",
+  scrapbook: "Tilted prints, tape and stickers",
 };
 
 /** Read-only editor label, e.g. "A5 Landscape · Modern". */

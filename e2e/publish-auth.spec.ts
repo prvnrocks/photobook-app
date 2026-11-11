@@ -327,6 +327,7 @@ test("a. build (replay) → editor → Done lands on /books/<id>/publish", async
   needMigrations();
   test.setTimeout(600_000);
   await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
+  await page.getByRole("radio", { name: /Modern/ }).check(); // D-068: travel now defaults to Geometric; this spec covers Modern.
   await page.getByTestId("create-book").click();
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
   bookId = new URL(page.url()).pathname.split("/")[2];

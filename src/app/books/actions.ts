@@ -40,7 +40,8 @@ const NewBookSchema = z.object({
   tone: z.enum(TONES, { error: "Please choose a tone." }),
   captionLang: z.enum(CAPTION_LANGS, { error: "Please choose a caption language." }),
   // D-063: fixed at creation. Absent (a form rendered before M10b) → portrait / the occasion's
-  // default style; any value sent must be in the enum, and the style one the form offers (D-065).
+  // default style (D-068); any value sent must be in the enum and one the form offers (all four
+  // since M10c).
   format: z.preprocess(
     absentToUndefined,
     z.enum(BookFormatSchema.options, { error: "Please choose a shape." }).optional(),
@@ -49,7 +50,7 @@ const NewBookSchema = z.object({
     absentToUndefined,
     z
       .enum(DesignStyleSchema.options, { error: "Please choose a style." })
-      .refine(isFormDesignStyle, { error: "That style is coming soon. Please choose Modern or Classic." })
+      .refine(isFormDesignStyle, { error: "Please choose a style." })
       .optional(),
   ),
 });
@@ -63,7 +64,7 @@ const FIELDS: readonly NewBookField[] = ["title", "occasion", "tone", "captionLa
 /**
  * Creates a book. Form fields: `title` (optional), `occasion`, `tone`,
  * `captionLang`, `format` + `designStyle` (D-063, fixed at creation; absent → portrait / the
- * occasion's default style; geometric/scrapbook refused until M10c, D-065). On success
+ * occasion's default style, D-068). On success
  * redirects to /books/<id>/upload (never returns); signed out → /login?next=/books/new.
  */
 export async function createBookAction(
