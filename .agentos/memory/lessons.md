@@ -119,3 +119,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-11, next) Importing anything from a module that imports a "use client" package (ui/button → @base-ui/react/button) ships it to the importing server page's client bundle — keep pure class recipes (cva) in their own file (src/components/ui/button-variants.ts).
 - (2026-11-11, next) A route.ts may only export route fields (handlers, runtime, maxDuration…) — next build fails otherwise; keep zod body schemas in a lib module.
 - (2026-11-11, geometry) When extending a clip polygon into print bleed, stop each edge ray only at the extended (bleed) sides, or a diagonal edge leaves an unfilled sliver.
+- (2026-11-11, pdf) Chromium turns blurred box-shadow into Luminosity soft masks that Apple PDF renderers (Preview, iOS) ignore → hard grey box. Check shadows with sips/PDFKit, not only Chrome/pdfjs. Prove photo passthrough by hashing served JPEGs vs PDF image streams.
