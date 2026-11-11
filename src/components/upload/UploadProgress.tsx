@@ -1,5 +1,6 @@
 "use client";
-// Progress card shown while the upload queue runs. Presentational only.
+// Progress card shown while the upload queue runs. Presentational only. The "Keep this screen open"
+// notice lives in <Uploader> (shown while uploading and finalizing).
 import type { QueueProgress } from "@/lib/upload/queue";
 import { Button } from "@/components/ui/button";
 import { useThrottledValue } from "./use-throttled-value";
@@ -22,10 +23,10 @@ export function UploadProgress({ progress, paused, onTogglePause }: UploadProgre
 
   return (
     <section
-      className="flex min-w-0 flex-col gap-3 rounded-xl border bg-card p-4"
+      className="flex min-w-0 flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-card sm:p-6"
       data-testid="upload-running"
     >
-      <p className="text-base font-medium" role="status" aria-live="polite" data-testid="upload-progress">
+      <p className="type-h2 [font-variant-numeric:lining-nums_tabular-nums]" role="status" aria-live="polite" data-testid="upload-progress">
         {shownText}
       </p>
       <div
@@ -38,7 +39,7 @@ export function UploadProgress({ progress, paused, onTogglePause }: UploadProgre
         className="h-3 w-full overflow-hidden rounded-full bg-muted"
       >
         <div
-          className="h-full rounded-full bg-primary transition-[width] duration-300"
+          className="h-full rounded-full bg-accent-strong transition-[width] duration-300 motion-reduce:transition-none"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -47,14 +48,12 @@ export function UploadProgress({ progress, paused, onTogglePause }: UploadProgre
         {skipped > 0 ? ` · ${skipped} skipped` : null}
         {failed > 0 ? ` · ${failed} failed` : null}
       </p>
-      <p className="text-sm text-muted-foreground">
-        Keep this screen open until it finishes.
-      </p>
       <Button
         type="button"
         variant="outline"
+        size="touch"
         onClick={onTogglePause}
-        className="h-11 w-full text-base"
+        className="w-full text-base"
         data-testid="upload-pause"
       >
         {paused ? "Resume" : "Pause"}

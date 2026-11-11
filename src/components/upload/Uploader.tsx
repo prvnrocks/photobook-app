@@ -4,9 +4,14 @@
 // with it exifr / heic2any are loaded one level deeper, on the first photo.
 // Nothing about the photos (names, dates, places) is logged or sent anywhere
 // except the user's own Supabase rows/files.
+// M11 T10 (D-067): a large drop-zone style "Choose photos" area (tap to pick; desktop can also drop
+// files on it), status boxes as shared <Notice>s and "Keep this screen open" as an info notice.
+import { ImagePlus } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState, useTransition, type ChangeEvent } from "react";
+import { useEffect, useId, useRef, useState, useTransition, type ChangeEvent, type DragEvent } from "react";
 import { deleteUnfinishedAction } from "@/app/books/actions";
+import { LoadingState } from "@/components/app/LoadingState";
+import { Notice } from "@/components/app/Notice";
 import { Button } from "@/components/ui/button";
 import { track } from "@/lib/analytics/client";
 import {
@@ -48,7 +53,8 @@ const FINALIZE_MESSAGES: Record<FinalizeError, string> = {
   rate_limited: "We're still finishing your album. Your photos are safe — please try again in a moment.",
 };
 
-const noticeClass = "rounded-xl border p-4 text-base break-words";
+const signInLinkClass =
+  "inline-flex min-h-11 items-center rounded-md font-medium text-foreground underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export function Uploader(props: UploaderProps) {
   const { bookId, userId, isPaid, maxUpload } = props;
@@ -85,6 +91,8 @@ export function Uploader(props: UploaderProps) {
   const [loadFailed, setLoadFailed] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [removing, startRemove] = useTransition();
+  const [dragOver, setDragOver] = useState(false);
+  const capacityId = useId();
 
   const uploading = phase === "running";
   const busy = uploading || phase === "finalizing";
@@ -236,6 +244,21 @@ export function Uploader(props: UploaderProps) {
     void handleFiles(files);
   }
 
+  // Desktop: dropping files on the picker area feeds the same queue (it skips non-photos itself).
+  function onDragOver(e: DragEvent<HTMLButtonElement>) {
+    if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setDragOver(true);
+  }
+
+  function onDrop(e: DragEvent<HTMLButtonElement>) {
+    if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+    e.preventDefault();
+    setDragOver(false);
+    void handleFiles(Array.from(e.dataTransfer.files));
+  }
+
   function openPicker() {
     inputRef.current?.click();
   }
@@ -285,10 +308,7 @@ export function Uploader(props: UploaderProps) {
       />
 
       {showResume ? (
-        <div
-          className={`${noticeClass} border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-50`}
-          data-testid="upload-resume"
-        >
+        <Notice tone="warn" data-testid="upload-resume">
           <p>
             {pending === 1
               ? "1 photo didn't finish uploading."
@@ -298,10 +318,11 @@ export function Uploader(props: UploaderProps) {
           <Button
             type="button"
             variant="outline"
+            size="touch"
             onClick={removeUnfinished}
             disabled={removing}
             aria-busy={removing}
-            className="mt-3 h-11 w-full text-base"
+            className="mt-3 w-full text-base"
             data-testid="remove-unfinished"
           >
             {removing ? "Removing…" : "Remove unfinished"}
@@ -311,99 +332,111 @@ export function Uploader(props: UploaderProps) {
               {removeError}
             </p>
           ) : null}
-        </div>
+        </Notice>
       ) : null}
 
       {showPicker ? (
         <div className="flex flex-col gap-2">
-          <Button
+          <button
             type="button"
             onClick={openPicker}
-            className="h-16 w-full text-lg"
+            onDragOver={onDragOver}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDrop}
+            aria-describedby={capacityId}
+            data-drag={dragOver ? "over" : undefined}
+            className="group flex min-h-40 w-full flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-input bg-card px-6 py-8 text-center shadow-card transition-colors outline-none hover:border-accent-strong hover:bg-secondary/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[drag=over]:border-accent-strong data-[drag=over]:bg-secondary"
             data-testid="upload-pick"
           >
-            Choose photos
-          </Button>
-          <p className="text-center text-sm text-muted-foreground" data-testid="upload-capacity">
+            <span
+              aria-hidden="true"
+              className="flex size-14 items-center justify-center rounded-full bg-accent-strong text-accent-strong-foreground shadow-card"
+            >
+              <ImagePlus className="size-7" />
+            </span>
+            <span className="type-h2 text-foreground">Choose photos</span>
+            <span className="type-small text-muted-foreground">
+              Select as many as you like at once. iPhone photos (HEIC) work too.
+            </span>
+          </button>
+          <p
+            id={capacityId}
+            className="text-center text-sm text-muted-foreground"
+            data-testid="upload-capacity"
+          >
             Up to {maxUpload} photos in this book · {readyCount} added
           </p>
         </div>
       ) : null}
 
       {loadFailed ? (
-        <p
-          className={`${noticeClass} border-destructive/30 bg-destructive/10 text-destructive`}
-          role="alert"
-          data-testid="upload-error"
-        >
+        <Notice tone="error" data-testid="upload-error">
           We couldn&apos;t start the upload. Check your connection and choose your photos again.
-        </p>
+        </Notice>
       ) : null}
 
       {limitNotice ? (
-        <p
-          className={`${noticeClass} border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-50`}
-          data-testid="upload-limit"
-        >
+        <Notice tone="warn" data-testid="upload-limit">
           {isPaid ? "This book holds" : "Free books hold"} {limitNotice.limit} photos —{" "}
           {limitNotice.skipped === 1 ? "1 wasn't added." : `${limitNotice.skipped} weren't added.`}
-        </p>
+        </Notice>
+      ) : null}
+
+      {busy ? (
+        <Notice tone="info" title="Keep this screen open" data-testid="upload-keep-open">
+          {phase === "finalizing"
+            ? "We're finishing your album. Leaving now skips places and duplicates until your next visit."
+            : "The upload stops if you leave. Choose the same photos again later and we'll continue where you left off."}
+        </Notice>
       ) : null}
 
       {uploading && progress ? (
         <UploadProgress progress={progress} paused={paused} onTogglePause={togglePause} />
       ) : uploading ? (
-        <p className="text-base" role="status" data-testid="upload-preparing">
-          Getting ready…
-        </p>
+        <LoadingState label="Getting ready…" data-testid="upload-preparing" />
       ) : null}
 
       {phase === "finalizing" ? (
-        <p
-          className="rounded-xl border bg-card p-4 text-base"
-          role="status"
+        <LoadingState
+          label="Finding places and duplicates…"
+          className="rounded-2xl border border-border bg-card p-4 shadow-card"
           data-testid="upload-finalizing"
-        >
-          Finding places and duplicates…
-        </p>
+        />
       ) : null}
 
       {fatal ? (
-        <div
-          className={`${noticeClass} border-destructive/30 bg-destructive/10 text-destructive`}
-          role="alert"
-          data-testid="upload-signed-out"
-        >
+        <Notice tone="error" data-testid="upload-signed-out">
           <p>Please sign in again. Your photos so far are saved.</p>
-          <Link href={loginHref} className="mt-2 inline-flex min-h-11 items-center font-medium underline">
+          <Link href={loginHref} className={`mt-1 ${signInLinkClass}`}>
             Sign in
           </Link>
-        </div>
+        </Notice>
       ) : null}
 
       {phase === "finalize_error" && finalizeError ? (
-        <div
-          className={`${noticeClass} border-destructive/30 bg-destructive/10 text-destructive`}
-          data-testid="finalize-error"
-        >
+        <Notice tone="error" data-testid="finalize-error">
           <p>{FINALIZE_MESSAGES[finalizeError]}</p>
           {finalizeError === "signed_out" ? (
-            <Link href={loginHref} className="mt-2 inline-flex min-h-11 items-center font-medium underline">
+            <Link href={loginHref} className={`mt-1 ${signInLinkClass}`}>
               Sign in
             </Link>
           ) : (
             <Button
               type="button"
               variant="outline"
+              size="touch"
               onClick={() => void runFinalize(summary?.uploaded ?? 0)}
               disabled={retryWaitSec > 0}
-              className="mt-3 h-11 w-full text-base"
+              // Inside a role="alert" notice: a fixed accessible name, so the per-second countdown
+              // isn't re-announced.
+              aria-label={retryWaitSec > 0 ? "Try again in a moment" : undefined}
+              className="mt-3 w-full text-base"
               data-testid="finalize-retry"
             >
               {retryWaitSec > 0 ? `Try again in ${retryWaitSec}s` : "Try again"}
             </Button>
           )}
-        </div>
+        </Notice>
       ) : null}
 
       {summary && !fatal && (phase === "done" || phase === "finalize_error") ? (

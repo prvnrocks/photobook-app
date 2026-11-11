@@ -1,25 +1,24 @@
-// Shown on the dashboard when the user has no books yet.
+// Shown on the dashboard when the user has no books yet (M11 T8: the shared app EmptyState).
 import Link from "next/link";
+import { EmptyState as AppEmptyState } from "@/components/app/EmptyState";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export function EmptyState() {
   return (
-    <div
-      className="rounded-xl border border-dashed px-6 py-10 text-center"
+    <AppEmptyState
       data-testid="dashboard-empty"
-    >
-      <h2 className="text-lg font-semibold">No books yet</h2>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Upload your photos and we&apos;ll lay out the first draft for you.
-      </p>
-      <Link
-        href="/books/new"
-        className={cn(buttonVariants(), "mt-6 h-11 px-4")}
-        data-testid="create-first-book"
-      >
-        Create your first book
-      </Link>
-    </div>
+      title="No books yet"
+      description="Upload your photos and we'll lay out the first draft for you."
+      action={
+        <Link
+          href="/books/new"
+          className={cn(buttonVariants({ variant: "accent", size: "cta" }))}
+          data-testid="create-first-book"
+        >
+          Create your first book
+        </Link>
+      }
+    />
   );
 }

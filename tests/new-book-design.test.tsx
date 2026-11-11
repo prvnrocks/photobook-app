@@ -55,7 +55,8 @@ describe("NewBookForm shape + style (M10b A12)", () => {
     expect(html).toContain(">Modern<");
     expect(html).toContain(">Classic<");
     expect(html).not.toMatch(/<svg(?![^>]*aria-hidden="true")/);
-    expect(html).toContain("Shape and style are set when the book is created.");
+    // M11 T9 (D-063): the fixed-at-creation note describes both design fieldsets.
+    expect(html).toContain("Set when the book is created — these two can&#x27;t be changed later.");
   });
 
   it("previews: the page box follows the shape", () => {

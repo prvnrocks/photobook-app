@@ -1,8 +1,13 @@
 "use client";
 // What happened after an upload run (+ finalize counts when available). Presentational, plus
 // the D-020 iOS location hint (device check runs client-side only, after hydration).
+// M11 T10 (D-067): result card + a sticky next-step bar — "Build my album" is the call to action,
+// "Add more photos" the secondary action.
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useSyncExternalStore } from "react";
+import { ActionBar } from "@/components/app/ActionBar";
+import { Notice } from "@/components/app/Notice";
 import { Button, buttonVariants } from "@/components/ui/button";
 import type { FinalizeResult } from "@/lib/upload/finalize-client";
 import type { QueueSummary } from "@/lib/upload/queue";
@@ -29,78 +34,81 @@ export function UploadSummary({ bookId, summary, finalize, onAddMore }: UploadSu
   const notStarted = summary.fatal ? 0 : summary.notStarted;
 
   return (
-    <section
-      className="flex min-w-0 flex-col gap-4 rounded-xl border bg-card p-4"
-      data-testid="upload-summary"
-      aria-labelledby="upload-summary-heading"
-    >
-      <h2 id="upload-summary-heading" className="text-lg font-semibold" data-testid="summary-added">
-        {summary.uploaded > 0 ? `${plural(summary.uploaded, "photo")} added` : "No new photos added"}
-      </h2>
+    <div className="flex min-w-0 flex-col gap-stack">
+      <section
+        className="flex min-w-0 flex-col gap-4 rounded-2xl border border-border bg-card p-4 shadow-card sm:p-6"
+        data-testid="upload-summary"
+        aria-labelledby="upload-summary-heading"
+      >
+        <h2 id="upload-summary-heading" className="type-h2" data-testid="summary-added">
+          {summary.uploaded > 0 ? `${plural(summary.uploaded, "photo")} added` : "No new photos added"}
+        </h2>
 
-      {finalize && finalize.photos > 0 ? (
-        <ul className="flex flex-col gap-1.5 text-base">
-          <li data-testid="summary-dates">
-            {finalize.withDate} of {finalize.photos} with a date from the camera
-          </li>
-          {finalize.withGps > 0 ? (
-            <li data-testid="summary-places">
-              Places found for {finalize.withPlace} of {finalize.withGps} with a location
+        {finalize && finalize.photos > 0 ? (
+          <ul className="flex list-disc flex-col gap-1.5 ps-5 text-base marker:text-accent-strong">
+            <li data-testid="summary-dates">
+              {finalize.withDate} of {finalize.photos} with a date from the camera
             </li>
-          ) : null}
-          {finalize.dupPhotos > 0 ? (
-            <li data-testid="summary-dupes">
-              {plural(finalize.dupPhotos, "possible duplicate")} — you can check them next
-            </li>
-          ) : null}
-          {finalize.pages > 0 ? (
-            <li data-testid="summary-pages">
-              {plural(finalize.pages, "page")} in your draft album
-            </li>
-          ) : null}
-        </ul>
-      ) : null}
-
-      {showGpsHint ? (
-        <p className="text-sm text-muted-foreground" data-testid="gps-hint">
-          Want place names? In the photo picker, tap Options and turn on Location.
-        </p>
-      ) : null}
-
-      {skipped.length > 0 ? (
-        <div className="text-base" data-testid="summary-skipped">
-          <p className="font-medium">
-            {plural(summary.skipped, "photo")} skipped:
-          </p>
-          <ul className="mt-1 list-disc ps-5 text-muted-foreground">
-            {skipped.map((s) => (
-              <li key={s.key} data-testid={`summary-skipped-${s.key}`}>
-                {s.text}
+            {finalize.withGps > 0 ? (
+              <li data-testid="summary-places">
+                Places found for {finalize.withPlace} of {finalize.withGps} with a location
               </li>
-            ))}
+            ) : null}
+            {finalize.dupPhotos > 0 ? (
+              <li data-testid="summary-dupes">
+                {plural(finalize.dupPhotos, "possible duplicate")} — you can check them next
+              </li>
+            ) : null}
+            {finalize.pages > 0 ? (
+              <li data-testid="summary-pages">
+                {plural(finalize.pages, "page")} in your draft album
+              </li>
+            ) : null}
           </ul>
-        </div>
-      ) : null}
+        ) : null}
 
-      {summary.failed > 0 ? (
-        <p className="text-base text-destructive" data-testid="summary-failed">
-          {plural(summary.failed, "photo")} couldn&apos;t be uploaded. To try again, choose your
-          photos again — we&apos;ll skip the ones already added.
-        </p>
-      ) : null}
+        {showGpsHint ? (
+          <Notice tone="info" data-testid="gps-hint">
+            Want place names? In the photo picker, tap Options and turn on Location.
+          </Notice>
+        ) : null}
 
-      {notStarted > 0 ? (
-        <p className="text-base text-muted-foreground" data-testid="summary-not-started">
-          {notStarted === 1
-            ? "1 photo wasn't started. Choose it again to add it."
-            : `${notStarted} photos weren't started. Choose them again to add them.`}
-        </p>
-      ) : null}
+        {skipped.length > 0 ? (
+          <div className="text-base" data-testid="summary-skipped">
+            <p className="font-medium">
+              {plural(summary.skipped, "photo")} skipped:
+            </p>
+            <ul className="mt-1 list-disc ps-5 text-muted-foreground">
+              {skipped.map((s) => (
+                <li key={s.key} data-testid={`summary-skipped-${s.key}`}>
+                  {s.text}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
-      <div className="flex flex-col gap-2">
+        {summary.failed > 0 ? (
+          <p className="text-base text-destructive" data-testid="summary-failed">
+            {plural(summary.failed, "photo")} couldn&apos;t be uploaded. To try again, choose your
+            photos again — we&apos;ll skip the ones already added.
+          </p>
+        ) : null}
+
+        {notStarted > 0 ? (
+          <p className="text-base text-muted-foreground" data-testid="summary-not-started">
+            {notStarted === 1
+              ? "1 photo wasn't started. Choose it again to add it."
+              : `${notStarted} photos weren't started. Choose them again to add them.`}
+          </p>
+        ) : null}
+
+      </section>
+
+      <ActionBar label="Next step">
         <Link
           href={`/books/${bookId}/build`}
-          className={cn(buttonVariants(), "h-11 w-full px-4 text-base")}
+          className={cn(buttonVariants({ variant: "accent", size: "cta" }))}
           data-testid="build-album"
         >
           Build my album
@@ -108,13 +116,15 @@ export function UploadSummary({ bookId, summary, finalize, onAddMore }: UploadSu
         <Button
           type="button"
           variant="outline"
+          size="touch"
           onClick={onAddMore}
-          className="h-11 w-full text-base"
+          className="w-full text-base sm:h-12"
           data-testid="upload-add-more"
         >
+          <Plus aria-hidden="true" data-icon="inline-start" />
           Add more photos
         </Button>
-      </div>
-    </section>
+      </ActionBar>
+    </div>
   );
 }

@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Plus } from "lucide-react";
 import { deleteBookAction } from "@/app/books/actions";
+import { Notice } from "@/components/app/Notice";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { BookList } from "@/components/dashboard/BookList";
 import { EmptyState } from "@/components/dashboard/EmptyState";
@@ -49,33 +51,45 @@ export default async function DashboardPage() {
   // Drafts of owners who get no warning email are deleted without one (review S2) — the chips show it.
   const emailable = reminders === null ? null : reminders && Boolean(user.email);
   const displayName = profile?.name ?? profile?.email ?? user.email ?? null;
+  const count = books?.length ?? 0;
 
   return (
     <>
       <AppHeader displayName={displayName} />
-      <main className="mx-auto w-full max-w-md px-4 py-6">
-        <div className="mb-6 flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold" data-testid="dashboard-heading">
-            My books
-          </h1>
-          <Link
-            href="/books/new"
-            className={cn(buttonVariants(), "h-11 shrink-0 px-4")}
-            data-testid="new-book"
-          >
-            New book
-          </Link>
-        </div>
+      <main className="mx-auto w-full max-w-wide px-gutter py-6 sm:py-8">
+        {/* Own header markup (not <PageHeader>) so the h1 keeps its data-testid. */}
+        <header className="mb-stack flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="type-eyebrow mb-1">Your library</p>
+            <h1 className="type-h1 text-foreground" data-testid="dashboard-heading">
+              My books
+            </h1>
+            {count > 0 ? (
+              <p className="type-small mt-1 text-muted-foreground">
+                {count} {count === 1 ? "book" : "books"}
+              </p>
+            ) : null}
+          </div>
+          {/* Empty library: the EmptyState's call to action is the only "new book" button. */}
+          {count > 0 || books === null ? (
+            <Link
+              href="/books/new"
+              className={cn(buttonVariants({ size: "touch" }), "shrink-0")}
+              data-testid="new-book"
+            >
+              <Plus aria-hidden="true" data-icon="inline-start" />
+              New book
+            </Link>
+          ) : null}
+        </header>
         {books === null ? (
-          <p
-            role="alert"
-            className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"
-            data-testid="dashboard-error"
-          >
+          <Notice tone="error" data-testid="dashboard-error">
             We couldn&apos;t load your books. Please refresh.
-          </p>
+          </Notice>
         ) : books.length === 0 ? (
-          <EmptyState />
+          <div className="mx-auto max-w-app">
+            <EmptyState />
+          </div>
         ) : (
           <BookList books={books} deleteBook={deleteBookAction} emailable={emailable} />
         )}

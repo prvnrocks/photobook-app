@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { StepProgress } from "@/components/app/StepProgress";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Uploader } from "@/components/upload/Uploader";
 import { limitsFor } from "@/lib/ai/limits";
@@ -47,32 +48,32 @@ export default async function UploadPage({ params }: { params: Promise<{ id: str
   return (
     <>
       <AppHeader displayName={displayName} />
-      <main className="mx-auto w-full max-w-md px-4 py-6">
-        <p className="text-sm text-muted-foreground" data-testid="upload-occasion">
-          {isOccasion(book.occasion) ? OCCASION_LABELS[book.occasion] : "Photobook"}
-        </p>
-        <h1
-          dir="auto"
-          className="mt-1 text-2xl font-semibold break-words"
-          data-testid="upload-book-title"
-        >
-          {book.title || "Untitled book"}
-        </h1>
-        <p className="mt-2 text-base text-muted-foreground">
-          Add the photos for your book. We&apos;ll arrange them into a draft album you can change.
-        </p>
-        <div className="mt-6">
-          <Uploader
-            bookId={book.id}
-            userId={user.id}
-            isPaid={book.is_paid}
-            existing={existing}
-            maxUpload={limitsFor(book.is_paid).maxUploadPhotos}
-            readyCount={readyCount}
-            pendingCount={pendingCount}
-            hasDoc={docHasContent(book.doc)}
-          />
-        </div>
+      <main className="mx-auto w-full max-w-app px-gutter pt-4 pb-6 sm:pt-6">
+        {/* Own header markup (not <PageHeader>) so the eyebrow and h1 keep their data-testids. */}
+        <header className="mb-stack flex flex-col gap-4">
+          <StepProgress current="photos" />
+          <div className="min-w-0">
+            <p className="type-eyebrow mb-2" data-testid="upload-occasion">
+              {isOccasion(book.occasion) ? OCCASION_LABELS[book.occasion] : "Photobook"}
+            </p>
+            <h1 dir="auto" className="type-h1 break-words text-foreground" data-testid="upload-book-title">
+              {book.title || "Untitled book"}
+            </h1>
+            <p className="type-body mt-2 text-muted-foreground">
+              Add the photos for your book. We&apos;ll arrange them into a draft album you can change.
+            </p>
+          </div>
+        </header>
+        <Uploader
+          bookId={book.id}
+          userId={user.id}
+          isPaid={book.is_paid}
+          existing={existing}
+          maxUpload={limitsFor(book.is_paid).maxUploadPhotos}
+          readyCount={readyCount}
+          pendingCount={pendingCount}
+          hasDoc={docHasContent(book.doc)}
+        />
       </main>
     </>
   );

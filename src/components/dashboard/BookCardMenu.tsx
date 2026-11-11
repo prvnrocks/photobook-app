@@ -67,7 +67,7 @@ export function BookCardMenuView({
     <>
       <Menu.Root>
         <Menu.Trigger
-          className="flex min-h-11 w-11 shrink-0 items-center justify-center rounded-r-xl border-l text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+          className="flex min-h-11 min-w-11 flex-1 items-center justify-center text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-popup-open:bg-muted"
           aria-label={`${DELETE_BOOK_COPY.menuLabel}: ${shownTitle}`}
           data-testid="book-menu"
         >
@@ -75,9 +75,9 @@ export function BookCardMenuView({
         </Menu.Trigger>
         <Menu.Portal>
           <Menu.Positioner sideOffset={4} align="end" className="z-50 outline-none">
-            <Menu.Popup className="min-w-44 rounded-xl border bg-popover p-1 text-popover-foreground shadow-lg outline-none">
+            <Menu.Popup className="min-w-44 rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-lift outline-none">
               <Menu.Item
-                className="flex min-h-11 cursor-default items-center gap-2 rounded-lg px-3 text-base text-destructive outline-none select-none data-highlighted:bg-destructive/10"
+                className="flex min-h-11 cursor-default items-center gap-2 rounded-lg px-3 text-base text-destructive outline-none select-none data-highlighted:bg-destructive-soft"
                 onClick={() => {
                   setError(null);
                   setConfirmOpen(true);
@@ -101,9 +101,9 @@ export function BookCardMenuView({
         }}
       >
         <AlertDialog.Portal>
-          <AlertDialog.Backdrop className="fixed inset-0 z-50 min-h-dvh bg-black/40" />
+          <AlertDialog.Backdrop className="fixed inset-0 z-50 min-h-dvh bg-primary/40" />
           <AlertDialog.Popup
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-md rounded-t-2xl bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl outline-none sm:inset-x-auto sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl"
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-md rounded-t-2xl border border-border bg-card p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-lift outline-none sm:inset-x-auto sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl"
             aria-labelledby={titleId}
             aria-describedby={detailId}
             data-testid="delete-book-dialog"
@@ -145,7 +145,7 @@ export function DeleteBookConfirmContent({
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <div className="flex min-w-0 flex-col gap-2">
-        <h2 id={titleId} className="text-lg font-semibold">
+        <h2 id={titleId} className="type-h2">
           {DELETE_BOOK_COPY.title}
         </h2>
         <p dir="auto" className="truncate text-base font-medium" data-testid="delete-book-title">
@@ -158,7 +158,7 @@ export function DeleteBookConfirmContent({
       {error ? (
         <p
           role="alert"
-          className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          className="rounded-lg border border-destructive-border bg-destructive-soft px-3 py-2 text-sm text-destructive"
           data-testid="delete-book-error"
         >
           {error}
@@ -168,7 +168,8 @@ export function DeleteBookConfirmContent({
         <Button
           type="button"
           variant="outline"
-          className="h-11 text-base"
+          size="touch"
+          className="text-base"
           disabled={pending}
           onClick={onCancel}
           data-testid="delete-book-cancel"
@@ -178,7 +179,8 @@ export function DeleteBookConfirmContent({
         <Button
           type="button"
           variant="destructive"
-          className="h-11 bg-destructive text-base text-white hover:bg-destructive/90"
+          size="touch"
+          className="bg-destructive text-base text-white hover:bg-destructive/90 focus-visible:ring-destructive"
           disabled={pending}
           aria-busy={pending}
           onClick={onConfirm}
