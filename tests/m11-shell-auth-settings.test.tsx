@@ -21,6 +21,8 @@ const { AppHeader, AppHeaderPlaceholder } = await import("@/components/layout/Ap
 const { AccountMenu, accountInitial } = await import("@/components/layout/AccountMenu");
 const { RouteLoading, EditorLoading } = await import("@/components/layout/RouteLoading");
 const NotFound = (await import("@/app/not-found")).default;
+vi.mock("@sentry/nextjs", () => ({ captureException: vi.fn() }));
+const AppError = (await import("@/app/error")).default;
 const { LoginForm } = await import("@/components/auth/LoginForm");
 const { DeleteAccountView } = await import("@/components/settings/DeleteAccount");
 const { SettingsMemory } = await import("@/components/settings/SettingsMemory");
@@ -124,6 +126,18 @@ describe("route loading + not-found (T5)", () => {
     expect(html).toContain("We couldn&#x27;t find that page");
     expect(html).toContain('href="/dashboard"');
     expect(html).toContain('href="/"');
+    // The whole page is the message → its title is the page's h1.
+    expect(html).toMatch(/<h1[^>]*>We couldn&#x27;t find that page<\/h1>/);
+  });
+
+  it("app error: h1 title, only claims saved work is safe, retry + dashboard", () => {
+    const html = renderToStaticMarkup(<AppError error={new Error("x")} reset={() => {}} />);
+    expect(has(html, "app-error")).toBe(true);
+    expect(html).toMatch(/<h1[^>]*>Something went wrong<\/h1>/);
+    expect(html).toContain("Your saved work is safe.");
+    expect(html).not.toContain("photos and books are safe");
+    expect(html).toContain("Try again");
+    expect(html).toContain('href="/dashboard"');
   });
 });
 

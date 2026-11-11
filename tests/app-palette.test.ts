@@ -37,3 +37,25 @@ describe("app palette", () => {
     expect(contrastRatio("#ffffff", "#ffffff")).toBe(1);
   });
 });
+
+describe("tracked type utilities reset letter-spacing for RTL (M11 review N12)", () => {
+  it.each(["type-display", "type-h1", "type-eyebrow"])("%s: :dir(rtl) plus a [dir=rtl] fallback rule", (name) => {
+    const start = css.indexOf(`@utility ${name} {`);
+    expect(start).toBeGreaterThan(-1);
+    const body = css.slice(start, css.indexOf("\n}\n", start));
+    expect(body).toContain("&:dir(rtl) {\n    letter-spacing: 0;");
+    // Separate rule, not in one list with :dir() — an unsupported pseudo-class would drop the list.
+    expect(body).toContain('&[dir="rtl"],\n  [dir="rtl"] & {\n    letter-spacing: 0;');
+  });
+});
+
+describe("WhatsApp button colour (user decision 2026-11-11)", () => {
+  it("white text on the WhatsApp green (and its hover) meets AA 4.5:1", () => {
+    const button = readFileSync(new URL("../src/components/ui/button.tsx", import.meta.url), "utf8");
+    const line = button.split("\n").find((l) => l.includes("whatsapp:")) ?? "";
+    const [bg, hover] = [...line.matchAll(/bg-\[(#[0-9A-Fa-f]{6})\]/g)].map((m) => m[1]);
+    expect(line).toContain("text-white");
+    expect(contrastRatio("#ffffff", bg)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio("#ffffff", hover)).toBeGreaterThanOrEqual(4.5);
+  });
+});

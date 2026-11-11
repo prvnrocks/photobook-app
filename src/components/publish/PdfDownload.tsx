@@ -143,11 +143,15 @@ export function PdfDownloadView({
         </button>
       ) : null}
 
-      <div aria-live="polite" data-testid="pdf-status" data-state={state.kind} data-code={state.kind === "error" ? state.code : undefined}>
+      {/* The one live region for PDF status: children (progress, Notice) carry no role of their own. */}
+      <div
+        role={isError && !notPaid ? "alert" : "status"}
+        aria-live={isError && !notPaid ? "assertive" : "polite"}
+        data-testid="pdf-status" data-state={state.kind} data-code={state.kind === "error" ? state.code : undefined}>
         {copy && busy ? (
           <PdfProgress state={state} copy={copy} />
         ) : copy ? (
-          <Notice tone={isError ? (notPaid ? "info" : "error") : state.kind === "ready" ? "success" : "info"}>
+          <Notice live={false} tone={isError ? (notPaid ? "info" : "error") : state.kind === "ready" ? "success" : "info"}>
             <span data-testid="pdf-status-text">{copy}</span>
             {state.kind === "ready" ? (
               <span className="block text-muted-foreground" data-testid="pdf-ready-detail">
@@ -193,7 +197,7 @@ function PdfProgress({ state, copy }: { state: PdfUiState; copy: string }) {
   const steps = pdfProgressSteps(state);
   const paused = state.kind === "preparing" && state.paused;
   return (
-    <div role="status" className="type-small rounded-xl border border-border bg-background p-4" data-testid="pdf-progress">
+    <div className="type-small rounded-xl border border-border bg-background p-4" data-testid="pdf-progress">
       <p className="flex items-start gap-2 font-medium text-foreground">
         <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-accent-strong motion-reduce:animate-none" aria-hidden="true" />
         <span className="min-w-0" data-testid="pdf-status-text">

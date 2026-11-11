@@ -30,7 +30,7 @@ export function StatusScreen({
         </div>
       </header>
       <main className="mx-auto flex w-full max-w-app flex-1 flex-col justify-center px-gutter py-10">
-        <EmptyState title={title} description={description} action={action} data-testid={testId} />
+        <EmptyState title={title} description={description} action={action} headingLevel={1} data-testid={testId} />
       </main>
     </div>
   );

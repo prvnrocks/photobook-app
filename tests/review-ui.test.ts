@@ -22,9 +22,9 @@ import {
   reasonLabel,
   REBUILD_LABELS,
   REBUILD_MESSAGES,
-  rebuildHint,
   rebuildOutcome,
   rebuildsLeft,
+  rebuildsLeftCopy,
   rebuildsLeftLabel,
   rebuildTrigger,
   rebuildVariant,
@@ -386,11 +386,13 @@ describe("updateAlbumOutcome", () => {
 });
 
 describe("rebuild as secondary (D-028)", () => {
-  it("labels + hint", () => {
+  it("labels + rebuilds-left copy", () => {
     expect(REBUILD_LABELS.rebuild).toBe("Rebuild with AI");
     expect(REBUILD_LABELS.ai_off).toBe("Rebuild album");
-    expect(rebuildHint(2)).toBe("Re-plans the whole story with AI (2 left)");
-    expect(rebuildHint(null)).toBe("Re-plans the whole story with AI.");
+    expect(rebuildsLeftCopy(null)).toBeNull();
+    expect(rebuildsLeftCopy(1)).toBe("1 rebuild left");
+    expect(rebuildsLeftCopy(3)).toBe("3 rebuilds left");
+    expect(rebuildsLeftCopy(-1)).toBe("0 rebuilds left");
   });
 });
 

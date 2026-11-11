@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { PageHeader } from "@/components/app/PageHeader";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { DeleteAccount } from "@/components/settings/DeleteAccount";
 import { EmailRemindersToggle } from "@/components/settings/EmailRemindersToggle";
@@ -44,27 +44,23 @@ export default async function SettingsPage() {
     <>
       <AppHeader displayName={displayName} />
       <main className="mx-auto w-full max-w-app px-gutter pt-4 pb-12">
-        <Link
-          href="/dashboard"
-          className="-ms-3 inline-flex h-11 w-fit items-center gap-1 rounded-lg ps-2 pe-3 text-sm font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        >
-          <ChevronLeft className="size-4 rtl:rotate-180" aria-hidden="true" />
-          My books
-        </Link>
-        <header className="mt-2 mb-stack">
-          <p className="type-eyebrow mb-2">Account</p>
-          <h1 className="type-h1 text-foreground" data-testid="settings-heading">
-            {SETTINGS_COPY.heading}
-          </h1>
-          {email ? (
-            <p className="type-small mt-2 text-muted-foreground">
-              Signed in as{" "}
-              <span dir="auto" className="font-medium break-all text-foreground" data-testid="settings-email">
-                {email}
-              </span>
-            </p>
-          ) : null}
-        </header>
+        <PageHeader
+          className="mb-stack"
+          back={{ href: "/dashboard", label: "My books" }}
+          eyebrow="Account"
+          title={SETTINGS_COPY.heading}
+          titleTestId="settings-heading"
+          description={
+            email ? (
+              <>
+                Signed in as{" "}
+                <span dir="auto" className="font-medium break-all text-foreground" data-testid="settings-email">
+                  {email}
+                </span>
+              </>
+            ) : undefined
+          }
+        />
         <div className="flex min-w-0 flex-col gap-4">
           <EmailRemindersToggle initialOn={remindersOn} />
           <SettingsMemory view={memory} />

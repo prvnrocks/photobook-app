@@ -201,6 +201,11 @@
   &:dir(rtl) {
     letter-spacing: 0;
   }
+  /* fallback where :dir() is unsupported (separate rule: an unknown pseudo-class would drop a shared list) */
+  &[dir="rtl"],
+  [dir="rtl"] & {
+    letter-spacing: 0;
+  }
 }
 @utility type-h1 {
   font-family: var(--font-display);
@@ -210,6 +215,11 @@
   font-weight: 600;
   /* tracking breaks Arabic joining (dir="auto" text resolving to RTL) */
   &:dir(rtl) {
+    letter-spacing: 0;
+  }
+  /* fallback where :dir() is unsupported (separate rule: an unknown pseudo-class would drop a shared list) */
+  &[dir="rtl"],
+  [dir="rtl"] & {
     letter-spacing: 0;
   }
 }
@@ -229,6 +239,11 @@
   color: var(--accent-strong);
   /* tracking breaks Arabic joining (dir="auto" text resolving to RTL) */
   &:dir(rtl) {
+    letter-spacing: 0;
+  }
+  /* fallback where :dir() is unsupported (separate rule: an unknown pseudo-class would drop a shared list) */
+  &[dir="rtl"],
+  [dir="rtl"] & {
     letter-spacing: 0;
   }
 }

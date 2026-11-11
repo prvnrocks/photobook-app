@@ -6,7 +6,7 @@ import { AppToast } from "@/components/app/AppToast";
 import { EmptyState } from "@/components/app/EmptyState";
 import { LoadingState } from "@/components/app/LoadingState";
 import { Notice } from "@/components/app/Notice";
-import { PageHeader } from "@/components/app/PageHeader";
+import { BACK_LINK_CLASS, PageHeader } from "@/components/app/PageHeader";
 import { PageSkeleton, Skeleton } from "@/components/app/Skeleton";
 import { StepProgress } from "@/components/app/StepProgress";
 
@@ -150,6 +150,27 @@ describe("PageHeader testid props (M11 follow-up)", () => {
   it("omits them otherwise", () => {
     const html = renderToStaticMarkup(<PageHeader title="T" />);
     expect(html).not.toContain('data-testid="t-id"');
+  });
+});
+
+describe("PageHeader options (M11 review)", () => {
+  it("description testid, inline actions and the text eyebrow for user titles", () => {
+    const h = renderToStaticMarkup(
+      <PageHeader title="T" description="D" descriptionTestId="d-id" eyebrow="سارة وعمر" eyebrowVariant="text" eyebrowTestId="e-id" actions={<button>Go</button>} actionsInline />,
+    );
+    expect(h).toMatch(/<p dir="auto"[^>]*data-testid="d-id"[^>]*>D<\/p>/);
+    expect(h).toMatch(/<p dir="auto" class="type-small[^"]*truncate[^"]*" data-testid="e-id">سارة وعمر<\/p>/);
+    expect(h).not.toContain("type-eyebrow");
+    expect(h).toContain("flex gap-3 flex-row items-end justify-between");
+  });
+  it("defaults: tracked label eyebrow, actions stack below sm", () => {
+    const h = renderToStaticMarkup(<PageHeader title="T" eyebrow="Account" actions={<button>Go</button>} />);
+    expect(h).toContain("type-eyebrow");
+    expect(h).toContain("flex-col sm:flex-row");
+  });
+  it("back link uses the exported BACK_LINK_CLASS", () => {
+    const h = renderToStaticMarkup(<PageHeader title="T" back={{ href: "/x", label: "Back" }} />);
+    expect(h).toContain(`class="${BACK_LINK_CLASS}"`);
   });
 });
 

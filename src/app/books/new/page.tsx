@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
 import { redirect } from "next/navigation";
 import { NewBookForm } from "@/components/books/NewBookForm";
 import { AppHeader } from "@/components/layout/AppHeader";
-import { StepProgress } from "@/components/app/StepProgress";
+import { PageHeader } from "@/components/app/PageHeader";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getOwnMemoryView } from "@/lib/db/memory";
 import { getMyProfile } from "@/lib/db/profiles";
@@ -12,6 +10,9 @@ import { getMyProfile } from "@/lib/db/profiles";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "New book" };
+
+/** Only page shape + style are fixed (D-063); occasion, feel and caption language have no edit path yet. */
+const NEW_BOOK_INTRO = "Page shape and style are set now. You can change the title, photos and captions later.";
 
 export default async function NewBookPage() {
   const user = await getCurrentUser();
@@ -30,27 +31,17 @@ export default async function NewBookPage() {
   return (
     <>
       <AppHeader displayName={displayName} />
-      <main className="mx-auto w-full max-w-app px-gutter pt-4 pb-6 sm:pt-6">
-        {/* Own header markup (not <PageHeader>) so the back link and h1 keep their data-testids. */}
-        <header className="mb-stack flex flex-col gap-4">
-          <Link
-            href="/dashboard"
-            className="-ms-3 inline-flex h-11 w-fit items-center gap-1 rounded-lg ps-2 pe-3 text-sm font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            data-testid="back-to-dashboard"
-          >
-            <ChevronLeft className="size-4 rtl:rotate-180" aria-hidden="true" />
-            Back to my books
-          </Link>
-          <StepProgress current="new" />
-          <div>
-            <h1 className="type-h1 text-foreground" data-testid="new-book-heading">
-              New book
-            </h1>
-            <p className="type-body mt-2 text-muted-foreground" data-testid="new-book-intro">
-              Page shape and style are set now. Everything else can change later.
-            </p>
-          </div>
-        </header>
+      {/* pb-0 on phones: the sticky Create book bar sits flush with the screen bottom. */}
+      <main className="mx-auto w-full max-w-app px-gutter pt-4 pb-0 sm:pt-6 sm:pb-6">
+        <PageHeader
+          className="mb-stack"
+          back={{ href: "/dashboard", label: "Back to my books", testId: "back-to-dashboard" }}
+          step="new"
+          title="New book"
+          titleTestId="new-book-heading"
+          description={NEW_BOOK_INTRO}
+          descriptionTestId="new-book-intro"
+        />
         <NewBookForm initialTone={initialTone} initialLang={initialLang} fromMemory={fromMemory} />
       </main>
     </>

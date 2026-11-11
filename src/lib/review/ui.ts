@@ -404,9 +404,10 @@ export function editorHref(bookId: string): string {
   return `/books/${bookId}/edit`;
 }
 
-/** Hint under the secondary "Rebuild with AI" button. */
-export function rebuildHint(left: number | null): string {
-  return left === null ? "Re-plans the whole story with AI." : `Re-plans the whole story with AI (${left} left)`;
+/** "2 rebuilds left" (M11 T12); null when rebuilds aren't counted here (rule / replay mode). */
+export function rebuildsLeftCopy(left: number | null): string | null {
+  if (left === null) return null;
+  return left === 1 ? "1 rebuild left" : `${Math.max(0, left)} rebuilds left`;
 }
 
 // ---------------------------------------------------------------------------------------------

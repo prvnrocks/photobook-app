@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { BACK_LINK_CLASS } from "@/components/app/PageHeader";
 import { buttonVariants } from "@/components/ui/button";
 import { UpgradeStatusPoller } from "@/components/upgrade/UpgradeStatusPoller";
 import { getCurrentUser } from "@/lib/auth/current-user";
@@ -47,7 +48,7 @@ export default async function UpgradeSuccessPage({ params }: { params: Promise<{
       <header className="flex items-center gap-1">
         <Link
           href={`/books/${id}/publish`}
-          className="-ms-3 inline-flex h-11 items-center gap-1 rounded-lg ps-2 pe-3 text-sm font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className={BACK_LINK_CLASS}
           data-testid="upgrade-back"
         >
           <ChevronLeft className="size-4 rtl:rotate-180" aria-hidden="true" />

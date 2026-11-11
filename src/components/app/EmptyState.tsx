@@ -29,14 +29,20 @@ export type EmptyStateProps = {
   className?: string;
   /** 1 when the empty state is the whole page (e.g. /b state screens); default 2. */
   headingLevel?: 1 | 2;
+  /** Extra body content under the description (several paragraphs, a reference line…). */
+  children?: ReactNode;
   "data-testid"?: string;
+  "data-phase"?: string;
+  "aria-busy"?: boolean;
 };
 
-export function EmptyState({ title, description, action, art, className, headingLevel = 2, ...rest }: EmptyStateProps) {
+export function EmptyState({ title, description, action, art, className, headingLevel = 2, children, ...rest }: EmptyStateProps) {
   const Heading = headingLevel === 1 ? "h1" : "h2";
   return (
     <section
       data-testid={rest["data-testid"]}
+      data-phase={rest["data-phase"]}
+      aria-busy={rest["aria-busy"] ? "true" : undefined}
       className={cn("flex flex-col items-center rounded-2xl border border-border bg-card px-6 py-10 text-center shadow-card", className)}
     >
       {art ?? <OpenBookArt />}
@@ -48,6 +54,7 @@ export function EmptyState({ title, description, action, art, className, heading
           {description}
         </p>
       ) : null}
+      {children ? <div className="mt-3 flex w-full flex-col items-center gap-3">{children}</div> : null}
       {action ? <div className="mt-6 flex w-full max-w-xs flex-col gap-2">{action}</div> : null}
     </section>
   );

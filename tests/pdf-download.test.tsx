@@ -225,3 +225,20 @@ describe("editor PDF tool", () => {
     expect(html).toContain("latest saved edits");
   });
 });
+
+describe("one live region for PDF status (M11 review N7)", () => {
+  const inner = (html: string) => {
+    const at = html.indexOf('data-testid="pdf-status"');
+    const end = html.indexOf('data-testid="pdf-download-again"') > at ? html.indexOf('data-testid="pdf-download-again"') : html.length;
+    return html.slice(html.indexOf(">", at) + 1, end);
+  };
+  it.each<[string, PdfUiState]>([
+    ["ready", { kind: "ready", url: "https://x/y.pdf", filename: "y.pdf", bytes: 1000, pages: 2 } as unknown as PdfUiState],
+    ["failed", { kind: "error", code: "failed" }],
+    ["timeout", { kind: "timeout", exportId: "e1" }],
+  ])("%s: pdf-status is the only role/aria-live", (_, state) => {
+    const html = view({ isPaid: true, state });
+    expect(html).toMatch(/role="(status|alert)" aria-live="(polite|assertive)" data-testid="pdf-status"/);
+    expect(inner(html)).not.toMatch(/role="(status|alert)"|aria-live=/);
+  });
+});

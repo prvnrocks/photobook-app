@@ -10,6 +10,7 @@ import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   REBUILD_LABELS,
+  rebuildsLeftCopy,
   rebuildTrigger,
   requestRebuild,
   type RebuildVariant,
@@ -21,12 +22,6 @@ type RebuildButtonProps = {
   /** Live AI rebuilds left for this book; null = not limited here (rule / replay mode). */
   rebuildsLeft: number | null;
 };
-
-/** "2 rebuilds left" (M11 T12); null when rebuilds aren't counted here (rule / replay mode). */
-export function rebuildsLeftCopy(left: number | null): string | null {
-  if (left === null) return null;
-  return left === 1 ? "1 rebuild left" : `${Math.max(0, left)} rebuilds left`;
-}
 
 export function RebuildButton({ bookId, variant, rebuildsLeft }: RebuildButtonProps) {
   const router = useRouter();

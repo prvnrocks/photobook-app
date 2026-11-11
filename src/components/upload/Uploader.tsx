@@ -111,6 +111,28 @@ export function Uploader(props: UploaderProps) {
     };
   }, []);
 
+  // A file dropped beside the drop zone would make the browser open it, leaving the page and
+  // aborting a running upload. While this screen is open, swallow file drags/drops the zone didn't
+  // handle (the zone's own handlers call preventDefault first, so it keeps its "copy" effect).
+  useEffect(() => {
+    const hasFiles = (e: globalThis.DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
+    const onWindowDragOver = (e: globalThis.DragEvent) => {
+      if (!hasFiles(e) || e.defaultPrevented) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "none";
+    };
+    const onWindowDrop = (e: globalThis.DragEvent) => {
+      if (!hasFiles(e) || e.defaultPrevented) return;
+      e.preventDefault();
+    };
+    window.addEventListener("dragover", onWindowDragOver);
+    window.addEventListener("drop", onWindowDrop);
+    return () => {
+      window.removeEventListener("dragover", onWindowDragOver);
+      window.removeEventListener("drop", onWindowDrop);
+    };
+  }, []);
+
   // Countdown for a pending Retry-After on the "Try again" button.
   useEffect(() => {
     if (retryAt === null) return;
@@ -252,6 +274,14 @@ export function Uploader(props: UploaderProps) {
     setDragOver(true);
   }
 
+  // dragleave also fires when the pointer moves onto the zone's own icon/text — only reset when it
+  // really left the zone (relatedTarget outside it, or null when leaving the window).
+  function onDragLeave(e: DragEvent<HTMLButtonElement>) {
+    const to = e.relatedTarget;
+    if (to instanceof Node && e.currentTarget.contains(to)) return;
+    setDragOver(false);
+  }
+
   function onDrop(e: DragEvent<HTMLButtonElement>) {
     if (!Array.from(e.dataTransfer.types).includes("Files")) return;
     e.preventDefault();
@@ -341,7 +371,7 @@ export function Uploader(props: UploaderProps) {
             type="button"
             onClick={openPicker}
             onDragOver={onDragOver}
-            onDragLeave={() => setDragOver(false)}
+            onDragLeave={onDragLeave}
             onDrop={onDrop}
             aria-describedby={capacityId}
             data-drag={dragOver ? "over" : undefined}
@@ -414,29 +444,30 @@ export function Uploader(props: UploaderProps) {
       ) : null}
 
       {phase === "finalize_error" && finalizeError ? (
-        <Notice tone="error" data-testid="finalize-error">
-          <p>{FINALIZE_MESSAGES[finalizeError]}</p>
-          {finalizeError === "signed_out" ? (
-            <Link href={loginHref} className={`mt-1 ${signInLinkClass}`}>
-              Sign in
-            </Link>
-          ) : (
+        <div className="flex flex-col gap-2">
+          <Notice tone="error" data-testid="finalize-error">
+            <p>{FINALIZE_MESSAGES[finalizeError]}</p>
+            {finalizeError === "signed_out" ? (
+              <Link href={loginHref} className={`mt-1 ${signInLinkClass}`}>
+                Sign in
+              </Link>
+            ) : null}
+          </Notice>
+          {finalizeError !== "signed_out" ? (
+            // Outside the role="alert" notice, so the per-second countdown text is never announced.
             <Button
               type="button"
               variant="outline"
               size="touch"
               onClick={() => void runFinalize(summary?.uploaded ?? 0)}
               disabled={retryWaitSec > 0}
-              // Inside a role="alert" notice: a fixed accessible name, so the per-second countdown
-              // isn't re-announced.
-              aria-label={retryWaitSec > 0 ? "Try again in a moment" : undefined}
-              className="mt-3 w-full text-base"
+              className="w-full text-base"
               data-testid="finalize-retry"
             >
               {retryWaitSec > 0 ? `Try again in ${retryWaitSec}s` : "Try again"}
             </Button>
-          )}
-        </Notice>
+          ) : null}
+        </div>
       ) : null}
 
       {summary && !fatal && (phase === "done" || phase === "finalize_error") ? (

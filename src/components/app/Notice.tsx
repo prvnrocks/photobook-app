@@ -22,15 +22,17 @@ export type NoticeProps = {
   /** Buttons/links under the text. */
   action?: ReactNode;
   className?: string;
+  /** false inside a parent live region: no role of its own, so screen readers don't get nested regions. */
+  live?: boolean;
   "data-testid"?: string;
 };
 
-export function Notice({ tone = "info", title, children, action, className, ...rest }: NoticeProps) {
+export function Notice({ tone = "info", title, children, action, className, live = true, ...rest }: NoticeProps) {
   const t = TONES[tone];
   const Icon = t.icon;
   return (
     <div
-      role={tone === "error" ? "alert" : "status"}
+      role={live ? (tone === "error" ? "alert" : "status") : undefined}
       data-tone={tone}
       data-testid={rest["data-testid"]}
       className={cn("flex gap-3 rounded-xl border p-4 text-foreground", t.box, className)}

@@ -20,6 +20,9 @@ const buttonVariants = cva(
         // M11 (D-067): terracotta call to action, used sparingly (one per screen at most).
         accent:
           "bg-accent-strong text-accent-strong-foreground shadow-card hover:bg-accent-strong/90",
+        // "Send on WhatsApp" only (user decision 2026-11-11): dark WhatsApp green, white text 5.41:1
+        // (hover 7.08:1). Not #25D366 — white on it is 1.98:1. Not the screen's accent cta.
+        whatsapp: "bg-[#0F7A40] text-white shadow-card hover:bg-[#0B6635]",
       },
       size: {
         default:

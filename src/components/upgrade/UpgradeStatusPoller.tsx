@@ -13,6 +13,7 @@ import { AlertCircle, BookX, Check, CheckCircle2, Clock, ExternalLink, Loader2, 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { EmptyState } from "@/components/app/EmptyState";
 import { buttonVariants } from "@/components/ui/button";
 import { LIMITS } from "@/lib/ai/limits";
 import { createUpgradePoller, type UpgradePollPhase } from "@/lib/upgrade/poller";
@@ -103,7 +104,7 @@ const TONE_RING: Record<Tone, string> = {
   neutral: "bg-secondary text-primary",
 };
 
-/** One centred status screen: icon disc, serif heading, body, actions. */
+/** One centred status screen on the shared EmptyState: icon disc as its art, h1 title, body, actions. */
 function StatusScreen({
   tone,
   icon: Icon,
@@ -124,19 +125,21 @@ function StatusScreen({
   busy?: boolean;
 }) {
   return (
-    <section
-      className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card px-5 py-8 text-center shadow-card"
-      aria-busy={busy ? "true" : undefined}
+    <EmptyState
+      headingLevel={1}
+      title={title}
+      action={actions}
       data-testid={testId}
       data-phase={phase}
+      aria-busy={busy}
+      art={
+        <span className={cn("flex size-16 items-center justify-center rounded-full", TONE_RING[tone])}>
+          <Icon className={cn("size-8", busy && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
+        </span>
+      }
     >
-      <span className={cn("flex size-16 items-center justify-center rounded-full", TONE_RING[tone])}>
-        <Icon className={cn("size-8", busy && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
-      </span>
-      <h1 className="type-h1 text-foreground">{title}</h1>
       {children}
-      {actions ? <div className="mt-2 flex w-full flex-col gap-2">{actions}</div> : null}
-    </section>
+    </EmptyState>
   );
 }
 

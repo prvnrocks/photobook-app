@@ -8,7 +8,8 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {},
 
 const { BuildProgress } = await import("@/components/review/BuildProgress");
 const { ReviewBody } = await import("@/components/review/ReviewBody");
-const { RebuildButton, rebuildsLeftCopy } = await import("@/components/review/RebuildButton");
+const { RebuildButton } = await import("@/components/review/RebuildButton");
+const { rebuildsLeftCopy } = await import("@/lib/review/ui");
 const { UpdateAlbumBar } = await import("@/components/review/UpdateAlbumBar");
 
 const progress = (p: Partial<RunProgress>): RunProgress => ({

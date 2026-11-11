@@ -94,9 +94,11 @@ describe("T8 dashboard cards", () => {
     expect(empty).toMatch(/bg-accent-strong[^"]*"[^>]*data-testid="create-first-book"[^>]*>Create your first book/);
   });
 
-  it("page: heading testid kept, error as an error Notice", () => {
+  it("page: shared PageHeader keeps the heading testid, error as an error Notice", () => {
     const page = src("src/app/dashboard/page.tsx");
-    expect(page).toContain('data-testid="dashboard-heading"');
+    expect(page).toContain("<PageHeader");
+    expect(page).toContain('titleTestId="dashboard-heading"');
+    expect(page).toContain('data-testid="new-book"');
     expect(page).toContain('<Notice tone="error" data-testid="dashboard-error">');
   });
 });
@@ -130,11 +132,17 @@ describe("T9 New book form", () => {
     expect(submit).toContain("h-12 w-full");
   });
 
-  it("page: step 1 progress and the D-063 copy", () => {
+  it("page: shared PageHeader with step 1, testids and copy that only promises real edit paths", () => {
     const page = src("src/app/books/new/page.tsx");
-    expect(page).toContain('<StepProgress current="new" />');
-    expect(page).toContain("Page shape and style are set now. Everything else can change later.");
+    expect(page).toContain("<PageHeader");
+    expect(page).toContain('step="new"');
+    expect(page).toContain('testId: "back-to-dashboard"');
+    expect(page).toContain('titleTestId="new-book-heading"');
+    expect(page).toContain('descriptionTestId="new-book-intro"');
+    expect(page).toContain("Page shape and style are set now. You can change the title, photos and captions later.");
+    expect(page).not.toContain("Everything else can change later");
     expect(page).not.toContain("change most of this later");
+    expect(page).toContain("pb-0 sm:pt-6 sm:pb-6");
   });
 });
 
@@ -194,14 +202,35 @@ describe("T10 Upload", () => {
     expect(html).toMatch(/data-testid="summary-added">3 photos added</);
   });
 
+  it("finalize retry countdown sits outside the role=alert notice (M11 review N8)", () => {
+    const u = src("src/components/upload/Uploader.tsx");
+    const notice = u.slice(u.indexOf('<Notice tone="error" data-testid="finalize-error">'));
+    const close = notice.indexOf("</Notice>");
+    expect(close).toBeGreaterThan(0);
+    expect(notice.indexOf('data-testid="finalize-retry"')).toBeGreaterThan(close);
+  });
+
+  it("drag/drop: leave ignores moves onto the zone's children; stray window drops are swallowed and cleaned up (N9)", () => {
+    const u = src("src/components/upload/Uploader.tsx");
+    expect(u).toContain("onDragLeave={onDragLeave}");
+    expect(u).toMatch(/e\.currentTarget\.contains\(to\)\) return;/);
+    expect(u).toContain('window.addEventListener("dragover", onWindowDragOver);');
+    expect(u).toContain('window.addEventListener("drop", onWindowDrop);');
+    expect(u).toContain('window.removeEventListener("dragover", onWindowDragOver);');
+    expect(u).toContain('window.removeEventListener("drop", onWindowDrop);');
+    expect(u).toMatch(/if \(!hasFiles\(e\) \|\| e\.defaultPrevented\) return;/);
+  });
+
   it("upload_done analytics still fires from the Uploader", () => {
     expect(src("src/components/upload/Uploader.tsx")).toContain('track("upload_done", { photos: s.uploaded, failed: s.failed, skipped: s.skipped });');
   });
 
-  it("page: step 2 progress, occasion + title testids", () => {
+  it("page: shared PageHeader with step 2, occasion + title testids", () => {
     const page = src("src/app/books/[id]/upload/page.tsx");
-    expect(page).toContain('<StepProgress current="photos" />');
-    expect(page).toContain('data-testid="upload-occasion"');
-    expect(page).toMatch(/<h1 dir="auto"[^>]*data-testid="upload-book-title"/);
+    expect(page).toContain("<PageHeader");
+    expect(page).toContain('step="photos"');
+    expect(page).toContain('eyebrowTestId="upload-occasion"');
+    expect(page).toContain('titleTestId="upload-book-title"');
+    expect(page).toContain("pb-0 sm:pt-6 sm:pb-6");
   });
 });

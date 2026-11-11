@@ -15,7 +15,6 @@ import {
   displayUrl,
   EXPIRED_COPY,
   expiryLabel,
-  FREE_NOTICE_COPY,
   hasUnpublishedChanges,
   passwordErrorCopy,
   passwordLengthError,
@@ -117,11 +116,10 @@ describe("copy mapping", () => {
     expect(passwordErrorCopy("unavailable")).toBe("Passwords aren't available right now — try again later");
   });
 
-  it("free notice never implies a free (watermarked) PDF — D-002: free = no PDF (T10 N5)", () => {
-    expect(FREE_NOTICE_COPY).toBe(
-      "Free link works for 30 days after you publish · Upgrade for a permanent link, no watermark and PDF download",
-    );
-    expect(FREE_NOTICE_COPY).not.toMatch(/watermark-free PDF|free PDF/i);
+  it("free vs upgraded copy never implies a free (watermarked) PDF — D-002: free = no PDF (T10 N5)", () => {
+    const c = publishCompare();
+    expect(JSON.stringify(c)).not.toMatch(/watermark-free PDF|free PDF/i);
+    expect(c.rows.find((r) => r.key === "pdf")?.freeIncluded).toBe(false);
     expect(unpublishErrorCopy("failed")).toMatch(/unpublish/i);
   });
 
@@ -261,10 +259,16 @@ describe("PublishPanelView states", () => {
     expect(has(html, "unpublish-section")).toBe(false);
   });
 
-  it("live: Send on WhatsApp is the one accent cta; Copy link and Open book are secondary, before the link field", () => {
+  it("live: Send on WhatsApp is the WhatsApp-green cta; Copy link and Open book are secondary, before the link field", () => {
     const html = panel("live");
     expect(html).toContain("Send on WhatsApp");
-    expect(html.match(/class="[^"]*\bbg-accent-strong\b/g)?.length).toBe(1);
+    // User decision 2026-11-11: WhatsApp green (white text ≥ 4.5:1), not the terracotta accent —
+    // and no other accent was added, so the live screen has none (one accent per screen at most).
+    const wa = html.match(/<a[^>]*data-testid="share-whatsapp"[^>]*>/)?.[0] ?? "";
+    expect(wa).toContain("bg-[#0F7A40] text-white");
+    expect(wa).toContain("h-12");
+    expect(wa).toContain("focus-visible:ring-2");
+    expect(html.match(/class="[^"]*\bbg-accent-strong\b/g)?.length ?? 0).toBe(0);
     const order = ["share-whatsapp", "share-copy", "publish-open", "publish-url"].map((id) => html.indexOf(`data-testid="${id}"`));
     expect(order.every((i) => i > 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
@@ -275,7 +279,6 @@ describe("PublishPanelView states", () => {
   it("free vs upgraded card: every number comes from LIMITS / UPGRADE / FREE_LINK_DAYS", () => {
     const c = publishCompare();
     expect(c.summary).toBe(`Free link works for ${FREE_LINK_DAYS} days after you publish`);
-    expect(FREE_NOTICE_COPY.startsWith(c.summary)).toBe(true);
     expect(c.price).toBe(UPGRADE.label);
     const row = (k: string) => c.rows.find((r) => r.key === k)!;
     expect(row("pages")).toMatchObject({ free: `Up to ${LIMITS.free.maxPages}`, paid: `Up to ${LIMITS.paid.maxPages}` });
@@ -365,5 +368,19 @@ describe("editor header publish chip", () => {
       const html = renderToStaticMarkup(<EditorShell data={data} transport={devTransport("ok")} tools={[]} />);
       expect(html).not.toContain('data-testid="editor-publish-changes"');
     }
+  });
+});
+
+describe("PublishHeader on the shared PageHeader (M11 review)", () => {
+  it("keeps publish-back / publish-title testids, step 6 and an Arabic-safe title line", async () => {
+    const { PublishHeader } = await import("@/components/publish/PublishHeader");
+    const html = renderToStaticMarkup(<PublishHeader bookId="b1" title="سارة وعمر" />);
+    expect(html).toContain('data-testid="page-header"');
+    expect(html).toMatch(/<a data-testid="publish-back"[^>]*href="\/books\/b1\/edit"/);
+    expect(html).toContain("Back to editor");
+    expect(html).toContain("Step 6 of 6: Share");
+    expect(html).toMatch(/<p dir="auto" class="type-small[^"]*" data-testid="publish-title">سارة وعمر<\/p>/);
+    expect(html).not.toContain("type-eyebrow");
+    expect(html).toMatch(/<h1[^>]*>Share your book<\/h1>/);
   });
 });

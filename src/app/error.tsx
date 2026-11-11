@@ -18,7 +18,7 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
     <StatusScreen
       testId="app-error"
       title="Something went wrong"
-      description="Sorry, this page didn't load. Your photos and books are safe. Please try again."
+      description="Sorry, this page didn't load. Your saved work is safe. Please try again."
       action={
         <>
           <Button type="button" size="cta" onClick={() => reset()}>

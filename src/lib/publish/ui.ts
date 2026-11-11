@@ -28,9 +28,6 @@ export const PASSWORD_MAX = 64;
 
 export const EXPIRED_COPY = "This free link has expired — Upgrade to bring it back";
 export const CONFLICT_COPY = "Something changed — try again";
-/** D-002: free = watermark, 30-day link and NO PDF at all — don't imply a (watermarked) free PDF. */
-export const FREE_NOTICE_COPY =
-  "Free link works for 30 days after you publish · Upgrade for a permanent link, no watermark and PDF download";
 export const PASSWORD_UNAVAILABLE_COPY = "Passwords aren't available right now — try again later";
 
 /** Why Publish / Publish changes is disabled (getPublishState().canPublishReason). */

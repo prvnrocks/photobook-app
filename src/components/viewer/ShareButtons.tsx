@@ -89,7 +89,7 @@ export function ShareButtons({ url, title, layout = "stack", secondary, classNam
         href={whatsappShareUrl(title, url)}
         target="_blank"
         rel="noopener noreferrer"
-        className={cn(buttonVariants({ variant: "accent", size: stack ? "cta" : "touch" }))}
+        className={cn(buttonVariants({ variant: "whatsapp", size: stack ? "cta" : "touch" }))}
         data-testid="share-whatsapp"
       >
         <MessageCircle className="size-5" aria-hidden />
