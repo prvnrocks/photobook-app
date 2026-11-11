@@ -2,6 +2,7 @@
 // No user data: placeholder SVG photos from src/lib/book/dev-preview.ts.
 
 import { DEV_BG_PHOTO_UUID, devPreviewDoc, devPreviewPhotos } from "@/lib/book/dev-preview";
+import { devSampleDoc, devSamplePhotos, type DevSample } from "@/lib/book/dev-sample";
 import { serializeDoc } from "@/lib/book/doc-version";
 import { validateEditorDoc } from "@/lib/book/validate-editor-doc";
 import type { SaveOutcome } from "./autosave";
@@ -129,5 +130,28 @@ export function devTransport(mode: DevSaveMode, opts: DevTransportOptions = {}):
     async photoUrls() {
       return [];
     },
+  };
+}
+
+/**
+ * `?sample=modern-portrait|modern-landscape` (M10b A15): the editor on a modern sample book with
+ * spreads (src/lib/book/dev-sample.ts) — its sp* placeholder photos as kept photos, d0 on the cover.
+ */
+export function withDevSampleBook(data: EditorShellData, sample: DevSample): EditorShellData {
+  const doc = devSampleDoc(sample);
+  const photos = devSamplePhotos();
+  return {
+    ...data,
+    book: { ...data.book, title: doc.cover.title },
+    doc,
+    photos: Object.entries(photos).map(([id, p]) => ({
+      id,
+      status: "kept" as const,
+      userOverride: false,
+      width: p?.width ?? null,
+      height: p?.height ?? null,
+      webUrl: p?.url ?? null,
+      thumbUrl: p?.url ?? null,
+    })),
   };
 }

@@ -11,7 +11,16 @@ import type { EditorTool } from "@/components/editor/tools/types";
 import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
 import { replacePhoto, setCover } from "@/lib/book/edit-ops";
 import type { BookFormat } from "@/lib/book/types";
-import { devEditorData, devTransport, withDevBackgroundPhotos, withDevLightVeilPage, type DevAiMode, type DevSaveMode } from "@/lib/editor/dev-fixture";
+import type { DevSample } from "@/lib/book/dev-sample";
+import {
+  devEditorData,
+  devTransport,
+  withDevBackgroundPhotos,
+  withDevLightVeilPage,
+  withDevSampleBook,
+  type DevAiMode,
+  type DevSaveMode,
+} from "@/lib/editor/dev-fixture";
 import { withDevPagesData } from "@/lib/editor/dev-pages-fixture";
 
 const DEV_TOOLS: EditorTool[] = [
@@ -62,6 +71,7 @@ export function DevEditorClient({
   paymentsEnabled = false,
   bg = false,
   lightVeil = false,
+  sample = null,
 }: {
   mode: DevSaveMode;
   ai?: DevAiMode;
@@ -74,12 +84,14 @@ export function DevEditorClient({
   bg?: boolean;
   /** `?bg=1&bgveil=light50`: page 1 has a photo background under a white 50 % veil (M10b A4). */
   lightVeil?: boolean;
+  /** `?sample=modern-portrait|modern-landscape`: modern sample book with spreads (M10b A15). */
+  sample?: DevSample | null;
 }) {
   const [data] = useState(() => {
-    const raw = withDevPagesData(devEditorData(mode, ai), pages);
+    const raw = sample ? withDevSampleBook(devEditorData(mode, ai), sample) : withDevPagesData(devEditorData(mode, ai), pages);
     const withBg = bg ? withDevBackgroundPhotos(raw) : raw;
     const fixture = bg && lightVeil ? withDevLightVeilPage(withBg) : withBg;
-    const base = format === fixture.doc.format ? fixture : { ...fixture, doc: { ...fixture.doc, format } };
+    const base = sample || format === fixture.doc.format ? fixture : { ...fixture, doc: { ...fixture.doc, format } };
     const d = paid ? { ...base, book: { ...base.book, isPaid: true, maxPages: 100 } } : base;
     return published ? { ...d, publishedRev: d.docRev } : d;
   });

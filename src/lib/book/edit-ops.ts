@@ -26,7 +26,8 @@ import { LIMITS } from "@/lib/ai/limits";
 import { getLayout } from "@/lib/layouts";
 import { clipCodePoints, clipText, stripLoneSurrogates } from "@/lib/text/clip";
 import { clampCrop, DEFAULT_CROP } from "./crop";
-import { defaultCaptionFont, type CaptionFont } from "./fonts";
+import { styleCaptionFont } from "@/lib/design/styles";
+import { DEFAULT_ARABIC_CAPTION_FONT, defaultCaptionFont, type CaptionFont } from "./fonts";
 import { BOOK_TITLE_MAX_CODE_POINTS } from "./options";
 import { BackgroundSchema } from "./schema";
 import { isSpreadLayout, layoutsFor, repairSpreads, splitSpreadAt, spreadStartOf } from "./spreads";
@@ -475,8 +476,9 @@ export function setCrop(doc: BookDoc, pageIdx: number, slotIdx: number, crop: Pa
 /**
  * Set a page caption typed by the user (source "user"). Whitespace-only text removes the
  * caption (null). Text is kept as typed (not trimmed), made jsonb-safe and clipped to 200 units.
- * An existing caption keeps its font/align; a new one gets defaultCaptionFont(text, captionLang)
- * and "center".
+ * An existing caption keeps its font/align; a new one gets "center" and the book style's caption
+ * face (newCaptionFont): classic = defaultCaptionFont (Playfair / Cairo, unchanged), modern =
+ * styleCaptionFont (Cormorant / Amiri) — caption.font overrides the style face in the renderer.
  */
 export function setCaption(
   doc: BookDoc,
@@ -494,11 +496,22 @@ export function setCaption(
   if (prev && prev.text === clean && prev.source === "user") return doc;
   const caption: Caption = {
     text: clean,
-    font: prev?.font ?? defaultCaptionFont(clean, opts.captionLang),
+    font: prev?.font ?? newCaptionFont(doc, clean, opts.captionLang),
     align: prev?.align ?? "center",
     source: "user",
   };
   return withPage(doc, pageIdx, { ...page, caption });
+}
+
+/**
+ * Font for a new user caption: Arabic vs Latin is decided from the text as before
+ * (defaultCaptionFont); classic books keep exactly that font, other styles use their caption face.
+ */
+export function newCaptionFont(doc: Pick<BookDoc, "style">, text: string, captionLang?: string) {
+  const classic = defaultCaptionFont(text, captionLang);
+  const style = doc.style.designStyle ?? "classic";
+  if (style === "classic") return classic;
+  return styleCaptionFont(style, classic === DEFAULT_ARABIC_CAPTION_FONT ? "ar" : "en");
 }
 
 /**

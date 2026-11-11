@@ -4,52 +4,125 @@
 // - Delete page → Undo toast (the toast's Undo is void once the doc changes again).
 // - Move to chapter → appends the page to that chapter (D-037 #5, movePageToChapter);
 //   chapters left empty are pruned by the op.
+// - Spreads (M10b A15, D-064): on either half the menu acts on the whole spread (pageUnit) —
+//   delete asks "Delete this 2-page spread?" first; ops get book.maxPages; later spreads the reflow
+//   had to split are announced with Undo (splitCount).
 
 import { Check, FileCog, Trash2 } from "lucide-react";
-import { deletePage, movePageToChapter } from "@/lib/book/edit-ops";
-import { chapterLabel, indexAfterChapterMove } from "@/lib/editor/pages";
+import { useState } from "react";
+import { deletePageResult, movePageToChapterResult, pageUnit } from "@/lib/book/edit-ops";
+import { chapterLabel, splitNotice } from "@/lib/editor/pages";
 import { cn } from "@/lib/utils";
 import { showEditorToast } from "../EditorToast";
 import type { EditorPanelProps, EditorTool } from "./types";
 
 export function PageMenu({ ctx, close }: EditorPanelProps) {
-  const { state, actions, readOnly } = ctx;
+  const { state, actions, readOnly, book } = ctx;
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const doc = state.doc;
   const idx = state.page;
   if (idx === "cover" || !doc.pages[idx]) return null;
   const page = doc.pages[idx];
+  const unit = pageUnit(doc, idx);
+  const isSpread = unit.count === 2;
   const n = idx + 1;
+  const unitLabel = isSpread ? `Pages ${unit.start + 1}–${unit.start + 2}` : `Page ${n}`;
   const chapter = chapterLabel(doc, page.chapterId);
+  const maxPages = book.maxPages;
 
-  const onDelete = () => {
+  const doDelete = () => {
     if (readOnly) return;
-    actions.edit((d) => deletePage(d, idx), { select: null });
+    const base = doc;
+    let r: ReturnType<typeof deletePageResult>;
+    try {
+      r = deletePageResult(base, idx, maxPages);
+    } catch {
+      actions.edit((d) => deletePageResult(d, idx, maxPages).doc); // surfaces the error code
+      return;
+    }
+    const restoreAt = unit.start;
+    actions.edit((d) => (d === base ? r.doc : deletePageResult(d, idx, maxPages).doc), {
+      select: null,
+      goTo: r.pageIdx < 0 ? "cover" : r.pageIdx,
+    });
     close();
     const undo = () => {
       actions.undo();
-      actions.goTo(idx); // back to the restored page
+      actions.goTo(restoreAt); // back to the restored page
     };
-    showEditorToast({ message: `Page ${n} deleted`, action: { label: "Undo", run: undo }, dismissOnEdit: true });
+    const message = [isSpread ? `${unitLabel} deleted` : `Page ${n} deleted`, splitNotice(r.splitCount)].filter(Boolean).join(" · ");
+    showEditorToast({ message, action: { label: "Undo", run: undo }, dismissOnEdit: true });
+  };
+
+  const onDelete = () => {
+    if (readOnly) return;
+    if (isSpread) {
+      setConfirmDelete(true);
+      return;
+    }
+    doDelete();
   };
 
   const onMoveTo = (chapterId: string) => {
     if (readOnly || chapterId === page.chapterId) return;
-    const to = indexAfterChapterMove(doc, idx, chapterId);
-    if (to === null) return;
+    const base = doc;
+    let r: ReturnType<typeof movePageToChapterResult>;
+    try {
+      r = movePageToChapterResult(base, idx, chapterId, maxPages);
+    } catch {
+      return;
+    }
+    if (r.doc === base) return;
+    const to = r.pageIdx;
     const label = chapterLabel(doc, chapterId) ?? "chapter";
-    actions.edit((d) => movePageToChapter(d, idx, chapterId), { select: null, goTo: to });
+    actions.edit((d) => (d === base ? r.doc : movePageToChapterResult(d, idx, chapterId, maxPages).doc), {
+      select: null,
+      goTo: to,
+    });
     close();
     showEditorToast({
-      message: `Moved to “${label}” (now page ${to + 1})`,
+      message: [`Moved to “${label}” (now page ${to + 1})`, splitNotice(r.splitCount)].filter(Boolean).join(" · "),
       action: { label: "Undo", run: actions.undo },
       dismissOnEdit: true,
     });
   };
 
+  if (confirmDelete) {
+    return (
+      <div role="alertdialog" aria-labelledby="page-menu-confirm-title" className="flex flex-col gap-3" data-testid="page-menu-confirm">
+        <h3 id="page-menu-confirm-title" className="text-sm font-semibold">
+          Delete this 2-page spread?
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          {unitLabel} share one layout, so both pages are deleted. Their photos move to Not used.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(false)}
+            className="min-h-11 flex-1 rounded-lg border px-4 text-sm font-medium hover:bg-muted"
+            data-testid="page-menu-confirm-cancel"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={doDelete}
+            className="min-h-11 flex-1 rounded-lg bg-red-700 px-4 text-sm font-medium text-white hover:bg-red-800"
+            data-testid="page-menu-confirm-delete"
+          >
+            Delete 2 pages
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4" data-testid="page-menu">
       <p className="text-sm text-muted-foreground">
-        Page {n} of {doc.pages.length}
+        {unitLabel} of {doc.pages.length}
+        {isSpread ? " · 2-page spread" : null}
         {chapter ? (
           <>
             {" · "}
@@ -104,7 +177,7 @@ export function PageMenu({ ctx, close }: EditorPanelProps) {
         data-testid="page-menu-delete"
       >
         <Trash2 className="size-4" aria-hidden="true" />
-        Delete page {n}
+        {isSpread ? `Delete pages ${unit.start + 1}–${unit.start + 2}` : `Delete page ${n}`}
       </button>
     </div>
   );

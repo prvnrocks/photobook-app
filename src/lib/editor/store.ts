@@ -14,6 +14,7 @@
 //   code, never user data) so a reducer never throws.
 
 import { EditOpError, type EditOpErrorCode } from "@/lib/book/edit-ops";
+import { spreadStartOf } from "@/lib/book/spreads";
 import { getLayout } from "@/lib/layouts";
 import type { BookDoc } from "@/lib/book/types";
 
@@ -123,12 +124,29 @@ function samePosition(a: EditorPosition, b: EditorPosition) {
   return a === b;
 }
 
+/**
+ * True when `a` and `b` are the same page or the two halves of one spread (M10b A15): a spread's
+ * slots + caption live on its left page, so a selection made on the right half points at the left
+ * page while the user still looks at the right one.
+ */
+export function sameUnit(doc: BookDoc, a: EditorPosition, b: EditorPosition): boolean {
+  if (a === b) return true;
+  if (a === "cover" || b === "cover" || !doc.pages[a] || !doc.pages[b]) return false;
+  const s = spreadStartOf(doc, a);
+  return s !== null && s === spreadStartOf(doc, b);
+}
+
+/** Where to be for a selection living on `target`: stay put when already on that spread. */
+function positionFor(doc: BookDoc, current: EditorPosition, target: EditorPosition): EditorPosition {
+  return sameUnit(doc, current, target) ? current : target;
+}
+
 /** After the doc changed: clamp the position, drop a dangling selection. */
 function settle(state: EditorState, doc: BookDoc, page: EditorPosition, selection: EditorSelection): EditorState {
   const pos = clampPosition(doc, page);
   let sel = validSelection(doc, selection);
   const selPos = selectionPosition(sel);
-  if (selPos !== null && !samePosition(selPos, pos)) sel = null;
+  if (selPos !== null && !sameUnit(doc, selPos, pos)) sel = null;
   return { ...state, doc, page: pos, selection: sel };
 }
 
@@ -154,8 +172,8 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
         throw err;
       }
       const selection = action.select !== undefined ? action.select : state.selection;
-      const page =
-        action.goTo ?? (action.select !== undefined ? selectionPosition(action.select) : null) ?? state.page;
+      const selPos = action.select !== undefined ? selectionPosition(action.select) : null;
+      const page = action.goTo ?? (selPos !== null ? positionFor(doc, state.page, selPos) : null) ?? state.page;
       if (doc === state.doc) {
         // No-op: no history entry, but honour navigation/selection requests.
         const settled = settle(state, doc, page, selection);
@@ -221,7 +239,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
     case "select": {
       const sel = validSelection(state.doc, action.selection);
       const pos = selectionPosition(sel);
-      const page = pos === null ? state.page : clampPosition(state.doc, pos);
+      const page = pos === null ? state.page : clampPosition(state.doc, positionFor(state.doc, state.page, pos));
       if (sel === state.selection && page === state.page) return state;
       return { ...state, selection: sel, page, lastCoalesceKey: null };
     }
