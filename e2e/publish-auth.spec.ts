@@ -25,6 +25,7 @@ import path from "node:path";
 import { expect, test, type APIRequestContext, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import exifr from "exifr";
+import { hasCaptionArea } from "../src/lib/ai/captions";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live publish/viewer flow");
@@ -507,8 +508,12 @@ test("d. edit a caption → viewer keeps the old snapshot → Publish changes �
   needMigrations();
   test.skip(!slug, "needs test b");
   const before = await bookRow();
-  const doc = structuredClone(before.doc) as { pages: { caption: unknown }[]; style: { font: string } };
-  doc.pages[0].caption = { text: NEW_CAPTION, font: doc.style.font, align: "center", source: "user" };
+  const doc = structuredClone(before.doc) as { pages: { layout: string; side?: "left" | "right"; caption: unknown }[]; style: { font: string } };
+  // Since A12 the form defaults to Modern, whose full-bleed / photo-only layouts and spread right
+  // halves have no caption area (a caption there is invalid_doc) — edit the first page that has one.
+  const target = doc.pages.find((p) => hasCaptionArea(p.layout, p.side));
+  expect(target, "a captionable page").toBeTruthy();
+  target!.caption = { text: NEW_CAPTION, font: doc.style.font, align: "center", source: "user" };
   const put = await putDoc(doc, before.doc_rev);
   expect(put.status).toBe(200);
 

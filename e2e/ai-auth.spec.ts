@@ -43,9 +43,11 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { PLANTED_PRECHECK_TEXT, isPlantedMismatch } from "../src/lib/ai/agents/caption-writer-replay";
 import { buildCaptionContext, checkCaption } from "../src/lib/ai/caption-check";
+import { hasCaptionArea } from "../src/lib/ai/captions";
 import { wordCount } from "../src/lib/ai/schemas";
 import { parseBookDoc, validateBookDoc } from "../src/lib/book/schema";
-import { getLayout } from "../src/lib/layouts";
+import { styleCaptionFont } from "../src/lib/design/styles";
+import type { DesignStyle } from "../src/lib/book/types";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live signed-in AI flow");
@@ -121,7 +123,7 @@ async function photoRows(bookId: string): Promise<PhotoRow[]> {
 async function bookRow(bookId: string) {
   const { data, error } = await admin
     .from("books")
-    .select("doc, ai_status, max_pages, page_count, updated_at, title, tone, caption_lang")
+    .select("doc, ai_status, max_pages, page_count, updated_at, title, tone, caption_lang, design_style")
     .eq("id", bookId)
     .single();
   if (error) throw new Error(`books select failed (${error.code})`);
@@ -134,6 +136,7 @@ async function bookRow(bookId: string) {
     title: string | null;
     tone: string;
     caption_lang: string;
+    design_style: DesignStyle | null;
   };
 }
 
@@ -223,7 +226,14 @@ function expectValidDoc(doc: unknown, keptIds: Set<string>, maxPages: number, ta
 
 // ----- M4 caption helpers (counts only; caption text is never logged) -----
 type DocCaption = { text: string; font: string; align: string; source: string };
-type DocPage = { id: string; layout: string; chapterId: string | null; slots: { photoId?: string | null }[]; caption: DocCaption | null };
+type DocPage = {
+  id: string;
+  layout: string;
+  side?: "left" | "right";
+  chapterId: string | null;
+  slots: { photoId?: string | null }[];
+  caption: DocCaption | null;
+};
 type DocChapter = { id: string; title: string; dateLabel: string; place: string | null };
 
 function pagesOf(doc: unknown): DocPage[] {
@@ -232,8 +242,14 @@ function pagesOf(doc: unknown): DocPage[] {
 function chaptersOf(doc: unknown): DocChapter[] {
   return ((doc as { chapters?: DocChapter[] } | null)?.chapters ?? []) as DocChapter[];
 }
+/** The book style's caption face (doc.style.font: Cormorant/Amiri in Modern books, Playfair/Cairo in Classic). */
+function styleFontOf(doc: unknown): string {
+  return (doc as { style?: { font?: string } } | null)?.style?.font ?? "Playfair Display";
+}
+/** Single page with a caption area, or the LEFT half of a spread (Modern, the form default since
+ * A12, stores spreads as page pairs: the right half shares the layout id but never has a caption). */
 function isCaptionable(p: DocPage): boolean {
-  return !!getLayout(p.layout)?.caption;
+  return hasCaptionArea(p.layout, p.side);
 }
 function pagePhotoIds(p: DocPage): string[] {
   return p.slots.map((s) => s.photoId).filter((x): x is string => typeof x === "string");
@@ -997,7 +1013,7 @@ test("h. user caption (D-031): AI rebuild 409 user_edited, doc unchanged; Update
   const [target, ti] = capIdx.find(([p]) => pagePhotoIds(p).length >= 2) ?? capIdx[0];
   doc.pages[ti] = {
     ...target,
-    caption: { text: USER_CAPTIONS[0], font: target.caption?.font ?? "Playfair Display", align: "center", source: "user" },
+    caption: { text: USER_CAPTIONS[0], font: target.caption?.font ?? styleFontOf(before.doc), align: "center", source: "user" },
   };
   const upd = await admin.from("books").update({ doc }).eq("id", bookA);
   expect(upd.error).toBeNull();
@@ -1061,7 +1077,7 @@ test("m. Memory Keeper: ≥ 3 short user captions + Continue → user_memory (to
   for (let i = 0; i < doc.pages.length && users < 4 && next < USER_CAPTIONS.length; i++) {
     const p = doc.pages[i];
     if (!isCaptionable(p) || p.caption?.source === "user") continue;
-    doc.pages[i] = { ...p, caption: { text: USER_CAPTIONS[next++], font: p.caption?.font ?? "Playfair Display", align: "center", source: "user" } };
+    doc.pages[i] = { ...p, caption: { text: USER_CAPTIONS[next++], font: p.caption?.font ?? styleFontOf(before.doc), align: "center", source: "user" } };
     users++;
   }
   console.log(`[m] user captions written=${users} captionable=${doc.pages.filter(isCaptionable).length}`);
@@ -1222,7 +1238,8 @@ test("ar. Arabic book: native Arabic captions pass the pre-check; preview dir=au
   expect(st.ai).toBe(st.withCaption);
   expect(st.over18).toBe(0);
   expect(issues).toBe(0);
-  expect(fonts).toEqual(["Cairo"]);
+  // The style's Arabic caption face: Cairo in Classic, Amiri in Modern (the form default since A12).
+  expect(fonts).toEqual([styleCaptionFont(book.design_style, "ar")]);
   // Memory was cleared in "s" → nothing injected.
   expect(story.every((s) => memoryKeysOfStep(s).length === 0)).toBe(true);
   expect(writers.every((s) => memoryKeysOfStep(s).length === 0)).toBe(true);
