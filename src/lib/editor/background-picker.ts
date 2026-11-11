@@ -90,9 +90,26 @@ export function initialTab(bg: Background): BackgroundTab {
   return bg.kind;
 }
 
-/** True when the page shows an AI suggestion (M10c), so the picker marks it "Suggested". */
-export function isSuggested(doc: BookDoc, pageIdx: number | null): boolean {
-  return pageOverride(doc, pageIdx)?.source === "ai";
+/**
+ * True when the book background is an AI suggestion: `style.backgroundSource === "ai"` (D-068 D5).
+ * TODO(M10c T11): StyleSchema gets `backgroundSource` in T11 (in the working tree, uncommitted when
+ * T14 was written) — switch to a typed `doc.style.backgroundSource` once T11 is committed. Read
+ * loosely until then so this compiles with or without it (absent = not suggested).
+ */
+export function isBookSuggested(doc: Pick<BookDoc, "style">): boolean {
+  return (doc.style as { backgroundSource?: unknown }).backgroundSource === "ai";
+}
+
+/**
+ * True when the chosen scope shows an AI suggestion (M10c), so the picker marks it "Suggested":
+ * - "page": the page's own background has source "ai"; a page without one shows the book
+ *   background, suggested when the book's is;
+ * - "book": the book background is an AI suggestion (isBookSuggested).
+ */
+export function isSuggested(doc: BookDoc, pageIdx: number | null, scope: BackgroundScope = "page"): boolean {
+  if (scope === "book") return isBookSuggested(doc);
+  const own = pageOverride(doc, pageIdx);
+  return own ? own.source === "ai" : isBookSuggested(doc);
 }
 
 /**

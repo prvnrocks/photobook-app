@@ -95,7 +95,7 @@ export function BackgroundPickerPanel({ ctx }: EditorPanelProps) {
       tab={tab}
       onTab={setTab}
       current={current}
-      suggested={scope === "page" && isSuggested(doc, pageIdx)}
+      suggested={isSuggested(doc, pageIdx, scope)}
       hasOverride={scope === "page" && pageOverride(doc, pageIdx) !== null}
       overrideCount={pageBackgroundOverrideCount(doc)}
       adjustKeepsOverrides={scope === "book" && doc.style.background.kind === "photo"}

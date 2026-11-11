@@ -15,18 +15,16 @@ import {
   closestCenter,
   DndContext,
   KeyboardSensor,
-  PointerSensor,
   TouchSensor,
   useSensor,
   useSensors,
   type Announcements,
   type DragEndEvent,
-  type PointerActivationConstraint,
 } from "@dnd-kit/core";
 import { rectSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronLeft, ChevronRight, LayoutGrid } from "lucide-react";
-import { useRef, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useRef, type KeyboardEvent } from "react";
 import { BookPage } from "@/components/book/BookPage";
 import { movePageResult, type PageOpResult } from "@/lib/book/edit-ops";
 import { designLabel } from "@/lib/design/defaults";
@@ -34,21 +32,10 @@ import type { BookDoc } from "@/lib/book/types";
 import { pageCountLabel, pageUnits, splitNotice, unitMoveTarget, type PageTileUnit } from "@/lib/editor/pages";
 import { cn } from "@/lib/utils";
 import type { EditorContextValue } from "../editor-context";
+import { DesktopPointerSensor, MOUSE_CONSTRAINT, TOUCH_CONSTRAINT } from "../dnd-sensors";
 import { showEditorToast } from "../EditorToast";
 import type { EditorPanelProps, EditorTool } from "./types";
 
-/** Pointer sensor for mouse / pen only — touch goes through TouchSensor (press-and-hold). */
-class DesktopPointerSensor extends PointerSensor {
-  static activators = [
-    {
-      eventName: "onPointerDown" as const,
-      handler: ({ nativeEvent: e }: ReactPointerEvent) => e.isPrimary && e.button === 0 && e.pointerType !== "touch",
-    },
-  ];
-}
-
-const MOUSE_CONSTRAINT: PointerActivationConstraint = { distance: 6 };
-const TOUCH_CONSTRAINT: PointerActivationConstraint = { delay: 250, tolerance: 8 };
 const KEYBOARD_CODES = { start: ["Space"], cancel: ["Escape"], end: ["Space"] };
 
 const INSTRUCTIONS =

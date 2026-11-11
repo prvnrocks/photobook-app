@@ -5,6 +5,10 @@
 // match). Drag to pan (pointer events, focal point x/y), pinch or slider to zoom 1–4, arrow keys
 // nudge. Every gesture is one undo step (coalesceKey); the big page updates live behind the sheet.
 // While the panel is open on mobile its backdrop blocks the carousel, so pages can't swipe.
+// M10c T14: shaped / tilted / framed slots crop in the UNROTATED photo rect (layoutSlotMm =
+// photoRectOf: frame excluded, same box the render model cover-fits), so saved values render the
+// same in viewer and print. A mask dims what the slot's shape hides (circle, hexagon, diamond,
+// polygon, rounded) and outlines what shows.
 
 import { Crop as CropIcon, RotateCcw } from "lucide-react";
 import { useRef, type KeyboardEvent, type PointerEvent } from "react";
@@ -13,7 +17,9 @@ import { setCrop } from "@/lib/book/edit-ops";
 import { isSlotLowRes, layoutSlotMm } from "@/lib/book/resolution";
 import { cropBoxStyle } from "@/lib/book/render";
 import type { Crop } from "@/lib/book/types";
+import { getLayout } from "@/lib/layouts";
 import { panCrop, pinchZoom, zoomCrop, type CropFrame } from "@/lib/editor/crop-gesture";
+import { cropMaskOf, cropMaskPath, type CropMask } from "@/lib/editor/shaped-slots";
 import type { EditorContextValue } from "../editor-context";
 import type { EditorPanelProps, EditorTool } from "./types";
 
@@ -26,6 +32,10 @@ type CropTarget = {
   url: string;
   photo: { width: number; height: number };
   frame: CropFrame;
+  /** Visible part of the photo rect (slot shape; M10c). */
+  mask: CropMask;
+  /** Slot tilt in degrees (the panel shows it straight). */
+  rotate: number;
 };
 
 const finitePos = (v: number | null | undefined): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
@@ -40,6 +50,7 @@ export function cropTarget(ctx: Pick<EditorContextValue, "state" | "photos">): C
   const p = ctx.photos.web[slot.photoId];
   const mm = layoutSlotMm(page.layout, sel.slotIdx, ctx.state.doc.format);
   if (!p?.url || !mm || !finitePos(p.width) || !finitePos(p.height)) return null;
+  const layout = getLayout(page.layout);
   return {
     pageIdx: sel.pageIdx,
     slotIdx: sel.slotIdx,
@@ -49,6 +60,8 @@ export function cropTarget(ctx: Pick<EditorContextValue, "state" | "photos">): C
     url: p.url,
     photo: { width: p.width, height: p.height },
     frame: { photoW: p.width, photoH: p.height, slotWmm: mm.w, slotHmm: mm.h },
+    mask: cropMaskOf(layout, sel.slotIdx, ctx.state.doc.format),
+    rotate: layout?.slots[sel.slotIdx]?.rotate ?? 0,
   };
 }
 
@@ -163,7 +176,13 @@ export function CropPanel({ ctx, close }: EditorPanelProps) {
             <span key={i} className="border-[0.5px] border-white/50" />
           ))}
         </div>
+        <CropMaskOverlay mask={t.mask} />
       </div>
+      {t.rotate ? (
+        <p className="-mt-1 text-xs text-muted-foreground" data-testid="crop-tilt-note">
+          Shown straight. The photo stays tilted on the page.
+        </p>
+      ) : null}
 
       <label className="flex w-full max-w-sm items-center gap-3 text-sm">
         <span className="shrink-0 font-medium">Zoom</span>
@@ -206,6 +225,29 @@ export function CropPanel({ ctx, close }: EditorPanelProps) {
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Dims the part of the photo rect the slot's shape hides and outlines the visible shape (SVG in the
+ * crop box's own %, so it matches the render model's clip exactly). Nothing for rect slots.
+ */
+function CropMaskOverlay({ mask }: { mask: CropMask }) {
+  const d = cropMaskPath(mask);
+  if (!d) return null;
+  return (
+    <svg
+      aria-hidden="true"
+      focusable="false"
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      className="pointer-events-none absolute inset-0 block size-full"
+      data-testid="crop-mask"
+      data-shape={mask.kind}
+    >
+      <path d={`M0,0 H100 V100 H0 Z ${d}`} fill="rgba(0,0,0,0.55)" fillRule="evenodd" />
+      <path d={d} fill="none" stroke="white" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+    </svg>
   );
 }
 

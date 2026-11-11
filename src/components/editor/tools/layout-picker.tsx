@@ -8,13 +8,18 @@
 // (e.g. "Starts on a left page"); removing user captions asks first (confirmDropCaptions).
 // M11 T14: docked under the page on phones (dockOnMobile) so the page stays visible while choosing;
 // four diagrams per row keep each option ≥ 44 px at 375 px and more of them inside the 42dvh panel.
+// M10c T14: shaped / tilted / framed slots draw their shape, tilt and frame card (diagramSlotLook)
+// so geometric and scrapbook options are recognisable; decorations are left out. Plain slots keep
+// their M5 markup.
 
 import { LayoutTemplate } from "lucide-react";
 import { useState } from "react";
 import { changeLayout, type ChangeLayoutResult } from "@/lib/book/edit-ops";
 import { pageAspectStyle } from "@/lib/book/format-style";
+import { paintOrder } from "@/lib/book/slot-geometry";
 import type { BookFormat, Caption, Layout } from "@/lib/book/types";
 import { layoutOptions, type LayoutOption } from "@/lib/editor/layout-options";
+import { diagramSlotLook } from "@/lib/editor/shaped-slots";
 import { splitNotice } from "@/lib/editor/pages";
 import { layoutChangeNotice } from "@/lib/editor/photo-picker";
 import { spreadAspectRatio } from "@/lib/editor/spreads";
@@ -46,6 +51,8 @@ function rectStyle(r: Rect, spread: boolean) {
 export function LayoutDiagram({ layout, format, className }: { layout: Layout; format?: BookFormat | null; className?: string }) {
   const spread = layout.role === "spread";
   const boxes: readonly Rect[] = layout.slices ?? layout.slots;
+  // Slots bottom → top as the page paints them (z); slices as they come.
+  const order = layout.slices ? boxes.map((_, i) => i) : paintOrder(layout);
   return (
     <div
       className={cn("relative aspect-[148/210] w-full rounded-sm border border-border bg-white", className)}
@@ -53,9 +60,26 @@ export function LayoutDiagram({ layout, format, className }: { layout: Layout; f
       aria-hidden="true"
       data-kind={spread ? "spread" : undefined}
     >
-      {boxes.map((r, i) => (
-        <div key={i} className="absolute rounded-[2px] bg-input/60" style={rectStyle(r, spread)} data-diagram-box="" />
-      ))}
+      {order.map((i) => {
+        const r = boxes[i];
+        const look = layout.slices ? null : diagramSlotLook(layout, i, format);
+        if (!look) return <div key={i} className="absolute rounded-[2px] bg-input/60" style={rectStyle(r, spread)} data-diagram-box="" />;
+        const shapeStyle = {
+          ...(look.borderRadius ? { borderRadius: look.borderRadius } : {}),
+          ...(look.clipPath ? { clipPath: look.clipPath } : {}),
+        };
+        return (
+          <div
+            key={i}
+            className={cn("absolute", look.photo ? "bg-white shadow-[0_0_0_1px_var(--color-border)]" : "bg-input/80")}
+            style={{ ...rectStyle(r, spread), ...shapeStyle, ...(look.rotate ? { transform: `rotate(${look.rotate}deg)` } : {}) }}
+            data-diagram-box=""
+            data-diagram-shaped="true"
+          >
+            {look.photo ? <div className="absolute bg-input/80" style={{ ...rectStyle(look.photo, false), ...shapeStyle }} /> : null}
+          </div>
+        );
+      })}
       {layout.caption ? (
         <div
           className="absolute flex flex-col items-center justify-center gap-[3px]"
