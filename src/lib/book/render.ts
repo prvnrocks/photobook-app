@@ -725,24 +725,6 @@ function textPanels(
   return out;
 }
 
-/**
- * Styles whose chapter title / date panels (and their plates) show only on the chapter's first
- * page; later pages of the chapter render nothing there. Classic/modern keep repeating them
- * (their goldens are frozen).
- */
-const CHAPTER_OPENER_STYLES: ReadonlySet<string> = new Set(["geometric", "scrapbook"]);
-
-/**
- * True when `doc.pages[index]` opens its chapter: its chapterId differs from the previous page's.
- * For a spread pass the left half's index — the whole spread counts as the chapter's first page.
- */
-export function opensChapter(doc: Pick<BookDoc, "pages">, index: number): boolean {
-  const page = doc.pages[index];
-  if (!page) return false;
-  const prev = index > 0 ? doc.pages[index - 1] : undefined;
-  return !prev || prev.chapterId !== page.chapterId;
-}
-
 /** Render model of `doc.pages[pageIndex]`; null when the index is out of range. */
 export function pageRenderModel(
   doc: BookDoc,
@@ -815,11 +797,7 @@ export function pageRenderModel(
     }
   }
 
-  const chapterBinds: readonly TextBinding[] =
-    CHAPTER_OPENER_STYLES.has(layout.style ?? "") && owner && !opensChapter(doc, half ? half.ownerIndex ?? pageIndex : pageIndex)
-      ? []
-      : ["chapterTitle", "dateLabel"];
-  const texts = layout.texts && chapterBinds.length > 0 ? textPanels(doc, layout, owner, offset, captionLang, chapterBinds) : [];
+  const texts = layout.texts ? textPanels(doc, layout, owner, offset, captionLang, ["chapterTitle", "dateLabel"]) : [];
   // Decorations are layout artwork: drawn on orphaned right halves too (like the background).
   const decorations = layout.decorations ? renderDecorations(layout, doc.occasion, offset) : [];
   return {

@@ -160,9 +160,7 @@ describe("render model: decorations + plates (T8b)", () => {
   });
 
   it("Arabic plated text: no letter-spacing, lang ar", () => {
-    const base = testM10cDoc("travel", "جولة في المدينة القديمة");
-    // The spread opens the chapter (chapter panels show on a chapter's first page only).
-    const doc = { ...base, pages: base.pages.map((p, i) => (i === 0 ? { ...p, chapterId: null } : p)) };
+    const doc = testM10cDoc("travel", "جولة في المدينة القديمة");
     const t = pageRenderModel(doc, 1, photos)!.texts ?? [];
     expect(t).toHaveLength(0); // left half: the plated chapter title sits on the right page
     const right = pageRenderModel(doc, 2, photos)!.texts![0];

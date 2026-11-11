@@ -190,7 +190,7 @@ describe.each(DESIGNS)("rule-built album for %o", (design) => {
         }
       }
     }
-  });
+  }, 30_000); // heavy property walk (~2.5 s alone, >5 s under the full parallel suite since the M10c look-ahead)
 
   it("special sets: all panoramas, all tall portraits, all squares, unknown sizes, all undated", () => {
     const sets: Record<string, AutoPhoto[]> = {

@@ -1414,7 +1414,49 @@
             "fontWeight": 400,
             "fontStyle": "normal"
           }
-        }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 8.1081,
+              "y": 65.7143,
+              "w": 33.7838,
+              "h": 6.6667
+            },
+            "text": "The long drive",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 8.1081,
+              "y": 73.3333,
+              "w": 33.7838,
+              "h": 3.3334
+            },
+            "text": "5 Nov 2026",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.1081,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            }
+          }
+        ]
       },
       "bleed": {
         "kind": "page",
@@ -1489,7 +1531,49 @@
             "fontWeight": 400,
             "fontStyle": "normal"
           }
-        }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 8.1081,
+              "y": 65.7143,
+              "w": 33.7838,
+              "h": 6.6667
+            },
+            "text": "The long drive",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 8.1081,
+              "y": 73.3333,
+              "w": 33.7838,
+              "h": 3.3334
+            },
+            "text": "5 Nov 2026",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.1081,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            }
+          }
+        ]
       }
     },
     {
@@ -2176,7 +2260,29 @@
             "fontWeight": 400,
             "fontStyle": "normal"
           }
-        }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 8.1081,
+              "y": 79.0476,
+              "w": 83.7838,
+              "h": 6.6667
+            },
+            "text": "Last evening",
+            "align": "center",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          }
+        ]
       },
       "bleed": {
         "kind": "page",
@@ -2292,7 +2398,29 @@
             "fontWeight": 400,
             "fontStyle": "normal"
           }
-        }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 8.1081,
+              "y": 79.0476,
+              "w": 83.7838,
+              "h": 6.6667
+            },
+            "text": "Last evening",
+            "align": "center",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          }
+        ]
       }
     },
     {
@@ -2454,7 +2582,49 @@
             "fontWeight": 400,
             "fontStyle": "normal"
           }
-        }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 8.1081,
+              "y": 10.4762,
+              "w": 83.7838,
+              "h": 6.6667
+            },
+            "text": "Last evening",
+            "align": "center",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 8.1081,
+              "y": 18.0952,
+              "w": 83.7838,
+              "h": 3.3334
+            },
+            "text": "8 Nov 2026",
+            "align": "center",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.1081,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            }
+          }
+        ]
       },
       "bleed": {
         "kind": "page",
@@ -2598,7 +2768,49 @@
             "fontWeight": 400,
             "fontStyle": "normal"
           }
-        }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 8.1081,
+              "y": 10.4762,
+              "w": 83.7838,
+              "h": 6.6667
+            },
+            "text": "Last evening",
+            "align": "center",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 8.1081,
+              "y": 18.0952,
+              "w": 83.7838,
+              "h": 3.3334
+            },
+            "text": "8 Nov 2026",
+            "align": "center",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.1081,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            }
+          }
+        ]
       }
     },
     {
@@ -2719,6 +2931,82 @@
             "fontStyle": "normal"
           }
         },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 17.5676,
+              "y": 61.9048,
+              "w": 74.3243,
+              "h": 6.6666
+            },
+            "text": "Last evening",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 8.1081,
+              "y": 70.4762,
+              "w": 32.4324,
+              "h": 3.8095
+            },
+            "text": "8 Nov 2026",
+            "align": "center",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.1081,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            },
+            "plate": {
+              "art": {
+                "stickerId": "plate-label",
+                "viewBox": "0 0 140 30",
+                "preserveAspectRatio": "none",
+                "paths": [
+                  {
+                    "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+                    "fill": "#235A5E"
+                  },
+                  {
+                    "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+                    "fill": "none",
+                    "stroke": "rgba(83, 126, 129, 0.9)",
+                    "strokeWidth": 0.7
+                  },
+                  {
+                    "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+                    "fill": "#709496"
+                  },
+                  {
+                    "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+                    "fill": "rgba(255, 255, 255, 0.5)"
+                  }
+                ]
+              },
+              "textBox": {
+                "x": 11,
+                "y": 12,
+                "w": 78,
+                "h": 76
+              },
+              "ink": "light"
+            }
+          }
+        ],
         "decorations": [
           {
             "kind": "sticker",
@@ -2831,6 +3119,82 @@
             "fontStyle": "normal"
           }
         },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 17.5676,
+              "y": 61.9048,
+              "w": 74.3243,
+              "h": 6.6666
+            },
+            "text": "Last evening",
+            "align": "left",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 5.4054,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.05em"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 8.1081,
+              "y": 70.4762,
+              "w": 32.4324,
+              "h": 3.8095
+            },
+            "text": "8 Nov 2026",
+            "align": "center",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.1081,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "letterSpacing": "0.18em"
+            },
+            "plate": {
+              "art": {
+                "stickerId": "plate-label",
+                "viewBox": "0 0 140 30",
+                "preserveAspectRatio": "none",
+                "paths": [
+                  {
+                    "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+                    "fill": "#235A5E"
+                  },
+                  {
+                    "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+                    "fill": "none",
+                    "stroke": "rgba(83, 126, 129, 0.9)",
+                    "strokeWidth": 0.7
+                  },
+                  {
+                    "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+                    "fill": "#709496"
+                  },
+                  {
+                    "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+                    "fill": "rgba(255, 255, 255, 0.5)"
+                  }
+                ]
+              },
+              "textBox": {
+                "x": 11,
+                "y": 12,
+                "w": 78,
+                "h": 76
+              },
+              "ink": "light"
+            }
+          }
+        ],
         "decorations": [
           {
             "kind": "sticker",
