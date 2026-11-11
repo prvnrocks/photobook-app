@@ -98,6 +98,9 @@ export function PublishPanelView({
   const [busy, setBusy] = useState<"publish" | "unpublish" | null>(null);
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
   const [message, setMessage] = useState<Message | null>(null);
+  // The state a first publish succeeded on: until the refresh brings the live state, the draft
+  // card (disabled Publish) would sit under "Your book is live" — show a link placeholder instead.
+  const [publishedOn, setPublishedOn] = useState<PublishState | null>(null);
   const locked = busy !== null || refreshing;
   const urlId = useId();
   const unpublishHeadingId = useId();
@@ -121,6 +124,7 @@ export function PublishPanelView({
         first: state.publishedAt === null,
       });
       setMessage({ tone: "ok", text: state.published ? "Changes published" : "Your book is live" });
+      if (!state.published) setPublishedOn(state);
       refresh();
     } else {
       setMessage({ tone: "error", text: publishErrorCopy(r.error, state.maxPages), signIn: r.error === "signed_out" });
@@ -153,6 +157,7 @@ export function PublishPanelView({
   };
 
   const live = state.published && !state.expired;
+  const awaitingLink = !state.published && publishedOn === state;
   const expiry = expiryLabel({ isPaid: state.isPaid, expiresAt: state.expiresAt, expired: state.expired, now });
   const blocked = state.canPublishReason;
   const deleteDate = state.expired ? expiredBookDeleteDate({ is_paid: state.isPaid, expires_at: state.expiresAt }, now) : null;
@@ -247,6 +252,13 @@ export function PublishPanelView({
               data-testid="publish-url"
             />
           </div>
+        </section>
+      ) : awaitingLink ? (
+        <section className={CARD} data-testid="publish-pending" aria-busy="true">
+          <p className="type-small flex items-center gap-2 text-muted-foreground">
+            <Loader2 className={SPIN} aria-hidden="true" />
+            Getting your link ready…
+          </p>
         </section>
       ) : (
         <section className={CARD} data-testid="publish-draft">

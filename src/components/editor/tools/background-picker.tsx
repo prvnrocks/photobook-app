@@ -31,7 +31,7 @@ import {
   FADE_MAX,
   FADE_STEP,
   fadeSlider,
-  initialTab,
+  scopeTab,
   isSuggested,
   nextFade,
   pageOverride,
@@ -60,7 +60,7 @@ export function BackgroundPickerPanel({ ctx }: EditorPanelProps) {
   const [scopePref, setScope] = useState<BackgroundScope>(scopes[0]);
   const scope: BackgroundScope = scopes.includes(scopePref) ? scopePref : scopes[0];
   const current = currentBackground(doc, scope, pageIdx);
-  const [tab, setTab] = useState<BackgroundTab>(() => initialTab(current));
+  const [tab, setTab] = useState<BackgroundTab>(() => scopeTab(doc, scope, pageIdx));
   const [session] = useState(() => ++sessionSeq);
   const photos = useMemo(() => backgroundPhotoCandidates(ctx.photos.photos), [ctx.photos.photos]);
 
@@ -91,7 +91,11 @@ export function BackgroundPickerPanel({ ctx }: EditorPanelProps) {
     <BackgroundPickerView
       scopes={scopes}
       scope={scope}
-      onScope={setScope}
+      onScope={(next) => {
+        setScope(next);
+        // Open the tab of what the new scope shows (a page photo vs a paper book background).
+        if (next !== scope) setTab(scopeTab(doc, next, pageIdx));
+      }}
       tab={tab}
       onTab={setTab}
       current={current}

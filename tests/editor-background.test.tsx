@@ -37,6 +37,7 @@ import {
   TINT_SWATCHES,
   VEIL_SWATCHES,
   withVeilColor,
+  scopeTab,
 } from "@/lib/editor/background-picker";
 import { nextRadioIndex, rovingTabStop, trapFocusIndex } from "@/lib/editor/roving";
 import { DEV_DROPPED_BG_PHOTO_UUID, devEditorData, devTransport, withDevBackgroundPhotos } from "@/lib/editor/dev-fixture";
@@ -238,6 +239,14 @@ describe("background picker helpers", () => {
     expect(currentBackground(withPage, "book", 1)).toEqual(NAVY);
     expect(initialTab(LINEN)).toBe("texture");
     expect(initialTab(PHOTO)).toBe("photo");
+  });
+
+  it("scopeTab: switching to Whole book shows the book background's tab, not the page's (M10c polish)", () => {
+    const doc = setPageBackground(setBookBackground(devPreviewDoc(), LINEN), 1, PHOTO);
+    expect(scopeTab(doc, "page", 1)).toBe("photo");
+    expect(scopeTab(doc, "book", 1)).toBe("texture");
+    expect(scopeTab(doc, "page", 0)).toBe("texture");
+    expect(scopeTab(setBookBackground(doc, NAVY, { keepPageOverrides: true }), "book", 1)).toBe("color");
   });
 
   it("isSuggested only for an AI page background", () => {

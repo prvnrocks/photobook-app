@@ -90,6 +90,11 @@ export function initialTab(bg: Background): BackgroundTab {
   return bg.kind;
 }
 
+/** Tab to show for `scope`: the kind of that scope's background (on open and on a scope switch). */
+export function scopeTab(doc: BookDoc, scope: BackgroundScope, pageIdx: number | null): BackgroundTab {
+  return initialTab(currentBackground(doc, scope, pageIdx));
+}
+
 /** True when the book background is an AI suggestion: `style.backgroundSource === "ai"` (D-068 D5; absent = not suggested). */
 export function isBookSuggested(doc: Pick<BookDoc, "style">): boolean {
   return doc.style.backgroundSource === "ai";
