@@ -135,9 +135,23 @@ describe("getMyBook (deploy-order tolerant)", () => {
       { data: null, error: { code: "42703", message: "column books.doc_rev does not exist" } },
       { data: { id: B, doc: {} }, error: null },
     );
-    expect(await getMyBook(B)).toEqual({ id: B, doc: {}, doc_rev: null });
+    expect(await getMyBook(B)).toEqual({ id: B, doc: {}, doc_rev: null, format: null, design_style: null });
     expect(fake.state.chains).toHaveLength(2);
     expect(String(fake.state.chains[1].calls[0][1])).not.toMatch(/doc_rev/);
+  });
+
+  it("M10b A6: selects format + design_style; before migration 1900 retries with the base columns (doc_rev null → saving unavailable)", async () => {
+    fake.state.results.push({ data: { id: B }, error: null });
+    await getMyBook(B);
+    expect(String(fake.state.chains[0].calls[0][1])).toMatch(/\bformat\b.*\bdesign_style\b/);
+
+    fake.state.chains = [];
+    fake.state.results.push(
+      { data: null, error: { code: "42703", message: "column books.design_style does not exist" } },
+      { data: { id: B, doc: {} }, error: null },
+    );
+    expect(await getMyBook(B)).toEqual({ id: B, doc: {}, doc_rev: null, format: null, design_style: null });
+    expect(String(fake.state.chains[1].calls[0][1])).not.toMatch(/doc_rev|format|design_style/);
   });
 
   it("legacy fallback keeps null for a missing book; other errors are not swallowed", async () => {

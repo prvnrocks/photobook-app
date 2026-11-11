@@ -284,8 +284,10 @@ describe("validateBookDoc on v2", () => {
   // One photo per slot, all known: a doc validateBookDoc accepts, with v2 backgrounds on top.
   function validV2(): { doc: BookDoc; photoIds: Set<string> } {
     // Portrait: the shipping catalogue has only A5 portrait layouts so far (M10b: a layout's
-    // format must match doc.format). Backgrounds + modern style still make it a v2 doc.
-    const doc: BookDoc = { ...v2Doc(), format: "A5_PORTRAIT" };
+    // format must match doc.format) and only classic ones (M10b A6: a layout's style must match
+    // doc.style.designStyle). The backgrounds still make it a v2 doc.
+    const base = v2Doc();
+    const doc: BookDoc = { ...base, format: "A5_PORTRAIT", style: { ...base.style, designStyle: "classic" } };
     const photoIds = new Set<string>([PHOTO_A]);
     let n = 0;
     const pages = doc.pages
@@ -313,6 +315,18 @@ describe("validateBookDoc on v2", () => {
     expect(issues[0]).toBe('cover: layout "cover" is for A5_PORTRAIT, book is A5_LANDSCAPE');
     expect(issues).toContain(`pages[0]: layout "${doc.pages[0].layout}" is for A5_PORTRAIT, book is A5_LANDSCAPE`);
     expect(issues).toHaveLength(1 + doc.pages.length);
+  });
+
+  it("flags layouts whose design style differs from the book's (M10b A6, strict)", () => {
+    const { doc, photoIds } = validV2();
+    const issues = validateBookDoc({ ...doc, style: { ...doc.style, designStyle: "modern" } }, { photoIds, maxPages: 100 });
+    expect(issues[0]).toBe('cover: layout "cover" is classic, book is modern');
+    expect(issues).toContain(`pages[0]: layout "${doc.pages[0].layout}" is classic, book is modern`);
+    expect(issues).toHaveLength(1 + doc.pages.length);
+    // An absent designStyle counts as classic.
+    const noStyle = { ...doc.style };
+    delete noStyle.designStyle;
+    expect(validateBookDoc({ ...doc, style: noStyle }, { photoIds, maxPages: 100 })).toEqual([]);
   });
 
   it("flags unknown background photos (page override and book default)", () => {

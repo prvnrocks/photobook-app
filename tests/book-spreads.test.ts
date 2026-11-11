@@ -180,9 +180,10 @@ function checkRepair(opDoc: BookDoc) {
 // --- catalogue + schema --------------------------------------------------------------------------
 
 describe("layout schema v2", () => {
-  it("the 7 shipping layouts are classic A5 portrait, ids unchanged, no spreads", async () => {
+  it("the 7 classic A5 portrait layouts are unchanged, no spreads, and lead the catalogue", async () => {
     const real = await vi.importActual<typeof import("@/lib/layouts")>("@/lib/layouts");
-    expect(real.LAYOUTS.map((l) => l.id)).toEqual([
+    expect(real.LAYOUTS.slice(0, 7)).toEqual(real.CLASSIC_PORTRAIT_LAYOUTS);
+    expect(real.CLASSIC_PORTRAIT_LAYOUTS.map((l) => l.id)).toEqual([
       "cover",
       "full-page",
       "one-portrait",
@@ -191,7 +192,7 @@ describe("layout schema v2", () => {
       "three-mixed",
       "four-grid",
     ]);
-    for (const l of real.LAYOUTS) {
+    for (const l of real.CLASSIC_PORTRAIT_LAYOUTS) {
       expect(l.style).toBe("classic");
       expect(l.format).toBe("A5_PORTRAIT");
       expect(l.twin).toBeUndefined();
@@ -235,13 +236,24 @@ describe("layout schema v2", () => {
 
   it("layoutsFor filters by format, style (null = any) and role, in catalogue order", () => {
     expect(layoutsFor("A5_PORTRAIT", "classic", "page").map((l) => l.id)).toEqual(
-      LAYOUTS.filter((l) => l.role === "page" && l.style === "classic").map((l) => l.id),
+      LAYOUTS.filter((l) => l.role === "page" && l.style === "classic" && l.format === "A5_PORTRAIT").map((l) => l.id),
     );
     expect(layoutsFor("A5_PORTRAIT", "classic", "spread").map((l) => l.id)).toEqual(["test-spread-a", "test-spread-b", "test-spread-c"]);
     expect(layoutsFor("A5_PORTRAIT", "classic", "cover").map((l) => l.id)).toEqual(["cover"]);
-    expect(layoutsFor("A5_PORTRAIT", "modern", "page").map((l) => l.id)).toEqual(["test-modern-one"]);
-    expect(layoutsFor("A5_PORTRAIT", null, "page")).toHaveLength(7);
-    expect(layoutsFor("A5_LANDSCAPE", null, "page")).toEqual([]);
+    // Real modern portrait pages (M10b A5a) come first, the test-only one is appended by withTestSpreads.
+    expect(layoutsFor("A5_PORTRAIT", "modern", "page").map((l) => l.id)).toEqual(
+      LAYOUTS.filter((l) => l.role === "page" && l.style === "modern" && l.format === "A5_PORTRAIT").map((l) => l.id),
+    );
+    expect(layoutsFor("A5_PORTRAIT", "modern", "page").map((l) => l.id)).toContain("test-modern-one");
+    expect(layoutsFor("A5_PORTRAIT", null, "page").map((l) => l.id)).toEqual(
+      LAYOUTS.filter((l) => l.role === "page" && l.format === "A5_PORTRAIT").map((l) => l.id),
+    );
+    expect(layoutsFor("A5_PORTRAIT", null, "page").length).toBeGreaterThanOrEqual(7);
+    expect(layoutsFor("A5_LANDSCAPE", null, "page").map((l) => l.id)).toEqual(
+      LAYOUTS.filter((l) => l.role === "page" && l.format === "A5_LANDSCAPE").map((l) => l.id),
+    );
+    expect(layoutsFor("A5_LANDSCAPE", "classic", "spread")).toEqual([]);
+    for (const l of layoutsFor("A5_LANDSCAPE", "modern", "spread")) expect(l.format).toBe("A5_LANDSCAPE");
   });
 
   it("rectHalf / toPageRect split by the rect centre", () => {

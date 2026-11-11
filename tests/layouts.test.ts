@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { LayoutSchema } from "@/lib/book/schema";
 import type { Rect } from "@/lib/book/types";
-import { COVER_LAYOUT_ID, getLayout, LAYOUT_IDS, LAYOUTS, layoutsByRole, PAGE_MM } from "@/lib/layouts";
+import { pageMm } from "@/lib/book/format";
+import { COVER_LAYOUT_ID, getLayout, LAYOUT_IDS, LAYOUTS, layoutsByRole } from "@/lib/layouts";
 
-const inside = (r: Rect) => r.x >= 0 && r.y >= 0 && r.x + r.w <= 100 && r.y + r.h <= 100;
+/** Spread rects run 0..200 % across both pages (lib/book/schema.ts). */
+const inside = (r: Rect, maxX = 100) => r.x >= 0 && r.y >= 0 && r.x + r.w <= maxX + 1e-9 && r.y + r.h <= 100 + 1e-9;
 const overlaps = (a: Rect, b: Rect) =>
   a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
@@ -31,7 +33,7 @@ describe("layout catalogue", () => {
     });
 
     it("slots lie within the page and do not overlap", () => {
-      for (const s of layout.slots) expect(inside(s)).toBe(true);
+      for (const s of layout.slots) expect(inside(s, layout.role === "spread" ? 200 : 100)).toBe(true);
       for (let i = 0; i < layout.slots.length; i++)
         for (let j = i + 1; j < layout.slots.length; j++)
           expect(overlaps(layout.slots[i], layout.slots[j])).toBe(false);
@@ -39,13 +41,14 @@ describe("layout catalogue", () => {
 
     it("caption is inside the page and does not overlap slots", () => {
       if (!layout.caption) return;
-      expect(inside(layout.caption)).toBe(true);
+      expect(inside(layout.caption, layout.role === "spread" ? 200 : 100)).toBe(true);
       for (const s of layout.slots) expect(overlaps(layout.caption, s)).toBe(false);
     });
 
-    it("slot shape agrees with its orientation preference on an A5 page", () => {
+    it("slot shape agrees with its orientation preference on a page of its format", () => {
+      const page = pageMm(layout.format);
       layout.slots.forEach((s, i) => {
-        const ratio = (s.w * PAGE_MM.w) / (s.h * PAGE_MM.h);
+        const ratio = (s.w * page.w) / (s.h * page.h);
         if (layout.prefers[i] === "portrait") expect(ratio).toBeLessThan(1);
         if (layout.prefers[i] === "landscape") expect(ratio).toBeGreaterThan(1);
       });

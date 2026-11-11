@@ -26,7 +26,8 @@ import { bleedRect, printSlotSizeMm } from "@/lib/book/bleed";
 import { coverRenderModel, pageRenderModel, type RenderPhotos } from "@/lib/book/render";
 import { effectiveDpi, isSlotLowRes, layoutSlotMm, slotSizeMm } from "@/lib/book/resolution";
 import type { BookDoc, BookPage as DocPage, Caption } from "@/lib/book/types";
-import { LAYOUTS, layoutsByRole } from "@/lib/layouts";
+// M10b: the M9 goldens freeze the classic A5 portrait catalogue; other formats/styles have their own tests.
+import { CLASSIC_PORTRAIT_LAYOUTS as LAYOUTS, layoutsByRole } from "@/lib/layouts";
 import { planPrintImages } from "@/lib/pdf/image-plan";
 import { printPhotoIds, printRenderPhotos, printSheetTargets } from "@/lib/pdf/print-doc";
 import { parsePublicDoc, publicDocToRenderDoc, publicPhotoIds, toPublicDoc } from "@/lib/publish/public-doc";

@@ -7,7 +7,8 @@ import { devPreviewDoc, devPreviewPhotos } from "@/lib/book/dev-preview";
 import { coverRenderModel, pageRenderModel, type RenderPhotos } from "@/lib/book/render";
 import { slotSizeMm } from "@/lib/book/resolution";
 import type { BookDoc, BookPage as DocPage, Rect } from "@/lib/book/types";
-import { BLEED_MM, getLayout, LAYOUTS, PAGE_MM, SAFE_MM, SHEET_MM } from "@/lib/layouts";
+import { pageMm } from "@/lib/book/format";
+import { BLEED_MM, CLASSIC_PORTRAIT_LAYOUTS, getLayout, LAYOUTS, PAGE_MM, SAFE_MM, SHEET_MM } from "@/lib/layouts";
 
 const close = (a: number, b: number) => expect(a).toBeCloseTo(b, 9);
 
@@ -106,18 +107,27 @@ describe("bleedRect", () => {
 });
 
 describe("safe zone: text never closer than SAFE_MM to the trim", () => {
-  const textRects = LAYOUTS.flatMap((l) => (l.caption ? [[l.id, l.caption] as const] : []));
+  // Caption + text-panel rects of every layout, in mm of the layout's own format. Spread rects
+  // (x 0..200) are measured on the page half they sit on (a text never crosses the fold).
+  const textRects = LAYOUTS.flatMap((l) =>
+    [...(l.caption ? [l.caption] : []), ...(l.texts ?? []).map((t) => t.box)].map((r) => [l.id, r, l] as const),
+  );
 
   it("the catalogue has caption/cover-text rects to check (incl. cover)", () => {
-    expect(textRects.map(([id]) => id)).toContain("cover");
-    expect(textRects.length).toBeGreaterThanOrEqual(LAYOUTS.length - 1);
+    const classic = CLASSIC_PORTRAIT_LAYOUTS.filter((l) => l.caption).map((l) => l.id);
+    expect(classic).toContain("cover");
+    expect(classic.length).toBeGreaterThanOrEqual(CLASSIC_PORTRAIT_LAYOUTS.length - 1);
+    expect(textRects.length).toBeGreaterThanOrEqual(classic.length);
   });
 
-  it.each(textRects)("%s text rect is ≥ SAFE_MM inside the trim", (_id, r) => {
-    const left = (r.x / 100) * PAGE_MM.w;
-    const top = (r.y / 100) * PAGE_MM.h;
-    const right = PAGE_MM.w - ((r.x + r.w) / 100) * PAGE_MM.w;
-    const bottom = PAGE_MM.h - ((r.y + r.h) / 100) * PAGE_MM.h;
+  it.each(textRects)("%s text rect is ≥ SAFE_MM inside the trim", (_id, r, l) => {
+    const page = pageMm(l.format);
+    const x = l.role === "spread" && r.x >= 100 ? r.x - 100 : r.x;
+    if (l.role === "spread") expect(x + r.w).toBeLessThanOrEqual(100 + 1e-9);
+    const left = (x / 100) * page.w;
+    const top = (r.y / 100) * page.h;
+    const right = page.w - ((x + r.w) / 100) * page.w;
+    const bottom = page.h - ((r.y + r.h) / 100) * page.h;
     for (const gap of [left, top, right, bottom]) expect(gap).toBeGreaterThanOrEqual(SAFE_MM);
   });
 });

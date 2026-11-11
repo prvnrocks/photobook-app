@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { learnFromBook } from "@/lib/ai/learn-from-book";
 import { autolayout } from "@/lib/autolayout";
+import { bookDesignOf, withBookDesign } from "@/lib/book/book-design";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { CAPTION_LANGS, OCCASIONS, type CaptionLang, type Occasion } from "@/lib/book/options";
 import { relayoutDoc, type RelayoutPhoto } from "@/lib/book/relayout";
@@ -161,14 +162,19 @@ function nextDoc(
     ? (book.caption_lang as CaptionLang)
     : "en";
   const isPaid = book.is_paid === true;
+  // D-063 (M10b A6): format + design style always from books.format / books.design_style.
+  const design = bookDesignOf(book);
 
   if (isEmptyDoc(book.doc)) {
     if (!photos.some((p) => p.status === "kept")) return { changed: false, doc: null };
     // Fresh rule album (meta generator "rule", runId null, D-018).
-    return { changed: true, doc: autolayout(photos, { occasion, title: book.title, captionLang, isPaid, runId: null }) };
+    const fresh = autolayout(photos, { occasion, title: book.title, captionLang, isPaid, runId: null });
+    return { changed: true, doc: withBookDesign(fresh, design) };
   }
   const parsed = parseBookDoc(book.doc);
   if (!parsed.ok) return "invalid"; // isReplaceableDoc already refuses this; belt and braces
-  const r = relayoutDoc(parsed.doc, photos, { isPaid, maxPages: book.max_pages, captionLang });
-  return { changed: r.changed, doc: r.doc };
+  // Stamped before relayoutDoc so its validation checks layouts against the book's columns.
+  const stamped = withBookDesign(parsed.doc, design);
+  const r = relayoutDoc(stamped, photos, { isPaid, maxPages: book.max_pages, captionLang });
+  return { changed: r.changed || stamped !== parsed.doc, doc: r.doc };
 }

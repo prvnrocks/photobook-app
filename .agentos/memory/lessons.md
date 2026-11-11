@@ -91,3 +91,5 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-11, e2e) Pin a scratch copy with `git archive HEAD | tar -x` + only your changed files (symlink node_modules/.env.local) so parallel builders' WIP is excluded.
 - (2026-11-11, testing) Test-only catalogue entries: vi.mock("@/lib/layouts", async (orig) => withTestSpreads(await orig())) from tests/fixtures/test-spread-layouts.ts.
 - (2026-11-11, fonts) next/font adds a '<Name> Fallback' face (local Arial/Times) with Arabic glyphs, so Arabic in a Latin chain skips our Arabic face (and can print as Type3): use adjustFontFallback:false and no fallback list on book fonts.
+- (2026-11-11, schema) When a DB column becomes authority for a doc field, set it from the column before validation in EVERY writer (editor save, AI, rule album, relayout, finalize, strip), not just the editor route.
+- (2026-11-11, layouts) Tests that loop the whole catalogue + goldens break when any new format/style layout lands: freeze goldens to CLASSIC_PORTRAIT_LAYOUTS and make geometry tests use the layout's own format/role first.

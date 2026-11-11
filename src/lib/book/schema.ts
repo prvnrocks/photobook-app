@@ -358,12 +358,22 @@ export function validateBookDoc(
   { photoIds, backgroundPhotoIds = photoIds, maxPages }: ValidateOptions,
 ): string[] {
   const issues: string[] = [];
+  // M10b A6 (D-063): a book uses only layouts of its own design style — strict, no cross-style
+  // fallback (classic books classic layouts, modern books modern layouts). Server writers stamp
+  // doc.format / doc.style.designStyle from books.format / books.design_style first
+  // (src/lib/book/book-design.ts), so both layout checks are checks against the book's columns.
+  const bookStyle = doc.style.designStyle ?? DEFAULT_DESIGN_STYLE;
 
   const coverLayout = getLayout(doc.cover.layout);
   if (!coverLayout) issues.push(`cover: unknown layout "${safeId(doc.cover.layout)}"`);
   else if (coverLayout.role !== "cover") issues.push(`cover: layout "${coverLayout.id}" is not a cover layout`);
-  else if (coverLayout.format !== doc.format) {
-    issues.push(`cover: layout "${coverLayout.id}" is for ${coverLayout.format}, book is ${doc.format}`);
+  else {
+    if (coverLayout.format !== doc.format) {
+      issues.push(`cover: layout "${coverLayout.id}" is for ${coverLayout.format}, book is ${doc.format}`);
+    }
+    if (coverLayout.style !== bookStyle) {
+      issues.push(`cover: layout "${coverLayout.id}" is ${coverLayout.style}, book is ${bookStyle}`);
+    }
   }
   if (doc.cover.photoId !== null && !photoIds.has(doc.cover.photoId)) {
     issues.push("cover: unknown photo");
@@ -405,6 +415,9 @@ export function validateBookDoc(
     } else {
       if (layout.format !== doc.format) {
         issues.push(`${at}: layout "${layout.id}" is for ${layout.format}, book is ${doc.format}`);
+      }
+      if (layout.style !== bookStyle) {
+        issues.push(`${at}: layout "${layout.id}" is ${layout.style}, book is ${bookStyle}`);
       }
       // A spread's right half is an empty placeholder: the left half owns slots + caption.
       const rightHalf = layout.role === "spread" && page.side === "right";

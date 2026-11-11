@@ -827,4 +827,19 @@ describe("books: AI pipeline writes", () => {
       expect(String(get.calls[0][1])).toContain(col);
     }
   });
+
+  it("M10b A6: getBookForRun selects format + design_style; before 1900 retries without them (nulls)", async () => {
+    fake.state.results.push({ data: { id: B }, error: null });
+    await books.getBookForRun(B);
+    expect(String(fake.state.chains[0].calls[0][1])).toMatch(/\bformat\b.*\bdesign_style\b/);
+    fake.state.chains = [];
+    fake.state.results.push(
+      { data: null, error: { code: "42703", message: "column books.format does not exist" } },
+      { data: { id: B, doc: {} }, error: null },
+    );
+    expect(await books.getBookForRun(B)).toEqual({ id: B, doc: {}, format: null, design_style: null });
+    expect(String(fake.state.chains[1].calls[0][1])).not.toMatch(/format|design_style/);
+    fake.state.results.push({ data: null, error: { code: "42703", message: "column books.other does not exist" } });
+    await expect(books.getBookForRun(B)).rejects.toBeInstanceOf(books.BooksQueryError);
+  });
 });

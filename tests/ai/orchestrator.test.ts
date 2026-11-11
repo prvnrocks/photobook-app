@@ -103,6 +103,8 @@ class FakeDb {
       doc: {},
       updated_at: this.stamp(),
       ai_status: "idle",
+      format: "A5_PORTRAIT",
+      design_style: "classic",
       ...book,
     };
   }

@@ -246,50 +246,44 @@ describe("validateEditorDoc — title + meta", () => {
   });
 });
 
-describe("validateEditorDoc — pinned until M10b: format, designStyle, page sides (review S2)", () => {
-  it("unchanged values pass (saved v2 modern style is kept as it is)", () => {
-    const saved: BookDoc = { ...devPreviewDoc(), style: { ...devPreviewDoc().style, designStyle: "modern" } };
-    expect(validateEditorDoc(saved, ctx({ savedDoc: saved })).ok).toBe(true);
-    expect(validateEditorDoc(devPreviewDoc(), ctx()).ok).toBe(true);
-  });
+describe("validateEditorDoc — format + design style from the book's columns (M10b A6, D-063)", () => {
+  const PORTRAIT_CLASSIC = { format: "A5_PORTRAIT", designStyle: "classic" } as const;
 
-  it("M10b A2: unchanged but structurally invalid → invalid_doc (portrait layouts in a landscape book, side on a single page)", () => {
-    const landscape: BookDoc = { ...devPreviewDoc(), format: "A5_LANDSCAPE" };
-    expect(validateEditorDoc(landscape, ctx({ savedDoc: landscape }))).toEqual({ ok: false, code: "invalid_doc" });
-    const sided: BookDoc = {
-      ...devPreviewDoc(),
-      pages: devPreviewDoc().pages.map((p, i) => (i === 0 ? { ...p, side: "left" as const } : p)),
-    };
-    expect(validateEditorDoc(sided, ctx({ savedDoc: sided }))).toEqual({ ok: false, code: "invalid_doc" });
-  });
-
-  it("changing format → invalid_doc", () => {
-    expect(validateEditorDoc({ ...devPreviewDoc(), format: "A5_LANDSCAPE" }, ctx())).toEqual({ ok: false, code: "invalid_doc" });
-  });
-
-  it("changing designStyle → invalid_doc; absent = classic on either side", () => {
+  it("client format / designStyle are overwritten by ctx.design (no longer an error)", () => {
     const d = devPreviewDoc();
-    expect(validateEditorDoc({ ...d, style: { ...d.style, designStyle: "scrapbook" } }, ctx())).toEqual({ ok: false, code: "invalid_doc" });
-    const noStyle = { ...d.style };
-    delete noStyle.designStyle;
-    expect(validateEditorDoc({ ...d, style: noStyle }, ctx({ savedDoc: { ...d, style: { ...d.style, designStyle: "classic" } } })).ok).toBe(true);
+    const landscape = validateEditorDoc({ ...d, format: "A5_LANDSCAPE" }, ctx({ design: PORTRAIT_CLASSIC }));
+    expect(landscape.ok && landscape.doc.format).toBe("A5_PORTRAIT");
+    const scrapbook = validateEditorDoc({ ...d, style: { ...d.style, designStyle: "scrapbook" } }, ctx({ design: PORTRAIT_CLASSIC }));
+    expect(scrapbook.ok && scrapbook.doc.style.designStyle).toBe("classic");
   });
 
-  it("adding a side to a page, or a new page with a side → invalid_doc", () => {
+  it("the columns win over the saved doc too", () => {
+    const d = devPreviewDoc();
+    const savedModern: BookDoc = { ...d, style: { ...d.style, designStyle: "modern" } };
+    const r = validateEditorDoc(d, ctx({ savedDoc: savedModern, design: PORTRAIT_CLASSIC }));
+    expect(r.ok && r.doc.style.designStyle).toBe("classic");
+  });
+
+  it("layouts of another format or style than the book's → invalid_doc", () => {
+    const d = devPreviewDoc();
+    // Classic portrait layouts in a landscape book / a modern book.
+    expect(validateEditorDoc(d, ctx({ design: { format: "A5_LANDSCAPE", designStyle: "classic" } }))).toEqual({ ok: false, code: "invalid_doc" });
+    expect(validateEditorDoc(d, ctx({ design: { format: "A5_PORTRAIT", designStyle: "modern" } }))).toEqual({ ok: false, code: "invalid_doc" });
+  });
+
+  it("no ctx.design (dev fixtures / tests only) → the saved doc's own design", () => {
+    const d = devPreviewDoc();
+    expect(validateEditorDoc({ ...d, format: "A5_LANDSCAPE" }, ctx({ savedDoc: {} })).ok).toBe(true);
+    const savedModern: BookDoc = { ...d, style: { ...d.style, designStyle: "modern" } };
+    expect(validateEditorDoc(d, ctx({ savedDoc: savedModern }))).toEqual({ ok: false, code: "invalid_doc" });
+  });
+
+  it("side is not pinned any more, but a side on a single-page layout is still invalid_doc", () => {
     const d = devPreviewDoc();
     const sided = { ...d, pages: d.pages.map((p, i) => (i === 1 ? { ...p, side: "right" as const } : p)) };
-    expect(validateEditorDoc(sided, ctx())).toEqual({ ok: false, code: "invalid_doc" });
-    // Saved with a side, client removes it → also a change.
-    expect(validateEditorDoc(d, ctx({ savedDoc: sided }))).toEqual({ ok: false, code: "invalid_doc" });
-    const added = addPage(d, 0, "one-portrait", 100);
-    const newId = added.pages[1].id;
-    const addedSided = { ...added, pages: added.pages.map((p) => (p.id === newId ? { ...p, side: "left" as const } : p)) };
-    expect(validateEditorDoc(addedSided, ctx())).toEqual({ ok: false, code: "invalid_doc" });
-  });
-
-  it("legacy / empty saved doc → baseline A5_PORTRAIT, classic, no sides", () => {
-    expect(validateEditorDoc(devPreviewDoc(), ctx({ savedDoc: {} })).ok).toBe(true);
-    expect(validateEditorDoc({ ...devPreviewDoc(), format: "A5_LANDSCAPE" }, ctx({ savedDoc: {} }))).toEqual({ ok: false, code: "invalid_doc" });
+    expect(validateEditorDoc(sided, ctx({ design: PORTRAIT_CLASSIC }))).toEqual({ ok: false, code: "invalid_doc" });
+    // Saved with a side, client removes it → fine now (the saved doc no longer pins sides).
+    expect(validateEditorDoc(d, ctx({ savedDoc: sided, design: PORTRAIT_CLASSIC })).ok).toBe(true);
   });
 });
 

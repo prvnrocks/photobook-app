@@ -21,6 +21,7 @@ import "server-only";
 import { autolayout, type AutoPhoto } from "@/lib/autolayout";
 import { limitsFor } from "@/lib/ai/limits";
 import { CAPTION_LANGS, OCCASIONS, type CaptionLang, type Occasion } from "@/lib/book/options";
+import { bookDesignOf, withBookDesign } from "@/lib/book/book-design";
 import { serializeDoc } from "@/lib/book/doc-version";
 import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import type { BookDoc } from "@/lib/book/types";
@@ -276,12 +277,16 @@ export async function finalizeBook(
 
   if (isEmptyDoc(book.doc)) {
     const isPaid = book.is_paid;
-    const doc: BookDoc = autolayout(photos.map(toAutoPhoto), {
-      occasion: asOccasion(book.occasion),
-      title: book.title,
-      captionLang: asCaptionLang(book.caption_lang),
-      isPaid,
-    });
+    // D-063: format + design style from books.format / books.design_style (M10b A6).
+    const doc: BookDoc = withBookDesign(
+      autolayout(photos.map(toAutoPhoto), {
+        occasion: asOccasion(book.occasion),
+        title: book.title,
+        captionLang: asCaptionLang(book.caption_lang),
+        isPaid,
+      }),
+      bookDesignOf(book),
+    );
     const parsed = parseBookDoc(doc);
     const issues = parsed.ok
       ? validateBookDoc(parsed.doc, { photoIds: readyIds, maxPages: limitsFor(isPaid).maxPages })

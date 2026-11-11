@@ -13,6 +13,7 @@
 // The user's books.title always wins over the AI title (D-018). Captions are null (written in M4).
 
 import { dayRange, DEFAULT_TITLES } from "@/lib/autolayout";
+import { DEFAULT_BOOK_DESIGN, type BookDesign } from "@/lib/book/book-design";
 import { BOOK_TITLE_MAX_CODE_POINTS } from "@/lib/book/options";
 import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import type { BookDoc, BookPage, Chapter, Crop } from "@/lib/book/types";
@@ -32,6 +33,11 @@ export interface PlanToDocOptions {
   runId: string | null;
   /** Stored in doc.meta.generatorVersion — use STORYTELLER_PROMPT_VERSION. */
   generatorVersion: number;
+  /**
+   * books.format / books.design_style (bookDesignOf, D-063): doc.format / doc.style.designStyle,
+   * and what the plan's layouts are validated against. Omitted → classic A5 portrait.
+   */
+  design?: BookDesign;
 }
 
 export type PlanToDocResult = { doc: BookDoc } | { issues: string[] };
@@ -126,7 +132,7 @@ function dateLabelFor(momentPhotos: StoryPhoto[]): string {
 }
 
 export function planToDoc(plan: AlbumPlan, opts: PlanToDocOptions): PlanToDocResult {
-  const { aliasToId, photos, book, runId, generatorVersion } = opts;
+  const { aliasToId, photos, book, runId, generatorVersion, design = DEFAULT_BOOK_DESIGN } = opts;
   const maxPages = effectiveMaxPages(book);
 
   const planIssues = validatePlanAgainstPhotos(plan, { aliasToId, photos, maxPages });
@@ -157,7 +163,7 @@ export function planToDoc(plan: AlbumPlan, opts: PlanToDocOptions): PlanToDocRes
   const userTitle = book.title?.trim() ?? "";
   const doc: BookDoc = {
     version: 2,
-    format: "A5_PORTRAIT",
+    format: design.format,
     occasion: book.occasion,
     cover: {
       layout: COVER_LAYOUT_ID,
@@ -169,7 +175,7 @@ export function planToDoc(plan: AlbumPlan, opts: PlanToDocOptions): PlanToDocRes
     pages,
     style: {
       background: { kind: "color", hex: "#FFFFFF" },
-      designStyle: "classic",
+      designStyle: design.designStyle,
       font: book.captionLang === "ar" ? "Cairo" : "Playfair",
     },
     meta: { generator: "ai", generatorVersion, runId, userEdited: false },

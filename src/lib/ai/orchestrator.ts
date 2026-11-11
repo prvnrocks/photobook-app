@@ -61,6 +61,7 @@ import {
   type Tone,
 } from "@/lib/book/options";
 import { docOrigin, isAiReplaceableDoc, isEmptyDoc } from "@/lib/book/replaceable";
+import { bookDesignOf, withBookDesign } from "@/lib/book/book-design";
 import { serializeDoc } from "@/lib/book/doc-version";
 import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import type { BookDoc } from "@/lib/book/types";
@@ -795,14 +796,16 @@ function applyRows(photos: CurationPhoto[], rows: CurationWrite[]): void {
   }
 }
 
+/** Rule-based album, stamped with the book's format + design style (D-063, M10b A6). */
 function ruleDoc(photos: CurationPhoto[], book: BookForRun, runId: string | null): BookDoc {
-  return autolayout(photos.map(toAutoPhoto), {
+  const doc = autolayout(photos.map(toAutoPhoto), {
     occasion: asOccasion(book.occasion),
     title: book.title,
     captionLang: asCaptionLang(book.caption_lang),
     isPaid: book.is_paid === true,
     runId,
   });
+  return withBookDesign(doc, bookDesignOf(book));
 }
 
 function docIssues(doc: BookDoc, photos: CurationPhoto[], book: BookForRun): string[] {
@@ -1449,6 +1452,7 @@ async function storytellerStep(c: Tick): Promise<void> {
       book,
       runId: c.runId,
       generatorVersion: STORYTELLER_PROMPT_VERSION,
+      design: bookDesignOf(c.book),
     });
     if ("doc" in out) {
       c.cursor.album = { kind: "ai", plan: result.data };
@@ -1550,6 +1554,7 @@ function planDocOf(c: Tick): PlanDoc | null {
     book: storyBookOf(c.book),
     runId: c.runId,
     generatorVersion: STORYTELLER_PROMPT_VERSION,
+    design: bookDesignOf(c.book),
   });
   if (!("doc" in out)) return null;
   // Grounded titles: the Caption Writer and the Critic see the same neutral titles the book gets.
@@ -2134,6 +2139,7 @@ async function validateAndSave(c: Tick): Promise<AdvanceResult> {
       book: storyBookOf(c.book),
       runId: c.runId,
       generatorVersion: STORYTELLER_PROMPT_VERSION,
+      design: bookDesignOf(c.book),
     });
     if ("doc" in out && docIssues(out.doc, c.photos, c.book).length === 0) {
       // SF3: Storyteller titles / subtitle that fail the pre-check become neutral, then captions.

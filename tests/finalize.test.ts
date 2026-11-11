@@ -69,6 +69,8 @@ function makeDb(initial: {
     page_count: 0,
     doc: (initial.doc ?? {}) as MyBook["doc"],
     doc_rev: 0,
+    format: "A5_PORTRAIT",
+    design_style: "classic",
     updated_at: "2026-11-08T10:00:00.000001+00:00",
   };
   const photos = initial.photos.map((p) => ({ ...p }));

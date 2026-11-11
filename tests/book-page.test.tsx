@@ -52,7 +52,7 @@ describe("<BookPage> slots", () => {
   const pageLayouts = LAYOUTS.filter((l) => l.role === "page");
 
   it.each(pageLayouts.map((l) => [l.id, l] as const))("%s renders one positioned slot per layout slot", (_id, layout) => {
-    const ids = ["p1", "p2", "p3", "p4"].slice(0, layout.photoCount);
+    const ids = Array.from({ length: layout.photoCount }, (_, i) => `p${(i % 4) + 1}`);
     const doc = makeDoc([page("pg1", layout.id, ids)]);
     const out = html(<BookPage doc={doc} page={0} mode="view" photos={photos} />);
     expect(count(out, /data-slot-index="/g)).toBe(layout.slots.length);

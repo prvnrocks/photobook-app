@@ -5,6 +5,7 @@ import "server-only";
 // those columns are server-only from migration 0900 on (D-036): writeDocIfEmpty,
 // saveDocIfRev and the AI pipeline section at the bottom (see there).
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { bookDesignOf, withBookDesign } from "@/lib/book/book-design";
 import { serializeDoc } from "@/lib/book/doc-version";
 import { isAiReplaceableDoc, isReplaceableDoc } from "@/lib/book/replaceable";
 import { BookFormatSchema, DesignStyleSchema, parseBookDoc } from "@/lib/book/schema";
@@ -60,6 +61,12 @@ export type MyBook = Pick<
    * available" — saveDocIfRev would fail. Drop the null once 0900 is applied everywhere.
    */
   doc_rev: number | null;
+  /**
+   * books.format / books.design_style (migration 1900, D-063) — the authority for doc.format /
+   * doc.style.designStyle (resolve with bookDesignOf). `null` only while 1900 is not applied yet.
+   */
+  format: string | null;
+  design_style: string | null;
 };
 
 export type CreateBookInput = {
@@ -193,9 +200,11 @@ function isMissingColumnError(error: { code?: string; message?: string }, column
  * doesn't exist, belongs to someone else (RLS: owner-only) or the user is
  * signed out.
  *
- * Deploy-order tolerance (0900): code ships before the migration, so when
- * `doc_rev` doesn't exist yet the query is retried without it and `doc_rev` is
- * null. Remove the fallback once 0900 is applied in every environment.
+ * Deploy-order tolerance (0900 / 1900): when `doc_rev`, `format` or `design_style` doesn't exist
+ * yet, the query is retried with the base columns only and those fields are null — doc_rev null
+ * makes the editor save answer "saving unavailable" (safe: without the 1900 columns the server
+ * has no format/style authority). LAUNCH.md applies 1900 before this code; remove the fallback
+ * once both migrations are applied everywhere.
  */
 export async function getMyBook(id: string): Promise<MyBook | null> {
   if (!isUuid(id)) return null;
@@ -205,19 +214,22 @@ export async function getMyBook(id: string): Promise<MyBook | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("books")
-    .select(`${MY_BOOK_COLUMNS}, doc_rev`)
+    .select(`${MY_BOOK_COLUMNS}, doc_rev, format, design_style`)
     .eq("id", id)
     .maybeSingle();
 
   if (!error) return data;
-  if (!isMissingColumnError(error, "doc_rev")) {
+  if (!OPTIONAL_COLUMNS.some((c) => isMissingColumnError(error, c))) {
     throw new BooksQueryError("load book", error.code);
   }
 
   const legacy = await supabase.from("books").select(MY_BOOK_COLUMNS).eq("id", id).maybeSingle();
   if (legacy.error) throw new BooksQueryError("load book", legacy.error.code);
-  return legacy.data ? { ...legacy.data, doc_rev: null } : null;
+  return legacy.data ? { ...legacy.data, doc_rev: null, format: null, design_style: null } : null;
 }
+
+/** Columns of not-yet-applied migrations that readers tolerate (0900 doc_rev, 1900 format/style). */
+const OPTIONAL_COLUMNS = ["doc_rev", "format", "design_style"] as const;
 
 /**
  * Writes the fallback album only if the book's doc is still the empty object
@@ -340,11 +352,13 @@ export async function stripPhotoFromBookDoc(bookId: string, photoId: string): Pr
     if (!parsed.ok) return "unchanged";
     const stripped = stripPhotoFromDoc(parsed.doc, photoId);
     if (!stripped.changed) return "unchanged";
+    // D-063: the stored doc always carries the book's columns (no-op once they agree).
+    const doc = withBookDesign(stripped.doc, bookDesignOf(book));
     const saved = await saveDocIfRev(
       book.id,
       user.id,
-      serializeDoc(stripped.doc) as unknown as Json,
-      stripped.doc.pages.length,
+      serializeDoc(doc) as unknown as Json,
+      doc.pages.length,
       book.doc_rev,
     );
     if (saved.ok) return "updated";
@@ -381,18 +395,34 @@ export type BookForRun = Pick<
   | "doc"
   | "updated_at"
   | "ai_status"
->;
+> & {
+  /** books.format / books.design_style (1900, D-063); null only before 1900 (see getBookForRun). */
+  format: string | null;
+  design_style: string | null;
+};
 
-/** The book as the pipeline needs it, or null (malformed id / missing). Admin client. */
+const BOOK_FOR_RUN_COLUMNS = "id, user_id, title, occasion, tone, caption_lang, is_paid, max_pages, doc, updated_at, ai_status";
+
+/**
+ * The book as the pipeline needs it, or null (malformed id / missing). Admin client.
+ * format / design_style are null only before migration 1900 (retried without them; writers then
+ * fall back to the doc's own design via bookDesignOf).
+ */
 export async function getBookForRun(bookId: string): Promise<BookForRun | null> {
   if (!isUuid(bookId)) return null;
-  const { data, error } = await createAdminClient()
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("books")
-    .select("id, user_id, title, occasion, tone, caption_lang, is_paid, max_pages, doc, updated_at, ai_status")
+    .select(`${BOOK_FOR_RUN_COLUMNS}, format, design_style`)
     .eq("id", bookId)
     .maybeSingle();
-  if (error) throw new BooksQueryError("load book for run", error.code);
-  return data;
+  if (!error) return data;
+  if (!isMissingColumnError(error, "format") && !isMissingColumnError(error, "design_style")) {
+    throw new BooksQueryError("load book for run", error.code);
+  }
+  const legacy = await admin.from("books").select(BOOK_FOR_RUN_COLUMNS).eq("id", bookId).maybeSingle();
+  if (legacy.error) throw new BooksQueryError("load book for run", legacy.error.code);
+  return legacy.data ? { ...legacy.data, format: null, design_style: null } : null;
 }
 
 /** Sets books.ai_status (server-only column, D-021). Admin client. */

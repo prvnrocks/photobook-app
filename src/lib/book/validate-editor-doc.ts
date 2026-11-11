@@ -15,20 +15,22 @@
 // "dark"), the same list the picker offers: a dark multiply tint turns paper into mud and breaks
 // the texture's declared ink → invalid_doc.
 //
-// Pinned until M10b (review S2): format, style.designStyle and pages[].side must equal the saved
-// doc's values (absent saved doc → A5_PORTRAIT / classic / no side; a page the saved doc doesn't
-// have → no side). The editor has no UI for them yet, so a change can only come from a crafted
-// request → invalid_doc.
-// TODO(M10b A6/A7): books.format / books.design_style (migration 1900) own format and style; validate
-// against those columns instead of the saved doc, and let spread layouts set `side`.
-// Since M10b A2 validateBookDoc (below) also rejects layouts of another format than doc.format,
-// misaligned / half spreads and `side` on single-page layouts (src/lib/book/spreads.ts).
+// Format + design style (M10b A6, D-063, replaces the M10a review-S2 pin to the saved doc):
+// books.format / books.design_style are the authority. The route passes them as ctx.design and the
+// validator OVERWRITES doc.format / doc.style.designStyle with them before any check, whatever the
+// client sent — so a landscape doc sent for a portrait book is stored portrait (and its layouts
+// are then checked against portrait). validateBookDoc then rejects layouts of another format or
+// another design style than the book's (strict; see book-design.ts) → invalid_doc.
+// Page sides are no longer pinned: spread halves (`side` left/right, spreads.ts) are allowed when
+// the doc is spread-aligned; misaligned / half spreads and `side` on a single-page layout fail
+// validateBookDoc → invalid_doc.
 
 import { BACKGROUND_SWATCHES } from "@/lib/design/backgrounds";
 import { clipCodePoints } from "@/lib/text/clip";
 import { isCaptionFont } from "./fonts";
 import { BOOK_TITLE_MAX_CODE_POINTS } from "./options";
-import { DEFAULT_DESIGN_STYLE, DocMetaSchema, parseBookDoc, validateBookDoc } from "./schema";
+import { designOfDoc, withBookDesign, type BookDesign } from "./book-design";
+import { DocMetaSchema, parseBookDoc, validateBookDoc } from "./schema";
 import type { BookDoc, DocMeta } from "./types";
 
 export type EditorDocErrorCode =
@@ -45,6 +47,11 @@ export interface EditorDocContext {
   maxPages: number;
   /** books.doc as currently stored (may be `{}` or legacy). */
   savedDoc: unknown;
+  /**
+   * books.format / books.design_style (bookDesignOf(book row)). The real route MUST pass it.
+   * Omitted only by dev fixtures / unit tests: then the saved doc's own design (designOfDoc).
+   */
+  design?: BookDesign;
 }
 
 export type EditorDocResult =
@@ -105,17 +112,6 @@ function tintOk(bg: { kind: string; tint?: string } | null | undefined): boolean
   return bg?.kind !== "texture" || bg.tint === undefined || TEXTURE_TINTS.has(bg.tint.toUpperCase());
 }
 
-/** format / designStyle / page sides the client may not change yet (S2, until M10b). */
-function pinnedFieldsUnchanged(doc: BookDoc, savedDoc: unknown): boolean {
-  const saved = parseBookDoc(savedDoc);
-  const format = saved.ok ? saved.doc.format : "A5_PORTRAIT";
-  const style = (saved.ok ? saved.doc.style.designStyle : undefined) ?? DEFAULT_DESIGN_STYLE;
-  if (doc.format !== format) return false;
-  if ((doc.style.designStyle ?? DEFAULT_DESIGN_STYLE) !== style) return false;
-  const savedSides = new Map<string, string | undefined>(saved.ok ? saved.doc.pages.map((p) => [p.id, p.side]) : []);
-  return doc.pages.every((p) => p.side === savedSides.get(p.id));
-}
-
 export function validateEditorDoc(input: unknown, ctx: EditorDocContext): EditorDocResult {
   // Page limit first, so a free book with 21+ pages gets the specific code even when the
   // count is also above the schema's absolute maximum.
@@ -124,9 +120,9 @@ export function validateEditorDoc(input: unknown, ctx: EditorDocContext): Editor
 
   const parsed = parseBookDoc(input);
   if (!parsed.ok) return { ok: false, code: "invalid_doc" };
-  const doc = parsed.doc;
+  // D-063: format + design style always come from the book row, never from the client.
+  const doc = withBookDesign(parsed.doc, ctx.design ?? designOfDoc(ctx.savedDoc));
   if (doc.pages.length > ctx.maxPages) return { ok: false, code: "page_limit" };
-  if (!pinnedFieldsUnchanged(doc, ctx.savedDoc)) return { ok: false, code: "invalid_doc" };
 
   // Photo ownership + single use (the cover photo may repeat once on a page).
   const placed = new Set<string>();

@@ -200,3 +200,18 @@ describe("prunePlan — photos removed during the run", () => {
     expect("issues" in planToDoc(r.plan, { ...base, photos: ps })).toBe(true);
   });
 });
+
+describe("planToDoc — book design from books.format / books.design_style (M10b A6, D-063)", () => {
+  it("default (no design) = classic A5 portrait, as before", () => {
+    const doc = okDoc();
+    expect(doc.format).toBe("A5_PORTRAIT");
+    expect(doc.style.designStyle).toBe("classic");
+  });
+
+  it("stamps the given design and validates the plan's layouts against it (classic plan in a modern / landscape book → issues)", () => {
+    const modern = planToDoc(fixturePlan(), { ...base, design: { format: "A5_PORTRAIT", designStyle: "modern" } });
+    expect("issues" in modern && modern.issues.some((i) => i.includes("is classic, book is modern"))).toBe(true);
+    const landscape = planToDoc(fixturePlan(), { ...base, design: { format: "A5_LANDSCAPE", designStyle: "classic" } });
+    expect("issues" in landscape && landscape.issues.some((i) => i.includes("book is A5_LANDSCAPE"))).toBe(true);
+  });
+});

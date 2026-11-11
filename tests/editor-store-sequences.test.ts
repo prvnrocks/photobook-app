@@ -229,7 +229,7 @@ describe("random edit walks (seeded) stay saveable and fully undoable", () => {
     let x = seed >>> 0;
     return () => ((x = (x * 1664525 + 1013904223) >>> 0) / 4294967296);
   }
-  const pageLayouts = LAYOUTS.filter((l) => l.role === "page").map((l) => l.id);
+  const pageLayouts = LAYOUTS.filter((l) => l.role === "page" && l.format === "A5_PORTRAIT" && l.style === "classic").map((l) => l.id);
 
   for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
     it(`seed ${seed}: 60 ops → every doc passes validateEditorDoc; undo to start`, () => {

@@ -6,6 +6,9 @@
 // dropped photos placed in the doc become kept with user_override (D-037 (4)). Photo
 // backgrounds may use any upload-ready photo of the book (kept or dropped) and are not
 // "placed": they never mark a dropped photo kept (M10a A8, validate-editor-doc.ts).
+// Format + design style come from books.format / books.design_style (D-063, M10b A6): the stored
+// doc always carries the columns' values whatever the client sent; layouts of another format or
+// style, and misaligned spreads, → 422 invalid_doc.
 // Responses (all no-store):
 //   200 { rev, savedAt }
 //   400 { error: 'invalid_body' }                        — not JSON / bad shape / bad baseRev
@@ -20,6 +23,7 @@
 import { type NextRequest } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { bookDesignOf } from "@/lib/book/book-design";
 import { serializeDoc } from "@/lib/book/doc-version";
 import { validateEditorDoc } from "@/lib/book/validate-editor-doc";
 import { isSameOrigin } from "@/lib/auth/same-origin";
@@ -74,6 +78,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       photoIds: new Set(photos.map((p) => p.id)),
       maxPages: book.max_pages,
       savedDoc: book.doc,
+      design: bookDesignOf(book),
     });
     if (!result.ok) return json({ error: result.code }, 422);
 
