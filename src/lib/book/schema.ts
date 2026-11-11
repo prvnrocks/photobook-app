@@ -10,8 +10,18 @@
 import { z } from "zod";
 import { LIMITS } from "@/lib/ai/limits";
 import { BACKGROUND_VEIL_MAX, BACKGROUND_VEIL_MIN, TEXTURE_IDS } from "@/lib/design/backgrounds";
-import { getLayout } from "@/lib/layouts";
+import { getLayout, SAFE_MM } from "@/lib/layouts";
 import { codePointLength, hasLoneSurrogate } from "@/lib/text/clip";
+import { pageMm } from "./format";
+import {
+  CIRCLE_TOLERANCE_MM,
+  EDGE_GAP_MM,
+  frameInsetMm,
+  MIN_PHOTO_MM,
+  MM_EPS,
+  rotatedBoundsPct,
+  type BoundsPct,
+} from "./slot-geometry";
 import { spreadIssues, spreadIssueText } from "./spreads";
 import { BOOK_TITLE_MAX_CODE_POINTS, CAPTION_LANGS, OCCASIONS, TONES } from "./options";
 
@@ -245,61 +255,265 @@ const LayoutRectSchema = z.object({
   h: z.number().positive().max(100),
 });
 
+// --- Shaped / tilted / framed slots + decorations (M10c T1) --------------------------------------
+// All optional: a slot without them is the M1–M10b plain rect (absent = rect, 0°, no frame, no
+// shadow, z = slot index order). Geometry maths (photo rect, clip-path, hit test, rotated bounds)
+// lives in ./slot-geometry — the single source for render, crop, low-res and the image plan.
+
+/** Max slot / text tilt in degrees (either way). */
+export const SLOT_ROTATE_MAX = 12;
+/** Max decoration tilt in degrees (tape is often laid at ~45°). */
+export const DECORATION_ROTATE_MAX = 45;
+/**
+ * Reserved decoration id: "the occasion accent" — the renderer picks the actual sticker from
+ * doc.occasion (M10c D4). Same value as OCCASION_ACCENT in src/lib/design/stickers.ts (kept as a
+ * literal so the schema stays free of artwork imports; tests assert they match). Always accepted
+ * for kind "sticker" decorations.
+ */
+export const ACCENT_STICKER_ID = "occasion-accent";
+
+const PolygonPointSchema = z.tuple([z.number().min(0).max(100), z.number().min(0).max(100)]);
+
+/**
+ * Clip shape of a slot. Points / radii are relative to the slot box: polygon points are [x, y] in %
+ * of the slot (0..100); `rounded.r` is a corner radius in mm. circle = the ellipse inscribed in the
+ * slot (the slot must be square in mm); hexagon (flat top) and diamond are fixed polygons
+ * (slot-geometry SHAPE_POLYGONS).
+ */
+export const SlotShapeSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("rect") }),
+  z.strictObject({ kind: z.literal("rounded"), r: z.number().positive().max(30) }),
+  z.strictObject({ kind: z.literal("circle") }),
+  z.strictObject({ kind: z.literal("ellipse") }),
+  z.strictObject({ kind: z.literal("hexagon") }),
+  z.strictObject({ kind: z.literal("diamond") }),
+  z.strictObject({ kind: z.literal("polygon"), points: z.array(PolygonPointSchema).min(3).max(16) }),
+]);
+
+/**
+ * Frame drawn inside the slot box: the photo sits in the slot minus the frame inset
+ * (slot-geometry photoRectOf). border = even `mm` band of `hex`; polaroid = white card with `side`
+ * mm on left/top/right and `bottom` mm at the bottom (rect / rounded slots only).
+ */
+export const SlotFrameSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("none") }),
+  z.strictObject({ kind: z.literal("border"), mm: z.number().positive().max(10), hex: HexColorSchema }),
+  z.strictObject({
+    kind: z.literal("polaroid"),
+    side: z.number().positive().max(15),
+    bottom: z.number().positive().max(30),
+  }),
+]);
+
+export const SLOT_SHADOWS = ["none", "soft", "lifted"] as const;
+
+/**
+ * A layout slot: rect (% of the page; spreads x 0..200) + optional M10c fields. Strict, so a typo
+ * in layout data ("rotation") fails the catalogue tests instead of being dropped.
+ */
+export const LayoutSlotDefSchema = z.strictObject({
+  x: z.number().min(0).max(200),
+  y: z.number().min(0).max(100),
+  w: z.number().positive().max(200),
+  h: z.number().positive().max(100),
+  shape: SlotShapeSchema.optional(),
+  /** Degrees clockwise about the slot centre; |rotate| ≤ SLOT_ROTATE_MAX. */
+  rotate: z.number().min(-SLOT_ROTATE_MAX).max(SLOT_ROTATE_MAX).optional(),
+  frame: SlotFrameSchema.optional(),
+  /** box-shadow preset (never CSS filter — print rule D-062). */
+  shadow: z.enum(SLOT_SHADOWS).optional(),
+  /** Paint order: higher on top; ties keep slot order. Absent = 0. */
+  z: z.number().int().min(0).max(20).optional(),
+});
+
+/** Sticker-catalogue id (src/lib/design/stickers.ts) — existence checked by layoutIssues(…, { stickerIds }). */
+const StickerIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/);
+
+export const DECORATION_KINDS = ["sticker", "tape", "plate"] as const;
+
+/**
+ * Pure-decoration artwork from the sticker catalogue, positioned in layout units (% of the page;
+ * spreads x 0..200). `under` paints between background and photos, `over` above photos (below
+ * text). Never selectable, never holds a photo or text.
+ */
+export const LayoutDecorationSchema = z.strictObject({
+  kind: z.enum(DECORATION_KINDS),
+  id: StickerIdSchema,
+  box: LayoutRectSchema,
+  rotate: z.number().min(-DECORATION_ROTATE_MAX).max(DECORATION_ROTATE_MAX).optional(),
+  layer: z.enum(["under", "over"]),
+  tint: HexColorSchema.optional(),
+});
+
+/** Label plate behind a text panel (fills the panel box). `id` = a plate sticker id. */
+export const TextPlateSchema = z.strictObject({
+  id: StickerIdSchema,
+  tint: HexColorSchema.optional(),
+});
+
 export const LayoutTextSchema = z.strictObject({
   bind: z.enum(TEXT_BINDINGS),
   box: LayoutRectSchema,
   align: z.enum(["start", "center", "end"]),
   font: z.enum(TEXT_FONT_ROLES),
+  plate: TextPlateSchema.optional(),
+  /** Degrees clockwise about the box centre (text stays live text). */
+  rotate: z.number().min(-SLOT_ROTATE_MAX).max(SLOT_ROTATE_MAX).optional(),
 });
 
-export const LayoutSchema = z
-  .object({
-    id: IdSchema,
-    name: z.string().min(1),
-    /**
-     * "cover" layouts are only valid for `doc.cover`, "page" layouts for single `doc.pages`
-     * entries, "spread" layouts for a left/right page pair (spreads.ts).
-     */
-    role: z.enum(LAYOUT_ROLES),
-    style: DesignStyleSchema,
-    format: BookFormatSchema,
-    photoCount: z.number().int().min(1).max(MAX_SLOTS_V2),
-    prefers: z.array(z.enum(["portrait", "landscape", "any"])),
-    slots: z.array(LayoutRectSchema).max(MAX_SLOTS_V2),
-    caption: LayoutRectSchema.nullable(),
-    /** Spreads only (required there): the [left, right] single-page layouts it splits into (D-064). */
-    twin: z.tuple([IdSchema, IdSchema]).optional(),
-    /** Text panels bound to doc data (chapter title, date label, caption, cover title/subtitle). */
-    texts: z.array(LayoutTextSchema).max(8).optional(),
-    /**
-     * Covers only (M10b A9): split-strip windows onto the ONE cover photo. The cover has exactly
-     * one slot (photoCount 1) = the box the photo is laid out over (cover-fit, crop as usual); the
-     * renderer draws it once, clipped to each slice — page background shows in the gaps. Slices
-     * are % of the page and lie inside the slot box.
-     */
-    slices: z.array(LayoutRectSchema).min(2).max(8).optional(),
-  })
-  .superRefine((l, ctx) => {
-    if (l.slices) {
-      const s = l.slots[0];
-      if (l.role !== "cover" || l.photoCount !== 1 || l.slots.length !== 1 || !s) {
-        ctx.addIssue({ code: "custom", message: "slices need a cover layout with exactly one slot" });
-      } else if (
-        l.slices.some(
-          (r) => r.x < s.x - 1e-6 || r.y < s.y - 1e-6 || r.x + r.w > s.x + s.w + 1e-6 || r.y + r.h > s.y + s.h + 1e-6,
-        )
-      ) {
-        ctx.addIssue({ code: "custom", message: "slice outside the cover slot" });
-      }
-    }
-    const maxX = l.role === "spread" ? 200 : 100;
-    const rects = [...l.slots, ...(l.caption ? [l.caption] : []), ...(l.texts ?? []).map((t) => t.box)];
-    if (rects.some((r) => r.x + r.w > maxX + 1e-9 || r.y + r.h > 100 + 1e-9)) {
-      ctx.addIssue({ code: "custom", message: `rect outside the ${l.role} area` });
-    }
-    if (l.role === "spread" && !l.twin) ctx.addIssue({ code: "custom", message: "spread needs a twin" });
-    if (l.role !== "spread" && l.twin) ctx.addIssue({ code: "custom", message: "only spreads have a twin" });
+const LayoutObjectSchema = z.object({
+  id: IdSchema,
+  name: z.string().min(1),
+  /**
+   * "cover" layouts are only valid for `doc.cover`, "page" layouts for single `doc.pages`
+   * entries, "spread" layouts for a left/right page pair (spreads.ts).
+   */
+  role: z.enum(LAYOUT_ROLES),
+  style: DesignStyleSchema,
+  format: BookFormatSchema,
+  photoCount: z.number().int().min(1).max(MAX_SLOTS_V2),
+  prefers: z.array(z.enum(["portrait", "landscape", "any"])),
+  slots: z.array(LayoutSlotDefSchema).max(MAX_SLOTS_V2),
+  caption: LayoutRectSchema.nullable(),
+  /** Spreads only (required there): the [left, right] single-page layouts it splits into (D-064). */
+  twin: z.tuple([IdSchema, IdSchema]).optional(),
+  /** Text panels bound to doc data (chapter title, date label, caption, cover title/subtitle). */
+  texts: z.array(LayoutTextSchema).max(8).optional(),
+  /**
+   * Covers only (M10b A9): split-strip windows onto the ONE cover photo. The cover has exactly
+   * one slot (photoCount 1) = the box the photo is laid out over (cover-fit, crop as usual); the
+   * renderer draws it once, clipped to each slice — page background shows in the gaps. Slices
+   * are % of the page and lie inside the slot box.
+   */
+  slices: z.array(LayoutRectSchema).min(2).max(8).optional(),
+  /** M10c: stickers / tape / label plates (pure decoration, sticker-catalogue ids). */
+  decorations: z.array(LayoutDecorationSchema).max(16).optional(),
+});
+
+type LayoutObject = z.infer<typeof LayoutObjectSchema>;
+
+export interface LayoutCheckOptions {
+  /**
+   * Known sticker-catalogue ids (src/lib/design/stickers.ts). When given, every decoration id and
+   * text plate id must be in it (ACCENT_STICKER_ID is always accepted for decorations). Absent =
+   * id format is checked only (LayoutSchema); the catalogue test passes the real set.
+   */
+  stickerIds?: ReadonlySet<string>;
+  /**
+   * Optional sticker id → catalogue kind (StickerDef.kind). When given, a decoration's kind must
+   * match its sticker's kind and a text plate must be a "plate" sticker (also implies existence).
+   */
+  stickerKinds?: ReadonlyMap<string, (typeof DECORATION_KINDS)[number]>;
+}
+
+/** Builds the layout schema; pass `stickerIds` to also check decoration ids against a catalogue. */
+export function makeLayoutSchema(opts: LayoutCheckOptions = {}) {
+  return LayoutObjectSchema.superRefine((l, ctx) => {
+    for (const message of layoutIssues(l, opts)) ctx.addIssue({ code: "custom", message });
   });
+}
+
+/**
+ * Semantic layout checks (messages contain no user data). M10b: slices, rects inside the role's
+ * area, twin rules. M10c: shape/frame/rotation/decoration geometry — see m10cLayoutIssues.
+ */
+export function layoutIssues(l: LayoutObject, opts: LayoutCheckOptions = {}): string[] {
+  const issues: string[] = [];
+  if (l.slices) {
+    const s = l.slots[0];
+    if (l.role !== "cover" || l.photoCount !== 1 || l.slots.length !== 1 || !s) {
+      issues.push("slices need a cover layout with exactly one slot");
+    } else if (
+      l.slices.some(
+        (r) => r.x < s.x - 1e-6 || r.y < s.y - 1e-6 || r.x + r.w > s.x + s.w + 1e-6 || r.y + r.h > s.y + s.h + 1e-6,
+      )
+    ) {
+      issues.push("slice outside the cover slot");
+    }
+  }
+  const maxX = l.role === "spread" ? 200 : 100;
+  const rects = [...l.slots, ...(l.caption ? [l.caption] : []), ...(l.texts ?? []).map((t) => t.box)];
+  if (rects.some((r) => r.x + r.w > maxX + 1e-9 || r.y + r.h > 100 + 1e-9)) {
+    issues.push(`rect outside the ${l.role} area`);
+  }
+  if (l.role === "spread" && !l.twin) issues.push("spread needs a twin");
+  if (l.role !== "spread" && l.twin) issues.push("only spreads have a twin");
+  issues.push(...m10cLayoutIssues(l, opts));
+  return issues;
+}
+
+/** Layout definition. Sticker ids are format-checked only — see layoutIssues(…, { stickerIds }). */
+export const LayoutSchema = makeLayoutSchema();
+
+/**
+ * M10c geometry rules (all in mm on the layout's own format; spreads: x 0..200 = both pages):
+ * - framed or rotated slots: rotated bounding box ≥ SAFE_MM inside the trim (no bleed for objects);
+ * - rounded / circle / ellipse slots never touch the trim (their bleed would change the shape);
+ *   circle slots are square in mm; polaroid frames only on rect / rounded slots; the frame inset
+ *   leaves a photo area;
+ * - rotated / plated texts: rotated box ≥ SAFE_MM inside the trim;
+ * - decorations: rotated box inside the trim;
+ * - spreads: no shaped / framed / rotated slot, decoration or plated / rotated text crosses the
+ *   fold (x = 100). Plain rect slots may (panoramas).
+ * - stickerIds (when given): decoration and plate ids exist.
+ */
+function m10cLayoutIssues(l: LayoutObject, { stickerIds, stickerKinds }: LayoutCheckOptions): string[] {
+  const issues: string[] = [];
+  const page = pageMm(l.format);
+  const maxX = l.role === "spread" ? 200 : 100;
+  const eps = 1e-6;
+  const insideTrim = (b: BoundsPct, marginMm: number) =>
+    (b.x0 / 100) * page.w >= marginMm - MM_EPS &&
+    (b.y0 / 100) * page.h >= marginMm - MM_EPS &&
+    ((maxX - b.x1) / 100) * page.w >= marginMm - MM_EPS &&
+    ((100 - b.y1) / 100) * page.h >= marginMm - MM_EPS;
+  const crossesFold = (b: BoundsPct) => l.role === "spread" && b.x0 < 100 - eps && b.x1 > 100 + eps;
+
+  l.slots.forEach((s, i) => {
+    const at = `slot ${i}`;
+    const shape = s.shape?.kind ?? "rect";
+    const framed = (s.frame?.kind ?? "none") !== "none";
+    const rotated = (s.rotate ?? 0) !== 0;
+    const b = rotatedBoundsPct(s, s.rotate ?? 0, page);
+    if ((framed || rotated) && !insideTrim(b, SAFE_MM)) issues.push(`${at}: framed/rotated slot outside the ${SAFE_MM} mm safe zone`);
+    if ((shape === "rounded" || shape === "circle" || shape === "ellipse") && !insideTrim(b, EDGE_GAP_MM)) {
+      issues.push(`${at}: ${shape} slot touches the trim`);
+    }
+    if (shape === "circle" && Math.abs((s.w / 100) * page.w - (s.h / 100) * page.h) > CIRCLE_TOLERANCE_MM) {
+      issues.push(`${at}: circle slot is not square in mm`);
+    }
+    if (s.frame?.kind === "polaroid" && shape !== "rect" && shape !== "rounded") {
+      issues.push(`${at}: polaroid frame needs a rect or rounded slot`);
+    }
+    if (framed) {
+      const inset = frameInsetMm(s.frame);
+      const wMm = (s.w / 100) * page.w - inset.left - inset.right;
+      const hMm = (s.h / 100) * page.h - inset.top - inset.bottom;
+      if (wMm < MIN_PHOTO_MM || hMm < MIN_PHOTO_MM) issues.push(`${at}: frame leaves no photo area`);
+    }
+    if ((shape !== "rect" || framed || rotated) && crossesFold(b)) issues.push(`${at}: shaped slot crosses the fold`);
+  });
+
+  (l.texts ?? []).forEach((t, i) => {
+    if (!t.plate && !t.rotate) return;
+    const b = rotatedBoundsPct(t.box, t.rotate ?? 0, page);
+    if (!insideTrim(b, SAFE_MM)) issues.push(`text ${i}: rotated/plated text outside the ${SAFE_MM} mm safe zone`);
+    if (crossesFold(b)) issues.push(`text ${i}: plated text crosses the fold`);
+    if (t.plate && stickerIds && !stickerIds.has(t.plate.id)) issues.push(`text ${i}: unknown plate "${t.plate.id}"`);
+    if (t.plate && stickerKinds && stickerKinds.get(t.plate.id) !== "plate") issues.push(`text ${i}: "${t.plate.id}" is not a plate`);
+  });
+
+  (l.decorations ?? []).forEach((d, i) => {
+    const b = rotatedBoundsPct(d.box, d.rotate ?? 0, page);
+    if (!insideTrim(b, 0)) issues.push(`decoration ${i}: outside the trim`);
+    if (crossesFold(b)) issues.push(`decoration ${i}: crosses the fold`);
+    const accent = d.id === ACCENT_STICKER_ID;
+    if (accent && d.kind !== "sticker") issues.push(`decoration ${i}: the occasion accent must be kind sticker`);
+    if (!accent && stickerIds && !stickerIds.has(d.id)) issues.push(`decoration ${i}: unknown sticker "${d.id}"`);
+    if (!accent && stickerKinds && stickerKinds.get(d.id) !== d.kind) issues.push(`decoration ${i}: "${d.id}" is not a ${d.kind}`);
+  });
+  return issues;
+}
 
 export type ParseResult =
   | { ok: true; doc: z.infer<typeof BookDocSchema> }

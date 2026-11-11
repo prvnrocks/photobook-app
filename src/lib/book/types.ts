@@ -16,11 +16,16 @@ import type {
   CropSchema,
   DocMetaSchema,
   GeneratorSchema,
+  LayoutDecorationSchema,
   LayoutSchema,
+  LayoutSlotDefSchema,
   LayoutSlotSchema,
+  LayoutTextSchema,
   PageSchema,
   RectSchema,
+  SlotFrameSchema,
   SlotSchema,
+  SlotShapeSchema,
   StyleSchema,
   StyleSchemaV1,
 } from "./schema";
@@ -52,6 +57,14 @@ export type Rect = z.infer<typeof RectSchema>;
 export type LayoutSlot = z.infer<typeof LayoutSlotSchema>;
 export type Layout = z.infer<typeof LayoutSchema>;
 export type LayoutRole = Layout["role"];
+/** A layout slot: rect + optional M10c shape / rotate / frame / shadow / z (slot-geometry.ts). */
+export type LayoutSlotDef = z.infer<typeof LayoutSlotDefSchema>;
+export type SlotShape = z.infer<typeof SlotShapeSchema>;
+export type SlotShapeKind = SlotShape["kind"];
+export type SlotFrame = z.infer<typeof SlotFrameSchema>;
+export type SlotShadow = NonNullable<LayoutSlotDef["shadow"]>;
+export type LayoutDecoration = z.infer<typeof LayoutDecorationSchema>;
+export type LayoutText = z.infer<typeof LayoutTextSchema>;
 export type Orientation = Layout["prefers"][number];
 
 export type { CaptionLang, Occasion, Tone } from "./options";

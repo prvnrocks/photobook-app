@@ -13,6 +13,10 @@ import { twoVertical } from "./two-vertical";
 import { CLASSIC_LANDSCAPE_LAYOUTS } from "./classic/landscape";
 import { MODERN_LANDSCAPE_LAYOUTS } from "./modern/landscape";
 import { MODERN_PORTRAIT_LAYOUTS } from "./modern/portrait";
+import { GEOMETRIC_LANDSCAPE_LAYOUTS } from "./geometric/landscape";
+import { GEOMETRIC_PORTRAIT_LAYOUTS } from "./geometric/portrait";
+import { SCRAPBOOK_LANDSCAPE_LAYOUTS } from "./scrapbook/landscape";
+import { SCRAPBOOK_PORTRAIT_LAYOUTS } from "./scrapbook/portrait";
 
 /** The M1–M10a catalogue: classic A5 portrait. Order and geometry frozen (goldens, AI prompt cache). */
 export const CLASSIC_PORTRAIT_LAYOUTS: readonly Layout[] = [
@@ -31,6 +35,11 @@ export const LAYOUTS: readonly Layout[] = [
   ...CLASSIC_LANDSCAPE_LAYOUTS,
   ...MODERN_PORTRAIT_LAYOUTS,
   ...MODERN_LANDSCAPE_LAYOUTS,
+  // M10c (appended; empty until T5/T6 land).
+  ...GEOMETRIC_PORTRAIT_LAYOUTS,
+  ...GEOMETRIC_LANDSCAPE_LAYOUTS,
+  ...SCRAPBOOK_PORTRAIT_LAYOUTS,
+  ...SCRAPBOOK_LANDSCAPE_LAYOUTS,
 ];
 
 export const LAYOUT_IDS: readonly string[] = LAYOUTS.map((l) => l.id);
