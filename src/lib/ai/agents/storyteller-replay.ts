@@ -30,7 +30,7 @@ import { DEFAULT_BOOK_DESIGN, type BookDesign } from "@/lib/book/book-design";
 import { layoutsFor } from "@/lib/book/spreads";
 import { bestPageLayout, fitScore } from "@/lib/layouts/fit";
 import { swatchById } from "@/lib/design/backgrounds";
-import { FADED_PHOTO_ID, suggestBookBackground, suggestsBackgrounds } from "@/lib/design/background-suggest";
+import { AI_BACKGROUND_CATALOGUE, FADED_PHOTO_ID, suggestBookBackground, suggestsBackgrounds } from "@/lib/design/background-suggest";
 import type { Background } from "@/lib/book/types";
 import type { AlbumPlanAi } from "../schemas";
 import { dubaiDay } from "../story";
@@ -235,15 +235,17 @@ function readMeta(meta: Record<string, unknown>): StorytellerScenarioMeta {
   };
 }
 
+/** Swatch ids the AI may pick in any style (catalogue order, de-duplicated; textures excluded). */
+const AI_SWATCH_IDS: readonly string[] = [
+  ...new Set(Object.values(AI_BACKGROUND_CATALOGUE).flatMap((ids) => (ids as readonly string[]).filter((id) => swatchById(id)))),
+];
+
 /** Catalogue id of a rule Background (swatch by hex, texture by id). */
 function idOfBackground(bg: Background): string | null {
   if (bg.kind === "texture") return bg.textureId;
   if (bg.kind !== "color") return null;
   const hex = bg.hex.toUpperCase();
-  for (const id of ["white", "cream", "warm-sand", "blush", "butter", "sage", "sky", "lavender", "stone"]) {
-    if (swatchById(id)?.hex.toUpperCase() === hex) return id;
-  }
-  return null;
+  return AI_SWATCH_IDS.find((id) => swatchById(id)?.hex.toUpperCase() === hex) ?? null;
 }
 
 /** v6 background picks added to a synthesised plan (styles with AI backgrounds only). */

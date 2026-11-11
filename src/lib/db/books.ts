@@ -11,7 +11,8 @@ import { isAiReplaceableDoc, isReplaceableDoc } from "@/lib/book/replaceable";
 import { DEFAULT_FORMAT } from "@/lib/book/format";
 import { BookFormatSchema, DEFAULT_DESIGN_STYLE, DesignStyleSchema, parseBookDoc } from "@/lib/book/schema";
 import { stripPhotoFromDoc, type StripPhotoDims } from "@/lib/book/strip-photos";
-import { listPhotoDims, PHOTOS_BUCKET, REVIEW_URL_TTL_SECONDS } from "@/lib/db/photos";
+import { hasAiPhotoBackground, pruneAiBackgrounds } from "@/lib/design/background-suggest";
+import { listPhotoDims, listPlaceablePhotos, PHOTOS_BUCKET, REVIEW_URL_TTL_SECONDS } from "@/lib/db/photos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Json, Tables } from "@/lib/supabase/database.types";
@@ -468,6 +469,49 @@ export async function stripPhotoFromBookDoc(bookId: string, photoId: string): Pr
     const stripped = stripPhotoFromDoc(stamped, photoId, dims);
     if (!stripped.changed) return "unchanged";
     const doc = stripped.doc;
+    const saved = await saveDocIfRev(
+      book.id,
+      user.id,
+      serializeDoc(doc) as unknown as Json,
+      doc.pages.length,
+      book.doc_rev,
+    );
+    if (saved.ok) return "updated";
+    if (saved.reason === "not_found") return "not_found";
+    // conflict: the doc changed since we read it → reload and retry once
+  }
+  return "conflict";
+}
+
+export type PruneAiBackgroundsResult = StripPhotoResult;
+
+/**
+ * After the review screen dropped a photo (M10c review S1, D-062): AI photo backgrounds whose photo
+ * is no longer kept are removed (pruneAiBackgrounds, rule 5 — page → book default, AI book
+ * background → style default). Only source "ai" photo backgrounds are touched, so this is safe on
+ * user-edited albums (Update album refuses those) and never changes a user-picked background (an
+ * explicit pick may use a dropped photo, D-062). Read-modify-write guarded by doc_rev exactly like
+ * stripPhotoFromBookDoc (saveDocIfRev, one retry on conflict); meta / title / page_count's meaning
+ * unchanged (a cleanup is not a user edit). `{}`, unparsable docs, docs without an AI photo
+ * background and pre-0900 rows (doc_rev null) → "unchanged" (no write, no photo query).
+ * Reads under RLS (getMyBook = ownership), writes with the admin client + owner filter.
+ * Call AFTER the photo's status was saved, so the kept set already excludes it.
+ */
+export async function pruneUnkeptAiBackgrounds(bookId: string): Promise<PruneAiBackgroundsResult> {
+  if (!isUuid(bookId)) return "not_found";
+  const user = await getCurrentUser();
+  if (!user) return "not_found";
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const book = await getMyBook(bookId);
+    if (!book) return "not_found";
+    if (book.doc_rev === null) return "unchanged";
+    const parsed = parseBookDoc(book.doc);
+    if (!parsed.ok || !hasAiPhotoBackground(parsed.doc)) return "unchanged";
+    const photos = await listPlaceablePhotos(book.id);
+    const kept = new Set(photos.filter((p) => p.status === "kept").map((p) => p.id));
+    const pruned = pruneAiBackgrounds(parsed.doc, (id) => kept.has(id));
+    if (!pruned.changed) return "unchanged";
+    const doc = pruned.doc;
     const saved = await saveDocIfRev(
       book.id,
       user.id,

@@ -456,3 +456,32 @@ export function pruneAiBackgrounds(doc: BookDoc, usable: (photoId: string) => bo
   });
   return changed ? { doc: { ...doc, style, pages }, changed } : { doc, changed };
 }
+
+/** True when the doc has any AI photo background (book or page) — the only kind the privacy prunes touch. */
+export function hasAiPhotoBackground(doc: BookDoc): boolean {
+  if (doc.style.backgroundSource === "ai" && doc.style.background.kind === "photo") return true;
+  return doc.pages.some((p) => p.background?.source === "ai" && p.background.kind === "photo");
+}
+
+/**
+ * Privacy prune (D-062, M10c review S1) for snapshots (publish, PDF export): removes ONLY AI photo
+ * backgrounds whose photo isn't `usable` (kept) — page → book default, book → style default.
+ * Narrower than pruneAiBackgrounds on purpose: the snapshot otherwise matches what the editor
+ * shows. "user" backgrounds (an explicit pick may use a dropped photo, D-062) and every
+ * non-photo background are kept. Returns the input object (changed:false) when nothing changes.
+ */
+export function stripUnusableAiPhotoBackgrounds(doc: BookDoc, usable: (photoId: string) => boolean): PruneResult {
+  let changed = false;
+  let style = doc.style;
+  if (style.backgroundSource === "ai" && style.background.kind === "photo" && !usable(style.background.photoId)) {
+    style = { ...style, background: styleDefaultBackground(style.designStyle) };
+    changed = true;
+  }
+  const pages = doc.pages.map((page) => {
+    const bg = page.background;
+    if (!bg || bg.source !== "ai" || bg.kind !== "photo" || usable(bg.photoId)) return page;
+    changed = true;
+    return withoutBackground(page);
+  });
+  return changed ? { doc: { ...doc, style, pages }, changed } : { doc, changed };
+}

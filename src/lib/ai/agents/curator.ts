@@ -39,6 +39,7 @@ import {
   type SceneSchema,
 } from "../schemas";
 import { cachedSystem, MAX_IMAGES_PER_REQUEST, type AgentTransport } from "../transport";
+import { PHOTO_COLOR_RE } from "@/lib/image/color";
 import { clipText } from "@/lib/text/clip";
 import type { Occasion } from "@/lib/book/options";
 import type { CuratorReplayHint } from "./curator-replay";
@@ -287,8 +288,6 @@ export async function curateBatch(args: CurateBatchArgs): Promise<CurateBatchRes
   return { results, usedAi: true, costUsd: step.costUsd, ...colors };
 }
 
-const HEX_COLOR_RE = /^#[0-9a-f]{6}$/;
-
 /** M10c: colours for photos with color === null and a loaded thumb. `{}` when nothing to report. */
 async function backfillColors(
   photos: CurationPhoto[],
@@ -304,7 +303,7 @@ async function backfillColors(
     todo.map(async (p) => {
       try {
         const hex = await colorOf(thumbs.get(p.thumbPath!)!);
-        if (typeof hex === "string" && HEX_COLOR_RE.test(hex)) colors.set(p.id, hex);
+        if (typeof hex === "string" && PHOTO_COLOR_RE.test(hex)) colors.set(p.id, hex);
       } catch {
         // undecodable thumb → colour stays null
       }

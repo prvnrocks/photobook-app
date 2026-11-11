@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { learnFromBook } from "@/lib/ai/learn-from-book";
 import { autolayout } from "@/lib/autolayout";
 import { bookDesignOf, isSupportedDesign, isUnsupportedDesignError, withBookDesign } from "@/lib/book/book-design";
-import { applyBackgroundSuggestions } from "@/lib/design/background-suggest";
+import { applyBackgroundSuggestions, hasAiPhotoBackground } from "@/lib/design/background-suggest";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { CAPTION_LANGS, OCCASIONS, type CaptionLang, type Occasion } from "@/lib/book/options";
 import { relayoutDoc, type RelayoutPhoto } from "@/lib/book/relayout";
@@ -14,7 +14,13 @@ import { serializeDoc } from "@/lib/book/doc-version";
 import { parseBookDoc } from "@/lib/book/schema";
 import type { BookDoc } from "@/lib/book/types";
 import { getActiveRunForBook } from "@/lib/db/agent-runs";
-import { getBookForRun, getMyBook, writeDocIfReplaceable, type BookForRun } from "@/lib/db/books";
+import {
+  getBookForRun,
+  getMyBook,
+  pruneUnkeptAiBackgrounds,
+  writeDocIfReplaceable,
+  type BookForRun,
+} from "@/lib/db/books";
 import { listPhotosForCuration, setUserOverride, type CurationPhotoRow } from "@/lib/db/photos";
 import { errorCodeOf } from "@/lib/http/json";
 import type { Json } from "@/lib/supabase/database.types";
@@ -27,6 +33,10 @@ const MSG_SAVE_FAILED = "We couldn't save that. Please try again.";
 /**
  * Review screen (M3): the user keeps or removes one photo. Sets user_override so the AI never
  * changes this choice again ("AI drafts, the user decides").
+ * Dropping a photo also removes AI photo backgrounds that used it (M10c review S1, D-062: only an
+ * explicit user pick may make a dropped photo public) — right away, because the user may Continue
+ * without Update album, or Update album may refuse a user-edited album. Only source "ai" photo
+ * backgrounds change; best effort (publish / PDF export strip them again).
  */
 export async function togglePhotoAction(
   bookId: string,
@@ -44,12 +54,25 @@ export async function togglePhotoAction(
     if (!book) return { ok: false, error: MSG_NOT_FOUND };
     const saved = await setUserOverride(book.id, photoId, keep);
     if (!saved) return { ok: false, error: MSG_NOT_FOUND };
+    if (!keep) await pruneDroppedAiBackgrounds(book.id, book.doc);
   } catch (err) {
     console.error(`[review] toggle photo failed (${errorCodeOf(err)})`);
     return { ok: false, error: MSG_SAVE_FAILED };
   }
   revalidatePath(`/books/${bookId}/review`);
   return { ok: true };
+}
+
+/** Best effort: the photo choice is already saved; a failed prune is logged (code only) and caught later. */
+async function pruneDroppedAiBackgrounds(bookId: string, doc: unknown): Promise<void> {
+  const parsed = parseBookDoc(doc);
+  if (!parsed.ok || !hasAiPhotoBackground(parsed.doc)) return; // no query, no write
+  try {
+    const res = await pruneUnkeptAiBackgrounds(bookId);
+    if (res === "conflict") console.error("[review] prune ai backgrounds failed (conflict)");
+  } catch (err) {
+    console.error(`[review] prune ai backgrounds failed (${errorCodeOf(err)})`);
+  }
 }
 
 export type UpdateAlbumResult =

@@ -28,7 +28,7 @@ import { bleedRect, slotBleeds, spreadBleedRect } from "./bleed";
 import { pageMm, type SizeMm } from "./format";
 import { slotSizeMm } from "./resolution";
 import type { TEXT_BINDINGS } from "./schema";
-import { clipPathFor, frameInsetMm, paintOrder, photoRectOf } from "./slot-geometry";
+import { clipPathFor, innerRadiusMm, paintOrder, photoRectOf, slotRadiusMm } from "./slot-geometry";
 import type {
   Background,
   BookDoc,
@@ -420,7 +420,7 @@ function slotLook(layout: Layout, i: number, renderRect: Rect, format: BookForma
   const page: SizeMm = pageMm(format);
   const look: RenderSlotLook = {};
   const shape = s.shape && s.shape.kind !== "rect" ? s.shape : undefined;
-  const rMm = shape?.kind === "rounded" ? shape.r : 0;
+  const rMm = slotRadiusMm(s);
   if (shape) {
     look.shape = shape.kind;
     const round = shape.kind === "rounded" || shape.kind === "circle" || shape.kind === "ellipse";
@@ -454,11 +454,8 @@ function slotLook(layout: Layout, i: number, renderRect: Rect, format: BookForma
       if (shape) {
         const wMm = (pr.w / 100) * page.w;
         const hMm = (pr.h / 100) * page.h;
-        const inset = frameInsetMm(s.frame);
         const inner =
-          shape.kind === "rounded"
-            ? radiusOf("rounded", rMm - Math.max(inset.left, inset.top), wMm, hMm)
-            : radiusOf(shape.kind, 0, wMm, hMm);
+          shape.kind === "rounded" ? radiusOf("rounded", innerRadiusMm(s), wMm, hMm) : radiusOf(shape.kind, 0, wMm, hMm);
         if (inner) frame.borderRadius = inner;
         else if (shape.kind !== "rounded") frame.clipPath = clipPathFor(shape, pr, pr, page);
       }

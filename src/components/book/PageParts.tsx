@@ -276,24 +276,24 @@ function ShapedPhotoSlot({
           data-slot-shadow={String(slot.index)}
         />
       ) : null}
-    <div className="absolute overflow-hidden" style={outer} {...data}>
-      {f ? (
-        <div
-          className="absolute overflow-hidden"
-          style={{
-            ...rectStyle(f.photo),
-            ...(f.borderRadius ? { borderRadius: f.borderRadius } : {}),
-            ...(f.clipPath ? { clipPath: f.clipPath } : {}),
-          }}
-          data-slot-photo="true"
-        >
+      <div className="absolute overflow-hidden" style={outer} {...data}>
+        {f ? (
+          <div
+            className="absolute overflow-hidden"
+            style={{
+              ...rectStyle(f.photo),
+              ...(f.borderRadius ? { borderRadius: f.borderRadius } : {}),
+              ...(f.clipPath ? { clipPath: f.clipPath } : {}),
+            }}
+            data-slot-photo="true"
+          >
+            <SlotContent slot={slot} mode={mode} priority={priority} />
+          </div>
+        ) : (
           <SlotContent slot={slot} mode={mode} priority={priority} />
-        </div>
-      ) : (
-        <SlotContent slot={slot} mode={mode} priority={priority} />
-      )}
-      {mode === "edit" ? overlay : null}
-    </div>
+        )}
+        {mode === "edit" ? overlay : null}
+      </div>
     </>
   );
 }

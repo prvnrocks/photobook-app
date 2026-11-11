@@ -47,8 +47,10 @@ import {
   supersedeExports,
   uploadExportPdf,
 } from "@/lib/db/exports";
-import { listPrintPhotoSources } from "@/lib/db/print";
+import { listKeptPhotoIds, listPrintPhotoSources } from "@/lib/db/print";
+import { serializeDoc } from "@/lib/book/doc-version";
 import { parseBookDoc } from "@/lib/book/schema";
+import { hasAiPhotoBackground, stripUnusableAiPhotoBackgrounds } from "@/lib/design/background-suggest";
 import type { BookDoc } from "@/lib/book/types";
 import type { PrintPhotoSourceRow } from "@/lib/db/print";
 import { getAccessSecret } from "@/lib/publish/access-cookie";
@@ -172,7 +174,7 @@ export async function requestExport(
       bookId,
       userId,
       docRev: book.doc_rev,
-      doc: book.doc as Json,
+      doc: await exportSnapshotDoc(bookId, userId, book.doc, check.doc),
       captionLang: captionLangOf(book.caption_lang),
       rendererVersion: PDF_RENDERER_VERSION,
       dailyCap: EXPORT_DAILY_CAP,
@@ -229,6 +231,19 @@ export async function requestExport(
       }
     }
   }
+}
+
+/**
+ * The doc snapshot an export renders (print route + worker both read it from the export row).
+ * D-062 defence in depth (M10c review S1): AI photo backgrounds whose photo isn't kept are
+ * stripped (the review drop prunes the draft too, best effort); user-picked backgrounds stay.
+ * No AI photo background → the stored doc verbatim (no query; byte-identical to before).
+ */
+async function exportSnapshotDoc(bookId: string, userId: string, stored: unknown, doc: BookDoc): Promise<Json> {
+  if (!hasAiPhotoBackground(doc)) return stored as Json;
+  const kept = await listKeptPhotoIds(bookId, userId);
+  const stripped = stripUnusableAiPhotoBackgrounds(doc, (id) => kept.has(id));
+  return stripped.changed ? (serializeDoc(stripped.doc) as unknown as Json) : (stored as Json);
 }
 
 // ---------------------------------------------------------------------------

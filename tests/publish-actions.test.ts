@@ -174,6 +174,29 @@ describe("publishBookAction", () => {
     expect(fake.revalidatePath).toHaveBeenCalledWith(`/b/${r.slug}`);
   });
 
+  it("D-062 (M10c review S1): an AI faded background of a dropped photo never publishes; a user-picked one does", async () => {
+    const XDROP = "d3333333-3333-4333-8333-333333333333";
+    const XPICK = "e4444444-4444-4444-8444-444444444444";
+    const faded = (photoId: string, source: "ai" | "user") => ({ kind: "photo", photoId, veil: 0.8, veilColor: "#F5EEDC", source });
+    const base = doc();
+    const d = {
+      ...base,
+      pages: base.pages.map((p, i) =>
+        i === 0 ? { ...p, background: faded(XDROP, "ai") } : i === 1 ? { ...p, background: faded(XPICK, "user") } : p,
+      ),
+      style: { ...base.style, background: { kind: "photo", photoId: XDROP, veil: 0.8, veilColor: "#F5EEDC" }, backgroundSource: "ai" },
+    };
+    fake.state.photos = [...fake.state.photos, { id: XDROP, status: "dropped" }, { id: XPICK, status: "dropped" }];
+    fake.state.results.push({ data: row({ doc: d }), error: null }, { data: [{ id: BOOK }], error: null });
+    expect((await publishBookAction(BOOK)).ok).toBe(true);
+    const pub = (updates()[0].payload as { published_doc: { pages: { background?: unknown }[]; style: { background: unknown } } })
+      .published_doc;
+    expect(JSON.stringify(pub)).not.toContain(XDROP);
+    expect(pub.pages[0].background).toBeUndefined();
+    expect(pub.pages[1].background).toMatchObject({ kind: "photo", photoId: XPICK });
+    expect(pub.style.background).toEqual({ kind: "color", hex: "#FFFFFF" });
+  });
+
   it("freezes caption_lang 'ar' into the snapshot; unknown / null values snapshot as 'en'", async () => {
     fake.state.results.push({ data: row({ caption_lang: "ar" }), error: null }, { data: [{ id: BOOK }], error: null });
     expect((await publishBookAction(BOOK)).ok).toBe(true);

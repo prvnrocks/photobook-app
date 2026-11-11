@@ -85,3 +85,21 @@ export async function listPrintPhotoSources(
   }
   return out;
 }
+
+/**
+ * Ids of the book's kept photos (status 'kept', ready) — the PDF export's D-062 check (M10c review
+ * S1): AI photo backgrounds whose photo isn't kept are stripped from the export snapshot. Admin
+ * client filtered by book_id AND user_id; the caller MUST have verified ownership. Ids only.
+ */
+export async function listKeptPhotoIds(bookId: string, userId: string): Promise<Set<string>> {
+  if (!isUuid(bookId) || !isUuid(userId)) return new Set();
+  const { data, error } = await createAdminClient()
+    .from("photos")
+    .select("id")
+    .eq("book_id", bookId)
+    .eq("user_id", userId)
+    .eq("upload_state", "ready")
+    .eq("status", "kept");
+  if (error) throw new PrintQueryError("list kept photos", error.code);
+  return new Set(((data ?? []) as { id: string }[]).map((r) => r.id));
+}

@@ -14,6 +14,7 @@ import "server-only";
 //
 // Errors carry only the operation and a Postgres/Storage code — never ids,
 // paths or other user data.
+import { PHOTO_COLOR_RE } from "@/lib/image/color";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
@@ -270,7 +271,6 @@ export async function setPhotosPlaceChecked(
 
 /** Parallel update requests in setPhotosColor (one per distinct colour, ≤100 ids each). */
 export const COLOR_WRITE_CONCURRENCY = 6;
-const PHOTO_COLOR_DB_RE = /^#[0-9a-f]{6}$/;
 
 /**
  * M10c: sets photos.color (server-only column, 1900 guard) for photos of the book that have NO
@@ -288,7 +288,7 @@ export async function setPhotosColor(
   const entries = colors instanceof Map ? [...colors] : Object.entries(colors);
   const byColor = new Map<string, string[]>();
   for (const [id, hex] of entries) {
-    if (!isUuid(id) || typeof hex !== "string" || !PHOTO_COLOR_DB_RE.test(hex)) continue;
+    if (!isUuid(id) || typeof hex !== "string" || !PHOTO_COLOR_RE.test(hex)) continue;
     const list = byColor.get(hex);
     if (list) list.push(id);
     else byColor.set(hex, [id]);

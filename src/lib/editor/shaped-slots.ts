@@ -8,7 +8,7 @@
 
 import type { CollisionDetection, UniqueIdentifier } from "@dnd-kit/core";
 import { pageMm } from "@/lib/book/format";
-import { frameInsetMm, photoRectOf, shapePoints, slotAt, type Point } from "@/lib/book/slot-geometry";
+import { innerRadiusMm, photoRectOf, shapePoints, slotAt, slotRadiusMm, type Point } from "@/lib/book/slot-geometry";
 import type { BookFormat, Layout, LayoutSlotDef, Rect } from "@/lib/book/types";
 
 // --- Hit tests ------------------------------------------------------------------------------------
@@ -125,9 +125,7 @@ export function cropMaskOf(layout: Layout | undefined, i: number, format?: BookF
     const page = pageMm(fmt);
     const wMm = (pr.w / 100) * page.w;
     const hMm = (pr.h / 100) * page.h;
-    const framed = !!s.frame && s.frame.kind !== "none";
-    const inset = frameInsetMm(s.frame);
-    const r = Math.max(0, Math.min(shape.r - (framed ? Math.max(inset.left, inset.top) : 0), wMm / 2, hMm / 2));
+    const r = Math.max(0, Math.min(innerRadiusMm(s), wMm / 2, hMm / 2));
     if (!(r > 0) || !(wMm > 0) || !(hMm > 0)) return { kind: "none" };
     return { kind: "rounded", rx: r4((r / wMm) * 100), ry: r4((r / hMm) * 100) };
   }
@@ -191,7 +189,7 @@ export function diagramSlotLook(layout: Layout, i: number, format?: BookFormat |
     const page = pageMm(format ?? layout.format);
     const wMm = (s.w / 100) * page.w;
     const hMm = (s.h / 100) * page.h;
-    const r = Math.max(0, Math.min(shape.r, wMm / 2, hMm / 2));
+    const r = Math.max(0, Math.min(slotRadiusMm(s), wMm / 2, hMm / 2));
     if (r > 0 && wMm > 0 && hMm > 0) look.borderRadius = `${r4((r / wMm) * 100)}% / ${r4((r / hMm) * 100)}%`;
   } else {
     const pts = shapePoints(shape);

@@ -90,14 +90,9 @@ export function initialTab(bg: Background): BackgroundTab {
   return bg.kind;
 }
 
-/**
- * True when the book background is an AI suggestion: `style.backgroundSource === "ai"` (D-068 D5).
- * TODO(M10c T11): StyleSchema gets `backgroundSource` in T11 (in the working tree, uncommitted when
- * T14 was written) — switch to a typed `doc.style.backgroundSource` once T11 is committed. Read
- * loosely until then so this compiles with or without it (absent = not suggested).
- */
+/** True when the book background is an AI suggestion: `style.backgroundSource === "ai"` (D-068 D5; absent = not suggested). */
 export function isBookSuggested(doc: Pick<BookDoc, "style">): boolean {
-  return (doc.style as { backgroundSource?: unknown }).backgroundSource === "ai";
+  return doc.style.backgroundSource === "ai";
 }
 
 /**

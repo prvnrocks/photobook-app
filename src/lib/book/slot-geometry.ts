@@ -91,6 +91,22 @@ export function frameInsetMm(frame: SlotFrame | undefined): InsetMm {
   }
 }
 
+/** Corner radius (mm) of a rounded slot's outer box; 0 for every other shape. Unclamped. */
+export function slotRadiusMm(slot: Pick<LayoutSlotDef, "shape">): number {
+  return slot.shape?.kind === "rounded" ? slot.shape.r : 0;
+}
+
+/**
+ * Corner radius (mm) of a rounded slot's PHOTO area: the slot radius minus the frame band
+ * (max of the left/top insets) when framed; 0 for every other shape. Unclamped — callers clamp to
+ * half the photo rect. Single source for render.ts slotLook and the editor crop mask.
+ */
+export function innerRadiusMm(slot: Pick<LayoutSlotDef, "shape" | "frame">): number {
+  if (slot.shape?.kind !== "rounded") return 0;
+  const inset = frameInsetMm(slot.frame);
+  return slot.shape.r - Math.max(inset.left, inset.top);
+}
+
 /**
  * Bounds (layout units) of `rect` rotated by `deg` about its centre, measured in mm so the page's
  * aspect is respected. deg 0 → the rect's own edges, exactly.

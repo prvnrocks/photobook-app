@@ -18,6 +18,8 @@
 //   polygon outline for clip-path shapes).
 // - Drag a photo onto another slot of the same page / spread to swap them (dnd-kit; press-and-hold
 //   on touch). Collision = the visible slot under the pointer (slotCollision → slotAt).
+//   Drag-swap has no keyboard path (no KeyboardSensor); the keyboard alternative is selecting a
+//   slot and choosing its new photo in the photo picker.
 
 import { DndContext, DragOverlay, TouchSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
 import { useMemo, useRef, useState, type MouseEvent } from "react";

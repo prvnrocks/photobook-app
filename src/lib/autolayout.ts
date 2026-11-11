@@ -744,9 +744,9 @@ function assignSlots(cat: Catalogue, layout: Layout, photos: P[]): { order: P[];
 
 /**
  * Rule 10: photos → slots with the fewest shape-aware misses, then the smallest total aspect
- * distance (exact: dynamic programming over photo subsets, ≤ 6 slots → ≤ 64 states; ties keep the
- * earlier photo in the earlier slot). `photos.length` may exceed the slot count only in tests;
- * extra photos stay unassigned.
+ * distance (exact: dynamic programming over photo subsets — 2^photos states: ≤ 6 photos per page →
+ * ≤ 64, spreads up to 12 photos → ≤ 4096; ties keep the earlier photo in the earlier slot).
+ * `photos.length` may exceed the slot count only in tests; extra photos stay unassigned.
  */
 function assignShaped(layout: Layout, photos: P[], design: BookDesign): { order: P[]; misses: number } {
   const k = Math.min(layout.prefers.length, photos.length);

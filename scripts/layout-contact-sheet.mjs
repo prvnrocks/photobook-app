@@ -48,6 +48,7 @@ const { pageMm } = await jiti.import(resolve(root, "src/lib/book/format.ts"));
 const geo = await jiti.import(resolve(root, "src/lib/book/slot-geometry.ts"));
 const stickers = await jiti.import(resolve(root, "src/lib/design/stickers.ts"));
 const { STICKERS, stickerSvg, resolveStickerId, plateInk } = stickers;
+const { STYLE_TOKENS, styleTokens } = await jiti.import(resolve(root, "src/lib/design/styles.ts"));
 
 const FOLD_KEEP_OUT_MM = 8;
 const PX = 1.6; // px per mm (same scale on both axes, so mm rotations = px rotations)
@@ -71,7 +72,8 @@ const BIND_LABEL = {
   coverTitle: "Cover title",
   coverSubtitle: "subtitle / year",
 };
-const SHADOW = { soft: { d: 0.8, a: 0.16 }, lifted: { d: 1.8, a: 0.24 } }; // mm offset, opacity
+// Drawn shadows = the style's tokens (styles.ts: dxMm/dyMm/flat rgba colour, as render.ts slotLook).
+const SHADOW = styleTokens(style).shadows ?? STYLE_TOKENS.scrapbook.shadows ?? {};
 
 let clipSeq = 0;
 
@@ -159,7 +161,7 @@ function card(l) {
 
     const g = [];
     const sh = SHADOW[s.shadow ?? "none"];
-    if (sh) g.push(`<g transform="translate(${n2(sh.d * PX * 0.6)} ${n2(sh.d * PX)})">${shapeEl(`fill="#000" fill-opacity="${sh.a}"`, false)}</g>`);
+    if (sh) g.push(`<g transform="translate(${n2(sh.dxMm * PX)} ${n2(sh.dyMm * PX)})">${shapeEl(`fill="${sh.color}"`, false)}</g>`);
     if (l.slices) {
       // Split-strip cover (A9): ONE photo over the slot box, shown only through the slices.
       g.push(`<rect x="${n2(r.x)}" y="${n2(r.y)}" width="${n2(r.w)}" height="${n2(r.h)}" fill="none" stroke="#9e9e9e" stroke-dasharray="4 3"/>`);

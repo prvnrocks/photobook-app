@@ -9,6 +9,7 @@ import { learnFromBook } from "@/lib/ai/learn-from-book";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getSiteUrl } from "@/lib/auth/redirect";
 import { validateBookDoc } from "@/lib/book/schema";
+import { stripUnusableAiPhotoBackgrounds } from "@/lib/design/background-suggest";
 import { getMyBook } from "@/lib/db/books";
 import { listPlaceablePhotos } from "@/lib/db/photos";
 import {
@@ -133,7 +134,11 @@ export async function publishBookAction(bookId: string): Promise<PublishBookResu
     if (!check.ok) return { ok: false, error: check.reason };
 
     const photos = await listPlaceablePhotos(owner.bookId);
-    const issues = validateBookDoc(check.doc, {
+    // D-062 defence in depth (M10c review S1): an AI photo background never publishes a photo that
+    // isn't kept (the review drop prunes the draft too, best effort). User picks are untouched.
+    const kept = new Set(photos.filter((p) => p.status === "kept").map((p) => p.id));
+    const doc = stripUnusableAiPhotoBackgrounds(check.doc, (id) => kept.has(id)).doc;
+    const issues = validateBookDoc(doc, {
       photoIds: new Set(photos.map((p) => p.id)),
       maxPages: row.max_pages,
     });
@@ -147,7 +152,7 @@ export async function publishBookAction(bookId: string): Promise<PublishBookResu
     const publishedAt = row.published_at ?? nowIso;
     // caption_lang is frozen into the snapshot so the viewer never reads the live column (D-039).
     const captionLang = row.caption_lang === "ar" ? "ar" : "en";
-    const publishedDoc = toPublicDoc(check.doc, { captionLang }) as unknown as Json;
+    const publishedDoc = toPublicDoc(doc, { captionLang }) as unknown as Json;
     const read = {
       docRev: row.doc_rev,
       isPaid: row.is_paid,
@@ -158,7 +163,7 @@ export async function publishBookAction(bookId: string): Promise<PublishBookResu
 
     let slug: string | null = null;
     for (let attempt = 0; attempt < SLUG_ATTEMPTS; attempt++) {
-      const candidate = row.slug ?? makeSlug(row.title ?? check.doc.cover.title);
+      const candidate = row.slug ?? makeSlug(row.title ?? doc.cover.title);
       const res = await publishSnapshot({
         bookId: owner.bookId,
         ownerId: owner.userId,

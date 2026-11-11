@@ -3,6 +3,7 @@
 
 import { parseTime } from "@/lib/autolayout";
 import type { CaptionLang, Occasion, Tone } from "@/lib/book/options";
+import { PHOTO_COLOR_RE } from "@/lib/image/color";
 import { limitsFor } from "./limits";
 import type { MOODS, SCENES } from "./schemas";
 
@@ -43,10 +44,9 @@ export interface StoryPhoto {
   blurScore?: number | null;
 }
 
-const HEX_RE = /^#[0-9A-Fa-f]{6}$/;
 /** A valid "#RRGGBB" colour (upper case) or null. */
 export function colourOf(p: Pick<StoryPhoto, "color">): string | null {
-  return typeof p.color === "string" && HEX_RE.test(p.color) ? p.color.toUpperCase() : null;
+  return typeof p.color === "string" && PHOTO_COLOR_RE.test(p.color.toLowerCase()) ? p.color.toUpperCase() : null;
 }
 
 export interface StoryBook {
