@@ -496,10 +496,17 @@ async function buildToReview() {
   await page.getByTestId("build-album").click();
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build$/, { timeout: 30_000 });
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/review$/, { timeout: 180_000 });
+  await reviewLoaded();
+}
+
+/** M11 added route loading.tsx skeletons: the URL is /review before the review content streams in. */
+async function reviewLoaded() {
+  await expect(page.getByRole("status").filter({ hasText: "Loading your album…" })).toHaveCount(0, { timeout: 30_000 });
 }
 
 /** Opens the (collapsed) captions preview if present; returns its count text or null. */
 async function openCaptionsPreview(): Promise<string | null> {
+  await reviewLoaded();
   const preview = page.getByTestId("captions-preview");
   if ((await preview.count()) === 0) return null;
   await preview.locator("summary").click();

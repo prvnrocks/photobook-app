@@ -3,7 +3,7 @@ import Link from "next/link";
 import { APP_NAME, MADE_IN, SUPPORT_EMAIL } from "@/lib/brand";
 
 const FOOTER_LINK =
-  "inline-flex min-h-11 items-center rounded-md underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring";
+  "inline-flex min-h-11 min-w-11 items-center justify-center rounded-md underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring";
 
 export function SiteFooter() {
   const year = new Date().getFullYear();

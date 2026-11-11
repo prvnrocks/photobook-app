@@ -115,3 +115,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-11, ui) Notice adds an sr-only tone prefix — put toHaveText testids on an inner element with only the message; never put user text in type-eyebrow (letter-spacing breaks Arabic joining).
 - (2026-11-11, test) Remove the Next dev overlay badge (nextjs-portal) before clicking in screenshot scripts; warm routes with curl on a cold scratch next dev or the first e2e run fails with goto timeouts.
 - (2026-11-11, ui) Check contrast numerically before using a suggested colour: #128C4A gives white text only 4.31:1; #0F7A40 gives 5.41:1.
+- (2026-11-11, test) A route loading.tsx makes waitForURL resolve before content — wait for the skeleton status to disappear or a content testid. Replay build ticks need a test-side response delay to observe checklist states. ai-auth cleanup leaves orphan replay agent_runs — delete them after gates.
