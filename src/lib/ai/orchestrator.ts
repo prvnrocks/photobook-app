@@ -798,14 +798,16 @@ function applyRows(photos: CurationPhoto[], rows: CurationWrite[]): void {
 
 /** Rule-based album, stamped with the book's format + design style (D-063, M10b A6). */
 function ruleDoc(photos: CurationPhoto[], book: BookForRun, runId: string | null): BookDoc {
+  const design = bookDesignOf(book);
   const doc = autolayout(photos.map(toAutoPhoto), {
     occasion: asOccasion(book.occasion),
     title: book.title,
     captionLang: asCaptionLang(book.caption_lang),
     isPaid: book.is_paid === true,
     runId,
+    design,
   });
-  return withBookDesign(doc, bookDesignOf(book));
+  return withBookDesign(doc, design);
 }
 
 function docIssues(doc: BookDoc, photos: CurationPhoto[], book: BookForRun): string[] {

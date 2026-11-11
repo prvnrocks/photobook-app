@@ -278,14 +278,16 @@ export async function finalizeBook(
   if (isEmptyDoc(book.doc)) {
     const isPaid = book.is_paid;
     // D-063: format + design style from books.format / books.design_style (M10b A6).
+    const design = bookDesignOf(book);
     const doc: BookDoc = withBookDesign(
       autolayout(photos.map(toAutoPhoto), {
         occasion: asOccasion(book.occasion),
         title: book.title,
         captionLang: asCaptionLang(book.caption_lang),
         isPaid,
+        design,
       }),
-      bookDesignOf(book),
+      design,
     );
     const parsed = parseBookDoc(doc);
     const issues = parsed.ok

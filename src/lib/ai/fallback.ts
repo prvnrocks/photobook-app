@@ -175,6 +175,8 @@ export interface RuleAlbumOptions {
   captionLang: AutolayoutOptions["captionLang"];
   isPaid: boolean;
   dupGroups?: Map<string, number>;
+  /** books.format / books.design_style (bookDesignOf). Default classic A5 portrait. */
+  design?: AutolayoutOptions["design"];
 }
 
 /** Rule-based album for an AI run (doc.meta.runId = runId, generator 'rule'). */

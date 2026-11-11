@@ -35,14 +35,41 @@
 // 8. meta = { generator: "rule", generatorVersion: AUTOLAYOUT_VERSION, runId: opts.runId ?? null,
 //    userEdited: false } on every doc, including the minimal fallback (D-018). Bump
 //    AUTOLAYOUT_VERSION when these rules change output.
+// 9. Design (M10b A10, D-063): opts.design = books.format / books.design_style (default classic
+//    A5 portrait). Classic A5 portrait uses rules 5–6 exactly as above (output byte-identical,
+//    frozen by tests/autolayout-classic-golden.test.ts). Every other design uses the same rules
+//    1–4 and 6–8 with a catalogue-driven filler over layoutsFor(format, style, …) only:
+//    - singles: the one-photo page layouts whose slot fits the photo's orientation (all when none
+//      fits), closest slot aspect (mm) first; the previous page's layout is not repeated if
+//      another fits. Chapter opener as rule 5.
+//    - multi-photo pages: a layout is a candidate when every slot fits a photo (photos are
+//      assigned within the page: portrait/landscape slots take matching photos in time order,
+//      then squares, "any" slots the rest). Photo counts by chapter size: < 10 → 2, 3, 4 (4 only
+//      for layouts whose slots all ask for an orientation — no grids in short chapters);
+//      10–19 → 3, 4, 2; ≥ 20 → 4, 5, 3, 6, 2; catalogue order within a count; a pair may skip
+//      one photo ahead (ranked last); the previous page's layout is not repeated.
+//    - spreads (styles that have them; never on an odd page index — the cover stands alone and
+//      doc.pages[2k] is a left page): a photo with aspect ≥ PANORAMA_RATIO at the head of the
+//      queue → the panorama spread; a chapter of ≥ SPREAD_MOMENT_MIN photos → one spread per
+//      started 20 photos: the first spread layout (fewest photos first) whose slots fit with at
+//      most ⌊n/4⌋ orientation misses (all-"any" grids need that many photos left). Never two
+//      spreads in a row. A spread counts 2 pages toward maxPages; if the album ends up over the
+//      cap anyway it is rebuilt without spreads.
+//    - cover: the style's one-photo cover whose slot fits the cover photo (bestCoverLayout);
+//      the cover photo prefers the format's orientation (portrait books portrait, landscape
+//      books landscape). The minimal album uses the design's full-page layout (fullPageLayout).
 // The result is checked with parseBookDoc + validateBookDoc; if that ever fails, a minimal
 // safe album is returned instead (the user must always get an album).
 
 import { limitsFor } from "@/lib/ai/limits";
+import { DEFAULT_BOOK_DESIGN, type BookDesign } from "@/lib/book/book-design";
+import { orientationOf as formatOrientation } from "@/lib/book/format";
 import { BOOK_TITLE_MAX_CODE_POINTS, type CaptionLang, type Occasion } from "@/lib/book/options";
 import { DocMetaSchema, parseBookDoc, validateBookDoc } from "@/lib/book/schema";
-import type { BookDoc, BookPage, Chapter, Crop, DocMeta } from "@/lib/book/types";
+import { layoutsFor } from "@/lib/book/spreads";
+import type { BookDoc, BookPage, Chapter, Crop, DocMeta, Layout } from "@/lib/book/types";
 import { COVER_LAYOUT_ID } from "@/lib/layouts";
+import { bestCoverLayout, fitsSlot, fullPageLayout, slotAspectMm } from "@/lib/layouts/fit";
 import { clipCodePoints, clipText } from "@/lib/text/clip";
 
 export interface AutoPhoto {
@@ -66,6 +93,8 @@ export interface AutolayoutOptions {
   dupGroups?: Map<string, number>;
   /** agent_runs.id when this album is the fallback of an AI run; otherwise null. */
   runId?: string | null;
+  /** books.format / books.design_style (bookDesignOf, D-063). Default classic A5 portrait. */
+  design?: BookDesign;
 }
 
 /** Version of the rules above, stored in doc.meta.generatorVersion. */
@@ -104,6 +133,8 @@ interface P {
   day: number | null;
   place: string | null;
   orient: Orient;
+  /** w / h (1 when unknown). */
+  ratio: number;
   sharp: number;
   area: number;
 }
@@ -114,38 +145,50 @@ interface Group {
 
 export function autolayout(photos: AutoPhoto[], opts: AutolayoutOptions): BookDoc {
   const maxPages = limitsFor(opts.isPaid).maxPages;
+  const design = opts.design ?? DEFAULT_BOOK_DESIGN;
   const kept = dedupe(photos, opts.dupGroups).sort(byTime);
 
+  let doc = build(kept, opts, design, maxPages, makeFiller(design, true));
+  // A spread counts 2 pages; the budget accounts for that, but a last-resort single-photo chapter
+  // could still land a panorama spread over the cap — rebuild without spreads (rule 9).
+  if (doc.pages.length > maxPages && hasSpreads(design)) {
+    doc = build(kept, opts, design, maxPages, makeFiller(design, false));
+  }
+  return ensureValid(doc, kept, opts, maxPages, design);
+}
+
+function build(kept: P[], opts: AutolayoutOptions, design: BookDesign, maxPages: number, fill: Filler): BookDoc {
   let groups = splitChapters(kept);
-  const need = groups.reduce((a, g) => a + fillChapter(g.photos).length, 0);
+  const need = sequentialPages(groups, fill).reduce((a, b) => a + b, 0);
   // Overflowing album: aim for ≥ ~3 pages per chapter so sampling keeps real content.
   if (need > maxPages) groups = mergeToFit(groups, Math.max(1, Math.floor(maxPages / PAGES_PER_CHAPTER)));
 
-  const chosen = fitPages(groups, maxPages);
+  const chosen = fitPages(groups, maxPages, fill);
 
   const chapters: Chapter[] = [];
   const pages: BookPage[] = [];
   chosen.forEach((g, i) => {
     const chapterId = `c${i + 1}`;
     chapters.push(chapterMeta(chapterId, g.photos, chosen.length > 1));
-    for (const pg of fillChapter(g.photos)) {
-      pages.push({
-        id: `p${pages.length + 1}`,
-        chapterId,
-        layout: pg.layout,
-        slots: pg.photos.map((p) => ({ photoId: p.id, crop: { ...CENTER } })),
-        caption: null,
-      });
+    for (const pg of fill(g.photos, pages.length)) {
+      const slots = pg.photos.map((p) => ({ photoId: p.id, crop: { ...CENTER } }));
+      if (!pg.spread) {
+        pages.push({ id: `p${pages.length + 1}`, chapterId, layout: pg.layout, slots, caption: null });
+        continue;
+      }
+      pages.push({ id: `p${pages.length + 1}`, chapterId, layout: pg.layout, slots, caption: null, side: "left" });
+      pages.push({ id: `p${pages.length + 1}`, chapterId, layout: pg.layout, slots: [], caption: null, side: "right" });
     }
   });
 
-  const coverPhoto = pickCover(kept);
-  const doc: BookDoc = {
+  const classic = isClassicPortrait(design);
+  const coverPhoto = pickCover(kept, classic ? "portrait" : formatOrientation(design.format));
+  return {
     version: 2,
-    format: "A5_PORTRAIT",
+    format: design.format,
     occasion: opts.occasion,
     cover: {
-      layout: COVER_LAYOUT_ID,
+      layout: classic ? COVER_LAYOUT_ID : bestCoverLayout(design, coverPhoto?.orient ?? null),
       photoId: coverPhoto?.id ?? null,
       title: coverTitle(opts.title?.trim() || DEFAULT_TITLES[opts.occasion]),
       subtitle: clip(subtitleFor(kept), 120),
@@ -154,13 +197,21 @@ export function autolayout(photos: AutoPhoto[], opts: AutolayoutOptions): BookDo
     pages,
     style: {
       background: { kind: "color", hex: "#FFFFFF" },
-      designStyle: "classic",
+      designStyle: design.designStyle,
       font: opts.captionLang === "ar" ? "Cairo" : "Playfair",
     },
     meta: ruleMeta(opts),
   };
+}
 
-  return ensureValid(doc, kept, opts, maxPages);
+/** Pages each chapter takes when laid out one after another (spreads depend on the start index). */
+function sequentialPages(groups: Group[], fill: Filler): number[] {
+  let start = 0;
+  return groups.map((g) => {
+    const n = pageCount(fill(g.photos, start));
+    start += n;
+    return n;
+  });
 }
 
 // ---------- 1. filter + dedupe ----------
@@ -199,6 +250,7 @@ function toP(ph: AutoPhoto): P {
     day: ms === null ? null : Math.floor((ms + DUBAI_OFFSET_MS) / DAY_MS),
     place,
     orient,
+    ratio,
     sharp: Number.isFinite(ph.blurScore) ? (ph.blurScore as number) : 0,
     area: w * h,
   };
@@ -342,15 +394,16 @@ function subtitleFor(photos: P[]): string {
   return [place, when].filter(Boolean).join(" · ");
 }
 
-function pickCover(photos: P[]): P | null {
+/** Cover photo: `prefer` orientation first (portrait for portrait books), then sharpest, largest, smallest id. */
+function pickCover(photos: P[], prefer: "portrait" | "landscape"): P | null {
   let best: P | null = null;
   for (const p of photos) {
     if (!best) {
       best = p;
       continue;
     }
-    const pp = p.orient === "portrait" ? 0 : 1;
-    const bp = best.orient === "portrait" ? 0 : 1;
+    const pp = p.orient === prefer ? 0 : 1;
+    const bp = best.orient === prefer ? 0 : 1;
     if (pp < bp || (pp === bp && bySharpness(p, best) < 0)) best = p;
   }
   return best;
@@ -358,8 +411,8 @@ function pickCover(photos: P[]): P | null {
 
 // ---------- 4. page cap ----------
 
-function fitPages(groups: Group[], maxPages: number): Group[] {
-  const need = groups.map((g) => fillChapter(g.photos).length);
+function fitPages(groups: Group[], maxPages: number, fill: Filler): Group[] {
+  const need = sequentialPages(groups, fill);
   const total = need.reduce((a, b) => a + b, 0);
   if (total <= maxPages) return groups;
 
@@ -383,24 +436,32 @@ function fitPages(groups: Group[], maxPages: number): Group[] {
     }
   }
 
+  // Chapters are laid out in order: `start` = page index of the chapter's first page, so the
+  // counts here are exactly what the final fill produces (spreads only on even indices).
   let carry = 0;
+  let start = 0;
   return groups.map((g, i) => {
     const b = budget[i] + carry;
-    if (need[i] <= b) {
-      carry = b - need[i];
+    const full = pageCount(fill(g.photos, start));
+    if (full <= b) {
+      carry = b - full;
+      start += full;
       return g;
     }
     const n = g.photos.length;
-    for (let k = Math.min(n, 4 * b); k >= 1; k--) {
+    for (let k = Math.min(n, fill.maxPerPage * b); k >= 1; k--) {
       const sample = sampleEvenly(g.photos, k);
-      const used = fillChapter(sample).length;
+      const used = pageCount(fill(sample, start));
       if (used <= b) {
         carry = b - used;
+        start += used;
         return { photos: sample };
       }
     }
+    const one = sampleEvenly(g.photos, 1);
     carry = b - 1;
-    return { photos: sampleEvenly(g.photos, 1) };
+    start += pageCount(fill(one, start));
+    return { photos: one };
   });
 }
 
@@ -424,6 +485,39 @@ function sampleEvenly(photos: P[], k: number): P[] {
 interface PagePlan {
   layout: string;
   photos: P[];
+  /** A two-page spread (left page owns the photos; counts 2 pages). */
+  spread?: boolean;
+}
+
+/** Fills one chapter whose first page lands on doc.pages[start]. */
+interface Filler {
+  (photos: P[], start: number, opener?: boolean, prevLayout?: string | null): PagePlan[];
+  /** Most photos one page can hold (bounds the page-cap sampling). */
+  maxPerPage: number;
+}
+
+const pageCount = (plans: readonly PagePlan[]) => plans.reduce((n, p) => n + (p.spread ? 2 : 1), 0);
+
+function isClassicPortrait(d: BookDesign): boolean {
+  return d.format === "A5_PORTRAIT" && d.designStyle === "classic";
+}
+
+function hasSpreads(d: BookDesign): boolean {
+  return layoutsFor(d.format, d.designStyle, "spread").length > 0;
+}
+
+/** Rule 5 filler for classic A5 portrait, the catalogue-driven filler (rule 9) otherwise. */
+function makeFiller(design: BookDesign, allowSpreads: boolean): Filler {
+  if (isClassicPortrait(design)) {
+    const classic = (photos: P[], _start: number, opener = true, prev: string | null = null) =>
+      fillChapter(photos, opener, prev);
+    return Object.assign(classic, { maxPerPage: 4 });
+  }
+  const cat = catalogueOf(design);
+  const generic = (photos: P[], start: number, opener = true, prev: string | null = null) =>
+    genericFill(cat, allowSpreads, photos, start, opener, prev);
+  const spreadMax = allowSpreads ? Math.max(0, ...cat.spreads.map((l) => Math.ceil(l.photoCount / 2))) : 0;
+  return Object.assign(generic, { maxPerPage: Math.max(1, cat.maxPerPage, spreadMax) });
 }
 
 const isP = (p: P) => p.orient !== "landscape";
@@ -476,16 +570,20 @@ function candidates(q: P[], long: boolean): { layout: string; take: number[]; or
  * Greedy, orientation-aware page filler (rule 5) for photos that are appended to an existing
  * chapter (relayoutDoc, D-028): photos are sorted by time (undated last, ties by id), no chapter
  * opener unless asked, and `prevLayout` (the chapter's last page) is not repeated first.
- * Same rules and output as the autolayout filler. Pure, deterministic.
+ * Same rules and output as the autolayout filler of `opts.design` (default classic A5 portrait),
+ * single pages only. Pure, deterministic.
  */
 export function fillPages(
   photos: readonly Pick<AutoPhoto, "id" | "width" | "height" | "takenAt" | "place" | "blurScore">[],
-  opts: { opener?: boolean; prevLayout?: string | null } = {},
+  opts: { opener?: boolean; prevLayout?: string | null; design?: BookDesign } = {},
 ): { layout: string; photoIds: string[] }[] {
   const ps = photos
     .map((ph) => toP({ ...ph, dateSource: null, status: "kept", dupGroup: null }))
     .sort(byTime);
-  return fillChapter(ps, opts.opener ?? false, opts.prevLayout ?? null).map((pg) => ({
+  // Single pages only (no spreads): the caller inserts these between existing pages, where the
+  // page index parity is not known — repairSpreads handles later spreads.
+  const fill = makeFiller(opts.design ?? DEFAULT_BOOK_DESIGN, false);
+  return fill(ps, 0, opts.opener ?? false, opts.prevLayout ?? null).map((pg) => ({
     layout: pg.layout,
     photoIds: pg.photos.map((p) => p.id),
   }));
@@ -522,22 +620,213 @@ function fillChapter(photos: P[], opener = true, prevLayout: string | null = nul
   return pages;
 }
 
+// ---------- 9. catalogue-driven filler (every design except classic A5 portrait) ----------
+
+/** Aspect (w/h) at or above which a photo is a panorama (rule 9: panorama spread). */
+export const PANORAMA_RATIO = 2.0;
+/** Chapter size from which a chapter gets a grid / mosaic spread (rule 9). */
+export const SPREAD_MOMENT_MIN = 7;
+/** One grid/mosaic spread per started block of this many chapter photos. */
+const PHOTOS_PER_SPREAD = 20;
+
+interface Catalogue {
+  design: BookDesign;
+  singles: readonly Layout[];
+  /** Page layouts with ≥ 2 photos by photo count, catalogue order. */
+  multis: ReadonlyMap<number, readonly Layout[]>;
+  /** Panorama spreads (one wide photo). */
+  panoramas: readonly Layout[];
+  /** Grid / mosaic spreads, fewest photos first (catalogue order on ties). */
+  bigSpreads: readonly Layout[];
+  /** Spread layouts at all (bigSpreads + panoramas). */
+  spreads: readonly Layout[];
+  maxPerPage: number;
+}
+
+function catalogueOf(design: BookDesign): Catalogue {
+  const pages = layoutsFor(design.format, design.designStyle, "page");
+  const spreads = layoutsFor(design.format, design.designStyle, "spread");
+  const multis = new Map<number, Layout[]>();
+  for (const l of pages) {
+    if (l.photoCount < 2) continue;
+    const list = multis.get(l.photoCount) ?? [];
+    list.push(l);
+    multis.set(l.photoCount, list);
+  }
+  return {
+    design,
+    singles: pages.filter((l) => l.photoCount === 1),
+    multis,
+    panoramas: spreads.filter((l) => l.photoCount === 1),
+    bigSpreads: spreads
+      .filter((l) => l.photoCount >= 2)
+      .map((l, i) => ({ l, i }))
+      .sort((a, b) => a.l.photoCount - b.l.photoCount || a.i - b.i)
+      .map((x) => x.l),
+    spreads,
+    maxPerPage: Math.max(1, ...pages.map((l) => l.photoCount)),
+  };
+}
+
+/**
+ * Photos → slots of `layout`: portrait/landscape slots take matching photos (time order), then
+ * squares; the remaining slots ("any" + unmatched) take the rest in time order. `misses` = slots
+ * whose preference the assigned photo doesn't fit.
+ */
+function assignSlots(layout: Layout, photos: P[]): { order: P[]; misses: number } {
+  const prefs = layout.prefers;
+  const used = photos.map(() => false);
+  const order: (P | undefined)[] = prefs.map(() => undefined);
+  const take = (s: number, pred: (p: P) => boolean) => {
+    const j = photos.findIndex((p, i) => !used[i] && pred(p));
+    if (j >= 0) {
+      used[j] = true;
+      order[s] = photos[j];
+    }
+  };
+  prefs.forEach((pref, s) => {
+    if (pref !== "any") take(s, (p) => p.orient === pref);
+  });
+  prefs.forEach((pref, s) => {
+    if (pref !== "any" && !order[s]) take(s, (p) => p.orient === "square");
+  });
+  prefs.forEach((_, s) => {
+    if (!order[s]) take(s, () => true);
+  });
+  const filled = order.filter((p): p is P => p !== undefined);
+  const misses = prefs.reduce((n, pref, s) => n + (order[s] && fitsSlot(pref, order[s].orient) ? 0 : 1), 0);
+  return { order: filled, misses };
+}
+
+function genericSingle(cat: Catalogue, p: P, prev: string | null): PagePlan {
+  const fitting = cat.singles.filter((l) => fitsSlot(l.prefers[0] ?? "any", p.orient));
+  const pool = fitting.length > 0 ? fitting : cat.singles;
+  const dist = (l: Layout) => Math.abs(Math.log(slotAspectMm(cat.design, l.slots[0]) / p.ratio));
+  const ranked = pool
+    .map((l, i) => ({ l, i, d: dist(l) }))
+    .sort((a, b) => a.d - b.d || a.i - b.i)
+    .map((x) => x.l);
+  const pick = ranked[0].id === prev && ranked[1] ? ranked[1] : ranked[0];
+  return { layout: pick.id, photos: [p] };
+}
+
+function countsFor(chapterSize: number): number[] {
+  if (chapterSize >= 2 * LONG_CHAPTER) return [4, 5, 3, 6, 2];
+  if (chapterSize >= LONG_CHAPTER) return [3, 4, 2];
+  return [2, 3, 4];
+}
+
+/** Multi-photo page candidates from the head of the queue, best first (rule 9). */
+function genericCandidates(cat: Catalogue, q: P[], chapterSize: number): { layout: string; take: number[]; order: P[] }[] {
+  const out: { layout: string; take: number[]; order: P[] }[] = [];
+  const skips: { layout: string; take: number[]; order: P[] }[] = [];
+  for (const k of countsFor(chapterSize)) {
+    if (q.length < k) continue;
+    for (const l of cat.multis.get(k) ?? []) {
+      // Short chapters: 4-photo pages only when every slot asks for an orientation (no grids).
+      if (k > 3 && chapterSize < LONG_CHAPTER && l.prefers.every((p) => p === "any")) continue;
+      const take = Array.from({ length: k }, (_, i) => i);
+      const a = assignSlots(l, take.map((i) => q[i]));
+      if (a.misses === 0) out.push({ layout: l.id, take, order: a.order });
+      else if (k === 2 && q.length >= 3) {
+        const b = assignSlots(l, [q[0], q[2]]);
+        if (b.misses === 0) skips.push({ layout: l.id, take: [0, 2], order: b.order });
+      }
+    }
+  }
+  return [...out, ...skips];
+}
+
+/** A spread for the head of the queue, or null (caller checks the even page index). */
+function spreadFor(cat: Catalogue, q: P[], chapterSize: number, bigLeft: number): { plan: PagePlan; take: number; big: boolean } | null {
+  const head = q[0];
+  if (head && head.ratio >= PANORAMA_RATIO && cat.panoramas[0]) {
+    return { plan: { layout: cat.panoramas[0].id, photos: [head], spread: true }, take: 1, big: false };
+  }
+  if (bigLeft <= 0 || chapterSize < SPREAD_MOMENT_MIN) return null;
+  for (const l of cat.bigSpreads) {
+    if (q.length < l.photoCount) continue;
+    const a = assignSlots(l, q.slice(0, l.photoCount));
+    if (a.misses <= Math.floor(l.photoCount / 4)) {
+      return { plan: { layout: l.id, photos: a.order, spread: true }, take: l.photoCount, big: true };
+    }
+  }
+  return null;
+}
+
+function genericFill(
+  cat: Catalogue,
+  allowSpreads: boolean,
+  photos: P[],
+  start: number,
+  opener: boolean,
+  prevLayout: string | null,
+): PagePlan[] {
+  const pages: PagePlan[] = [];
+  const q = [...photos];
+  const n = photos.length;
+  let pos = start;
+  let prev = prevLayout;
+  let lastSpread = false;
+  let bigLeft = allowSpreads ? Math.ceil(n / PHOTOS_PER_SPREAD) : 0;
+  const push = (pl: PagePlan) => {
+    pages.push(pl);
+    pos += pl.spread ? 2 : 1;
+    prev = pl.layout;
+    lastSpread = pl.spread === true;
+  };
+  const trySpread = (): boolean => {
+    if (!allowSpreads || pos % 2 !== 0 || lastSpread || cat.spreads.length === 0) return false;
+    const s = spreadFor(cat, q, n, bigLeft);
+    if (!s) return false;
+    q.splice(0, s.take);
+    if (s.big) bigLeft--;
+    push(s.plan);
+    return true;
+  };
+
+  if (opener && q.length >= OPENER_MIN && !trySpread()) push(genericSingle(cat, q.shift() as P, null));
+
+  while (q.length) {
+    if (trySpread()) continue;
+    const cands = genericCandidates(cat, q, n);
+    const pick = cands.find((c) => c.layout !== prev) ?? cands[0];
+    if (!pick) {
+      push(genericSingle(cat, q.shift() as P, prev));
+      continue;
+    }
+    const taken = new Set(pick.take);
+    for (let i = q.length - 1; i >= 0; i--) if (taken.has(i)) q.splice(i, 1);
+    push({ layout: pick.layout, photos: pick.order });
+  }
+  return pages;
+}
+
 // ---------- 7. safety net ----------
 
-function ensureValid(doc: BookDoc, kept: P[], opts: AutolayoutOptions, maxPages: number): BookDoc {
+function ensureValid(doc: BookDoc, kept: P[], opts: AutolayoutOptions, maxPages: number, design: BookDesign): BookDoc {
   const photoIds = new Set(kept.map((p) => p.id));
   const parsed = parseBookDoc(doc);
   if (parsed.ok && validateBookDoc(parsed.doc, { photoIds, maxPages }).length === 0) return parsed.doc;
 
-  // Should never happen (tests cover it) — a minimal album the renderer can always show.
+  // Should never happen (tests cover it) — a minimal album the renderer can always show, in the
+  // book's own format + style (validateBookDoc rejects other layouts).
+  const classic = isClassicPortrait(design);
+  const fullPage = classic ? "full-page" : fullPageLayout(design);
   const minimal: BookDoc = {
     ...doc,
-    cover: { ...doc.cover, photoId: kept[0]?.id ?? null, title: coverTitle(DEFAULT_TITLES[opts.occasion]), subtitle: "" },
+    cover: {
+      ...doc.cover,
+      layout: classic ? COVER_LAYOUT_ID : bestCoverLayout(design, kept[0]?.orient ?? null),
+      photoId: kept[0]?.id ?? null,
+      title: coverTitle(DEFAULT_TITLES[opts.occasion]),
+      subtitle: "",
+    },
     chapters: [],
     pages: sampleEvenly(kept, Math.min(kept.length, maxPages)).map((p, i) => ({
       id: `p${i + 1}`,
       chapterId: null,
-      layout: "full-page",
+      layout: fullPage,
       slots: [{ photoId: p.id, crop: { ...CENTER } }],
       caption: null,
     })),

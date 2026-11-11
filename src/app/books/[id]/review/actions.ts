@@ -168,7 +168,7 @@ function nextDoc(
   if (isEmptyDoc(book.doc)) {
     if (!photos.some((p) => p.status === "kept")) return { changed: false, doc: null };
     // Fresh rule album (meta generator "rule", runId null, D-018).
-    const fresh = autolayout(photos, { occasion, title: book.title, captionLang, isPaid, runId: null });
+    const fresh = autolayout(photos, { occasion, title: book.title, captionLang, isPaid, runId: null, design });
     return { changed: true, doc: withBookDesign(fresh, design) };
   }
   const parsed = parseBookDoc(book.doc);

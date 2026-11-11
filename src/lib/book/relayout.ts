@@ -33,18 +33,31 @@
 //    photo no longer exists at all (deleted) is removed: book default → white colour, page
 //    override → removed (stripMissingBackgrounds). That alone counts as a change.
 // 7. No change → the input doc object is returned with changed:false.
+// 8. Design (M10b A10, D-063/D-064): every layout comes from the doc's own format + design style
+//    (doc.format / doc.style.designStyle — the caller stamps them from the book's columns first):
+//    bestPageLayout / fillPages with that design. Spreads: an untouched spread stays as is. A
+//    spread that loses photos becomes a spread of the same style with exactly that many photos
+//    when one fits every photo's orientation (a one-photo spread only for a panorama, aspect ≥
+//    PANORAMA_RATIO; caption rules as rule 1), else its photos split into
+//    its two halves (slot by the half its rect lies in, the caption with the caption rect's half)
+//    and each non-empty half gets the best single-page layout (an empty half is dropped). New
+//    pages are single pages. Over the cap, a trailing spread is removed as one unit. Finally
+//    repairSpreads (D-064) splits any spread pushed onto a right-hand page into its twins — so the
+//    result is always spread-aligned. Classic A5 portrait docs have no spreads: output unchanged.
 // The result is checked with parseBookDoc + validateBookDoc (photoIds = kept, backgroundPhotoIds =
 // every photo passed in, maxPages = cap);
 // a failure throws RelayoutError (issue strings only, no user data) — the caller keeps the
 // current album and reports a generic error.
 
-import { dayRange, fillPages, parseTime } from "@/lib/autolayout";
+import { dayRange, fillPages, PANORAMA_RATIO, parseTime } from "@/lib/autolayout";
 import { dubaiDay, effectiveMaxPages, orientationOf, placeKey } from "@/lib/ai/story";
 import { getLayout } from "@/lib/layouts";
-import { bestPageLayout } from "@/lib/layouts/fit";
+import { bestPageLayout, fitScore } from "@/lib/layouts/fit";
+import type { BookDesign } from "./book-design";
 import { clipText } from "@/lib/text/clip";
 import type { CaptionLang } from "./options";
 import { parseBookDoc, validateBookDoc } from "./schema";
+import { rectHalf, repairSpreads } from "./spreads";
 import { stripMissingBackgrounds } from "./strip-photos";
 import type { BookDoc, BookPage, Chapter, Crop, Slot } from "./types";
 
@@ -102,6 +115,12 @@ const sharpOf = (p: RelayoutPhoto) => (Number.isFinite(p.blurScore) ? (p.blurSco
 const areaOf = (p: RelayoutPhoto) =>
   (Number.isFinite(p.width) && p.width > 0 ? p.width : 0) * (Number.isFinite(p.height) && p.height > 0 ? p.height : 0);
 
+const ratioOf = (p: RelayoutPhoto) => {
+  const w = Number.isFinite(p.width) && p.width > 0 ? p.width : 0;
+  const h = Number.isFinite(p.height) && p.height > 0 ? p.height : 0;
+  return w > 0 && h > 0 ? w / h : 1;
+};
+
 /** Negative = a is the better photo (sharper, larger, smaller id). */
 function betterFirst(a: RelayoutPhoto, b: RelayoutPhoto): number {
   return sharpOf(b) - sharpOf(a) || areaOf(b) - areaOf(a) || cmpId(a.id, b.id);
@@ -141,43 +160,78 @@ export function relayoutDoc(doc: BookDoc, photos: readonly RelayoutPhoto[], opts
   const nextChapterId = idAllocator("c", doc.chapters.map((c) => c.id), doc.chapters.length + 1);
 
   // ---- 1. removals ---------------------------------------------------------------------------
+  const design: BookDesign = { format: doc.format, designStyle: doc.style.designStyle ?? "classic" };
   let removed = 0;
   const touched = new Set<string>(); // chapter ids whose photo set changed
   const seen = new Set<string>();
   let pages: BookPage[] = [];
-  for (const page of doc.pages) {
+  for (let i = 0; i < doc.pages.length; i++) {
+    const page = doc.pages[i];
     const left: Slot[] = [];
+    const leftIdx: number[] = []; // original slot index of each slot in `left`
     let lost = 0;
-    for (const slot of page.slots) {
-      if (slot.photoId === null) continue;
+    page.slots.forEach((slot, j) => {
+      if (slot.photoId === null) return;
       if (isKept(slot.photoId) && !seen.has(slot.photoId)) {
         seen.add(slot.photoId);
         left.push(slot);
+        leftIdx.push(j);
       } else lost++;
-    }
+    });
     if (lost === 0) {
       pages.push(page);
       continue;
     }
     removed += lost;
     if (page.chapterId !== null) touched.add(page.chapterId);
-    if (left.length === 0) continue;
 
-    // A page with the user's caption re-fits onto a layout with a caption area when one exists,
-    // so Update album never loses the user's words (D-031).
-    const layoutId = bestPageLayout(
-      left.map((s) => orient(s.photoId as string)),
-      { preferCaption: page.caption?.source === "user" },
-    );
-    if (layoutId) {
-      pages.push(refit(page, layoutId, left));
+    const layout = getLayout(page.layout);
+    if (layout?.role === "spread" && page.side === "left") {
+      const next = doc.pages[i + 1];
+      const right = next && next.side === "right" && next.layout === page.layout ? next : null;
+      if (right) i++; // the right half is handled here
+      if (left.length === 0) continue; // whole spread goes
+      const keepCaption = page.caption?.source === "user";
+      const orients = left.map((s) => orient(s.photoId as string));
+      const smaller = bestPageLayout(orients, { preferCaption: keepCaption, design, role: "spread" });
+      const smallerLayout = smaller ? getLayout(smaller) : undefined;
+      // Only a spread every photo fits; a one-photo spread only for a real panorama.
+      const smallerOk =
+        smallerLayout !== undefined &&
+        fitScore(smallerLayout, orients) === orients.length &&
+        (orients.length > 1 || ratioOf(photo(left[0].photoId as string)) >= PANORAMA_RATIO);
+      if (smallerOk && right) {
+        pages.push(refit(page, smallerLayout.id, left), { ...right, layout: smallerLayout.id });
+        continue;
+      }
+      // Split into the halves the photos were on (rule 8).
+      const halves: Slot[][] = [[], []];
+      left.forEach((s, k) => {
+        const rect = layout.slots[leftIdx[k]];
+        halves[rect && rectHalf(rect) === "right" ? 1 : 0].push(s);
+      });
+      // The caption stays with its rect's half — or the other half when that one is empty.
+      const rectCaptionHalf = layout.caption && rectHalf(layout.caption) === "right" ? 1 : 0;
+      const captionHalf = halves[rectCaptionHalf].length > 0 ? rectCaptionHalf : 1 - rectCaptionHalf;
+      const bases: BookPage[] = [page, right ?? page];
+      let firstOut = true;
+      for (const h of [0, 1] as const) {
+        if (halves[h].length === 0) continue;
+        const base = bases[h];
+        const src: BookPage = {
+          ...base,
+          id: firstOut ? page.id : (right?.id ?? nextPageId()),
+          chapterId: page.chapterId,
+          caption: h === captionHalf ? page.caption : null,
+        };
+        delete src.side;
+        firstOut = false;
+        pages.push(...fitSingles(src, halves[h], design, orient, photo, nextPageId));
+      }
       continue;
     }
-    // More photos left than any layout holds (not reachable with the v1 catalogue): split.
-    fillPages(left.map((s) => photo(s.photoId as string)), { prevLayout: null }).forEach((pg, i) => {
-      const slots = pg.photoIds.map((id) => left.find((s) => s.photoId === id) as Slot);
-      pages.push(refit({ ...page, id: i === 0 ? page.id : nextPageId() }, pg.layout, slots));
-    });
+    if (left.length === 0) continue;
+    pages.push(...fitSingles(page, left, design, orient, photo, nextPageId));
   }
 
   // ---- 2. additions --------------------------------------------------------------------------
@@ -192,7 +246,7 @@ export function relayoutDoc(doc: BookDoc, photos: readonly RelayoutPhoto[], opts
 
   // Page cap: drop the blurriest new photos until everything fits.
   let candidates = newPhotos;
-  let fills = fillByChapter(candidates, assignment, pages);
+  let fills = fillByChapter(candidates, assignment, pages, design);
   const worstFirst = [...newPhotos].sort((a, b) => -betterFirst(a, b));
   let wi = 0;
   while (candidates.length > 0 && pages.length + countPages(fills) > maxPages) {
@@ -202,7 +256,7 @@ export function relayoutDoc(doc: BookDoc, photos: readonly RelayoutPhoto[], opts
       const worst = worstFirst[wi++];
       candidates = candidates.filter((p) => p !== worst);
     }
-    fills = fillByChapter(candidates, assignment, pages);
+    fills = fillByChapter(candidates, assignment, pages, design);
   }
   const added = candidates.length;
   const skipped = newPhotos.length - added;
@@ -245,10 +299,18 @@ export function relayoutDoc(doc: BookDoc, photos: readonly RelayoutPhoto[], opts
   pages = merged;
 
   // Existing pages alone over the cap (cap shrank): trailing pages go — unavoidable.
+  // A trailing spread goes as one unit (its right half alone would leave a half spread).
   while (pages.length > maxPages) {
     const gone = pages.pop() as BookPage;
-    removed += gone.slots.filter((s) => s.photoId !== null).length;
-    if (gone.chapterId !== null) touched.add(gone.chapterId);
+    const leftHalf = pages[pages.length - 1];
+    const unit =
+      gone.side === "right" && leftHalf?.side === "left" && leftHalf.layout === gone.layout
+        ? [gone, pages.pop() as BookPage]
+        : [gone];
+    for (const g of unit) {
+      removed += g.slots.filter((s) => s.photoId !== null).length;
+      if (g.chapterId !== null) touched.add(g.chapterId);
+    }
   }
 
   // ---- 4. chapters ---------------------------------------------------------------------------
@@ -302,10 +364,12 @@ export function relayoutDoc(doc: BookDoc, photos: readonly RelayoutPhoto[], opts
   if (removed === 0 && added === 0 && !coverChanged && !bgChanged) {
     return { doc, changed: false, added: 0, removed: 0, skipped };
   }
-  const out = stripMissingBackgrounds(
+  const stripped = stripMissingBackgrounds(
     { ...doc, cover: { ...doc.cover, photoId: coverId }, chapters, pages },
     exists,
   ).doc;
+  // Removed / inserted pages may push a later spread onto a right-hand page (D-064).
+  const out = repairSpreads(stripped).doc;
 
   const parsed = parseBookDoc(out);
   if (!parsed.ok) throw new RelayoutError(parsed.issues);
@@ -317,14 +381,43 @@ export function relayoutDoc(doc: BookDoc, photos: readonly RelayoutPhoto[], opts
 
 /** Page with a new layout and the slots left on it; caption only if it is the user's and fits. */
 function refit(page: BookPage, layoutId: string, slots: Slot[]): BookPage {
-  const hasCaptionArea = getLayout(layoutId)?.caption != null;
+  const layout = getLayout(layoutId);
+  const hasCaptionArea = layout?.caption != null;
   const caption = page.caption && page.caption.source === "user" && hasCaptionArea ? page.caption : null;
-  return {
+  const out: BookPage = {
     ...page,
     layout: layoutId,
     slots: slots.map((s) => ({ photoId: s.photoId, crop: { ...s.crop } })),
     caption,
   };
+  if (layout?.role !== "spread") delete out.side;
+  return out;
+}
+
+/**
+ * Rule 1 for one single page's remaining slots: the best page layout of the design for them
+ * (caption-preferring when the user wrote the caption), else split with the filler.
+ */
+function fitSingles(
+  page: BookPage,
+  left: Slot[],
+  design: BookDesign,
+  orient: (id: string) => ReturnType<typeof orientationOf>,
+  photo: (id: string) => RelayoutPhoto,
+  nextPageId: () => string,
+): BookPage[] {
+  // A page with the user's caption re-fits onto a layout with a caption area when one exists,
+  // so Update album never loses the user's words (D-031).
+  const layoutId = bestPageLayout(
+    left.map((s) => orient(s.photoId as string)),
+    { preferCaption: page.caption?.source === "user", design },
+  );
+  if (layoutId) return [refit(page, layoutId, left)];
+  // More photos left than any layout holds (e.g. a big spread half): split.
+  return fillPages(left.map((s) => photo(s.photoId as string)), { prevLayout: null, design }).map((pg, i) => {
+    const slots = pg.photoIds.map((id) => left.find((s) => s.photoId === id) as Slot);
+    return refit({ ...page, id: i === 0 ? page.id : nextPageId() }, pg.layout, slots);
+  });
 }
 
 /** Rule 2: which chapter each new photo goes to (computed once from the pages after removal). */
@@ -382,6 +475,7 @@ function fillByChapter(
   candidates: RelayoutPhoto[],
   assignment: Map<string, ChapterKey>,
   pages: BookPage[],
+  design: BookDesign,
 ): Map<ChapterKey, { layout: string; photoIds: string[] }[]> {
   const groups = new Map<ChapterKey, RelayoutPhoto[]>();
   for (const p of candidates) {
@@ -395,7 +489,7 @@ function fillByChapter(
   const out = new Map<ChapterKey, { layout: string; photoIds: string[] }[]>();
   for (const [key, ps] of groups) {
     const prevLayout = typeof key === "string" ? (lastLayout.get(key) ?? null) : null;
-    out.set(key, fillPages(ps, { opener: key === NEW_CHAPTER, prevLayout }));
+    out.set(key, fillPages(ps, { opener: key === NEW_CHAPTER, prevLayout, design }));
   }
   return out;
 }
