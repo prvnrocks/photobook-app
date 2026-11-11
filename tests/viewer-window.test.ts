@@ -74,7 +74,8 @@ describe("spreadStart", () => {
 
 describe("fitBook", () => {
   it("phone 375 wide: width-limited single page, A5 ratio", () => {
-    expect(fitBook({ width: 351, height: 660 }, false)).toEqual({ width: 351, height: 498, pageWidth: 351 });
+    // 351 × 210 / 148 = 498.04 → rounded up (page-flip must not shrink the page, M10b A13).
+    expect(fitBook({ width: 351, height: 660 }, false)).toEqual({ width: 351, height: 499, pageWidth: 351 });
   });
   it("desktop: height-limited spread", () => {
     const b = fitBook({ width: 1256, height: 720 }, true)!;

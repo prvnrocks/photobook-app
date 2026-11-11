@@ -337,6 +337,19 @@ export function panelFontMm(text: string, role: TextRole, boxWmm: number, boxHmm
 // --- Spread halves (M10b A9) ---------------------------------------------------------------------
 
 /** A spread rect (x 0..200) seen from one half: shifted into that page's 0..100 (may run outside). */
+/**
+ * Alignment a page caption renders with on `layout`. Classic: the caption's own. Design styles: an
+ * alignment the user picked (source "user") wins; otherwise the pageCaption panel's logical one,
+ * else the chapter panel's (a text column reads as one block), else centre. Also used by the public
+ * snapshot (src/lib/publish/public-doc.ts), which drops caption source.
+ */
+export function captionAlignOn(layout: Pick<Layout, "style" | "texts">, c: Pick<Caption, "align" | "source"> | null): RenderAlign {
+  if (layout.style === "classic") return c?.align ?? "center";
+  if (c?.source === "user") return c.align;
+  const panel = layout.texts?.find((t) => t.bind === "pageCaption") ?? layout.texts?.find((t) => t.bind === "chapterTitle");
+  return panel?.align ?? "center";
+}
+
 function shiftRect(r: Rect, offset: number): Rect {
   return offset === 0 ? r : { ...r, x: r.x - offset };
 }
@@ -497,7 +510,7 @@ export function pageRenderModel(
         text,
         lang: attrs.lang,
         // No caption panel: follow the page's chapter panel (a text column reads as one block).
-        align: c?.source === "user" ? c.align : (panel ?? layout.texts?.find((t) => t.bind === "chapterTitle"))?.align ?? "center",
+        align: captionAlignOn(layout, c),
         fontFamily: f.fontFamily,
         ...sizing,
         typography: typographyOf(f),

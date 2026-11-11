@@ -30,7 +30,14 @@ export interface BookBox {
   pageWidth: number;
 }
 
-/** Largest book that fits `avail` (CSS px). Whole pixels so page edges stay crisp. */
+/**
+ * Largest book that fits `avail` (CSS px). Whole-pixel page width; the height is rounded UP so
+ * page-flip ("stretch": pageHeight = pageWidth / ratio, shrunk to the block height only when taller)
+ * keeps exactly `pageWidth` per page. A height rounded down made page-flip shrink the pages to a
+ * fractional width (e.g. 482.42 px), and two fractional page boxes snap to device pixels on their
+ * own — a 1 px light seam through a panorama spread at the fold (M10b A13). The height uses the
+ * whole pixels of `avail.height` so rounding up never exceeds it.
+ */
 export function fitBook(
   avail: { width: number; height: number },
   spread: boolean,
@@ -38,12 +45,17 @@ export function fitBook(
 ): BookBox | null {
   const cols = spread ? 2 : 1;
   const byWidth = avail.width / cols;
-  const byHeight = (avail.height * ratio.w) / ratio.h;
+  const byHeight = (Math.floor(avail.height) * ratio.w) / ratio.h;
   const pageWidth = Math.floor(Math.min(byWidth, byHeight));
   if (!Number.isFinite(pageWidth) || pageWidth < 40) return null;
   return {
     width: pageWidth * cols,
-    height: Math.round((pageWidth * ratio.h) / ratio.w),
+    height: pageHeightPx(pageWidth, ratio),
     pageWidth,
   };
+}
+
+/** Whole-pixel height that holds a `pageWidth` page of `ratio` (rounded up; float noise ignored). */
+export function pageHeightPx(pageWidth: number, ratio: PageRatio): number {
+  return Math.ceil((pageWidth * ratio.h) / ratio.w - 1e-9);
 }

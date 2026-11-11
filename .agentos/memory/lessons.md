@@ -100,3 +100,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-11, ai) To keep a cached prompt byte-identical while parameterising it, save the old text as a fixture before editing and compare exactly; keep default strings verbatim.
 - (2026-11-11, e2e) dnd-kit auto-scrolls a scrollable panel near its edge — scroll the source tile to block:start before dragging in e2e.
 - (2026-11-11, pdf) pdf-lib copyPages per chunk duplicates shared images — dedupe byte-identical XObjects after merging; per-sheet helpers reading page.slots must resolve spread right halves to the owner's slots.
+- (2026-11-11, viewer) page-flip stretch+autoSize reads block height as integer offsetHeight → fractional page widths → 1 px fold seam: size stf__wrapper from your box (h-full, pb-0) and round box height up.

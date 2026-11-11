@@ -130,8 +130,9 @@ describe("viewer fit per format", () => {
   });
 
   it("landscape: 375 px phone fits by width; 1280 px spread fits by width", () => {
-    expect(fitBook({ width: 375, height: 600 }, false, pageRatio("A5_LANDSCAPE"))).toEqual({ width: 375, height: 264, pageWidth: 375 });
-    expect(fitBook({ width: 1280, height: 700 }, true, pageRatio("A5_LANDSCAPE"))).toEqual({ width: 1280, height: 451, pageWidth: 640 });
+    // Heights round up (264.29 → 265, 451.05 → 452) so page-flip keeps the whole-pixel page width.
+    expect(fitBook({ width: 375, height: 600 }, false, pageRatio("A5_LANDSCAPE"))).toEqual({ width: 375, height: 265, pageWidth: 375 });
+    expect(fitBook({ width: 1280, height: 700 }, true, pageRatio("A5_LANDSCAPE"))).toEqual({ width: 1280, height: 452, pageWidth: 640 });
     // Height-bound: 300 px tall stage → page 425 px wide.
     expect(fitBook({ width: 1280, height: 300 }, true, pageRatio("A5_LANDSCAPE"))).toEqual({ width: 850, height: 300, pageWidth: 425 });
   });

@@ -14,6 +14,8 @@
 // writes a byte-identical snapshot — else v2 (format, Background union, design style, per-page
 // backgrounds without `source`, spread side). parsePublicDoc returns the stored shape (v1 | v2);
 // publicDocToRenderDoc normalises either to the in-memory v2 BookDoc the renderer takes.
+// v2 caption `align` is the alignment the renderer shows (design-style panels resolved to left/right
+// by the caption's dir="auto" direction, M10b A13), since `source` is not published.
 
 import { z } from "zod";
 import {
@@ -32,9 +34,10 @@ import {
   StyleSchemaV1,
 } from "@/lib/book/schema";
 import { usesV2Features } from "@/lib/book/doc-version";
-import { backgroundColor } from "@/lib/book/render";
+import { backgroundColor, captionAlignOn } from "@/lib/book/render";
+import { getLayout } from "@/lib/layouts";
 import { CAPTION_LANGS, type CaptionLang } from "@/lib/book/options";
-import type { Background, BookDoc, BookPage } from "@/lib/book/types";
+import type { Background, BookDoc, BookPage, Caption } from "@/lib/book/types";
 import { LIMITS } from "@/lib/ai/limits";
 
 const PublicCaptionSchema = CaptionSchema.pick({ text: true, font: true, align: true }).strict();
@@ -136,6 +139,34 @@ const publicPageBase = (p: BookPage) => ({
   caption: p.caption ? { text: p.caption.text, font: p.caption.font, align: p.caption.align } : null,
 });
 
+/** Direction `dir="auto"` gives `text`: its first strong (letter) character, LTR when none. */
+export function autoDirection(text: string): "ltr" | "rtl" {
+  for (const ch of text) {
+    if (!/\p{L}/u.test(ch)) continue;
+    return /[\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}\p{Script=Samaritan}\p{Script=Mandaic}]/u.test(ch)
+      ? "rtl"
+      : "ltr";
+  }
+  return "ltr";
+}
+
+/**
+ * The caption alignment a v2 snapshot stores: the one the renderer would use for the source doc,
+ * as a physical value. Design-style layouts follow their text panel's LOGICAL alignment for
+ * captions the user didn't align (source ≠ "user") — but the snapshot drops `source` (who wrote
+ * the caption) and the render doc marks every caption "user", so the viewer would show the stored
+ * value (usually "center") instead (M10b A13). A logical start/end is resolved with the
+ * direction dir="auto" gives the caption, which renders identically.
+ */
+function publicCaptionAlign(page: BookPage, c: Caption): Caption["align"] {
+  const layout = getLayout(page.layout);
+  if (!layout) return c.align;
+  const a = captionAlignOn(layout, c);
+  if (a !== "start" && a !== "end") return a;
+  const rtl = autoDirection(c.text) === "rtl";
+  return (a === "start") !== rtl ? "left" : "right";
+}
+
 /**
  * Public copy of a (parsed) book doc: v1 shape when the doc uses no v2-only feature (byte-identical
  * to M6–M9 snapshots), else v2. Fresh objects, never aliases `doc`.
@@ -160,6 +191,7 @@ export function toPublicDoc(doc: BookDoc, opts: ToPublicDocOptions = {}): Public
       chapters: publicChapters(doc),
       pages: doc.pages.map((p) => {
         const page: PublicBookDocV2["pages"][number] = publicPageBase(p);
+        if (p.caption && page.caption) page.caption.align = publicCaptionAlign(p, p.caption);
         if (p.background) page.background = copyBackground(p.background);
         if (p.side !== undefined) page.side = p.side;
         return page;

@@ -11,7 +11,9 @@
 // - page-flip only re-measures on window "resize"; the stage is measured with ResizeObserver
 //   and we call update() after our own size change.
 // - Page ratio comes from doc.format (pageRatio): fitBook sizes the stage and page-flip gets the
-//   same width/height; settings are read once, so a format change remounts the book (key).
+//   same width/height; settings are read once, so a format change remounts the book (key). The
+//   block height is our box (FLIPBOOK_CLASS) so both pages of a spread are whole pixels wide and
+//   spread layouts meet at the fold without a seam (M10b A13).
 // - Orientation is decided by us (viewport >= 768 px = spread), not by page-flip's minWidth
 //   heuristic; switching remounts the book at the same page.
 // - Children are static (keyed by page count) and read doc/photos/current page from context:
@@ -295,6 +297,16 @@ function useElementSize(el: HTMLElement | null): { width: number; height: number
 
 type HTMLFlipBookProps = ComponentProps<typeof HTMLFlipBook>;
 
+/**
+ * Classes on page-flip's root (.stf__parent). The block height comes from OUR box, not page-flip's
+ * autoSize wrapper: that wrapper is `padding-bottom: h/(2w)%` tall, page-flip reads it back as an
+ * integer offsetHeight, and whenever that rounds down (pageWidth / ratio > offsetHeight) it shrinks
+ * the pages to a fractional width — two fractional page boxes snap to device pixels separately and
+ * leave a 1 px seam through a panorama at the fold (seen at 999 px, landscape). fitBook rounds the
+ * box height UP, so pageWidth stays exactly box.pageWidth and the halves meet on a whole pixel.
+ */
+const FLIPBOOK_CLASS = "!h-full !min-h-0 !min-w-0 [&_.stf__wrapper]:!h-full [&_.stf__wrapper]:!pb-0";
+
 type BookInstanceProps = {
   pageCount: number;
   spread: boolean;
@@ -384,7 +396,7 @@ function BookInstance({ pageCount, spread, ratio, startPage, onInstance, onFlipI
       {...settings}
       {...handlers}
       renderOnlyPageLengthChange
-      className="!min-h-0 !min-w-0"
+      className={FLIPBOOK_CLASS}
       style={{}}
     >
       {children}
