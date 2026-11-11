@@ -176,7 +176,7 @@ planted bad caption in tests; a second book reflects the user's earlier tone/len
 Plan + decisions: `.agentos/runs/m10.md`, D-062. Three shippable phases.
 - [x] M10a: doc v2 (upgrade on read, v1 on write), portrait + landscape geometry, backgrounds (colour / own paper textures / faded photo; page or whole book) in editor, viewer and PDF, open-book (facing pages) editor ≥ 768 px + phone "View spread"
 - [x] M10b: landscape layouts, two-page spread layouts, modern style (split-strip cover, text panel, grids), new OFL fonts (script / display / serif + Arabic pairs), format + style on new books, AI per format/style (migration 1900, migration first)
-- [ ] M10c: geometric + scrapbook styles (shapes, frames, tilt, stickers), crop on shaped slots, AI-suggested backgrounds (kept photos only)
+- [ ] M10c: geometric + scrapbook styles (shapes, frames, tilt, own stickers incl. Eid/Ramadan), crop on shaped slots, photo colour at upload, AI-suggested backgrounds (Geometric/Scrapbook/Modern; kept photos only, user choices never overwritten), occasion → default style (D-068); Restyle stays out (D-063)
 **Done when:** a user builds a landscape or portrait book in any style with spreads and backgrounds that look the same in editor, flipbook and PDF.
 > M10b: migration 1900 applied to prod 2026-11-11 (rls 175).
 > M10b (2026-11-11): built, re-reviewed (APPROVED), live specs green (m10b 7/7, pdf 7/7, ai-auth 15/15, editor 62, editor-spreads 8, viewer 14, m10b-viewer 6, launch-smoke, m10a, publish-auth, payments, analytics), goldens (m9 byte-frozen + m10b). PDF chunks ≤20 sheets / ≤60 distinct images, spread cap 1.5×. Deployed 2026-11-11 (main d922e15). Post-deploy: one real prod PDF with Arabic + new fonts (no Type3 / missing glyphs) and a real-photo large-book size check.
@@ -196,7 +196,7 @@ App screens take on the book look (Classic serif / Modern clean); app chrome onl
 
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
-- [ ] AI "story mode": a short paragraph per chapter; AI-picked background colours from the photos
+- [ ] AI "story mode": a short paragraph per chapter (AI-picked backgrounds moved into M10c)
 - [ ] Shared albums (family members upload to one book), ambassador codes, Arabic UI, RTL books
 
 ---
