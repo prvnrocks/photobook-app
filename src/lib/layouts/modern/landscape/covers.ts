@@ -10,8 +10,9 @@ import type { Layout } from "@/lib/book/types";
 
 /**
  * Split-strip cover (ref1 feel, original geometry): script title and serif year on a white band
- * over a wide full-bleed photo. The vertical strip cuts across the photo are drawn by the cover
- * renderer (A9); the layout carries the photo box and the text boxes.
+ * over a wide photo cut into three vertical strips (2.5 mm gutters, staggered tops), bleeding
+ * left/right/bottom. One cover photo: the slot is the box it is laid out over, `slices` are the
+ * strip windows the renderer clips it to (A9 slice model, same as m-p-cover-strips).
  */
 export const modernLandscapeCoverStrip: Layout = {
   id: "m-l-cover-strip",
@@ -22,6 +23,11 @@ export const modernLandscapeCoverStrip: Layout = {
   photoCount: 1,
   prefers: ["landscape"],
   slots: [{ x: 0, y: 31.081, w: 100, h: 68.919 }], // 0 46 210×102 mm, bleeds left/right/bottom
+  slices: [
+    { x: 0, y: 36.486, w: 32.54, h: 63.514 }, // 0 54 68.33×94 mm
+    { x: 33.73, y: 31.081, w: 32.54, h: 68.919 }, // 70.83 46 68.33×102 mm
+    { x: 67.46, y: 41.892, w: 32.54, h: 58.108 }, // 141.67 62 68.33×86 mm
+  ],
   caption: { x: 4.762, y: 4.054, w: 90.476, h: 24.324 }, // 10 6 190×36 mm
   texts: [
     { bind: "coverTitle", box: { x: 4.762, y: 4.054, w: 90.476, h: 16.216 }, align: "center", font: "title" }, // 10 6 190×24 mm

@@ -7,6 +7,7 @@
 //
 //   node scripts/layout-contact-sheet-landscape.mjs [--style classic|modern|all] [--out-dir docs/design]
 //     writes <out-dir>/layouts-<style>-landscape.png (default: both classic and modern)
+//   --only <layout-id>  draws just that layout → <out-dir>/layout-<layout-id>.png
 
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -20,6 +21,7 @@ const arg = (name, fallback) => {
   return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
 };
 const styleArg = arg("style", "all");
+const only = arg("only", null);
 const outDir = resolve(root, arg("out-dir", "docs/design"));
 
 const jiti = createJiti(import.meta.url, { alias: { "@": resolve(root, "src") } });
@@ -63,8 +65,16 @@ function card(l) {
   l.slots.forEach((s, i) => {
     const r = R(s);
     const ext = { l: s.x <= 0.01 ? b : 0, t: s.y <= 0.01 ? b : 0, r: s.x + s.w >= pages * 100 - 0.01 ? b : 0, bo: s.y + s.h >= 99.99 ? b : 0 };
-    p.push(`<rect x="${r.x - ext.l}" y="${r.y - ext.t}" width="${r.w + ext.l + ext.r}" height="${r.h + ext.t + ext.bo}" fill="#c9c9c9" opacity="0.55"/>`);
-    p.push(`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="#b4b4b4" stroke="#8a8a8a"/>`);
+    if (!l.slices) p.push(`<rect x="${r.x - ext.l}" y="${r.y - ext.t}" width="${r.w + ext.l + ext.r}" height="${r.h + ext.t + ext.bo}" fill="#c9c9c9" opacity="0.55"/>`);
+    if (l.slices) {
+      // Split-strip cover (A9 slice model): ONE photo over the slot box, shown only through the slices.
+      p.push(`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="none" stroke="#8a8a8a" stroke-dasharray="4 3"/>`);
+      for (const sl of l.slices) {
+        const q = R(sl);
+        p.push(`<rect x="${q.x}" y="${q.y}" width="${q.w}" height="${q.h}" fill="#b4b4b4" stroke="#8a8a8a"/>`);
+      }
+      p.push(`<text x="${r.x + 4}" y="${r.y - 4}" font-family="Helvetica, Arial" font-size="10" fill="#555">1 photo, ${l.slices.length} slices</text>`);
+    } else p.push(`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="#b4b4b4" stroke="#8a8a8a"/>`);
     const fs = Math.max(11, Math.min(22, Math.min(r.w, r.h) / 3.2));
     p.push(`<text x="${r.x + r.w / 2}" y="${r.y + r.h / 2 + fs * 0.35}" font-family="Helvetica, Arial" font-size="${fs}" font-weight="700" fill="#fff" text-anchor="middle">${i + 1}</text>`);
     const hint = l.prefers[i] === "any" ? "" : l.prefers[i][0].toUpperCase();
@@ -107,7 +117,7 @@ function card(l) {
 }
 
 async function sheet(style) {
-  const layouts = LAYOUTS.filter((l) => l.format === FORMAT && l.style === style).sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role]);
+  const layouts = LAYOUTS.filter((l) => l.format === FORMAT && l.style === style && (!only || l.id === only)).sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role]);
   if (layouts.length === 0) throw new Error(`no ${FORMAT} layouts for style ${style}`);
   const cards = layouts.map((l) => ({ l, ...card(l) }));
   const singleW = Math.max(...cards.filter((c) => c.l.role !== "spread").map((c) => c.w), 0);
@@ -145,10 +155,11 @@ async function sheet(style) {
     `<text x="${GAP}" y="65" font-family="Helvetica, Arial" font-size="11" fill="#444">${esc(legend2)}</text>` +
     body +
     `</svg>`;
-  const out = resolve(outDir, `layouts-${style}-landscape.png`);
+  const out = resolve(outDir, only ? `layout-${only}.png` : `layouts-${style}-landscape.png`);
   mkdirSync(dirname(out), { recursive: true });
   await sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toFile(out);
   console.log(`${out}  ${W}×${H}px  ${layouts.length} layouts`);
 }
 
-for (const style of styleArg === "all" ? ["classic", "modern"] : [styleArg]) await sheet(style);
+const styles = only ? [LAYOUTS.find((l) => l.id === only && l.format === FORMAT)?.style ?? styleArg] : styleArg === "all" ? ["classic", "modern"] : [styleArg];
+for (const style of styles) await sheet(style);

@@ -95,3 +95,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-11, layouts) Tests that loop the whole catalogue + goldens break when any new format/style layout lands: freeze goldens to CLASSIC_PORTRAIT_LAYOUTS and make geometry tests use the layout's own format/role first.
 - (2026-11-11, agents) Never git stash in a working tree shared with parallel builders; use git show HEAD:path for baselines.
 - (2026-11-11, layout) With 2-page units, compute the page budget by laying chapters out in order with real start indices and reuse them in the final fill; when refitting a spread change the layout id on both halves (repairSpreads matches halves by id).
+- (2026-11-11, render) Resolve spread halves inside the render model from doc.pages[i-1] (no new prop) — all callers work unchanged.

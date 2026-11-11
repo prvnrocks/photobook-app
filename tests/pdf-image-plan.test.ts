@@ -44,7 +44,7 @@ describe("parity with the renderer (book/bleed.ts)", () => {
     for (const l of LAYOUTS) {
       l.slots.forEach((rect, i) => {
         const r = printSlotSizeMm(l, i)!;
-        const b = printBoxMm(rect);
+        const b = printBoxMm(rect, undefined, undefined, l.role === "spread");
         expect(b.w).toBeCloseTo(r.w, 9);
         expect(b.h).toBeCloseTo(r.h, 9);
       });

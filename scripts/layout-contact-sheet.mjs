@@ -68,10 +68,18 @@ function card(l) {
       r: s.x + s.w >= pages * 100 - 0.01 ? b : 0,
       bt: s.y + s.h >= 99.99 ? b : 0,
     };
-    if (ext.l || ext.t || ext.r || ext.bt) {
+    if (!l.slices && (ext.l || ext.t || ext.r || ext.bt)) {
       parts.push(`<rect x="${r.x - ext.l}" y="${r.y - ext.t}" width="${r.w + ext.l + ext.r}" height="${r.h + ext.t + ext.bt}" fill="#c9c9c9"/>`);
     }
-    parts.push(`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="#9e9e9e"/>`);
+    if (l.slices) {
+      // Split-strip cover (A9 slice model): ONE photo over the slot box, shown only through the slices.
+      parts.push(`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="none" stroke="#9e9e9e" stroke-dasharray="4 3"/>`);
+      for (const sl of l.slices) {
+        const q = rx(sl);
+        parts.push(`<rect x="${q.x}" y="${q.y}" width="${q.w}" height="${q.h}" fill="#9e9e9e"/>`);
+      }
+      parts.push(`<text x="${r.x + 4}" y="${r.y - 4}" font-size="9" fill="#7a8b99">1 photo, ${l.slices.length} slices</text>`);
+    } else parts.push(`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="#9e9e9e"/>`);
     const ar = (s.w * page.w) / (s.h * page.h);
     parts.push(`<text x="${r.x + r.w / 2}" y="${r.y + r.h / 2}" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="middle">${i + 1}</text>`);
     parts.push(`<text x="${r.x + r.w / 2}" y="${r.y + r.h / 2 + 15}" font-size="9" fill="#f2f2f2" text-anchor="middle" dominant-baseline="middle">${esc(l.prefers[i])} ${ar.toFixed(2)}</text>`);

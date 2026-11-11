@@ -271,8 +271,27 @@ export const LayoutSchema = z
     twin: z.tuple([IdSchema, IdSchema]).optional(),
     /** Text panels bound to doc data (chapter title, date label, caption, cover title/subtitle). */
     texts: z.array(LayoutTextSchema).max(8).optional(),
+    /**
+     * Covers only (M10b A9): split-strip windows onto the ONE cover photo. The cover has exactly
+     * one slot (photoCount 1) = the box the photo is laid out over (cover-fit, crop as usual); the
+     * renderer draws it once, clipped to each slice — page background shows in the gaps. Slices
+     * are % of the page and lie inside the slot box.
+     */
+    slices: z.array(LayoutRectSchema).min(2).max(8).optional(),
   })
   .superRefine((l, ctx) => {
+    if (l.slices) {
+      const s = l.slots[0];
+      if (l.role !== "cover" || l.photoCount !== 1 || l.slots.length !== 1 || !s) {
+        ctx.addIssue({ code: "custom", message: "slices need a cover layout with exactly one slot" });
+      } else if (
+        l.slices.some(
+          (r) => r.x < s.x - 1e-6 || r.y < s.y - 1e-6 || r.x + r.w > s.x + s.w + 1e-6 || r.y + r.h > s.y + s.h + 1e-6,
+        )
+      ) {
+        ctx.addIssue({ code: "custom", message: "slice outside the cover slot" });
+      }
+    }
     const maxX = l.role === "spread" ? 200 : 100;
     const rects = [...l.slots, ...(l.caption ? [l.caption] : []), ...(l.texts ?? []).map((t) => t.box)];
     if (rects.some((r) => r.x + r.w > maxX + 1e-9 || r.y + r.h > 100 + 1e-9)) {

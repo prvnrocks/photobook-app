@@ -5,8 +5,8 @@
 
 import type { ReactNode } from "react";
 import {
-  CAPTION_FONT_SIZE_CQW,
   CAPTION_LINE_HEIGHT,
+  captionSizeCqw,
   pageRenderModel,
   resolveBackground,
   type RenderCaption,
@@ -15,7 +15,7 @@ import {
 import type { Ink } from "@/lib/design/backgrounds";
 import type { BookDoc, Caption } from "@/lib/book/types";
 import { BookCover } from "./BookCover";
-import { BackgroundLayer, Box, INK_TEXT, PageFrame, PhotoSlot, type BookRenderMode } from "./PageParts";
+import { BackgroundLayer, Box, INK_TEXT, PageFrame, PhotoSlot, TextPanel, type BookRenderMode } from "./PageParts";
 
 export type { BookRenderMode } from "./PageParts";
 export type { RenderCaption, RenderPhoto, RenderPhotos } from "@/lib/book/render";
@@ -29,16 +29,21 @@ export type BookPageProps = {
   photos: RenderPhotos;
   /** Book caption language (books.caption_lang, default "en"): lang/font for text without letters. */
   captionLang?: string;
-  /** Edit mode only: rendered inside each photo slot (absolute-position it with `inset-0`). */
-  renderSlotOverlay?: (slotIdx: number) => ReactNode;
+  /**
+   * Edit mode only: rendered inside each photo slot (absolute-position it with `inset-0`).
+   * `ownerPage` = the doc.pages index whose `slots[slotIdx]` this is: the page itself, or for the
+   * right half of a spread its left partner (spreads store every slot on the left page). Cover: "cover".
+   */
+  renderSlotOverlay?: (slotIdx: number, ownerPage: number | "cover") => ReactNode;
   /**
    * Edit mode only: replaces the static caption inside the layout's caption area (called for
    * every layout that HAS a caption area, with null when the page has no caption yet). The
    * second argument is the caption's render model (resolved font family, lang, align) so an
    * editable caption can look exactly like the static one. `ink` = the page background's text
-   * colour family (INK_TEXT.caption[ink] is the static caption's class).
+   * colour family (INK_TEXT.caption[ink] is the static caption's class). `ownerPage` = the
+   * doc.pages index that holds the caption (a spread's caption lives on its left page).
    */
-  renderCaption?: (caption: Caption | null, model: RenderCaption, ink: Ink) => ReactNode;
+  renderCaption?: (caption: Caption | null, model: RenderCaption, ink: Ink, ownerPage: number) => ReactNode;
   /** Edit mode only, cover only: rendered inside the cover text area (absolute, `inset-0`). */
   renderCoverTextOverlay?: () => ReactNode;
   className?: string;
@@ -56,7 +61,7 @@ export function BookPage(props: BookPageProps) {
         mode={mode}
         photos={photos}
         captionLang={captionLang}
-        renderSlotOverlay={renderSlotOverlay}
+        renderSlotOverlay={renderSlotOverlay ? (i) => renderSlotOverlay(i, "cover") : undefined}
         renderTextOverlay={renderCoverTextOverlay}
         className={className}
         priority={priority}
@@ -79,9 +84,14 @@ export function BookPage(props: BookPageProps) {
     );
   }
 
+  // Each page (both spread halves too) shows its own background.
   const bg = resolveBackground(doc, doc.pages[page], photos);
   const c = m.caption;
-  const editCaption = mode === "edit" && renderCaption && c ? renderCaption(c.caption, c, bg.ink) : null;
+  // Spread right half: slots + caption belong to the left page (m.spread.ownerIndex).
+  const owner = m.spread ? (m.spread.ownerIndex ?? page) : page;
+  const editCaption = mode === "edit" && renderCaption && c ? renderCaption(c.caption, c, bg.ink, owner) : null;
+  const data: Record<`data-${string}`, string> = { "data-page": String(page), "data-page-id": m.pageId, "data-layout": m.layoutId };
+  if (m.spread) data["data-spread-side"] = m.spread.side;
 
   return (
     <PageFrame
@@ -90,7 +100,7 @@ export function BookPage(props: BookPageProps) {
       mode={mode}
       format={doc.format}
       className={className}
-      data={{ "data-page": String(page), "data-page-id": m.pageId, "data-layout": m.layoutId }}
+      data={data}
     >
       {m.slots.map((slot) => (
         <PhotoSlot
@@ -98,7 +108,7 @@ export function BookPage(props: BookPageProps) {
           slot={slot}
           mode={mode}
           priority={priority}
-          overlay={renderSlotOverlay?.(slot.index)}
+          overlay={renderSlotOverlay?.(slot.index, owner)}
         />
       ))}
       {c && (editCaption !== null || c.text) ? (
@@ -112,7 +122,13 @@ export function BookPage(props: BookPageProps) {
               dir="auto"
               lang={c.lang}
               className={`w-full whitespace-pre-line break-words ${INK_TEXT.caption[bg.ink]}`}
-              style={{ fontFamily: c.fontFamily, textAlign: c.align, fontSize: `${CAPTION_FONT_SIZE_CQW}cqw`, lineHeight: CAPTION_LINE_HEIGHT }}
+              style={{
+                fontFamily: c.fontFamily,
+                textAlign: c.align,
+                fontSize: `${captionSizeCqw(c)}cqw`,
+                lineHeight: CAPTION_LINE_HEIGHT,
+                ...c.typography,
+              }}
               data-testid="page-caption"
             >
               {c.text}
@@ -120,6 +136,7 @@ export function BookPage(props: BookPageProps) {
           )}
         </Box>
       ) : null}
+      {m.texts?.map((t, i) => <TextPanel key={i} panel={t} ink={bg.ink} />)}
     </PageFrame>
   );
 }

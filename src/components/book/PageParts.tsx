@@ -4,9 +4,10 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import { rgbaOf, textureLayerStyle } from "@/lib/book/background-style";
-import { cropBoxStyle, rectStyle, type RenderSlot, type ResolvedBackground } from "@/lib/book/render";
+import { cropBoxStyle, rectStyle, type RenderSlot, type RenderTextPanel, type ResolvedBackground } from "@/lib/book/render";
 import { orientationOf, pageMm, sheetMm } from "@/lib/book/format";
-import { textureSrc } from "@/lib/design/backgrounds";
+import { textureSrc, type Ink } from "@/lib/design/backgrounds";
+import type { TextRole } from "@/lib/design/styles";
 import { withPageAspect } from "@/lib/book/format-style";
 import type { BookFormat, Rect } from "@/lib/book/types";
 import { BLEED_MM } from "@/lib/layouts";
@@ -255,3 +256,99 @@ export const INK_TEXT = {
   coverTitle: { dark: "text-neutral-900", light: "text-white" },
   coverSubtitle: { dark: "text-neutral-600", light: "text-neutral-200" },
 } as const;
+
+/** Ink class family per text-panel role (M10b A9): title-like roles use the cover-title ink. */
+const PANEL_INK: Record<TextRole, keyof typeof INK_TEXT> = {
+  title: "coverTitle",
+  chapter: "coverTitle",
+  subtitle: "coverSubtitle",
+  year: "coverSubtitle",
+  caption: "caption",
+};
+
+/**
+ * A layout text panel (M10b A9): bound doc text in its design-style font, logical alignment,
+ * dir="auto" (Arabic renders right-to-left with start/end mirrored). Vertically centred in its box.
+ */
+export function TextPanel({ panel, ink }: { panel: RenderTextPanel; ink: Ink }) {
+  return (
+    <Box rect={panel.rect} className="flex flex-col justify-center overflow-hidden" data={{ "data-text-panel": panel.bind }}>
+      <p
+        dir="auto"
+        lang={panel.lang}
+        className={`w-full whitespace-pre-line break-words ${INK_TEXT[PANEL_INK[panel.role]][ink]}`}
+        style={{
+          fontFamily: panel.fontFamily,
+          textAlign: panel.align,
+          fontSize: `${panel.fontSizeCqw}cqw`,
+          lineHeight: panel.lineHeight,
+          ...panel.typography,
+        }}
+        data-testid={`text-${panel.bind}`}
+      >
+        {panel.text}
+      </p>
+    </Box>
+  );
+}
+
+/**
+ * Split-strip cover photo (M10b A9): the slot box (data-slot-index 0, the edit overlay's target)
+ * holds one window per slice; each window clips the SAME photo, laid out over the whole slot box
+ * with the usual crop maths, so the strips read as one picture with gaps showing the background.
+ */
+export function SlicedPhotoSlot({
+  slot,
+  slices,
+  mode,
+  priority,
+  overlay,
+}: {
+  slot: RenderSlot;
+  /** Windows in % of the slot box (render.ts sliceWindows). */
+  slices: readonly Rect[];
+  mode: BookRenderMode;
+  priority?: boolean;
+  overlay?: ReactNode;
+}) {
+  const empty = slot.photo === null;
+  return (
+    <Box rect={slot.rect} data={{ "data-slot-index": String(slot.index), "data-slot-empty": String(empty), "data-slot-sliced": "true" }}>
+      {slices.map((sl, i) => (
+        <Box key={i} rect={sl} className="overflow-hidden" data={{ "data-slice": String(i) }}>
+          {slot.photo ? (
+            // The slot-sized photo box, positioned so this window shows its part of the picture.
+            <div
+              className="pointer-events-none absolute"
+              style={{
+                left: `${(-sl.x / sl.w) * 100}%`,
+                top: `${(-sl.y / sl.h) * 100}%`,
+                width: `${(100 / sl.w) * 100}%`,
+                height: `${(100 / sl.h) * 100}%`,
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- short-lived signed URLs; next/image would cache/proxy them */}
+              <img
+                src={slot.photo.url}
+                alt=""
+                draggable={false}
+                decoding="async"
+                loading={priority || mode === "print" ? "eager" : "lazy"}
+                fetchPriority={priority ? "high" : undefined}
+                className="pointer-events-none absolute block"
+                style={{ ...cropBoxStyle(slot.photo.style), maxWidth: "none" }}
+              />
+            </div>
+          ) : mode === "edit" ? (
+            <div
+              className="absolute inset-0 border border-dashed border-neutral-400 bg-neutral-100"
+              style={{ borderWidth: "0.4cqw" }}
+              data-testid="slot-placeholder"
+            />
+          ) : null}
+        </Box>
+      ))}
+      {mode === "edit" ? overlay : null}
+    </Box>
+  );
+}

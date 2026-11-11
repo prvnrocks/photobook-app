@@ -14,7 +14,7 @@ import type { MouseEvent } from "react";
 import { BookPage, type RenderCaption } from "@/components/book/BookPage";
 import { INK_TEXT } from "@/components/book/PageParts";
 import type { Ink } from "@/lib/design/backgrounds";
-import { CAPTION_FONT_SIZE_CQW, CAPTION_LINE_HEIGHT, resolveBackground } from "@/lib/book/render";
+import { CAPTION_LINE_HEIGHT, captionSizeCqw, resolveBackground } from "@/lib/book/render";
 import type { Caption } from "@/lib/book/types";
 import type { EditorPosition, EditorSelection } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
@@ -38,8 +38,9 @@ export function EditablePage({ page, priority }: { page: EditorPosition; priorit
     actions.select(sameSelection(selection, sel) ? null : sel);
   };
 
-  const slotSel = (slotIdx: number): EditorSelection =>
-    page === "cover" ? { kind: "cover", part: "photo" } : { kind: "slot", pageIdx: page, slotIdx };
+  // `owner` = the doc page holding the slot/caption (a spread's right half shows its left page's).
+  const slotSel = (slotIdx: number, owner: number | "cover" = page): EditorSelection =>
+    owner === "cover" ? { kind: "cover", part: "photo" } : { kind: "slot", pageIdx: owner, slotIdx };
 
   const label = page === "cover" ? "cover" : `page ${page + 1}`;
 
@@ -76,14 +77,14 @@ export function EditablePage({ page, priority }: { page: EditorPosition; priorit
         renderSlotOverlay={
           readOnly
             ? undefined
-            : (slotIdx) => (
+            : (slotIdx, owner) => (
                 <>
                   <SlotOverlay
-                    selected={sameSelection(selection, slotSel(slotIdx))}
+                    selected={sameSelection(selection, slotSel(slotIdx, owner))}
                     label={`Photo ${slotIdx + 1} on ${label}`}
-                    onClick={toggle(slotSel(slotIdx))}
+                    onClick={toggle(slotSel(slotIdx, owner))}
                   />
-                  <LowResBadge page={page} slotIdx={slotIdx} />
+                  <LowResBadge page={owner} slotIdx={slotIdx} />
                 </>
               )
         }
@@ -102,13 +103,13 @@ export function EditablePage({ page, priority }: { page: EditorPosition; priorit
         renderCaption={
           readOnly || page === "cover"
             ? undefined
-            : (caption, model, ink) => (
+            : (caption, model, ink, owner) => (
                 <CaptionTarget
                   caption={caption}
                   model={model}
                   ink={ink}
-                  selected={sameSelection(selection, { kind: "caption", pageIdx: page })}
-                  onClick={toggle({ kind: "caption", pageIdx: page })}
+                  selected={sameSelection(selection, { kind: "caption", pageIdx: owner })}
+                  onClick={toggle({ kind: "caption", pageIdx: owner })}
                 />
               )
         }
@@ -202,8 +203,9 @@ function CaptionTarget({
           style={{
             fontFamily: model.fontFamily,
             textAlign: model.align,
-            fontSize: `${CAPTION_FONT_SIZE_CQW}cqw`,
+            fontSize: `${captionSizeCqw(model)}cqw`,
             lineHeight: CAPTION_LINE_HEIGHT,
+            ...model.typography,
           }}
           data-testid="page-caption"
         >
@@ -212,7 +214,7 @@ function CaptionTarget({
       ) : (
         <span
           className={cn("block w-full text-center italic", ink === "light" ? "text-white/70" : "text-neutral-400")}
-          style={{ fontSize: `${CAPTION_FONT_SIZE_CQW}cqw`, lineHeight: CAPTION_LINE_HEIGHT }}
+          style={{ fontSize: `${captionSizeCqw(model)}cqw`, lineHeight: CAPTION_LINE_HEIGHT }}
         >
           Tap to add a caption
         </span>

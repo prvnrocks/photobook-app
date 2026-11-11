@@ -4,9 +4,24 @@
 import { notFound } from "next/navigation";
 import { BookPage } from "@/components/book/BookPage";
 import { devPreviewDoc, devPreviewPhotos } from "@/lib/book/dev-preview";
+import { devSampleDoc, devSamplePhotos, parseDevSample } from "@/lib/book/dev-sample";
+import { SampleBook } from "./SampleBook";
 
-export default function DevBookPagePreview() {
+// `?sample=modern-portrait|modern-landscape` (M10b A9): a modern sample book as open spreads
+// (cover alone, then page pairs; spread layouts meet at the fold), one page per row below md.
+// Add `&mode=edit` for edit-mode markup.
+
+export default async function DevBookPagePreview({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   if (process.env.NODE_ENV === "production") notFound();
+  const sp = await searchParams;
+  const sample = parseDevSample(sp.sample);
+  if (sample) {
+    return <SampleBook doc={devSampleDoc(sample)} photos={devSamplePhotos()} mode={sp.mode === "edit" ? "edit" : "view"} title={sample} />;
+  }
   const doc = devPreviewDoc();
   const photos = devPreviewPhotos();
   return (

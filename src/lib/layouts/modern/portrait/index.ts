@@ -13,10 +13,10 @@
 // - text stays ≥ 4 mm inside the trim and ≥ 8 mm from the fold (single pages: from both side edges,
 //   since a page may land on either side; spreads: from x = 100).
 //
-// Covers with several slots (m-p-cover-strips): `doc.cover` holds ONE photo. Every cover slot is a
-// window onto that same photo, laid out cover-fit over the union box of all slots (the strips are
-// slices of one picture). photoCount = slots.length keeps the catalogue invariant; renderers must
-// not ask for more than doc.cover.photoId.
+// Split-strip covers (m-p-cover-strips): `doc.cover` holds ONE photo, so the cover has one slot
+// (the union box of the strips) and `slices` = the strip windows (A9 slice model, shared with the
+// landscape m-l-cover-strip). The renderer lays the photo out cover-fit over the slot and clips it
+// to each slice.
 //
 // Spreads: x runs 0..200 across both pages (fold at 100). The fold carries the same thin gutter,
 // centred on it (1.25 mm per page). Slots are ordered left page first, then right page, so the
@@ -256,8 +256,9 @@ const stripTops = [64, 56, 72];
 const stripTitle = mmRect(M, 12, W - M, 38);
 const stripYear = mmRect(16, 39, W - 16, 50);
 /**
- * Split-strip cover: the cover photo cut into three vertical strips with staggered tops, bleeding
- * off the sides and bottom; script title and serif subtitle/year above.
+ * Split-strip cover: the ONE cover photo laid out over the strip area (slot = union box) and cut
+ * into three vertical slices with staggered tops and thin gutters, bleeding off the sides and
+ * bottom; script title and serif subtitle/year above. The renderer clips the photo to `slices`.
  */
 export const modernCoverStrips: Layout = {
   id: "m-p-cover-strips",
@@ -265,9 +266,10 @@ export const modernCoverStrips: Layout = {
   role: "cover",
   style: "modern",
   format: "A5_PORTRAIT",
-  photoCount: 3,
-  prefers: ["any", "any", "any"],
-  slots: cells(0, W, 3).map(([x0, x1], i) => mmRect(x0, stripTops[i], x1, H)),
+  photoCount: 1,
+  prefers: ["any"],
+  slots: [mmRect(0, Math.min(...stripTops), W, H)],
+  slices: cells(0, W, 3).map(([x0, x1], i) => mmRect(x0, stripTops[i], x1, H)),
   caption: mmRect(M, 12, W - M, 50),
   texts: [
     { bind: "coverTitle", box: stripTitle, align: "center", font: "title" },

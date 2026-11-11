@@ -1,0 +1,2952 @@
+{
+  "cover": {
+    "screen": {
+      "kind": "cover",
+      "layoutId": "m-l-cover-strip",
+      "knownLayout": true,
+      "slot": {
+        "index": 0,
+        "rect": {
+          "x": 0,
+          "y": 31.081,
+          "w": 100,
+          "h": 68.919
+        },
+        "photoId": "d0",
+        "photo": {
+          "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23c2410c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed0%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+          "style": {
+            "width": 100,
+            "height": 274.5094809692381,
+            "left": 0,
+            "top": -87.25474048461905
+          }
+        }
+      },
+      "textRect": {
+        "x": 4.762,
+        "y": 4.054,
+        "w": 90.476,
+        "h": 24.324
+      },
+      "title": {
+        "text": "Sara & Omar",
+        "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif",
+        "sizeCqw": 4.9333
+      },
+      "subtitle": {
+        "text": "Abu Dhabi · 2026",
+        "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif"
+      },
+      "textScale": 0.7048,
+      "panels": [
+        {
+          "bind": "coverTitle",
+          "role": "title",
+          "rect": {
+            "x": 4.762,
+            "y": 4.054,
+            "w": 90.476,
+            "h": 16.216
+          },
+          "text": "Sara & Omar",
+          "align": "center",
+          "fontFamily": "var(--font-great-vibes, \"Great Vibes\"), var(--font-aref-ruqaa, \"Aref Ruqaa\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 7.1429,
+          "lineHeight": 1.1,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        {
+          "bind": "coverSubtitle",
+          "role": "year",
+          "rect": {
+            "x": 4.762,
+            "y": 20.946,
+            "w": 90.476,
+            "h": 7.432
+          },
+          "text": "Abu Dhabi · 2026",
+          "align": "center",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 2.1905,
+          "lineHeight": 1.25,
+          "typography": {
+            "fontWeight": 600,
+            "fontStyle": "normal"
+          }
+        }
+      ],
+      "slices": [
+        {
+          "x": 0,
+          "y": 7.8425,
+          "w": 32.54,
+          "h": 92.1575
+        },
+        {
+          "x": 33.73,
+          "y": 0,
+          "w": 32.54,
+          "h": 100
+        },
+        {
+          "x": 67.46,
+          "y": 15.6865,
+          "w": 32.54,
+          "h": 84.3135
+        }
+      ]
+    },
+    "bleed": {
+      "kind": "cover",
+      "layoutId": "m-l-cover-strip",
+      "knownLayout": true,
+      "slot": {
+        "index": 0,
+        "rect": {
+          "x": -1.4285714285714286,
+          "y": 31.081,
+          "w": 102.85714285714285,
+          "h": 70.94602702702703
+        },
+        "photoId": "d0",
+        "photo": {
+          "url": "https://print-assets.invalid/d0.jpg",
+          "style": {
+            "width": 100,
+            "height": 274.2854008166847,
+            "left": 0,
+            "top": -87.14270040834236
+          }
+        }
+      },
+      "textRect": {
+        "x": 4.762,
+        "y": 4.054,
+        "w": 90.476,
+        "h": 24.324
+      },
+      "title": {
+        "text": "Sara & Omar",
+        "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif",
+        "sizeCqw": 4.9333
+      },
+      "subtitle": {
+        "text": "Abu Dhabi · 2026",
+        "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif"
+      },
+      "textScale": 0.7048,
+      "panels": [
+        {
+          "bind": "coverTitle",
+          "role": "title",
+          "rect": {
+            "x": 4.762,
+            "y": 4.054,
+            "w": 90.476,
+            "h": 16.216
+          },
+          "text": "Sara & Omar",
+          "align": "center",
+          "fontFamily": "var(--font-great-vibes, \"Great Vibes\"), var(--font-aref-ruqaa, \"Aref Ruqaa\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 7.1429,
+          "lineHeight": 1.1,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        {
+          "bind": "coverSubtitle",
+          "role": "year",
+          "rect": {
+            "x": 4.762,
+            "y": 20.946,
+            "w": 90.476,
+            "h": 7.432
+          },
+          "text": "Abu Dhabi · 2026",
+          "align": "center",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 2.1905,
+          "lineHeight": 1.25,
+          "typography": {
+            "fontWeight": 600,
+            "fontStyle": "normal"
+          }
+        }
+      ],
+      "slices": [
+        {
+          "x": 0,
+          "y": 7.6185,
+          "w": 33.025,
+          "h": 92.3815
+        },
+        {
+          "x": 34.1819,
+          "y": 0,
+          "w": 31.6361,
+          "h": 100
+        },
+        {
+          "x": 66.975,
+          "y": 15.2383,
+          "w": 33.025,
+          "h": 84.7617
+        }
+      ]
+    }
+  },
+  "pages": [
+    {
+      "index": 0,
+      "screen": {
+        "kind": "page",
+        "pageId": "s0",
+        "layoutId": "m-l-one-text",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 60,
+              "h": 100
+            },
+            "photoId": "sp0",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%230f766e%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed1%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 176.13543386739266,
+                "height": 100,
+                "left": -38.06771693369633,
+                "top": 0
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 64.762,
+            "y": 48.649,
+            "w": 30.476,
+            "h": 27.027
+          },
+          "caption": {
+            "text": "The longest table, the loudest laughs, and everyone we love in one room.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "The longest table, the loudest laughs, and everyone we love in one room.",
+          "align": "start",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 64.762,
+              "y": 27.027,
+              "w": 30.476,
+              "h": 10.811
+            },
+            "text": "The mehndi night",
+            "align": "start",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.8095,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "textTransform": "uppercase"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 64.762,
+              "y": 39.189,
+              "w": 30.476,
+              "h": 5.406
+            },
+            "text": "12 Oct 2026",
+            "align": "start",
+            "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+            "fontSizeCqw": 2.1905,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          }
+        ]
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s0",
+        "layoutId": "m-l-one-text",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": -1.4285714285714286,
+              "y": -2.027027027027027,
+              "w": 61.42857142857143,
+              "h": 104.05405405405406
+            },
+            "photoId": "sp0",
+            "photo": {
+              "url": "https://print-assets.invalid/sp0.jpg",
+              "style": {
+                "width": 179.01382562135376,
+                "height": 100,
+                "left": -39.50691281067688,
+                "top": 0
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 64.762,
+            "y": 48.649,
+            "w": 30.476,
+            "h": 27.027
+          },
+          "caption": {
+            "text": "The longest table, the loudest laughs, and everyone we love in one room.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "The longest table, the loudest laughs, and everyone we love in one room.",
+          "align": "start",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 64.762,
+              "y": 27.027,
+              "w": 30.476,
+              "h": 10.811
+            },
+            "text": "The mehndi night",
+            "align": "start",
+            "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.8095,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "textTransform": "uppercase"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 64.762,
+              "y": 39.189,
+              "w": 30.476,
+              "h": 5.406
+            },
+            "text": "12 Oct 2026",
+            "align": "start",
+            "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+            "fontSizeCqw": 2.1905,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "index": 1,
+      "screen": {
+        "kind": "page",
+        "pageId": "s1",
+        "layoutId": "m-l-two",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 46.548,
+              "h": 79.73
+            },
+            "photoId": "sp1",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231d4ed8%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed2%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 120.71553378591275,
+                "height": 100,
+                "left": -10.357766892956377,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 50.595,
+              "y": 4.054,
+              "w": 46.548,
+              "h": 79.73
+            },
+            "photoId": "sp2",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23a21caf%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed3%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 110.45250694065444,
+                "left": 0,
+                "top": -5.226253470327222
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 4.762,
+            "y": 86.486,
+            "w": 90.476,
+            "h": 9.46
+          },
+          "caption": {
+            "text": "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى",
+          "lang": "ar",
+          "align": "center",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s1",
+        "layoutId": "m-l-two",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 46.548,
+              "h": 79.73
+            },
+            "photoId": "sp1",
+            "photo": {
+              "url": "https://print-assets.invalid/sp1.jpg",
+              "style": {
+                "width": 120.71553378591275,
+                "height": 100,
+                "left": -10.357766892956377,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 50.595,
+              "y": 4.054,
+              "w": 46.548,
+              "h": 79.73
+            },
+            "photoId": "sp2",
+            "photo": {
+              "url": "https://print-assets.invalid/sp2.jpg",
+              "style": {
+                "width": 100,
+                "height": 110.45250694065444,
+                "left": 0,
+                "top": -5.226253470327222
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 4.762,
+            "y": 86.486,
+            "w": 90.476,
+            "h": 9.46
+          },
+          "caption": {
+            "text": "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى",
+          "lang": "ar",
+          "align": "center",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        }
+      }
+    },
+    {
+      "index": 2,
+      "screen": {
+        "kind": "page",
+        "pageId": "s2",
+        "layoutId": "m-l-spread-mosaic",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 31.191,
+              "h": 39.02
+            },
+            "photoId": "sp3",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%234d7c0f%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed4%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 132.2074565645025,
+                "height": 100,
+                "left": -16.103728282251254,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 2.857,
+              "y": 44.764,
+              "w": 31.191,
+              "h": 39.02
+            },
+            "photoId": "sp4",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23b45309%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed5%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 113.42260379292668,
+                "left": 0,
+                "top": -6.71130189646334
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 35.238,
+              "y": 4.054,
+              "w": 61.905,
+              "h": 79.73
+            },
+            "photoId": "sp5",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23be123c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed6%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 146.89272239755118,
+                "left": 0,
+                "top": -23.44636119877559
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 4.762,
+            "y": 86.486,
+            "w": 90.476,
+            "h": 9.46
+          },
+          "caption": {
+            "text": "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى",
+          "lang": "ar",
+          "align": "start",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "spread": {
+          "side": "left",
+          "ownerIndex": 2
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s2",
+        "layoutId": "m-l-spread-mosaic",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 31.191,
+              "h": 39.02
+            },
+            "photoId": "sp3",
+            "photo": {
+              "url": "https://print-assets.invalid/sp3.jpg",
+              "style": {
+                "width": 132.2074565645025,
+                "height": 100,
+                "left": -16.103728282251254,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 2.857,
+              "y": 44.764,
+              "w": 31.191,
+              "h": 39.02
+            },
+            "photoId": "sp4",
+            "photo": {
+              "url": "https://print-assets.invalid/sp4.jpg",
+              "style": {
+                "width": 100,
+                "height": 113.42260379292668,
+                "left": 0,
+                "top": -6.71130189646334
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 35.238,
+              "y": 4.054,
+              "w": 61.905,
+              "h": 79.73
+            },
+            "photoId": "sp5",
+            "photo": {
+              "url": "https://print-assets.invalid/sp5.jpg",
+              "style": {
+                "width": 100,
+                "height": 146.89272239755118,
+                "left": 0,
+                "top": -23.44636119877559
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 4.762,
+            "y": 86.486,
+            "w": 90.476,
+            "h": 9.46
+          },
+          "caption": {
+            "text": "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى",
+          "lang": "ar",
+          "align": "start",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        },
+        "spread": {
+          "side": "left",
+          "ownerIndex": 2
+        }
+      }
+    },
+    {
+      "index": 3,
+      "screen": {
+        "kind": "page",
+        "pageId": "s3",
+        "layoutId": "m-l-spread-mosaic",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 3,
+            "rect": {
+              "x": 2.8569999999999993,
+              "y": 4.054,
+              "w": 61.905,
+              "h": 79.73
+            },
+            "photoId": "sp6",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23334155%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed7%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 136.11124925851433,
+                "height": 100,
+                "left": -18.055624629257167,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 4,
+            "rect": {
+              "x": 65.952,
+              "y": 4.054,
+              "w": 31.191,
+              "h": 39.02
+            },
+            "photoId": "sp7",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23c2410c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed8%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 113.42260379292668,
+                "left": 0,
+                "top": -6.71130189646334
+              }
+            }
+          },
+          {
+            "index": 5,
+            "rect": {
+              "x": 65.952,
+              "y": 44.764,
+              "w": 31.191,
+              "h": 39.02
+            },
+            "photoId": "sp8",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%230f766e%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed9%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 151.2301383905689,
+                "left": 0,
+                "top": -25.61506919528445
+              }
+            }
+          }
+        ],
+        "caption": null,
+        "spread": {
+          "side": "right",
+          "ownerIndex": 2
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 4.7620000000000005,
+              "y": 86.486,
+              "w": 59.524,
+              "h": 9.46
+            },
+            "text": "ليلة العمر",
+            "lang": "ar",
+            "align": "start",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.8095,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "textTransform": "uppercase"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 66.667,
+              "y": 86.486,
+              "w": 28.571,
+              "h": 9.46
+            },
+            "text": "١٣ أكتوبر ٢٠٢٦",
+            "lang": "ar",
+            "align": "end",
+            "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+            "fontSizeCqw": 2.1905,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          }
+        ]
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s3",
+        "layoutId": "m-l-spread-mosaic",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 3,
+            "rect": {
+              "x": 2.8569999999999993,
+              "y": 4.054,
+              "w": 61.905,
+              "h": 79.73
+            },
+            "photoId": "sp6",
+            "photo": {
+              "url": "https://print-assets.invalid/sp6.jpg",
+              "style": {
+                "width": 136.11124925851433,
+                "height": 100,
+                "left": -18.055624629257167,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 4,
+            "rect": {
+              "x": 65.952,
+              "y": 4.054,
+              "w": 31.191,
+              "h": 39.02
+            },
+            "photoId": "sp7",
+            "photo": {
+              "url": "https://print-assets.invalid/sp7.jpg",
+              "style": {
+                "width": 100,
+                "height": 113.42260379292668,
+                "left": 0,
+                "top": -6.71130189646334
+              }
+            }
+          },
+          {
+            "index": 5,
+            "rect": {
+              "x": 65.952,
+              "y": 44.764,
+              "w": 31.191,
+              "h": 39.02
+            },
+            "photoId": "sp8",
+            "photo": {
+              "url": "https://print-assets.invalid/sp8.jpg",
+              "style": {
+                "width": 100,
+                "height": 151.2301383905689,
+                "left": 0,
+                "top": -25.61506919528445
+              }
+            }
+          }
+        ],
+        "caption": null,
+        "spread": {
+          "side": "right",
+          "ownerIndex": 2
+        },
+        "texts": [
+          {
+            "bind": "chapterTitle",
+            "role": "chapter",
+            "rect": {
+              "x": 4.7620000000000005,
+              "y": 86.486,
+              "w": 59.524,
+              "h": 9.46
+            },
+            "text": "ليلة العمر",
+            "lang": "ar",
+            "align": "start",
+            "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+            "fontSizeCqw": 3.8095,
+            "lineHeight": 1.05,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal",
+              "textTransform": "uppercase"
+            }
+          },
+          {
+            "bind": "dateLabel",
+            "role": "subtitle",
+            "rect": {
+              "x": 66.667,
+              "y": 86.486,
+              "w": 28.571,
+              "h": 9.46
+            },
+            "text": "١٣ أكتوبر ٢٠٢٦",
+            "lang": "ar",
+            "align": "end",
+            "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+            "fontSizeCqw": 2.1905,
+            "lineHeight": 1.25,
+            "typography": {
+              "fontWeight": 400,
+              "fontStyle": "normal"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "screen": {
+        "kind": "page",
+        "pageId": "s4",
+        "layoutId": "m-l-spread-panorama",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 200,
+              "h": 100
+            },
+            "photoId": "sp9",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231d4ed8%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed10%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 189.24831081081084,
+                "left": 0,
+                "top": -44.62415540540542
+              }
+            }
+          }
+        ],
+        "caption": null,
+        "spread": {
+          "side": "left",
+          "ownerIndex": 4
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s4",
+        "layoutId": "m-l-spread-panorama",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": -1.4285714285714286,
+              "y": -2.027027027027027,
+              "w": 202.85714285714283,
+              "h": 104.05405405405406
+            },
+            "photoId": "sp9",
+            "photo": {
+              "url": "https://print-assets.invalid/sp9.jpg",
+              "style": {
+                "width": 100,
+                "height": 184.47321428571428,
+                "left": 0,
+                "top": -42.23660714285714
+              }
+            }
+          }
+        ],
+        "caption": null,
+        "spread": {
+          "side": "left",
+          "ownerIndex": 4
+        }
+      }
+    },
+    {
+      "index": 5,
+      "screen": {
+        "kind": "page",
+        "pageId": "s5",
+        "layoutId": "m-l-spread-panorama",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": -100,
+              "y": 0,
+              "w": 200,
+              "h": 100
+            },
+            "photoId": "sp9",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231d4ed8%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed10%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 189.24831081081084,
+                "left": 0,
+                "top": -44.62415540540542
+              }
+            }
+          }
+        ],
+        "caption": null,
+        "spread": {
+          "side": "right",
+          "ownerIndex": 4
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s5",
+        "layoutId": "m-l-spread-panorama",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": -101.42857142857143,
+              "y": -2.027027027027027,
+              "w": 202.85714285714283,
+              "h": 104.05405405405406
+            },
+            "photoId": "sp9",
+            "photo": {
+              "url": "https://print-assets.invalid/sp9.jpg",
+              "style": {
+                "width": 100,
+                "height": 184.47321428571428,
+                "left": 0,
+                "top": -42.23660714285714
+              }
+            }
+          }
+        ],
+        "caption": null,
+        "spread": {
+          "side": "right",
+          "ownerIndex": 4
+        }
+      }
+    },
+    {
+      "index": 6,
+      "screen": {
+        "kind": "page",
+        "pageId": "s6",
+        "layoutId": "m-l-spread-grid",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp10",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23a21caf%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed11%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 103.75539959741036,
+                "height": 100,
+                "left": -1.87769979870518,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 34.683,
+              "y": 4.054,
+              "w": 30.634,
+              "h": 45.101
+            },
+            "photoId": "sp11",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%234d7c0f%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed12%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 128.50317335805465,
+                "left": 0,
+                "top": -14.251586679027326
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 66.508,
+              "y": 4.054,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp12",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23b45309%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed13%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 155.58447924635104,
+                "height": 100,
+                "left": -27.79223962317552,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 3,
+            "rect": {
+              "x": 2.857,
+              "y": 50.845,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp13",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23be123c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed14%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 103.75539959741036,
+                "height": 100,
+                "left": -1.87769979870518,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 4,
+            "rect": {
+              "x": 34.683,
+              "y": 50.845,
+              "w": 30.634,
+              "h": 45.101
+            },
+            "photoId": "sp14",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23334155%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed15%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 128.50317335805465,
+                "left": 0,
+                "top": -14.251586679027326
+              }
+            }
+          },
+          {
+            "index": 5,
+            "rect": {
+              "x": 66.508,
+              "y": 50.845,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp15",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%230f766e%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed1%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 155.58447924635104,
+                "height": 100,
+                "left": -27.79223962317552,
+                "top": 0
+              }
+            }
+          }
+        ],
+        "caption": null,
+        "spread": {
+          "side": "left",
+          "ownerIndex": 6
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s6",
+        "layoutId": "m-l-spread-grid",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp10",
+            "photo": {
+              "url": "https://print-assets.invalid/sp10.jpg",
+              "style": {
+                "width": 103.75539959741036,
+                "height": 100,
+                "left": -1.87769979870518,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 34.683,
+              "y": 4.054,
+              "w": 30.634,
+              "h": 45.101
+            },
+            "photoId": "sp11",
+            "photo": {
+              "url": "https://print-assets.invalid/sp11.jpg",
+              "style": {
+                "width": 100,
+                "height": 128.50317335805465,
+                "left": 0,
+                "top": -14.251586679027326
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 66.508,
+              "y": 4.054,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp12",
+            "photo": {
+              "url": "https://print-assets.invalid/sp12.jpg",
+              "style": {
+                "width": 155.58447924635104,
+                "height": 100,
+                "left": -27.79223962317552,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 3,
+            "rect": {
+              "x": 2.857,
+              "y": 50.845,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp13",
+            "photo": {
+              "url": "https://print-assets.invalid/sp13.jpg",
+              "style": {
+                "width": 103.75539959741036,
+                "height": 100,
+                "left": -1.87769979870518,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 4,
+            "rect": {
+              "x": 34.683,
+              "y": 50.845,
+              "w": 30.634,
+              "h": 45.101
+            },
+            "photoId": "sp14",
+            "photo": {
+              "url": "https://print-assets.invalid/sp14.jpg",
+              "style": {
+                "width": 100,
+                "height": 128.50317335805465,
+                "left": 0,
+                "top": -14.251586679027326
+              }
+            }
+          },
+          {
+            "index": 5,
+            "rect": {
+              "x": 66.508,
+              "y": 50.845,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp15",
+            "photo": {
+              "url": "https://print-assets.invalid/sp15.jpg",
+              "style": {
+                "width": 155.58447924635104,
+                "height": 100,
+                "left": -27.79223962317552,
+                "top": 0
+              }
+            }
+          }
+        ],
+        "caption": null,
+        "spread": {
+          "side": "left",
+          "ownerIndex": 6
+        }
+      }
+    },
+    {
+      "index": 7,
+      "screen": {
+        "kind": "page",
+        "pageId": "s7",
+        "layoutId": "m-l-spread-grid",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 6,
+            "rect": {
+              "x": 2.8569999999999993,
+              "y": 4.054,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp16",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231d4ed8%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed2%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 103.75539959741036,
+                "height": 100,
+                "left": -1.87769979870518,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 7,
+            "rect": {
+              "x": 34.68299999999999,
+              "y": 4.054,
+              "w": 30.634,
+              "h": 45.101
+            },
+            "photoId": "sp17",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23a21caf%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed3%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 128.50317335805465,
+                "left": 0,
+                "top": -14.251586679027326
+              }
+            }
+          },
+          {
+            "index": 8,
+            "rect": {
+              "x": 66.50800000000001,
+              "y": 4.054,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp18",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%234d7c0f%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed4%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 155.58447924635104,
+                "height": 100,
+                "left": -27.79223962317552,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 9,
+            "rect": {
+              "x": 2.8569999999999993,
+              "y": 50.845,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp19",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23b45309%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed5%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 103.75539959741036,
+                "height": 100,
+                "left": -1.87769979870518,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 10,
+            "rect": {
+              "x": 34.68299999999999,
+              "y": 50.845,
+              "w": 30.634,
+              "h": 45.101
+            },
+            "photoId": "sp20",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23be123c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed6%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 128.50317335805465,
+                "left": 0,
+                "top": -14.251586679027326
+              }
+            }
+          },
+          {
+            "index": 11,
+            "rect": {
+              "x": 66.50800000000001,
+              "y": 50.845,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp21",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23334155%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed7%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 155.58447924635104,
+                "height": 100,
+                "left": -27.79223962317552,
+                "top": 0
+              }
+            }
+          }
+        ],
+        "caption": null,
+        "spread": {
+          "side": "right",
+          "ownerIndex": 6
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s7",
+        "layoutId": "m-l-spread-grid",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 6,
+            "rect": {
+              "x": 2.8569999999999993,
+              "y": 4.054,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp16",
+            "photo": {
+              "url": "https://print-assets.invalid/sp16.jpg",
+              "style": {
+                "width": 103.75539959741036,
+                "height": 100,
+                "left": -1.87769979870518,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 7,
+            "rect": {
+              "x": 34.68299999999999,
+              "y": 4.054,
+              "w": 30.634,
+              "h": 45.101
+            },
+            "photoId": "sp17",
+            "photo": {
+              "url": "https://print-assets.invalid/sp17.jpg",
+              "style": {
+                "width": 100,
+                "height": 128.50317335805465,
+                "left": 0,
+                "top": -14.251586679027326
+              }
+            }
+          },
+          {
+            "index": 8,
+            "rect": {
+              "x": 66.50800000000001,
+              "y": 4.054,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp18",
+            "photo": {
+              "url": "https://print-assets.invalid/sp18.jpg",
+              "style": {
+                "width": 155.58447924635104,
+                "height": 100,
+                "left": -27.79223962317552,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 9,
+            "rect": {
+              "x": 2.8569999999999993,
+              "y": 50.845,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp19",
+            "photo": {
+              "url": "https://print-assets.invalid/sp19.jpg",
+              "style": {
+                "width": 103.75539959741036,
+                "height": 100,
+                "left": -1.87769979870518,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 10,
+            "rect": {
+              "x": 34.68299999999999,
+              "y": 50.845,
+              "w": 30.634,
+              "h": 45.101
+            },
+            "photoId": "sp20",
+            "photo": {
+              "url": "https://print-assets.invalid/sp20.jpg",
+              "style": {
+                "width": 100,
+                "height": 128.50317335805465,
+                "left": 0,
+                "top": -14.251586679027326
+              }
+            }
+          },
+          {
+            "index": 11,
+            "rect": {
+              "x": 66.50800000000001,
+              "y": 50.845,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp21",
+            "photo": {
+              "url": "https://print-assets.invalid/sp21.jpg",
+              "style": {
+                "width": 155.58447924635104,
+                "height": 100,
+                "left": -27.79223962317552,
+                "top": 0
+              }
+            }
+          }
+        ],
+        "caption": null,
+        "spread": {
+          "side": "right",
+          "ownerIndex": 6
+        }
+      }
+    },
+    {
+      "index": 8,
+      "screen": {
+        "kind": "page",
+        "pageId": "s8",
+        "layoutId": "m-l-one",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 94.286,
+              "h": 79.73
+            },
+            "photoId": "sp22",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23c2410c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed8%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 167.79654984220394,
+                "left": 0,
+                "top": -33.89827492110197
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 4.762,
+            "y": 86.486,
+            "w": 90.476,
+            "h": 9.46
+          },
+          "caption": {
+            "text": "The longest table, the loudest laughs, and everyone we love in one room.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "The longest table, the loudest laughs, and everyone we love in one room.",
+          "align": "center",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s8",
+        "layoutId": "m-l-one",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 94.286,
+              "h": 79.73
+            },
+            "photoId": "sp22",
+            "photo": {
+              "url": "https://print-assets.invalid/sp22.jpg",
+              "style": {
+                "width": 100,
+                "height": 167.79654984220394,
+                "left": 0,
+                "top": -33.89827492110197
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 4.762,
+            "y": 86.486,
+            "w": 90.476,
+            "h": 9.46
+          },
+          "caption": {
+            "text": "The longest table, the loudest laughs, and everyone we love in one room.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "The longest table, the loudest laughs, and everyone we love in one room.",
+          "align": "center",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        }
+      }
+    },
+    {
+      "index": 9,
+      "screen": {
+        "kind": "page",
+        "pageId": "s9",
+        "layoutId": "m-l-three",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 61.905,
+              "h": 79.73
+            },
+            "photoId": "sp23",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%230f766e%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed9%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 146.89272239755118,
+                "left": 0,
+                "top": -23.44636119877559
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 65.952,
+              "y": 4.054,
+              "w": 31.191,
+              "h": 39.02
+            },
+            "photoId": "sp24",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231d4ed8%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed10%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 132.2074565645025,
+                "height": 100,
+                "left": -16.103728282251254,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 65.952,
+              "y": 44.764,
+              "w": 31.191,
+              "h": 39.02
+            },
+            "photoId": "sp25",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23a21caf%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed11%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 113.42260379292668,
+                "left": 0,
+                "top": -6.71130189646334
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 4.762,
+            "y": 86.486,
+            "w": 90.476,
+            "h": 9.46
+          },
+          "caption": {
+            "text": "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى",
+          "lang": "ar",
+          "align": "center",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s9",
+        "layoutId": "m-l-three",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 61.905,
+              "h": 79.73
+            },
+            "photoId": "sp23",
+            "photo": {
+              "url": "https://print-assets.invalid/sp23.jpg",
+              "style": {
+                "width": 100,
+                "height": 146.89272239755118,
+                "left": 0,
+                "top": -23.44636119877559
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 65.952,
+              "y": 4.054,
+              "w": 31.191,
+              "h": 39.02
+            },
+            "photoId": "sp24",
+            "photo": {
+              "url": "https://print-assets.invalid/sp24.jpg",
+              "style": {
+                "width": 132.2074565645025,
+                "height": 100,
+                "left": -16.103728282251254,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 65.952,
+              "y": 44.764,
+              "w": 31.191,
+              "h": 39.02
+            },
+            "photoId": "sp25",
+            "photo": {
+              "url": "https://print-assets.invalid/sp25.jpg",
+              "style": {
+                "width": 100,
+                "height": 113.42260379292668,
+                "left": 0,
+                "top": -6.71130189646334
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 4.762,
+            "y": 86.486,
+            "w": 90.476,
+            "h": 9.46
+          },
+          "caption": {
+            "text": "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى",
+            "font": "Amiri",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "أجمل ليلة بدأت بضحكة، وانتهت بذكرى لا تُنسى",
+          "lang": "ar",
+          "align": "center",
+          "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        }
+      }
+    },
+    {
+      "index": 10,
+      "screen": {
+        "kind": "page",
+        "pageId": "s10",
+        "layoutId": "m-l-three-b",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 31.191,
+              "h": 39.02
+            },
+            "photoId": "sp26",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%234d7c0f%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed12%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 151.2301383905689,
+                "left": 0,
+                "top": -25.61506919528445
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 2.857,
+              "y": 44.764,
+              "w": 31.191,
+              "h": 39.02
+            },
+            "photoId": "sp27",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23b45309%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed13%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 132.2074565645025,
+                "height": 100,
+                "left": -16.103728282251254,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 35.238,
+              "y": 4.054,
+              "w": 61.905,
+              "h": 79.73
+            },
+            "photoId": "sp28",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23be123c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed14%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 110.16954179816338,
+                "left": 0,
+                "top": -5.08477089908169
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 4.762,
+            "y": 86.486,
+            "w": 90.476,
+            "h": 9.46
+          },
+          "caption": {
+            "text": "The longest table, the loudest laughs, and everyone we love in one room.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "The longest table, the loudest laughs, and everyone we love in one room.",
+          "align": "center",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s10",
+        "layoutId": "m-l-three-b",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 31.191,
+              "h": 39.02
+            },
+            "photoId": "sp26",
+            "photo": {
+              "url": "https://print-assets.invalid/sp26.jpg",
+              "style": {
+                "width": 100,
+                "height": 151.2301383905689,
+                "left": 0,
+                "top": -25.61506919528445
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 2.857,
+              "y": 44.764,
+              "w": 31.191,
+              "h": 39.02
+            },
+            "photoId": "sp27",
+            "photo": {
+              "url": "https://print-assets.invalid/sp27.jpg",
+              "style": {
+                "width": 132.2074565645025,
+                "height": 100,
+                "left": -16.103728282251254,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 35.238,
+              "y": 4.054,
+              "w": 61.905,
+              "h": 79.73
+            },
+            "photoId": "sp28",
+            "photo": {
+              "url": "https://print-assets.invalid/sp28.jpg",
+              "style": {
+                "width": 100,
+                "height": 110.16954179816338,
+                "left": 0,
+                "top": -5.08477089908169
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 4.762,
+            "y": 86.486,
+            "w": 90.476,
+            "h": 9.46
+          },
+          "caption": {
+            "text": "The longest table, the loudest laughs, and everyone we love in one room.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "The longest table, the loudest laughs, and everyone we love in one room.",
+          "align": "center",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        }
+      }
+    },
+    {
+      "index": 11,
+      "screen": {
+        "kind": "page",
+        "pageId": "s11",
+        "layoutId": "m-l-three-row",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 30.635,
+              "h": 79.73
+            },
+            "photoId": "sp29",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23334155%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed15%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 137.56487677493067,
+                "height": 100,
+                "left": -18.782438387465334,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 34.683,
+              "y": 4.054,
+              "w": 30.634,
+              "h": 79.73
+            },
+            "photoId": "sp30",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%230f766e%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed1%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 275.05278074519583,
+                "height": 100,
+                "left": -87.52639037259792,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 66.508,
+              "y": 4.054,
+              "w": 30.635,
+              "h": 79.73
+            },
+            "photoId": "sp31",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231d4ed8%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed2%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 183.4198356999075,
+                "height": 100,
+                "left": -41.709917849953754,
+                "top": 0
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 4.762,
+            "y": 86.486,
+            "w": 90.476,
+            "h": 9.46
+          },
+          "caption": null,
+          "text": "",
+          "align": "center",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s11",
+        "layoutId": "m-l-three-row",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 30.635,
+              "h": 79.73
+            },
+            "photoId": "sp29",
+            "photo": {
+              "url": "https://print-assets.invalid/sp29.jpg",
+              "style": {
+                "width": 137.56487677493067,
+                "height": 100,
+                "left": -18.782438387465334,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 34.683,
+              "y": 4.054,
+              "w": 30.634,
+              "h": 79.73
+            },
+            "photoId": "sp30",
+            "photo": {
+              "url": "https://print-assets.invalid/sp30.jpg",
+              "style": {
+                "width": 275.05278074519583,
+                "height": 100,
+                "left": -87.52639037259792,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 66.508,
+              "y": 4.054,
+              "w": 30.635,
+              "h": 79.73
+            },
+            "photoId": "sp31",
+            "photo": {
+              "url": "https://print-assets.invalid/sp31.jpg",
+              "style": {
+                "width": 183.4198356999075,
+                "height": 100,
+                "left": -41.709917849953754,
+                "top": 0
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 4.762,
+            "y": 86.486,
+            "w": 90.476,
+            "h": 9.46
+          },
+          "caption": null,
+          "text": "",
+          "align": "center",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        }
+      }
+    },
+    {
+      "index": 12,
+      "screen": {
+        "kind": "page",
+        "pageId": "s12",
+        "layoutId": "m-l-four",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 46.548,
+              "h": 39.02
+            },
+            "photoId": "sp32",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23a21caf%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed3%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 225.68883593998922,
+                "left": 0,
+                "top": -62.84441796999461
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 50.595,
+              "y": 4.054,
+              "w": 46.548,
+              "h": 39.02
+            },
+            "photoId": "sp33",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%234d7c0f%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed4%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 112.8796818506102,
+                "left": 0,
+                "top": -6.4398409253050986
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 2.857,
+              "y": 44.764,
+              "w": 46.548,
+              "h": 39.02
+            },
+            "photoId": "sp34",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23b45309%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed5%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 169.26662695499186,
+                "left": 0,
+                "top": -34.63331347749593
+              }
+            }
+          },
+          {
+            "index": 3,
+            "rect": {
+              "x": 50.595,
+              "y": 44.764,
+              "w": 46.548,
+              "h": 39.02
+            },
+            "photoId": "sp35",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23be123c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed6%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 225.68883593998922,
+                "left": 0,
+                "top": -62.84441796999461
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 4.762,
+            "y": 86.486,
+            "w": 90.476,
+            "h": 9.46
+          },
+          "caption": {
+            "text": "The longest table, the loudest laughs, and everyone we love in one room.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "The longest table, the loudest laughs, and everyone we love in one room.",
+          "align": "center",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        }
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s12",
+        "layoutId": "m-l-four",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 46.548,
+              "h": 39.02
+            },
+            "photoId": "sp32",
+            "photo": {
+              "url": "https://print-assets.invalid/sp32.jpg",
+              "style": {
+                "width": 100,
+                "height": 225.68883593998922,
+                "left": 0,
+                "top": -62.84441796999461
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 50.595,
+              "y": 4.054,
+              "w": 46.548,
+              "h": 39.02
+            },
+            "photoId": "sp33",
+            "photo": {
+              "url": "https://print-assets.invalid/sp33.jpg",
+              "style": {
+                "width": 100,
+                "height": 112.8796818506102,
+                "left": 0,
+                "top": -6.4398409253050986
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 2.857,
+              "y": 44.764,
+              "w": 46.548,
+              "h": 39.02
+            },
+            "photoId": "sp34",
+            "photo": {
+              "url": "https://print-assets.invalid/sp34.jpg",
+              "style": {
+                "width": 100,
+                "height": 169.26662695499186,
+                "left": 0,
+                "top": -34.63331347749593
+              }
+            }
+          },
+          {
+            "index": 3,
+            "rect": {
+              "x": 50.595,
+              "y": 44.764,
+              "w": 46.548,
+              "h": 39.02
+            },
+            "photoId": "sp35",
+            "photo": {
+              "url": "https://print-assets.invalid/sp35.jpg",
+              "style": {
+                "width": 100,
+                "height": 225.68883593998922,
+                "left": 0,
+                "top": -62.84441796999461
+              }
+            }
+          }
+        ],
+        "caption": {
+          "rect": {
+            "x": 4.762,
+            "y": 86.486,
+            "w": 90.476,
+            "h": 9.46
+          },
+          "caption": {
+            "text": "The longest table, the loudest laughs, and everyone we love in one room.",
+            "font": "Cormorant",
+            "align": "center",
+            "source": "ai"
+          },
+          "text": "The longest table, the loudest laughs, and everyone we love in one room.",
+          "align": "center",
+          "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+          "fontSizeCqw": 1.8324,
+          "typography": {
+            "fontWeight": 400,
+            "fontStyle": "normal"
+          }
+        }
+      }
+    },
+    {
+      "index": 13,
+      "screen": {
+        "kind": "page",
+        "pageId": "s13",
+        "layoutId": "m-l-five",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 38.095,
+              "h": 91.892
+            },
+            "photoId": "sp36",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23334155%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed7%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 254.9222305647845,
+                "height": 100,
+                "left": -77.46111528239226,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 42.143,
+              "y": 4.054,
+              "w": 26.905,
+              "h": 45.101
+            },
+            "photoId": "sp37",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23c2410c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed8%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 118.13962708294613,
+                "height": 100,
+                "left": -9.069813541473067,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 70.238,
+              "y": 4.054,
+              "w": 26.905,
+              "h": 45.101
+            },
+            "photoId": "sp38",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%230f766e%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed9%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 112.86080430888752,
+                "left": 0,
+                "top": -6.430402154443762
+              }
+            }
+          },
+          {
+            "index": 3,
+            "rect": {
+              "x": 42.143,
+              "y": 50.845,
+              "w": 26.905,
+              "h": 45.101
+            },
+            "photoId": "sp39",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231d4ed8%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed10%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 177.1540799744272,
+                "height": 100,
+                "left": -38.577039987213595,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 4,
+            "rect": {
+              "x": 70.238,
+              "y": 50.845,
+              "w": 26.905,
+              "h": 45.101
+            },
+            "photoId": "sp40",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23a21caf%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed11%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 118.13962708294613,
+                "height": 100,
+                "left": -9.069813541473067,
+                "top": 0
+              }
+            }
+          }
+        ],
+        "caption": null
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s13",
+        "layoutId": "m-l-five",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 38.095,
+              "h": 91.892
+            },
+            "photoId": "sp36",
+            "photo": {
+              "url": "https://print-assets.invalid/sp36.jpg",
+              "style": {
+                "width": 254.9222305647845,
+                "height": 100,
+                "left": -77.46111528239226,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 42.143,
+              "y": 4.054,
+              "w": 26.905,
+              "h": 45.101
+            },
+            "photoId": "sp37",
+            "photo": {
+              "url": "https://print-assets.invalid/sp37.jpg",
+              "style": {
+                "width": 118.13962708294613,
+                "height": 100,
+                "left": -9.069813541473067,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 70.238,
+              "y": 4.054,
+              "w": 26.905,
+              "h": 45.101
+            },
+            "photoId": "sp38",
+            "photo": {
+              "url": "https://print-assets.invalid/sp38.jpg",
+              "style": {
+                "width": 100,
+                "height": 112.86080430888752,
+                "left": 0,
+                "top": -6.430402154443762
+              }
+            }
+          },
+          {
+            "index": 3,
+            "rect": {
+              "x": 42.143,
+              "y": 50.845,
+              "w": 26.905,
+              "h": 45.101
+            },
+            "photoId": "sp39",
+            "photo": {
+              "url": "https://print-assets.invalid/sp39.jpg",
+              "style": {
+                "width": 177.1540799744272,
+                "height": 100,
+                "left": -38.577039987213595,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 4,
+            "rect": {
+              "x": 70.238,
+              "y": 50.845,
+              "w": 26.905,
+              "h": 45.101
+            },
+            "photoId": "sp40",
+            "photo": {
+              "url": "https://print-assets.invalid/sp40.jpg",
+              "style": {
+                "width": 118.13962708294613,
+                "height": 100,
+                "left": -9.069813541473067,
+                "top": 0
+              }
+            }
+          }
+        ],
+        "caption": null
+      }
+    },
+    {
+      "index": 14,
+      "screen": {
+        "kind": "page",
+        "pageId": "s14",
+        "layoutId": "m-l-six",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp41",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%234d7c0f%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed12%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 128.50736814728745,
+                "left": 0,
+                "top": -14.253684073643726
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 34.683,
+              "y": 4.054,
+              "w": 30.634,
+              "h": 45.101
+            },
+            "photoId": "sp42",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23b45309%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed13%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 155.58955806332716,
+                "height": 100,
+                "left": -27.79477903166358,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 66.508,
+              "y": 4.054,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp43",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23be123c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed14%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 103.75539959741036,
+                "height": 100,
+                "left": -1.87769979870518,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 3,
+            "rect": {
+              "x": 2.857,
+              "y": 50.845,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp44",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23334155%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed15%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 128.50736814728745,
+                "left": 0,
+                "top": -14.253684073643726
+              }
+            }
+          },
+          {
+            "index": 4,
+            "rect": {
+              "x": 34.683,
+              "y": 50.845,
+              "w": 30.634,
+              "h": 45.101
+            },
+            "photoId": "sp45",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221067%22%20viewBox%3D%220%200%201600%201067%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%230f766e%22%2F%3E%3Cpath%20d%3D%22M0%200L1600%201067M1600%200L0%201067%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2216%22%2F%3E%3Ccircle%20cx%3D%22800%22%20cy%3D%22533.5%22%20r%3D%22106.7%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22800.25%22%20font-size%3D%22133.375%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed1%201600%C3%971067%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 155.58955806332716,
+                "height": 100,
+                "left": -27.79477903166358,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 5,
+            "rect": {
+              "x": 66.508,
+              "y": 50.845,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp46",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221200%22%20viewBox%3D%220%200%201200%201200%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%231d4ed8%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201200M1200%200L0%201200%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22600%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%22900%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed2%201200%C3%971200%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 103.75539959741036,
+                "height": 100,
+                "left": -1.87769979870518,
+                "top": 0
+              }
+            }
+          }
+        ],
+        "caption": null
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s14",
+        "layoutId": "m-l-six",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 2.857,
+              "y": 4.054,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp41",
+            "photo": {
+              "url": "https://print-assets.invalid/sp41.jpg",
+              "style": {
+                "width": 100,
+                "height": 128.50736814728745,
+                "left": 0,
+                "top": -14.253684073643726
+              }
+            }
+          },
+          {
+            "index": 1,
+            "rect": {
+              "x": 34.683,
+              "y": 4.054,
+              "w": 30.634,
+              "h": 45.101
+            },
+            "photoId": "sp42",
+            "photo": {
+              "url": "https://print-assets.invalid/sp42.jpg",
+              "style": {
+                "width": 155.58955806332716,
+                "height": 100,
+                "left": -27.79477903166358,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 2,
+            "rect": {
+              "x": 66.508,
+              "y": 4.054,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp43",
+            "photo": {
+              "url": "https://print-assets.invalid/sp43.jpg",
+              "style": {
+                "width": 103.75539959741036,
+                "height": 100,
+                "left": -1.87769979870518,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 3,
+            "rect": {
+              "x": 2.857,
+              "y": 50.845,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp44",
+            "photo": {
+              "url": "https://print-assets.invalid/sp44.jpg",
+              "style": {
+                "width": 100,
+                "height": 128.50736814728745,
+                "left": 0,
+                "top": -14.253684073643726
+              }
+            }
+          },
+          {
+            "index": 4,
+            "rect": {
+              "x": 34.683,
+              "y": 50.845,
+              "w": 30.634,
+              "h": 45.101
+            },
+            "photoId": "sp45",
+            "photo": {
+              "url": "https://print-assets.invalid/sp45.jpg",
+              "style": {
+                "width": 155.58955806332716,
+                "height": 100,
+                "left": -27.79477903166358,
+                "top": 0
+              }
+            }
+          },
+          {
+            "index": 5,
+            "rect": {
+              "x": 66.508,
+              "y": 50.845,
+              "w": 30.635,
+              "h": 45.101
+            },
+            "photoId": "sp46",
+            "photo": {
+              "url": "https://print-assets.invalid/sp46.jpg",
+              "style": {
+                "width": 103.75539959741036,
+                "height": 100,
+                "left": -1.87769979870518,
+                "top": 0
+              }
+            }
+          }
+        ],
+        "caption": null
+      }
+    },
+    {
+      "index": 15,
+      "screen": {
+        "kind": "page",
+        "pageId": "s15",
+        "layoutId": "m-l-full-bleed",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "w": 100,
+              "h": 100
+            },
+            "photoId": "sp47",
+            "photo": {
+              "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23a21caf%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed3%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+              "style": {
+                "width": 100,
+                "height": 189.1891891891892,
+                "left": 0,
+                "top": -44.5945945945946
+              }
+            }
+          }
+        ],
+        "caption": null
+      },
+      "bleed": {
+        "kind": "page",
+        "pageId": "s15",
+        "layoutId": "m-l-full-bleed",
+        "knownLayout": true,
+        "slots": [
+          {
+            "index": 0,
+            "rect": {
+              "x": -1.4285714285714286,
+              "y": -2.027027027027027,
+              "w": 102.85714285714285,
+              "h": 104.05405405405406
+            },
+            "photoId": "sp47",
+            "photo": {
+              "url": "https://print-assets.invalid/sp47.jpg",
+              "style": {
+                "width": 100,
+                "height": 187.012987012987,
+                "left": 0,
+                "top": -43.5064935064935
+              }
+            }
+          }
+        ],
+        "caption": null
+      }
+    }
+  ]
+}

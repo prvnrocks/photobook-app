@@ -13,6 +13,7 @@
 import { notFound } from "next/navigation";
 import { BookPage } from "@/components/book/BookPage";
 import { PrintDocument } from "@/components/print/PrintDocument";
+import { PRINT_FONT_CLASSES } from "@/components/print/print-fonts";
 import {
   devPreviewDoc,
   devPreviewPhotos,
@@ -21,6 +22,7 @@ import {
   parseDevFormat,
   withDevBackgrounds,
 } from "@/lib/book/dev-preview";
+import { devSampleDoc, devSamplePhotos, parseDevSample } from "@/lib/book/dev-sample";
 import { pageMm, sheetMm, type SizeMm } from "@/lib/book/format";
 import { BLEED_MM, SAFE_MM } from "@/lib/layouts";
 import { printRenderPhotos, printSheetTargets } from "@/lib/pdf/print-doc";
@@ -56,12 +58,15 @@ export default async function DevPrintPreview({
   if (process.env.NODE_ENV === "production") notFound();
   const sp = await searchParams;
   const guides = sp.guides !== "0";
-  const format = parseDevFormat(sp.format);
+  // `?sample=modern-portrait|modern-landscape` (M10b A9): the modern sample book instead of the fixture.
+  const sample = parseDevSample(sp.sample);
+  const format = sample ? devSampleDoc(sample).format : parseDevFormat(sp.format);
   const bgKind = parseDevBackgrounds(sp.bg);
-  const doc = bgKind ? withDevBackgrounds(devPreviewDoc(format), bgKind) : devPreviewDoc(format);
+  const base = sample ? devSampleDoc(sample) : devPreviewDoc(format);
+  const doc = bgKind ? withDevBackgrounds(base, bgKind) : base;
   const sheet = sheetMm(format);
   const trim = pageMm(format);
-  const photos = bgKind ? devPreviewPhotosWithBackgrounds() : devPreviewPhotos();
+  const photos = sample ? devSamplePhotos() : bgKind ? devPreviewPhotosWithBackgrounds() : devPreviewPhotos();
   if (typeof sp.sheets === "string") {
     const m = /^(\d{1,3})-(\d{1,3})$/.exec(sp.sheets);
     const sheets = m ? printSheetTargets(doc.pages.length, Number(m[1]), Number(m[2])) : null;
@@ -73,10 +78,12 @@ export default async function DevPrintPreview({
     return <PrintDocument doc={doc} photos={shown} captionLang="ar" sheets={sheets} />;
   }
   const pick = ["full-page", "one-portrait", "two-vertical", "three-mixed"];
-  const pages = pick.map((id) => doc.pages.findIndex((p) => p.layout === id)).filter((i) => i >= 0);
+  const pages = sample
+    ? doc.pages.map((_p, i) => i)
+    : pick.map((id) => doc.pages.findIndex((p) => p.layout === id)).filter((i) => i >= 0);
   const targets: (number | "cover")[] = ["cover", ...pages];
   return (
-    <main className="bg-neutral-300 p-4" data-testid="dev-print">
+    <main className={`bg-neutral-300 p-4 ${PRINT_FONT_CLASSES}`} data-testid="dev-print">
       <h1 className="mb-1 text-lg font-semibold">Print preview (dev only)</h1>
       <p className="mb-4 text-sm text-neutral-700">
         Sheet {sheet.w}×{sheet.h} mm, trim {trim.w}×{trim.h} mm (red), text safe zone {SAFE_MM} mm (blue).

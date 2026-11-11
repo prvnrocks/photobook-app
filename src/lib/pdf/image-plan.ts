@@ -12,7 +12,7 @@
 // (sheetMm) under a ≥ 50 % veil, so it is planned at BACKGROUND_PRINT_DPI (150, like the texture
 // washes; capped by the pass dpi). A photo that is also in a slot gets the larger of both needs.
 
-import { bleedRect, printSlotSizeMm } from "@/lib/book/bleed";
+import { bleedRect, printSlotSizeMm, spreadBleedRect } from "@/lib/book/bleed";
 import { clampCrop, DEFAULT_CROP } from "@/lib/book/crop";
 import { pageMm, sheetMm } from "@/lib/book/format";
 import type { BookDoc, BookFormat, Crop, Layout, Rect } from "@/lib/book/types";
@@ -51,10 +51,16 @@ const finitePos = (v: unknown): v is number => typeof v === "number" && Number.i
 /**
  * Printed size (mm) of a slot rect incl. bleed extension on sides touching a trim edge. Only for
  * a non-default `bleedMm`; the plan itself uses printSlotSizeMm (T3, the renderer's own box).
- * `rect` is % of the trim page of `format` (default portrait).
+ * `rect` is % of the trim page of `format` (default portrait); `spread` = a spread layout's rect
+ * (x 0..200, bleed only on the spread's outer edges — book/bleed.ts spreadBleedRect).
  */
-export function printBoxMm(rect: Rect, bleedMm: number = BLEED_MM, format?: BookFormat | null): { w: number; h: number } {
-  const { sheetMm } = bleedRect(rect, pageMm(format), bleedMm);
+export function printBoxMm(
+  rect: Rect,
+  bleedMm: number = BLEED_MM,
+  format?: BookFormat | null,
+  spread = false,
+): { w: number; h: number } {
+  const { sheetMm } = (spread ? spreadBleedRect : bleedRect)(rect, pageMm(format), bleedMm);
   return { w: sheetMm.w, h: sheetMm.h };
 }
 
@@ -62,7 +68,7 @@ export function printBoxMm(rect: Rect, bleedMm: number = BLEED_MM, format?: Book
 function slotBoxMm(layout: Layout, slotIndex: number, bleedMm: number, format: BookFormat): { w: number; h: number } | null {
   if (bleedMm === BLEED_MM) return printSlotSizeMm(layout, slotIndex, format);
   const rect = layout.slots[slotIndex];
-  return rect ? printBoxMm(rect, bleedMm, format) : null;
+  return rect ? printBoxMm(rect, bleedMm, format, layout.role === "spread") : null;
 }
 
 /**

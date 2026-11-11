@@ -76,9 +76,23 @@ export function bleedRect(rect: Rect, pageMm: PageMm = formatPageMm(), bleedMm: 
 }
 
 /**
+ * Spread slot rect (% of ONE page width, x 0..200 across both facing pages, M10b) → its print box.
+ * The spread is treated as one sheet of 2 × page width: only the OUTER trim edges (x 0, x 200,
+ * top, bottom) get bleed — never the fold, so a photo that stops short of the fold stays short
+ * and one that crosses it (panorama) keeps one box, i.e. the same crop on both halves. `pct` stays
+ * in spread units (x may run below 0 / past 200); `sheetMm` origin = the LEFT sheet's top-left.
+ */
+export function spreadBleedRect(rect: Rect, pageMm: PageMm = formatPageMm(), bleedMm: number = BLEED_MM): BleedRect {
+  // Halving / doubling x is exact in binary floating point, so untouched edges keep their numbers.
+  const b = bleedRect({ x: rect.x / 2, y: rect.y, w: rect.w / 2, h: rect.h }, { w: pageMm.w * 2, h: pageMm.h }, bleedMm);
+  return { pct: { x: b.pct.x * 2, y: b.pct.y, w: b.pct.w * 2, h: b.pct.h }, sheetMm: b.sheetMm, edges: b.edges };
+}
+
+/**
  * Printed size in mm of `slotIndex` of a layout (object or id), including bleed extension —
- * the box the photo must cover in the PDF, on a page of `format` (default portrait). null for an
- * unknown layout / slot.
+ * the box the photo must cover in the PDF, on a page of `format` (default portrait). Spread slots
+ * use spreadBleedRect (whole box across both halves, no bleed at the fold). null for an unknown
+ * layout / slot.
  */
 export function printSlotSizeMm(
   layout: Layout | string,
@@ -88,6 +102,6 @@ export function printSlotSizeMm(
   const l = typeof layout === "string" ? getLayout(layout) : layout;
   const rect = l?.slots[slotIndex];
   if (!rect) return null;
-  const { sheetMm } = bleedRect(rect, formatPageMm(format));
+  const { sheetMm } = l.role === "spread" ? spreadBleedRect(rect, formatPageMm(format)) : bleedRect(rect, formatPageMm(format));
   return { w: sheetMm.w, h: sheetMm.h };
 }
