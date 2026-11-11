@@ -17,6 +17,9 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",
+        // M11 (D-067): terracotta call to action, used sparingly (one per screen at most).
+        accent:
+          "bg-accent-strong text-accent-strong-foreground shadow-card hover:bg-accent-strong/90",
       },
       size: {
         default:
@@ -30,6 +33,11 @@ const buttonVariants = cva(
         "icon-sm":
           "size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg",
         "icon-lg": "size-9",
+        // M11 (D-067) app sizes: 44 px touch target, and a 48 px full-width call to action. Both use a
+        // solid focus ring with an offset (3:1 against paper and against the navy fill).
+        touch:
+          "h-11 gap-2 px-4 text-sm focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background has-data-[icon=inline-end]:pe-3 has-data-[icon=inline-start]:ps-3",
+        cta: "h-12 w-full gap-2 px-5 text-base focus-visible:border-transparent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
       },
     },
     defaultVariants: {

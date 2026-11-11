@@ -110,3 +110,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-11, pdf) poppler isn't installed; Swift PDFKit is a second renderer/text extractor. pdfjs returns some Arabic in visual order — confirm with PDFKit before calling it a bug.
 - (2026-11-11, test) Opening /books/[id]/build with a fresh load starts a new run — never visit it just to measure. Deleting a test user leaves its agent_runs (ids nulled): count before/after and remove your own orphans.
 - (2026-11-11, test) When app tokens change --background, full-page pixel compares of dev fixtures differ; compare per [data-page] element for book-render parity.
+- (2026-11-11, fonts) next/font var(--font-x) includes its "X Fallback" (Times, has Arabic) — in chains meant to reach Cairo, name the family directly then var(--font-cairo). Pixel gates after a body-background change: compare /dev-print?sheets= and page interiors, not full dev pages.
