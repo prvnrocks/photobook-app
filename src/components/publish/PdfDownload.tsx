@@ -13,8 +13,8 @@ import { Circle, CircleCheck, CircleDot, Download, FileDown, Loader2 } from "luc
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { BTN } from "@/components/app/button-classes";
 import { Notice } from "@/components/app/Notice";
-import { buttonVariants } from "@/components/ui/button";
 import { UpgradeButtonView } from "@/components/upgrade/UpgradeButton";
 import { track } from "@/lib/analytics/client";
 import {
@@ -31,7 +31,6 @@ import {
   type PdfUiState,
 } from "@/lib/pdf/ui";
 import { PDF_PAUSED_COPY, pdfProgressSteps } from "@/lib/pdf/progress";
-import { cn } from "@/lib/utils";
 
 export type PdfDownloadProps = {
   bookId: string;
@@ -45,9 +44,9 @@ export type PdfDownloadProps = {
   onBeforeStart?: () => unknown;
 };
 
-// Shared Button looks (M11, D-067).
-const PRIMARY = cn(buttonVariants({ variant: "default", size: "cta" }), "h-auto min-h-12 py-2 whitespace-normal");
-const OUTLINE = cn(buttonVariants({ variant: "outline", size: "cta" }), "bg-card");
+// Shared Button looks (M11, D-067), precomputed (BTN) so the publish route ships no cn/ui-button.
+const PRIMARY = BTN.ctaPrimaryWrap;
+const OUTLINE = BTN.ctaOutlineCard;
 
 export function PdfDownload(props: PdfDownloadProps) {
   const router = useRouter();
@@ -212,11 +211,9 @@ function PdfProgress({ state, copy }: { state: PdfUiState; copy: string }) {
               data-step={step.id}
               data-state={step.state}
               aria-current={step.state === "current" ? "step" : undefined}
-              className={cn(
-                "flex items-center gap-2",
-                step.state === "todo" ? "text-muted-foreground" : "text-foreground",
-                step.state === "current" && "font-medium",
-              )}
+              className={`flex items-center gap-2 ${step.state === "todo" ? "text-muted-foreground" : "text-foreground"}${
+                step.state === "current" ? " font-medium" : ""
+              }`}
             >
               {step.state === "done" ? (
                 <CircleCheck className="size-4 shrink-0 text-success" aria-hidden="true" />

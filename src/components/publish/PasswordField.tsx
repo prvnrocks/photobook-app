@@ -6,9 +6,8 @@
 import { Eye, EyeOff, KeyRound, Loader2 } from "lucide-react";
 import { useId, useState } from "react";
 import type { SetBookPasswordResult } from "@/app/books/[id]/publish/actions";
-import { buttonVariants } from "@/components/ui/button";
+import { BTN } from "@/components/app/button-classes";
 import { PASSWORD_MAX, passwordErrorCopy, passwordLengthError } from "@/lib/publish/ui";
-import { cn } from "@/lib/utils";
 
 export type PasswordFieldProps = {
   hasPassword: boolean;
@@ -19,10 +18,10 @@ export type PasswordFieldProps = {
   disabled?: boolean;
 };
 
-// Shared Button looks (M11, D-067): 44 px targets with a visible focus ring.
-const PRIMARY = buttonVariants({ variant: "default", size: "touch" });
-const OUTLINE = cn(buttonVariants({ variant: "outline", size: "touch" }), "bg-card");
-const DANGER = cn(buttonVariants({ variant: "outline", size: "touch" }), "bg-card text-destructive hover:bg-destructive-soft hover:text-destructive");
+// Shared Button looks (M11, D-067): 44 px targets with a visible focus ring (precomputed, see BTN).
+const PRIMARY = BTN.touchPrimary;
+const OUTLINE = BTN.touchOutlineCard;
+const DANGER = BTN.touchOutlineDanger;
 
 export function PasswordField({ hasPassword, setPassword, onChanged, disabled = false }: PasswordFieldProps) {
   const [editing, setEditing] = useState(false);

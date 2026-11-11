@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { CaptionsPreview } from "@/components/review/CaptionsPreview";
 import { ReviewBody } from "@/components/review/ReviewBody";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { resolveAiMode } from "@/lib/ai/client";
 import { limitsFor } from "@/lib/ai/limits";
 import { getCurrentUser } from "@/lib/auth/current-user";

@@ -15,12 +15,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { startUpgradeCheckout } from "@/app/books/[id]/upgrade/actions";
+import { BTN } from "@/components/app/button-classes";
 import { Notice } from "@/components/app/Notice";
-import { buttonVariants } from "@/components/ui/button";
 import { track } from "@/lib/analytics/client";
 import type { StartUpgradeCheckoutResult, StartUpgradeErrorCode } from "@/lib/upgrade/types";
 import { PAYMENTS_UNAVAILABLE_HINT, runUpgradeCheckout, UPGRADE_BUTTON_LABEL } from "@/lib/upgrade/ui";
-import { cn } from "@/lib/utils";
 
 export type UpgradeButtonProps = {
   bookId: string;
@@ -38,11 +37,12 @@ export type UpgradeButtonProps = {
 };
 
 // Shared Button looks (M11, D-067): 44 px touch / 48 px cta, token colours, visible focus ring.
-// whitespace-normal: the label may wrap on narrow screens instead of overflowing.
+// whitespace-normal: the label may wrap on narrow screens instead of overflowing. Precomputed (BTN):
+// this ships on /b and publish, which must not pull in cn/ui-button.
 const VARIANTS: Record<NonNullable<UpgradeButtonProps["variant"]>, string> = {
-  primary: cn(buttonVariants({ variant: "default", size: "cta" }), "h-auto min-h-12 py-2 whitespace-normal"),
-  outline: cn(buttonVariants({ variant: "outline", size: "touch" }), "h-auto min-h-11 w-full bg-card py-2 whitespace-normal"),
-  viewer: cn(buttonVariants({ variant: "default", size: "cta" }), "h-auto min-h-12 py-2 whitespace-normal"),
+  primary: BTN.ctaPrimaryWrap,
+  outline: BTN.touchOutlineWrap,
+  viewer: BTN.ctaPrimaryWrap,
 };
 
 export function UpgradeButton(props: UpgradeButtonProps) {

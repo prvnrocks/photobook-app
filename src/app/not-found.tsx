@@ -3,7 +3,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { StatusScreen } from "@/components/layout/StatusScreen";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 
 export const metadata: Metadata = { title: "Page not found", robots: { index: false } };
 

@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { BookList } from "@/components/dashboard/BookList";
 import { EmptyState } from "@/components/dashboard/EmptyState";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getOwnEmailReminders } from "@/lib/db/account";
 import { listMyBooks, type BookListItem } from "@/lib/db/books";

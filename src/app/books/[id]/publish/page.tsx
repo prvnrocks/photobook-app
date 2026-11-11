@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { PublishHeader } from "@/components/publish/PublishHeader";
 import { PublishPanel } from "@/components/publish/PublishPanel";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getMyBookTitle } from "@/lib/db/books";

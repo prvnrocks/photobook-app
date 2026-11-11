@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { EditorShell } from "@/components/editor/EditorShell";
 import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { touchWarnedDraft } from "@/lib/db/draft-activity";
 import { getEditorData } from "@/lib/db/editor";

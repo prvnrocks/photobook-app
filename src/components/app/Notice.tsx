@@ -1,10 +1,12 @@
 // Shared status callout (M11, D-067) replacing hand-rolled amber/emerald/red boxes. Tone is shown
 // by icon + a visually hidden prefix as well as colour. Errors are role="alert"; the rest
 // role="status" (polite). Body can contain user text → dir="auto".
+// No cn/tailwind-merge: client components on the public viewer and publish routes import this, and
+// cn costs ~10 kB gzip there. className is appended, not merged — don't pass utilities that
+// conflict with the box (padding, radius, border width, display).
 
 import { CircleAlert, CircleCheck, Info, TriangleAlert, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
 
 export type NoticeTone = "info" | "success" | "warn" | "error";
 
@@ -35,9 +37,9 @@ export function Notice({ tone = "info", title, children, action, className, live
       role={live ? (tone === "error" ? "alert" : "status") : undefined}
       data-tone={tone}
       data-testid={rest["data-testid"]}
-      className={cn("flex gap-3 rounded-xl border p-4 text-foreground", t.box, className)}
+      className={`flex gap-3 rounded-xl border p-4 text-foreground ${t.box}${className ? ` ${className}` : ""}`}
     >
-      <Icon className={cn("mt-0.5 size-5 shrink-0", t.icon_)} aria-hidden="true" />
+      <Icon className={`mt-0.5 size-5 shrink-0 ${t.icon_}`} aria-hidden="true" />
       <div className="min-w-0 flex-1 type-small">
         <span className="sr-only">{t.prefix} </span>
         {title ? (
@@ -46,7 +48,7 @@ export function Notice({ tone = "info", title, children, action, className, live
           </p>
         ) : null}
         {children ? (
-          <div dir="auto" className={cn(title ? "mt-1" : "", "text-foreground/85")}>
+          <div dir="auto" className={title ? "mt-1 text-foreground/85" : "text-foreground/85"}>
             {children}
           </div>
         ) : null}

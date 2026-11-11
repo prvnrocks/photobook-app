@@ -7,7 +7,7 @@ import { HeroIllustration } from "@/components/marketing/HeroIllustration";
 import { HowItWorks } from "@/components/marketing/HowItWorks";
 import { Pricing } from "@/components/marketing/Pricing";
 import { AccountDeletedNotice } from "@/components/settings/AccountDeletedNotice";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { APP_NAME } from "@/lib/brand";
 import {
   CTA_HREF,

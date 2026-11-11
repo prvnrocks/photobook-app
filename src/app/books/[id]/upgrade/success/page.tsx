@@ -3,7 +3,7 @@ import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { BACK_LINK_CLASS } from "@/components/app/PageHeader";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { UpgradeStatusPoller } from "@/components/upgrade/UpgradeStatusPoller";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getPublishRow } from "@/lib/db/publish";

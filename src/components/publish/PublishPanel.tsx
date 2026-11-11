@@ -17,8 +17,8 @@ import type {
   SetBookPasswordResult,
   UnpublishBookResult,
 } from "@/app/books/[id]/publish/actions";
+import { BTN } from "@/components/app/button-classes";
 import { Notice } from "@/components/app/Notice";
-import { buttonVariants } from "@/components/ui/button";
 import { UpgradeButtonView } from "@/components/upgrade/UpgradeButton";
 import { track } from "@/lib/analytics/client";
 import { deletesOnLabel, expiredBookDeleteDate } from "@/lib/dashboard/deletion-chip";
@@ -33,7 +33,6 @@ import {
   publishWithRetry,
   unpublishErrorCopy,
 } from "@/lib/publish/ui";
-import { cn } from "@/lib/utils";
 import { PasswordField } from "./PasswordField";
 import { PdfDownloadView } from "./PdfDownload";
 
@@ -57,10 +56,14 @@ export type PublishPanelProps = {
 
 type Message = { tone: "ok" | "error"; text: string; signIn?: boolean };
 
-// Shared looks (M11, D-067): cards on paper, 44/48 px buttons with a visible focus ring.
+// Shared looks (M11, D-067): cards on paper, 44/48 px buttons with a visible focus ring. Precomputed
+// strings (BTN, CARD_*) instead of buttonVariants + cn keep ~14 kB gzip off this route; CARD_WARN /
+// CARD_INFO are exactly cn(CARD, "<tone classes>").
 const CARD = "flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 shadow-card sm:p-5";
-const PRIMARY = buttonVariants({ variant: "default", size: "cta" });
-const OUTLINE = cn(buttonVariants({ variant: "outline", size: "touch" }), "bg-card");
+const CARD_WARN = "flex flex-col gap-4 rounded-2xl border p-4 shadow-card sm:p-5 border-warning-border bg-warning-soft";
+const CARD_INFO = "flex flex-col gap-4 rounded-2xl border p-4 shadow-card sm:p-5 border-info-border bg-info-soft shadow-none";
+const PRIMARY = BTN.ctaPrimary;
+const OUTLINE = BTN.touchOutlineCard;
 const SPIN = "size-4 animate-spin motion-reduce:animate-none";
 
 export function PublishPanel(props: PublishPanelProps) {
@@ -190,7 +193,7 @@ export function PublishPanelView({
       </div>
 
       {state.expired ? (
-        <section className={cn(CARD, "border-warning-border bg-warning-soft")} data-testid="publish-expired">
+        <section className={CARD_WARN} data-testid="publish-expired">
           <div className="flex items-start gap-3">
             <TriangleAlert className="mt-0.5 size-5 shrink-0 text-warning" aria-hidden="true" />
             <div className="min-w-0">
@@ -265,7 +268,7 @@ export function PublishPanelView({
       )}
 
       {live && state.hasChanges ? (
-        <section className={cn(CARD, "border-info-border bg-info-soft shadow-none")} data-testid="publish-changes">
+        <section className={CARD_INFO} data-testid="publish-changes">
           <p className="type-small flex items-start gap-3 text-foreground">
             <Info className="mt-0.5 size-5 shrink-0 text-info" aria-hidden="true" />
             <span className="min-w-0">You have edits that aren&apos;t in the shared book yet.</span>
@@ -324,7 +327,7 @@ export function PublishPanelView({
                   type="button"
                   onClick={onUnpublish}
                   disabled={locked}
-                  className={cn(buttonVariants({ size: "touch" }), "bg-destructive text-white hover:bg-destructive/90")}
+                  className={BTN.touchDestructiveSolid}
                   data-testid="unpublish-confirm-button"
                 >
                   {busy === "unpublish" ? <Loader2 className={SPIN} aria-hidden="true" /> : null}
@@ -340,7 +343,7 @@ export function PublishPanelView({
               type="button"
               onClick={() => setConfirmUnpublish(true)}
               disabled={locked}
-              className={cn(buttonVariants({ variant: "ghost", size: "touch" }), "-ms-3 self-start text-destructive hover:bg-destructive-soft hover:text-destructive")}
+              className={BTN.touchGhostDanger}
               data-testid="unpublish-button"
             >
               Unpublish

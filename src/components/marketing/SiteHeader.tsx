@@ -1,6 +1,6 @@
 // Top bar for public marketing + legal pages (signed-out friendly; no session reads).
 import Link from "next/link";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { CTA_HREF } from "@/lib/marketing/copy";
 import { cn } from "@/lib/utils";
 import { SiteWordmark } from "./Wordmark";

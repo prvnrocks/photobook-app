@@ -1,14 +1,14 @@
 // Centered card used by the public viewer's non-book states (expired, password, unavailable, 404).
 // M11 T17: the shared app EmptyState on the paper background (serif title, open-book drawing or a
 // state icon), with the actions underneath. Full-height column with safe-area padding; fits 375 px.
-// No hooks — usable from server components.
+// No hooks — usable from server components. PasswordGate (client) imports this, so no ui/button or
+// cn here: link classes come from BTN (precomputed, byte-identical).
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { BTN } from "@/components/app/button-classes";
 import { EmptyState } from "@/components/app/EmptyState";
-import { buttonVariants } from "@/components/ui/button";
 import { APP_NAME } from "@/lib/brand";
-import { cn } from "@/lib/utils";
 
 export function ViewerMessage({
   title,
@@ -56,6 +56,6 @@ export function ViewerMessageIcon({ children }: { children: ReactNode }) {
 }
 
 /** Primary call to action (create-yours / open photobook): navy, 48 px, full width. */
-export const VIEWER_PRIMARY_LINK = cn(buttonVariants({ size: "cta" }), "rounded-full");
+export const VIEWER_PRIMARY_LINK = BTN.viewerPrimary;
 /** Secondary action (open in editor / create your own after an error). */
-export const VIEWER_SECONDARY_LINK = cn(buttonVariants({ variant: "outline", size: "cta" }), "rounded-full bg-card");
+export const VIEWER_SECONDARY_LINK = BTN.viewerSecondary;

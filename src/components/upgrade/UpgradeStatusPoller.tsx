@@ -13,12 +13,11 @@ import { AlertCircle, BookX, Check, CheckCircle2, Clock, ExternalLink, Loader2, 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { BTN } from "@/components/app/button-classes";
 import { EmptyState } from "@/components/app/EmptyState";
-import { buttonVariants } from "@/components/ui/button";
 import { LIMITS } from "@/lib/ai/limits";
 import { createUpgradePoller, type UpgradePollPhase } from "@/lib/upgrade/poller";
 import type { UpgradeStatusResult } from "@/lib/upgrade/types";
-import { cn } from "@/lib/utils";
 
 export type UpgradeStatusPollerProps = {
   bookId: string;
@@ -30,9 +29,10 @@ export type UpgradeStatusPollerProps = {
   check: () => Promise<UpgradeStatusResult>;
 };
 
-// Shared Button looks (M11, D-067) on links and buttons alike.
-const PRIMARY = buttonVariants({ variant: "default", size: "cta" });
-const OUTLINE = cn(buttonVariants({ variant: "outline", size: "cta" }), "bg-card");
+// Shared Button looks (M11, D-067) on links and buttons alike, precomputed (BTN) so this route ships
+// no cn/ui-button.
+const PRIMARY = BTN.ctaPrimary;
+const OUTLINE = BTN.ctaOutlineCard;
 
 export function UpgradeStatusPoller(props: UpgradeStatusPollerProps) {
   const router = useRouter();
@@ -133,8 +133,8 @@ function StatusScreen({
       data-phase={phase}
       aria-busy={busy}
       art={
-        <span className={cn("flex size-16 items-center justify-center rounded-full", TONE_RING[tone])}>
-          <Icon className={cn("size-8", busy && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
+        <span className={`flex size-16 items-center justify-center rounded-full ${TONE_RING[tone]}`}>
+          <Icon className={busy ? "size-8 animate-spin motion-reduce:animate-none" : "size-8"} aria-hidden="true" />
         </span>
       }
     >
@@ -178,7 +178,7 @@ export function UpgradeStatusView({
     return (
       <section className="flex flex-col gap-stack" data-testid="upgrade-paid">
         <div className="flex flex-col items-center gap-3 pt-4 text-center">
-          <span className={cn("flex size-16 items-center justify-center rounded-full", TONE_RING.success)}>
+          <span className={`flex size-16 items-center justify-center rounded-full ${TONE_RING.success}`}>
             <CheckCircle2 className="size-8" aria-hidden="true" />
           </span>
           <h1 className="type-h1 text-foreground">Your book is upgraded</h1>

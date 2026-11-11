@@ -3,12 +3,12 @@
 // Share actions for a book link: "Send on WhatsApp" (the call to action), Copy link (with toast)
 // and the native share sheet when the browser has one, as secondary actions. Reused by the publish
 // screen (T8, M11 T15) and the viewer's share sheet. No analytics: nothing here logs or tags the
-// slug/URL.
+// slug/URL. Classes come from BTN (precomputed buttonVariants + cn) — this file ships on the public
+// viewer, so it must not import ui/button or cn (~14 kB gzip).
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, Link2, MessageCircle, Share2 } from "lucide-react";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { BTN } from "@/components/app/button-classes";
 import { whatsappShareUrl } from "@/lib/viewer/share";
 
 export type ShareButtonsProps = {
@@ -48,7 +48,7 @@ async function copyText(text: string): Promise<boolean> {
 }
 
 /** Class for a secondary share action passed via `secondary` (same look as Copy link). */
-export const SHARE_SECONDARY_CLASS = cn(buttonVariants({ variant: "outline", size: "touch" }), "min-w-[9rem] flex-1 basis-0 bg-card");
+export const SHARE_SECONDARY_CLASS = BTN.shareSecondary;
 
 export function ShareButtons({ url, title, layout = "stack", secondary, className }: ShareButtonsProps) {
   const [canShare, setCanShare] = useState(false);
@@ -81,21 +81,23 @@ export function ShareButtons({ url, title, layout = "stack", secondary, classNam
 
   const stack = layout === "stack";
   // Secondary actions share a row on a phone (two per line, wrapping) and never overflow 375 px.
-  const second = stack ? SHARE_SECONDARY_CLASS : cn(buttonVariants({ variant: "outline", size: "touch" }), "bg-card");
+  const second = stack ? SHARE_SECONDARY_CLASS : BTN.touchOutlineCard;
+  const box = stack ? "flex flex-col gap-2" : "flex flex-wrap items-center gap-2";
 
   return (
-    <div className={cn(stack ? "flex flex-col gap-2" : "flex flex-wrap items-center gap-2", className)} data-testid="share-buttons">
+    <div className={className ? `${box} ${className}` : box} data-testid="share-buttons">
       <a
         href={whatsappShareUrl(title, url)}
         target="_blank"
         rel="noopener noreferrer"
-        className={cn(buttonVariants({ variant: "whatsapp", size: stack ? "cta" : "touch" }))}
+        className={stack ? BTN.ctaWhatsapp : BTN.touchWhatsapp}
         data-testid="share-whatsapp"
       >
         <MessageCircle className="size-5" aria-hidden />
         Send on WhatsApp
       </a>
-      <div className={cn("flex flex-wrap gap-2", !stack && "contents")}>
+      {/* Same as cn("flex flex-wrap gap-2", !stack && "contents"): contents replaces flex. */}
+      <div className={stack ? "flex flex-wrap gap-2" : "flex-wrap gap-2 contents"}>
         <button type="button" onClick={onCopy} className={second} data-testid="share-copy">
           {toast?.ok ? <Check className="size-4 text-success" aria-hidden /> : <Link2 className="size-4" aria-hidden />}
           Copy link

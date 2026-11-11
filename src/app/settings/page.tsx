@@ -6,7 +6,7 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { DeleteAccount } from "@/components/settings/DeleteAccount";
 import { EmailRemindersToggle } from "@/components/settings/EmailRemindersToggle";
 import { SettingsMemory } from "@/components/settings/SettingsMemory";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getOwnEmailReminders } from "@/lib/db/account";
 import { getOwnMemoryView, type OwnMemoryView } from "@/lib/db/memory";

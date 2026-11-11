@@ -1,8 +1,9 @@
 // Shared empty state (M11, D-067): a small open-book drawing in the paper palette, a serif title,
 // one line of help and usually one action. No texture image (0 extra bytes).
+// No cn/tailwind-merge (keeps ~10 kB gzip out of the /b and upgrade client bundles): className is
+// appended, not merged — don't pass utilities that conflict with the card (padding, radius, display).
 
 import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
 
 function OpenBookArt() {
   return (
@@ -43,7 +44,7 @@ export function EmptyState({ title, description, action, art, className, heading
       data-testid={rest["data-testid"]}
       data-phase={rest["data-phase"]}
       aria-busy={rest["aria-busy"] ? "true" : undefined}
-      className={cn("flex flex-col items-center rounded-2xl border border-border bg-card px-6 py-10 text-center shadow-card", className)}
+      className={`flex flex-col items-center rounded-2xl border border-border bg-card px-6 py-10 text-center shadow-card${className ? ` ${className}` : ""}`}
     >
       {art ?? <OpenBookArt />}
       <Heading dir="auto" className="type-h2 mt-5 text-foreground">

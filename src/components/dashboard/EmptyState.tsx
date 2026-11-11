@@ -1,7 +1,7 @@
 // Shown on the dashboard when the user has no books yet (M11 T8: the shared app EmptyState).
 import Link from "next/link";
 import { EmptyState as AppEmptyState } from "@/components/app/EmptyState";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 
 export function EmptyState() {

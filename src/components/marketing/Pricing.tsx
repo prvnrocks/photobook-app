@@ -1,6 +1,6 @@
 import { Check, X } from "lucide-react";
 import Link from "next/link";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { CTA_HREF, CTA_LABEL } from "@/lib/marketing/copy";
 import { plans } from "@/lib/marketing/plans";
 import { cn } from "@/lib/utils";
