@@ -19,8 +19,10 @@ import { PdfDownloadView } from "@/components/publish/PdfDownload";
 import { PublishPanelView, type PublishActions } from "@/components/publish/PublishPanel";
 import { devEditorData } from "@/lib/editor/dev-fixture";
 import { initEditorState, type EditorSelection } from "@/lib/editor/store";
+import { PDF_PAUSED_COPY, PDF_STEP_LABELS, pdfProgressSteps } from "@/lib/pdf/progress";
 import type { PdfUiState } from "@/lib/pdf/ui";
 import { DEV_PUBLISH_URL, devPublishState, type DevPublishStateName } from "@/lib/publish/dev-fixture";
+import { publishCompare } from "@/lib/publish/compare";
 
 const BOOK = "11111111-1111-4111-8111-111111111111";
 const URL_ = "https://x.supabase.co/storage/v1/object/sign/exports/e1.pdf?token=t";
@@ -45,7 +47,7 @@ describe("<PdfDownloadView>", () => {
     expect(html).toContain("Download PDF");
     expect(html).toMatch(/data-testid="pdf-status" data-state="idle"/);
     expect(html).not.toMatch(/data-testid="pdf-download"[^>]*disabled/);
-    expect(html).toMatch(/class="[^"]*min-h-11[^"]*"[^>]*data-testid="pdf-download"/);
+    expect(html).toMatch(/class="[^"]*\bmin-h-1[12]\b[^"]*"[^>]*data-testid="pdf-download"/);
     expect(has(html, "pdf-upgrade")).toBe(false);
     expect(has(html, "pdf-download-again")).toBe(false);
   });
@@ -119,6 +121,40 @@ describe("<PdfDownloadView>", () => {
   });
 });
 
+describe("PDF progress checklist (M11 T16: only real export states)", () => {
+  const states = (s: PdfUiState) => pdfProgressSteps(s)?.map((x) => `${x.id}:${x.state}`) ?? null;
+  it("maps starting / queued / rendering; nothing for idle, ready, timeout, error", () => {
+    expect(states({ kind: "starting" })).toEqual(["request:current", "queue:todo", "render:todo", "ready:todo"]);
+    expect(states({ kind: "preparing", exportId: "e", status: "queued", paused: false })).toEqual(["request:done", "queue:current", "render:todo", "ready:todo"]);
+    expect(states({ kind: "preparing", exportId: "e", status: "rendering", paused: false })).toEqual(["request:done", "queue:done", "render:current", "ready:todo"]);
+    expect(states({ kind: "idle" })).toBeNull();
+    expect(states({ kind: "ready", exportId: "e", url: URL_, filename: "a.pdf", bytes: 1, pageCount: 1 })).toBeNull();
+    expect(states({ kind: "timeout", exportId: "e" })).toBeNull();
+    expect(states({ kind: "error", code: "failed" })).toBeNull();
+  });
+
+  it("renders the checklist with aria-current on the live step, and the paused note only when paused", () => {
+    const html = view({ state: { kind: "preparing", exportId: "e1", status: "rendering", paused: false } });
+    expect(has(html, "pdf-progress")).toBe(true);
+    expect(html).toMatch(/data-step="render" data-state="current" aria-current="step"/);
+    expect(html).toMatch(/data-step="queue" data-state="done"/);
+    expect(html).toContain(PDF_STEP_LABELS.render);
+    expect(has(html, "pdf-paused")).toBe(false);
+    const paused = view({ state: { kind: "preparing", exportId: "e1", status: "queued", paused: true } });
+    expect(paused).toContain(PDF_PAUSED_COPY);
+    expect(paused).toMatch(/data-step="queue" data-state="current"/);
+  });
+
+  it("ready / error keep their exact text on pdf-status-text (Notice adds an sr-only prefix outside it)", () => {
+    const ready = view({ state: { kind: "ready", exportId: "e1", url: URL_, filename: "s.pdf", bytes: 1_000_000, pageCount: 3 } });
+    expect(ready).toContain('data-testid="pdf-status-text">Your PDF is ready</span>');
+    expect(has(ready, "pdf-progress")).toBe(false);
+    expect(ready).toContain('data-tone="success"');
+    const err = view({ state: { kind: "error", code: "failed" } });
+    expect(err).toContain('data-tone="error"');
+  });
+});
+
 describe("PublishPanel PDF section", () => {
   const actions: PublishActions = {
     publish: async () => ({ ok: true, slug: "s", url: DEV_PUBLISH_URL, expiresAt: null }),
@@ -127,7 +163,7 @@ describe("PublishPanel PDF section", () => {
   };
   const panel = (name: DevPublishStateName) =>
     renderToStaticMarkup(
-      <PublishPanelView bookId={BOOK} title="T" state={devPublishState(name)} actions={actions} paymentsEnabled refresh={() => {}} />,
+      <PublishPanelView bookId={BOOK} title="T" state={devPublishState(name)} actions={actions} paymentsEnabled compare={publishCompare()} refresh={() => {}} />,
     );
 
   it.each(["draft-paid", "live-paid"] as const)("%s: PDF section with Download PDF", (name) => {

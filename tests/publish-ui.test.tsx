@@ -23,6 +23,11 @@ import {
   publishWithRetry,
   unpublishErrorCopy,
 } from "@/lib/publish/ui";
+import { readFileSync } from "node:fs";
+import { LIMITS } from "@/lib/ai/limits";
+import { UPGRADE } from "@/lib/pricing";
+import { publishCompare } from "@/lib/publish/compare";
+import { FREE_LINK_DAYS } from "@/lib/publish/rules";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/app/books/[id]/upgrade/actions", () => ({ startUpgradeCheckout: vi.fn() }));
@@ -44,6 +49,7 @@ function panel(name: DevPublishStateName, paymentsEnabled = true): string {
       state={devPublishState(name)}
       actions={actions}
       paymentsEnabled={paymentsEnabled}
+      compare={publishCompare()}
       refresh={() => {}}
       now={NOW}
     />,
@@ -166,7 +172,9 @@ describe("PublishPanelView states", () => {
     expect(html).toContain('data-state="unpublished"');
     expect(html).toMatch(/<button type="button" class="[^"]*" data-testid="publish-button"/); // no disabled=""
     expect(html).toContain(">Publish</");
-    expect(html).toContain(FREE_NOTICE_COPY);
+    // M11 T15: the free notice is a Free vs upgraded comparison card (numbers from the limit modules).
+    expect(html).toContain(publishCompare().summary);
+    expect(html).toContain('data-testid="publish-compare"');
     expect(html).toMatch(/<button type="button" class="[^"]*" data-testid="publish-upgrade"/); // no disabled=""
     expect(html).toContain("Upgrade this book — AED 39");
     expect(html).not.toMatch(/coming soon/i);
@@ -205,7 +213,8 @@ describe("PublishPanelView states", () => {
   it("published free: link, share buttons, open book, expiry, unpublish, no publish-changes", () => {
     const html = panel("live");
     expect(html).toContain('data-state="published"');
-    expect(html).toMatch(/<input readOnly="" dir="ltr"[^>]*data-testid="publish-url" value="https:\/\/photobook\.example\/b\/[^"]+"/);
+    expect(html).toMatch(/<input id="[^"]+" readOnly="" dir="ltr"[^>]*data-testid="publish-url" value="https:\/\/photobook\.example\/b\/[^"]+"/);
+    expect(html).toMatch(/<label for="[^"]+"[^>]*>Book link<\/label>/);
     expect(has(html, "share-buttons")).toBe(true);
     expect(has(html, "share-whatsapp")).toBe(true);
     expect(html).toMatch(/<a href="\/b\/sara-and-omar-wedding-7Hq2xYp9Kd" target="_blank" rel="noopener noreferrer"[^>]*data-testid="publish-open"/);
@@ -250,6 +259,43 @@ describe("PublishPanelView states", () => {
     const html = panel("unpublished");
     expect(html).toContain("keeps the same link and expiry date");
     expect(has(html, "unpublish-section")).toBe(false);
+  });
+
+  it("live: Send on WhatsApp is the one accent cta; Copy link and Open book are secondary, before the link field", () => {
+    const html = panel("live");
+    expect(html).toContain("Send on WhatsApp");
+    expect(html.match(/class="[^"]*\bbg-accent-strong\b/g)?.length).toBe(1);
+    const order = ["share-whatsapp", "share-copy", "publish-open", "publish-url"].map((id) => html.indexOf(`data-testid="${id}"`));
+    expect(order.every((i) => i > 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // Unpublish lives in the quiet bottom section, after password.
+    expect(html.indexOf('data-testid="unpublish-section"')).toBeGreaterThan(html.indexOf('data-testid="password-section"'));
+  });
+
+  it("free vs upgraded card: every number comes from LIMITS / UPGRADE / FREE_LINK_DAYS", () => {
+    const c = publishCompare();
+    expect(c.summary).toBe(`Free link works for ${FREE_LINK_DAYS} days after you publish`);
+    expect(FREE_NOTICE_COPY.startsWith(c.summary)).toBe(true);
+    expect(c.price).toBe(UPGRADE.label);
+    const row = (k: string) => c.rows.find((r) => r.key === k)!;
+    expect(row("pages")).toMatchObject({ free: `Up to ${LIMITS.free.maxPages}`, paid: `Up to ${LIMITS.paid.maxPages}` });
+    expect(row("link")).toMatchObject({ free: `${FREE_LINK_DAYS} days`, paid: "Permanent" });
+    expect(row("pdf").freeIncluded).toBe(false);
+    const html = panel("live");
+    for (const r of c.rows) {
+      expect(html).toContain(`data-row="${r.key}"`);
+      expect(html).toContain(r.free);
+      expect(html).toContain(r.paid);
+    }
+    expect(html).toContain(`${UPGRADE.label} · ${c.priceNote}`);
+    // Source never hard-codes the limits.
+    const src = readFileSync("src/components/publish/PublishPanel.tsx", "utf8") + readFileSync("src/lib/publish/compare.ts", "utf8");
+    expect(src).not.toMatch(/\b(20|100|30) (pages|days)\b|AED 39/);
+  });
+
+  it("blocked reason and messages keep their exact text on the testid element", () => {
+    const html = panel("empty");
+    expect(html).toContain(`data-testid="publish-blocked">${blockReasonCopy("empty", 20)}</p>`);
   });
 
   it("PasswordField off: add button only", () => {

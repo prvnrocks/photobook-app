@@ -218,6 +218,29 @@ describe("upgrade status view", () => {
   const view = (phase: UpgradePollPhase, liveSlug: string | null = null) =>
     renderToStaticMarkup(<UpgradeStatusView bookId={BOOK} phase={phase} liveSlug={liveSlug} onRetry={() => {}} />);
 
+  it("M11: every phase has one h1 with the exact heading, shared button looks (≥ 44 px, focus ring)", () => {
+    const heads: Array<[UpgradePollPhase, string]> = [
+      ["polling", "Confirming payment…"],
+      ["processing", "Your payment is processing…"],
+      ["paid", "Your book is upgraded"],
+      ["failed", "Payment didn&#x27;t go through"],
+      ["support", "We need to check this payment"],
+      ["timeout", "Still confirming"],
+      ["unauthenticated", "You&#x27;ve been signed out"],
+      ["not_found", "We couldn&#x27;t find this book"],
+    ];
+    for (const [phase, title] of heads) {
+      const html = view(phase, "s-1");
+      expect(html.match(/<h1/g)?.length, phase).toBe(1);
+      expect(html, phase).toMatch(new RegExp(`<h1[^>]*>${title}</h1>`));
+      for (const m of html.matchAll(/<(?:a|button)[^>]*class="([^"]*)"/g)) {
+        expect(m[1], phase).toMatch(/\bh-12\b/);
+        expect(m[1], phase).toContain("focus-visible:ring-2");
+      }
+    }
+    expect(view("paid")).toContain("PDF download");
+  });
+
   it("polling shows the spinner copy and no success", () => {
     const html = view("polling");
     expect(html).toContain("Confirming payment…");

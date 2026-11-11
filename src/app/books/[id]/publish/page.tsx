@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
-import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
+import { PublishHeader } from "@/components/publish/PublishHeader";
 import { PublishPanel } from "@/components/publish/PublishPanel";
+import { buttonVariants } from "@/components/ui/button";
 import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getMyBookTitle } from "@/lib/db/books";
+import { publishCompare } from "@/lib/publish/compare";
 import { isPaymentsEnabled } from "@/lib/stripe";
 import { getPublishState, publishBookAction, setBookPasswordAction, unpublishBookAction } from "./actions";
 
@@ -24,10 +26,10 @@ export default async function PublishPage({ params }: { params: Promise<{ id: st
     if (res.error === "signed_out") redirect(`/login?next=${encodeURIComponent(`/books/${id}/publish`)}`);
     if (res.error === "not_found") notFound();
     return (
-      <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-4 px-4 py-10" data-testid="publish-load-error">
-        <h1 className="text-2xl font-semibold">We couldn&apos;t load this page</h1>
-        <p className="text-base text-muted-foreground">Please check your connection and try again.</p>
-        <Link href={`/books/${id}/publish`} className="min-h-11 font-medium underline underline-offset-4">
+      <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-4 px-gutter py-10" data-testid="publish-load-error">
+        <h1 className="type-h1 text-foreground">We couldn&apos;t load this page</h1>
+        <p className="type-body text-muted-foreground">Please check your connection and try again.</p>
+        <Link href={`/books/${id}/publish`} className={buttonVariants({ variant: "default", size: "cta" })}>
           Try again
         </Link>
       </main>
@@ -37,29 +39,15 @@ export default async function PublishPage({ params }: { params: Promise<{ id: st
   const title = (await getMyBookTitle(id).catch(() => null)) || "Our photobook";
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-4 px-4 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-3">
-      <header className="flex items-center gap-1">
-        <Link
-          href={`/books/${id}/edit`}
-          className="-ml-2 flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm font-medium hover:bg-muted"
-          data-testid="publish-back"
-        >
-          <ArrowLeft className="size-4" aria-hidden="true" />
-          Back to editor
-        </Link>
-      </header>
-      <div className="min-w-0">
-        <h1 className="text-2xl font-semibold">Share your book</h1>
-        <p dir="auto" className="truncate text-sm text-muted-foreground" data-testid="publish-title">
-          {title}
-        </p>
-      </div>
+    <main className="mx-auto flex min-h-dvh w-full max-w-app flex-col gap-stack px-gutter pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-3">
+      <PublishHeader bookId={id} title={title} />
       <Suspense fallback={null}>
         <UpgradeCancelledNotice />
       </Suspense>
       <PublishPanel
         bookId={id}
         paymentsEnabled={isPaymentsEnabled()}
+        compare={publishCompare()}
         title={title}
         state={res.state}
         actions={{

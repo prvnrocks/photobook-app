@@ -3,6 +3,7 @@
 // Static renders (no DOM); server actions are mocked or passed as props.
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { publishCompare } from "@/lib/publish/compare";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/app/settings/actions", () => ({ setEmailRemindersAction: vi.fn(), deleteAccountAction: vi.fn() }));
@@ -130,7 +131,7 @@ describe("dashboard: BookList + delete menu", () => {
       <BookCardMenuView bookId={BOOK} title={null} deleteBook={async () => ({ ok: true })} refresh={() => {}} />,
     );
     expect(html).toMatch(/data-testid="book-menu"/);
-    expect(html).toContain("min-h-11 w-11");
+    expect(html).toContain("min-h-11 min-w-11");
     expect(html).toContain('aria-label="Book options: Untitled book"');
     expect(has(html, "delete-book-dialog")).toBe(false);
   });
@@ -179,6 +180,7 @@ describe("publish screen: expired free book shows its deletion date", () => {
           setPassword: async () => ({ ok: true, hasPassword: false }),
         }}
         paymentsEnabled
+        compare={publishCompare()}
         refresh={() => {}}
         now={NOW}
       />,

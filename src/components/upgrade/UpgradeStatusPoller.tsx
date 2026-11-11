@@ -9,13 +9,15 @@
 // <UpgradeStatusView> is the pure per-phase markup (unit tests, dev fixture).
 // Polling rules live in src/lib/upgrade/poller.ts.
 
-import { AlertCircle, CheckCircle2, Clock, ExternalLink, Loader2, RotateCw } from "lucide-react";
+import { AlertCircle, BookX, Check, CheckCircle2, Clock, ExternalLink, Loader2, LogIn, RotateCw, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { buttonVariants } from "@/components/ui/button";
 import { LIMITS } from "@/lib/ai/limits";
 import { createUpgradePoller, type UpgradePollPhase } from "@/lib/upgrade/poller";
 import type { UpgradeStatusResult } from "@/lib/upgrade/types";
+import { cn } from "@/lib/utils";
 
 export type UpgradeStatusPollerProps = {
   bookId: string;
@@ -27,9 +29,9 @@ export type UpgradeStatusPollerProps = {
   check: () => Promise<UpgradeStatusResult>;
 };
 
-const BTN = "inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-medium transition-colors disabled:opacity-50";
-const PRIMARY = `${BTN} bg-primary text-primary-foreground hover:bg-primary/90`;
-const OUTLINE = `${BTN} border bg-background hover:bg-muted`;
+// Shared Button looks (M11, D-067) on links and buttons alike.
+const PRIMARY = buttonVariants({ variant: "default", size: "cta" });
+const OUTLINE = cn(buttonVariants({ variant: "outline", size: "cta" }), "bg-card");
 
 export function UpgradeStatusPoller(props: UpgradeStatusPollerProps) {
   const router = useRouter();
@@ -92,6 +94,52 @@ export function upgradeSuccessPath(bookId: string): string {
   return `/books/${bookId}/upgrade/success`;
 }
 
+type Tone = "busy" | "success" | "error" | "neutral";
+
+const TONE_RING: Record<Tone, string> = {
+  busy: "bg-secondary text-accent-strong",
+  success: "bg-success-soft text-success",
+  error: "bg-destructive-soft text-destructive",
+  neutral: "bg-secondary text-primary",
+};
+
+/** One centred status screen: icon disc, serif heading, body, actions. */
+function StatusScreen({
+  tone,
+  icon: Icon,
+  title,
+  children,
+  actions,
+  testId,
+  phase,
+  busy = false,
+}: {
+  tone: Tone;
+  icon: LucideIcon;
+  title: string;
+  children?: ReactNode;
+  actions?: ReactNode;
+  testId: string;
+  phase?: string;
+  busy?: boolean;
+}) {
+  return (
+    <section
+      className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card px-5 py-8 text-center shadow-card"
+      aria-busy={busy ? "true" : undefined}
+      data-testid={testId}
+      data-phase={phase}
+    >
+      <span className={cn("flex size-16 items-center justify-center rounded-full", TONE_RING[tone])}>
+        <Icon className={cn("size-8", busy && "animate-spin motion-reduce:animate-none")} aria-hidden="true" />
+      </span>
+      <h1 className="type-h1 text-foreground">{title}</h1>
+      {children}
+      {actions ? <div className="mt-2 flex w-full flex-col gap-2">{actions}</div> : null}
+    </section>
+  );
+}
+
 export function UpgradeStatusView({
   bookId,
   phase,
@@ -108,44 +156,43 @@ export function UpgradeStatusView({
 
   if (phase === "polling" || phase === "processing") {
     return (
-      <section
-        className="flex flex-col items-center gap-4 py-10 text-center"
-        aria-busy="true"
-        data-testid="upgrade-polling"
-        data-phase={phase}
+      <StatusScreen
+        tone="busy"
+        icon={Loader2}
+        busy
+        testId="upgrade-polling"
+        phase={phase}
+        title={phase === "processing" ? "Your payment is processing…" : "Confirming payment…"}
       >
-        <Loader2 className="size-8 animate-spin text-muted-foreground" aria-hidden="true" />
-        <h1 className="text-2xl font-semibold">
-          {phase === "processing" ? "Your payment is processing…" : "Confirming payment…"}
-        </h1>
-        <p className="text-base text-muted-foreground" role="status">
+        <p className="type-body text-muted-foreground" role="status">
           This usually takes a few seconds. Please keep this page open.
         </p>
-      </section>
+      </StatusScreen>
     );
   }
 
   if (phase === "paid") {
     return (
-      <section className="flex flex-col gap-5" data-testid="upgrade-paid">
-        <div className="flex flex-col items-center gap-3 pt-6 text-center">
-          <CheckCircle2 className="size-10 text-primary" aria-hidden="true" />
-          <h1 className="text-2xl font-semibold">Your book is upgraded</h1>
-          <p className="text-base text-muted-foreground">Thank you! Here&apos;s what you get:</p>
+      <section className="flex flex-col gap-stack" data-testid="upgrade-paid">
+        <div className="flex flex-col items-center gap-3 pt-4 text-center">
+          <span className={cn("flex size-16 items-center justify-center rounded-full", TONE_RING.success)}>
+            <CheckCircle2 className="size-8" aria-hidden="true" />
+          </span>
+          <h1 className="type-h1 text-foreground">Your book is upgraded</h1>
+          <p className="type-body text-muted-foreground">Thank you! Here&apos;s what you get:</p>
         </div>
-        <ul className="flex flex-col gap-2 rounded-2xl border p-4 text-sm" data-testid="upgrade-benefits">
-          <li className="flex items-start gap-2">
-            <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-            No watermark
-          </li>
-          <li className="flex items-start gap-2">
-            <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-            Permanent link: it never expires
-          </li>
-          <li className="flex items-start gap-2">
-            <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-            Up to {LIMITS.paid.maxPages} pages
-          </li>
+        <ul className="type-small flex flex-col divide-y divide-border rounded-2xl border border-border bg-card px-4 shadow-card" data-testid="upgrade-benefits">
+          {[
+            "No watermark",
+            "Permanent link: it never expires",
+            `Up to ${LIMITS.paid.maxPages} pages`,
+            "PDF download",
+          ].map((text) => (
+            <li key={text} className="flex items-start gap-3 py-3">
+              <Check className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
+              {text}
+            </li>
+          ))}
         </ul>
         <div className="flex flex-col gap-2">
           {liveSlug ? (
@@ -153,17 +200,17 @@ export function UpgradeStatusView({
               href={`/b/${encodeURIComponent(liveSlug)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className={`${PRIMARY} w-full`}
+              className={PRIMARY}
               data-testid="upgrade-open-live"
             >
               <ExternalLink className="size-4" aria-hidden="true" />
               Open live link
             </a>
           ) : null}
-          <Link href={publishHref} className={`${liveSlug ? OUTLINE : PRIMARY} w-full`} data-testid="upgrade-publish">
+          <Link href={publishHref} className={liveSlug ? OUTLINE : PRIMARY} data-testid="upgrade-publish">
             {liveSlug ? "Publish screen" : "Publish your book"}
           </Link>
-          <Link href={editHref} className={`${OUTLINE} w-full`} data-testid="upgrade-edit">
+          <Link href={editHref} className={OUTLINE} data-testid="upgrade-edit">
             Back to editor
           </Link>
         </div>
@@ -173,78 +220,103 @@ export function UpgradeStatusView({
 
   if (phase === "failed") {
     return (
-      <section className="flex flex-col items-center gap-4 py-10 text-center" data-testid="upgrade-failed">
-        <AlertCircle className="size-10 text-destructive" aria-hidden="true" />
-        <h1 className="text-2xl font-semibold">Payment didn&apos;t go through</h1>
-        <p className="text-base text-muted-foreground">The payment wasn&apos;t completed. You can try again from the publish screen.</p>
-        <Link href={publishHref} className={`${PRIMARY} w-full`} data-testid="upgrade-back-publish">
-          Back to publish screen
-        </Link>
-      </section>
+      <StatusScreen
+        tone="error"
+        icon={AlertCircle}
+        testId="upgrade-failed"
+        title="Payment didn't go through"
+        actions={
+          <Link href={publishHref} className={PRIMARY} data-testid="upgrade-back-publish">
+            Back to publish screen
+          </Link>
+        }
+      >
+        <p className="type-body text-muted-foreground">The payment wasn&apos;t completed. You can try again from the publish screen.</p>
+      </StatusScreen>
     );
   }
 
   if (phase === "support") {
     return (
-      <section className="flex flex-col items-center gap-4 py-10 text-center" data-testid="upgrade-support">
-        <AlertCircle className="size-10 text-destructive" aria-hidden="true" />
-        <h1 className="text-2xl font-semibold">We need to check this payment</h1>
-        <p className="text-base text-muted-foreground" role="status">
+      <StatusScreen
+        tone="error"
+        icon={AlertCircle}
+        testId="upgrade-support"
+        title="We need to check this payment"
+        actions={
+          <Link href={publishHref} className={OUTLINE} data-testid="upgrade-support-publish">
+            Back to publish screen
+          </Link>
+        }
+      >
+        <p className="type-body text-muted-foreground" role="status">
           Something went wrong with this payment. We&apos;ll sort it out — contact support and mention this book.
         </p>
-        <p className="break-all font-mono text-xs text-muted-foreground" data-testid="upgrade-support-ref">
+        <p className="w-full break-all rounded-lg bg-muted px-3 py-2 font-mono text-xs text-muted-foreground" data-testid="upgrade-support-ref">
           Book reference: {bookId}
         </p>
-        <Link href={publishHref} className={`${OUTLINE} w-full`} data-testid="upgrade-support-publish">
-          Back to publish screen
-        </Link>
-      </section>
+      </StatusScreen>
     );
   }
 
   if (phase === "timeout") {
     return (
-      <section className="flex flex-col items-center gap-4 py-10 text-center" data-testid="upgrade-timeout">
-        <Clock className="size-10 text-muted-foreground" aria-hidden="true" />
-        <h1 className="text-2xl font-semibold">Still confirming</h1>
-        <p className="text-base text-muted-foreground">
+      <StatusScreen
+        tone="neutral"
+        icon={Clock}
+        testId="upgrade-timeout"
+        title="Still confirming"
+        actions={
+          <>
+            <button type="button" onClick={onRetry} className={PRIMARY} data-testid="upgrade-refresh">
+              <RotateCw className="size-4" aria-hidden="true" />
+              Refresh
+            </button>
+            <Link href={publishHref} className={OUTLINE} data-testid="upgrade-timeout-publish">
+              Back to publish screen
+            </Link>
+          </>
+        }
+      >
+        <p className="type-body text-muted-foreground">
           We haven&apos;t had confirmation from Stripe yet. If you completed payment, this page will update
           shortly — you won&apos;t be charged twice.
         </p>
-        <button type="button" onClick={onRetry} className={`${PRIMARY} w-full`} data-testid="upgrade-refresh">
-          <RotateCw className="size-4" aria-hidden="true" />
-          Refresh
-        </button>
-        <Link href={publishHref} className={`${OUTLINE} w-full`} data-testid="upgrade-timeout-publish">
-          Back to publish screen
-        </Link>
-      </section>
+      </StatusScreen>
     );
   }
 
   if (phase === "unauthenticated") {
     return (
-      <section className="flex flex-col items-center gap-4 py-10 text-center" data-testid="upgrade-signed-out">
-        <h1 className="text-2xl font-semibold">You&apos;ve been signed out</h1>
-        <p className="text-base text-muted-foreground">Sign in again to see your upgrade status.</p>
-        <Link
-          href={`/login?next=${encodeURIComponent(upgradeSuccessPath(bookId))}`}
-          className={`${PRIMARY} w-full`}
-          data-testid="upgrade-sign-in"
-        >
-          Sign in
-        </Link>
-      </section>
+      <StatusScreen
+        tone="neutral"
+        icon={LogIn}
+        testId="upgrade-signed-out"
+        title="You've been signed out"
+        actions={
+          <Link href={`/login?next=${encodeURIComponent(upgradeSuccessPath(bookId))}`} className={PRIMARY} data-testid="upgrade-sign-in">
+            Sign in
+          </Link>
+        }
+      >
+        <p className="type-body text-muted-foreground">Sign in again to see your upgrade status.</p>
+      </StatusScreen>
     );
   }
 
   return (
-    <section className="flex flex-col items-center gap-4 py-10 text-center" data-testid="upgrade-not-found">
-      <h1 className="text-2xl font-semibold">We couldn&apos;t find this book</h1>
-      <p className="text-base text-muted-foreground">It may have been deleted.</p>
-      <Link href="/dashboard" className={`${PRIMARY} w-full`} data-testid="upgrade-dashboard">
-        Go to my books
-      </Link>
-    </section>
+    <StatusScreen
+      tone="neutral"
+      icon={BookX}
+      testId="upgrade-not-found"
+      title="We couldn't find this book"
+      actions={
+        <Link href="/dashboard" className={PRIMARY} data-testid="upgrade-dashboard">
+          Go to my books
+        </Link>
+      }
+    >
+      <p className="type-body text-muted-foreground">It may have been deleted.</p>
+    </StatusScreen>
   );
 }

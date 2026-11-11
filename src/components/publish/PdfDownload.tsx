@@ -9,10 +9,12 @@
 // <PdfDownload> wires next/navigation (refresh for the upgrade fallback); <PdfDownloadView> is
 // router-free (PublishPanelView, unit tests, dev fixtures). Paid status comes from the server.
 
-import { Download, FileDown, Loader2 } from "lucide-react";
+import { Circle, CircleCheck, CircleDot, Download, FileDown, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { Notice } from "@/components/app/Notice";
+import { buttonVariants } from "@/components/ui/button";
 import { UpgradeButtonView } from "@/components/upgrade/UpgradeButton";
 import { track } from "@/lib/analytics/client";
 import {
@@ -28,6 +30,8 @@ import {
   type PdfTransport,
   type PdfUiState,
 } from "@/lib/pdf/ui";
+import { PDF_PAUSED_COPY, pdfProgressSteps } from "@/lib/pdf/progress";
+import { cn } from "@/lib/utils";
 
 export type PdfDownloadProps = {
   bookId: string;
@@ -41,10 +45,9 @@ export type PdfDownloadProps = {
   onBeforeStart?: () => unknown;
 };
 
-const BTN =
-  "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-5 text-center text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
-const PRIMARY = `${BTN} bg-primary text-primary-foreground hover:bg-primary/90`;
-const OUTLINE = `${BTN} border bg-background hover:bg-muted`;
+// Shared Button looks (M11, D-067).
+const PRIMARY = cn(buttonVariants({ variant: "default", size: "cta" }), "h-auto min-h-12 py-2 whitespace-normal");
+const OUTLINE = cn(buttonVariants({ variant: "outline", size: "cta" }), "bg-card");
 
 export function PdfDownload(props: PdfDownloadProps) {
   const router = useRouter();
@@ -105,7 +108,7 @@ export function PdfDownloadView({
   if (!isPaid) {
     return (
       <div className="flex w-full min-w-0 flex-col gap-3" data-testid="pdf-download-free">
-        <p className="text-sm">{PDF_FREE_COPY}</p>
+        <p className="type-small text-foreground">{PDF_FREE_COPY}</p>
         <UpgradeButtonView
           bookId={bookId}
           returnTo={returnTo}
@@ -135,41 +138,31 @@ export function PdfDownloadView({
           className={PRIMARY}
           data-testid="pdf-download"
         >
-          {busy ? <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden="true" /> : <FileDown className="size-4 shrink-0" aria-hidden="true" />}
+          {busy ? <Loader2 className="size-4 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <FileDown className="size-4 shrink-0" aria-hidden="true" />}
           <span className="min-w-0">{pdfButtonLabel(state)}</span>
         </button>
       ) : null}
 
       <div aria-live="polite" data-testid="pdf-status" data-state={state.kind} data-code={state.kind === "error" ? state.code : undefined}>
-        {copy ? (
-          <div
-            role={isError ? "alert" : "status"}
-            className={
-              isError && !notPaid
-                ? "rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-                : state.kind === "ready"
-                  ? "rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
-                  : "flex items-start gap-2 rounded-lg bg-muted/60 px-3 py-2 text-sm"
-            }
-          >
-            {busy ? <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin" aria-hidden="true" /> : null}
-            <p className="min-w-0">
-              <span data-testid="pdf-status-text">{copy}</span>
-              {state.kind === "ready" ? (
-                <span className="block text-xs text-emerald-800/80" data-testid="pdf-ready-detail">
-                  {pdfReadyDetail(state)}
-                </span>
-              ) : null}
-              {state.kind === "error" && state.code === "unauthenticated" ? (
-                <>
-                  {" "}
-                  <Link href={`/login?next=${encodeURIComponent(returnTo)}`} className="font-medium underline">
-                    Sign in
-                  </Link>
-                </>
-              ) : null}
-            </p>
-          </div>
+        {copy && busy ? (
+          <PdfProgress state={state} copy={copy} />
+        ) : copy ? (
+          <Notice tone={isError ? (notPaid ? "info" : "error") : state.kind === "ready" ? "success" : "info"}>
+            <span data-testid="pdf-status-text">{copy}</span>
+            {state.kind === "ready" ? (
+              <span className="block text-muted-foreground" data-testid="pdf-ready-detail">
+                {pdfReadyDetail(state)}
+              </span>
+            ) : null}
+            {state.kind === "error" && state.code === "unauthenticated" ? (
+              <>
+                {" "}
+                <Link href={`/login?next=${encodeURIComponent(returnTo)}`} className="font-medium underline underline-offset-4">
+                  Sign in
+                </Link>
+              </>
+            ) : null}
+          </Notice>
         ) : null}
       </div>
 
@@ -190,6 +183,54 @@ export function PdfDownloadView({
           testId="pdf-upgrade"
           refresh={refresh}
         />
+      ) : null}
+    </div>
+  );
+}
+
+/** Busy export: spinner + copy + the real-state checklist (src/lib/pdf/progress.ts). */
+function PdfProgress({ state, copy }: { state: PdfUiState; copy: string }) {
+  const steps = pdfProgressSteps(state);
+  const paused = state.kind === "preparing" && state.paused;
+  return (
+    <div role="status" className="type-small rounded-xl border border-border bg-background p-4" data-testid="pdf-progress">
+      <p className="flex items-start gap-2 font-medium text-foreground">
+        <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-accent-strong motion-reduce:animate-none" aria-hidden="true" />
+        <span className="min-w-0" data-testid="pdf-status-text">
+          {copy}
+        </span>
+      </p>
+      {steps ? (
+        <ol className="mt-3 flex flex-col gap-2 ps-1" aria-label="PDF progress">
+          {steps.map((step) => (
+            <li
+              key={step.id}
+              data-step={step.id}
+              data-state={step.state}
+              aria-current={step.state === "current" ? "step" : undefined}
+              className={cn(
+                "flex items-center gap-2",
+                step.state === "todo" ? "text-muted-foreground" : "text-foreground",
+                step.state === "current" && "font-medium",
+              )}
+            >
+              {step.state === "done" ? (
+                <CircleCheck className="size-4 shrink-0 text-success" aria-hidden="true" />
+              ) : step.state === "current" ? (
+                <CircleDot className="size-4 shrink-0 text-accent-strong" aria-hidden="true" />
+              ) : (
+                <Circle className="size-4 shrink-0 text-input" aria-hidden="true" />
+              )}
+              {step.label}
+              <span className="sr-only">{step.state === "done" ? " (done)" : step.state === "current" ? " (in progress)" : ""}</span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+      {paused ? (
+        <p className="mt-2 text-muted-foreground" data-testid="pdf-paused">
+          {PDF_PAUSED_COPY}
+        </p>
       ) : null}
     </div>
   );

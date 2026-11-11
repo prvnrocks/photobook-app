@@ -102,9 +102,12 @@ describe("<UpgradeButton>", () => {
     expect(view({ label: "Upgrade to bring it back" })).toContain("Upgrade to bring it back");
   });
 
-  it("payments on: enabled button, no hint, ≥ 44 px tall (min-h-11)", () => {
+  it("payments on: enabled button, no hint, ≥ 44 px tall (min-h-11 / min-h-12, M11 shared Button looks)", () => {
     const html = view();
-    expect(html).toMatch(/<button type="button" class="[^"]*min-h-11[^"]*" data-testid="upgrade-button"/);
+    expect(html).toMatch(/<button type="button" class="[^"]*\bmin-h-1[12]\b[^"]*" data-testid="upgrade-button"/);
+    for (const variant of ["primary", "outline", "viewer"] as const) {
+      expect(view({ variant })).toMatch(/class="[^"]*\bmin-h-1[12]\b[^"]*focus-visible:ring[^"]*" data-testid="upgrade-button"|class="[^"]*focus-visible:ring[^"]*\bmin-h-1[12]\b[^"]*" data-testid="upgrade-button"/);
+    }
     expect(html).not.toContain('disabled=""');
     expect(html).not.toContain(PAYMENTS_UNAVAILABLE_HINT);
     expect(html).toContain('data-payments="on"');

@@ -15,9 +15,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { startUpgradeCheckout } from "@/app/books/[id]/upgrade/actions";
+import { Notice } from "@/components/app/Notice";
+import { buttonVariants } from "@/components/ui/button";
 import { track } from "@/lib/analytics/client";
 import type { StartUpgradeCheckoutResult, StartUpgradeErrorCode } from "@/lib/upgrade/types";
 import { PAYMENTS_UNAVAILABLE_HINT, runUpgradeCheckout, UPGRADE_BUTTON_LABEL } from "@/lib/upgrade/ui";
+import { cn } from "@/lib/utils";
 
 export type UpgradeButtonProps = {
   bookId: string;
@@ -34,12 +37,12 @@ export type UpgradeButtonProps = {
   onBeforeStart?: () => void;
 };
 
-const BASE =
-  "inline-flex min-h-11 w-full items-center justify-center gap-2 px-5 text-center font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+// Shared Button looks (M11, D-067): 44 px touch / 48 px cta, token colours, visible focus ring.
+// whitespace-normal: the label may wrap on narrow screens instead of overflowing.
 const VARIANTS: Record<NonNullable<UpgradeButtonProps["variant"]>, string> = {
-  primary: `${BASE} rounded-full bg-primary text-sm text-primary-foreground hover:bg-primary/90`,
-  outline: `${BASE} rounded-full border bg-background text-sm hover:bg-muted`,
-  viewer: `${BASE} rounded-full bg-neutral-900 text-base text-white hover:bg-neutral-800`,
+  primary: cn(buttonVariants({ variant: "default", size: "cta" }), "h-auto min-h-12 py-2 whitespace-normal"),
+  outline: cn(buttonVariants({ variant: "outline", size: "touch" }), "h-auto min-h-11 w-full bg-card py-2 whitespace-normal"),
+  viewer: cn(buttonVariants({ variant: "default", size: "cta" }), "h-auto min-h-12 py-2 whitespace-normal"),
 };
 
 export function UpgradeButton(props: UpgradeButtonProps) {
@@ -119,32 +122,26 @@ export function UpgradeButtonView({
         <span className="min-w-0">{label}</span>
       </button>
       {!paymentsEnabled ? (
-        <p id={hintId} className="text-center text-xs text-muted-foreground" data-testid={hintId}>
+        <p id={hintId} className="type-small text-center text-muted-foreground" data-testid={hintId}>
           {PAYMENTS_UNAVAILABLE_HINT}
         </p>
       ) : null}
       <div aria-live="polite">
         {message ? (
-          <p
-            role={message.code === "already_paid" ? "status" : "alert"}
-            className={
-              message.code === "already_paid"
-                ? "rounded-lg bg-emerald-50 px-3 py-2 text-center text-sm text-emerald-800"
-                : "rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-center text-sm text-destructive"
-            }
-            data-testid={`${testId}-message`}
-            data-code={message.code}
-          >
-            {message.text}
-            {message.code === "unauthenticated" ? (
-              <>
-                {" "}
-                <Link href={`/login?next=${encodeURIComponent(returnTo)}`} className="font-medium underline">
-                  Sign in
-                </Link>
-              </>
-            ) : null}
-          </p>
+          <Notice tone={message.code === "already_paid" ? "success" : "error"}>
+            {/* The testid sits on the text itself (Notice adds a screen-reader tone prefix). */}
+            <p data-testid={`${testId}-message`} data-code={message.code}>
+              {message.text}
+              {message.code === "unauthenticated" ? (
+                <>
+                  {" "}
+                  <Link href={`/login?next=${encodeURIComponent(returnTo)}`} className="font-medium underline underline-offset-4">
+                    Sign in
+                  </Link>
+                </>
+              ) : null}
+            </p>
+          </Notice>
         ) : null}
       </div>
     </div>

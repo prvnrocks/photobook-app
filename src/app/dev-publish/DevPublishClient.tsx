@@ -5,8 +5,10 @@
 
 import { Suspense, useMemo, useRef, useState } from "react";
 import type { PublishBookResult, PublishState } from "@/app/books/[id]/publish/actions";
+import { PublishHeader } from "@/components/publish/PublishHeader";
 import { PublishPanelView, type PublishActions } from "@/components/publish/PublishPanel";
 import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
+import type { PublishCompare } from "@/lib/publish/compare";
 import { DEV_PUBLISH_URL, devPublishState, type DevPublishStateName } from "@/lib/publish/dev-fixture";
 
 const BOOK_ID = "00000000-0000-4000-8000-000000000000";
@@ -16,10 +18,12 @@ export function DevPublishClient({
   name,
   result,
   paymentsEnabled,
+  compare,
 }: {
   name: DevPublishStateName;
   result: "ok" | "conflict" | "conflict2" | "failed";
   paymentsEnabled: boolean;
+  compare: PublishCompare;
 }) {
   const [state, setState] = useState<PublishState>(() => devPublishState(name));
   const next = useRef<PublishState>(state);
@@ -52,8 +56,8 @@ export function DevPublishClient({
   );
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-4 px-4 pb-10 pt-3">
-      <h1 className="text-2xl font-semibold">Share your book</h1>
+    <main className="mx-auto flex min-h-dvh w-full max-w-app flex-col gap-stack px-gutter pb-10 pt-3">
+      <PublishHeader bookId={BOOK_ID} title="Sara & Omar" />
       <Suspense fallback={null}>
         <UpgradeCancelledNotice />
       </Suspense>
@@ -63,6 +67,7 @@ export function DevPublishClient({
         state={state}
         actions={actions}
         paymentsEnabled={paymentsEnabled}
+        compare={compare}
         refresh={() => setState(next.current)}
       />
     </main>
