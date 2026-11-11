@@ -279,3 +279,45 @@ export const geometricLandscapeSpreadBand: Layout = {
   ],
   decorations: [{ kind: "sticker", id: "photo-corner", box: g.shift(ONE_BAND.wedge), layer: "over", tint: ACCENT }],
 };
+
+// --- later additions (append-only) ----------------------------------------------------------------
+
+// Two LANDSCAPE photos (the page's own orientation) stacked in a photo column that bleeds top /
+// left / bottom: a diagonal seam rising to the right between them (3 mm gutter, perpendicular) and
+// a right edge on the shared slope (parallel to g-l-one-band's cut); text column beside it.
+const STACK_R0 = 128; // right edge x at the top (mm); x = R0 − SLOPE·y
+const STACK_M = -12 / 128; // seam: y = STACK_S0 + STACK_M·x (rises to the right)
+const STACK_S0 = 84;
+const STACK_HALF = verticalGap(GEO_GUTTER_MM / 2, STACK_M); // vertical half-gutter across the seam
+/** Point where the seam edge y = c + m·x meets the slanted right edge. */
+const stackCorner = (c: number): Pt => {
+  const y = (c + STACK_M * STACK_R0) / (1 + STACK_M * SLOPE);
+  return [STACK_R0 - SLOPE * y, y];
+};
+const stackTop: Pt[] = [[0, 0], [STACK_R0, 0], stackCorner(STACK_S0 - STACK_HALF), [0, STACK_S0 - STACK_HALF]];
+const stackBottom: Pt[] = [[0, STACK_S0 + STACK_HALF], stackCorner(STACK_S0 + STACK_HALF), [STACK_R0 - SLOPE * H, H], [0, H]];
+const TWO_STACK = {
+  wedge: rect(138, 34, 148, 44),
+  chapter: rect(138, 48, 198, 62),
+  date: rect(138, 66, 182, 74),
+  caption: rect(138, 80, 198, 124),
+};
+
+/** Two landscape photos stacked, diagonal seam + slanted right edge (bleed top/left/bottom); text column. */
+export const geometricLandscapeTwoStack: Layout = {
+  id: "g-l-two-stack",
+  name: "2 wide photos, diagonal seam + text column",
+  role: "page",
+  style: "geometric",
+  format: "A5_LANDSCAPE",
+  photoCount: 2,
+  prefers: ["landscape", "landscape"],
+  slots: [poly(stackTop), poly(stackBottom)],
+  caption: TWO_STACK.caption,
+  texts: [
+    { bind: "chapterTitle", box: TWO_STACK.chapter, align: "start", font: "chapter" },
+    { bind: "dateLabel", box: TWO_STACK.date, align: "center", font: "subtitle", plate: DATE_PLATE },
+    { bind: "pageCaption", box: TWO_STACK.caption, align: "start", font: "caption" },
+  ],
+  decorations: [{ kind: "sticker", id: "photo-corner", box: TWO_STACK.wedge, layer: "over", tint: ACCENT }],
+};

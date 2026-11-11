@@ -105,9 +105,9 @@ const textRects = (l: Layout) => [...(l.caption ? [l.caption] : []), ...(l.texts
 describe.each(SETS)("geometric $orientation catalogue", ({ format, prefix, list }) => {
   const byRole = (role: Layout["role"]) => list.filter((l) => l.role === role);
 
-  it("has 1 cover, 6 single pages, 1 spread — all geometric, ids g-<o>-*", () => {
+  it("has 1 cover, 7 single pages, 1 spread — all geometric, ids g-<o>-*", () => {
     expect(byRole("cover")).toHaveLength(1);
-    expect(byRole("page")).toHaveLength(6);
+    expect(byRole("page")).toHaveLength(7);
     expect(byRole("spread")).toHaveLength(1);
     for (const l of list) {
       expect(l.id.startsWith(prefix)).toBe(true);
@@ -356,12 +356,13 @@ describe.each(SETS)("validateBookDoc over every geometric $orientation layout", 
   it("an aligned doc using the cover, every single page and the spread has no issues", () => {
     let n = 1;
     const pages: BookPage[] = [];
-    for (const l of list.filter((x) => x.role === "page")) {
-      pages.push(pageOf(l, `pg${pages.length}`, n));
-      n += l.photoCount;
-    }
+    // Spreads first: they must start on an even index whatever the single-page count is.
     for (const l of list.filter((x) => x.role === "spread")) {
       pages.push(...spreadOf(l, `sp${pages.length}`, n));
+      n += l.photoCount;
+    }
+    for (const l of list.filter((x) => x.role === "page")) {
+      pages.push(pageOf(l, `pg${pages.length}`, n));
       n += l.photoCount;
     }
     const cover = list.find((l) => l.role === "cover")!;

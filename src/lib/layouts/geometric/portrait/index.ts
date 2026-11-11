@@ -11,6 +11,7 @@ import {
   geometricPortraitThreeDiamond,
   geometricPortraitTwoCircle,
   geometricPortraitTwoDiag,
+  geometricPortraitTwoPair,
 } from "./layouts";
 
 export const GEOMETRIC_PORTRAIT_LAYOUTS: readonly Layout[] = [
@@ -22,4 +23,5 @@ export const GEOMETRIC_PORTRAIT_LAYOUTS: readonly Layout[] = [
   geometricPortraitFourPetals,
   geometricPortraitFiveHex,
   geometricPortraitSpreadBand,
+  geometricPortraitTwoPair,
 ];

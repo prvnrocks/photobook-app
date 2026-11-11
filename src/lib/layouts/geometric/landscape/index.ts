@@ -11,6 +11,7 @@ import {
   geometricLandscapeThreeDiamond,
   geometricLandscapeTwoCircle,
   geometricLandscapeTwoDiag,
+  geometricLandscapeTwoStack,
 } from "./layouts";
 
 export const GEOMETRIC_LANDSCAPE_LAYOUTS: readonly Layout[] = [
@@ -22,4 +23,5 @@ export const GEOMETRIC_LANDSCAPE_LAYOUTS: readonly Layout[] = [
   geometricLandscapeFourPetals,
   geometricLandscapeFiveHex,
   geometricLandscapeSpreadBand,
+  geometricLandscapeTwoStack,
 ];

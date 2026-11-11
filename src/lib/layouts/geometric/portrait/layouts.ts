@@ -280,3 +280,46 @@ export const geometricPortraitSpreadBand: Layout = {
   ],
   decorations: [{ kind: "sticker", id: "photo-corner", box: g.shift(ONE_BAND_WEDGE), layer: "over", tint: ACCENT }],
 };
+
+// --- later additions (append-only) ----------------------------------------------------------------
+
+// Two tall photos side by side for PORTRAIT photos (the page's own orientation): one slanted seam
+// between them (3 mm gutter, perpendicular) and a shared bottom edge falling to the right, parallel
+// to the spread diagonal (slope 30/148), so the text block below reads like g-p-one-band's.
+const PAIR_BOTTOM = 92; // bottom edge height at x = 0 (mm); x = W → 122
+const pairBottom = (x: number) => PAIR_BOTTOM + SLOPE * x;
+const PAIR_K = 10 / 120; // seam leans right going down ("\"): x = PAIR_S0 + PAIR_K·y
+const PAIR_S0 = 69;
+const PAIR_HALF = verticalGap(GEO_GUTTER_MM / 2, PAIR_K); // horizontal half-gutter across the seam
+/** Point where the seam edge x = s0 + k·y meets the bottom edge. */
+const pairCorner = (s0: number): Pt => {
+  const y = (PAIR_BOTTOM + SLOPE * s0) / (1 - SLOPE * PAIR_K);
+  return [s0 + PAIR_K * y, y];
+};
+const pairLeft: Pt[] = [[0, 0], [PAIR_S0 - PAIR_HALF, 0], pairCorner(PAIR_S0 - PAIR_HALF), [0, pairBottom(0)]];
+const pairRight: Pt[] = [[PAIR_S0 + PAIR_HALF, 0], [W, 0], [W, pairBottom(W)], pairCorner(PAIR_S0 + PAIR_HALF)];
+const TWO_PAIR = {
+  wedge: rect(12, 131, 22, 141),
+  chapter: rect(26, 130, 136, 144),
+  date: rect(12, 148, 60, 156),
+  caption: rect(12, 162, 136, 201),
+};
+
+/** Two portrait photos side by side, slanted seam + diagonal bottom (bleed top/left/right); text block below. */
+export const geometricPortraitTwoPair: Layout = {
+  id: "g-p-two-pair",
+  name: "2 tall photos, slanted seam + text block",
+  role: "page",
+  style: "geometric",
+  format: "A5_PORTRAIT",
+  photoCount: 2,
+  prefers: ["portrait", "portrait"],
+  slots: [poly(pairLeft), poly(pairRight)],
+  caption: TWO_PAIR.caption,
+  texts: [
+    { bind: "chapterTitle", box: TWO_PAIR.chapter, align: "start", font: "chapter" },
+    { bind: "dateLabel", box: TWO_PAIR.date, align: "center", font: "subtitle", plate: DATE_PLATE },
+    { bind: "pageCaption", box: TWO_PAIR.caption, align: "start", font: "caption" },
+  ],
+  decorations: [{ kind: "sticker", id: "photo-corner", box: TWO_PAIR.wedge, layer: "over", tint: ACCENT }],
+};

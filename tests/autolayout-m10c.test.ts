@@ -381,6 +381,21 @@ describe("spread rules per style (rule 10)", () => {
     expect(spreadsOf(d3).map((s) => s.layout)).toEqual(["g-l-spread-band"]);
   });
 
+  it("geometric: phone shots in the book's own orientation pair up (g-l-two-stack / g-p-two-pair), not one one-band page each", () => {
+    // 7 × 16:9 landscapes in a landscape book gave 7 one-band pages before the pair layouts existed.
+    for (const [format, w, h, pair] of [
+      ["A5_LANDSCAPE", 1920, 1080, "g-l-two-stack"],
+      ["A5_PORTRAIT", 1080, 1920, "g-p-two-pair"],
+    ] as const) {
+      const photos = Array.from({ length: 7 }, (_, i) => shot(`o${i}`, w, h, i));
+      const doc = autolayout(photos, { ...BASE, isPaid: true, design: { format, designStyle: "geometric" } });
+      const layouts = doc.pages.map((p) => p.layout);
+      expect(layouts, format).toContain(pair);
+      expect(layouts.filter((id) => id.endsWith("-one-band")).length, format).toBe(1); // the chapter opener only
+      expectValidDoc(doc, keptIds(photos), 100, format);
+    }
+  });
+
   it("spreads count 2 pages toward the free cap", () => {
     for (const design of DESIGNS) {
       const photos = Array.from({ length: 120 }, (_, i) => shotLP(`f${i}`, !(i % 3), i * 2));
