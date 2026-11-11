@@ -137,3 +137,18 @@ describe("AppToast", () => {
     expect(h).not.toContain("fixed");
   });
 });
+
+describe("PageHeader testid props (M11 follow-up)", () => {
+  it("puts testids on the back link, eyebrow and title when given", () => {
+    const html = renderToStaticMarkup(
+      <PageHeader title="T" eyebrow="E" back={{ href: "/x", label: "Back", testId: "b-id" }} titleTestId="t-id" eyebrowTestId="e-id" />,
+    );
+    expect(html).toContain('data-testid="b-id"');
+    expect(html).toContain('data-testid="t-id"');
+    expect(html).toContain('data-testid="e-id"');
+  });
+  it("omits them otherwise", () => {
+    const html = renderToStaticMarkup(<PageHeader title="T" />);
+    expect(html).not.toContain('data-testid="t-id"');
+  });
+});
