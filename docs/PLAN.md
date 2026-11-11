@@ -179,7 +179,7 @@ Plan + decisions: `.agentos/runs/m10.md`, D-062. Three shippable phases.
 - [ ] M10c: geometric + scrapbook styles (shapes, frames, tilt, stickers), crop on shaped slots, AI-suggested backgrounds (kept photos only)
 **Done when:** a user builds a landscape or portrait book in any style with spreads and backgrounds that look the same in editor, flipbook and PDF.
 > M10b: migration 1900 applied to prod 2026-11-11 (rls 175).
-> M10b (2026-11-11): built, re-reviewed (APPROVED), live specs green (m10b 7/7, pdf 7/7, ai-auth 15/15, editor 62, editor-spreads 8, viewer 14, m10b-viewer 6, launch-smoke, m10a, publish-auth, payments, analytics), goldens (m9 byte-frozen + m10b). PDF chunks ≤20 sheets / ≤60 distinct images, spread cap 1.5×. NOT deployed. Post-deploy: one real prod PDF with Arabic + new fonts (no Type3 / missing glyphs) and a real-photo large-book size check.
+> M10b (2026-11-11): built, re-reviewed (APPROVED), live specs green (m10b 7/7, pdf 7/7, ai-auth 15/15, editor 62, editor-spreads 8, viewer 14, m10b-viewer 6, launch-smoke, m10a, publish-auth, payments, analytics), goldens (m9 byte-frozen + m10b). PDF chunks ≤20 sheets / ≤60 distinct images, spread cap 1.5×. Deployed 2026-11-11 (main d922e15). Post-deploy: one real prod PDF with Arabic + new fonts (no Type3 / missing glyphs) and a real-photo large-book size check.
 > M10a (2026-11-10): built, reviewed (APPROVED), live e2e/m10a 7/7, launch-smoke 7/7, editor 59/59, goldens byte-frozen. No migration. NOT deployed. Needs user sign-off on fonts/textures (docs/design/) before M10b.
 
 ## Milestone 10+ — After launch

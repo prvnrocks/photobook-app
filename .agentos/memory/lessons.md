@@ -106,3 +106,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-11, schema) When a DB enum allows values the code can't lay out yet, raise one typed 'unsupported' error at layout entry points and refuse in each writer — never remap (doc must agree with column).
 - (2026-11-11, pdf) Before blaming a size cap for too_large, check which pass it binds in (the 250-dpi fallback may sit under the cap). Chunk by distinct images with spread pairs whole, and scale the print-ready cap with image count.
 - (2026-11-11, test) pdf-render-live is skipped by default — pass PDF_CHROME_PATH from .env.local to vitest in any PDF re-gate.
+- (2026-11-11, ops) gh/vercel CLIs aren't installed locally — confirm a deploy by fetching an asset only the new build has on the alpha domain.

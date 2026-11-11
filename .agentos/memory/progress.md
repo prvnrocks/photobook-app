@@ -141,3 +141,8 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - Tests: 5197 vitest, goldens, all live specs green; reviewer APPROVED. Runs: .agentos/runs/m10.md.
 - Open risks: worst-case synthetic 100p panorama book too_large after fallback + ~2 GB local peak (real-photo check on prod); intermittent Supabase fetch hang (no deadline); Mapbox token/plan (NEEDS-HUMAN).
 - NEXT: user "deploy" → merge to main; post-deploy real PDF check (Arabic + new fonts, Type0 only). Then M10c (geometric + scrapbook, shaped-slot crop, AI backgrounds).
+
+## 2026-11-11 — Milestone 10b — deployed
+- main fast-forwarded f1a5626 → d922e15 and pushed (via the resumed PDF builder at the user's request); prod alpha serves the new build (new texture asset 200). Migration 1900 was already remote; no db push.
+- PDF_RENDERER_VERSION 3 → each paid book's next PDF re-renders once (counts toward the daily export cap).
+- Post-deploy: real prod PDF check (Arabic + new fonts on Vercel Linux Chromium) — see runs/m10.md.
