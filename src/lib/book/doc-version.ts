@@ -16,7 +16,7 @@ export function upgradeDocV1(v1: BookDocV1): BookDoc {
 
 /**
  * True when `doc` cannot be written as v1 without losing something: landscape format, a non-colour
- * book background, a non-classic design style, any page background or spread side, more slots
+ * book background, a book backgroundSource (M10c D5), a non-classic design style, any page background or spread side, more slots
  * on a page than v1 allows, a spread or non-classic layout (page or cover), or a v2-only caption
  * font (fonts-v2.ts) as book font or on a page caption. (An explicit `page.background: null` is
  * the same as absent.) Unknown layout ids are not v2 by themselves (validation rejects them).
@@ -24,6 +24,7 @@ export function upgradeDocV1(v1: BookDocV1): BookDoc {
 export function usesV2Features(doc: BookDoc): boolean {
   if (doc.format !== "A5_PORTRAIT") return true;
   if (doc.style.background.kind !== "color") return true;
+  if (doc.style.backgroundSource !== undefined) return true;
   if ((doc.style.designStyle ?? DEFAULT_DESIGN_STYLE) !== DEFAULT_DESIGN_STYLE) return true;
   if (isV2CaptionFont(doc.style.font)) return true;
   if (isV2Layout(doc.cover.layout)) return true;
@@ -95,6 +96,7 @@ function normaliseV2(doc: BookDoc): BookDoc {
       font: doc.style.font,
     },
   };
+  if (doc.style.backgroundSource !== undefined) out.style.backgroundSource = doc.style.backgroundSource;
   if (doc.meta !== undefined) out.meta = { ...doc.meta };
   return out;
 }

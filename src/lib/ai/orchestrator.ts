@@ -81,6 +81,7 @@ import * as booksDb from "@/lib/db/books";
 import { getUserMemoryAdmin } from "@/lib/db/memory";
 import type { BookAiStatus, BookForRun, WriteDocResult } from "@/lib/db/books";
 import * as photosDb from "@/lib/db/photos";
+import { applyBackgroundSuggestions } from "@/lib/design/background-suggest";
 import { colorFromThumbBase64 } from "@/lib/image/color-server";
 import type { CurationPhotoRow, CurationWrite } from "@/lib/db/photos";
 import type { Json } from "@/lib/supabase/database.types";
@@ -808,7 +809,7 @@ function applyRows(photos: CurationPhoto[], rows: CurationWrite[]): void {
   }
 }
 
-/** Rule-based album, stamped with the book's format + design style (D-063, M10b A6). */
+/** Rule-based album, stamped with the book's format + design style (D-063, M10b A6), with rule backgrounds. */
 function ruleDoc(photos: CurationPhoto[], book: BookForRun, runId: string | null): BookDoc {
   const design = bookDesignOf(book);
   const doc = autolayout(photos.map(toAutoPhoto), {
@@ -819,7 +820,18 @@ function ruleDoc(photos: CurationPhoto[], book: BookForRun, runId: string | null
     runId,
     design,
   });
-  return withBookDesign(doc, design);
+  // M10c T11: rule background suggestions (Modern/Geometric/Scrapbook; classic unchanged).
+  return applyBackgroundSuggestions(
+    withBookDesign(doc, design),
+    photos.map((p) => ({
+      id: p.id,
+      status: p.status,
+      color: p.color ?? null,
+      width: p.width,
+      height: p.height,
+      blurScore: p.blurScore,
+    })),
+  );
 }
 
 function docIssues(doc: BookDoc, photos: CurationPhoto[], book: BookForRun): string[] {

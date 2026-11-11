@@ -29,6 +29,7 @@ import { clampCrop, DEFAULT_CROP } from "./crop";
 import { styleCaptionFont } from "@/lib/design/styles";
 import { DEFAULT_ARABIC_CAPTION_FONT, defaultCaptionFont, type BookFontName } from "./fonts";
 import { BOOK_TITLE_MAX_CODE_POINTS } from "./options";
+import { suggestsBackgrounds } from "@/lib/design/background-suggest";
 import { BackgroundSchema } from "./schema";
 import { isSpreadLayout, layoutsFor, repairSpreads, splitSpreadAt, spreadStartOf } from "./spreads";
 import type { Background, BookDoc, BookPage, Caption, Chapter, Crop, Layout, PageBackground, Slot } from "./types";
@@ -828,13 +829,22 @@ export interface SetBookBackgroundOptions {
   keepPageOverrides?: boolean;
 }
 
-/** Set the book default background (cover + every page without an override). */
+/**
+ * Set the book default background (cover + every page without an override). In a style with AI
+ * background suggestions (Modern / Geometric / Scrapbook, D-068) it is marked the user's choice
+ * (style.backgroundSource "user", M10c D5) so AI never replaces it — picking the AI-suggested
+ * background again also makes it the user's. Classic gets no AI backgrounds, so no marker: a classic
+ * doc picking a colour stays v1.
+ */
 export function setBookBackground(doc: BookDoc, bg: Background, opts: SetBookBackgroundOptions = {}): BookDoc {
   const clean = cleanBackground(bg);
-  const sameDefault = sameBackground(doc.style.background, clean);
+  const markUser = suggestsBackgrounds(doc.style.designStyle) && doc.style.backgroundSource !== "user";
+  const sameDefault = sameBackground(doc.style.background, clean) && !markUser;
   const clearPages = opts.keepPageOverrides !== true && doc.pages.some((p) => p.background != null);
   if (sameDefault && !clearPages) return doc;
-  const style = sameDefault ? doc.style : { ...doc.style, background: clean };
+  const style: BookDoc["style"] = sameDefault
+    ? doc.style
+    : { ...doc.style, background: clean, ...(suggestsBackgrounds(doc.style.designStyle) ? { backgroundSource: "user" as const } : {}) };
   if (!clearPages) return { ...doc, style };
   const pages = doc.pages.map((p) => {
     if (p.background == null) return p;

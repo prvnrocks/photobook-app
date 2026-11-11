@@ -305,12 +305,16 @@ Differences from v1:
   editor saves only accept light-swatch tints) · `{kind:"photo", photoId, veil 0.5–0.9, veilColor}` (faded photo,
   no blur; any ready photo of the book, kept or dropped).
 - `style.designStyle?`: `classic | modern | geometric | scrapbook` (absent = classic).
+- `style.backgroundSource?`: `ai | user` (M10c D5, D-068): who chose the book background. AI suggestions
+  (`src/lib/design/background-suggest.ts`, Modern/Geometric/Scrapbook only) replace it only when absent/`ai`;
+  the editor's Whole-book pick sets `user` (not in Classic). Stripped from the published doc.
 - `pages[].background?`: page override = a Background + `source: "ai" | "user"` (AI never overwrites `user`);
   absent/null = book default. `pages[].side?`: `left | right` (spread halves, M10b).
 - Up to 12 slots per page (v1: 8).
-- v2 features: non-portrait format, non-colour book background, non-classic style, any page background or
-  side, > 8 slots. Until M10b the editor save keeps `format`, `designStyle` and `side` as stored.
-- Deleting a photo clears its slots/cover and removes backgrounds using it (book default → white).
+- v2 features: non-portrait format, non-colour book background, `style.backgroundSource`, non-classic style,
+  any page background or side, > 8 slots. Until M10b the editor save keeps `format`, `designStyle` and `side` as stored.
+- Deleting a photo clears its slots/cover and removes backgrounds using it (book default → white; an AI book
+  background → the style default). Update album also removes an AI photo background whose photo is no longer kept.
 
 ### Spreads (M10b A2, D-064) — `src/lib/book/spreads.ts`
 - Pairing = editor/viewer: cover alone, then `pages[0,1]`, `[2,3]`, … A spread layout is stored as two pages:

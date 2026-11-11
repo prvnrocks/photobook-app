@@ -32,6 +32,10 @@
 //    dropped, so dropping a background photo on review keeps the background. A background whose
 //    photo no longer exists at all (deleted) is removed: book default → white colour, page
 //    override → removed (stripMissingBackgrounds). That alone counts as a change.
+//    AI backgrounds (M10c T11, D-068): an AI photo background (source "ai") whose photo is no longer
+//    KEPT (dropped or deleted), or that is no longer on its chapter's first page, is removed
+//    (pruneAiBackgrounds: page → book default; an AI photo book background → style default). User
+//    backgrounds and every colour / texture background are kept on their pages.
 // 7. No change → the input doc object is returned with changed:false.
 // 8. Design (M10b A10, D-063/D-064): every layout comes from the doc's own format + design style
 //    (doc.format / doc.style.designStyle — the caller stamps them from the book's columns first):
@@ -56,6 +60,7 @@ import { dayRange, fillPages, PANORAMA_RATIO, parseTime } from "@/lib/autolayout
 import { dubaiDay, effectiveMaxPages, orientationOf, placeKey } from "@/lib/ai/story";
 import { getLayout } from "@/lib/layouts";
 import { bestPageLayout, designFitScore } from "@/lib/layouts/fit";
+import { pruneAiBackgrounds } from "@/lib/design/background-suggest";
 import { assertSupportedDesign, type BookDesign } from "./book-design";
 import { clipText } from "@/lib/text/clip";
 import type { CaptionLang } from "./options";
@@ -293,18 +298,20 @@ export function relayoutDoc(doc: BookDoc, photos: readonly RelayoutPhoto[], opts
 
   // ---- 6. backgrounds ------------------------------------------------------------------------
   const exists = (id: string) => byId.has(id);
-  const bgChanged = stripMissingBackgrounds(doc, exists).changed;
+  // M10c T11: AI photo backgrounds need a KEPT photo on their chapter's first page (D-062/D-068).
+  const bgChanged = stripMissingBackgrounds(doc, exists).changed || pruneAiBackgrounds(doc, isKept).changed;
 
   // ---- 7. result -----------------------------------------------------------------------------
   if (removed === 0 && added === 0 && !coverChanged && !bgChanged) {
     return { doc, changed: false, added: 0, removed: 0, skipped };
   }
+  // Removed / inserted pages may push a later spread onto a right-hand page (D-064); the AI photo
+  // backgrounds are checked after that (a split spread or a moved opener may leave one off its place).
   const stripped = stripMissingBackgrounds(
     { ...doc, cover: { ...doc.cover, photoId: coverId }, chapters, pages },
     exists,
   ).doc;
-  // Removed / inserted pages may push a later spread onto a right-hand page (D-064).
-  const out = repairSpreads(stripped).doc;
+  const out = pruneAiBackgrounds(repairSpreads(stripped).doc, isKept).doc;
 
   const parsed = parseBookDoc(out);
   if (!parsed.ok) throw new RelayoutError(parsed.issues);

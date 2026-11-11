@@ -166,6 +166,13 @@ export const PageSchema = z.object({
 export const StyleSchema = z.object({
   /** Book default background. */
   background: BackgroundSchema,
+  /**
+   * Who chose the book background (M10c D5 / D-068): "ai" = suggestion (src/lib/design/
+   * background-suggest.ts may replace it), "user" = Whole-book pick in the editor (never replaced).
+   * Absent = nobody recorded (M10a/M10b docs, classic). A v2 feature when present; stripped from the
+   * published doc.
+   */
+  backgroundSource: BackgroundSourceSchema.optional(),
   /** Absent = "classic". */
   designStyle: DesignStyleSchema.optional(),
   font: FontSchema,

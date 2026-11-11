@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { learnFromBook } from "@/lib/ai/learn-from-book";
 import { autolayout } from "@/lib/autolayout";
 import { bookDesignOf, isSupportedDesign, isUnsupportedDesignError, withBookDesign } from "@/lib/book/book-design";
+import { applyBackgroundSuggestions } from "@/lib/design/background-suggest";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { CAPTION_LANGS, OCCASIONS, type CaptionLang, type Occasion } from "@/lib/book/options";
 import { relayoutDoc, type RelayoutPhoto } from "@/lib/book/relayout";
@@ -139,7 +140,9 @@ export async function confirmAlbumAction(bookId: string): Promise<void> {
   redirect(`/books/${mine.id}/edit`);
 }
 
-function toRelayoutPhoto(r: CurationPhotoRow): RelayoutPhoto & { dateSource: "exif" | "file" | null } {
+type ReviewPhoto = RelayoutPhoto & { dateSource: "exif" | "file" | null; color: string | null };
+
+function toRelayoutPhoto(r: CurationPhotoRow): ReviewPhoto {
   const positive = (v: number | null) => (v !== null && Number.isFinite(v) && v > 0 ? v : 1);
   return {
     id: r.id,
@@ -151,13 +154,14 @@ function toRelayoutPhoto(r: CurationPhotoRow): RelayoutPhoto & { dateSource: "ex
     place: r.place,
     dupGroup: r.dup_group,
     blurScore: r.blur_score,
+    color: r.color,
   };
 }
 
 /** The doc to write, `{ changed:false }` for a no-op, or "invalid" for an unparsable doc. */
 function nextDoc(
   book: BookForRun,
-  photos: (RelayoutPhoto & { dateSource: "exif" | "file" | null })[],
+  photos: ReviewPhoto[],
 ): { changed: boolean; doc: BookDoc | null } | "invalid" {
   const occasion: Occasion = (OCCASIONS as readonly string[]).includes(book.occasion ?? "")
     ? (book.occasion as Occasion)
@@ -173,7 +177,8 @@ function nextDoc(
     if (!photos.some((p) => p.status === "kept")) return { changed: false, doc: null };
     // Fresh rule album (meta generator "rule", runId null, D-018).
     const fresh = autolayout(photos, { occasion, title: book.title, captionLang, isPaid, runId: null, design });
-    return { changed: true, doc: withBookDesign(fresh, design) };
+    // M10c T11: rule background suggestions (Modern/Geometric/Scrapbook; classic unchanged).
+    return { changed: true, doc: applyBackgroundSuggestions(withBookDesign(fresh, design), photos) };
   }
   const parsed = parseBookDoc(book.doc);
   if (!parsed.ok) return "invalid"; // isReplaceableDoc already refuses this; belt and braces

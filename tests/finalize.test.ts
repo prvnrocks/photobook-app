@@ -410,6 +410,30 @@ describe("finalizeBook", () => {
     }
   });
 
+  it("rule album gets catalogue background suggestions in modern/geometric/scrapbook, none in classic (M10c T11)", async () => {
+    const { isValidAiBackground } = await import("@/lib/design/background-suggest");
+    for (const style of ["classic", "modern", "geometric", "scrapbook"]) {
+      const { db, book } = makeDb({ photos: Array.from({ length: 12 }, (_, i) => photo(i + 1, { color: "#6f8f63" })) });
+      book.design_style = style;
+      await fin(BOOK, { db, geocoder: makeGeocoder() });
+      const stored = book.doc as { version: number; style: Record<string, unknown> };
+      const parsed = parseBookDoc(stored);
+      expect(parsed.ok, style).toBe(true);
+      if (!parsed.ok) continue;
+      if (style === "classic") {
+        expect(stored.version).toBe(1);
+        expect(stored.style.background).toBe("#FFFFFF");
+        expect(stored.style.backgroundSource).toBeUndefined();
+        continue;
+      }
+      expect(parsed.doc.style.backgroundSource).toBe("ai");
+      expect(isValidAiBackground(parsed.doc.style.designStyle, parsed.doc.style.background, { scope: "book" })).toBe(true);
+      // Uniform green photos → the green catalogue entry (sage), scrapbook keeps a texture.
+      if (style !== "scrapbook") expect(parsed.doc.style.background).toEqual({ kind: "color", hex: "#CAD6C1" });
+      else expect(parsed.doc.style.background.kind).toBe("texture");
+    }
+  });
+
   it("never overwrites a non-empty doc (and doesn't even try)", async () => {
     const existing = { version: 1, mine: true };
     const { db, book, calls } = makeDb({ photos: [photo(1)], doc: existing });

@@ -42,6 +42,7 @@ import {
   reverseGeocodeMany,
   type ReverseGeocoder,
 } from "@/lib/geo/reverse-geocode";
+import { applyBackgroundSuggestions, type SuggestPhoto } from "@/lib/design/background-suggest";
 import { PHOTO_COLOR_RE } from "@/lib/image/color";
 import { groupDuplicates } from "@/lib/photos/dupes";
 import { clusterPoints } from "@/lib/photos/geo-cluster";
@@ -172,6 +173,17 @@ function toAutoPhoto(p: FinalizePhotoRow): AutoPhoto {
     place: p.place,
     status: p.status === "dropped" ? "dropped" : "kept",
     dupGroup: p.dup_group,
+    blurScore: p.blur_score,
+  };
+}
+
+function toSuggestPhoto(p: FinalizePhotoRow): SuggestPhoto {
+  return {
+    id: p.id,
+    status: p.status === "dropped" ? "dropped" : "kept",
+    color: p.color,
+    width: p.width,
+    height: p.height,
     blurScore: p.blur_score,
   };
 }
@@ -317,15 +329,19 @@ export async function finalizeBook(
     console.error("[finalize] fallback album skipped (unsupported_design)");
   } else if (isEmptyDoc(book.doc)) {
     const isPaid = book.is_paid;
-    const doc: BookDoc = withBookDesign(
-      autolayout(photos.map(toAutoPhoto), {
-        occasion: asOccasion(book.occasion),
-        title: book.title,
-        captionLang: asCaptionLang(book.caption_lang),
-        isPaid,
+    // M10c T11: rule background suggestions (Modern/Geometric/Scrapbook; classic unchanged).
+    const doc: BookDoc = applyBackgroundSuggestions(
+      withBookDesign(
+        autolayout(photos.map(toAutoPhoto), {
+          occasion: asOccasion(book.occasion),
+          title: book.title,
+          captionLang: asCaptionLang(book.caption_lang),
+          isPaid,
+          design,
+        }),
         design,
-      }),
-      design,
+      ),
+      photos.map(toSuggestPhoto),
     );
     const parsed = parseBookDoc(doc);
     const issues = parsed.ok

@@ -23,6 +23,7 @@ const { ReplayTransport } = await import("@/lib/ai/transport-replay");
 const { CURATOR_PROMPT_VERSION } = await import("@/lib/ai/agents/curator");
 const { autolayout } = await import("@/lib/autolayout");
 const { parseBookDoc } = await import("@/lib/book/schema");
+const { isValidAiBackground } = await import("@/lib/design/background-suggest");
 
 type OrchestratorDeps = import("@/lib/ai/orchestrator").OrchestratorDeps;
 type AdvanceResult = import("@/lib/ai/orchestrator").AdvanceResult;
@@ -1865,6 +1866,9 @@ describe("orchestrator — book design (M10b A11)", () => {
     expect(doc.style.designStyle).toBe("modern");
     expect(isSpreadAligned(doc)).toBe(true);
     for (const p of doc.pages) expect(getLayout(p.layout)).toMatchObject({ format: "A5_LANDSCAPE", style: "modern" });
+    // M10c T11: the rule album carries the rule background suggestion (catalogue, source ai).
+    expect(doc.style.backgroundSource).toBe("ai");
+    expect(isValidAiBackground("modern", doc.style.background, { scope: "book" })).toBe(true);
   });
 });
 

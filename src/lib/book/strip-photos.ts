@@ -2,7 +2,7 @@
 // M10b A19 review S2). Pure, no I/O. Safe on client and server.
 //
 // - stripMissingBackgrounds (strip-backgrounds.ts, re-exported): photo backgrounds whose photo is
-//   gone. Book default → white colour, page override → removed.
+//   gone. Book default → white colour (style default when it was an AI pick), page override → removed.
 // - stripPhotoFromDoc: everything that points at one deleted photo. The cover photo → null; its
 //   backgrounds go as above; and the pages that held it REFLOW per D-028 rule 1 (M10b A19),
 //   reusing relayout's removal step (removeSlotPhotos):
@@ -20,6 +20,7 @@
 //   M10a behaviour — slot photoId → null, pages untouched — so a photo delete never fails.
 // Both return the input object unchanged (changed:false) when nothing references the photo.
 
+import { pruneAiBackgrounds } from "@/lib/design/background-suggest";
 import { removeSlotPhotos, type RelayoutPhoto } from "./relayout";
 import { parseBookDoc, validateBookDoc } from "./schema";
 import { repairSpreads } from "./spreads";
@@ -131,7 +132,9 @@ function reflow(doc: BookDoc, photoId: string, photos: readonly StripPhotoDims[]
   const cover = doc.cover.photoId === photoId ? { ...doc.cover, photoId: null } : doc.cover;
 
   const bg = stripMissingBackgrounds({ ...doc, cover, chapters, pages: removal.pages }, (id) => id !== photoId);
-  const out = repairSpreads(bg.doc).doc;
+  // AI photo backgrounds stay only on their chapter's first page (M10c T11): a removed or split
+  // opener must not leave one on a later page.
+  const out = pruneAiBackgrounds(repairSpreads(bg.doc).doc, (id) => id !== photoId).doc;
 
   // Never lose a user caption; never write a doc that fails validation.
   const before = userCaptions(doc);
