@@ -2,9 +2,12 @@
 // edit, view and print; ink switching; print photo ids + image plan for background photos; and a
 // guard that print markup never contains a CSS `filter` (A7: rasterises the whole subtree).
 // Colour docs stay byte-identical to M9 — proven by tests/golden (not regenerated).
+// M10c: the guard also covers shaped / tilted / framed slots, decorations and label plates — the
+// test-only M10c layouts are added to the catalogue and a doc using all of them is printed over
+// every background kind.
 
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { BookCover } from "@/components/book/BookCover";
 import { BookPage, type BookRenderMode } from "@/components/book/BookPage";
 import { PrintDocument } from "@/components/print/PrintDocument";
@@ -24,6 +27,13 @@ import { BACKGROUND_SWATCHES, textureById, type Texture } from "@/lib/design/bac
 import { BACKGROUND_PRINT_DPI, backgroundPhotoUses, neededPx, planPrintImages, PRINT_DPI } from "@/lib/pdf/image-plan";
 import { printPhotoIds, printRenderPhotos, printSheetTargets } from "@/lib/pdf/print-doc";
 import { backgroundImageSources } from "@/lib/pdf/print-ready";
+import { tailwindFilterClasses } from "./fixtures/no-filter";
+import { testM10cDoc } from "./fixtures/test-m10c-layouts";
+
+vi.mock("@/lib/layouts", async (orig) => {
+  const { withTestM10c } = await import("./fixtures/test-m10c-layouts");
+  return withTestM10c(await orig());
+});
 
 const BG = "11111111-1111-4111-8111-111111111111";
 const MODES: BookRenderMode[] = ["edit", "view", "print"];
@@ -263,6 +273,24 @@ describe("print: no CSS filter anywhere (A7 guard)", () => {
     }
   });
 
+  it("M10c shapes, tilt, frames, shadows, decorations and plates: print markup has no `filter`", () => {
+    const shown = printRenderPhotos(Array.from({ length: 9 }, (_, i) => ({ id: `p${i}`, width: 3000, height: 2000 })));
+    for (const bg of [null, cream, blushWash, tintedKraft, navy] as const) {
+      const base = testM10cDoc();
+      const doc = bg ? { ...base, style: { ...base.style, background: bg } } : base;
+      const sheets = printSheetTargets(doc.pages.length, 0, doc.pages.length)!;
+      const html = renderToStaticMarkup(<PrintDocument doc={doc} photos={shown} captionLang="en" sheets={sheets} />);
+      expect(html).toContain("clip-path:polygon(");
+      expect(html).toContain("transform:rotate(");
+      expect(html).toContain("box-shadow:");
+      expect(html).toContain("data-decoration=");
+      expect(html).toContain("data-text-plate=");
+      expect(html).not.toMatch(/filter/i);
+      expect(html).not.toMatch(/<(image|text|filter|foreignObject)\b/);
+      expect(tailwindFilterClasses(html)).toEqual([]);
+    }
+  });
+
   it("the Tailwind class check catches filter utilities (incl. variants, arbitrary values, negatives)", () => {
     const html = [
       'class="blur-sm md:grayscale"',
@@ -278,23 +306,6 @@ describe("print: no CSS filter anywhere (A7 guard)", () => {
     ]);
   });
 });
-
-/**
- * Tailwind utilities that compile to `filter` / `backdrop-filter` (blur, drop-shadow, grayscale,
- * sepia, brightness, contrast, saturate, hue-rotate, invert, backdrop-*), found in class
- * attributes — the CSS itself isn't in static markup, so `/filter/` alone can't see them.
- */
-function tailwindFilterClasses(html: string): string[] {
-  const FILTER_UTILITY = /^-?(blur|drop-shadow|grayscale|sepia|brightness|contrast|saturate|hue-rotate|invert|backdrop)(-|$)/;
-  const found: string[] = [];
-  for (const m of html.matchAll(/class="([^"]*)"/g)) {
-    for (const token of m[1].split(/\s+/)) {
-      const utility = token.slice(token.lastIndexOf(":") + 1).replace(/^!/, "");
-      if (FILTER_UTILITY.test(utility)) found.push(token);
-    }
-  }
-  return found;
-}
 
 describe("print photo ids + image plan", () => {
   const PLAN_PHOTOS = [

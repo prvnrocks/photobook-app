@@ -15,6 +15,7 @@ import {
 import type { Ink } from "@/lib/design/backgrounds";
 import type { BookDoc, Caption } from "@/lib/book/types";
 import { BookCover } from "./BookCover";
+import { Decorations } from "./Decoration";
 import { BackgroundLayer, Box, INK_TEXT, PageFrame, PhotoSlot, TextPanel, type BookRenderMode } from "./PageParts";
 
 export type { BookRenderMode } from "./PageParts";
@@ -102,6 +103,7 @@ export function BookPage(props: BookPageProps) {
       className={className}
       data={data}
     >
+      <Decorations items={m.decorations} layer="under" />
       {m.slots.map((slot) => (
         <PhotoSlot
           key={slot.index}
@@ -111,6 +113,7 @@ export function BookPage(props: BookPageProps) {
           overlay={renderSlotOverlay?.(slot.index, owner)}
         />
       ))}
+      <Decorations items={m.decorations} layer="over" />
       {c && (editCaption !== null || c.text) ? (
         <Box
           rect={c.rect}

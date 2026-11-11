@@ -59,7 +59,8 @@ describe("<BookPage> slots", () => {
     expect(count(out, /<img /g)).toBe(layout.slots.length);
     layout.slots.forEach((r, i) => {
       const re = new RegExp(
-        `style="left:${pct(r.x)};top:${pct(r.y)};width:${pct(r.w)};height:${pct(r.h)}"[^>]*data-slot-index="${i}"`,
+        // M10c slots append rotate / shape / shadow / frame styles after the position.
+        `style="left:${pct(r.x)};top:${pct(r.y)};width:${pct(r.w)};height:${pct(r.h)}[;"][^>]*data-slot-index="${i}"`,
       );
       expect(out).toMatch(re);
     });

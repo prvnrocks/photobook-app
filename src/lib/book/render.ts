@@ -15,12 +15,33 @@ import {
   isCaptionFont,
   type CaptionFont,
 } from "./fonts";
-import { roleFont, type TextRole } from "@/lib/design/styles";
+import { roleFont, STYLE_TOKENS, styleTokens, type TextRole } from "@/lib/design/styles";
+import {
+  plateInk,
+  resolveStickerId,
+  resolveStickerPaths,
+  STICKERS,
+  type ResolvedStickerPath,
+  type StickerId,
+} from "@/lib/design/stickers";
 import { bleedRect, spreadBleedRect } from "./bleed";
-import { pageMm } from "./format";
+import { pageMm, type SizeMm } from "./format";
 import { slotSizeMm } from "./resolution";
 import type { TEXT_BINDINGS } from "./schema";
-import type { Background, BookDoc, BookFormat, BookPage, Caption, Crop, Layout, Rect } from "./types";
+import { clipPathFor, frameInsetMm, paintOrder, photoRectOf } from "./slot-geometry";
+import type {
+  Background,
+  BookDoc,
+  BookFormat,
+  BookPage,
+  Caption,
+  Crop,
+  Layout,
+  LayoutDecoration,
+  LayoutSlotDef,
+  Rect,
+  SlotShapeKind,
+} from "./types";
 
 /** A photo as the renderer needs it: a signed URL (web copy) + the stored pixel size. */
 export interface RenderPhoto {
@@ -50,8 +71,65 @@ export interface RenderSlot {
   /** Slot rectangle in % of the trim page. With `bleed`, edge slots run past 0..100 %. */
   rect: Rect;
   photoId: string | null;
-  /** null = empty slot (no photo, or the photo is not in `photos`, e.g. deleted). */
+  /**
+   * null = empty slot (no photo, or the photo is not in `photos`, e.g. deleted). With a frame the
+   * crop style is for the photo rect (look.frame.photo), not the whole slot box.
+   */
   photo: { url: string; style: CropStyle } | null;
+  /**
+   * M10c shape / tilt / frame / shadow of the slot. Absent for plain rect slots (every M1–M10b
+   * layout), whose markup must stay byte-identical (goldens).
+   */
+  look?: RenderSlotLook;
+}
+
+/**
+ * How a shaped / tilted / framed slot is drawn (M10c T8a). All CSS strings are relative to the
+ * slot box as rendered (`RenderSlot.rect`). Print-safe only: vector clip-path / border-radius,
+ * rotate transform, box-shadow — never CSS filter (A7: it rasterises the photo and kills text).
+ */
+export interface RenderSlotLook {
+  /** Shape kind when not a plain rect (data attribute, tests). */
+  shape?: Exclude<SlotShapeKind, "rect">;
+  /** Degrees clockwise about the slot centre (CSS rotate on the slot element). */
+  rotate?: number;
+  /** clip-path on the slot box (polygons; round shapes only when the box was bleed-extended). */
+  clipPath?: string;
+  /** border-radius on the slot box (rounded / circle / ellipse: keeps box-shadow on the shape). */
+  borderRadius?: string;
+  /** CSS box-shadow from the style's shadow token (omitted on polygons: clip-path would cut it). */
+  boxShadow?: string;
+  /** Frame band: the slot box is painted `color`, the photo sits in `photo` (% of the slot box). */
+  frame?: {
+    kind: "border" | "polaroid";
+    color: string;
+    photo: Rect;
+    clipPath?: string;
+    borderRadius?: string;
+  };
+}
+
+/** Resolved sticker artwork for an inline <svg> (paths already tinted; no filters/images/text). */
+export interface RenderStickerArt {
+  stickerId: StickerId;
+  viewBox: string;
+  /** Plates stretch to their box (plate textBox maps 1:1); stickers + tape keep their aspect, centred. */
+  preserveAspectRatio: "none" | "xMidYMid meet";
+  paths: ResolvedStickerPath[];
+}
+
+/**
+ * A layout decoration (sticker / tape / plate) placed on a page (M10c T8b). Pure decoration:
+ * never selectable, never holds a photo or text.
+ */
+export interface RenderDecoration {
+  kind: LayoutDecoration["kind"];
+  /** % of the page (spread halves: shifted into this page). */
+  rect: Rect;
+  /** Degrees clockwise about the box centre (photo corners include their quarter-turn). */
+  rotate?: number;
+  layer: "under" | "over";
+  art: RenderStickerArt;
 }
 
 export interface RenderText {
@@ -106,6 +184,13 @@ export interface RenderTextPanel extends RenderText {
   fontSizeCqw: number;
   lineHeight: number;
   typography: RenderTypography;
+  /** M10c: degrees clockwise about the panel centre (text stays live text). */
+  rotate?: number;
+  /**
+   * M10c label plate behind the text: artwork fills the panel box; the text sits in `textBox`
+   * (% of the panel box, from the plate's catalogue textBox) in the plate's ink.
+   */
+  plate?: { art: RenderStickerArt; textBox: Rect; ink: "dark" | "light" };
 }
 
 /** Which half of a spread layout a page shows (M10b): content comes from the left page (owner). */
@@ -128,6 +213,8 @@ export interface PageRenderModel {
   spread?: RenderSpreadHalf;
   /** Text panels with text (absent when none — every classic layout). */
   texts?: RenderTextPanel[];
+  /** M10c decorations on this page (absent when none). Slots are already in paint order (z). */
+  decorations?: RenderDecoration[];
 }
 
 export interface CoverRenderModel {
@@ -154,6 +241,8 @@ export interface CoverRenderModel {
    * Absent for single-window covers.
    */
   slices?: Rect[];
+  /** M10c decorations on the cover (absent when none). */
+  decorations?: RenderDecoration[];
 }
 
 /**
@@ -266,18 +355,145 @@ function renderSlot(
   crop: Crop,
   photos: RenderPhotos,
   ctx: SlotCtx,
+  layout?: Layout,
 ): RenderSlot {
   // Slot rects are % of the doc format's trim page, so bleed and crop use that page's mm.
   const rect = ctx.bleed ? bleedRect(layoutRect, pageMm(ctx.format)).pct : layoutRect;
+  const look = layout ? slotLook(layout, index, rect, ctx.format) : undefined;
   const p = photoId !== null && Object.prototype.hasOwnProperty.call(photos, photoId) ? photos[photoId] : undefined;
-  if (!p || !p.url) return { index, rect, photoId, photo: null };
-  const mm = slotSizeMm(rect, ctx.format);
+  if (!p || !p.url) return { index, rect, photoId, photo: null, ...(look ? { look } : {}) };
+  const mm = slotSizeMm(photoBoxOf(rect, look, layout, index, ctx.format), ctx.format);
   return {
     index,
     rect,
     photoId,
     photo: { url: p.url, style: cropToStyle(p.width ?? 0, p.height ?? 0, mm.w, mm.h, crop) },
+    ...(look ? { look } : {}),
   };
+}
+
+// --- Shaped / tilted / framed slots (M10c T8a) ---------------------------------------------------
+
+/** True when the slot uses any M10c look field (z alone only changes paint order). */
+function hasLook(s: LayoutSlotDef): boolean {
+  return (
+    (!!s.shape && s.shape.kind !== "rect") ||
+    !!s.rotate ||
+    (!!s.frame && s.frame.kind !== "none") ||
+    (!!s.shadow && s.shadow !== "none")
+  );
+}
+
+const pct4 = (n: number) => `${round4(n)}%`;
+const sameRect = (a: Rect, b: Rect) => a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+
+/** border-radius (% per axis) of a round shape drawn over a box of `wMm` × `hMm`. */
+function radiusOf(kind: SlotShapeKind, rMm: number, wMm: number, hMm: number): string | undefined {
+  if (kind === "circle" || kind === "ellipse") return "50%";
+  if (kind !== "rounded") return undefined;
+  const r = Math.max(0, Math.min(rMm, wMm / 2, hMm / 2));
+  if (r === 0) return undefined;
+  return `${pct4((r / wMm) * 100)} / ${pct4((r / hMm) * 100)}`;
+}
+
+/**
+ * The look of slot `i` of `layout`, relative to `renderRect` (the slot box as rendered: the slot
+ * on screen, its bleed-extended box in print; spreads: the whole box across both pages, in spread
+ * units). undefined for plain slots. Frame inset comes from photoRectOf (single source).
+ */
+function slotLook(layout: Layout, i: number, renderRect: Rect, format: BookFormat): RenderSlotLook | undefined {
+  const s = layout.slots[i];
+  if (!s || !hasLook(s)) return undefined;
+  const page: SizeMm = pageMm(format);
+  const look: RenderSlotLook = {};
+  const shape = s.shape && s.shape.kind !== "rect" ? s.shape : undefined;
+  const rMm = shape?.kind === "rounded" ? shape.r : 0;
+  if (shape) {
+    look.shape = shape.kind;
+    const round = shape.kind === "rounded" || shape.kind === "circle" || shape.kind === "ellipse";
+    if (round && sameRect(s, renderRect)) {
+      look.borderRadius = radiusOf(shape.kind, rMm, (s.w / 100) * page.w, (s.h / 100) * page.h);
+    } else {
+      look.clipPath = clipPathFor(shape, s, renderRect, page);
+    }
+  }
+  if (s.rotate) look.rotate = s.rotate;
+  if (s.shadow && s.shadow !== "none" && !look.clipPath) {
+    const shadows = styleTokens(layout.style).shadows ?? STYLE_TOKENS.scrapbook.shadows;
+    if (shadows) look.boxShadow = shadows[s.shadow];
+  }
+  if (s.frame && s.frame.kind !== "none") {
+    const pr = photoRectOf(layout, i, format);
+    if (pr) {
+      const photo: Rect = {
+        x: round4(((pr.x - renderRect.x) / renderRect.w) * 100),
+        y: round4(((pr.y - renderRect.y) / renderRect.h) * 100),
+        w: round4((pr.w / renderRect.w) * 100),
+        h: round4((pr.h / renderRect.h) * 100),
+      };
+      const color = s.frame.kind === "border" ? s.frame.hex : (styleTokens(layout.style).palette?.frame ?? "#FFFFFF");
+      const frame: NonNullable<RenderSlotLook["frame"]> = { kind: s.frame.kind, color, photo };
+      if (shape) {
+        const wMm = (pr.w / 100) * page.w;
+        const hMm = (pr.h / 100) * page.h;
+        const inset = frameInsetMm(s.frame);
+        const inner =
+          shape.kind === "rounded"
+            ? radiusOf("rounded", rMm - Math.max(inset.left, inset.top), wMm, hMm)
+            : radiusOf(shape.kind, 0, wMm, hMm);
+        if (inner) frame.borderRadius = inner;
+        else if (shape.kind !== "rounded") frame.clipPath = clipPathFor(shape, pr, pr, page);
+      }
+      look.frame = frame;
+    }
+  }
+  return look;
+}
+
+/**
+ * The box the photo covers (crop maths): a framed slot's photo rect straight from photoRectOf (the
+ * same exact numbers the print image plan uses), else the whole slot box as rendered.
+ */
+function photoBoxOf(rect: Rect, look: RenderSlotLook | undefined, layout: Layout | undefined, i: number, format: BookFormat): Rect {
+  if (!look?.frame || !layout) return rect;
+  return photoRectOf(layout, i, format) ?? rect;
+}
+
+// --- Decorations + label plates (M10c T8b) -------------------------------------------------------
+
+/** Inline-SVG artwork of a catalogue sticker with `tint` (plates stretch; stickers + tape keep aspect, centred). */
+export function stickerArt(id: StickerId, tint?: string | null): RenderStickerArt {
+  const def = STICKERS[id];
+  return {
+    stickerId: id,
+    viewBox: def.viewBox.join(" "),
+    preserveAspectRatio: def.kind === "plate" ? "none" : "xMidYMid meet",
+    paths: resolveStickerPaths(id, tint),
+  };
+}
+
+/**
+ * Decorations of `layout` visible on this page (spread halves: shifted by `offset`), with the
+ * occasion accent resolved from doc.occasion. Unknown sticker ids are skipped. Layout order is
+ * kept (later = on top within its layer).
+ */
+function renderDecorations(layout: Layout, occasion: string | null | undefined, offset: number): RenderDecoration[] {
+  const out: RenderDecoration[] = [];
+  for (const d of layout.decorations ?? []) {
+    const id = resolveStickerId(d.id, occasion);
+    if (!id) continue;
+    const rect = shiftRect(d.box, offset);
+    if (!onPage(rect)) continue;
+    const rotate = round4(d.rotate ?? 0);
+    out.push({
+      kind: d.kind,
+      rect: { x: rect.x, y: rect.y, w: rect.w, h: rect.h },
+      ...(rotate ? { rotate } : {}),
+      layer: d.layer,
+      art: stickerArt(id, d.tint),
+    });
+  }
+  return out;
 }
 
 /** Caption font: the doc's font when known, else the default for the text / caption language. */
@@ -381,15 +597,24 @@ function spreadSlot(
   crop: Crop,
   photos: RenderPhotos,
   ctx: SlotCtx,
+  layout?: Layout,
 ): RenderSlot {
   // One box across both halves (bleed only on the spread's outer edges): crop maths on the whole
   // box, so a photo crossing the fold lines up exactly on the two pages.
   const full = ctx.bleed ? spreadBleedRect(layoutRect, pageMm(ctx.format)).pct : layoutRect;
   const rect = shiftRect(full, offset);
+  // Look CSS is relative to the box, so the half's shift doesn't change it.
+  const look = layout ? slotLook(layout, index, full, ctx.format) : undefined;
   const p = photoId !== null && Object.prototype.hasOwnProperty.call(photos, photoId) ? photos[photoId] : undefined;
-  if (!p || !p.url) return { index, rect, photoId, photo: null };
-  const mm = slotSizeMm(full, ctx.format);
-  return { index, rect, photoId, photo: { url: p.url, style: cropToStyle(p.width ?? 0, p.height ?? 0, mm.w, mm.h, crop) } };
+  if (!p || !p.url) return { index, rect, photoId, photo: null, ...(look ? { look } : {}) };
+  const mm = slotSizeMm(photoBoxOf(full, look, layout, index, ctx.format), ctx.format);
+  return {
+    index,
+    rect,
+    photoId,
+    photo: { url: p.url, style: cropToStyle(p.width ?? 0, p.height ?? 0, mm.w, mm.h, crop) },
+    ...(look ? { look } : {}),
+  };
 }
 
 // --- Text panels ---------------------------------------------------------------------------------
@@ -438,7 +663,16 @@ function textPanels(
     const text = boundText(doc, t.bind, owner);
     if (!text.trim()) continue;
     const f = roleFont(layout.style, t.font, text, { captionLang });
-    const sizeMm = panelFontMm(text, t.font, (rect.w / 100) * page.w, (rect.h / 100) * page.h);
+    // Plated text sizes to the plate's text box (inside the panel box).
+    const plateDef = t.plate ? resolveStickerId(t.plate.id, doc.occasion) : undefined;
+    const tb = plateDef ? STICKERS[plateDef].textBox : undefined;
+    const textBox: Rect = tb ? { x: tb.x, y: tb.y, w: tb.w, h: tb.h } : { x: 0, y: 0, w: 100, h: 100 };
+    const sizeMm = panelFontMm(
+      text,
+      t.font,
+      (rect.w / 100) * page.w * (textBox.w / 100),
+      (rect.h / 100) * page.h * (textBox.h / 100),
+    );
     out.push({
       bind: t.bind,
       role: t.font,
@@ -450,6 +684,10 @@ function textPanels(
       fontSizeCqw: round4((sizeMm / page.w) * 100),
       lineHeight: PANEL_TYPE[t.font].lineHeight,
       typography: typographyOf(f),
+      ...(t.rotate ? { rotate: t.rotate } : {}),
+      ...(plateDef && t.plate
+        ? { plate: { art: stickerArt(plateDef, t.plate.tint), textBox, ink: plateInk(plateDef, t.plate.tint) } }
+        : {}),
     });
   }
   return out;
@@ -477,14 +715,16 @@ export function pageRenderModel(
 
   const slots: RenderSlot[] = [];
   if (owner) {
-    layout.slots.forEach((rect, i) => {
+    // Paint order (M10c z; ties = slot order, so plain layouts keep index order).
+    for (const i of paintOrder(layout)) {
+      const rect = layout.slots[i];
       const s = owner.slots[i];
       if (!isSpread) {
-        slots.push(renderSlot(i, rect, s?.photoId ?? null, s?.crop ?? DEFAULT_CROP, photos, ctx));
+        slots.push(renderSlot(i, rect, s?.photoId ?? null, s?.crop ?? DEFAULT_CROP, photos, ctx, layout));
       } else if (onPage(shiftRect(rect, offset))) {
-        slots.push(spreadSlot(i, rect, offset, s?.photoId ?? null, s?.crop ?? DEFAULT_CROP, photos, ctx));
+        slots.push(spreadSlot(i, rect, offset, s?.photoId ?? null, s?.crop ?? DEFAULT_CROP, photos, ctx, layout));
       }
-    });
+    }
   }
 
   let caption: RenderCaption | null = null;
@@ -526,6 +766,8 @@ export function pageRenderModel(
   }
 
   const texts = layout.texts ? textPanels(doc, layout, owner, offset, captionLang, ["chapterTitle", "dateLabel"]) : [];
+  // Decorations are layout artwork: drawn on orphaned right halves too (like the background).
+  const decorations = layout.decorations ? renderDecorations(layout, doc.occasion, offset) : [];
   return {
     kind: "page",
     pageId: page.id,
@@ -535,6 +777,7 @@ export function pageRenderModel(
     caption,
     ...(half ? { spread: half } : {}),
     ...(texts.length > 0 ? { texts } : {}),
+    ...(decorations.length > 0 ? { decorations } : {}),
   };
 }
 
@@ -570,9 +813,14 @@ export function coverRenderModel(
   const titleAttrs = captionTextAttrs(title, captionLang);
   const subAttrs = captionTextAttrs(subtitle, captionLang);
   const k = textScale(doc.format);
-  const slot = rect ? renderSlot(0, rect, doc.cover.photoId, DEFAULT_CROP, photos, { ...opts, format: doc.format }) : null;
+  const slices0 = known && !!layout.slices;
+  // Split-strip covers draw one photo through windows: no M10c look there.
+  const slot = rect
+    ? renderSlot(0, rect, doc.cover.photoId, DEFAULT_CROP, photos, { ...opts, format: doc.format }, slices0 ? undefined : layout)
+    : null;
   const panels = known && layout.texts?.length ? textPanels(doc, layout, null, 0, captionLang, ["coverTitle", "coverSubtitle"]) : null;
   const slices = known && slot && layout.slices ? sliceWindows(layout.slices, slot.rect, doc.format, !!opts.bleed) : null;
+  const decorations = known && layout.decorations ? renderDecorations(layout, doc.occasion, 0) : [];
   return {
     kind: "cover",
     layoutId: doc.cover.layout,
@@ -593,6 +841,7 @@ export function coverRenderModel(
     ...(k === 1 ? {} : { textScale: round4(k) }),
     ...(panels ? { panels } : {}),
     ...(slices ? { slices } : {}),
+    ...(decorations.length > 0 ? { decorations } : {}),
   };
 }
 

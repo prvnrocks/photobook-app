@@ -4,13 +4,21 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import { rgbaOf, textureLayerStyle } from "@/lib/book/background-style";
-import { cropBoxStyle, rectStyle, type RenderSlot, type RenderTextPanel, type ResolvedBackground } from "@/lib/book/render";
+import {
+  cropBoxStyle,
+  rectStyle,
+  type RenderSlot,
+  type RenderSlotLook,
+  type RenderTextPanel,
+  type ResolvedBackground,
+} from "@/lib/book/render";
 import { orientationOf, pageMm, sheetMm } from "@/lib/book/format";
 import { textureSrc, type Ink } from "@/lib/design/backgrounds";
 import type { TextRole } from "@/lib/design/styles";
 import { withPageAspect } from "@/lib/book/format-style";
 import type { BookFormat, Rect } from "@/lib/book/types";
 import { BLEED_MM } from "@/lib/layouts";
+import { rotateStyle, StickerArt } from "./Decoration";
 
 export type BookRenderMode = "edit" | "view" | "print";
 
@@ -148,6 +156,7 @@ export function PhotoSlot({
   priority?: boolean;
   overlay?: ReactNode;
 }) {
+  if (slot.look) return <ShapedPhotoSlot slot={slot} look={slot.look} mode={mode} priority={priority} overlay={overlay} />;
   const empty = slot.photo === null;
   return (
     <Box
@@ -179,6 +188,93 @@ export function PhotoSlot({
       ) : null}
       {mode === "edit" ? overlay : null}
     </Box>
+  );
+}
+
+/** The slot's photo (crop maths) or, in edit mode, the empty placeholder. */
+function SlotContent({ slot, mode, priority }: { slot: RenderSlot; mode: BookRenderMode; priority?: boolean }) {
+  if (slot.photo) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- short-lived signed URLs; next/image would cache/proxy them
+      <img
+        src={slot.photo.url}
+        alt=""
+        draggable={false}
+        decoding="async"
+        loading={priority || mode === "print" ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : undefined}
+        className="pointer-events-none absolute block"
+        style={{ ...cropBoxStyle(slot.photo.style), maxWidth: "none" }}
+      />
+    );
+  }
+  if (mode !== "edit") return null;
+  return (
+    <div
+      className="absolute inset-0 flex items-center justify-center border border-dashed border-neutral-400 bg-neutral-100 text-neutral-500"
+      style={{ fontSize: "3cqw", borderWidth: "0.4cqw" }}
+      data-testid="slot-placeholder"
+    >
+      Add photo
+    </div>
+  );
+}
+
+/**
+ * M10c slot (T8a): the slot element carries the tilt (rotate about its centre), the shape
+ * (border-radius or vector clip-path), the box-shadow and the frame colour; a frame's photo sits
+ * in an inner box (photo rect = slot minus frame inset) with the crop applied to that box. Never
+ * CSS filter. The edit overlay covers the whole slot (a tap on the frame means this photo).
+ */
+function ShapedPhotoSlot({
+  slot,
+  look,
+  mode,
+  priority,
+  overlay,
+}: {
+  slot: RenderSlot;
+  look: RenderSlotLook;
+  mode: BookRenderMode;
+  priority?: boolean;
+  overlay?: ReactNode;
+}) {
+  const empty = slot.photo === null;
+  const outer: CSSProperties = {
+    ...rectStyle(slot.rect),
+    ...rotateStyle(look.rotate),
+    ...(look.borderRadius ? { borderRadius: look.borderRadius } : {}),
+    ...(look.clipPath ? { clipPath: look.clipPath } : {}),
+    ...(look.boxShadow ? { boxShadow: look.boxShadow } : {}),
+    ...(look.frame ? { background: look.frame.color } : {}),
+  };
+  const data: Record<`data-${string}`, string> = {
+    "data-slot-index": String(slot.index),
+    "data-slot-empty": String(empty),
+  };
+  if (look.shape) data["data-slot-shape"] = look.shape;
+  if (look.frame) data["data-slot-frame"] = look.frame.kind;
+  if (look.rotate) data["data-slot-rotate"] = String(look.rotate);
+  const f = look.frame;
+  return (
+    <div className="absolute overflow-hidden" style={outer} {...data}>
+      {f ? (
+        <div
+          className="absolute overflow-hidden"
+          style={{
+            ...rectStyle(f.photo),
+            ...(f.borderRadius ? { borderRadius: f.borderRadius } : {}),
+            ...(f.clipPath ? { clipPath: f.clipPath } : {}),
+          }}
+          data-slot-photo="true"
+        >
+          <SlotContent slot={slot} mode={mode} priority={priority} />
+        </div>
+      ) : (
+        <SlotContent slot={slot} mode={mode} priority={priority} />
+      )}
+      {mode === "edit" ? overlay : null}
+    </div>
   );
 }
 
@@ -271,6 +367,7 @@ const PANEL_INK: Record<TextRole, keyof typeof INK_TEXT> = {
  * dir="auto" (Arabic renders right-to-left with start/end mirrored). Vertically centred in its box.
  */
 export function TextPanel({ panel, ink }: { panel: RenderTextPanel; ink: Ink }) {
+  if (panel.plate || panel.rotate) return <PlatedTextPanel panel={panel} ink={ink} />;
   return (
     <Box rect={panel.rect} className="flex flex-col justify-center overflow-hidden" data={{ "data-text-panel": panel.bind }}>
       <p
@@ -289,6 +386,43 @@ export function TextPanel({ panel, ink }: { panel: RenderTextPanel; ink: Ink }) 
         {panel.text}
       </p>
     </Box>
+  );
+}
+
+/**
+ * M10c text panel (T8b) with a label plate and/or tilt: the panel box rotates about its centre
+ * (text stays live text), the plate artwork fills it and the text sits in the plate's text box in
+ * the plate's ink. Font, dir="auto" and Latin-only tracking as in TextPanel.
+ */
+function PlatedTextPanel({ panel, ink }: { panel: RenderTextPanel; ink: Ink }) {
+  const plate = panel.plate;
+  const textInk = plate ? plate.ink : ink;
+  const data: Record<`data-${string}`, string> = { "data-text-panel": panel.bind };
+  if (plate) data["data-text-plate"] = plate.art.stickerId;
+  return (
+    <div className="absolute" style={{ ...rectStyle(panel.rect), ...rotateStyle(panel.rotate) }} {...data}>
+      {plate ? <StickerArt art={plate.art} /> : null}
+      <div
+        className="absolute flex flex-col justify-center overflow-hidden"
+        style={rectStyle(plate ? plate.textBox : { x: 0, y: 0, w: 100, h: 100 })}
+      >
+        <p
+          dir="auto"
+          lang={panel.lang}
+          className={`w-full whitespace-pre-line break-words ${INK_TEXT[PANEL_INK[panel.role]][textInk]}`}
+          style={{
+            fontFamily: panel.fontFamily,
+            textAlign: panel.align,
+            fontSize: `${panel.fontSizeCqw}cqw`,
+            lineHeight: panel.lineHeight,
+            ...panel.typography,
+          }}
+          data-testid={`text-${panel.bind}`}
+        >
+          {panel.text}
+        </p>
+      </div>
+    </div>
   );
 }
 

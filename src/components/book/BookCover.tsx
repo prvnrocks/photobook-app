@@ -4,6 +4,7 @@
 import type { ReactNode } from "react";
 import { coverRenderModel, resolveBackground, scaleCqw, type RenderPhotos } from "@/lib/book/render";
 import type { BookDoc } from "@/lib/book/types";
+import { Decorations } from "./Decoration";
 import { BackgroundLayer, Box, INK_TEXT, PageFrame, PhotoSlot, SlicedPhotoSlot, TextPanel, type BookRenderMode } from "./PageParts";
 
 export type BookCoverProps = {
@@ -34,6 +35,7 @@ export function BookCover({ doc, mode, photos, captionLang, renderSlotOverlay, r
       className={className}
       data={{ "data-page": "cover", "data-layout": m.layoutId }}
     >
+      <Decorations items={m.decorations} layer="under" />
       {m.slot && m.slices ? (
         <SlicedPhotoSlot slot={m.slot} slices={m.slices} mode={mode} priority={priority} overlay={renderSlotOverlay?.(0)} />
       ) : m.slot ? (
@@ -44,6 +46,7 @@ export function BookCover({ doc, mode, photos, captionLang, renderSlotOverlay, r
           overlay={renderSlotOverlay?.(0)}
         />
       ) : null}
+      <Decorations items={m.decorations} layer="over" />
       {m.panels ? (
         <>
           {/* Design-style cover (M10b): title + subtitle panels replace the stacked block. */}
