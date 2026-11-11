@@ -13,7 +13,8 @@
  *      upload 10 synthetic landscape JPEGs (one moment ≥ 8 → replay Storyteller may use a spread) →
  *      build (replay) → review → editor. Stored doc v2, doc.format/designStyle = columns, every page +
  *      cover layout is a modern landscape one (m-l-*), spreads aligned (left even idx owns slots,
- *      right half same layout, slots [], caption null)
+ *      right half same layout, slots [], caption null). Review captions preview counts only captionable
+ *      pages (spread right halves excluded, Bug 1) and shows no "page has no caption yet" line
  *   b. Free limit with spreads (max_pages 20): service-role pad to 19 pages (empty m-l-one pages, slot
  *      count kept) → editor: page 19 (a left page with no next page) → spread enabled (19 + 1 = 20) →
  *      applied, saved: 20 pages / page_count 20. Add page now opens the Upgrade sheet (no page 21).
@@ -23,8 +24,8 @@
  *   c. Real editor: apply m-l-spread-panorama on a left page → saved 200, stored v2 with side left/right.
  *      Tampering: PUT the stored doc with format A5_PORTRAIT / designStyle classic → stored doc still
  *      A5_LANDSCAPE / modern (columns); right half without `side` → 422 invalid_doc, nothing stored.
- *      A19 (review B1): type the first caption on a captionable page with none → saves 200, stored
- *      font Cormorant (modern style face)
+ *      A19 (review B1): type the first caption on a captionable page with none (single page with a
+ *      caption area or a captioned spread's left half) → saves 200, stored font Cormorant (modern face)
  *   d. Done → publish → anonymous viewer at 375 (each half its own page, data-spread-side left/right)
  *      and 1280 (both halves facing) — no horizontal overflow, landscape page ratio
  *   e. signed checkout → paid → Download PDF → pdf-analyze + pdf-inspect: pages = doc + cover, MediaBox
@@ -33,6 +34,9 @@
  *      cover title extractable as text
  *   f. New book form: Portrait + Classic → upload 3 → build → editor: stored v1 (no v2 key at all);
  *      a layout change in the editor saves 200 and the doc is still v1
+ *   g. A19 (review S2): deletePhotoAction (Next-Action from this build's manifest, as e2e/m10a g) on a
+ *      photo of a multi-photo spread → doc reflows: no empty slot, one photo fewer, spreads aligned,
+ *      user caption kept, still modern landscape; an editor layout change afterwards saves 200
  * afterAll (always): orders, private.stripe_events (linked CLI), exports rows, storage objects under
  * `<uid>/` (photos + exports), then the user (books/photos cascade). Per-test timeouts only.
  * Logs: counts / booleans / layout ids / timings only.
@@ -50,6 +54,7 @@ import path from "node:path";
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { buildEvent, postEvent } from "../scripts/stripe-signed-event.mjs";
+import { hasCaptionArea } from "../src/lib/ai/captions";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live M10b gate");
@@ -428,6 +433,23 @@ test("a. form Landscape + Modern → upload → build (replay) → modern landsc
   await expect(page.getByTestId("page-carousel")).toHaveAttribute("data-mode", "spread");
   await noHorizontalOverflow(page, DESKTOP.width);
   built = true;
+
+  // Review captions preview (M10b Bug 1, captionsPreviewOf passes side): a spread's right half is
+  // not captionable → "Captions (n)" counts only single pages with a caption area + captioned
+  // spread left halves, and a fully AI-captioned spread book shows no "page has no caption yet".
+  const captionable = doc.pages.filter((p) => hasCaptionArea(p.layout, p.side)).length;
+  const withCaption = doc.pages.filter((p) => hasCaptionArea(p.layout, p.side) && p.caption).length;
+  await page.goto(`/books/${bookId}/review`);
+  const preview = page.getByTestId("captions-preview");
+  await expect(preview).toBeVisible();
+  await preview.locator("summary").click();
+  const count = (await page.getByTestId("captions-count").textContent())?.trim();
+  const missing = await page.getByTestId("captions-missing").count();
+  console.log(`[a] review preview=${count} captionable=${captionable} withCaption=${withCaption} rightHalves=${doc.pages.filter((p) => p.side === "right").length} missingLine=${missing}`);
+  expect(withCaption).toBe(captionable);
+  expect(count).toBe(`Captions (${captionable})`);
+  expect(missing).toBe(0);
+  await expect(page.getByTestId("captions-item")).toHaveCount(captionable);
 });
 
 test("b. free limit with spreads: 19 pages → spread on page 19 makes 20; no page 21 (UI + server)", async () => {
@@ -551,8 +573,11 @@ test("c. editor: panorama spread on a left page → v2 with sides; client format
   // M10b A19 (review B1): the FIRST user caption in a modern book gets the style face (Cormorant /
   // Amiri, newCaptionFont) and must save 200 (was 422 invalid_font). Make sure a single page with a
   // caption area has no caption (service-role write), then type one in the editor.
-  const CAPTIONABLE = ["m-l-one", "m-l-one-text", "m-l-two", "m-l-three", "m-l-three-b", "m-l-three-row", "m-l-four", "m-l-two-land"];
-  const capIdx = afterT2.doc.pages.findIndex((p) => CAPTIONABLE.includes(p.layout) && p.side === undefined);
+  // Captionable = a single page with a caption area or the LEFT half of a captioned spread
+  // (hasCaptionArea): after the panorama the replay album may have no captioned single left
+  // (e.g. full-bleed + three → panorama, mosaic spread).
+  const capIdx = afterT2.doc.pages.findIndex((p) => hasCaptionArea(p.layout, p.side));
+  console.log(`[c] caption target layouts=${JSON.stringify(afterT2.doc.pages.map((p) => `${p.layout}${p.side ? `:${p.side[0]}` : ""}`))} capIdx=${capIdx}`);
   expect(capIdx).toBeGreaterThanOrEqual(0);
   const cleared = structuredClone(afterT2.doc);
   cleared.pages[capIdx].caption = null;
@@ -741,4 +766,79 @@ test("f. form Portrait + Classic → upload → build → stored v1; an editor l
   // Same top-level keys as the v1 doc the album build wrote (no v2-only key appears).
   expect(Object.keys(after.doc)).toEqual(Object.keys(built1.doc));
   console.log(`[f] classic pages=${after.doc.pages.length} layout p1 ${built1.doc.pages[0].layout}→${target} version=${after.doc.version} keys=${Object.keys(after.doc).join(",")}`);
+});
+
+function deletePhotoActionId(): string {
+  const m = JSON.parse(readFileSync(path.join(REPO, ".next", "server", "server-reference-manifest.json"), "utf8")) as {
+    node: Record<string, { exportedName?: string }>;
+  };
+  const hit = Object.entries(m.node).find(([, v]) => v.exportedName === "deletePhotoAction");
+  if (!hit) throw new Error("deletePhotoAction not in the server-reference manifest (run next build in this copy)");
+  return hit[0];
+}
+
+test("g. A19 S2: deleting a photo of a modern spread reflows the doc (no empty slot, spreads aligned); editor saves 200 afterwards", async () => {
+  test.skip(!built || panoIdx < 0, "needs tests a + c");
+  test.setTimeout(240_000);
+  const start = await bookRow();
+  const coverId = start.doc.cover.photoId;
+  // A photo on a multi-photo spread (the mosaic after c), not the cover photo.
+  const left = start.doc.pages.findIndex((p) => SPREADS.includes(p.layout) && p.side === "left" && p.slots.filter((s) => s.photoId).length >= 2);
+  expect(left).toBeGreaterThanOrEqual(0);
+  const victim = start.doc.pages[left].slots.map((s) => s.photoId).find((id): id is string => !!id && id !== coverId);
+  expect(victim).toBeTruthy();
+  const userCaps = start.doc.pages.flatMap((p) => ((p.caption as { source?: string } | null)?.source === "user" ? [JSON.stringify(p.caption)] : []));
+  const photosBefore = start.doc.pages.reduce((n, p) => n + p.slots.filter((s) => s.photoId).length, 0);
+
+  // The real server action, as in e2e/m10a g (no UI calls it yet): Next-Action from this build's manifest.
+  const res = await page.request.post(`/books/${bookId}/upload`, {
+    headers: { "Next-Action": deletePhotoActionId(), "Content-Type": "text/plain;charset=UTF-8", Accept: "text/x-component", Origin: baseURL },
+    data: JSON.stringify([victim, bookId]),
+  });
+  const body = await res.text();
+  expect(res.status()).toBe(200);
+  expect(body).toContain('"ok":true');
+  expect((await admin.from("photos").select("id").eq("id", victim!)).data?.length ?? -1).toBe(0);
+
+  const after = await bookRow();
+  const layouts = (d: StoredDoc) => d.pages.map((p) => `${p.layout}${p.side ? `:${p.side[0]}` : ""}`);
+  const emptySlots = after.doc.pages.reduce((n, p) => n + p.slots.filter((s) => !s.photoId).length, 0);
+  const photosAfter = after.doc.pages.reduce((n, p) => n + p.slots.filter((s) => s.photoId).length, 0);
+  const userCapsAfter = after.doc.pages.flatMap((p) => ((p.caption as { source?: string } | null)?.source === "user" ? [JSON.stringify(p.caption)] : []));
+  console.log(
+    `[g] delete photo on spread at ${left}: layouts ${JSON.stringify(layouts(start.doc))} → ${JSON.stringify(layouts(after.doc))} photos ${photosBefore}→${photosAfter} emptySlots=${emptySlots} spreadProblems=${spreadProblems(after.doc).length} userCaptions ${userCaps.length}→${userCapsAfter.length} rev ${start.doc_rev}→${after.doc_rev} page_count=${after.page_count}`,
+  );
+  expect(JSON.stringify(after.doc)).not.toContain(victim!);
+  expect(emptySlots).toBe(0); // reflowed, not nulled out (M10a fallback)
+  expect(photosAfter).toBe(photosBefore - 1);
+  expect(spreadProblems(after.doc)).toEqual([]);
+  expect(after.page_count).toBe(after.doc.pages.length);
+  expect(userCapsAfter.sort()).toEqual(userCaps.sort()); // the user caption from c survives
+  expect(after.doc_rev).toBeGreaterThan(start.doc_rev);
+  expect(after.doc.format).toBe("A5_LANDSCAPE");
+  expect(after.doc.style.designStyle).toBe("modern");
+  expect(after.doc.pages.every((p) => p.layout.startsWith("m-l-"))).toBe(true);
+
+  // Later edits save: the editor opens and a layout change on page 1 autosaves 200.
+  const saves: number[] = [];
+  page.on("response", (r) => {
+    if (/\/api\/books\/[^/]+\/doc$/.test(r.url()) && r.request().method() === "PUT") saves.push(r.status());
+  });
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await openEditorAt(page, 1);
+  await openLayoutTool(page);
+  const opts = page.locator('[data-testid="layout-option"]:not([data-disabled]):not([aria-pressed="true"])');
+  const optIds = await opts.evaluateAll((els) => els.map((e) => e.getAttribute("data-layout-id") ?? ""));
+  expect(optIds.length).toBeGreaterThan(0);
+  await page.locator(`[data-testid="layout-option"][data-layout-id="${optIds[0]}"]`).click();
+  if ((await page.getByTestId("layout-confirm").count()) > 0) await page.getByTestId("layout-confirm-apply").click();
+  await expect.poll(() => saves.length, { timeout: 20_000 }).toBeGreaterThan(0);
+  const final = await bookRow();
+  console.log(`[g] editor change p1 → ${optIds[0]}: saves ${saves.join(",")} rev ${after.doc_rev}→${final.doc_rev} spreadProblems=${spreadProblems(final.doc).length} errors=${errors.length}`);
+  expect(saves.every((s) => s === 200)).toBe(true);
+  expect(final.doc_rev).toBeGreaterThan(after.doc_rev);
+  expect(spreadProblems(final.doc)).toEqual([]);
+  expect(errors).toEqual([]);
+  await page.goto("about:blank");
 });

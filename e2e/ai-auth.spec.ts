@@ -28,6 +28,9 @@
  *
  * M4 (captions, Critic, memory): the main book is created with a non-default tone (nostalgic for
  * travel) so the Memory Keeper learns it; caption checks log counts only — never caption text.
+ * M10b: the main book picks Classic (the form defaults to Modern, whose spreads leave too few
+ * captionable pages for m). D-037 #2: once the album has user captions / meta.userEdited, review
+ * shows only "Continue in the editor" (h, m, f); memory is learned on editor Done (m).
  *
  * Example (production build in another folder, three `next start` servers):
  *   AI_MODE=replay ADMIN_USER_IDS=$U next start -p 3500
@@ -70,6 +73,7 @@ const CRITIC_REFUSAL_URL = process.env.E2E_CRITIC_REFUSAL_URL ?? "";
 const FIXED_UID = process.env.E2E_USER_ID ?? "";
 const IS_ADMIN = process.env.E2E_ADMIN === "1" && !!FIXED_UID;
 const USER_EDITED_MSG = "You've edited this album, so we won't rebuild it over your changes.";
+const EDITED_TITLE = "You've edited this album — continue in the editor"; // EDITED_ALBUM_COPY.title
 
 type FileSpec = { name: string; mimeType: string; buffer: Buffer };
 
@@ -436,10 +440,18 @@ async function makeSynthetic(p: Page, n: number): Promise<FileSpec[]> {
   return list.map((b64, i) => ({ name: `scene-${i + 1}.jpg`, mimeType: "image/jpeg", buffer: Buffer.from(b64, "base64") }));
 }
 
-async function createBookAt(base: string, opts: { tone?: string; lang?: "en" | "ar" } = {}): Promise<string> {
+async function createBookAt(
+  base: string,
+  opts: { tone?: string; lang?: "en" | "ar"; style?: "classic" | "modern" } = {},
+): Promise<string> {
   await page.goto(`${base}/books/new`);
   await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
   await expect(page.getByTestId("occasion-travel")).toBeChecked();
+  if (opts.style) {
+    // M10b A12: the form defaults to Modern (spreads → fewer captionable pages per photo).
+    await page.getByRole("radio", { name: opts.style === "classic" ? /Classic/ : /Modern/ }).check();
+    await expect(page.getByTestId(`style-${opts.style}`)).toBeChecked();
+  }
   if (opts.tone) {
     await page.locator("label", { has: page.getByTestId(`tone-${opts.tone}`) }).click();
     await expect(page.getByTestId(`tone-${opts.tone}`)).toBeChecked();
@@ -508,6 +520,20 @@ async function postRun(bookId: string, trigger: "build" | "rebuild") {
     },
     { id: bookId, t: trigger },
   );
+}
+
+/** Review captions preview of a fully captioned AI book: count = captionable pages (spread right
+ * halves excluded, M10b Bug 1), no missing line, no captions banner. Logs counts only. */
+async function expectPreviewIgnoresSpreadRightHalves(book: { doc: unknown; design_style: DesignStyle | null }, st: CaptionStats, tag: string) {
+  const pages = pagesOf(book.doc);
+  const rightHalves = pages.filter((p) => p.side === "right").length;
+  const count = await openCaptionsPreview();
+  const missing = await page.getByTestId("captions-missing").count();
+  console.log(`[${tag}] style=${book.design_style} pages=${pages.length} spreadRightHalves=${rightHalves} captionable=${st.captionable} preview=${count ?? "absent"} missingLine=${missing}`);
+  expect(count).toBe(`Captions (${st.captionable})`);
+  await expect(page.getByTestId("captions-missing")).toHaveCount(0);
+  await expect(page.getByTestId("review-banner-captions_missing")).toHaveCount(0);
+  return rightHalves;
 }
 
 test.describe.configure({ mode: "serial" });
@@ -622,8 +648,9 @@ test.afterAll(async () => {
 });
 
 test("a. upload 12 photos → Build my album → progress → review (replay)", async () => {
-  // M4: non-default tone for travel (default fun) → the Memory Keeper learns it on Continue.
-  bookA = await createBookAt(baseURL, { tone: "nostalgic" });
+  // M4: non-default tone for travel (default fun) → the Memory Keeper learns it on editor Done.
+  // Classic (M10b: the form defaults to Modern): 9 kept photos then give m ≥ 3 captionable pages.
+  bookA = await createBookAt(baseURL, { tone: "nostalgic", style: "classic" });
   await uploadAndWaitSummary(mainFiles, MAIN_COUNT);
   const rows = await photoRows(bookA);
   expect(rows.length).toBe(MAIN_COUNT);
@@ -636,14 +663,25 @@ test("a. upload 12 photos → Build my album → progress → review (replay)", 
   // Stage copy only (no user data): strip digits so the log stays generic.
   console.log(`[a] build→review ms=${ms} states=${states.join(">")} stageTexts=${texts.map((t) => t.replace(/\d+/g, "#")).join(" | ")}`);
   expect(states.length).toBeGreaterThanOrEqual(2);
-  // M4 stages render. In replay the Storyteller tick usually runs the (single) caption batch too
-  // (calls take ~0 ms), so "captioning" / "Writing captions d / t…" is only seen when a tick yields
-  // mid-captioning — verify on a live key (M4b). "Final check…" (critiquing) must always show.
+  // M4 stages render. In replay one tick can run storyteller → caption writer → critic (calls take
+  // ~0 ms), so "captioning" / "critiquing" and their copy ("Writing captions d / t…", "Final
+  // check…") are only seen when a tick yields mid-way — verify on a live key (M4b); the copy is
+  // covered by unit tests. Here: progress was shown (a planning stage or later) and the run ends
+  // done with captions on every captionable page.
   const sawCaptioning = states.includes("captioning") || texts.some((t) => t.startsWith("Writing captions"));
   console.log(`[a] sawCaptioning=${sawCaptioning} sawFinalCheck=${texts.includes("Final check…")}`);
-  expect(states.some((s) => s === "captioning" || s === "critiquing")).toBe(true);
-  expect(texts.some((t) => t.startsWith("Writing captions") || t === "Final check…")).toBe(true);
+  const LATE = ["storytelling", "captioning", "critiquing", "validating", "done"];
+  expect(states.some((s) => LATE.includes(s))).toBe(true);
   expect(new URL(page.url()).pathname).toBe(`/books/${bookA}/review`);
+  const runs = await runsFor(bookA);
+  expect(runs.length).toBe(1);
+  expect(runs[0]).toMatchObject({ trigger: "build", state: "done", ai_status: "ok" });
+  const book = await bookRow(bookA);
+  expect(book.design_style).toBe("classic");
+  const st = captionStats(book.doc);
+  console.log(`[a] run=${runs[0].state}/${runs[0].ai_status} style=${book.design_style} captionable=${st.captionable} withCaption=${st.captionableWithCaption}`);
+  expect(st.captionable).toBeGreaterThan(0);
+  expect(st.captionableWithCaption).toBe(st.captionable);
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(scrollWidth).toBeLessThanOrEqual(VIEWPORT.width);
 });
@@ -1004,8 +1042,27 @@ test("c. rebuild: build → review; 0 new curator calls; user choice untouched; 
 /** Short user captions (≤ 10 words → Memory Keeper learns captionLength 'short'). */
 const USER_CAPTIONS = ["Our quiet morning together", "Sun on our faces", "Back home at last", "One more slow walk"];
 
-test("h. user caption (D-031): AI rebuild 409 user_edited, doc unchanged; Update album keeps it", async () => {
+/** D-037 #2 (M5): an album with user edits (editor save → meta.userEdited, or any caption with
+ * source "user") shows only "Continue in the editor" on review — no Rebuild with AI, no Update
+ * album bar, no Continue (albumEditedByUser, src/lib/review/ui.ts). */
+async function expectEditedReview() {
+  await expect(page.getByTestId("review-edited")).toBeVisible();
+  await expect(page.getByTestId("review-edited")).toContainText(EDITED_TITLE);
+  await expect(page.getByTestId("review-open-editor")).toHaveAttribute("href", `/books/${bookA}/edit`);
+  await expect(page.getByTestId("rebuild-button")).toHaveCount(0);
+  await expect(page.getByTestId("update-album-bar")).toHaveCount(0);
+  await expect(page.getByTestId("review-continue")).toHaveCount(0);
+  await expect(page.getByTestId("review-continue-warning")).toHaveCount(0);
+  const sw = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(sw).toBeLessThanOrEqual(VIEWPORT.width);
+}
+
+test("h. user caption (D-031/D-037): rebuild 409 user_edited (API + stale button), doc unchanged; review → continue in editor", async () => {
+  // Review loaded while the album is still AI-only (after c) → "Rebuild with AI" is offered.
   await page.goto(`/books/${bookA}/review`);
+  await expect(page.getByTestId("rebuild-button")).toHaveText("Rebuild with AI");
+  await expect(page.getByTestId("review-edited")).toHaveCount(0);
+
   const before = await bookRow(bookA);
   const doc = structuredClone(before.doc) as { pages: DocPage[]; meta: Record<string, unknown>; cover: { photoId: string | null } };
   const capIdx = doc.pages.map((p, i) => [p, i] as const).filter(([p]) => isCaptionable(p));
@@ -1015,6 +1072,7 @@ test("h. user caption (D-031): AI rebuild 409 user_edited, doc unchanged; Update
     ...target,
     caption: { text: USER_CAPTIONS[0], font: target.caption?.font ?? styleFontOf(before.doc), align: "center", source: "user" },
   };
+  // The user caption lands while the review page is open (e.g. another tab saved it).
   const upd = await admin.from("books").update({ doc }).eq("id", bookA);
   expect(upd.error).toBeNull();
   const snapshot = (await bookRow(bookA)).doc;
@@ -1028,47 +1086,53 @@ test("h. user caption (D-031): AI rebuild 409 user_edited, doc unchanged; Update
   expect((await bookRow(bookA)).doc).toEqual(snapshot);
   expect((await runsFor(bookA)).length).toBe(runsBefore);
 
-  await page.reload();
+  // The stale "Rebuild with AI" button (page loaded before the edit) → the user_edited message.
   await page.getByTestId("rebuild-button").click();
   await expect(page.getByTestId("rebuild-error")).toHaveText(USER_EDITED_MSG);
   expect(new URL(page.url()).pathname).toBe(`/books/${bookA}/review`);
+
+  // Reload → D-037 #2 edited-album flow; the captions preview shows the user caption.
   await page.reload();
+  await expectEditedReview();
   await openCaptionsPreview();
   await expect(page.getByTestId("captions-source-user")).toHaveCount(1);
 
-  // Update album still works: drop a photo from the user-captioned page (if it has ≥ 2), else elsewhere.
+  // Photo choices no longer change the album: a toggle persists on the photo, but no Update album
+  // bar appears and the doc stays as it is. Toggle back so the next tests start from the same set.
   const rows = await photoRows(bookA);
-  const keptInAlbum = rows.filter((r) => r.status === "kept" && docPhotoIds(snapshot).has(r.id) && r.id !== doc.cover.photoId);
-  const onTarget = pagePhotoIds(target).length >= 2 ? keptInAlbum.find((r) => pagePhotoIds(target).includes(r.id)) : undefined;
-  const drop = onTarget ?? keptInAlbum.find((r) => !pagePhotoIds(target).includes(r.id));
-  expect(drop).toBeTruthy();
-  const tile = page.locator(`[data-testid="review-tile"][data-photo-id="${drop!.id}"]`);
+  const inAlbum = rows.find((r) => r.status === "kept" && docPhotoIds(snapshot).has(r.id) && r.id !== doc.cover.photoId);
+  expect(inAlbum).toBeTruthy();
+  const tile = page.locator(`[data-testid="review-tile"][data-photo-id="${inAlbum!.id}"]`);
   await expect(tile).toHaveAttribute("data-state", "kept");
   await tile.click();
   await expect(tile).toHaveAttribute("data-state", "dropped");
   await expect
-    .poll(async () => (await photoRows(bookA)).find((r) => r.id === drop!.id)?.user_override, { timeout: 15_000 })
-    .toBe(true);
-  await page.getByTestId("update-album").click();
-  await expect(page.getByTestId("update-album-toast")).toHaveText("Album updated", { timeout: 30_000 });
-  await expect(page.getByTestId("update-album-error")).toHaveCount(0);
+    .poll(async () => (await photoRows(bookA)).find((r) => r.id === inAlbum!.id)?.status, { timeout: 15_000 })
+    .toBe("dropped");
+  await expect(page.getByTestId("update-album-bar")).toHaveCount(0);
+  await expect(page.getByTestId("review-continue-warning")).toHaveCount(0);
+  expect((await bookRow(bookA)).doc).toEqual(snapshot);
+  await tile.click();
+  await expect(tile).toHaveAttribute("data-state", "kept");
+  await expect
+    .poll(async () => (await photoRows(bookA)).find((r) => r.id === inAlbum!.id)?.status, { timeout: 15_000 })
+    .toBe("kept");
+  await page.reload();
+  await expectEditedReview();
 
   const after = await bookRow(bookA);
   const userPages = pagesOf(after.doc).filter((p) => p.caption?.source === "user");
-  const sameText = userPages.filter((p) => p.caption?.text === USER_CAPTIONS[0]).length;
-  const rowsAfter = await photoRows(bookA);
   console.log(
-    `[h] update album: droppedFromUserPage=${!!onTarget} userCaptions=${userPages.length} sameText=${sameText} onCaptionable=${userPages.filter(isCaptionable).length} runs=${(await runsFor(bookA)).length} generator=${String(metaOf(after.doc).generator)} userEdited=${String(metaOf(after.doc).userEdited)}`,
+    `[h] edited review: userCaptions=${userPages.length} onCaptionable=${userPages.filter(isCaptionable).length} runs=${(await runsFor(bookA)).length} docUnchanged=${JSON.stringify(after.doc) === JSON.stringify(snapshot)}`,
   );
+  expect(after.doc).toEqual(snapshot);
   expect(userPages.length).toBe(1);
-  expect(sameText).toBe(1);
-  expect(docPhotoIds(after.doc).has(drop!.id)).toBe(false);
-  expect(metaOf(after.doc).userEdited).not.toBe(true);
   expect((await runsFor(bookA)).length).toBe(runsBefore);
+  const rowsAfter = await photoRows(bookA);
   expectValidDoc(after.doc, new Set(rowsAfter.filter((r) => r.status !== "dropped").map((r) => r.id)), after.max_pages ?? 20, "h");
 });
 
-test("m. Memory Keeper: ≥ 3 short user captions + Continue → user_memory (tone, short, en)", async () => {
+test("m. Memory Keeper: ≥ 3 short user captions → review → Continue in the editor → Done → user_memory (tone, short, en)", async () => {
   expect(await memoryRow()).toBeNull();
   const before = await bookRow(bookA);
   const doc = structuredClone(before.doc) as { pages: DocPage[] };
@@ -1086,9 +1150,15 @@ test("m. Memory Keeper: ≥ 3 short user captions + Continue → user_memory (to
   expect(upd.error).toBeNull();
   expect(metaOf((await bookRow(bookA)).doc).userEdited).toBe(false);
 
+  // D-037 #2: user captions → review offers only "Continue in the editor"; the Memory Keeper
+  // learns on editor Done (finishEditingAction, D-032) — review Continue is not shown.
   await page.goto(`/books/${bookA}/review`);
-  await page.getByTestId("review-continue").click();
-  await page.waitForURL(/\/dashboard$/, { timeout: 30_000 });
+  await expectEditedReview();
+  await page.getByTestId("review-open-editor").click();
+  await page.waitForURL(new RegExp(`/books/${bookA}/edit$`), { timeout: 30_000 });
+  await page.getByTestId("editor-done").click();
+  await page.waitForURL(new RegExp(`/books/${bookA}/publish$`), { timeout: 30_000 });
+  await expect(page.getByTestId("editor-done-error")).toHaveCount(0);
   await expect.poll(async () => (await memoryRow()) !== null, { timeout: 15_000 }).toBe(true);
   const prefs = (await memoryRow())!.prefs;
   const keys = Object.keys(prefs).filter((k) => prefs[k] !== undefined && prefs[k] !== null).sort();
@@ -1100,16 +1170,23 @@ test("m. Memory Keeper: ≥ 3 short user captions + Continue → user_memory (to
   };
   console.log(`[m] memory keys=${keys.join(",")} checks=${JSON.stringify(checks)}`);
   expect(checks).toEqual({ tone: true, short: true, en: true, noNames: true });
+  // Opening the editor and Done without edits never rewrites the doc's captions.
+  const after = await bookRow(bookA);
+  expect(pagesOf(after.doc).filter((p) => p.caption?.source === "user").length).toBe(users);
   await page.goto(`/books/${bookA}/review`);
 });
 
-test("f. userEdited guard: rebuild refused 409 user_edited, message shown, doc unchanged", async () => {
+test("f. userEdited guard (meta.userEdited only): rebuild refused 409 user_edited, edited review, build screen box, doc unchanged", async () => {
+  // Isolate the editor-save signal: no user captions left, only meta.userEdited = true.
   const before = await bookRow(bookA);
-  const doc = before.doc as Record<string, unknown>;
+  const doc = structuredClone(before.doc) as { pages: DocPage[]; meta: Record<string, unknown> } & Record<string, unknown>;
+  doc.pages = doc.pages.map((p) => (p.caption?.source === "user" ? { ...p, caption: null } : p));
   const edited = { ...doc, meta: { ...metaOf(doc), userEdited: true } };
   const upd = await admin.from("books").update({ doc: edited }).eq("id", bookA);
   expect(upd.error).toBeNull();
   const snapshot = (await bookRow(bookA)).doc;
+  expect(pagesOf(snapshot).some((p) => p.caption?.source === "user")).toBe(false);
+  expect(metaOf(snapshot).userEdited).toBe(true);
   const runsBefore = (await runsFor(bookA)).length;
 
   const res = await postRun(bookA, "rebuild");
@@ -1117,10 +1194,9 @@ test("f. userEdited guard: rebuild refused 409 user_edited, message shown, doc u
   expect(res.status).toBe(409);
   expect(res.body).toMatchObject({ error: "user_edited" });
 
-  await page.reload();
-  await page.getByTestId("rebuild-button").click();
-  await expect(page.getByTestId("rebuild-error")).toHaveText(USER_EDITED_MSG);
-  expect(new URL(page.url()).pathname).toBe(`/books/${bookA}/review`);
+  // Review: edited-album flow (no rebuild button to press any more — D-037 #2).
+  await page.goto(`/books/${bookA}/review`);
+  await expectEditedReview();
 
   // Build screen too (no run id) → user_edited box.
   await page.goto(`/books/${bookA}/build`);
@@ -1171,6 +1247,10 @@ test("n. memory → new book prefilled (tone + hint); book 2 build gets memory; 
   expect(leaks(JSON.stringify(steps.map((s) => [s.output, s.input_summary])), ["nostalgic\u0000"])).toBe(0);
   const rows = await photoRows(bookM);
   expectValidDoc(book.doc, new Set(rows.filter((r) => r.status !== "dropped").map((r) => r.id)), book.max_pages ?? 20, "n");
+
+  // M10b Bug 1: in a Modern book the right half of a spread is not captionable → the review
+  // preview counts only captionable pages and shows no "page has no caption yet" line.
+  await expectPreviewIgnoresSpreadRightHalves(book, st, "n");
 });
 
 test("s. /settings shows learned rows; Clear → confirm → row deleted; next new book has no hint", async () => {
