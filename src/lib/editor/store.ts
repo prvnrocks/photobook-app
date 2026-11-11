@@ -247,4 +247,7 @@ export const EDIT_ERROR_COPY: Record<EditOpErrorCode, string> = {
   no_caption_area: "This layout has no room for a caption. Pick a layout with a caption first.",
   page_limit: "You've reached the page limit for this book.",
   invalid_background: "That background isn't available.",
+  spread_needs_left_page: "Two-page layouts start on a left-hand page. Pick the page on the left.",
+  would_drop_caption: "This layout has room for one caption only. Confirm to remove the other caption.",
+  layout_not_for_book: "That layout doesn't match this book's size or style.",
 };

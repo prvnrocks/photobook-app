@@ -19,8 +19,8 @@
 // repairSpreads then splits it into its twin single-page layouts (layout.twin = [leftId,
 // rightId]), distributing slots by which half each slot's centre falls in (centre x < 100 → left).
 // Photos, crops and captions are never dropped; when a twin has too few slots, a bigger
-// single-page layout of the book's format (and style, if one exists) is used, and only if no
-// layout can hold them all do the leftovers continue on an extra page. An empty right half with
+// single-page layout of the book's format and design style is used (never another style), and
+// only if no layout of that style can hold them all do the leftovers continue on an extra page. An empty right half with
 // no left half (only possible from a bug) is removed — no blank filler pages are ever added.
 
 import { getLayout, LAYOUTS } from "@/lib/layouts";
@@ -162,9 +162,9 @@ export interface PickPageLayoutRequest {
 export interface RepairSpreadsOptions {
   /**
    * Single-page layout id for a half whose twin can't hold its photos / caption. Must return a
-   * "page" layout of `format` with ≥ photoCount slots (and a caption area when needsCaption), or
-   * null to use the default: smallest fitting layout of format+style, then of the format in any
-   * style (catalogue order on ties).
+   * "page" layout of `format` AND `style` with ≥ photoCount slots (and a caption area when
+   * needsCaption), or null to use the default: smallest fitting layout of format+style (catalogue
+   * order on ties). Never another style: validateBookDoc rejects off-style layouts.
    */
   pickPageLayout?: (req: PickPageLayoutRequest) => string | null;
 }
@@ -192,19 +192,7 @@ const hasPhoto = (s: Slot) => s.photoId !== null;
 export function repairSpreads(doc: BookDoc, opts: RepairSpreadsOptions = {}): RepairSpreadsResult {
   if (isSpreadAligned(doc)) return { doc, splitCount: 0, droppedHalves: 0, clearedSides: 0 };
 
-  const ids = new Set(doc.pages.map((p) => p.id));
-  const newId = (): string => {
-    let n = doc.pages.length + 1;
-    while (ids.has(`p${n}`)) n++;
-    ids.add(`p${n}`);
-    return `p${n}`;
-  };
-  const ctx: SplitContext = {
-    format: doc.format,
-    style: doc.style.designStyle ?? CLASSIC,
-    pick: opts.pickPageLayout,
-    newId,
-  };
+  const ctx = splitContext(doc, opts);
 
   const out: BookPage[] = [];
   let splitCount = 0;
@@ -243,6 +231,49 @@ export function repairSpreads(doc: BookDoc, opts: RepairSpreadsOptions = {}): Re
     if (partner) i++;
   }
   return { doc: { ...doc, pages: out }, splitCount, droppedHalves, clearedSides };
+}
+
+function splitContext(doc: BookDoc, opts: RepairSpreadsOptions): SplitContext {
+  const ids = new Set(doc.pages.map((p) => p.id));
+  const newId = (): string => {
+    let n = doc.pages.length + 1;
+    while (ids.has(`p${n}`)) n++;
+    ids.add(`p${n}`);
+    return `p${n}`;
+  };
+  return { format: doc.format, style: doc.style.designStyle ?? CLASSIC, pick: opts.pickPageLayout, newId };
+}
+
+export interface SplitSpreadAtResult {
+  doc: BookDoc;
+  /** Ids of the pages that replaced the left half (first = the left page's id, + overflow pages). */
+  leftPageIds: string[];
+  /** Ids of the pages that replaced the right half (first = the right page's id, + overflow pages). */
+  rightPageIds: string[];
+}
+
+/**
+ * Split the aligned spread whose left half is `doc.pages[leftIdx]` into its twin single pages with
+ * the repair rules (slots by half, captions/crops/backgrounds kept, too-small twin → bigger layout
+ * of the doc's format+style, overflow → extra pages). For "change a spread to a single layout"
+ * (edit-ops). Returns null when `leftIdx` is not the left half of a complete spread.
+ */
+export function splitSpreadAt(doc: BookDoc, leftIdx: number, opts: RepairSpreadsOptions = {}): SplitSpreadAtResult | null {
+  if (spreadStartOf(doc, leftIdx) !== leftIdx) return null;
+  const left = doc.pages[leftIdx];
+  const right = doc.pages[leftIdx + 1];
+  const layout = getSpreadLayout(left.layout);
+  if (!layout) return null;
+  const emitted = splitSpread(layout, left, right, splitContext(doc, opts));
+  const at = emitted.findIndex((p) => p.id === right.id);
+  const cut = at < 0 ? emitted.length : at;
+  const pages = doc.pages.slice();
+  pages.splice(leftIdx, 2, ...emitted);
+  return {
+    doc: { ...doc, pages },
+    leftPageIds: emitted.slice(0, cut).map((p) => p.id),
+    rightPageIds: emitted.slice(cut).map((p) => p.id),
+  };
 }
 
 interface SplitContext {
@@ -337,27 +368,30 @@ function fillHalf(half: Half, twin: Layout | undefined, base: BookPage | null, o
   return pages;
 }
 
-/** Twin if it fits, else the picker's / default choice, else the largest layout available. */
+/**
+ * Twin if it fits, else the picker's / default choice, else the largest layout available — always
+ * a page layout of the doc's format AND design style (validateBookDoc rejects a page whose layout
+ * style differs from doc.style.designStyle), so a too-big half overflows onto extra pages of the
+ * same style instead of switching style.
+ */
 function chooseLayout(twin: Layout | undefined, photoCount: number, needsCaption: boolean, ctx: SplitContext): Layout {
-  const fits = (l: Layout) => l.role === "page" && l.photoCount >= photoCount && (!needsCaption || l.caption !== null);
+  const inStyle = (l: Layout) => l.role === "page" && l.format === ctx.format && l.style === ctx.style;
+  const fits = (l: Layout) => inStyle(l) && l.photoCount >= photoCount && (!needsCaption || l.caption !== null);
   if (twin && fits(twin)) return twin;
   if (twin && ctx.pick) {
     const picked = getLayout(ctx.pick({ format: ctx.format, style: ctx.style, photoCount, needsCaption, twin }) ?? "");
-    if (picked && picked.role === "page" && picked.format === ctx.format && fits(picked)) return picked;
+    if (picked && fits(picked)) return picked;
   }
-  const pools = [layoutsFor(ctx.format, ctx.style, "page"), layoutsFor(ctx.format, null, "page")];
-  for (const pool of pools) {
-    const best = smallestFitting(pool, fits);
-    if (best) return best;
-  }
-  // Nothing holds them all: the largest layout (with a caption area when one is needed) takes
-  // what it can; fillHalf continues on another page.
-  const all = layoutsFor(ctx.format, null, "page");
-  const capable = needsCaption ? all.filter((l) => l.caption !== null) : all;
-  const pool = capable.length > 0 ? capable : all;
-  const largest = pool.reduce<Layout | undefined>((a, l) => (!a || l.photoCount > a.photoCount ? l : a), undefined);
+  const pool = layoutsFor(ctx.format, ctx.style, "page");
+  const best = smallestFitting(pool, fits);
+  if (best) return best;
+  // Nothing holds them all: the largest layout of the style (with a caption area when one is
+  // needed) takes what it can; fillHalf continues on another page.
+  const capable = needsCaption ? pool.filter((l) => l.caption !== null) : pool;
+  const from = capable.length > 0 ? capable : pool;
+  const largest = from.reduce<Layout | undefined>((a, l) => (!a || l.photoCount > a.photoCount ? l : a), undefined);
   const fallback = largest ?? twin;
-  if (!fallback) throw new Error(`repairSpreads: no page layout for ${ctx.format}`);
+  if (!fallback) throw new Error(`repairSpreads: no page layout for ${ctx.format}/${ctx.style}`);
   return fallback;
 }
 
