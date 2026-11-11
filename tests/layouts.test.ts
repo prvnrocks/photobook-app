@@ -34,9 +34,12 @@ describe("layout catalogue", () => {
 
     it("slots lie within the page and do not overlap", () => {
       for (const s of layout.slots) expect(inside(s, layout.role === "spread" ? 200 : 100)).toBe(true);
+      // M10c: shaped / tilted slots may share bounding-box area (diagonal seams, nested circles);
+      // their real geometry is checked by the style's own catalogue test. Plain rects never overlap.
+      const plain = (s: (typeof layout.slots)[number]) => (s.shape?.kind ?? "rect") === "rect" && !s.rotate;
       for (let i = 0; i < layout.slots.length; i++)
         for (let j = i + 1; j < layout.slots.length; j++)
-          expect(overlaps(layout.slots[i], layout.slots[j])).toBe(false);
+          if (plain(layout.slots[i]) && plain(layout.slots[j])) expect(overlaps(layout.slots[i], layout.slots[j])).toBe(false);
     });
 
     it("caption is inside the page and does not overlap slots", () => {
