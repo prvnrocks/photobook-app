@@ -145,22 +145,22 @@ function fiveCollage(ox = 0): Half {
   };
 }
 
-/** Two landscape prints staggered, chapter label + date tag stuck across the gap, caption below. */
+/** Chapter label + date tag on top, two landscape prints staggered below, caption at the bottom. */
 function twoLandscape(ox = 0): Half {
-  const a = shift({ x: 12, y: 12, w: 108, h: 74, rotate: -2.5, frame: BORDER }, ox);
-  const b = shift({ x: 28, y: 100, w: 108, h: 74, rotate: 2, frame: BORDER }, ox);
+  const a = shift({ x: 12, y: 30, w: 104, h: 70, rotate: -2.5, frame: BORDER }, ox);
+  const b = shift({ x: 32, y: 106, w: 104, h: 70, rotate: 2, frame: BORDER }, ox);
   const caption = g.rect(ox + 14, 184, 120, 20);
   return {
     slots: [g.slot(a), g.slot(b)],
     decorations: [
-      g.tape("tape-washi", a, -0.92, -0.9, 24, -36),
+      g.tape("tape-washi", a, -0.92, 0.9, 24, 36),
       g.tape("tape-kraft", b, 0.92, 0.9, 24, -36),
       g.deco("sticker", "sparkle", ox + 132, 40, 10),
       g.deco("sticker", "heart-kraft", ox + 17, 144, 12, { rotate: -12 }),
     ],
     texts: [
-      g.plate("chapterTitle", "plate-label", ox + 12, 85, 72, "chapter", -3),
-      g.plate("dateLabel", "plate-tag", ox + 94, 87, 40, "year", 4),
+      g.plate("chapterTitle", "plate-label", ox + 12, 10, 72, "chapter", -2),
+      g.plate("dateLabel", "plate-tag", ox + 92, 13, 42, "year", 3),
       captionText(caption),
     ],
     caption,

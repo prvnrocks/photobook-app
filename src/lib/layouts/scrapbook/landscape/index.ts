@@ -28,8 +28,9 @@ const captionText = (r: Rect, align: LayoutText["align"] = "center"): LayoutText
 
 /** One landscape polaroid on the left, text column (label, date tag, caption) on the right. */
 function onePolaroid(ox = 0): Half {
-  const card = shift({ x: 12, y: 12, w: 124, h: 122, rotate: -2, frame: POLAROID_L, shadow: "soft" }, ox);
-  const caption = g.rect(ox + 142, 60, 60, 58);
+  // Text column 72 mm wide so a 12–18 word caption sits in ~3 lines at the normal caption size.
+  const card = shift({ x: 12, y: 18, w: 112, h: 108, rotate: -2, frame: POLAROID_L, shadow: "soft" }, ox);
+  const caption = g.rect(ox + 130, 58, 72, 62);
   return {
     slots: [g.slot(card)],
     decorations: [
@@ -39,8 +40,8 @@ function onePolaroid(ox = 0): Half {
       g.deco("sticker", "sparkle", ox + 160, 132, 9),
     ],
     texts: [
-      g.plate("chapterTitle", "plate-label", ox + 141, 16, 60, "chapter", 3),
-      g.plate("dateLabel", "plate-tag", ox + 148, 37, 44, "year", -3),
+      g.plate("chapterTitle", "plate-label", ox + 133, 16, 66, "chapter", 3),
+      g.plate("dateLabel", "plate-tag", ox + 136, 38, 44, "year", -3),
       captionText(caption, "start"),
     ],
     caption,
@@ -49,9 +50,10 @@ function onePolaroid(ox = 0): Half {
 
 /** Two portrait polaroids overlapping, chapter title, date tag and caption in the right column. */
 function twoOverlap(ox = 0): Half {
-  const a = shift({ x: 12, y: 14, w: 72, h: 96, rotate: -4, frame: POLAROID_M }, ox);
-  const b = shift({ x: 72, y: 32, w: 72, h: 96, rotate: 3, frame: POLAROID_M, shadow: "soft", z: 1 }, ox);
-  const caption = g.rect(ox + 152, 66, 50, 58);
+  // Text column 64 mm wide (caption ~3–4 lines at the normal size).
+  const a = shift({ x: 10, y: 16, w: 66, h: 90, rotate: -4, frame: POLAROID_M }, ox);
+  const b = shift({ x: 62, y: 34, w: 66, h: 90, rotate: 3, frame: POLAROID_M, shadow: "soft", z: 1 }, ox);
+  const caption = g.rect(ox + 138, 64, 64, 60);
   return {
     slots: [g.slot(a), g.slot(b)],
     decorations: [
@@ -61,8 +63,8 @@ function twoOverlap(ox = 0): Half {
       g.deco("sticker", "flower", ox + 182, 134, 14, { rotate: 12 }),
     ],
     texts: [
-      g.text("chapterTitle", ox + 152, 18, 50, 24, "chapter", "start"),
-      g.plate("dateLabel", "plate-tag", ox + 154, 46, 44, "year", -3),
+      g.text("chapterTitle", ox + 138, 16, 64, 24, "chapter", "start"),
+      g.plate("dateLabel", "plate-tag", ox + 140, 44, 44, "year", -3),
       captionText(caption, "start"),
     ],
     caption,
@@ -116,19 +118,21 @@ function threeRow(ox = 0, withCaption = true): Half {
 
 /** Four bordered prints in a loose 2×2 on the left, a heart in the middle, caption on the right. */
 function fourScatter(ox = 0, withCaption = true): Half {
-  // With the caption column: 60 mm squares on the left two-thirds. Without (a spread's right
+  // With the caption column (64 mm wide): 56 mm squares on the left. Without (a spread's right
   // page): wider prints spread over the whole page.
-  const w = withCaption ? 60 : 80;
-  const h = withCaption ? 60 : 64;
+  const w = withCaption ? 56 : 80;
+  const h = withCaption ? 56 : 64;
   const x1 = withCaption ? 12 : 18;
-  const x2 = withCaption ? 78 : 112;
+  const x2 = withCaption ? 74 : 112;
+  const y1 = withCaption ? 14 : 10;
+  const y2 = withCaption ? 78 : 76;
   const cards = ([
-    { x: x1, y: 10, w, h, rotate: -3, frame: BORDER },
-    { x: x2, y: 14, w, h, rotate: 2, frame: BORDER },
-    { x: x1 + 2, y: 76, w, h, rotate: 2.5, frame: BORDER },
-    { x: x2, y: 74 + (withCaption ? 0 : 2), w, h, rotate: -2, frame: BORDER },
+    { x: x1, y: y1, w, h, rotate: -3, frame: BORDER },
+    { x: x2, y: y1 + 4, w, h, rotate: 2, frame: BORDER },
+    { x: x1 + 2, y: y2, w, h, rotate: 2.5, frame: BORDER },
+    { x: x2, y: y2 - 2 + (withCaption ? 0 : 2), w, h, rotate: -2, frame: BORDER },
   ] as CardMm[]).map((c) => shift(c, ox));
-  const caption = withCaption ? g.rect(ox + 150, 44, 52, 60) : null;
+  const caption = withCaption ? g.rect(ox + 138, 40, 64, 66) : null;
   const tapes = ["tape-washi", "tape-kraft", "tape-kraft", "tape-washi"] as const;
   const mid = (x1 + w + x2) / 2;
   return {
@@ -136,7 +140,7 @@ function fourScatter(ox = 0, withCaption = true): Half {
     decorations: [
       // Three prints taped, the bottom-left one held by a photo-corner set.
       ...cards.flatMap((c, i) => (i === 2 ? g.corners(c, 9) : [g.tape(tapes[i], c, 0, -1, 22, i % 2 ? 4 : -4)])),
-      g.deco("sticker", "heart-kraft", ox + mid, withCaption ? 74 : 72, 12, { rotate: -8 }),
+      g.deco("sticker", "heart-kraft", ox + mid, withCaption ? 76 : 72, 12, { rotate: -8 }),
       withCaption
         ? g.deco("sticker", "occasion-accent", ox + 176, 124, 18, { rotate: 8 })
         : g.deco("sticker", "sparkle", ox + 200, 16, 9),
