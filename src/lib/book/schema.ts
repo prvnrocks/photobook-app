@@ -262,8 +262,13 @@ const LayoutRectSchema = z.object({
 
 /** Max slot / text tilt in degrees (either way). */
 export const SLOT_ROTATE_MAX = 12;
-/** Max decoration tilt in degrees (tape is often laid at ~45°). */
-export const DECORATION_ROTATE_MAX = 45;
+/**
+ * Max decoration rotation in degrees (either way). Full range so a layout states every turn
+ * explicitly — e.g. a photo-corner set is one top-left corner drawn at 0/90/180/-90 (+ the
+ * photo's tilt). The renderer and the contact sheet apply `rotate` as-is; no inferred turns.
+ */
+export const DECORATION_ROTATE_MAX = 180;
+const DecorationRotateSchema = z.number().min(-DECORATION_ROTATE_MAX).max(DECORATION_ROTATE_MAX);
 /**
  * Reserved decoration id: "the occasion accent" — the renderer picks the actual sticker from
  * doc.occasion (M10c D4). Same value as OCCASION_ACCENT in src/lib/design/stickers.ts (kept as a
@@ -340,7 +345,7 @@ export const LayoutDecorationSchema = z.strictObject({
   kind: z.enum(DECORATION_KINDS),
   id: StickerIdSchema,
   box: LayoutRectSchema,
-  rotate: z.number().min(-DECORATION_ROTATE_MAX).max(DECORATION_ROTATE_MAX).optional(),
+  rotate: DecorationRotateSchema.optional(),
   layer: z.enum(["under", "over"]),
   tint: HexColorSchema.optional(),
 });

@@ -301,7 +301,7 @@ describe("layout validation (M10c fields)", () => {
     expect(LayoutSchema.safeParse(page([base], { decorations: [deco] })).success).toBe(true);
     expect(LayoutSchema.safeParse(page([base], { decorations: [{ ...deco, extra: 1 } as typeof deco] })).success).toBe(false);
     expect(LayoutSchema.safeParse(page([base], { decorations: [{ ...deco, id: "../x.svg" }] })).success).toBe(false);
-    expect(LayoutSchema.safeParse(page([base], { decorations: [{ ...deco, rotate: 50 }] })).success).toBe(false);
+    expect(LayoutSchema.safeParse(page([base], { decorations: [{ ...deco, rotate: 181 }] })).success).toBe(false);
   });
 
   describe("safe zone: framed / rotated slots keep their rotated box ≥ 4 mm inside the trim", () => {
@@ -431,5 +431,14 @@ describe("catalogue", () => {
     for (const list of [GEOMETRIC_PORTRAIT_LAYOUTS, GEOMETRIC_LANDSCAPE_LAYOUTS, SCRAPBOOK_PORTRAIT_LAYOUTS, SCRAPBOOK_LANDSCAPE_LAYOUTS]) {
       for (const l of list) expect(LAYOUTS).toContain(l);
     }
+  });
+});
+
+describe("decoration rotation range (photo-corner sets)", async () => {
+  const { LayoutDecorationSchema } = await import("@/lib/book/schema");
+  const base = { kind: "sticker" as const, id: "photo-corner", box: { x: 10, y: 10, w: 5, h: 5 }, layer: "over" as const };
+  it("accepts any turn within ±180 (corners at 0/90/180/-90 plus tilt), rejects beyond", () => {
+    for (const r of [0, 45, -45, 90, 180, -90, 183 - 360, -177]) expect(LayoutDecorationSchema.safeParse({ ...base, rotate: r }).success).toBe(true);
+    for (const r of [181, -181, 270, 360]) expect(LayoutDecorationSchema.safeParse({ ...base, rotate: r }).success).toBe(false);
   });
 });
