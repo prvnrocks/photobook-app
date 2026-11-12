@@ -4,12 +4,15 @@ import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "./database.types";
+import { deadlineClientOptions } from "./deadline";
 import { getSupabasePublishableKey, getSupabaseUrl } from "./env";
 
 export async function createClient() {
   const cookieStore = await cookies();
 
   return createServerClient<Database>(getSupabaseUrl(), getSupabasePublishableKey(), {
+    // Deadline fetch: every call has a time budget; timeouts surface as SUPABASE_TIMEOUT.
+    ...deadlineClientOptions("server"),
     cookies: {
       getAll() {
         return cookieStore.getAll();

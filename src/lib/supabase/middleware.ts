@@ -2,6 +2,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isProtectedPath } from "@/lib/auth/redirect";
+import { MIDDLEWARE_AUTH_MS, deadlineClientOptions } from "./deadline";
 import { getSupabasePublishableKey, getSupabaseUrl } from "./env";
 
 function readEnv(): { url: string; key: string } | null {
@@ -32,6 +33,8 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   let cacheHeaders: Record<string, string> = {};
 
   const supabase = createServerClient(env.url, env.key, {
+    // Runs on every matched request: auth gets the tighter middleware budget.
+    ...deadlineClientOptions("server", { authMs: MIDDLEWARE_AUTH_MS }),
     cookies: {
       getAll() {
         return request.cookies.getAll();

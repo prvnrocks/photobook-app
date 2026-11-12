@@ -5,6 +5,7 @@ import "server-only";
 // checking ownership yourself first.
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./database.types";
+import { deadlineClientOptions } from "./deadline";
 import { getSupabaseUrl } from "./env";
 
 export function createAdminClient() {
@@ -15,6 +16,8 @@ export function createAdminClient() {
   }
 
   return createClient<Database>(getSupabaseUrl(), secretKey, {
+    // Deadline fetch: every call has a time budget; timeouts surface as SUPABASE_TIMEOUT.
+    ...deadlineClientOptions("server"),
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
