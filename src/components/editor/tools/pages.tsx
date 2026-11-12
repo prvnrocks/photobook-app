@@ -231,7 +231,7 @@ function PageTile({
         onClick={onOpen}
         role="button"
         tabIndex={0}
-        aria-label={`${name}${spread ? ", 2-page spread" : ""}${current ? ", current page" : ""}`}
+        aria-label={`${name}${spread ? ", two-page layout" : ""}${current ? ", current page" : ""}`}
         aria-current={current ? "page" : undefined}
         className={cn(
           "relative cursor-pointer touch-manipulation select-none rounded-sm outline-none [-webkit-touch-callout:none]",
@@ -286,6 +286,7 @@ export const pagesTool: EditorTool = {
   icon: LayoutGrid,
   scopes: ["none"],
   order: 70,
+  tier: "primary",
   editsDoc: false,
   Panel: PagesSheet,
   panelTitle: "Pages",

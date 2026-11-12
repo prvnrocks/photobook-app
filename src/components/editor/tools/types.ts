@@ -7,6 +7,12 @@ import type { EditorContextValue } from "../editor-context";
 /** When a tool shows: for the current selection kind ("none" = nothing selected). */
 export type ToolScope = SelectionKind;
 
+/**
+ * Where a tool sits in the simple toolbar (M13): "primary" = a big button in the row (at most 3 per
+ * selection), "more" = inside the "More" sheet (always ≤ 2 taps away).
+ */
+export type ToolTier = "primary" | "more";
+
 export interface EditorPanelProps {
   ctx: EditorContextValue;
   /** Close the panel (keeps the selection). */
@@ -16,12 +22,17 @@ export interface EditorPanelProps {
 export interface EditorTool {
   /** Stable id, also used as data-testid suffix: `editor-tool-<id>`. */
   id: string;
-  /** Short button label (≤ ~10 chars fits 5 buttons at 375 px). */
+  /** Short button label in plain words (≤ ~12 chars fits 4 buttons at 375 px). */
   label: string;
   /** lucide-react icon (or any component taking className). */
   icon: ComponentType<{ className?: string; "aria-hidden"?: boolean | "true" }>;
   /** Selection kinds the tool shows for, or "always". */
   scopes: readonly ToolScope[] | "always";
+  /**
+   * Toolbar tier (default "more"): one tier for every scope, or per selection kind — e.g. Layout is
+   * primary with nothing selected but sits in More when a photo is selected. See registry.splitTools.
+   */
+  tier?: ToolTier | Partial<Record<ToolScope, ToolTier>>;
   /** Sort key, ascending (default 100). Built-in convention: slot 10–29, caption 30–49, cover 50–69, page/book 70–99. */
   order?: number;
   /**

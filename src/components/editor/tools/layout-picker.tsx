@@ -100,7 +100,7 @@ const photosLabel = (n: number) => (n === 1 ? "1 photo" : `${n} photos`);
 /** Toast after a layout change: lost photos / caption, a split spread (D-064). */
 export function layoutAppliedNotice(result: ChangeLayoutResult, splitOwnSpread: boolean): string | null {
   const parts = [
-    splitOwnSpread ? "Spread split into two pages" : null,
+    splitOwnSpread ? "Two-page layout split into single pages" : null,
     layoutChangeNotice(result),
     splitNotice(result.splitCount),
   ].filter((p): p is string => !!p);
@@ -192,7 +192,7 @@ export function LayoutPickerPanel({ ctx, close }: EditorPanelProps) {
   return (
     <div className="flex flex-col gap-3" data-testid="layout-picker">
       <p className="text-sm text-muted-foreground">
-        {photosLabel(opts.placed)} on this {opts.onSpread ? "2-page spread" : "page"}. Photos move into the new layout in order.
+        {photosLabel(opts.placed)} on this {opts.onSpread ? "two-page layout" : "page"}. Photos move into the new layout in order.
       </p>
       {error ? (
         <p role="alert" className="rounded-lg border border-destructive-border bg-destructive-soft px-3 py-2 text-sm text-destructive" data-testid="layout-error">
@@ -274,6 +274,8 @@ export const layoutPickerTool: EditorTool = {
   icon: LayoutTemplate,
   scopes: ["slot", "caption", "none"],
   order: 20,
+  // Primary for the page (nothing selected); behind More while a photo or caption is selected.
+  tier: { none: "primary" },
   panelTitle: "Page layout",
   // M11: the page stays visible above the panel on phones while choosing.
   dockOnMobile: true,

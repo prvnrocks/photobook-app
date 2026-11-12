@@ -105,10 +105,11 @@ function CaptionEditorPanel({ ctx }: EditorPanelProps) {
 
 export const captionEditorTool: EditorTool = {
   id: "caption",
-  label: "Caption",
+  label: "Edit",
   icon: Type,
   scopes: ["caption"],
   order: 30,
+  tier: "primary",
   openOnSelect: true,
   panelTitle: "Caption",
   Panel: CaptionEditorPanel,
@@ -232,6 +233,7 @@ export const captionStyleTool: EditorTool = {
   icon: Palette,
   scopes: ["caption"],
   order: 32,
+  tier: "more",
   panelTitle: "Caption font",
   Panel: CaptionStylePanel,
 };

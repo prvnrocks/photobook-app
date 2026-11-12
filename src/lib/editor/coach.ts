@@ -1,10 +1,10 @@
-// One-time editor coach line (M11 T13): "Tap a photo to swap, crop or change its layout".
+// One-time editor coach line (M11 T13; shortened M13 T8): "Tap a photo or caption to edit it".
 // Remembered in localStorage once dismissed or once the user has tapped a photo. Storage can be
 // unavailable (Safari private mode, blocked cookies, in-app browsers): every access is guarded, and
 // without storage the line is hidden again for the rest of the page session after a dismiss.
 
 export const EDITOR_COACH_KEY = "pb.editor.coach.v1";
-export const EDITOR_COACH_TEXT = "Tap a photo to swap, crop or change its layout";
+export const EDITOR_COACH_TEXT = "Tap a photo or caption to edit it";
 
 export type CoachStorage = Pick<Storage, "getItem" | "setItem">;
 

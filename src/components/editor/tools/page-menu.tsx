@@ -91,7 +91,7 @@ export function PageMenu({ ctx, close }: EditorPanelProps) {
     return (
       <div role="alertdialog" aria-labelledby="page-menu-confirm-title" className="flex flex-col gap-3" data-testid="page-menu-confirm">
         <h3 id="page-menu-confirm-title" className="text-sm font-semibold">
-          Delete this 2-page spread?
+          Delete this two-page layout?
         </h3>
         <p className="text-sm text-muted-foreground">
           {unitLabel} share one layout, so both pages are deleted. Their photos move to Not used.
@@ -122,7 +122,7 @@ export function PageMenu({ ctx, close }: EditorPanelProps) {
     <div className="flex flex-col gap-4" data-testid="page-menu">
       <p className="text-sm text-muted-foreground">
         {unitLabel} of {doc.pages.length}
-        {isSpread ? " · 2-page spread" : null}
+        {isSpread ? " · two-page layout" : null}
         {chapter ? (
           <>
             {" · "}
@@ -185,11 +185,12 @@ export function PageMenu({ ctx, close }: EditorPanelProps) {
 
 export const pageMenuTool: EditorTool = {
   id: "page-menu",
-  label: "Page",
+  label: "Page options",
   icon: FileCog,
   scopes: ["none"],
   order: 80,
+  tier: "more",
   isAvailable: (ctx) => ctx.state.page !== "cover" && ctx.state.doc.pages.length > 0,
   Panel: PageMenu,
-  panelTitle: "Page",
+  panelTitle: "Page options",
 };

@@ -63,6 +63,7 @@ export const chapterTitleTool: EditorTool = {
   icon: BookmarkPlus,
   scopes: ["caption", "slot"],
   order: 40,
+  tier: "more",
   panelTitle: "Chapter",
   isAvailable: (ctx) => currentChapter(ctx) !== null,
   Panel: ChapterTitlePanel,

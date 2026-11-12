@@ -1,7 +1,7 @@
 "use client";
 
 // Replace (M5 Task 9): photo picker for a page slot or the cover photo.
-// Tabs "In book / Not used / Dropped by AI" (src/lib/editor/photo-picker.ts). Picking a photo
+// Tabs "In book / Not used / Left out by AI" (src/lib/editor/photo-picker.ts). Picking a photo
 // that is already on another page swaps the two slots (replacePhoto does it); the cover uses
 // setCover. Placing an AI-dropped photo keeps it — the server marks it kept on save (D-037 4).
 // M11 T14: docked under the page on phones (dockOnMobile) so the spot being filled stays visible.
@@ -140,6 +140,7 @@ export const photoPickerTool: EditorTool = {
   icon: ImageIcon,
   scopes: ["slot", "cover"],
   order: 10,
+  tier: "primary",
   panelTitle: "Choose a photo",
   // M11: the page stays visible above the panel on phones while choosing.
   dockOnMobile: true,

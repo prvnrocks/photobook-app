@@ -32,10 +32,11 @@ export function PdfPanel({ ctx }: EditorPanelProps) {
 /** Toolbar entry: paid books only; visible with nothing selected, and whenever it is open. */
 export const pdfDownloadTool: EditorTool = {
   id: PDF_TOOL_ID,
-  label: "PDF",
+  label: "Download PDF",
   icon: FileDown,
   scopes: "always",
   order: 98,
+  tier: "more",
   editsDoc: false,
   isAvailable: (ctx) => ctx.book.isPaid && (ctx.activeTool === PDF_TOOL_ID || selectionKind(ctx.state.selection) === "none"),
   Panel: PdfPanel,

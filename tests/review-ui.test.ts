@@ -94,8 +94,8 @@ describe("header copy", () => {
   it("says AI kept when the AI picked", () => {
     expect(headerCopy({ aiUsed: true, kept: 64, total: 200 })).toBe("AI kept 64 of 200");
   });
-  it("says Kept for rule albums", () => {
-    expect(headerCopy({ aiUsed: false, kept: 3, total: 5 })).toBe("Kept 3 of 5");
+  it("says 'in your book' for rule albums (plain words, M13)", () => {
+    expect(headerCopy({ aiUsed: false, kept: 3, total: 5 })).toBe("3 of 5 in your book");
   });
   it("aiPicked only for done / partial", () => {
     expect(aiPicked("done")).toBe(true);
@@ -163,9 +163,9 @@ describe("rebuilds", () => {
     expect(rebuildsLeft(Number.NaN, 0)).toBe(0);
   });
   it("labels", () => {
-    expect(rebuildsLeftLabel(2)).toBe("2 rebuilds left");
-    expect(rebuildsLeftLabel(1)).toBe("1 rebuild left");
-    expect(rebuildsLeftLabel(0)).toBe("No rebuilds left");
+    expect(rebuildsLeftLabel(2)).toBe("2 AI redos left");
+    expect(rebuildsLeftLabel(1)).toBe("1 AI redo left");
+    expect(rebuildsLeftLabel(0)).toBe("No AI redos left");
   });
   it("variant + trigger", () => {
     expect(rebuildVariant({ aiAvailable: false, aiStatus: "done" })).toBe("ai_off");
@@ -335,7 +335,7 @@ describe("album sync (D-028)", () => {
   it("changed copy", () => {
     expect(changedPhotosCopy(1)).toBe("You changed 1 photo.");
     expect(changedPhotosCopy(3)).toBe("You changed 3 photos.");
-    expect(CONTINUE_UNSYNCED_NOTE).toBe("Your changes aren't in the album yet — tap Update album.");
+    expect(CONTINUE_UNSYNCED_NOTE).toBe("Your changes aren't in the book yet — tap Apply photo changes.");
   });
 });
 
@@ -387,12 +387,12 @@ describe("updateAlbumOutcome", () => {
 
 describe("rebuild as secondary (D-028)", () => {
   it("labels + rebuilds-left copy", () => {
-    expect(REBUILD_LABELS.rebuild).toBe("Rebuild with AI");
+    expect(REBUILD_LABELS.rebuild).toBe("Redo with AI");
     expect(REBUILD_LABELS.ai_off).toBe("Rebuild album");
     expect(rebuildsLeftCopy(null)).toBeNull();
-    expect(rebuildsLeftCopy(1)).toBe("1 rebuild left");
-    expect(rebuildsLeftCopy(3)).toBe("3 rebuilds left");
-    expect(rebuildsLeftCopy(-1)).toBe("0 rebuilds left");
+    expect(rebuildsLeftCopy(1)).toBe("1 AI redo left");
+    expect(rebuildsLeftCopy(3)).toBe("3 AI redos left");
+    expect(rebuildsLeftCopy(-1)).toBe("0 AI redos left");
   });
 });
 

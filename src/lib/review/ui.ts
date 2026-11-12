@@ -93,8 +93,24 @@ export function aiPicked(aiStatus: string | null | undefined): boolean {
 
 export function headerCopy(input: { aiUsed: boolean; kept: number; total: number }): string {
   const { aiUsed, kept, total } = input;
-  return aiUsed ? `AI kept ${kept} of ${total}` : `Kept ${kept} of ${total}`;
+  return aiUsed ? `AI kept ${kept} of ${total}` : `${kept} of ${total} in your book`;
 }
+
+// Plain words (M13 T8): "In your book / Left out" instead of "Kept / Dropped" (testids keep the
+// internal kept / dropped names).
+export const REVIEW_TAB_LABELS: Record<ReviewTab, string> = { kept: "In your book", dropped: "Left out" };
+
+export const REVIEW_EMPTY_TAB_COPY: Record<ReviewTab, string> = {
+  kept: "No photos in your book yet. Open Left out to add some back.",
+  dropped: "Nothing left out — every photo is in your book.",
+};
+
+/** Screen-reader note after a tile moves between the tabs. */
+export const REVIEW_MOVED_COPY: Record<ReviewTab, string> = { kept: "Moved to In your book", dropped: "Moved to Left out" };
+
+/** The free re-layout button (D-028), formerly "Update album". */
+export const UPDATE_ALBUM_LABEL = "Apply photo changes";
+export const UPDATE_ALBUM_PENDING_LABEL = "Applying…";
 
 export type ReviewBanner = "building" | "ai_off" | "partial" | "captions_missing" | "failed" | null;
 
@@ -148,13 +164,13 @@ export function rebuildsLeft(maxRebuilds: number, used: number): number {
 }
 
 export function rebuildsLeftLabel(n: number): string {
-  if (n <= 0) return "No rebuilds left";
-  return n === 1 ? "1 rebuild left" : `${n} rebuilds left`;
+  if (n <= 0) return "No AI redos left";
+  return n === 1 ? "1 AI redo left" : `${n} AI redos left`;
 }
 
 /**
  * What the rebuild button does:
- * - 'rebuild'  → AI picked these (done): "Rebuild with AI" (trigger rebuild, counts toward the limit)
+ * - 'rebuild'  → AI picked these (done): "Redo with AI" (trigger rebuild, counts toward the limit)
  * - 'retry_ai' → AI partial/failed: "Try AI again" (trigger rebuild)
  * - 'first_ai' → AI available but never used on this book: "Build with AI" (trigger build)
  * - 'ai_off'   → AI unavailable: "Rebuild album" re-runs the simple rules; "Try AI again" disabled
@@ -169,7 +185,7 @@ export function rebuildVariant(input: { aiAvailable: boolean; aiStatus: string |
 }
 
 export const REBUILD_LABELS: Record<RebuildVariant, string> = {
-  rebuild: "Rebuild with AI",
+  rebuild: "Redo with AI",
   retry_ai: "Try AI again",
   first_ai: "Build with AI",
   ai_off: "Rebuild album",
@@ -382,7 +398,7 @@ export function updateAlbumOutcome(bookId: string, result: UpdateAlbumResult | n
   }
 }
 
-export const CONTINUE_UNSYNCED_NOTE = "Your changes aren't in the album yet — tap Update album.";
+export const CONTINUE_UNSYNCED_NOTE = `Your changes aren't in the book yet — tap ${UPDATE_ALBUM_LABEL}.`;
 
 /**
  * The album has user edits (editor save → meta.userEdited, any caption with source "user", or a
@@ -405,10 +421,10 @@ export function editorHref(bookId: string): string {
   return `/books/${bookId}/edit`;
 }
 
-/** "2 rebuilds left" (M11 T12); null when rebuilds aren't counted here (rule / replay mode). */
+/** "2 AI redos left" (M11 T12, plain words M13); null when rebuilds aren't counted here (rule / replay mode). */
 export function rebuildsLeftCopy(left: number | null): string | null {
   if (left === null) return null;
-  return left === 1 ? "1 rebuild left" : `${Math.max(0, left)} rebuilds left`;
+  return left === 1 ? "1 AI redo left" : `${Math.max(0, left)} AI redos left`;
 }
 
 // ---------------------------------------------------------------------------------------------

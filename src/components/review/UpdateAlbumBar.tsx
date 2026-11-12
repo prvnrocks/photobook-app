@@ -1,12 +1,13 @@
 "use client";
 
-// "Update album" row on the review screen (D-028, M11 T12): "You changed n photos." + "Update album".
+// "Apply photo changes" row on the review screen (D-028, M11 T12; formerly "Update album"):
+// "You changed n photos." + the button.
 // Shown only while keep / drop choices aren't in the album yet, inside the review ActionBar (which
 // owns the sticky, safe-area-aware positioning). Presentational; ReviewBody owns the state.
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { changedPhotosCopy, type UpdateAlbumOutcome } from "@/lib/review/ui";
+import { changedPhotosCopy, UPDATE_ALBUM_LABEL, UPDATE_ALBUM_PENDING_LABEL, type UpdateAlbumOutcome } from "@/lib/review/ui";
 
 type UpdateAlbumBarProps = {
   count: number;
@@ -36,7 +37,7 @@ export function UpdateAlbumBar({ count, pending, error, onUpdate, note }: Update
           onClick={onUpdate}
           data-testid="update-album"
         >
-          {pending ? "Updating…" : "Update album"}
+          {pending ? UPDATE_ALBUM_PENDING_LABEL : UPDATE_ALBUM_LABEL}
         </Button>
       </div>
       {error ? (

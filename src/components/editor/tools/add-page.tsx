@@ -48,6 +48,7 @@ export const addPageTool: EditorTool = {
   icon: FilePlus2,
   scopes: "always",
   order: 75,
+  tier: "more",
   // Paid book at 100 pages: nothing left to offer.
   isDisabled: (ctx) => addPageDecision(ctx.state.doc, ctx.book, ctx.state.page).kind === "full",
   run: runAddPage,

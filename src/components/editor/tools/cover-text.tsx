@@ -74,6 +74,7 @@ export const coverTextTool: EditorTool = {
   icon: Heading,
   scopes: ["cover"],
   order: 50,
+  tier: "primary",
   openOnSelect: true,
   panelTitle: "Cover title",
   isAvailable: (ctx) => ctx.state.selection?.kind === "cover" && ctx.state.selection.part === "text",

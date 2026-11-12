@@ -131,11 +131,11 @@ describe("LayoutPickerPanel / LayoutDiagram render", () => {
     expect(html.match(/data-role="page"[^>]*data-disabled/g)).toBeNull();
   });
 
-  it("left page: spread options enabled; spread half says '2-page spread'", () => {
+  it("left page: spread options enabled; spread half says 'two-page layout' (plain words, M13)", () => {
     const left = renderToStaticMarkup(<LayoutPickerPanel ctx={liveCtx(modern(), { page: 0 }).ctx} close={() => {}} />);
     expect(left).not.toContain('data-disabled="true"');
     const half = renderToStaticMarkup(<LayoutPickerPanel ctx={liveCtx(modern(), { page: 3 }).ctx} close={() => {}} />);
-    expect(half).toContain("on this 2-page spread");
+    expect(half).toContain("on this two-page layout");
     expect(half).toMatch(/aria-pressed="true"[^>]*data-layout-id="m-p-spread-mosaic"/);
   });
 
@@ -160,7 +160,7 @@ describe("LayoutPickerPanel / LayoutDiagram render", () => {
   it("layoutAppliedNotice joins own split, lost photos and reflow splits", () => {
     const base = { removedPhotoIds: ["a"], droppedCaption: null, splitCount: 2 } as unknown as ChangeLayoutResult;
     expect(layoutAppliedNotice(base, true)).toBe(
-      "Spread split into two pages · 1 photo moved to Not used · 2 spreads were split into single pages",
+      "Two-page layout split into single pages · 1 photo moved to Not used · 2 two-page layouts were split into single pages",
     );
     expect(layoutAppliedNotice({ ...base, removedPhotoIds: [], splitCount: 0 }, false)).toBeNull();
   });
@@ -200,8 +200,8 @@ describe("unit-aware page helpers", () => {
 
   it("splitNotice", () => {
     expect(splitNotice(0)).toBeNull();
-    expect(splitNotice(1)).toBe("A spread was split into two pages");
-    expect(splitNotice(3)).toBe("3 spreads were split into single pages");
+    expect(splitNotice(1)).toBe("A two-page layout was split into single pages");
+    expect(splitNotice(3)).toBe("3 two-page layouts were split into single pages");
   });
 });
 
@@ -249,7 +249,7 @@ describe("page tools on spreads", () => {
     expect(box.state.page).toBe(2);
     expect(box.state.doc.pages[3].layout).not.toBe("m-p-spread-mosaic");
     const toast = toasts.at(-1);
-    expect(toast?.message).toMatch(/^(A spread was split into two pages|\d+ spreads were split into single pages)$/);
+    expect(toast?.message).toMatch(/^(A two-page layout was split into single pages|\d+ two-page layouts were split into single pages)$/);
     expect(toast?.action?.label).toBe("Undo");
     toast?.action?.run();
     expect(box.state.doc).toBe(d);

@@ -11,6 +11,13 @@ import { expect, test, type Page } from "@playwright/test";
 const W = 375;
 test.use({ viewport: { width: W, height: 812 } });
 
+/** M13 simple toolbar: open "More", then tap a tool that lives in its sheet (testid unchanged). */
+async function viaMore(page: Page, id: string) {
+  await page.getByTestId("editor-more").click();
+  await expect(page.getByTestId("editor-more-sheet")).toBeVisible();
+  await page.getByTestId(`editor-tool-${id}`).click();
+}
+
 test.describe("editor routes when signed out", () => {
   test("/books/<uuid>/edit -> /login?next=/books/<uuid>/edit", async ({ page, request }) => {
     const id = randomUUID();
@@ -241,7 +248,8 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
     await goToItem(page, 6);
     await expect(cur(page).locator("[data-layout]").first()).toHaveAttribute("data-layout", "four-grid");
     await cur(page).locator('[data-slot-index="0"] [data-testid="slot-target"]').click();
-    await page.getByTestId("editor-tool-layout").click();
+    // M13: with a photo selected, Layout sits behind More.
+    await viaMore(page, "layout");
     await expect(page.getByTestId("editor-panel-layout")).toBeVisible();
     await expectNoOverflow(page, "layout picker");
     await page.locator('[data-testid="layout-option"][data-layout-id="full-page"]').click();
@@ -307,7 +315,7 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
     const o1 = await order();
     await page.getByTestId("pages-thumb").nth(3).click();
     await expect(counter(page)).toHaveText("4 / 20");
-    await page.getByTestId("editor-tool-page-menu").click();
+    await viaMore(page, "page-menu");
     await expect(page.getByTestId("page-menu")).toBeVisible();
     await expectNoOverflow(page, "page menu");
     await page.getByTestId("page-menu-delete").click();
@@ -323,7 +331,7 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
   test("delete the LAST page → header Undo lands on the restored page (T14 bug 3)", async ({ page }) => {
     await open(page);
     await goToItem(page, 6);
-    await page.getByTestId("editor-tool-page-menu").click();
+    await viaMore(page, "page-menu");
     await page.getByTestId("page-menu-delete").click();
     await expect(counter(page)).toHaveText("5 / 5");
     await page.getByTestId("editor-undo").click();
@@ -361,7 +369,7 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
   test("free book at 20 pages: Add page opens the Upgrade sheet, no page 21", async ({ page }) => {
     await open(page, "?pages=20");
     await goToItem(page, 20);
-    await page.getByTestId("editor-tool-add-page").click();
+    await viaMore(page, "add-page");
     await expect(page.getByTestId("upgrade-sheet")).toBeVisible();
     // M7: live when the dev server has Stripe keys, else disabled + "Payments unavailable".
     const btn = page.getByTestId("upgrade-button");
@@ -397,6 +405,7 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
       route.fulfill({ headers: { "content-type": "application/pdf", "content-disposition": 'attachment; filename="book.pdf"' }, body: "%PDF-1.7\n" }),
     );
     await open(page, "?paid=1");
+    await page.getByTestId("editor-more").click();
     await expect(page.getByTestId("editor-tool-upgrade")).toHaveCount(0);
     const tool = page.getByTestId("editor-tool-pdf");
     await expect(tool).toBeVisible();
@@ -415,6 +424,8 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
     expect(calls).toEqual(["POST", "GET"]);
     // Free book: no PDF tool.
     await open(page);
+    await page.getByTestId("editor-more").click();
+    await expect(page.getByTestId("editor-tool-upgrade")).toBeVisible();
     await expect(page.getByTestId("editor-tool-pdf")).toHaveCount(0);
   });
 
@@ -432,7 +443,7 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
   test("Add page below the limit inserts after the current page", async ({ page }) => {
     await open(page);
     await goToItem(page, 2);
-    await page.getByTestId("editor-tool-add-page").click();
+    await viaMore(page, "add-page");
     await expect(counter(page)).toHaveText("3 / 7");
     await waitSaved(page);
   });
@@ -574,7 +585,7 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
     await open(page);
     // One-time coach line: in the toolbar flow (never over the page), dismissible, remembered.
     const coach = page.getByTestId("editor-coach");
-    await expect(coach).toContainText("Tap a photo to swap, crop or change its layout");
+    await expect(coach).toContainText("Tap a photo or caption to edit it");
     const cov = (await cur(page).boundingBox())!;
     const cb = (await coach.boundingBox())!;
     expect(cb.y).toBeGreaterThanOrEqual(cov.y + cov.height - 1);
@@ -668,6 +679,8 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
     // Close the open panel between tools (sheets have a backdrop over the toolbar); the selection stays.
     for (const tool of ["ai-caption", "caption-style", "chapter"]) {
       await page.getByTestId("editor-panel-close").click();
+      // M13: AI help is a big button; Font and Chapter sit behind More.
+      if (tool !== "ai-caption") await page.getByTestId("editor-more").click();
       const btn = page.getByTestId(`editor-tool-${tool}`);
       await expect(btn, `toolbar shows ${tool} for a caption`).toBeVisible();
       await btn.click();
@@ -683,7 +696,9 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
       // Slot tools need the slot selected; page tools (Pages / Page menu) show with no selection.
       if ((tool === "replace" || tool === "crop") && !selected) await slot.click();
       if ((tool === "pages" || tool === "page-menu") && selected) await slot.click();
-      await page.getByTestId(`editor-tool-${tool}`).click();
+      // M13: Layout (photo selected) and Page options sit behind More.
+      if (tool === "layout" || tool === "page-menu") await viaMore(page, tool);
+      else await page.getByTestId(`editor-tool-${tool}`).click();
       await expect(page.getByTestId(`editor-panel-${tool}`)).toBeVisible();
       await expectNoOverflow(page, tool);
       if (tool === "crop") await page.getByTestId("crop-done").click();
@@ -722,7 +737,7 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
   test("Move to chapter appends the page to that chapter; toast Undo", async ({ page }) => {
     await open(page, "?pages=20");
     await goToItem(page, 4);
-    await page.getByTestId("editor-tool-page-menu").click();
+    await viaMore(page, "page-menu");
     await expect(page.getByTestId("page-menu")).toBeVisible();
     await page.getByTestId("page-menu-chapter").last().click();
     await expect(counter(page)).toHaveText("20 / 20");
@@ -864,7 +879,7 @@ test.describe("facing pages (/dev-editor)", () => {
       await right.locator('[data-slot-index="0"] [data-testid="slot-target"]').click();
       await expect(right).toHaveAttribute("data-active", "true");
       await expect(left).toHaveAttribute("data-active", "false");
-      await page.getByTestId("editor-tool-dev-panel").click();
+      await viaMore(page, "dev-panel");
       await expect(page.getByTestId("editor-panel-dev-panel")).toContainText("Page: 1 · selection: slot");
       await page.getByTestId("editor-panel-close").click();
 
@@ -882,7 +897,7 @@ test.describe("facing pages (/dev-editor)", () => {
       await page.getByTestId("editor-panel-close").click();
       await left.locator('[data-slot-index="0"] [data-testid="slot-target"]').click();
       await expect(left).toHaveAttribute("data-active", "true");
-      await page.getByTestId("editor-tool-dev-panel").click();
+      await viaMore(page, "dev-panel");
       await expect(page.getByTestId("editor-panel-dev-panel")).toContainText("Page: 0 · selection: slot");
     });
 
@@ -1189,7 +1204,7 @@ test.describe("backgrounds at 375 px (/dev-editor?bg=1)", () => {
 
   const KEPT_UUID = "00000000-0000-4000-8000-0000000000f5";
 
-  /** Nothing selected on page 1: the 6 real tools (Layout … Upgrade), then /dev-editor's 2 demo tools. */
+  /** Nothing selected on page 1 (M13): Layout / Background / Pages + More (Add page, Page options, Upgrade + demo tools). */
   async function page1Tools(page: Page) {
     await page.goto(`/dev-editor?bg=1`);
     await expect(page.getByTestId("editor-shell")).toBeVisible();
@@ -1197,66 +1212,117 @@ test.describe("backgrounds at 375 px (/dev-editor?bg=1)", () => {
     await page.getByTestId("carousel-next").click();
     await expect(counter(page)).toHaveText("1 / 6");
     await settle(page);
-    return page.locator('[data-testid^="editor-tool-"]');
+    return page.getByTestId("editor-toolbar-row").locator("button");
   }
 
-  /** Hide /dev-editor's demo tools so the row is exactly what the real editor shows. */
-  const HIDE_DEV_TOOLS = '[data-testid^="editor-tool-dev-"]{display:none!important}';
-
-  test("toolbar at 375: every real tool on screen without scrolling, labels unclipped, no page overflow", async ({ page }) => {
-    const tools = await page1Tools(page);
-    const devTools = await page.addStyleTag({ content: HIDE_DEV_TOOLS });
-    const visible = page.locator('[data-testid^="editor-tool-"]:not([data-testid^="editor-tool-dev-"])');
-    const ids = await visible.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.replace("editor-tool-", "")));
-    expect(ids).toEqual(["layout", "background", "pages", "add-page", "page-menu", "upgrade"]);
-    await expect(page.getByTestId("toolbar-fade-end")).toHaveAttribute("data-visible", "false");
-    for (let i = 0; i < ids.length; i++) {
-      const t = visible.nth(i);
+  /** Every row button: inside the viewport, ≥ 44 px, label unclipped. */
+  async function expectRowFits(page: Page, width: number) {
+    const row = page.getByTestId("editor-toolbar-row");
+    expect(await row.evaluate((el) => el.scrollWidth - el.clientWidth), "row never scrolls sideways").toBeLessThanOrEqual(0);
+    const buttons = row.locator("button");
+    const n = await buttons.count();
+    expect(n).toBeLessThanOrEqual(4);
+    for (let i = 0; i < n; i++) {
+      const t = buttons.nth(i);
+      const id = (await t.getAttribute("data-testid")) ?? String(i);
       const box = (await t.boundingBox())!;
-      expect(box.width, ids[i]).toBeGreaterThanOrEqual(44);
-      expect(box.width, ids[i]).toBeLessThanOrEqual(72);
-      expect(box.x, ids[i]).toBeGreaterThanOrEqual(0);
-      expect(box.x + box.width, ids[i]).toBeLessThanOrEqual(W);
-      // Label fits its button (no clipping / overflow).
+      expect(box.width, id).toBeGreaterThanOrEqual(44);
+      expect(box.height, id).toBeGreaterThanOrEqual(44);
+      expect(box.x, id).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width, id).toBeLessThanOrEqual(width);
       const fits = await t.evaluate((el) => {
         const label = el.querySelector("span")!;
-        const b = el.getBoundingClientRect();
-        const l = label.getBoundingClientRect();
-        return l.left >= b.left - 0.5 && l.right <= b.right + 0.5;
+        return label.scrollWidth <= label.clientWidth + 0.5;
       });
-      expect(fits, `label fits: ${ids[i]}`).toBe(true);
+      expect(fits, `label fits: ${id}`).toBe(true);
     }
     expect(await overflow(page)).toBeLessThanOrEqual(0);
-    await shot(page, "375-toolbar");
-    // With the 2 demo tools too (8 tools) the row scrolls: fade edge, last tool reachable.
-    await devTools.evaluate((el) => (el as HTMLElement).remove());
-    await expect(page.getByTestId("toolbar-fade-end")).toHaveAttribute("data-visible", "true");
+  }
+
+  test("M13 toolbar at 375: 3 big tools + More, no sideways scroll; More sheet holds the rest (keyboard + focus return)", async ({ page }) => {
+    const buttons = await page1Tools(page);
+    const ids = await buttons.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!));
+    expect(ids).toEqual(["editor-tool-layout", "editor-tool-background", "editor-tool-pages", "editor-more"]);
+    await expectRowFits(page, W);
+    await shot(page, "m13-editor-375-page");
+
+    // More: a labelled dialog with the rest; aria-expanded follows; first tool focused.
+    const more = page.getByTestId("editor-more");
+    await expect(more).toHaveAttribute("aria-expanded", "false");
+    await more.click();
+    await expect(more).toHaveAttribute("aria-expanded", "true");
+    const sheet = page.getByTestId("editor-more-sheet");
+    await expect(sheet).toBeVisible();
+    await expect(sheet).toHaveAttribute("role", "dialog");
+    const inSheet = await sheet.locator('[data-testid^="editor-tool-"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.replace("editor-tool-", "")));
+    expect(inSheet.filter((id) => !id.startsWith("dev-"))).toEqual(["add-page", "page-menu", "upgrade"]);
+    // Focus moves into the sheet: its first tool (here a /dev-editor demo tool sorts first).
+    await expect(sheet.locator("li button").first()).toBeFocused();
+    for (const b of await sheet.locator("button").all()) expect((await b.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     expect(await overflow(page)).toBeLessThanOrEqual(0);
-    await shot(page, "375-toolbar-scroll");
-    const lastTool = tools.last();
-    await page.getByTestId("editor-toolbar-row").evaluate((el) => el.scrollTo({ left: el.scrollWidth, behavior: "instant" }));
-    const box = (await lastTool.boundingBox())!;
-    expect(box.x + box.width).toBeLessThanOrEqual(W);
-    await expect(page.getByTestId("toolbar-fade-start")).toHaveAttribute("data-visible", "true");
-    await expect(page.getByTestId("toolbar-fade-end")).toHaveAttribute("data-visible", "false");
-    expect(await overflow(page)).toBeLessThanOrEqual(0);
+    await shot(page, "m13-editor-375-more");
+    // Arrow keys move between tools; Escape closes and returns focus to More (selection untouched).
+    await page.keyboard.press("ArrowDown");
+    await expect(sheet.locator("li button").nth(1)).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(sheet).toHaveCount(0);
+    await expect(more).toBeFocused();
+    await expect(more).toHaveAttribute("aria-expanded", "false");
+    // Enter opens it from the keyboard; picking a panel tool opens that panel, More shows it's active.
+    await page.keyboard.press("Enter");
+    await expect(sheet).toBeVisible();
+    await page.getByTestId("editor-tool-page-menu").click();
+    await expect(sheet).toHaveCount(0);
+    await expect(page.getByTestId("editor-panel-page-menu")).toBeVisible();
+    await expect(more).toHaveAttribute("data-active", "true");
+    await page.getByTestId("editor-panel-close").click();
+    await expect(more).toBeFocused();
+    // Backdrop tap closes too.
+    await more.click();
+    await page.getByTestId("editor-more-backdrop").click({ position: { x: 10, y: 10 } });
+    await expect(sheet).toHaveCount(0);
+  });
+
+  test("M13 toolbar per selection at 375: photo = Replace / Crop / More, caption = Edit / AI help / More", async ({ page }) => {
+    await page.goto(`/dev-editor`);
+    await expect(page.getByTestId("editor-shell")).toBeVisible();
+    await settle(page);
+    await page.getByTestId("carousel-next").click();
+    await page.getByTestId("carousel-next").click();
+    await expect(counter(page)).toHaveText("2 / 6");
+    await settle(page);
+    const rowIds = () => page.getByTestId("editor-toolbar-row").locator("button").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!));
+    await cur(page).locator('[data-slot-index="0"] [data-testid="slot-target"]').click();
+    await expect.poll(rowIds).toEqual(["editor-tool-replace", "editor-tool-crop", "editor-more"]);
+    await expectRowFits(page, W);
+    await shot(page, "m13-editor-375-photo");
+    await page.getByTestId("editor-more").click();
+    await expect(page.getByTestId("editor-tool-layout")).toBeVisible();
+    await page.keyboard.press("Escape");
+    // Escape on the sheet must not also clear the photo selection.
+    await expect.poll(rowIds).toEqual(["editor-tool-replace", "editor-tool-crop", "editor-more"]);
+
+    await cur(page).getByTestId("caption-target").click();
+    await expect(page.getByTestId("editor-panel-caption")).toBeVisible();
+    await expect.poll(rowIds).toEqual(["editor-tool-caption", "editor-tool-ai-caption", "editor-more"]);
+    await expect(page.getByTestId("editor-tool-caption")).toContainText("Edit");
+    await expect(page.getByTestId("editor-tool-ai-caption")).toContainText("AI help");
+    await expectRowFits(page, W);
+    await shot(page, "m13-editor-375-caption");
   });
 
   test.describe("at 320 px", () => {
     test.use({ viewport: { width: 320, height: 700 } });
 
-    test("toolbar: the row scrolls with a fade edge, every real tool reachable, no page overflow", async ({ page }) => {
-      const tools = await page1Tools(page);
-      await page.addStyleTag({ content: HIDE_DEV_TOOLS });
-      expect(await overflow(page)).toBeLessThanOrEqual(0);
-      for (const id of ["layout", "background", "pages", "add-page", "page-menu", "upgrade"]) {
-        const t = page.getByTestId(`editor-tool-${id}`);
-        await t.scrollIntoViewIfNeeded();
-        const box = (await t.boundingBox())!;
+    test("toolbar: ≤ 4 buttons fit without scrolling; every More tool reachable", async ({ page }) => {
+      await page1Tools(page);
+      await expectRowFits(page, 320);
+      await page.getByTestId("editor-more").click();
+      for (const id of ["add-page", "page-menu", "upgrade"]) {
+        const box = (await page.getByTestId(`editor-tool-${id}`).boundingBox())!;
         expect(box.x, id).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width, id).toBeLessThanOrEqual(320);
       }
-      expect(await tools.count()).toBeGreaterThanOrEqual(6);
       expect(await overflow(page)).toBeLessThanOrEqual(0);
     });
   });

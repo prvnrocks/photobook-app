@@ -7,6 +7,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import { useRefreshTransition } from "@/components/app/use-refresh-transition";
 import { PhotoTile } from "@/components/review/PhotoTile";
 import {
+  REVIEW_EMPTY_TAB_COPY,
+  REVIEW_TAB_LABELS,
   applyUserChoice,
   countKept,
   headerCopy,
@@ -167,7 +169,7 @@ export function ReviewGrid({ photos, aiUsed, toggle, onPhotosChange, toastClassN
                 selected ? "bg-card text-foreground shadow-card" : "text-muted-foreground hover:text-foreground",
               )}
             >
-              {t === "kept" ? "Kept" : "Dropped"}{" "}
+              {REVIEW_TAB_LABELS[t]}{" "}
               <span className="tabular-nums" data-testid={`review-count-${t}`}>
                 ({t === "kept" ? kept : dropped})
               </span>
@@ -179,7 +181,7 @@ export function ReviewGrid({ photos, aiUsed, toggle, onPhotosChange, toastClassN
       <div role="tabpanel" id="review-panel" aria-labelledby={`review-tab-${tab}`} data-testid="review-panel">
         {shown.length === 0 ? (
           <p className="type-small rounded-xl border border-dashed border-input/60 bg-card p-6 text-center text-muted-foreground" data-testid="review-empty-tab">
-            {tab === "kept" ? "No photos kept yet. Open Dropped to add some back." : "Nothing dropped — every photo is in your album."}
+            {REVIEW_EMPTY_TAB_COPY[tab]}
           </p>
         ) : (
           <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">

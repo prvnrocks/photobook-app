@@ -197,7 +197,7 @@ describe("photo tools render smoke", () => {
     const ctx = ctxWith({ kind: "slot", pageIdx: 0, slotIdx: 0 });
     const html = renderToStaticMarkup(<PhotoPickerPanel ctx={ctx} close={noop} />);
     expect(html).toContain("In book <span");
-    expect(html).toMatch(/Dropped by AI <span[^>]*>\(2\)/);
+    expect(html).toMatch(/Left out by AI <span[^>]*>\(2\)/);
     expect(html).toMatch(/data-testid="picker-tab-notUsed"[^>]*>|aria-selected="true"[^>]*data-testid="picker-tab-notUsed"/);
     expect(html.match(/data-testid="picker-photo"/g)).toHaveLength(1);
     expect(html).toContain('data-photo-id="d13"');

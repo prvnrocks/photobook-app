@@ -37,17 +37,17 @@ describe("editor server render before the width is known (N7)", () => {
 });
 
 describe("toolbar at 375 px", () => {
-  it("buttons size to the label (11 px, tight, 44–72 px) on phones, no truncation; fade edges for scrolling", () => {
+  it("M13: ≤ 4 equal buttons (3 primary + More), ≥ 44 px, no sideways scroll or fade edges", () => {
     const html = render();
+    const row = html.match(/<div[^>]*data-testid="editor-toolbar-row"[^>]*>/)?.[0] ?? "";
+    expect(row).not.toContain("overflow-x-auto");
+    expect(Number(row.match(/data-count="(\d+)"/)?.[1])).toBeLessThanOrEqual(4);
     const btn = html.match(/<button[^>]*data-testid="editor-tool-background"[^>]*>[\s\S]*?<\/button>/)?.[0] ?? "";
     expect(btn).toContain("Background");
-    expect(btn).toMatch(/min-w-11 max-w-\[72px\] flex-auto/);
-    expect(btn).toContain("text-[11px]");
-    expect(btn).toContain("tracking-tight");
-    expect(btn).not.toContain("truncate");
-    expect(btn).toContain('class="whitespace-nowrap"');
-    expect(html).toContain('data-testid="toolbar-fade-start"');
-    expect(html).toContain('data-testid="toolbar-fade-end"');
+    expect(btn).toMatch(/min-h-14 min-w-11 max-w-40 flex-1 basis-0/);
+    expect(html).toMatch(/<button[^>]*aria-haspopup="dialog"[^>]*aria-expanded="false"[^>]*data-testid="editor-more"/);
+    expect(html).not.toContain('data-testid="toolbar-fade-start"');
+    expect(html).not.toContain('data-testid="toolbar-fade-end"');
   });
 });
 

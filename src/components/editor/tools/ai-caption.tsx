@@ -256,10 +256,11 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
 export const aiCaptionTool: EditorTool = {
   id: "ai-caption",
   // M11: the Sparkles icon carries the "magic"; no emoji in the label (matches the other tools).
-  label: "AI",
+  label: "AI help",
   icon: Sparkles,
   scopes: ["caption"],
   order: 31,
+  tier: "primary",
   panelTitle: "AI caption help",
   Panel: AiCaptionPanel,
 };

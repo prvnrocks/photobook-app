@@ -3,7 +3,7 @@
 // One square photo toggle on the review screen. aria-pressed = kept.
 import { useEffect, useRef, useState } from "react";
 import { Check, ImageOff } from "lucide-react";
-import { isKept, reasonLabel, thumbSize, type ReviewTilePhoto } from "@/lib/review/ui";
+import { isKept, reasonLabel, REVIEW_MOVED_COPY, thumbSize, type ReviewTilePhoto } from "@/lib/review/ui";
 import { cn } from "@/lib/utils";
 
 type PhotoTileProps = {
@@ -111,7 +111,7 @@ export function PhotoTile({ photo, index, busy, moved, onTap, onThumbError }: Ph
           </span>
         ) : null}
         {moved ? (
-          <span className="sr-only">{kept ? "Moved to Kept" : "Moved to Dropped"}</span>
+          <span className="sr-only">{REVIEW_MOVED_COPY[kept ? "kept" : "dropped"]}</span>
         ) : null}
         {photo.userOverride ? <span className="sr-only">You changed this</span> : null}
       </span>

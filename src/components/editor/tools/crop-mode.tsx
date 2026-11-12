@@ -257,6 +257,7 @@ export const cropTool: EditorTool = {
   icon: CropIcon,
   scopes: ["slot"],
   order: 12,
+  tier: "primary",
   panelTitle: "Crop photo",
   isAvailable: (ctx) => cropTarget(ctx) !== null,
   Panel: CropPanel,

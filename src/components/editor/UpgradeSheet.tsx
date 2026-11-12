@@ -100,6 +100,7 @@ export const upgradeTool: EditorTool = {
   icon: Gem,
   scopes: "always",
   order: 98,
+  tier: "more",
   editsDoc: false,
   isAvailable: (ctx) =>
     !ctx.book.isPaid && (ctx.activeTool === UPGRADE_TOOL_ID || selectionKind(ctx.state.selection) === "none"),

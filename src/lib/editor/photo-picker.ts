@@ -10,7 +10,7 @@ export type PickerTab = "inBook" | "notUsed" | "dropped";
 export const PICKER_TABS: readonly { id: PickerTab; label: string; empty: string }[] = [
   { id: "inBook", label: "In book", empty: "No photos in the book yet." },
   { id: "notUsed", label: "Not used", empty: "Every kept photo is already in the book." },
-  { id: "dropped", label: "Dropped by AI", empty: "The AI didn't drop any photos." },
+  { id: "dropped", label: "Left out by AI", empty: "The AI didn't leave out any photos." },
 ];
 
 export type PickerGroups = Record<PickerTab, EditorShellPhoto[]>;
@@ -18,7 +18,7 @@ export type PickerGroups = Record<PickerTab, EditorShellPhoto[]>;
 /**
  * Split the book's photos into the picker tabs. Placement wins over AI status: a dropped photo
  * the user placed is "In book" (the server marks it kept on save, D-037 4); taking it out puts it
- * back under "Dropped by AI". In book = doc order (cover first, then pages); the other tabs keep
+ * back under "Left out by AI". In book = doc order (cover first, then pages); the other tabs keep
  * the photos' own order. Ids in the doc without a photo row (deleted) are skipped.
  */
 export function groupPickerPhotos(photos: readonly EditorShellPhoto[], doc: BookDoc): PickerGroups {

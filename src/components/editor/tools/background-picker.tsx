@@ -486,6 +486,7 @@ export const backgroundTool: EditorTool = {
   icon: PaintBucket,
   scopes: ["none"],
   order: 22,
+  tier: "primary",
   panelTitle: "Background",
   // Live preview: keep the page visible above the panel on phones.
   dockOnMobile: true,

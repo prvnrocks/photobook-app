@@ -92,7 +92,7 @@ export function movePageById(doc: BookDoc, activeId: string, overId: string, max
 /** Toast text when a structural change split later spreads (D-064), else null. */
 export function splitNotice(splitCount: number): string | null {
   if (!(splitCount > 0)) return null;
-  return splitCount === 1 ? "A spread was split into two pages" : `${splitCount} spreads were split into single pages`;
+  return splitCount === 1 ? "A two-page layout was split into single pages" : `${splitCount} two-page layouts were split into single pages`;
 }
 
 /** Index the page at `pageIdx` will have after "Move to chapter" (null if the move is invalid). */

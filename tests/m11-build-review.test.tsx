@@ -99,9 +99,9 @@ describe("Review hierarchy (T12)", () => {
     const bar = html.slice(html.indexOf('data-testid="review-actions"'));
     expect(bar).toContain('data-testid="review-continue"');
     expect(bar).toContain("Continue to editor");
-    expect(bar).not.toContain("Rebuild with AI");
-    expect(html.indexOf("Rebuild with AI")).toBeLessThan(html.indexOf('data-testid="review-actions"'));
-    expect(html).toContain("2 rebuilds left");
+    expect(bar).not.toContain("Redo with AI");
+    expect(html.indexOf("Redo with AI")).toBeLessThan(html.indexOf('data-testid="review-actions"'));
+    expect(html).toContain("2 AI redos left");
     // No pending changes → no Update album.
     expect(html).not.toContain('data-testid="update-album-bar"');
     expect(html).toContain('data-testid="review-add-photos"');
@@ -131,27 +131,28 @@ describe("Review hierarchy (T12)", () => {
 describe("RebuildButton + UpdateAlbumBar (T12)", () => {
   it("rebuilds-left copy", () => {
     expect(rebuildsLeftCopy(null)).toBeNull();
-    expect(rebuildsLeftCopy(1)).toBe("1 rebuild left");
-    expect(rebuildsLeftCopy(3)).toBe("3 rebuilds left");
+    expect(rebuildsLeftCopy(1)).toBe("1 AI redo left");
+    expect(rebuildsLeftCopy(3)).toBe("3 AI redos left");
   });
 
   it("label kept; out of rebuilds disables and drops the count", () => {
     const ok = renderToStaticMarkup(<RebuildButton bookId="b1" variant="rebuild" rebuildsLeft={1} />);
-    expect(ok).toContain("Rebuild with AI");
-    expect(ok).toContain("1 rebuild left");
+    expect(ok).toContain("Redo with AI");
+    expect(ok).toContain("1 AI redo left");
     const out = renderToStaticMarkup(<RebuildButton bookId="b1" variant="rebuild" rebuildsLeft={0} />);
     expect(out).toContain("disabled");
-    expect(out).not.toContain("rebuilds left");
+    expect(out).not.toContain("redos left");
     const replay = renderToStaticMarkup(<RebuildButton bookId="b1" variant="rebuild" rebuildsLeft={null} />);
     expect(replay).not.toContain('data-testid="rebuild-left"');
   });
 
-  it("Update album row: count, 44 px button, note", () => {
+  it("Apply photo changes row (formerly Update album): count, 44 px button, note", () => {
     const html = renderToStaticMarkup(
       <UpdateAlbumBar count={2} pending={false} error={null} onUpdate={() => {}} note={<p>note</p>} />,
     );
     expect(html).toContain("You changed 2 photos.");
-    expect(html).toContain("Update album");
+    expect(html).toContain("Apply photo changes");
+    expect(html).not.toContain("Update album");
     expect(html).toContain("h-11");
     expect(html).toContain("<p>note</p>");
   });

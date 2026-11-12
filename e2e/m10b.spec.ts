@@ -487,6 +487,8 @@ test("b. free limit with spreads: 19 pages → spread on page 19 makes 20; no pa
   rev = after.doc_rev;
 
   // At 20 pages: Add page opens the Upgrade sheet, nothing is added.
+  // M13: Add page sits behind More.
+  await page.getByTestId("editor-more").click();
   await page.getByTestId("editor-tool-add-page").click();
   await expect(page.getByTestId("upgrade-sheet")).toBeVisible();
   await page.waitForTimeout(1_500);

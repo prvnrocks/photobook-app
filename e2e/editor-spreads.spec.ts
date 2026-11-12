@@ -31,6 +31,12 @@ test.afterEach(() => {
 const carousel = (page: Page) => page.getByTestId("page-carousel");
 const cur = (page: Page) => page.locator('[data-testid="carousel-item"][aria-hidden="false"]');
 const counter = (page: Page) => page.getByTestId("page-counter");
+/** M13 simple toolbar: open "More", then tap a tool that lives in its sheet (testid unchanged). */
+async function viaMore(page: Page, id: string) {
+  await page.getByTestId("editor-more").click();
+  await expect(page.getByTestId("editor-more-sheet")).toBeVisible();
+  await page.getByTestId(`editor-tool-${id}`).click();
+}
 const overflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 const tileIds = (page: Page) => page.$$eval('[data-testid="pages-tile"]', (els) => els.map((e) => e.getAttribute("data-page-id")));
 const spreadTiles = (page: Page) => page.locator('[data-testid="pages-tile"][data-spread="true"]');
@@ -90,7 +96,8 @@ test.describe("open book at 1024 × 768", () => {
 
     // Select a photo on the left page → Layout.
     await cur(page).locator('[data-testid="spread-page"][data-side="left"] [data-testid="slot-target"]').first().click();
-    await page.getByTestId("editor-tool-layout").click();
+    // M13: with a photo selected, Layout sits behind More.
+    await viaMore(page, "layout");
     const picker = page.getByTestId("layout-picker");
     await expect(picker).toBeVisible();
     // Only modern portrait layouts; spreads grouped and enabled on a left page.
@@ -178,11 +185,11 @@ test.describe("phone at 375 px", () => {
   test("delete a spread from either half: confirm, both pages go, Undo restores", async ({ page }) => {
     await open(page, "single");
     await goToPage(page, 4);
-    await page.getByTestId("editor-tool-page-menu").click();
+    await viaMore(page, "page-menu");
     await expect(page.getByTestId("page-menu-delete")).toHaveText(/Delete pages 3–4/);
     await page.getByTestId("page-menu-delete").click();
     const confirm = page.getByTestId("page-menu-confirm");
-    await expect(confirm).toContainText("Delete this 2-page spread?");
+    await expect(confirm).toContainText("Delete this two-page layout?");
     expect(await overflow(page)).toBeLessThanOrEqual(0);
     await page.screenshot({ path: `${SHOTS}/m10b-editor-375-delete-spread.png` });
     await page.getByTestId("page-menu-confirm-delete").click();
@@ -196,7 +203,7 @@ test.describe("phone at 375 px", () => {
   test("cancel keeps the spread", async ({ page }) => {
     await open(page, "single");
     await goToPage(page, 3);
-    await page.getByTestId("editor-tool-page-menu").click();
+    await viaMore(page, "page-menu");
     await page.getByTestId("page-menu-delete").click();
     await page.getByTestId("page-menu-confirm-cancel").click();
     await expect(page.getByTestId("page-menu")).toBeVisible();
@@ -206,7 +213,7 @@ test.describe("phone at 375 px", () => {
   test("insert a page before a spread → spread split + Undo restores it", async ({ page }) => {
     await open(page, "single");
     await goToPage(page, 2);
-    await page.getByTestId("editor-tool-add-page").click();
+    await viaMore(page, "add-page");
     await expect(counter(page)).toHaveText("3 / 16");
     const toast = page.getByTestId("editor-toast");
     await expect(toast).toContainText(/split/);

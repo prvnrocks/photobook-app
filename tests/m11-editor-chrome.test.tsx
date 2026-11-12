@@ -79,7 +79,7 @@ describe("coach line storage", () => {
 
   it("renders the exact copy with a 44 px dismiss button", () => {
     const html = renderToStaticMarkup(<CoachLineView onDismiss={() => {}} />);
-    expect(EDITOR_COACH_TEXT).toBe("Tap a photo to swap, crop or change its layout");
+    expect(EDITOR_COACH_TEXT).toBe("Tap a photo or caption to edit it");
     expect(html).toContain(EDITOR_COACH_TEXT);
     expect(html).toMatch(/aria-label="Dismiss tip"[^>]*size-11|size-11[^>]*aria-label="Dismiss tip"/);
   });
@@ -100,7 +100,7 @@ describe("editor tools (T14)", () => {
   });
 
   it("AI tool uses the Sparkles icon and a plain label (no emoji)", () => {
-    expect(aiCaptionTool.label).toBe("AI");
+    expect(aiCaptionTool.label).toBe("AI help");
     expect(aiCaptionTool.panelTitle).toBe("AI caption help");
     expect(aiCaptionTool.label).not.toMatch(/✨/);
   });
