@@ -195,6 +195,15 @@ App screens take on the book look (Classic serif / Modern clean); app chrome onl
 **Done when:** on a 375 px phone a new user goes landing → login → new book → upload → AI build → review → edit → publish → share → upgrade → PDF in one consistent Classic/Modern look, always knows the next step, never scrolls sideways; m9 + m10b goldens and the print pixel baseline are unchanged, analytics events still fire, all live specs are green.
 > M11 (2026-11-11): built (5 parallel builders after style-board sign-off), reviewed APPROVED (fixes applied), gate PASS: 5347 vitest, goldens unchanged, book render parity 0 px over 112 captures, e2e/m11 375 a11y spec, all live specs green (upload-auth only Mapbox). First-load JS within +3 kB of pre-M11 (/ −3). WhatsApp button green (user). Deployed 2026-11-11 (main 97bcbd8).
 
+## Milestone 12 — Reliability (before launch)
+Plan: `.agentos/runs/m12.md`, D-069.
+- [ ] Time limits on every Supabase call (server + browser): reads, RPCs, signed URLs, uploads and downloads each get their own budget; a timeout becomes a typed `SUPABASE_TIMEOUT` → 503 "try again" (never a sign-out or login redirect)
+- [ ] Safe retries after a timeout: editor save replay is not a false "changed in another tab"; finalize, AI tick, PDF export and Stripe webhook stay idempotent; AI lease margin covers database budgets
+- [ ] Upload + build screens recover by themselves: finalize request deadline + 503 back-off; a stalled photo upload is retried
+- [ ] Small fixes: "Add photo" on an empty split-strip cover in the editor; layout picker no longer re-plans every layout on each render; PDF reference walk without a depth limit
+- [ ] e2e/m12-reliability.spec.ts (stalled upload recovers at 375 px) + all live specs green
+**Done when:** no server route or upload can hang past its time limit; a hung or slow Supabase response shows a retry (never the login page) and the flow recovers on its own; autosave never reports a false conflict after a timeout; goldens unchanged; lint, typecheck, tests and live specs pass.
+
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
 - [ ] AI "story mode": a short paragraph per chapter (AI-picked backgrounds moved into M10c)
