@@ -344,6 +344,24 @@ describe("photo-urls refresh: 503 → retry later, old URLs kept", () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({}, 500)));
     expect(await httpEditorTransport(BOOK).photoUrls(["a"])).toBeNull();
   });
+
+  it("the editor save maps 503 unavailable + Retry-After to retry; saving_unavailable stays terminal", async () => {
+    const doc = {} as Parameters<ReturnType<typeof httpEditorTransport>["save"]>[0];
+    vi.stubGlobal("fetch", vi.fn(async () => unavailable("5")));
+    expect(await httpEditorTransport(BOOK).save(doc, 1, { keepalive: false })).toEqual({
+      kind: "retry",
+      reason: "server",
+      minWaitMs: 5_000,
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => unavailable()));
+    expect(await httpEditorTransport(BOOK).save(doc, 1, { keepalive: false })).toEqual({
+      kind: "retry",
+      reason: "server",
+      minWaitMs: 3_000,
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => json({ error: "saving_unavailable" }, 503)));
+    expect(await httpEditorTransport(BOOK).save(doc, 1, { keepalive: false })).toEqual({ kind: "unavailable" });
+  });
 });
 
 describe("upload adapter: hung storage upload", () => {

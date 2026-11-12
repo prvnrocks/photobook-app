@@ -265,6 +265,9 @@ async function attemptOnce(a: Attempt): Promise<Response | typeof TIMED_OUT> {
     timedOut = true;
     controller.abort();
     rejectAbort(ABORTED);
+    // Remove the caller-signal listener now: in stream mode nobody may read the body again, so
+    // the pull()/cancel() cleanup might never run (idempotent; `cleanup` is assigned by then).
+    cleanup();
   }, a.budgetMs);
   a.callerSignal?.addEventListener("abort", onCallerAbort, { once: true });
 
@@ -401,6 +404,34 @@ export function createDeadlineFetch(profile: DeadlineProfile, overrides: Deadlin
     /* c8 ignore next */
     return timeoutResponse(cls, budgetMs);
   } as typeof fetch;
+}
+
+/**
+ * Deadline fetch plus an auth gate (M12): once one auth request timed out (or the caller's total
+ * cap fired and it called `close()`), every later auth request through THIS fetch answers the
+ * synthetic 504 at once — so auth-js's refresh retry loop (≈ 30 s of backoff) never makes another
+ * network call. Non-auth requests are untouched. Used by the middleware and the server client.
+ */
+export function createGatedAuthFetch(
+  profile: DeadlineProfile,
+  overrides: DeadlineOverrides = {},
+): { fetch: typeof fetch; close: () => void } {
+  const inner = createDeadlineFetch(profile, overrides);
+  let closed = false;
+  const gated = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const { url, method } = requestParts(input, init);
+    const isAuth = classifySupabaseRequest(url, method).cls === "auth";
+    if (isAuth && closed) return timeoutResponse("auth", 0);
+    const res = await inner(input, init);
+    if (isAuth && res.status === 504 && res.headers.get("x-supabase-timeout") === "auth") closed = true;
+    return res;
+  };
+  return {
+    fetch: gated as typeof fetch,
+    close: () => {
+      closed = true;
+    },
+  };
 }
 
 /**

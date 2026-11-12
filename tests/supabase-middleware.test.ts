@@ -137,6 +137,22 @@ describe("updateSession (src/lib/supabase/middleware.ts)", () => {
       err.mockRestore();
     });
 
+    it("refresh succeeded (rotated cookies) then /user timed out → the 503 still carries Set-Cookie + cache headers", async () => {
+      const err = vi.spyOn(console, "error").mockImplementation(() => {});
+      // The mock's getUser calls setAll (refresh rotated the session) before answering the timeout.
+      state.cookiesToSet = [{ name: "sb-x-auth-token", value: "rotated", options: { path: "/", httpOnly: true } }];
+      state.headers = { "cache-control": "private, no-cache, no-store, must-revalidate, max-age=0" };
+      state.authError = TIMEOUT;
+      const res = await updateSession(req("/dashboard"));
+      expect(res.status).toBe(503);
+      expect(res.headers.get("location")).toBeNull();
+      expect(res.cookies.get("sb-x-auth-token")?.value).toBe("rotated");
+      expect(res.headers.get("set-cookie")).toContain("sb-x-auth-token=rotated");
+      expect(res.headers.get("cache-control")).toContain("no-store");
+      expect(res.headers.get("retry-after")).toBe("3");
+      err.mockRestore();
+    });
+
     it("any AuthRetryableFetchError (network failure, Auth 502/503) on a protected path → 503", async () => {
       const err = vi.spyOn(console, "error").mockImplementation(() => {});
       state.authError = authRetryableFetchError("fetch failed", 0);

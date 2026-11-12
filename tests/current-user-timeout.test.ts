@@ -16,7 +16,7 @@ vi.mock("next/headers", () => ({
 // React cache() would memoise across tests in this file; pass it through.
 vi.mock("react", async (orig) => ({ ...(await orig<typeof import("react")>()), cache: <T>(fn: T) => fn }));
 
-const { getCurrentUser } = await import("@/lib/auth/current-user");
+const { getCurrentUser, CURRENT_USER_AUTH_TOTAL_MS } = await import("@/lib/auth/current-user");
 const { getActionUser, AUTH_UNAVAILABLE } = await import("@/lib/auth/action-user");
 const { SupabaseUnavailableError, isSupabaseTimeout, supabaseTimeoutResponse } = await import("@/lib/supabase/deadline");
 const { unavailableIfTimeout } = await import("@/lib/http/json");
@@ -97,6 +97,67 @@ describe("getCurrentUser (M12)", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("total cap: an expired session whose refresh keeps failing (Auth 503, retry loop ≈ 30 s) throws at the cap; the gate stops further calls (fake timers)", async () => {
+    expect(CURRENT_USER_AUTH_TOTAL_MS).toBe(10_000);
+    vi.useFakeTimers();
+    try {
+      jar.cookies = [sessionCookie(-60)]; // expired → getUser refreshes first
+      fetchMock.mockImplementation(async () => jsonRes({ message: "upstream" }, 503));
+      let settled: unknown = "pending";
+      void getCurrentUser().then(
+        () => (settled = "resolved"),
+        (e: unknown) => (settled = e),
+      );
+      await vi.advanceTimersByTimeAsync(CURRENT_USER_AUTH_TOTAL_MS - 1);
+      expect(settled).toBe("pending"); // auth-js is still retrying the refresh
+      const callsBefore = fetchMock.mock.calls.length;
+      expect(callsBefore).toBeGreaterThan(1);
+      expect(String(fetchMock.mock.calls[0][0])).toContain("/auth/v1/token");
+      await vi.advanceTimersByTimeAsync(1);
+      expect(settled).toBeInstanceOf(SupabaseUnavailableError);
+      expect(isSupabaseTimeout(settled)).toBe(true);
+      // The abandoned refresh loop keeps sleeping its backoff but never reaches the network again.
+      await vi.advanceTimersByTimeAsync(40_000);
+      expect(fetchMock.mock.calls.length).toBe(callsBefore);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("auth gate: after the first auth deadline timeout, the refresh retries get the synthetic 504 without a network call (fake timers)", async () => {
+    vi.useFakeTimers();
+    try {
+      jar.cookies = [sessionCookie(-60)];
+      fetchMock.mockImplementation((_u: unknown, init?: RequestInit) =>
+        new Promise((_, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")))),
+      );
+      let settled: unknown = "pending";
+      void getCurrentUser().then(
+        () => (settled = "resolved"),
+        (e: unknown) => (settled = e),
+      );
+      await vi.advanceTimersByTimeAsync(CURRENT_USER_AUTH_TOTAL_MS);
+      expect(settled).toBeInstanceOf(SupabaseUnavailableError);
+      await vi.advanceTimersByTimeAsync(40_000);
+      expect(fetchMock).toHaveBeenCalledTimes(1); // the one hung refresh; every retry was gated
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("unavailableIfTimeout: code-only log line with a route tag, custom Retry-After, null for other errors", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = unavailableIfTimeout(new SupabaseUnavailableError(), { route: "doc-save", retryAfterSeconds: 10 })!;
+    expect(res.status).toBe(503);
+    expect(res.headers.get("retry-after")).toBe("10");
+    expect(log.mock.calls.map((c) => String(c[0]))).toEqual(["[doc-save] unavailable (SUPABASE_TIMEOUT)"]);
+    log.mockClear();
+    expect(unavailableIfTimeout(new SupabaseUnavailableError())).not.toBeNull();
+    expect(log).not.toHaveBeenCalled(); // no route → caller logs itself (webhook)
+    expect(unavailableIfTimeout(new Error("boom"), { route: "doc-save" })).toBeNull();
+    expect(log).not.toHaveBeenCalled();
   });
 
   it("network failure (fetch throws) and Auth 503 → unavailable too", async () => {

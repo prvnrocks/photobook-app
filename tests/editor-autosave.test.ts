@@ -6,6 +6,7 @@ import {
   canUseKeepalive,
   classifySaveResponse,
   DEBOUNCE_MS,
+  parseRetryAfterMs,
   invalidSaveCopy,
   KEEPALIVE_MAX_BYTES,
   type AutosaveStatus,
@@ -96,6 +97,26 @@ describe("classifySaveResponse", () => {
     expect(classifySaveResponse(429, {})).toEqual({ kind: "retry", reason: "rate" });
     expect(classifySaveResponse(500, {})).toEqual({ kind: "retry", reason: "server" });
     expect(classifySaveResponse(null, null)).toEqual({ kind: "retry", reason: "network" });
+  });
+
+  it("M12: 503 'unavailable' (Supabase timeout) retries honouring Retry-After; other 503s stay terminal", () => {
+    expect(classifySaveResponse(503, { error: "unavailable" }, 7000)).toEqual({ kind: "retry", reason: "server", minWaitMs: 7000 });
+    // No / unparsable header → the route's default 3 s.
+    expect(classifySaveResponse(503, { error: "unavailable" })).toEqual({ kind: "retry", reason: "server", minWaitMs: 3000 });
+    // Migration missing: saving can never work → terminal (editor read-only).
+    expect(classifySaveResponse(503, { error: "saving_unavailable" }, 3000)).toEqual({ kind: "unavailable" });
+    // Unknown 503 bodies (HTML, empty, other codes) → terminal.
+    expect(classifySaveResponse(503, null)).toEqual({ kind: "unavailable" });
+    expect(classifySaveResponse(503, { error: "maintenance" })).toEqual({ kind: "unavailable" });
+  });
+
+  it("parseRetryAfterMs reads delta seconds and caps at 60 s", () => {
+    expect(parseRetryAfterMs("3")).toBe(3000);
+    expect(parseRetryAfterMs(" 1.5 ")).toBe(1500);
+    expect(parseRetryAfterMs("999")).toBe(60_000);
+    expect(parseRetryAfterMs(null)).toBeNull();
+    expect(parseRetryAfterMs("")).toBeNull();
+    expect(parseRetryAfterMs("Wed, 21 Oct 2026 07:28:00 GMT")).toBeNull();
   });
 
   it("backoff doubles from 2 s and caps at 30 s", () => {
@@ -210,7 +231,7 @@ describe("AutosaveScheduler", () => {
     expect(timers.pending).toBe(0);
   });
 
-  it("503 stops autosave", async () => {
+  it("503 saving_unavailable stops autosave", async () => {
     const { s, timers, calls } = setup();
     s.change(mk("a"));
     timers.advance(DEBOUNCE_MS);
@@ -220,6 +241,43 @@ describe("AutosaveScheduler", () => {
     s.change(mk("b"));
     timers.advance(60_000);
     expect(calls).toHaveLength(1);
+  });
+
+  it("M12: 503 'unavailable' retries (not read-only), waits at least Retry-After, then saves", async () => {
+    const { s, timers, calls } = setup();
+    s.change(mk("a"));
+    timers.advance(DEBOUNCE_MS);
+    calls[0].resolve(classifySaveResponse(503, { error: "unavailable" }, 10_000));
+    await flushMicrotasks();
+    expect(s.getStatus()).toEqual({ kind: "retrying", attempt: 1, reason: "server" });
+    // backoff alone would be 2 s; Retry-After 10 s wins
+    timers.advance(9_999);
+    expect(calls).toHaveLength(1);
+    // edits keep being accepted while retrying (not terminal)
+    const b = mk("b");
+    s.change(b);
+    timers.advance(1);
+    expect(calls).toHaveLength(2);
+    expect(calls[1].doc).toBe(b);
+    calls[1].resolve({ kind: "ok", rev: 2, savedAt: null });
+    await flushMicrotasks();
+    expect(s.getStatus().kind).toBe("saved");
+    expect(s.getRev()).toBe(2);
+  });
+
+  it("M12: wait = max(backoff, Retry-After)", async () => {
+    const { s, timers, calls } = setup();
+    s.change(mk("a"));
+    timers.advance(DEBOUNCE_MS);
+    for (let i = 0; i < 3; i++) {
+      calls[i].resolve(classifySaveResponse(503, { error: "unavailable" }, 3000));
+      await flushMicrotasks();
+      // attempt 1: max(2 s, 3 s) = 3 s; attempts 2–3: backoff 4 s / 8 s wins
+      timers.advance(Math.max(backoffMs(i + 1), 3000) - 1);
+      expect(calls).toHaveLength(i + 1);
+      timers.advance(1);
+      expect(calls).toHaveLength(i + 2);
+    }
   });
 
   it("401 and 404 are terminal too", async () => {
@@ -273,14 +331,14 @@ describe("AutosaveScheduler", () => {
     timers.advance(DEBOUNCE_MS);
     calls[0].resolve({ kind: "retry", reason: "network" });
     await flushMicrotasks();
-    expect(s.getStatus()).toEqual({ kind: "retrying", attempt: 1 });
+    expect(s.getStatus()).toEqual({ kind: "retrying", attempt: 1, reason: "network" });
     timers.advance(1999);
     expect(calls).toHaveLength(1);
     timers.advance(1);
     expect(calls).toHaveLength(2);
     calls[1].resolve({ kind: "retry", reason: "server" });
     await flushMicrotasks();
-    expect(s.getStatus()).toEqual({ kind: "retrying", attempt: 2 });
+    expect(s.getStatus()).toEqual({ kind: "retrying", attempt: 2, reason: "server" });
     // A change while waiting keeps the backoff (no 2 s debounce reset) and is what gets sent.
     const b = mk("b");
     s.change(b);
@@ -302,7 +360,7 @@ describe("AutosaveScheduler", () => {
     timers.advance(DEBOUNCE_MS);
     calls[4].resolve({ kind: "retry", reason: "network" });
     await flushMicrotasks();
-    expect(s.getStatus()).toEqual({ kind: "retrying", attempt: 1 });
+    expect(s.getStatus()).toEqual({ kind: "retrying", attempt: 1, reason: "network" });
   });
 
   it("a send that throws/rejects counts as a network error", async () => {
@@ -321,10 +379,10 @@ describe("AutosaveScheduler", () => {
     s.change(mk("a"));
     timers.advance(DEBOUNCE_MS);
     await flushMicrotasks();
-    expect(s.getStatus()).toEqual({ kind: "retrying", attempt: 1 });
+    expect(s.getStatus()).toEqual({ kind: "retrying", attempt: 1, reason: "network" });
     timers.advance(2000);
     await flushMicrotasks();
-    expect(s.getStatus()).toEqual({ kind: "retrying", attempt: 2 });
+    expect(s.getStatus()).toEqual({ kind: "retrying", attempt: 2, reason: "network" });
   });
 
   it("flush sends immediately (keepalive) and skips the debounce", async () => {

@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
         return json({ error: "not_found" }, 404);
     }
   } catch (err) {
-    const unavailable = unavailableIfTimeout(err);
+    const unavailable = unavailableIfTimeout(err, { route: "ai-runs" });
     if (unavailable) return unavailable;
     console.error(`[ai-runs] start failed (${errorCodeOf(err)})`);
     return json({ error: "server_error" }, 500);

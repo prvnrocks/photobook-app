@@ -74,6 +74,8 @@ describe("SaveStatus", () => {
     expect(saveStatusLabel({ kind: "pending" })).toBe("Saving…");
     expect(saveStatusLabel({ kind: "saving" })).toBe("Saving…");
     expect(saveStatusLabel({ kind: "retrying", attempt: 2 })).toBe("Offline – retrying");
+    expect(saveStatusLabel({ kind: "retrying", attempt: 2, reason: "network" })).toBe("Offline – retrying");
+    expect(saveStatusLabel({ kind: "retrying", attempt: 1, reason: "server" })).toBe("Saving delayed – retrying");
     expect(saveStatusLabel({ kind: "conflict" })).toBe("Changed in another tab");
     expect(saveStatusLabel({ kind: "unavailable" })).toBe("Saving unavailable");
     expect(saveStatusLabel({ kind: "readOnly" })).toBe("Saving unavailable");

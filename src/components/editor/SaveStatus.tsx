@@ -17,7 +17,8 @@ export function saveStatusLabel(s: SaveState): string {
     case "saving":
       return "Saving…";
     case "retrying":
-      return "Offline – retrying";
+      // Server busy (503 unavailable / 5xx / 429) isn't "offline" (M12).
+      return s.reason === "server" || s.reason === "rate" ? "Saving delayed – retrying" : "Offline – retrying";
     case "invalid":
       return "Not saved";
     case "conflict":

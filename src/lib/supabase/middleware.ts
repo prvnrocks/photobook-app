@@ -3,12 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isProtectedPath } from "@/lib/auth/redirect";
 import { isAuthUnavailableError } from "@/lib/auth/unavailable";
-import {
-  MIDDLEWARE_AUTH_MS,
-  classifySupabaseRequest,
-  createDeadlineFetch,
-  supabaseTimeoutResponse,
-} from "./deadline";
+import { MIDDLEWARE_AUTH_MS, createGatedAuthFetch } from "./deadline";
 import { getSupabasePublishableKey, getSupabaseUrl } from "./env";
 
 /**
@@ -24,35 +19,15 @@ export const MIDDLEWARE_RETRY_AFTER_S = 3;
 
 const AUTH_CAP = Symbol("auth-cap");
 
-function urlOf(input: RequestInfo | URL): string {
-  if (typeof input === "string") return input;
-  if (input instanceof URL) return input.href;
-  return input.url;
-}
-
-/**
- * Deadline fetch plus an auth gate: once one auth request timed out (or the total cap fired),
- * every later auth request of THIS middleware run answers the synthetic 504 at once — so the
- * auth-js refresh retry loop never makes another network call (it only sleeps its backoff, after
- * the response is already sent). Non-auth requests are untouched.
- */
-function gatedAuthFetch(): { fetch: typeof fetch; close: () => void } {
-  const inner = createDeadlineFetch("server", { authMs: MIDDLEWARE_AUTH_MS });
-  let closed = false;
-  const gated = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const method = init?.method ?? (input instanceof Request ? input.method : "GET");
-    const isAuth = classifySupabaseRequest(urlOf(input), method).cls === "auth";
-    if (isAuth && closed) return supabaseTimeoutResponse("auth", 0);
-    const res = await inner(input, init);
-    if (isAuth && res.status === 504 && res.headers.get("x-supabase-timeout") === "auth") closed = true;
-    return res;
-  };
-  return {
-    fetch: gated as typeof fetch,
-    close: () => {
-      closed = true;
-    },
-  };
+/** Copy cookie changes (e.g. a refresh that rotated the session) and cache headers onto `to`. */
+function carrySessionChanges(from: NextResponse, cacheHeaders: Record<string, string>, to: NextResponse): NextResponse {
+  for (const cookie of from.cookies.getAll()) {
+    to.cookies.set(cookie);
+  }
+  for (const [key, value] of Object.entries(cacheHeaders)) {
+    to.headers.set(key, value);
+  }
+  return to;
 }
 
 /** 503 page for a protected path while Supabase Auth does not answer — never a login redirect. */
@@ -104,7 +79,9 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   let cacheHeaders: Record<string, string> = {};
 
   // Runs on every matched request: auth gets the tighter middleware budget + the auth gate.
-  const gate = gatedAuthFetch();
+  // Auth gate (deadline.ts): after one auth timeout or the total cap, later auth requests of this
+  // run answer the synthetic 504 at once (auth-js only sleeps its backoff, after the response).
+  const gate = createGatedAuthFetch("server", { authMs: MIDDLEWARE_AUTH_MS });
   const supabase = createServerClient(env.url, env.key, {
     global: { fetch: gate.fetch },
     db: { retry: false },
@@ -162,7 +139,9 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     // (an HTML 503 would break the action response on the client).
     if (!protectedPath || request.headers.has("next-action")) return response;
     console.error("[auth] middleware session check unavailable (SUPABASE_TIMEOUT)");
-    return unavailableResponse();
+    // A token refresh may have succeeded (rotated cookies) before /user timed out: keep its
+    // Set-Cookie, or the browser keeps a refresh token that was already used.
+    return carrySessionChanges(response, cacheHeaders, unavailableResponse());
   }
 
   if (protectedPath && !user) {
@@ -171,15 +150,8 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     loginUrl.search = "";
     loginUrl.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
 
-    const redirect = NextResponse.redirect(loginUrl);
     // Keep any cookie changes (e.g. cleared expired session) and cache headers.
-    for (const cookie of response.cookies.getAll()) {
-      redirect.cookies.set(cookie);
-    }
-    for (const [key, value] of Object.entries(cacheHeaders)) {
-      redirect.headers.set(key, value);
-    }
-    return redirect;
+    return carrySessionChanges(response, cacheHeaders, NextResponse.redirect(loginUrl));
   }
 
   return response;

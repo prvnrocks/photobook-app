@@ -176,7 +176,7 @@ export async function POST(request: NextRequest) {
     }
     return json({ text: result.text, lang: result.lang, remaining }, 200);
   } catch (err) {
-    const unavailable = unavailableIfTimeout(err);
+    const unavailable = unavailableIfTimeout(err, { route: "ai-rewrite" });
     if (unavailable) return unavailable;
     console.error(`[ai-rewrite] failed (${errorCodeOf(err)})`);
     return json({ error: "server_error" }, 500);

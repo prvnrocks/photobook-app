@@ -92,7 +92,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       { headers: { "cache-control": "no-store" } },
     );
   } catch (err) {
-    const unavailable = unavailableIfTimeout(err);
+    const unavailable = unavailableIfTimeout(err, { route: "photo-urls" });
     if (unavailable) return unavailable;
     console.error(`[photo-urls] failed (${codeOf(err)})`);
     return fail(500, "server_error");

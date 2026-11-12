@@ -61,7 +61,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!result.ok) return json({ error: result.error }, ERROR_STATUS[result.error]);
     return json(result.body, result.httpStatus);
   } catch (err) {
-    const unavailable = unavailableIfTimeout(err);
+    const unavailable = unavailableIfTimeout(err, { route: "pdf-export" });
     if (unavailable) return unavailable;
     console.error(`[pdf-export] request failed (${errorCodeOf(err)})`);
     return json({ error: "server_error" }, 500);
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!state.found) return json({ error: "not_found" }, 404);
     return json(state.body, 200);
   } catch (err) {
-    const unavailable = unavailableIfTimeout(err);
+    const unavailable = unavailableIfTimeout(err, { route: "pdf-export" });
     if (unavailable) return unavailable;
     console.error(`[pdf-export] status failed (${errorCodeOf(err)})`);
     return json({ error: "server_error" }, 500);

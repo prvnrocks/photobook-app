@@ -31,7 +31,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       done: view.done,
     });
   } catch (err) {
-    const unavailable = unavailableIfTimeout(err);
+    const unavailable = unavailableIfTimeout(err, { route: "ai-runs" });
     if (unavailable) return unavailable;
     console.error(`[ai-runs] progress failed (${errorCodeOf(err)})`);
     return json({ error: "server_error" }, 500);

@@ -101,6 +101,13 @@ describe("doneStepAfterSave", () => {
     },
   );
 
+  it("M12: retrying because the server is busy → stays with the 'delayed' message (not read-only)", () => {
+    for (const reason of ["server", "rate"] as const) {
+      expect(doneStepAfterSave({ kind: "retrying", attempt: 1, reason }, BOOK)).toEqual({ kind: "error", message: DONE_MESSAGES.delayed });
+    }
+    expect(doneStepAfterSave({ kind: "retrying", attempt: 1, reason: "network" }, BOOK)).toEqual({ kind: "error", message: DONE_MESSAGES.unsaved });
+  });
+
   it("signed out → login back to the editor", () => {
     expect(doneStepAfterSave({ kind: "signedOut" }, BOOK)).toEqual({
       kind: "navigate",

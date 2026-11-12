@@ -105,7 +105,7 @@ export async function POST(
   } catch (err) {
     // M12: a Supabase timeout → 503 + Retry-After 10 (= the one-run-per-10-s limit); every
     // finalize step is safe to repeat, so the client simply retries.
-    const unavailable = unavailableIfTimeout(err, FINALIZE_RETRY_AFTER_S);
+    const unavailable = unavailableIfTimeout(err, { route: "finalize", retryAfterSeconds: FINALIZE_RETRY_AFTER_S });
     if (unavailable) return unavailable;
     console.error(`[finalize] failed (${codeOf(err)})`);
     return fail(500, "server_error");

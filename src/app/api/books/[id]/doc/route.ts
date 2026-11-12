@@ -115,7 +115,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     return json({ rev: saved.rev, savedAt: saved.savedAt }, 200);
   } catch (err) {
-    const unavailable = unavailableIfTimeout(err);
+    const unavailable = unavailableIfTimeout(err, { route: "doc-save" });
     if (unavailable) return unavailable;
     console.error(`[doc-save] failed (${errorCodeOf(err)})`);
     return json({ error: "server_error" }, 500);

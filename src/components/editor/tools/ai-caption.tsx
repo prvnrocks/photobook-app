@@ -185,7 +185,7 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
       {failure && failure !== "limit" ? (
         <div role="status" className="flex flex-wrap items-center gap-2 rounded-lg border border-warning-border bg-warning-soft px-3 py-2 text-sm text-foreground" data-testid="ai-caption-message">
           <p className="flex-1">{REWRITE_FAILURE_COPY[failure]}</p>
-          {last && (failure === "retry" || failure === "error" || failure === "busy") && !limitReached ? (
+          {last && (failure === "retry" || failure === "serverBusy" || failure === "error" || failure === "busy") && !limitReached ? (
             <button
               type="button"
               onClick={() => void run(last)}

@@ -10,6 +10,7 @@ import {
   rewriteOptions,
   rewriteResponseState,
   REWRITE_FAILURE_COPY,
+  requestRewrite,
   sessionBlockFor,
   type RewriteFailureKind,
 } from "@/lib/editor/caption-tools";
@@ -64,6 +65,23 @@ describe("rewrite route ↔ UI parity", () => {
     expect(REWRITE_FAILURE_COPY.tooShort).toBe("This caption is already short");
     // ai_off keeps its own copy and also switches ✨ off.
     expect(sessionBlockFor(rewriteResponseState(503, { error: "ai_off" }, "rewrite").kind)).toBe("off");
+  });
+
+  it("M12: 503 unavailable (Supabase timeout) → serverBusy 'try again', never a session block; other 503s keep blocking", () => {
+    const st = rewriteResponseState(503, { error: "unavailable" }, "rewrite");
+    expect(st.kind).toBe("serverBusy");
+    expect(sessionBlockFor(st.kind)).toBeNull();
+    expect(REWRITE_FAILURE_COPY.serverBusy).toBe("This is taking longer than usual. Try again in a moment.");
+    // ai_unavailable and unknown 503 bodies are unchanged.
+    expect(sessionBlockFor(rewriteResponseState(503, { error: "ai_unavailable" }, "rewrite").kind)).toBe("unavailable");
+    expect(sessionBlockFor(rewriteResponseState(503, null, "rewrite").kind)).toBe("unavailable");
+  });
+
+  it("M12: requestRewrite maps a 503 unavailable response to serverBusy", async () => {
+    const fetchImpl = (async () =>
+      new Response(JSON.stringify({ error: "unavailable" }), { status: 503, headers: { "retry-after": "3" } })) as unknown as typeof fetch;
+    const r = await requestRewrite({ bookId: "b", pageId: "p", instruction: "rewrite", text: "Sunset at the beach" }, { fetchImpl });
+    expect(r).toEqual({ kind: "serverBusy" });
   });
 
   it("D-059: 429 budget_exhausted → aiBreak ('try again later'), not a session block", () => {

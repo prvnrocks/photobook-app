@@ -52,7 +52,8 @@ const FINALIZE_MESSAGES: Record<FinalizeError, string> = {
   not_found: "We couldn't find this book. It may have been deleted.",
   failed: "We couldn't finish setting up your album. Your photos are safe — please try again.",
   rate_limited: "We're still finishing your album. Your photos are safe — please try again in a moment.",
-  unavailable: "Our server is taking longer than usual. Your photos are safe — please try again in a moment.",
+  // Neutral (M12 review): blame neither the server nor the phone; the "Try again in Ns" button shows the wait.
+  unavailable: "This is taking longer than usual. Your photos are safe — please try again in a moment.",
 };
 
 const signInLinkClass =

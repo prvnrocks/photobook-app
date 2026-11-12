@@ -9,17 +9,52 @@ import "server-only";
 // Pages let it reach error.tsx ("Try again"); API routes map it to 503 via unavailableIfTimeout;
 // server actions use getActionUser (src/lib/auth/action-user.ts) and return their generic error.
 // Real auth answers (no session, invalid / expired JWT, user gone) still return null.
+//
+// Total cap: one auth request has the 8 s server budget, but auth-js retries a failed token
+// refresh with backoff for up to ~30 s. getUser() is raced against CURRENT_USER_AUTH_TOTAL_MS;
+// when the cap fires (or the first auth timeout arrives) the client's auth gate closes, so the
+// abandoned refresh loop answers the synthetic 504 at once instead of calling Auth again.
 import { cache } from "react";
 import { isAuthUnavailableError } from "@/lib/auth/unavailable";
-import { SupabaseUnavailableError } from "@/lib/supabase/deadline";
-import { createClient } from "@/lib/supabase/server";
+import { DEADLINE_BUDGETS, SupabaseUnavailableError } from "@/lib/supabase/deadline";
+import { createClientWithAuthGate } from "@/lib/supabase/server";
+
+/** Hard cap on the whole getUser() (one 8 s auth request + a little slack). */
+export const CURRENT_USER_AUTH_TOTAL_MS = DEADLINE_BUDGETS.server.authMs + 2_000;
+
+const AUTH_CAP = Symbol("auth-cap");
 
 export const getCurrentUser = cache(async () => {
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error) {
-    if (isAuthUnavailableError(error)) throw new SupabaseUnavailableError();
-    return null;
+  const { supabase, closeAuthGate } = await createClientWithAuthGate();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const cap = new Promise<typeof AUTH_CAP>((resolve) => {
+    timer = setTimeout(() => resolve(AUTH_CAP), CURRENT_USER_AUTH_TOTAL_MS);
+  });
+  const getUser = supabase.auth.getUser();
+  try {
+    const outcome = await Promise.race([getUser, cap]);
+    if (outcome === AUTH_CAP) {
+      closeAuthGate();
+      getUser.catch(() => {}); // finishes (or not) later; never unhandled
+      throw new SupabaseUnavailableError("Supabase Auth did not answer within the total cap (SUPABASE_TIMEOUT)");
+    }
+    const { data, error } = outcome;
+    if (error) {
+      if (isAuthUnavailableError(error)) {
+        closeAuthGate();
+        throw new SupabaseUnavailableError();
+      }
+      return null;
+    }
+    return data.user;
+  } catch (err) {
+    if (err instanceof SupabaseUnavailableError) throw err;
+    if (isAuthUnavailableError(err)) {
+      closeAuthGate();
+      throw new SupabaseUnavailableError();
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  return data.user;
 });

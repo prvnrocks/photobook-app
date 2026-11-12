@@ -45,6 +45,8 @@ export type DoneStep =
 
 export const DONE_MESSAGES = {
   unsaved: "We couldn't save your latest changes. Check your connection and tap Done again.",
+  /** Retrying because the server is busy (503 unavailable / 5xx / 429), not offline (M12). */
+  delayed: "Saving is taking longer than usual. Your changes are kept here — wait a moment and tap Done again.",
   failed: "Something went wrong. Please tap Done again.",
 } as const;
 
@@ -67,9 +69,13 @@ export function doneStepAfterSave(s: DoneSaveState, bookId: string): DoneStep {
     case "saved":
     case "invalid":
       return { kind: "finish" };
+    case "retrying":
+      return {
+        kind: "error",
+        message: s.reason === "server" || s.reason === "rate" ? DONE_MESSAGES.delayed : DONE_MESSAGES.unsaved,
+      };
     case "pending":
     case "saving":
-    case "retrying":
       return { kind: "error", message: DONE_MESSAGES.unsaved };
     case "signedOut":
       return { kind: "navigate", to: loginHref(bookId) };

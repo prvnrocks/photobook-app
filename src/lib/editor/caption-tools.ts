@@ -126,6 +126,8 @@ export type RewriteUiState =
   | { kind: "tooShort" }
   | { kind: "busy" }
   | { kind: "retry" }
+  /** 503 unavailable (M12: Supabase timeout) — temporary, "Try again"; never a session block. */
+  | { kind: "serverBusy" }
   | { kind: "unusable" }
   | { kind: "refused" }
   | { kind: "signedOut" }
@@ -142,6 +144,7 @@ export const REWRITE_FAILURE_COPY: Record<RewriteFailureKind, string> = {
   tooShort: "This caption is already short",
   busy: "One rewrite at a time — wait for the current one to finish.",
   retry: "The AI didn't answer in time. Try again.",
+  serverBusy: "This is taking longer than usual. Try again in a moment.",
   unusable: "Couldn't improve this one — try another option",
   refused: "Can't rewrite this caption",
   signedOut: "You're signed out. Sign in again to use AI.",
@@ -172,7 +175,11 @@ export function rewriteResponseState(status: number, body: unknown, instruction:
     };
   }
   if (error === "ai_off") return { kind: "off" };
-  if (status === 503) return { kind: "unavailable" }; // ai_unavailable (or any other 503)
+  if (status === 503) {
+    // M12: "unavailable" = a Supabase timeout — temporary, so offer Try again (no session block).
+    if (error === "unavailable") return { kind: "serverBusy" };
+    return { kind: "unavailable" }; // ai_unavailable (or any other 503)
+  }
   if (status === 429) {
     if (error === "budget_exhausted") return { kind: "aiBreak" };
     return error === "daily_limit" ? { kind: "dailyLimit" } : { kind: "limit" };
@@ -193,7 +200,8 @@ export function rewriteResponseState(status: number, body: unknown, instruction:
 
 /**
  * Failures that switch ✨ off for the rest of this editor session (like AI off): retrying any
- * option would fail the same way. tooShort / unusable / refused are about this caption only.
+ * option would fail the same way. tooShort / unusable / refused are about this caption only;
+ * serverBusy (503 unavailable, M12) is temporary and never blocks the session.
  */
 export type AiSessionBlock = "off" | "unavailable" | "dailyLimit";
 

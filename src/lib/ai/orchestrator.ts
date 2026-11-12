@@ -153,6 +153,13 @@ export const MAX_LEASE_SECONDS = 300;
  * Time reserved after the last model call of a tick for writes + checkpoint + release. M12: must
  * cover at least one server write under its deadline (DEADLINE_BUDGETS.server.restMs, 10 s) plus
  * the release RPC (RELEASE_BUDGET_MS, 15 s) — 20 s did not (tests/ai/orchestrator.test.ts, "database timeouts").
+ * Slack: 10 + 15 = 25 s of the 30 s is budgeted; the remaining ~5 s absorbs the rest GET/HEAD
+ * retry pause (RETRY_DELAY_MS), clock skew between this instance and Postgres' lease clock, and
+ * in-process work between the last call and the release. A timed-out read that is retried
+ * (2 × 10 s + 0.5 s) would NOT fit — the tail must stay one checkpoint write (PATCH, never
+ * retried by the deadline fetch) + the release RPC. Raise this if a GET or a second write is ever
+ * added after the last model call. Storyteller
+ * (180 s) + 30 s = 210 s still leaves 30 s of the 240 s lease for the tick's opening reads.
  */
 export const LEASE_MARGIN_MS = 30_000;
 /**

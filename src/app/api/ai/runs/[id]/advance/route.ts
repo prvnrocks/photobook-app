@@ -46,7 +46,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       errorCode: result.errorCode ?? null,
     });
   } catch (err) {
-    const unavailable = unavailableIfTimeout(err);
+    const unavailable = unavailableIfTimeout(err, { route: "ai-runs" });
     if (unavailable) return unavailable;
     console.error(`[ai-runs] advance failed (${errorCodeOf(err)})`);
     return json({ error: "server_error" }, 500);

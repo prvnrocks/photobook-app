@@ -5,7 +5,10 @@
 // Contract with PUT /api/books/[id]/doc (D-036, T3):
 //   200 { rev, savedAt } → ok (identical doc keeps rev)
 //   409 conflict          → terminal, no retry ("Changed in another tab – Reload")
-//   503 saving_unavailable→ terminal, autosave stops
+//   503 saving_unavailable→ terminal, autosave stops (migration 0900 missing: saving can't work)
+//   503 unavailable       → retry (M12: Supabase timeout; the save is idempotent, T3) — the next
+//                           try waits at least Retry-After (default 3 s) on top of the backoff
+//   503 anything else     → terminal (unknown 503: don't hammer)
 //   422 <code> / 400      → this doc is rejected: no retry, friendly message; the NEXT edit tries again
 //   413 too_large         → same as 422 (code `too_large`): resending the same doc can't succeed
 //   401                   → terminal (signed out)
@@ -31,14 +34,21 @@ export type SaveOutcome =
   | { kind: "invalid"; code: string }
   | { kind: "signedOut" }
   | { kind: "failed" }
-  | { kind: "retry"; reason: "network" | "server" | "rate" };
+  | {
+      kind: "retry";
+      reason: "network" | "server" | "rate";
+      /** Server Retry-After in ms: the next try waits at least this long (M12). */
+      minWaitMs?: number;
+    };
+
+export type RetryReason = Extract<SaveOutcome, { kind: "retry" }>["reason"];
 
 export type AutosaveStatus =
   | { kind: "idle" }
   | { kind: "pending" }
   | { kind: "saving" }
   | { kind: "saved"; savedAt: string | null }
-  | { kind: "retrying"; attempt: number }
+  | { kind: "retrying"; attempt: number; reason?: RetryReason }
   | { kind: "invalid"; code: string }
   | { kind: "conflict" }
   | { kind: "unavailable" }
@@ -51,8 +61,23 @@ export function isTerminal(s: AutosaveStatus): s is Extract<AutosaveStatus, { ki
   return s.kind === "conflict" || s.kind === "unavailable" || s.kind === "signedOut" || s.kind === "failed";
 }
 
-/** Map an HTTP response (or a network error: status null) of the save route to an outcome. */
-export function classifySaveResponse(status: number | null, body: unknown): SaveOutcome {
+/** Retry-After for a 503 "unavailable" save without a usable header (= the route's default). */
+export const UNAVAILABLE_RETRY_AFTER_MS = 3000;
+/** Never wait longer than this for a Retry-After, whatever the header says. */
+export const MAX_RETRY_AFTER_MS = 60_000;
+
+/** Retry-After header (delta seconds) → ms, or null when missing / unparsable. HTTP dates aren't used by our routes. */
+export function parseRetryAfterMs(header: string | null | undefined): number | null {
+  const raw = header?.trim();
+  if (!raw || !/^\d+(\.\d+)?$/.test(raw)) return null;
+  return Math.min(MAX_RETRY_AFTER_MS, Math.ceil(Number(raw) * 1000));
+}
+
+/**
+ * Map an HTTP response (or a network error: status null) of the save route to an outcome.
+ * `retryAfterMs` = the parsed Retry-After header (parseRetryAfterMs), if any.
+ */
+export function classifySaveResponse(status: number | null, body: unknown, retryAfterMs: number | null = null): SaveOutcome {
   if (status === null) return { kind: "retry", reason: "network" };
   const b = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
   if (status >= 200 && status < 300) {
@@ -63,7 +88,13 @@ export function classifySaveResponse(status: number | null, body: unknown): Save
     return { kind: "retry", reason: "server" };
   }
   if (status === 409) return { kind: "conflict" };
-  if (status === 503) return { kind: "unavailable" };
+  if (status === 503) {
+    // M12: a Supabase timeout is temporary and the save is safe to replay → retry after Retry-After.
+    if (b.error === "unavailable") {
+      return { kind: "retry", reason: "server", minWaitMs: retryAfterMs ?? UNAVAILABLE_RETRY_AFTER_MS };
+    }
+    return { kind: "unavailable" }; // saving_unavailable (migration missing) or an unknown 503
+  }
   if (status === 413) return { kind: "invalid", code: "too_large" };
   if (status === 422 || status === 400) {
     return { kind: "invalid", code: typeof b.error === "string" ? b.error : "invalid_doc" };
@@ -301,9 +332,10 @@ export class AutosaveScheduler {
     if (o.kind === "retry") {
       this.attempt += 1;
       this.clearTimer();
-      this.timer = this.timers.set(() => this.fire(false), (this.opts.backoff ?? backoffMs)(this.attempt));
+      const wait = Math.max((this.opts.backoff ?? backoffMs)(this.attempt), o.minWaitMs ?? 0);
+      this.timer = this.timers.set(() => this.fire(false), wait);
       this.timerKind = "retry";
-      this.setStatus({ kind: "retrying", attempt: this.attempt });
+      this.setStatus({ kind: "retrying", attempt: this.attempt, reason: o.reason });
       return;
     }
     if (o.kind === "invalid") {

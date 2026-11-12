@@ -355,6 +355,19 @@ describe("storage", () => {
     expect(isSupabaseTimeout(s.error)).toBe(true);
   });
 
+  it("stream mode: when the deadline fires on an unread body, the caller-signal listener is removed", async () => {
+    fake.mockImplementation(async () => stalledBodyResponse());
+    const ac = new AbortController();
+    const remove = vi.spyOn(ac.signal, "removeEventListener");
+    const f = createDeadlineFetch("server");
+    const res = await f(`${BASE}/storage/v1/object/photos/u/a.jpg`, { signal: ac.signal });
+    expect(res.status).toBe(200);
+    expect(remove).not.toHaveBeenCalled(); // body not read yet: deadline still armed
+    await vi.advanceTimersByTimeAsync(DEADLINE_BUDGETS.server.downloadMs);
+    expect(remove).toHaveBeenCalledWith("abort", expect.any(Function));
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("a download that completes keeps its bytes and clears the deadline", async () => {
     fake.mockImplementation(async () => new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
     const s = track(client().storage.from("photos").download("u/a.jpg"));
@@ -466,17 +479,20 @@ describe("wiring and isomorphism", () => {
 
   it.each([
     ["src/lib/supabase/admin.ts", 'deadlineClientOptions("server")'],
-    ["src/lib/supabase/server.ts", 'deadlineClientOptions("server")'],
+    // M12 review: the server client and the middleware wrap the deadline fetch in the auth gate.
+    ["src/lib/supabase/server.ts", 'createGatedAuthFetch("server")'],
     ["src/lib/supabase/client.ts", 'deadlineClientOptions("browser")'],
-    // M12 T2: the middleware wraps the deadline fetch in its auth gate (gatedAuthFetch).
-    ["src/lib/supabase/middleware.ts", 'createDeadlineFetch("server", { authMs: MIDDLEWARE_AUTH_MS })'],
+    ["src/lib/supabase/middleware.ts", 'createGatedAuthFetch("server", { authMs: MIDDLEWARE_AUTH_MS })'],
   ])("%s uses the deadline fetch", (file, call) => {
     expect(read(file)).toContain(call);
   });
 
-  it("the middleware client also disables postgrest's own retry loop", () => {
-    expect(read("src/lib/supabase/middleware.ts")).toContain("db: { retry: false }");
-  });
+  it.each(["src/lib/supabase/middleware.ts", "src/lib/supabase/server.ts"])(
+    "%s also disables postgrest's own retry loop",
+    (file) => {
+      expect(read(file)).toContain("db: { retry: false }");
+    },
+  );
 
   it("client options disable postgrest's own retry loop", () => {
     const opts = deadlineClientOptions("server");

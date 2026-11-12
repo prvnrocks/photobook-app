@@ -3,7 +3,7 @@
 // nothing is logged.
 
 import type { BookDoc } from "@/lib/book/types";
-import { canUseKeepalive, classifySaveResponse, type SaveOutcome } from "./autosave";
+import { canUseKeepalive, classifySaveResponse, parseRetryAfterMs, type SaveOutcome } from "./autosave";
 import { DEFAULT_RETRY_LATER_MS, type FreshPhotoUrls, type PhotoUrlsResult } from "./photo-urls";
 
 export interface EditorTransport {
@@ -41,7 +41,7 @@ export function httpEditorTransport(bookId: string): EditorTransport {
           cache: "no-store",
           keepalive: opts.keepalive && canUseKeepalive(bytes),
         });
-        return classifySaveResponse(res.status, await readJson(res));
+        return classifySaveResponse(res.status, await readJson(res), parseRetryAfterMs(res.headers.get("retry-after")));
       } catch {
         return classifySaveResponse(null, null);
       }

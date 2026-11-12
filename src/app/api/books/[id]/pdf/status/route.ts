@@ -30,7 +30,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!state.found) return json({ error: "not_found" }, 404);
     return json(state.body, 200);
   } catch (err) {
-    const unavailable = unavailableIfTimeout(err);
+    const unavailable = unavailableIfTimeout(err, { route: "pdf-export" });
     if (unavailable) return unavailable;
     console.error(`[pdf-export] status failed (${errorCodeOf(err)})`);
     return json({ error: "server_error" }, 500);

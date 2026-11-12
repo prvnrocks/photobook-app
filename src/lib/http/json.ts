@@ -24,9 +24,19 @@ export const UNAVAILABLE_RETRY_AFTER_S = 3;
  * M12 (D-069): a Supabase deadline timeout (SUPABASE_TIMEOUT in any library's error shape, or
  * SupabaseUnavailableError from getCurrentUser) → `503 { error: "unavailable" }` + Retry-After.
  * Anything else → null (the caller keeps its own error answer). Use in every API route's catch:
- *   const unavailable = unavailableIfTimeout(err); if (unavailable) return unavailable;
+ *   const unavailable = unavailableIfTimeout(err, { route: "doc-save" }); if (unavailable) return unavailable;
+ * With `route`, logs one code-only line (`[doc-save] unavailable (SUPABASE_TIMEOUT)`) — never ids,
+ * paths or user data. Callers with their own log line (Stripe webhook) omit it.
  */
-export function unavailableIfTimeout(err: unknown, retryAfterSeconds = UNAVAILABLE_RETRY_AFTER_S): Response | null {
+export function unavailableIfTimeout(
+  err: unknown,
+  opts: { route?: string; retryAfterSeconds?: number } = {},
+): Response | null {
   if (!isSupabaseTimeout(err)) return null;
-  return json({ error: "unavailable" }, 503, { "retry-after": String(retryAfterSeconds) });
+  if (opts.route) {
+    const tag = opts.route.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) || "route";
+    console.error(`[${tag}] unavailable (SUPABASE_TIMEOUT)`);
+  }
+  const retryAfter = opts.retryAfterSeconds ?? UNAVAILABLE_RETRY_AFTER_S;
+  return json({ error: "unavailable" }, 503, { "retry-after": String(retryAfter) });
 }
