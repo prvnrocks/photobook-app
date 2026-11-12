@@ -125,3 +125,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-11, test) Keep a refusal path tested after it loses its last real trigger via a vi.mock toggle (tests/fixtures/simulated-unsupported-style.ts); freeze hash goldens for every existing design before changing shared fitters.
 - (2026-11-11, claude-api) SDK zodOutputFormat turns z.enum into a described string — the grammar doesn't enforce it; use strings + validate ids in code.
 - (2026-11-12, e2e) Live-gate 'stalls' with no error = host idle sleep on battery (DarkWake ~45 s every 15 min freezes timers) — check pmset -g log; run gates on AC with caffeinate -dims.
+- (2026-11-12, supabase) postgrest-js retries GET/HEAD 3× on 503/520/network by default — a custom fetch with its own retry needs db:{retry:false}; storage-js wraps Blob uploads in FormData (size from entries).
