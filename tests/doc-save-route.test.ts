@@ -184,15 +184,43 @@ describe("PUT /api/books/[id]/doc", () => {
   });
 
   it("409 stale rev (early) and when the conditional update loses the race", async () => {
-    const stale = await put({ doc: doc(), baseRev: 2 });
+    // Two or more revs behind → early 409. (One behind may be a replay of this save — below.)
+    const stale = await put({ doc: doc(), baseRev: 1 });
     expect(stale.status).toBe(409);
     expect(await stale.json()).toEqual({ error: "conflict" });
+    const ahead = await put({ doc: doc(), baseRev: 4 });
+    expect(ahead.status).toBe(409);
     expect(mocks.saveDocIfRev).not.toHaveBeenCalled();
 
     mocks.saveDocIfRev.mockResolvedValue({ ok: false, reason: "conflict" });
     const raced = await put({ doc: doc(), baseRev: 3 });
     expect(raced.status).toBe(409);
     expect(await raced.json()).toEqual({ error: "conflict" });
+  });
+
+  it("M12 T3: baseRev one behind (a save that committed while its response timed out) goes to saveDocIfRev", async () => {
+    // doc_rev is 3: the client's retry still sends baseRev 2. saveDocIfRev decides replay vs conflict.
+    mocks.saveDocIfRev.mockResolvedValue({ ok: true, rev: 3, savedAt: SAVED_AT });
+    const replay = await put({ doc: doc(), baseRev: 2 });
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual({ rev: 3, savedAt: SAVED_AT });
+    expect(mocks.saveDocIfRev.mock.calls[0][4]).toBe(2);
+
+    mocks.saveDocIfRev.mockResolvedValue({ ok: false, reason: "conflict" });
+    const different = await put({ doc: doc(), baseRev: 2 });
+    expect(different.status).toBe(409);
+    expect(await different.json()).toEqual({ error: "conflict" });
+  });
+
+  it("M12 T3: a replay re-validates against the saved doc and sends the same stored doc (same forced meta)", async () => {
+    // First save at rev 3 …
+    await put({ doc: doc(), baseRev: 3 });
+    const first = savedDoc();
+    // … committed (rev 4, stored = what we sent) but the response was lost; the retry sends baseRev 3.
+    mocks.book = { ...mocks.book, doc_rev: 4, doc: first };
+    mocks.saveDocIfRev.mockClear();
+    await put({ doc: doc(), baseRev: 3 });
+    expect(JSON.stringify(savedDoc())).toBe(JSON.stringify(first));
   });
 
   it("422 foreign_photo for a photo id not in the book (page or cover)", async () => {

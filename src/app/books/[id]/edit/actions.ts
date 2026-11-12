@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { learnFromBook } from "@/lib/ai/learn-from-book";
-import { getCurrentUser } from "@/lib/auth/current-user";
+import { AUTH_UNAVAILABLE, getActionUser } from "@/lib/auth/action-user";
 import { getMyBook } from "@/lib/db/books";
 import { errorCodeOf } from "@/lib/http/json";
 import { isUuid } from "@/lib/uuid";
@@ -27,7 +27,8 @@ const afterEditPath = (bookId: string) => `/books/${bookId}/publish`;
  * - Does not redirect itself; the client navigates to `redirectTo`.
  */
 export async function finishEditingAction(bookId: string): Promise<FinishEditingResult> {
-  const user = await getCurrentUser();
+  const user = await getActionUser();
+  if (user === AUTH_UNAVAILABLE) return { ok: false, error: "failed" };
   if (!user) return { ok: false, error: "signed_out" };
   if (typeof bookId !== "string" || !isUuid(bookId)) return { ok: false, error: "not_found" };
 

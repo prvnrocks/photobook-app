@@ -4,7 +4,7 @@
 // - Payments not configured → 503 (Stripe retries later).
 // - Events whose livemode differs from the key's mode (stripeKeyMode) → 200 + warn livemode_mismatch,
 //   nothing recorded (a test event must never touch a live deploy and vice versa).
-// - DB/RPC errors → 500 so Stripe retries; every RPC is deduped by event id ('duplicate' → 200).
+// - DB/RPC errors → 500 (Supabase timeout → 503 + Retry-After, M12) so Stripe retries; every RPC is deduped by event id ('duplicate' → 200).
 //   Exception: the RPC rejecting its arguments (22023) → 200 + error invalid_argument (a retry can
 //   never succeed).
 // - Sessions that fail validation (amount / currency / kind / reference) are logged and acknowledged
@@ -28,7 +28,7 @@ import {
   recordStripeOrderEvent,
   type OrderEventStatus,
 } from "@/lib/db/orders";
-import { errorCodeOf, json } from "@/lib/http/json";
+import { errorCodeOf, json, unavailableIfTimeout } from "@/lib/http/json";
 import {
   UPGRADE_METADATA_KIND,
   isPendingUpgradeSession,
@@ -244,6 +244,13 @@ export async function POST(req: Request): Promise<Response> {
       // The RPC refused its arguments: a retry would fail the same way — acknowledge and alert.
       logLine("error", event, "invalid_argument");
       return ok();
+    }
+    // M12: a Supabase timeout → 503 + Retry-After so Stripe retries; fulfil / record RPCs dedupe
+    // on the event id, so a replay of an event that did commit answers 'duplicate' (200).
+    const unavailable = unavailableIfTimeout(err);
+    if (unavailable) {
+      logLine("error", event, "db_timeout");
+      return unavailable;
     }
     logLine("error", event, `db_error:${errorCodeOf(err)}`);
     return json({ error: "server_error" }, 500);

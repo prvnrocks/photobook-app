@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { withAnalyticsFlash } from "@/lib/analytics/flash";
-import { getCurrentUser } from "@/lib/auth/current-user";
+import { AUTH_UNAVAILABLE, getActionUser } from "@/lib/auth/action-user";
 import { CAPTION_LANGS, OCCASIONS, TONES } from "@/lib/book/options";
 import { BookFormatSchema, DesignStyleSchema } from "@/lib/book/schema";
 import { deleteBookCompletely } from "@/lib/cleanup/delete-book";
@@ -71,7 +71,8 @@ export async function createBookAction(
   _prevState: NewBookFormState,
   formData: FormData,
 ): Promise<NewBookFormState> {
-  const user = await getCurrentUser();
+  const user = await getActionUser();
+  if (user === AUTH_UNAVAILABLE) return { ok: false, error: MSG_CREATE_FAILED };
   if (!user) redirect("/login?next=/books/new");
 
   const parsed = NewBookSchema.safeParse({
@@ -122,7 +123,8 @@ export async function deletePhotoAction(
   bookId: string,
 ): Promise<PhotoActionResult> {
   if (!isUuid(photoId) || !isUuid(bookId)) return { ok: false, error: MSG_NOT_FOUND };
-  const user = await getCurrentUser();
+  const user = await getActionUser();
+  if (user === AUTH_UNAVAILABLE) return { ok: false, error: MSG_DELETE_FAILED };
   if (!user) return { ok: false, error: MSG_SIGNED_OUT };
 
   let ownerBookId: string | null;
@@ -148,7 +150,8 @@ export async function deletePhotoAction(
 /** Deletes all `pending` photos (files + rows) of the current user's book. */
 export async function deleteUnfinishedAction(bookId: string): Promise<PhotoActionResult> {
   if (!isUuid(bookId)) return { ok: false, error: MSG_NOT_FOUND };
-  const user = await getCurrentUser();
+  const user = await getActionUser();
+  if (user === AUTH_UNAVAILABLE) return { ok: false, error: MSG_DELETE_FAILED };
   if (!user) return { ok: false, error: MSG_SIGNED_OUT };
 
   try {
@@ -170,7 +173,8 @@ export async function deleteUnfinishedAction(bookId: string): Promise<PhotoActio
  * book is 'not_found'. Storage failures still count as deleted (the orphan sweep finishes them).
  */
 export async function deleteBookAction(bookId: string): Promise<DeleteBookActionResult> {
-  const user = await getCurrentUser();
+  const user = await getActionUser();
+  if (user === AUTH_UNAVAILABLE) return { ok: false, error: "failed" };
   if (!user) return { ok: false, error: "unauthenticated" };
   if (!isUuid(bookId)) return { ok: false, error: "not_found" };
 

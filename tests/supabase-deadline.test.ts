@@ -468,9 +468,14 @@ describe("wiring and isomorphism", () => {
     ["src/lib/supabase/admin.ts", 'deadlineClientOptions("server")'],
     ["src/lib/supabase/server.ts", 'deadlineClientOptions("server")'],
     ["src/lib/supabase/client.ts", 'deadlineClientOptions("browser")'],
-    ["src/lib/supabase/middleware.ts", 'deadlineClientOptions("server", { authMs: MIDDLEWARE_AUTH_MS })'],
+    // M12 T2: the middleware wraps the deadline fetch in its auth gate (gatedAuthFetch).
+    ["src/lib/supabase/middleware.ts", 'createDeadlineFetch("server", { authMs: MIDDLEWARE_AUTH_MS })'],
   ])("%s uses the deadline fetch", (file, call) => {
     expect(read(file)).toContain(call);
+  });
+
+  it("the middleware client also disables postgrest's own retry loop", () => {
+    expect(read("src/lib/supabase/middleware.ts")).toContain("db: { retry: false }");
   });
 
   it("client options disable postgrest's own retry loop", () => {

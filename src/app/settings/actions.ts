@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { deleteAccountCompletely } from "@/lib/account/delete-account";
-import { getCurrentUser } from "@/lib/auth/current-user";
+import { AUTH_UNAVAILABLE, getActionUser } from "@/lib/auth/action-user";
 import { clearMemoryFromActiveRuns } from "@/lib/db/agent-runs";
 import { deleteOwnMemory } from "@/lib/db/memory";
 import { setEmailReminders } from "@/lib/db/profiles";
@@ -25,7 +25,8 @@ export type ClearMemoryResult =
  * under RLS. `cleared` is false when there was nothing to forget. Logs an error code only.
  */
 export async function clearMemoryAction(): Promise<ClearMemoryResult> {
-  const user = await getCurrentUser();
+  const user = await getActionUser();
+  if (user === AUTH_UNAVAILABLE) return { ok: false, error: "failed" };
   if (!user) return { ok: false, error: "signed_out" };
   try {
     const cleared = await deleteOwnMemory();
@@ -51,7 +52,8 @@ export async function clearMemoryAction(): Promise<ClearMemoryResult> {
  */
 export async function setEmailRemindersAction(on: boolean): Promise<SetEmailRemindersResult> {
   if (typeof on !== "boolean") return { ok: false, error: "invalid" };
-  const user = await getCurrentUser();
+  const user = await getActionUser();
+  if (user === AUTH_UNAVAILABLE) return { ok: false, error: "failed" };
   if (!user) return { ok: false, error: "unauthenticated" };
   try {
     const updated = await setEmailReminders(user.id, on);
@@ -76,7 +78,8 @@ export async function setEmailRemindersAction(on: boolean): Promise<SetEmailRemi
  */
 export async function deleteAccountAction(confirm: string): Promise<DeleteAccountActionResult> {
   if (!isDeleteConfirmed(confirm)) return { ok: false, error: "confirm" };
-  const user = await getCurrentUser();
+  const user = await getActionUser();
+  if (user === AUTH_UNAVAILABLE) return { ok: false, error: "failed" };
   if (!user) return { ok: false, error: "unauthenticated" };
 
   const result = await deleteAccountCompletely(user.id);

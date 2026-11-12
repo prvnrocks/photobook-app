@@ -12,6 +12,8 @@ import { setEmailReminders } from "@/lib/db/profiles";
 import { UNSUBSCRIBE_PAGE_HEADERS, unsubscribePage } from "@/lib/email/unsubscribe-page";
 import { verifyUnsubscribeToken } from "@/lib/email/unsubscribe-token";
 import { readBodyWithLimit } from "@/lib/http/body";
+import { UNAVAILABLE_RETRY_AFTER_S } from "@/lib/http/json";
+import { isSupabaseTimeout } from "@/lib/supabase/deadline";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,6 +69,13 @@ export async function POST(request: Request) {
   } catch (e) {
     const code = e && typeof e === "object" && "code" in e ? String((e as { code: unknown }).code) : "unknown";
     console.error(`[email] unsubscribe failed code=${code.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) || "unknown"}`);
+    // M12: a Supabase timeout is temporary → 503 + Retry-After (one-click senders may retry).
+    if (isSupabaseTimeout(e)) {
+      return new Response(unsubscribePage("error"), {
+        status: 503,
+        headers: { ...UNSUBSCRIBE_PAGE_HEADERS, "retry-after": String(UNAVAILABLE_RETRY_AFTER_S) },
+      });
+    }
     return html("error", 500);
   }
   console.info("[email] unsubscribe ok=1");

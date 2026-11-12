@@ -81,16 +81,65 @@ describe("saveDocIfRev", () => {
   });
 
   it("0 rows + the book still exists for the owner → conflict", async () => {
-    fake.state.results.push({ data: [], error: null }, { data: { id: B }, error: null });
+    fake.state.results.push({ data: [], error: null }, { data: { doc_rev: 2, doc: { other: true }, title: "T", updated_at: TS }, error: null });
     expect(await saveDocIfRev(B, U, DOC, 1, 2)).toEqual({ ok: false, reason: "conflict" });
     const [, check] = fake.state.chains;
     expect(check).toMatchObject({ client: "admin", table: "books", op: "select" });
     expect(check.calls).toEqual([
-      ["select", "id"],
+      ["select", "doc_rev, doc, title, updated_at"],
       ["eq", "id", B],
       ["eq", "user_id", U],
       ["maybeSingle"],
     ]);
+  });
+
+  describe("replay after a timed-out save (M12 T3)", () => {
+    const SENT = { version: 1, cover: { title: "Eid", photoId: null }, pages: [{ id: "p1", slots: [] }] };
+    // jsonb hands keys back in its own order — same value, different key order.
+    const STORED = { pages: [{ slots: [], id: "p1" }], cover: { photoId: null, title: "Eid" }, version: 1 };
+
+    it("doc_rev = baseRev + 1 and the stored doc canonically equals the sent doc → ok with that rev", async () => {
+      fake.state.results.push(
+        { data: [], error: null },
+        { data: { doc_rev: 8, doc: STORED, title: "Eid", updated_at: TS }, error: null },
+      );
+      expect(await saveDocIfRev(B, U, SENT, 1, 7)).toEqual({ ok: true, rev: 8, savedAt: TS });
+      // one UPDATE (0 rows) + one read; nothing written a second time
+      expect(fake.state.chains.map((c) => c.op)).toEqual(["update", "select"]);
+    });
+
+    it("the same replay with the title it saved → ok", async () => {
+      fake.state.results.push(
+        { data: [], error: null },
+        { data: { doc_rev: 8, doc: STORED, title: "Eid", updated_at: TS }, error: null },
+      );
+      expect(await saveDocIfRev(B, U, SENT, 1, 7, { title: "Eid" })).toEqual({ ok: true, rev: 8, savedAt: TS });
+    });
+
+    it("a different doc at baseRev + 1 → conflict", async () => {
+      const changed = { ...STORED, cover: { photoId: null, title: "Eid 2026" } };
+      fake.state.results.push(
+        { data: [], error: null },
+        { data: { doc_rev: 8, doc: changed, title: "Eid", updated_at: TS }, error: null },
+      );
+      expect(await saveDocIfRev(B, U, SENT, 1, 7)).toEqual({ ok: false, reason: "conflict" });
+    });
+
+    it("the same doc but more than one rev ahead (another save in between) → conflict", async () => {
+      fake.state.results.push(
+        { data: [], error: null },
+        { data: { doc_rev: 9, doc: STORED, title: "Eid", updated_at: TS }, error: null },
+      );
+      expect(await saveDocIfRev(B, U, SENT, 1, 7)).toEqual({ ok: false, reason: "conflict" });
+    });
+
+    it("the same doc but a different stored title → conflict", async () => {
+      fake.state.results.push(
+        { data: [], error: null },
+        { data: { doc_rev: 8, doc: STORED, title: "Renamed elsewhere", updated_at: TS }, error: null },
+      );
+      expect(await saveDocIfRev(B, U, SENT, 1, 7, { title: "Eid" })).toEqual({ ok: false, reason: "conflict" });
+    });
   });
 
   it("0 rows + no such book for the owner → not_found", async () => {

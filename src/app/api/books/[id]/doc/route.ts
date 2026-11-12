@@ -15,10 +15,13 @@
 //   401 { error: 'unauthenticated' }   403 { error: 'forbidden' } (cross-origin)
 //   404 { error: 'not_found' }                           — bad id / missing / not the caller's
 //   409 { error: 'conflict' }                            — baseRev is not the stored doc_rev
+//                                                          (an identical replay of the save that made
+//                                                          doc_rev = baseRev + 1 → 200, M12 T3)
 //   413 { error: 'too_large' }
 //   422 { error: 'invalid_doc' | 'page_limit' | 'foreign_photo' | 'duplicate_photo' | 'invalid_font'
 //               | 'unsupported_design' }                 — design style without layouts (M10b A19 S1)
 //   503 { error: 'saving_unavailable' }                  — migration 0900 not applied
+//   503 { error: 'unavailable' } + Retry-After: 3       — Supabase timeout (M12); retrying is safe
 //   500 { error: 'server_error' }
 // Logs carry error codes only — never ids or doc contents.
 import { type NextRequest } from "next/server";
@@ -31,7 +34,7 @@ import { isSameOrigin } from "@/lib/auth/same-origin";
 import { getMyBook, saveDocIfRev } from "@/lib/db/books";
 import { listPlaceablePhotos, markPlacedPhotosKept } from "@/lib/db/photos";
 import { readBodyWithLimit } from "@/lib/http/body";
-import { errorCodeOf, json } from "@/lib/http/json";
+import { errorCodeOf, json, unavailableIfTimeout } from "@/lib/http/json";
 import type { Json } from "@/lib/supabase/database.types";
 import { isUuid } from "@/lib/uuid";
 
@@ -72,7 +75,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (book.doc_rev === null) return json({ error: "saving_unavailable" }, 503);
     // The forced meta below comes from the doc at book.doc_rev; saving over any other
     // revision would mix origins. saveDocIfRev re-checks atomically.
-    if (baseRev !== book.doc_rev) return json({ error: "conflict" }, 409);
+    // One exception (M12 T3): doc_rev = baseRev + 1 may be THIS save, committed while its response
+    // timed out. It goes on to saveDocIfRev, whose UPDATE (doc_rev = baseRev) matches 0 rows and
+    // which answers ok only for an identical replay (canonical doc + title), else conflict.
+    if (baseRev !== book.doc_rev && baseRev + 1 !== book.doc_rev) return json({ error: "conflict" }, 409);
 
     const photos = await listPlaceablePhotos(book.id);
     const result = validateEditorDoc(inputDoc, {
@@ -109,6 +115,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     return json({ rev: saved.rev, savedAt: saved.savedAt }, 200);
   } catch (err) {
+    const unavailable = unavailableIfTimeout(err);
+    if (unavailable) return unavailable;
     console.error(`[doc-save] failed (${errorCodeOf(err)})`);
     return json({ error: "server_error" }, 500);
   }

@@ -2,7 +2,8 @@
 // owner's photos, used by the editor when an image 403s after its URL expired.
 // Body: { ids?: string[] } (≤ 500 uuids; omitted = all upload-finished photos).
 // Responses (JSON, no-store): 200 { photos: [{ id, webUrl, thumbUrl }], ttlSeconds }
-// | 400 invalid_body | 401 | 403 (cross-site) | 404 (not the user's book) | 413 | 500.
+// | 400 invalid_body | 401 | 403 (cross-site) | 404 (not the user's book) | 413 | 500
+// | 503 { error: 'unavailable' } + Retry-After (Supabase timeout, M12).
 // Logs carry error codes only — never ids or paths.
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
@@ -10,6 +11,7 @@ import { getCurrentUser } from "@/lib/auth/current-user";
 import { isSameOrigin } from "@/lib/auth/same-origin";
 import { EDITOR_URL_TTL_SECONDS, getPhotoUrls, MAX_PHOTO_URL_IDS } from "@/lib/db/editor";
 import { readBodyWithLimit } from "@/lib/http/body";
+import { unavailableIfTimeout } from "@/lib/http/json";
 import { isUuid } from "@/lib/uuid";
 
 export const runtime = "nodejs";
@@ -90,6 +92,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       { headers: { "cache-control": "no-store" } },
     );
   } catch (err) {
+    const unavailable = unavailableIfTimeout(err);
+    if (unavailable) return unavailable;
     console.error(`[photo-urls] failed (${codeOf(err)})`);
     return fail(500, "server_error");
   }

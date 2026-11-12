@@ -6,6 +6,7 @@ import { learnFromBook } from "@/lib/ai/learn-from-book";
 import { autolayout } from "@/lib/autolayout";
 import { bookDesignOf, isSupportedDesign, isUnsupportedDesignError, withBookDesign } from "@/lib/book/book-design";
 import { applyBackgroundSuggestions, hasAiPhotoBackground } from "@/lib/design/background-suggest";
+import { AUTH_UNAVAILABLE, getActionUser } from "@/lib/auth/action-user";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { CAPTION_LANGS, OCCASIONS, type CaptionLang, type Occasion } from "@/lib/book/options";
 import { relayoutDoc, type RelayoutPhoto } from "@/lib/book/relayout";
@@ -46,7 +47,8 @@ export async function togglePhotoAction(
   if (!isUuid(bookId) || !isUuid(photoId) || typeof keep !== "boolean") {
     return { ok: false, error: MSG_NOT_FOUND };
   }
-  const user = await getCurrentUser();
+  const user = await getActionUser();
+  if (user === AUTH_UNAVAILABLE) return { ok: false, error: MSG_SAVE_FAILED };
   if (!user) return { ok: false, error: MSG_SIGNED_OUT };
 
   try {
@@ -89,7 +91,8 @@ export type UpdateAlbumResult =
  * Logs error codes only, never photo data.
  */
 export async function updateAlbumAction(bookId: string): Promise<UpdateAlbumResult> {
-  const user = await getCurrentUser();
+  const user = await getActionUser();
+  if (user === AUTH_UNAVAILABLE) return { ok: false, error: "failed" };
   if (!user) return { ok: false, error: "signed_out" };
   if (typeof bookId !== "string" || !isUuid(bookId)) return { ok: false, error: "not_found" };
 
@@ -143,6 +146,8 @@ export async function updateAlbumAction(bookId: string): Promise<UpdateAlbumResu
  * (/books/[id]/edit, M5 Task 12 — the editor itself redirects to build/upload when needed).
  */
 export async function confirmAlbumAction(bookId: string): Promise<void> {
+  // Form action without a result: an Auth timeout (SupabaseUnavailableError) is thrown on purpose,
+  // so the route's error.tsx offers "Try again" (M12) — never a login redirect.
   const user = await getCurrentUser();
   if (!user) {
     const next = typeof bookId === "string" && isUuid(bookId) ? `/books/${bookId}/review` : "/dashboard";

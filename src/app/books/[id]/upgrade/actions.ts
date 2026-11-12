@@ -7,7 +7,7 @@
 
 import { createHash } from "node:crypto";
 import type Stripe from "stripe";
-import { getCurrentUser } from "@/lib/auth/current-user";
+import { AUTH_UNAVAILABLE, getActionUser } from "@/lib/auth/action-user";
 import { getSiteUrl } from "@/lib/auth/redirect";
 import {
   findPendingOrder,
@@ -125,7 +125,8 @@ function idempotencyKey(bookId: string, userId: string, bucket: number, params: 
  * `returnTo` may be `/b/{slug}` only for this book's own slug.
  */
 export async function startUpgradeCheckout(bookId: string, returnTo?: string): Promise<StartUpgradeCheckoutResult> {
-  const user = await getCurrentUser();
+  const user = await getActionUser();
+  if (user === AUTH_UNAVAILABLE) return { error: "failed" };
   if (!user) return { error: "unauthenticated" };
   if (!isUuid(bookId)) return { error: "not_found" };
   const id = bookId.toLowerCase();
@@ -197,7 +198,8 @@ export async function startUpgradeCheckout(bookId: string, returnTo?: string): P
  * order's status. Read-only — it never fulfils (the webhook is the only writer).
  */
 export async function getUpgradeStatus(bookId: string): Promise<UpgradeStatusResult> {
-  const user = await getCurrentUser();
+  const user = await getActionUser();
+  if (user === AUTH_UNAVAILABLE) return { error: "failed" };
   if (!user) return { error: "unauthenticated" };
   if (!isUuid(bookId)) return { error: "not_found" };
   const id = bookId.toLowerCase();

@@ -528,6 +528,34 @@ describe("POST /api/stripe/webhook — other", () => {
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 
+  it("M12: fulfil RPC timeout (SUPABASE_TIMEOUT) → 503 + Retry-After; Stripe's replay of the committed event → 200 duplicate", async () => {
+    // The deadline fetch's synthetic 504 reaches postgrest as error.code SUPABASE_TIMEOUT.
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: { code: "SUPABASE_TIMEOUT", message: "timeout" } });
+    const first = await post("checkout.session.completed", session(), "evt_timeout_1");
+    expect(first.status).toBe(503);
+    expect(first.headers.get("retry-after")).toBe("3");
+    expect(first.headers.get("cache-control")).toBe("no-store");
+    expect(await first.json()).toEqual({ error: "unavailable" });
+    expect(logs.some((l) => l.includes("db_timeout") && l.includes("evt=evt_timeout_1"))).toBe(true);
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+
+    // The write had committed: the RPC dedupes on the event id.
+    mocks.rpc.mockResolvedValueOnce({ data: "duplicate", error: null });
+    const replay = await post("checkout.session.completed", session(), "evt_timeout_1");
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual({ received: true });
+    expect(mocks.rpc).toHaveBeenCalledTimes(2);
+    expect(mocks.rpc.mock.calls[1][1]).toEqual(mocks.rpc.mock.calls[0][1]);
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("M12: record RPC timeout → 503 (Stripe retries)", async () => {
+    mocks.rpc.mockResolvedValue({ data: null, error: { code: "SUPABASE_TIMEOUT" } });
+    const res = await post("checkout.session.expired", session());
+    expect(res.status).toBe(503);
+    expect(res.headers.get("retry-after")).toBe("3");
+  });
+
   it("record RPC error → 500", async () => {
     mocks.rpc.mockResolvedValue({ data: null, error: { code: "42501" } });
     expect((await post("checkout.session.expired", session())).status).toBe(500);

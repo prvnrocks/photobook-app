@@ -6,7 +6,7 @@
 
 import { revalidatePath } from "next/cache";
 import { learnFromBook } from "@/lib/ai/learn-from-book";
-import { getCurrentUser } from "@/lib/auth/current-user";
+import { AUTH_UNAVAILABLE, getActionUser } from "@/lib/auth/action-user";
 import { getSiteUrl } from "@/lib/auth/redirect";
 import { validateBookDoc } from "@/lib/book/schema";
 import { stripUnusableAiPhotoBackgrounds } from "@/lib/design/background-suggest";
@@ -84,7 +84,8 @@ type Owner = { userId: string; bookId: string };
 
 /** Session user + RLS ownership check (getMyBook). */
 async function resolveOwner(bookId: unknown, tag: string): Promise<Owner | { error: "signed_out" | "not_found" | "failed" }> {
-  const user = await getCurrentUser();
+  const user = await getActionUser();
+  if (user === AUTH_UNAVAILABLE) return { error: "failed" };
   if (!user) return { error: "signed_out" };
   if (typeof bookId !== "string" || !isUuid(bookId)) return { error: "not_found" };
   try {

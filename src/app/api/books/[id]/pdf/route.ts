@@ -19,7 +19,7 @@
 import { after, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { isSameOrigin } from "@/lib/auth/same-origin";
-import { errorCodeOf, json } from "@/lib/http/json";
+import { errorCodeOf, json, unavailableIfTimeout } from "@/lib/http/json";
 import { getExportState, requestExport, runExport, type RequestExportError } from "@/lib/pdf/job";
 import { isUuid } from "@/lib/uuid";
 
@@ -61,6 +61,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!result.ok) return json({ error: result.error }, ERROR_STATUS[result.error]);
     return json(result.body, result.httpStatus);
   } catch (err) {
+    const unavailable = unavailableIfTimeout(err);
+    if (unavailable) return unavailable;
     console.error(`[pdf-export] request failed (${errorCodeOf(err)})`);
     return json({ error: "server_error" }, 500);
   }
@@ -78,6 +80,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!state.found) return json({ error: "not_found" }, 404);
     return json(state.body, 200);
   } catch (err) {
+    const unavailable = unavailableIfTimeout(err);
+    if (unavailable) return unavailable;
     console.error(`[pdf-export] status failed (${errorCodeOf(err)})`);
     return json({ error: "server_error" }, 500);
   }

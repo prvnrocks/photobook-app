@@ -18,6 +18,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Json, Tables } from "@/lib/supabase/database.types";
 import type { CaptionLang, Occasion, Tone } from "@/lib/book/options";
 import type { BookFormat, DesignStyle } from "@/lib/book/types";
+import { canonicalJson } from "@/lib/json/canonical";
 import { isUuid } from "@/lib/uuid";
 
 export type BookListItem = Pick<
@@ -378,9 +379,12 @@ export type SaveDocResult =
  * only when the stored revision is still `baseRev` — one UPDATE … WHERE id AND
  * user_id AND doc_rev = baseRev RETURNING doc_rev, updated_at. The
  * books_set_doc_rev trigger bumps doc_rev when doc changes (an identical doc
- * keeps the rev). 0 rows → a follow-up existence check (same id + owner)
- * tells `conflict` (someone saved first; no merge, client reloads) from
- * `not_found` (deleted / not the owner's).
+ * keeps the rev). 0 rows → a follow-up read (same id + owner) tells
+ * `conflict` (someone saved first; no merge, client reloads) from `not_found`
+ * (deleted / not the owner's) — and from an identical REPLAY of this save
+ * (M12 T3: doc_rev = baseRev + 1, canonically equal doc and title) → ok with
+ * the stored rev, so a retry after a timed-out-but-committed save is no false
+ * "Changed in another tab".
  *
  * Admin client: doc is server-only. The caller (PUT /api/books/[id]/doc) MUST
  * have verified the session user = ownerId and validated the whole doc
@@ -414,14 +418,26 @@ export async function saveDocIfRev(
   if (error) throw new BooksQueryError("save book doc", error.code);
   if (data.length === 1) return { ok: true, rev: data[0].doc_rev, savedAt: data[0].updated_at };
 
+  // 0 rows: someone else saved first, the book is gone — or THIS save already landed and only its
+  // response was lost (deadline timeout after commit, M12 T3), so the client's retry finds
+  // doc_rev = baseRev + 1. An identical replay (exactly one rev ahead, canonically equal doc) is
+  // success with that rev; anything else stays a conflict.
   const { data: existing, error: readError } = await admin
     .from("books")
-    .select("id")
+    .select("doc_rev, doc, title, updated_at")
     .eq("id", bookId)
     .eq("user_id", ownerId)
     .maybeSingle();
   if (readError) throw new BooksQueryError("save book doc", readError.code);
-  return { ok: false, reason: existing ? "conflict" : "not_found" };
+  if (!existing) return { ok: false, reason: "not_found" };
+  if (
+    existing.doc_rev === baseRev + 1 &&
+    canonicalJson(existing.doc) === canonicalJson(doc) &&
+    (extra.title === undefined || existing.title === extra.title)
+  ) {
+    return { ok: true, rev: existing.doc_rev, savedAt: existing.updated_at };
+  }
+  return { ok: false, reason: "conflict" };
 }
 
 export type StripPhotoResult = "updated" | "unchanged" | "conflict" | "not_found";

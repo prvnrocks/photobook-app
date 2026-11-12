@@ -1,7 +1,8 @@
 // POST /api/books/[id]/finalize (T9, D-017): duplicate groups, places, fallback album.
 // Called by the upload screen (same origin, fetch) after all uploads are ready.
 // Responses are JSON: 200 FinalizeResult counts | 400 invalid_body | 401 | 403 | 404 |
-// 413 too_large | 429 (+ Retry-After, one run per book per 10 s) | 500 { error }.
+// 413 too_large | 429 (+ Retry-After, one run per book per 10 s) | 500 { error } |
+// 503 { error: 'unavailable' } + Retry-After: 10 (Supabase timeout, M12 — safe to retry).
 // Body (optional, M10c): { colors?: { [photoId: uuid]: "#rrggbb" } } (≤ 500 entries) — photo
 // colours computed by the uploader; finalize writes them only for this book's ready photos whose
 // colour is still null (photos.color is server-only). Empty body = no colours.
@@ -11,11 +12,15 @@ import { getCurrentUser } from "@/lib/auth/current-user";
 import { isSameOrigin } from "@/lib/auth/same-origin";
 import { finalizeBook } from "@/lib/photos/finalize";
 import { FinalizeBodySchema, MAX_BODY_BYTES, type FinalizeBody } from "@/lib/photos/finalize-body";
+import { unavailableIfTimeout } from "@/lib/http/json";
 import { isUuid } from "@/lib/uuid";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
+
+/** Retry-After for a Supabase timeout: matches the one-run-per-book-per-10-s rate limit. */
+const FINALIZE_RETRY_AFTER_S = 10;
 
 type ErrorCode =
   | "forbidden"
@@ -98,6 +103,10 @@ export async function POST(
 
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (err) {
+    // M12: a Supabase timeout → 503 + Retry-After 10 (= the one-run-per-10-s limit); every
+    // finalize step is safe to repeat, so the client simply retries.
+    const unavailable = unavailableIfTimeout(err, FINALIZE_RETRY_AFTER_S);
+    if (unavailable) return unavailable;
     console.error(`[finalize] failed (${codeOf(err)})`);
     return fail(500, "server_error");
   }

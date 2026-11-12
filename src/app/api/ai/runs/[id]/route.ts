@@ -6,7 +6,7 @@
 import { type NextRequest } from "next/server";
 import { getProgress } from "@/lib/ai/orchestrator";
 import { getCurrentUser } from "@/lib/auth/current-user";
-import { errorCodeOf, json } from "@/lib/http/json";
+import { errorCodeOf, json, unavailableIfTimeout } from "@/lib/http/json";
 import { isUuid } from "@/lib/uuid";
 
 export const runtime = "nodejs";
@@ -31,6 +31,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       done: view.done,
     });
   } catch (err) {
+    const unavailable = unavailableIfTimeout(err);
+    if (unavailable) return unavailable;
     console.error(`[ai-runs] progress failed (${errorCodeOf(err)})`);
     return json({ error: "server_error" }, 500);
   }

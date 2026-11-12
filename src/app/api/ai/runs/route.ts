@@ -24,7 +24,7 @@ import { isSameOrigin } from "@/lib/auth/same-origin";
 import { docOrigin } from "@/lib/book/replaceable";
 import { getActiveRunForBook, getLatestRunForBook, hasFinishedLiveAiRun } from "@/lib/db/agent-runs";
 import { getMyBook } from "@/lib/db/books";
-import { errorCodeOf, json } from "@/lib/http/json";
+import { errorCodeOf, json, unavailableIfTimeout } from "@/lib/http/json";
 import { isUuid } from "@/lib/uuid";
 
 export const runtime = "nodejs";
@@ -97,6 +97,8 @@ export async function POST(request: NextRequest) {
         return json({ error: "not_found" }, 404);
     }
   } catch (err) {
+    const unavailable = unavailableIfTimeout(err);
+    if (unavailable) return unavailable;
     console.error(`[ai-runs] start failed (${errorCodeOf(err)})`);
     return json({ error: "server_error" }, 500);
   }

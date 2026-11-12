@@ -51,6 +51,7 @@ import {
   uploadExportPdf,
 } from "@/lib/db/exports";
 import { listPrintPhotoSources } from "@/lib/db/print";
+import { isSupabaseTimeout } from "@/lib/supabase/deadline";
 
 const U = "11111111-1111-4111-8111-111111111111";
 const B = "22222222-2222-4222-8222-222222222222";
@@ -82,6 +83,28 @@ describe("exports bucket", () => {
     fake.state.storageResults.push({ error: { statusCode: "409" } }, { data: [], error: null }, { data: {}, error: null });
     await uploadExportPdf(PATH, BYTES);
     expect(fake.state.storage.map((s) => s.op)).toEqual(["upload", "remove", "upload"]);
+  });
+
+  it("M12: an upload that timed out but stored the file → the retry hits 409, removes the leftover, re-uploads", async () => {
+    // Attempt 1: the deadline fetch answers the synthetic 504 (storage-js: statusCode SUPABASE_TIMEOUT).
+    fake.state.storageResults.push({ error: { statusCode: "SUPABASE_TIMEOUT", message: "timeout" } });
+    const err = await uploadExportPdf(PATH, BYTES).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ExportStorageError);
+    expect((err as ExportStorageError).code).toBe("SUPABASE_TIMEOUT");
+    expect(isSupabaseTimeout(err)).toBe(true);
+    // Attempt 2 (next job run): the object exists → 409 → remove → upload succeeds.
+    fake.state.storage.length = 0;
+    fake.state.storageResults.push({ error: { statusCode: "409" } }, { data: [], error: null }, { data: {}, error: null });
+    await expect(uploadExportPdf(PATH, BYTES)).resolves.toBeUndefined();
+    expect(fake.state.storage.map((s) => s.op)).toEqual(["upload", "remove", "upload"]);
+    expect(fake.state.storage[1].args).toEqual([[PATH]]);
+  });
+
+  it("409 → remove fails → code-only error, no second upload", async () => {
+    fake.state.storageResults.push({ error: { statusCode: "409" } }, { data: null, error: { statusCode: "SUPABASE_TIMEOUT" } });
+    const err = await uploadExportPdf(PATH, BYTES).catch((e: unknown) => e);
+    expect((err as ExportStorageError).code).toBe("SUPABASE_TIMEOUT");
+    expect(fake.state.storage.map((s) => s.op)).toEqual(["upload", "remove"]);
   });
 
   it("other upload errors throw a code-only error (no path)", async () => {

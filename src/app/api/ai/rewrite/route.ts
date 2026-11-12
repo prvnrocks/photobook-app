@@ -56,7 +56,7 @@ import { getMyBook } from "@/lib/db/books";
 import { getUserMemoryAdmin } from "@/lib/db/memory";
 import { getPhotoNotesAdmin } from "@/lib/db/photo-notes";
 import { readBodyWithLimit } from "@/lib/http/body";
-import { errorCodeOf, json } from "@/lib/http/json";
+import { errorCodeOf, json, unavailableIfTimeout } from "@/lib/http/json";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -176,6 +176,8 @@ export async function POST(request: NextRequest) {
     }
     return json({ text: result.text, lang: result.lang, remaining }, 200);
   } catch (err) {
+    const unavailable = unavailableIfTimeout(err);
+    if (unavailable) return unavailable;
     console.error(`[ai-rewrite] failed (${errorCodeOf(err)})`);
     return json({ error: "server_error" }, 500);
   }

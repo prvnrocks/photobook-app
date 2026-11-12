@@ -206,6 +206,11 @@ function budgetFor(b: DeadlineBudgets, cls: RequestClass, body: unknown): number
   }
 }
 
+/** The synthetic 504 a timed-out request answers (exported for the middleware's auth gate). */
+export function supabaseTimeoutResponse(cls: RequestClass, ms: number): Response {
+  return timeoutResponse(cls, ms);
+}
+
 function timeoutResponse(cls: RequestClass, ms: number): Response {
   const message = `Supabase ${cls} request timed out after ${ms} ms (${SUPABASE_TIMEOUT})`;
   return new Response(
