@@ -80,6 +80,11 @@ export type EditorData = {
    * published or unpublished). Header "Publish changes" when the saved rev is higher.
    */
   publishedRev: number | null;
+  /**
+   * books.expires_at (D-039: set at the first publish of an unpaid book, never moved). null = never
+   * published (or paid). Drives the Share button's "Free · 30 days" / "N days left" / "Link expired".
+   */
+  expiresAt: string | null;
   canSave: boolean;
   aiMode: AiMode;
   /** Successful (ai_status 'ok') rewrite runs of this book (D-037 (6)). */
@@ -87,6 +92,11 @@ export type EditorData = {
   rewritesLeft: number;
   /** The book's active (not done/failed) build or rebuild run, if any. */
   activeBuildRunId: string | null;
+  /**
+   * The book ever had a build/rebuild run (any state). Read error → true (safe side: no "Make it
+   * with AI" chip; the review screen still decides what's allowed).
+   */
+  hasBuildRun: boolean;
   /** Upload-finished photos (kept + dropped), oldest first. */
   photos: EditorPhoto[];
 };
@@ -180,25 +190,40 @@ async function activeBuildRun(
   return data?.id ?? null;
 }
 
+/** True when the book has any build/rebuild run (any state). Rewrite runs don't count. */
+async function hasAnyBuildRun(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  bookId: string,
+): Promise<boolean> {
+  const { count, error } = await supabase
+    .from("agent_runs")
+    .select("id", { count: "exact", head: true })
+    .eq("book_id", bookId)
+    .in("trigger", [...BUILD_RUN_TRIGGERS]);
+  if (error) throw new EditorQueryError("check build runs", error.code);
+  return (count ?? 0) > 0;
+}
+
 /**
  * books.published_rev, but only while a live snapshot exists (D-039): unpublish clears
  * published_doc and keeps published_rev, so `live:published_doc->version` decides. null = not
- * published → no "Publish changes" chip.
+ * published → no "Publish changes" chip. Plus books.expires_at (kept across unpublish).
  */
-async function loadPublishedRev(
+async function loadPublishState(
   supabase: Awaited<ReturnType<typeof createClient>>,
   bookId: string,
-): Promise<number | null> {
+): Promise<{ publishedRev: number | null; expiresAt: string | null }> {
   const { data, error } = await supabase
     .from("books")
-    .select("published_rev, live:published_doc->version")
+    .select("published_rev, expires_at, live:published_doc->version")
     .eq("id", bookId)
     .maybeSingle();
   if (error) throw new EditorQueryError("load publish state", error.code);
-  const row = data as { published_rev?: unknown; live?: unknown } | null;
-  if (!row || row.live === null || row.live === undefined) return null;
+  const row = data as { published_rev?: unknown; expires_at?: unknown; live?: unknown } | null;
+  const expiresAt = typeof row?.expires_at === "string" && row.expires_at !== "" ? row.expires_at : null;
+  if (!row || row.live === null || row.live === undefined) return { publishedRev: null, expiresAt };
   const rev = row.published_rev;
-  return typeof rev === "number" && Number.isSafeInteger(rev) ? rev : null;
+  return { publishedRev: typeof rev === "number" && Number.isSafeInteger(rev) ? rev : null, expiresAt };
 }
 
 function isEmptyObject(v: unknown): boolean {
@@ -215,11 +240,12 @@ export async function getEditorData(bookId: string): Promise<EditorData | null> 
   if (!book) return null;
 
   const supabase = await createClient();
-  const [rows, rewritesUsed, activeBuildRunId, publishedRev] = await Promise.all([
+  const [rows, rewritesUsed, activeBuildRunId, publish, hasBuildRun] = await Promise.all([
     listReadyPhotoRows(supabase, book.id),
     getRewritesUsed(book.id, supabase),
     activeBuildRun(supabase, book.id),
-    loadPublishedRev(supabase, book.id),
+    loadPublishState(supabase, book.id),
+    hasAnyBuildRun(supabase, book.id).catch(() => true),
   ]);
   const signed = await signRows(supabase, rows);
 
@@ -256,12 +282,14 @@ export async function getEditorData(bookId: string): Promise<EditorData | null> 
     doc,
     docError,
     docRev: book.doc_rev,
-    publishedRev,
+    publishedRev: publish.publishedRev,
+    expiresAt: book.is_paid ? null : publish.expiresAt,
     canSave: book.doc_rev !== null,
     aiMode: resolveAiMode(),
     rewritesUsed,
     rewritesLeft: Math.max(0, cap - rewritesUsed),
     activeBuildRunId,
+    hasBuildRun,
     photos,
   };
 }

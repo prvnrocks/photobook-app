@@ -3,7 +3,7 @@
 // (publish or publish changes, src/app/books/[id]/publish/actions.ts) only when the latest edit is
 // saved (or nothing was pending), so what goes live is what the user sees.
 
-import { FREE_LINK_DAYS } from "@/lib/publish/free-link";
+import { FREE_LINK_DAYS, type FreeLinkState } from "@/lib/publish/free-link";
 import { publishErrorCopy, type PublishError } from "@/lib/publish/ui";
 import { isTerminal, type AutosaveStatus } from "./autosave";
 
@@ -134,8 +134,52 @@ export function doneStepAfterShare(r: ShareResult | null | undefined, bookId: st
   }
 }
 
-/** Share button subtitle (shown before the tap, D-070 #4). */
-export function shareSubtitle(args: { isPaid: boolean; hasChanges: boolean }): string {
+export type ShareLinkArgs = {
+  isPaid: boolean;
+  hasChanges: boolean;
+  /** Unpaid books only (freeLinkState); absent → treated as never published. */
+  link?: FreeLinkState;
+};
+
+function freeLink(args: ShareLinkArgs): FreeLinkState {
+  return args.link ?? { kind: "unpublished" };
+}
+
+function daysLeftText(n: number): string {
+  return n === 1 ? "1 day left" : `${n} days left`;
+}
+
+/**
+ * Share button subtitle (shown before the tap, D-070 #4), truthful per D-039: "Free · 30 days" only
+ * before the first publish; then "Free · N days left"; "Link expired" once past expiry (wins over
+ * "Publish changes": republishing is blocked then).
+ */
+export function shareSubtitle(args: ShareLinkArgs): string {
+  if (args.isPaid) return args.hasChanges ? "Publish changes" : "Permanent link";
+  const link = freeLink(args);
+  if (link.kind === "expired") return "Link expired";
   if (args.hasChanges) return "Publish changes";
-  return args.isPaid ? "Permanent link" : `Free · ${FREE_LINK_DAYS} days`;
+  if (link.kind === "counting") return `Free · ${daysLeftText(link.daysLeft)}`;
+  return `Free · ${FREE_LINK_DAYS} days`;
+}
+
+/** The button's screen-reader description (aria-describedby). */
+export function shareDescription(args: ShareLinkArgs): string {
+  const base = "Publishes your book so anyone with the link can see it, then opens sharing.";
+  if (args.isPaid) return base;
+  const link = freeLink(args);
+  if (link.kind === "expired") return "Your free link has expired. Opens sharing, where you can see your options.";
+  if (link.kind === "counting") return `${base} Your free link has ${daysLeftText(link.daysLeft)}.`;
+  return `${base} Free links last ${FREE_LINK_DAYS} days from the first share.`;
+}
+
+/**
+ * An expired free link can't be republished (D-039): instead of trying (and failing), Share opens
+ * the share screen, where Upgrade lives. Other steps pass through.
+ */
+export function shareStepForLink(step: DoneStep, args: ShareLinkArgs, bookId: string): DoneStep {
+  if (step.kind === "share" && !args.isPaid && freeLink(args).kind === "expired") {
+    return { kind: "navigate", to: shareScreenHref(bookId) };
+  }
+  return step;
 }

@@ -85,7 +85,12 @@ export type UploaderProps = {
   firstRun: FirstRunState;
   /** D-026 daily cap for the limit copy. */
   dailyCap: number;
+  /** resolveAiMode() !== "off" from the page (D-024): false → neutral copy, no AI claims. Default true. */
+  aiOn?: boolean;
 };
+
+/** Shown when photos are picked while the automatic first build is starting (they aren't added). */
+export const PICKS_WHILE_STARTING_COPY = "Your book is being made — add more photos from the editor.";
 
 type AutoState =
   | { kind: "idle" }
@@ -110,6 +115,7 @@ const signInLinkClass =
 
 export function Uploader(props: UploaderProps) {
   const { bookId, userId, isPaid, maxUpload, firstRun } = props;
+  const aiOn = props.aiOn ?? true;
   const loginHref = `/login?next=${encodeURIComponent(`/books/${bookId}/upload`)}`;
   const router = useRouter();
   const setupCtl = useBookSetup(bookId, props.setup, props.locks);
@@ -153,6 +159,8 @@ export function Uploader(props: UploaderProps) {
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [removing, startRemove] = useTransition();
   const [dragOver, setDragOver] = useState(false);
+  /** Photos picked while the automatic build was starting: they were not added — say so. */
+  const [picksIgnored, setPicksIgnored] = useState(false);
   const capacityId = useId();
 
   const uploading = phase === "running";
@@ -385,7 +393,12 @@ export function Uploader(props: UploaderProps) {
 
   async function handleFiles(files: File[]) {
     if (files.length === 0) return;
-    if (autoBusyRef.current) return; // the build is starting with the photos already added
+    if (autoBusyRef.current) {
+      // The build is starting with the photos already added: don't drop the new picks silently.
+      setPicksIgnored(true);
+      return;
+    }
+    setPicksIgnored(false);
     setLoadFailed(false);
     setRemoveError(null);
     let q: UploadQueue;
@@ -674,7 +687,13 @@ export function Uploader(props: UploaderProps) {
         </div>
       ) : null}
 
-      {showSetup && !fatal ? <SetupCard controller={setupCtl} suggestedFormat={suggestedFormat} /> : null}
+      {picksIgnored && starting ? (
+        <Notice tone="info" data-testid="upload-picks-ignored">
+          {PICKS_WHILE_STARTING_COPY}
+        </Notice>
+      ) : null}
+
+      {showSetup && !fatal ? <SetupCard controller={setupCtl} suggestedFormat={suggestedFormat} aiOn={aiOn} /> : null}
 
       {summary && !fatal && (phase === "done" || phase === "finalize_error") ? (
         <UploadSummary
@@ -683,6 +702,7 @@ export function Uploader(props: UploaderProps) {
           finalize={finalize}
           onAddMore={openPicker}
           next={summaryNext}
+          aiOn={aiOn}
         />
       ) : null}
 

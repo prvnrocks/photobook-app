@@ -6,6 +6,8 @@ import {
   doneStepAfterShare,
   drainSaves,
   loginHref,
+  shareDescription,
+  shareStepForLink,
   shareSubtitle,
   type DrainableSaves,
 } from "@/lib/editor/done";
@@ -168,5 +170,39 @@ describe("shareSubtitle", () => {
     expect(shareSubtitle({ isPaid: true, hasChanges: false })).toBe("Permanent link");
     expect(shareSubtitle({ isPaid: false, hasChanges: true })).toBe("Publish changes");
     expect(shareSubtitle({ isPaid: true, hasChanges: true })).toBe("Publish changes");
+  });
+});
+
+describe("shareSubtitle with the free link state (D-039, M13 review)", () => {
+  const free = (link: Parameters<typeof shareSubtitle>[0]["link"], hasChanges = false) => shareSubtitle({ isPaid: false, hasChanges, link });
+  it("30 days only before the first publish; then days left; expired wins over Publish changes", () => {
+    expect(free({ kind: "unpublished" })).toBe("Free · 30 days");
+    expect(free({ kind: "counting", daysLeft: 12 })).toBe("Free · 12 days left");
+    expect(free({ kind: "counting", daysLeft: 1 })).toBe("Free · 1 day left");
+    expect(free({ kind: "counting", daysLeft: 12 }, true)).toBe("Publish changes");
+    expect(free({ kind: "expired" })).toBe("Link expired");
+    expect(free({ kind: "expired" }, true)).toBe("Link expired");
+    // Paid ignores any link state.
+    expect(shareSubtitle({ isPaid: true, hasChanges: false, link: { kind: "expired" } })).toBe("Permanent link");
+  });
+
+  it("description matches the subtitle", () => {
+    expect(shareDescription({ isPaid: false, hasChanges: false })).toContain("Free links last 30 days from the first share.");
+    expect(shareDescription({ isPaid: false, hasChanges: false, link: { kind: "counting", daysLeft: 3 } })).toContain(
+      "Your free link has 3 days left.",
+    );
+    const exp = shareDescription({ isPaid: false, hasChanges: false, link: { kind: "expired" } });
+    expect(exp).toContain("expired");
+    expect(exp).not.toContain("Publishes");
+    expect(shareDescription({ isPaid: true, hasChanges: false })).not.toContain("Free");
+  });
+
+  it("expired free link: Share opens the share screen without publishing; other steps pass through", () => {
+    const exp = { isPaid: false, hasChanges: true, link: { kind: "expired" } as const };
+    expect(shareStepForLink({ kind: "share" }, exp, BOOK)).toEqual({ kind: "navigate", to: `/books/${BOOK}/publish` });
+    expect(shareStepForLink({ kind: "share" }, { ...exp, isPaid: true }, BOOK)).toEqual({ kind: "share" });
+    expect(shareStepForLink({ kind: "share" }, { ...exp, link: { kind: "counting", daysLeft: 2 } }, BOOK)).toEqual({ kind: "share" });
+    const err = { kind: "error", message: "x" } as const;
+    expect(shareStepForLink(err, exp, BOOK)).toBe(err);
   });
 });

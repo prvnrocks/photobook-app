@@ -47,7 +47,7 @@ export function hasFields(patch: BookSetupPatch): boolean {
 
 export const LOCK_COPY: Record<SetupLockReason, string> = {
   ai_started: "Your book is being made with these choices. You can still change the title, photos and captions in the editor.",
-  user_edited: "Page shape and style are fixed because you've edited the book.",
+  user_edited: "These choices are fixed because you've edited the book. Change the title and captions in the editor.",
 };
 
 /** Plain-English language names for the summary line (the chips show the native names). */

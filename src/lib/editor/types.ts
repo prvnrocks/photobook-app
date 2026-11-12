@@ -4,6 +4,8 @@
 
 import type { BookDoc } from "@/lib/book/types";
 import type { CaptionLang, Occasion, Tone } from "@/lib/book/options";
+import type { FreeLinkState } from "@/lib/publish/free-link";
+import type { EditorAiPath } from "./ai-path";
 
 /** Mirrors AiMode in src/lib/ai/client.ts (server-only). */
 export type EditorAiMode = "off" | "replay" | "live";
@@ -38,8 +40,12 @@ export type EditorShellData = {
   docRev: number | null;
   /** doc_rev of the live published snapshot; null = not published. */
   publishedRev: number | null;
+  /** Unpaid books: where the free link stands (D-039) for the Share button. Absent = never published. */
+  freeLink?: FreeLinkState;
   canSave: boolean;
   aiMode: EditorAiMode;
+  /** "Make it with AI" chip / "Redo with AI" entry (src/lib/editor/ai-path.ts). Absent = neither. */
+  aiPath?: EditorAiPath;
   rewritesUsed: number;
   rewritesLeft: number;
   photos: EditorShellPhoto[];

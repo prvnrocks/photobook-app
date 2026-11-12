@@ -22,8 +22,28 @@ describe("editor header Share button (M13 T9; was Done, T12)", () => {
     expect(btn).toContain(">Share<");
     expect(btn).toContain("Free · 30 days");
     expect(btn).toMatch(/aria-describedby="[^"]+"/);
-    expect(html).toContain("Free links last 30 days.");
+    expect(html).toContain("Free links last 30 days from the first share.");
+    expect(btn).toContain('data-link="unpublished"');
     expect(html).toContain("anyone with the link can see it");
+  });
+
+  it("live free link → N days left; expired → Link expired (wins over Publish changes) (D-039)", () => {
+    const data = devEditorData("ok");
+    const free = { ...data, book: { ...data.book, isPaid: false } };
+    const live = renderToStaticMarkup(<EditorShell data={{ ...free, freeLink: { kind: "counting", daysLeft: 12 } }} transport={devTransport("ok")} />);
+    expect(button(live)).toContain("Free · 12 days left");
+    expect(button(live)).not.toContain("Free · 30 days");
+    expect(live).toContain("Your free link has 12 days left.");
+    const one = renderToStaticMarkup(<EditorShell data={{ ...free, freeLink: { kind: "counting", daysLeft: 1 } }} transport={devTransport("ok")} />);
+    expect(button(one)).toContain("Free · 1 day left");
+    const expired = renderToStaticMarkup(
+      <EditorShell data={{ ...free, publishedRev: 0, freeLink: { kind: "expired" } }} transport={devTransport("ok")} />,
+    );
+    expect(button(expired)).toContain("Link expired");
+    expect(button(expired)).toContain('data-testid="editor-share-note"');
+    expect(button(expired)).toContain('data-link="expired"');
+    expect(expired).toContain("Your free link has expired.");
+    expect(expired).not.toContain("Free links last");
   });
 
   it("paid → Permanent link", () => {

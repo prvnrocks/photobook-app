@@ -16,7 +16,6 @@ import {
   hasFields,
   initialFollow,
   occasionPatch,
-  withoutDesign,
   type SetupFollow,
   type SetupLocks,
 } from "@/lib/upload/setup-ui";
@@ -58,7 +57,7 @@ export function useBookSetup(bookId: string, initial: BookSetup, initialLocks: S
   }, []);
 
   const send = useCallback(
-    async (patch: BookSetupPatch, retryWithoutDesign = true): Promise<void> => {
+    async (patch: BookSetupPatch): Promise<void> => {
       setStatus({ kind: "saving" });
       let res: UpdateBookSetupResult;
       try {
@@ -76,19 +75,11 @@ export function useBookSetup(bookId: string, initial: BookSetup, initialLocks: S
         return;
       }
       if (res.error === "locked") {
-        const reason = res.reason ?? "ai_started";
-        if (reason === "user_edited") {
-          setLocks((l) => ({ ...l, design: "user_edited" }));
-          const rest = withoutDesign(patch);
-          if (retryWithoutDesign && hasFields(rest)) {
-            setSetup((cur) => ({ ...cur, format: confirmedRef.current.format, designStyle: confirmedRef.current.designStyle }));
-            await send(rest, false);
-            return;
-          }
-        } else {
-          setLocks({ details: "ai_started", design: "ai_started" });
-          pendingRef.current = {};
-        }
+        // Both reasons lock every setup field (M13 review: an edited album locks the details too),
+        // so the controls disable now, without a reload.
+        const reason = res.reason === "user_edited" ? "user_edited" : "ai_started";
+        setLocks({ details: reason, design: reason });
+        pendingRef.current = {};
         setSetup(confirmedRef.current);
         setTitleDraft(confirmedRef.current.title ?? "");
         setStatus({ kind: "idle" });

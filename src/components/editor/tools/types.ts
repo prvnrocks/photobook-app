@@ -44,6 +44,11 @@ export interface EditorTool {
   isAvailable?(ctx: EditorContextValue): boolean;
   /** Show but disable (e.g. Add page at the page limit). */
   isDisabled?(ctx: EditorContextValue): boolean;
+  /**
+   * Navigation entry (e.g. "See all photos" → review): rendered as a link to this app path instead
+   * of a button; run/Panel are ignored. Use editsDoc: false for links that only look.
+   */
+  href?(ctx: EditorContextValue): string;
   /** Immediate action on tap. If Panel is also set, run() is called and then the Panel opens. */
   run?(ctx: EditorContextValue): void;
   /** Panel content: bottom sheet on mobile, side panel on desktop. */

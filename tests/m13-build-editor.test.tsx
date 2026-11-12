@@ -111,10 +111,14 @@ describe("BuildProgress (T7)", () => {
   it("build page: ?auto=1 passes auto, a finished auto run opens the editor, draft from books.doc", () => {
     const s = src("src/app/books/[id]/build/page.tsx");
     expect(s).toContain('const auto = query.auto === "1";');
-    expect(s).toContain("if (auto && !active) redirect(`/books/${book.id}/edit`);");
+    // Review fix: redirect only on a confirmed "no run"; a read error renders BuildProgress.
+    expect(s).toContain("if (auto && activeRead.ok && !active) redirect(`/books/${book.id}/edit`);");
+    expect(s).not.toContain("getActiveRunForBook(book.id).catch(() => null)");
     expect(s).toContain("auto={auto}");
+    expect(s).toContain("aiOn={aiOn}");
     expect(s).toContain("preview={preview}");
-    expect(s).toContain("listReviewPhotos(book.id).catch(() => null)");
+    // Only the preview's photos are loaded + signed.
+    expect(s).toContain("listReviewPhotos(book.id, wanted).catch(() => null)");
   });
 });
 
@@ -130,8 +134,8 @@ describe("aiSummary", () => {
   });
 
   it("rule album: no AI claim, only when photos were left out", () => {
-    expect(aiSummary("rule", ph(8, 2))).toMatchObject({ label: "Kept 8 of 10", linkText: "See 2 left out" });
-    expect(aiSummary(undefined, ph(8, 2))).toMatchObject({ label: "Kept 8 of 10" });
+    expect(aiSummary("rule", ph(8, 2))).toMatchObject({ label: "8 of 10 in your book", linkText: "See 2 left out" });
+    expect(aiSummary(undefined, ph(8, 2))).toMatchObject({ label: "8 of 10 in your book" });
     expect(aiSummary("rule", ph(10, 0))).toBeNull();
     expect(aiSummary("ai", [])).toBeNull();
   });

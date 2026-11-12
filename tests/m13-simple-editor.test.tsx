@@ -53,8 +53,35 @@ describe("simple toolbar split (M13 T8)", () => {
   it("page (nothing selected): Layout / Background / Pages + More", () => {
     const s = split(ctxFor());
     expect(s.primary).toEqual(["layout", "background", "pages"]);
-    expect(s.more).toEqual(["add-page", "page-menu", "upgrade"]);
-    expect(split(ctxFor({ isPaid: true })).more).toEqual(["add-page", "page-menu", "pdf"]);
+    expect(s.more).toEqual(["add-page", "page-menu", "see-photos", "upgrade"]);
+    expect(split(ctxFor({ isPaid: true })).more).toEqual(["add-page", "page-menu", "see-photos", "pdf"]);
+  });
+
+  it("More (nothing selected): See all photos always (read-only too); Redo with AI only when aiPath allows (M13 review)", () => {
+    const withAi = (aiPath: EditorContextValue["aiPath"], readOnly = false) =>
+      split({ ...ctxFor({ readOnly }), aiPath } as EditorContextValue).more;
+    expect(withAi({ makeWithAi: false, redoWithAi: true })).toEqual(["add-page", "page-menu", "see-photos", "redo-ai", "upgrade"]);
+    expect(withAi({ makeWithAi: true, redoWithAi: false })).not.toContain("redo-ai");
+    expect(withAi(undefined)).not.toContain("redo-ai");
+    // Read-only: the doc tools and Redo hide; See all photos stays (it only looks).
+    const ro = splitTools(visibleTools(EDITOR_TOOLS, { ...ctxFor({ readOnly: true }), aiPath: { makeWithAi: false, redoWithAi: true } } as EditorContextValue), ctxFor({ readOnly: true }));
+    const ids = [...ro.primary, ...ro.more].map((t) => t.id);
+    expect(ids).toContain("see-photos");
+    expect(ids).not.toContain("redo-ai");
+    // Selected photo/caption: not offered (page-level only).
+    expect(split(ctxFor({ selection: SLOT })).more).not.toContain("see-photos");
+  });
+
+  it("MoreSheet renders link entries as real links to the review screen", () => {
+    const ctx = { ...ctxFor(), aiPath: { makeWithAi: false, redoWithAi: true } } as EditorContextValue;
+    const tools = EDITOR_TOOLS.filter((t) => t.id === "see-photos" || t.id === "redo-ai");
+    const html = renderToStaticMarkup(<MoreSheet id="m" tools={tools} ctx={ctx} onClose={vi.fn()} onPick={vi.fn()} />);
+    const bookId = ctx.book.id;
+    expect(html).toContain(`<a class="`);
+    expect(html).toMatch(new RegExp(`<a[^>]*data-testid="editor-tool-see-photos"[^>]*href="/books/${bookId}/review"`));
+    expect(html).toMatch(new RegExp(`<a[^>]*data-testid="editor-tool-redo-ai"[^>]*href="/books/${bookId}/review"`));
+    expect(html).toContain("See all photos");
+    expect(html).toContain("Redo with AI");
   });
 
   it("photo: Replace / Crop + More (Layout behind More)", () => {

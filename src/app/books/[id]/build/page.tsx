@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { BuildDraftPreview } from "@/components/review/BuildDraftPreview";
 import { BuildProgress } from "@/components/review/BuildProgress";
+import { resolveAiMode } from "@/lib/ai/client";
 import { limitsFor } from "@/lib/ai/limits";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { parseBookDoc } from "@/lib/book/schema";
@@ -45,36 +46,44 @@ export default async function BuildPage({
   const book = await getMyBook(id);
   if (!book) notFound();
 
-  const [active, profile] = await Promise.all([
-    // On a read error the POST answers 409 already_running + runId, so starting is still safe.
-    getActiveRunForBook(book.id).catch(() => null),
+  const [activeRead, profile] = await Promise.all([
+    // A read error is not "no run": keep it apart so ?auto=1 never strands a queued run.
+    getActiveRunForBook(book.id).then(
+      (run) => ({ ok: true as const, run }),
+      () => ({ ok: false as const, run: null }),
+    ),
     getMyProfile().catch(() => null),
   ]);
+  const active = activeRead.run;
   const displayName = profile?.name ?? profile?.email ?? user.email ?? null;
   const trigger = query.trigger === "rebuild" ? "rebuild" : "build";
   const auto = query.auto === "1";
   // The automatic run already finished (fast replay / rule run, or a reload after it ended):
-  // never start a manual build from an auto link — open the album instead.
-  if (auto && !active) redirect(`/books/${book.id}/edit`);
+  // never start a manual build from an auto link — open the album instead. Only on a confirmed
+  // "no active run": after a read error BuildProgress POSTs, and the server answers
+  // 409 already_running + runId for a run that is still queued (or starts one when none is).
+  if (auto && activeRead.ok && !active) redirect(`/books/${book.id}/edit`);
 
-  // Draft preview: cover + first pages, 512 px thumbs signed for exactly those photos. A read
-  // error only drops the preview (the checklist still shows).
+  // Draft preview: cover + first pages, 512 px thumbs signed for exactly those photos (only their
+  // ids are loaded and signed). A read error only drops the preview (the checklist still shows).
   const doc = draftDoc(book.doc);
   let preview: ReactNode = null;
   if (doc) {
     const items = draftPreviewItems(doc);
-    const photos = await listReviewPhotos(book.id).catch(() => null);
+    const wanted = draftPreviewPhotoIds(doc, items);
+    const photos = await listReviewPhotos(book.id, wanted).catch(() => null);
     if (photos) {
       preview = (
         <BuildDraftPreview
           doc={doc}
           items={items}
-          photos={draftPreviewPhotos(draftPreviewPhotoIds(doc, items), photos)}
+          photos={draftPreviewPhotos(wanted, photos)}
           captionLang={book.caption_lang}
         />
       );
     }
   }
+  const aiOn = resolveAiMode() !== "off";
 
   return (
     <>
@@ -96,6 +105,7 @@ export default async function BuildPage({
           isPaid={book.is_paid}
           dailyCap={limitsFor(book.is_paid).maxLiveBuildsPerUserPerDay}
           auto={auto}
+          aiOn={aiOn}
           preview={preview}
         />
       </main>

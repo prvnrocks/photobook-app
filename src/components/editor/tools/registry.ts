@@ -42,6 +42,7 @@ import { pageMenuTool } from "./page-menu";
 import { pagesTool } from "./pages";
 import { upgradeTool } from "../UpgradeSheet";
 import { pdfDownloadTool } from "./pdf-download";
+import { redoAiTool, seePhotosTool } from "./ai-path-links";
 
 export type { EditorPanelProps, EditorTool, ToolScope, ToolTier } from "./types";
 
@@ -56,6 +57,8 @@ export const EDITOR_TOOLS: readonly EditorTool[] = [
   pageMenuTool,
   upgradeTool,
   pdfDownloadTool,
+  seePhotosTool,
+  redoAiTool,
   captionEditorTool,
   aiCaptionTool,
   captionStyleTool,

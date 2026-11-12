@@ -543,17 +543,23 @@ export const REVIEW_URL_TTL_SECONDS = 600;
  * Photos for the keep/drop review screen (RLS client). Only small AI fields
  * (quality / scene / coverWorthy) are selected — never the description.
  * Thumb URLs are signed in one createSignedUrls call.
+ * `onlyIds` (build screen draft preview, M13): load + sign just these photos (malformed ids are
+ * skipped; an empty list returns [] without a query).
  */
-export async function listReviewPhotos(bookId: string): Promise<ReviewPhoto[]> {
+export async function listReviewPhotos(bookId: string, onlyIds?: readonly string[]): Promise<ReviewPhoto[]> {
   if (!isUuid(bookId)) return [];
+  const ids = onlyIds ? [...new Set(onlyIds.filter(isUuid))] : null;
+  if (ids && ids.length === 0) return [];
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("photos")
     .select(
       "id, status, drop_reason, user_override, dup_group, width, height, taken_at, thumb_path, quality:ai->quality, scene:ai->>scene, coverWorthy:ai->coverWorthy",
     )
     .eq("book_id", bookId)
-    .eq("upload_state", "ready")
+    .eq("upload_state", "ready");
+  if (ids) query = query.in("id", ids);
+  const { data, error } = await query
     .order("taken_at", { ascending: true, nullsFirst: false })
     .order("id", { ascending: true });
   if (error) throw new PhotosQueryError("list review photos", error.code);

@@ -7,6 +7,7 @@
 import { createContext, useContext } from "react";
 import type { EditorState } from "@/lib/editor/store";
 import type { AiSessionBlock } from "@/lib/editor/caption-tools";
+import type { EditorAiPath } from "@/lib/editor/ai-path";
 import type { EditorShellBook, EditorAiMode } from "@/lib/editor/types";
 import type { SaveState } from "./useAutosave";
 import type { EditorActions } from "./useEditorStore";
@@ -38,6 +39,11 @@ export interface EditorContextValue {
     blocked?: AiSessionBlock | null;
     blockSession?(kind: AiSessionBlock): void;
   };
+  /**
+   * AI entry points for this session (src/lib/editor/ai-path.ts): "Redo with AI" in More. Absent =
+   * none (dev fixture / tests).
+   */
+  aiPath?: EditorAiPath;
   /**
    * Facing-pages editing (≥ md, M10a A9): the carousel shows open spreads and state.page is the
    * page last tapped inside the shown spread. Absent = false (single page).

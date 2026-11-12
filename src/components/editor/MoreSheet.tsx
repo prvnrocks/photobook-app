@@ -8,6 +8,7 @@
 // Each tool keeps its `editor-tool-<id>` testid here, exactly as in the row.
 
 import { X } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useId, useRef, type KeyboardEvent } from "react";
 import { nextRadioIndex, trapFocusIndex } from "@/lib/editor/roving";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,9 @@ import type { EditorContextValue } from "./editor-context";
 import type { EditorTool } from "./tools/types";
 
 export const MORE_SHEET_TITLE = "More tools";
+
+const ITEM =
+  "flex min-h-12 w-full items-center gap-3 rounded-lg px-3 text-start text-base font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40";
 
 export interface MoreSheetProps {
   id: string;
@@ -29,12 +33,12 @@ export interface MoreSheetProps {
 export function MoreSheet({ id, tools, ctx, onClose, onPick }: MoreSheetProps) {
   const titleId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
-  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const itemRefs = useRef<(HTMLButtonElement | HTMLAnchorElement | null)[]>([]);
   const disabled = tools.map((t) => t.isDisabled?.(ctx) ?? false);
 
   // Focus the first usable tool once, on open.
   useEffect(() => {
-    const first = itemRefs.current.find((el) => el && !el.disabled);
+    const first = itemRefs.current.find((el) => el && !(el instanceof HTMLButtonElement && el.disabled));
     (first ?? rootRef.current?.querySelector<HTMLElement>("button"))?.focus();
   }, []);
 
@@ -49,15 +53,15 @@ export function MoreSheet({ id, tools, ctx, onClose, onPick }: MoreSheetProps) {
     if (e.key === "Tab") {
       const root = rootRef.current;
       if (!root) return;
-      const all = Array.from(root.querySelectorAll<HTMLButtonElement>("button:not([disabled])"));
+      const all = Array.from(root.querySelectorAll<HTMLElement>("button:not([disabled]), a[href]"));
       if (all.length === 0) return;
       e.preventDefault();
-      const from = all.indexOf(document.activeElement as HTMLButtonElement);
+      const from = all.indexOf(document.activeElement as HTMLElement);
       all[trapFocusIndex(from, all.length, e.shiftKey)]?.focus();
       return;
     }
     if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Home" || e.key === "End") {
-      const from = itemRefs.current.indexOf(document.activeElement as HTMLButtonElement);
+      const from = itemRefs.current.indexOf(document.activeElement as HTMLButtonElement | HTMLAnchorElement);
       const next = nextRadioIndex(from, disabled, e.key);
       if (next === null) return;
       e.preventDefault();
@@ -109,27 +113,41 @@ export function MoreSheet({ id, tools, ctx, onClose, onPick }: MoreSheetProps) {
           {tools.map((t, i) => {
             const Icon = t.icon;
             const active = ctx.activeTool === t.id;
+            const face = (
+              <>
+                <Icon className="size-5 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 flex-1">{t.label}</span>
+              </>
+            );
+            const setRef = (el: HTMLButtonElement | HTMLAnchorElement | null) => {
+              itemRefs.current[i] = el;
+            };
             return (
               <li key={t.id}>
-                <button
-                  ref={(el) => {
-                    itemRefs.current[i] = el;
-                  }}
-                  type="button"
-                  onClick={() => onPick(t)}
-                  disabled={disabled[i]}
-                  aria-pressed={t.Panel ? active : undefined}
-                  className={cn(
-                    "flex min-h-12 w-full items-center gap-3 rounded-lg px-3 text-start text-base font-medium outline-none",
-                    "focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40",
-                    active ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-muted",
-                  )}
-                  data-active={active ? "true" : undefined}
-                  data-testid={`editor-tool-${t.id}`}
-                >
-                  <Icon className="size-5 shrink-0" aria-hidden="true" />
-                  <span className="min-w-0 flex-1">{t.label}</span>
-                </button>
+                {t.href && !disabled[i] ? (
+                  // Navigation entry (e.g. See all photos → review): a real link.
+                  <Link
+                    ref={setRef}
+                    href={t.href(ctx)}
+                    className={cn(ITEM, "text-foreground hover:bg-muted")}
+                    data-testid={`editor-tool-${t.id}`}
+                  >
+                    {face}
+                  </Link>
+                ) : (
+                  <button
+                    ref={setRef}
+                    type="button"
+                    onClick={() => onPick(t)}
+                    disabled={disabled[i]}
+                    aria-pressed={t.Panel ? active : undefined}
+                    className={cn(ITEM, active ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-muted")}
+                    data-active={active ? "true" : undefined}
+                    data-testid={`editor-tool-${t.id}`}
+                  >
+                    {face}
+                  </button>
+                )}
               </li>
             );
           })}

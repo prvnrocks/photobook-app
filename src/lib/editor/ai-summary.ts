@@ -3,7 +3,7 @@
 // same status the review grid shows); nothing about photo content is used.
 
 export type AiSummary = {
-  /** "AI kept 34 of 40" (AI album) or "Kept 34 of 40" (rule album — no AI claim). */
+  /** "AI kept 34 of 40" (AI album) or "34 of 40 in your book" (rule album — no AI claim; review wording). */
   label: string;
   /** "See 6 left out", or "See all photos" when nothing was left out. */
   linkText: string;
@@ -27,7 +27,7 @@ export function aiSummary(
   const ai = generator === "ai";
   if (!ai && left === 0) return null;
   return {
-    label: ai ? `AI kept ${kept} of ${total}` : `Kept ${kept} of ${total}`,
+    label: ai ? `AI kept ${kept} of ${total}` : `${kept} of ${total} in your book`,
     linkText: left > 0 ? `See ${left} left out` : "See all photos",
     kept,
     total,

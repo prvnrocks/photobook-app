@@ -7,16 +7,26 @@
 // - signed out: /login?next=/books/<id>/edit;
 // - still unsaved (offline) / publish blocked (empty, page limit, expired, invalid) / failed:
 //   stay in the editor and say why.
-// The subtitle shows what the link will be BEFORE the tap: "Free · 30 days", "Permanent link"
-// or "Publish changes" when the live book is behind the saved one.
+// The subtitle shows what the link will be BEFORE the tap, truthfully (D-039): "Free · 30 days"
+// before the first publish, "Free · N days left" once the clock runs, "Link expired" (the tap then
+// opens the share screen with the options, without publishing), "Permanent link", or
+// "Publish changes" when the live book is behind the saved one.
 
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { track } from "@/lib/analytics/client";
-import { FREE_LINK_DAYS } from "@/lib/publish/free-link";
-import { doneStepAfterSave, doneStepAfterShare, shareSubtitle, type DoneStep, type ShareResult } from "@/lib/editor/done";
+import type { FreeLinkState } from "@/lib/publish/free-link";
+import {
+  doneStepAfterSave,
+  doneStepAfterShare,
+  shareDescription,
+  shareStepForLink,
+  shareSubtitle,
+  type DoneStep,
+  type ShareResult,
+} from "@/lib/editor/done";
 import type { SaveState } from "./useAutosave";
 
 export type EditorShareButtonProps = {
@@ -29,6 +39,8 @@ export type EditorShareButtonProps = {
   isPaid: boolean;
   /** Live and the saved doc moved past the snapshot (hasUnpublishedChanges). */
   hasChanges: boolean;
+  /** Unpaid books: where the free link stands (freeLinkState, computed by the page). Absent = never published. */
+  freeLink?: FreeLinkState;
   maxPages?: number;
 };
 
@@ -38,7 +50,7 @@ const ERROR_LINK_MS = 12000;
 
 type ErrorStep = Extract<DoneStep, { kind: "error" }>;
 
-export function EditorShareButton({ bookId, settle, share, fallbackHref, isPaid, hasChanges, maxPages }: EditorShareButtonProps) {
+export function EditorShareButton({ bookId, settle, share, fallbackHref, isPaid, hasChanges, freeLink, maxPages }: EditorShareButtonProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ErrorStep | null>(null);
   const [target, setTarget] = useState<string | null>(null);
@@ -58,7 +70,7 @@ export function EditorShareButton({ bookId, settle, share, fallbackHref, isPaid,
     setError(null);
     let step: DoneStep;
     try {
-      step = doneStepAfterSave(await settle(), bookId);
+      step = shareStepForLink(doneStepAfterSave(await settle(), bookId), { isPaid, hasChanges, link: freeLink }, bookId);
       if (step.kind === "share") {
         if (!share) {
           step = { kind: "navigate", to: fallbackHref };
@@ -84,9 +96,13 @@ export function EditorShareButton({ bookId, settle, share, fallbackHref, isPaid,
     if (step.kind === "error") setError(step);
     running.current = false;
     setBusy(false);
-  }, [settle, share, bookId, fallbackHref, maxPages]);
+  }, [settle, share, bookId, fallbackHref, maxPages, isPaid, hasChanges, freeLink]);
 
-  const subtitle = shareSubtitle({ isPaid, hasChanges });
+  const linkArgs = { isPaid, hasChanges, link: freeLink };
+  const subtitle = shareSubtitle(linkArgs);
+  const linkKind = isPaid ? "paid" : (freeLink?.kind ?? "unpublished");
+  // "Link expired" wins over "Publish changes" (republish is blocked), so key the testid on the text.
+  const showsChanges = hasChanges && linkKind !== "expired";
 
   return (
     <>
@@ -96,10 +112,11 @@ export function EditorShareButton({ bookId, settle, share, fallbackHref, isPaid,
         disabled={busy}
         aria-busy={busy}
         aria-describedby={descId}
-        title="Publishes your book and opens sharing"
+        title={linkKind === "expired" ? "Opens sharing" : "Publishes your book and opens sharing"}
         className="flex h-11 min-w-16 shrink-0 items-center justify-center rounded-lg bg-primary px-3 text-primary-foreground shadow-card outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:opacity-70"
         data-testid="editor-done"
         data-changes={hasChanges ? "true" : "false"}
+        data-link={linkKind}
       >
         <span className="flex flex-col items-start leading-tight">
           <span className="flex items-center gap-1 text-sm font-semibold">
@@ -108,15 +125,14 @@ export function EditorShareButton({ bookId, settle, share, fallbackHref, isPaid,
           </span>
           <span
             className="whitespace-nowrap text-[11px] font-medium text-primary-foreground/80"
-            data-testid={hasChanges ? "editor-publish-changes" : "editor-share-note"}
+            data-testid={showsChanges ? "editor-publish-changes" : "editor-share-note"}
           >
             {subtitle}
           </span>
         </span>
       </button>
       <span id={descId} className="sr-only">
-        Publishes your book so anyone with the link can see it, then opens sharing.
-        {isPaid ? "" : ` Free links last ${FREE_LINK_DAYS} days.`}
+        {shareDescription(linkArgs)}
       </span>
       <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 top-16 z-50 flex justify-center px-4">
         {error ? (

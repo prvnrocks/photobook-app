@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/app/PageHeader";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Uploader } from "@/components/upload/Uploader";
+import { resolveAiMode } from "@/lib/ai/client";
 import { limitsFor } from "@/lib/ai/limits";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { bookDesignOf } from "@/lib/book/book-design";
@@ -114,6 +115,7 @@ export default async function UploadPage({ params }: { params: Promise<{ id: str
           locks={locks}
           firstRun={firstRun}
           dailyCap={limitsFor(book.is_paid).maxLiveBuildsPerUserPerDay}
+          aiOn={resolveAiMode() !== "off"}
         />
       </main>
     </>

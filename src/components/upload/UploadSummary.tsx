@@ -33,14 +33,21 @@ type UploadSummaryProps = {
   finalize: FinalizeResult | null;
   onAddMore: () => void;
   next: SummaryNext;
+  /** resolveAiMode() !== "off" from the page (D-024): false → neutral copy. Default true. */
+  aiOn?: boolean;
 };
+
+/** "Starting your book…" detail line (exported for tests). */
+export function startingCopy(aiOn: boolean): string {
+  return aiOn ? "AI is picking your best photos and writing captions." : "Laying out your book…";
+}
 
 const noSubscribe = () => () => undefined;
 const readIsIos = () =>
   isIosDevice(navigator.userAgent, navigator.platform ?? "", navigator.maxTouchPoints ?? 0);
 const serverIsIos = () => false;
 
-export function UploadSummary({ bookId, summary, finalize, onAddMore, next }: UploadSummaryProps) {
+export function UploadSummary({ bookId, summary, finalize, onAddMore, next, aiOn = true }: UploadSummaryProps) {
   const isIos = useSyncExternalStore(noSubscribe, readIsIos, serverIsIos);
   const showGpsHint = isIos && finalize !== null && finalize.photos > 0 && finalize.withGps === 0;
   const skipped = skippedLines(summary.skippedBy);
@@ -128,7 +135,7 @@ export function UploadSummary({ bookId, summary, finalize, onAddMore, next }: Up
         {next.kind === "starting" ? (
           <LoadingState
             label="Starting your book…"
-            description="AI is picking your best photos and writing captions."
+            description={startingCopy(aiOn)}
             data-testid="upload-auto-starting"
           />
         ) : next.kind === "build" ? (

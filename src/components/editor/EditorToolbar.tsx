@@ -11,6 +11,7 @@
 // and a serif title.
 
 import { Ellipsis, Lightbulb, X } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { coachSeen, EDITOR_COACH_TEXT, markCoachSeen, subscribeCoach } from "@/lib/editor/coach";
 import { EDIT_ERROR_COPY } from "@/lib/editor/store";
@@ -84,6 +85,25 @@ function ToolButtonFace({ tool, active }: { tool: Pick<EditorTool, "icon" | "lab
   );
 }
 
+/** What is selected, as a stable string (same thing → same key even for a new object). Exported for tests. */
+export function selectionKey(selection: EditorContextValue["state"]["selection"]): string {
+  if (selection === null) return "none";
+  switch (selection.kind) {
+    case "slot":
+      return `slot:${selection.pageIdx}:${selection.slotIdx}`;
+    case "caption":
+      return `caption:${selection.pageIdx}`;
+    case "cover":
+      return `cover:${selection.part}`;
+  }
+}
+
+/** True when keyboard focus is inside `el` or nowhere (<body>). */
+function focusIsIn(el: HTMLElement | null): boolean {
+  const active = document.activeElement;
+  return !active || active === document.body || (!!el && el.contains(active));
+}
+
 export function EditorToolbar({ tools }: { tools: EditorTool[] }) {
   const ctx = useEditor();
   const { state, actions, activeTool } = ctx;
@@ -100,14 +120,28 @@ export function EditorToolbar({ tools }: { tools: EditorTool[] }) {
     if (selKind === "slot" || selKind === "cover") markCoachSeen();
   }, [selKind]);
 
-  // A new selection shows a new set of tools: close a stale sheet.
-  useEffect(() => {
-    setMoreOpen(false);
-  }, [state.selection]);
+  // A different selection shows a different set of tools: close a stale sheet — only when what is
+  // selected really changed (not on a new object for the same thing), and keep focus in the toolbar.
+  const selKey = selectionKey(state.selection);
+  const lastSelKey = useRef(selKey);
+  const rowRef = useRef<HTMLDivElement>(null);
+  /** Set when the sheet closes by itself while focus was in it: refocus the toolbar after unmount. */
+  const refocusRef = useRef(false);
   const hasMore = more.length > 0;
   useEffect(() => {
-    if (!hasMore) setMoreOpen(false);
-  }, [hasMore]);
+    const changed = lastSelKey.current !== selKey;
+    lastSelKey.current = selKey;
+    if (!moreOpen || (!changed && hasMore)) return;
+    refocusRef.current = focusIsIn(document.getElementById(moreId));
+    setMoreOpen(false);
+  }, [selKey, hasMore, moreId, moreOpen]);
+  useEffect(() => {
+    if (moreOpen || !refocusRef.current) return;
+    refocusRef.current = false;
+    const el = document.activeElement;
+    if (el && el !== document.body) return;
+    (moreBtnRef.current ?? rowRef.current?.querySelector<HTMLElement>("button:not([disabled]), a[href]"))?.focus();
+  }, [moreOpen]);
 
   // Focus return after a tool opened from More closes (its panel unmounted, focus fell to <body>).
   useEffect(() => {
@@ -165,6 +199,7 @@ export function EditorToolbar({ tools }: { tools: EditorTool[] }) {
       <EditorCoachLine show={coachApplies(ctx, tools.length)} />
       <div className="relative mx-auto max-w-3xl">
         <div
+          ref={rowRef}
           role="group"
           aria-label="Editing tools"
           className="flex min-h-16 items-stretch justify-center gap-1 px-2 py-1"
@@ -180,6 +215,18 @@ export function EditorToolbar({ tools }: { tools: EditorTool[] }) {
               {primary.map((t) => {
                 const disabled = t.isDisabled?.(ctx) ?? false;
                 const active = activeTool === t.id;
+                if (t.href && !disabled) {
+                  return (
+                    <Link
+                      key={t.id}
+                      href={t.href(ctx)}
+                      className={cn(TOOL_BUTTON, "text-foreground hover:bg-muted")}
+                      data-testid={`editor-tool-${t.id}`}
+                    >
+                      <ToolButtonFace tool={t} active={false} />
+                    </Link>
+                  );
+                }
                 return (
                   <button
                     key={t.id}

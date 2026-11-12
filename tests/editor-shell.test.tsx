@@ -153,9 +153,10 @@ describe("editor page data", () => {
 
   it("maps loader data to serializable shell props (null for no doc)", () => {
     const fx = devEditorData("ok");
-    const data: EditorData = { ...fx, docError: null, activeBuildRunId: null };
+    const data: EditorData = { ...fx, docError: null, activeBuildRunId: null, expiresAt: null, hasBuildRun: true };
     const out = toEditorShellData(data);
-    expect(out).toEqual(fx);
+    // + the free-link state (never published) and the AI entry points (M13 review fixes).
+    expect(out).toEqual({ ...fx, freeLink: { kind: "unpublished" }, aiPath: out!.aiPath });
     expect(JSON.parse(JSON.stringify(out))).toEqual(out);
     expect(toEditorShellData({ ...data, doc: null, docError: "invalid" })).toBeNull();
   });

@@ -43,7 +43,15 @@ export type BuildProgressProps = {
   auto?: boolean;
   /** Read-only draft book (server-rendered <BuildDraftPreview>), shown while the run works. */
   preview?: ReactNode;
+  /** resolveAiMode() !== "off" from the page (D-024): false → neutral copy, no AI claims. Default true. */
+  aiOn?: boolean;
 };
+
+/** The line under the draft preview (exported for tests). */
+export function buildNoteCopy(leaving: boolean, aiOn: boolean): string {
+  if (leaving) return "Opening your book…";
+  return aiOn ? "AI is choosing your best photos and writing captions…" : "Laying out your book…";
+}
 
 type StopError =
   | "signed_out" // 401
@@ -89,7 +97,7 @@ const STEP_STATE_SR: Record<ChecklistStepState, string> = {
   todo: "not started",
 };
 
-export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap, auto = false, preview }: BuildProgressProps) {
+export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap, auto = false, preview, aiOn = true }: BuildProgressProps) {
   const router = useRouter();
   const editorHref = `/books/${bookId}/edit`;
   const loginHref = `/login?next=${encodeURIComponent(`/books/${bookId}/build`)}`;
@@ -385,7 +393,7 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap, 
         <div className="flex min-w-0 flex-col gap-2">
           {preview}
           <p className="type-small text-muted-foreground" data-testid="build-ai-note">
-            {leaving ? "Opening your book…" : "AI is choosing your best photos and writing captions…"}
+            {buildNoteCopy(leaving, aiOn)}
           </p>
         </div>
       ) : null}

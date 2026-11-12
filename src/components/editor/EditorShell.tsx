@@ -3,7 +3,8 @@
 // Editor shell (M5 Task 8): full-height, mobile-first layout
 //   header (back · title + save status · undo/redo)
 //   save banner (read-only / conflict / rejected / signed out)
-//   "AI kept X of Y · See left out" chip → review screen (M13 T7, D-070 (3))
+//   "AI kept X of Y · See left out" chip → review screen (M13 T7, D-070 (3)), or — for a rule
+//   album that never got an AI build — the persistent "Make it with AI" chip (src/lib/editor/ai-path.ts)
 //   [desktop: page strip] · page carousel · [desktop: tool panel]
 //   toolbar (registered tools for the current selection) — mobile: bottom sheet for panels
 // State: useEditorStore (doc + undo/redo + position + selection); autosave: useAutosave;
@@ -12,6 +13,7 @@
 import { ArrowLeft, Redo2, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { sessionAiPath } from "@/lib/editor/ai-path";
 import type { AiSummary } from "@/lib/editor/ai-summary";
 import type { AiSessionBlock } from "@/lib/editor/caption-tools";
 import { stepSpread } from "@/lib/editor/spreads";
@@ -23,6 +25,7 @@ import { hasUnpublishedChanges } from "@/lib/publish/ui";
 import { AiSummaryChip } from "./AiSummaryChip";
 import { EditorContext, type EditorContextValue } from "./editor-context";
 import { EditorShareButton } from "./EditorShareButton";
+import { MakeWithAiChip } from "./MakeWithAiChip";
 import { EditorToastHost } from "./EditorToast";
 import { EditorPanelHost, EditorToolbar } from "./EditorToolbar";
 import { PageCarousel, SpreadCarouselPlaceholder } from "./PageCarousel";
@@ -94,6 +97,12 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
   const openTool = useCallback((id: string) => setActiveTool(id), []);
   const closeTool = useCallback(() => setActiveTool(null), []);
   const setRewrites = useCallback((used: number, left: number) => setRewritesState({ used, left }), []);
+  // Any edit will be saved as a user edit, after which AI runs are refused (D-037 #2).
+  const editedThisSession = canUndo(state);
+  const aiPath = useMemo(
+    () => sessionAiPath(data.aiPath, { edited: editedThisSession, readOnly: state.readOnly }),
+    [data.aiPath, editedThisSession, state.readOnly],
+  );
 
   const ctx = useMemo<EditorContextValue>(
     () => ({
@@ -112,12 +121,13 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
         blocked: aiBlocked,
         blockSession: setAiBlocked,
       },
+      aiPath,
       spread,
       activeTool,
       openTool,
       closeTool,
     }),
-    [data.book, paymentsEnabled, data.aiMode, state, actions, photos, autosave.status, autosave.flush, autosave.settle, rewrites, setRewrites, aiBlocked, spread, activeTool, openTool, closeTool],
+    [data.book, paymentsEnabled, data.aiMode, state, actions, photos, autosave.status, autosave.flush, autosave.settle, rewrites, setRewrites, aiBlocked, aiPath, spread, activeTool, openTool, closeTool],
   );
 
   const registry = toolsProp ?? EDITOR_TOOLS;
@@ -221,12 +231,19 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
             fallbackHref={backHref}
             isPaid={data.book.isPaid}
             hasChanges={unpublished}
+            freeLink={data.freeLink}
             maxPages={data.book.maxPages}
           />
         </header>
 
         <SaveBanner status={autosave.status} bookId={data.book.id} />
-        <AiSummaryChip bookId={data.book.id} summary={aiSummary} readOnly={state.readOnly} />
+        {aiPath.makeWithAi ? (
+          // Not dismissible: the only way into the AI for this book. Photos stay one tap away in
+          // More → "See all photos".
+          <MakeWithAiChip bookId={data.book.id} />
+        ) : (
+          <AiSummaryChip bookId={data.book.id} summary={aiSummary} readOnly={state.readOnly} />
+        )}
 
         {/* Column on mobile so a docked panel (on-page text editing) sits under the page. */}
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">

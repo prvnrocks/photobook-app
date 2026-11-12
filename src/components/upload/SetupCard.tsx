@@ -1,7 +1,7 @@
 "use client";
 // Upload-screen setup card (M13 T6, D-070): the one optional question while photos upload —
 // "What's this book for?" (6 occasion chips, default Other) — plus a "Change" disclosure with feel,
-// caption language, title (blank = AI suggests), page shape (suggested from the photos) and style
+// caption language, title (blank = AI suggests, or "Your book" when AI is off), page shape (suggested from the photos) and style
 // (follows the occasion until picked). Changes save by themselves (use-book-setup); once the AI
 // build starts, or the album was edited, the locked controls say why.
 import { ChevronDown } from "lucide-react";
@@ -45,9 +45,19 @@ export type SetupCardProps = {
   controller: BookSetupController;
   /** Shape suggested from the picked photos at start (photos-first hand-off), if known. */
   suggestedFormat?: BookFormat;
+  /** resolveAiMode() !== "off" (D-024): false → no "we'll suggest one" promise. Default true. */
+  aiOn?: boolean;
 };
 
-export function SetupCard({ controller: c, suggestedFormat }: SetupCardProps) {
+/** Title copy: AI suggests a title only when AI is on (exported for tests). */
+export function titleCopy(aiOn: boolean): { summary: string; hint: string } {
+  return aiOn
+    ? { summary: "Title: we'll suggest one", hint: "Leave empty and we'll suggest one" }
+    : { summary: "Title: Your book", hint: "Leave empty for \u201cYour book\u201d" };
+}
+
+export function SetupCard({ controller: c, suggestedFormat, aiOn = true }: SetupCardProps) {
+  const titleText = titleCopy(aiOn);
   const uid = useId();
   const [open, setOpen] = useState(false);
   const { setup, locks, status, frozen } = c;
@@ -104,7 +114,7 @@ export function SetupCard({ controller: c, suggestedFormat }: SetupCardProps) {
           {setupSummary(setup)}
           <span className="sr-only">. </span>
           <span className="block" dir="auto">
-            {setup.title ? <>Title: {setup.title}</> : "Title: we'll suggest one"}
+            {setup.title ? <>Title: {setup.title}</> : titleText.summary}
           </span>
         </p>
         <button
@@ -190,7 +200,7 @@ export function SetupCard({ controller: c, suggestedFormat }: SetupCardProps) {
             data-testid="setup-title"
           />
           <div className="flex items-start justify-between gap-3 text-sm text-muted-foreground">
-            <p id={ids.titleHint}>Leave empty and we&apos;ll suggest one</p>
+            <p id={ids.titleHint}>{titleText.hint}</p>
             {titleLen > COUNTER_FROM ? (
               <p
                 id={ids.titleCount}
