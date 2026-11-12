@@ -9,8 +9,7 @@
 
 import { Check, ExternalLink, FileText, Info, Loader2, Send, TriangleAlert, X } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useId, useState, useTransition, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import type {
   PublishBookResult,
   PublishState,
@@ -19,6 +18,7 @@ import type {
 } from "@/app/books/[id]/publish/actions";
 import { BTN } from "@/components/app/button-classes";
 import { Notice } from "@/components/app/Notice";
+import { useRefreshTransition } from "@/components/app/use-refresh-transition";
 import { UpgradeButtonView } from "@/components/upgrade/UpgradeButton";
 import { track } from "@/lib/analytics/client";
 import { deletesOnLabel, expiredBookDeleteDate } from "@/lib/dashboard/deletion-chip";
@@ -67,9 +67,8 @@ const OUTLINE = BTN.touchOutlineCard;
 const SPIN = "size-4 animate-spin motion-reduce:animate-none";
 
 export function PublishPanel(props: PublishPanelProps) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const refresh = useCallback(() => startTransition(() => router.refresh()), [router]);
+  // Not startTransition(router.refresh): that can stay pending forever under publish/loading.tsx.
+  const [pending, refresh] = useRefreshTransition();
   return <PublishPanelView {...props} refresh={refresh} refreshing={pending} />;
 }
 

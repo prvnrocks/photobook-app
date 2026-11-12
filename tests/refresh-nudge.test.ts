@@ -104,3 +104,51 @@ describe("review refreshes go through useRefreshTransition", () => {
     expect(fs.existsSync(path.join(ROOT, "src/app/books/[id]/review/loading.tsx"))).toBe(true);
   });
 });
+
+// Follow-up: every refresh in src/components goes through useRefreshTransition, not just review.
+describe("no raw router.refresh() in src/components", () => {
+  const COMPONENTS = path.join(ROOT, "src/components");
+  const HOOK = "src/components/app/use-refresh-transition.ts";
+  // Documented exceptions: only on /b/[slug], which has no loading.tsx (so the ping is never lost),
+  // and their refresh is part of a bigger flow (password action / one-shot image re-sign).
+  const EXCEPTIONS: Record<string, string> = {
+    "src/components/viewer/public/PasswordGate.tsx": "/b/[slug] has no loading.tsx",
+    "src/components/viewer/public/PublicViewer.tsx": "/b/[slug] has no loading.tsx",
+  };
+  const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  const files = (fs.readdirSync(COMPONENTS, { recursive: true }) as string[])
+    .filter((f) => /\.(ts|tsx)$/.test(f))
+    .map((f) => path.relative(ROOT, path.join(COMPONENTS, f)).split(path.sep).join("/"))
+    .sort();
+  const callers = files.filter((f) => f !== HOOK && /router\.refresh\(/.test(strip(read(f))));
+
+  it("finds the component tree (guard is not vacuous)", () => {
+    expect(files.length).toBeGreaterThan(50);
+    expect(files).toContain(HOOK);
+  });
+
+  it("only the documented exceptions call router.refresh() directly", () => {
+    expect(callers).toEqual(Object.keys(EXCEPTIONS).sort());
+  });
+
+  it("the exceptions' routes still have no loading.tsx (else they must switch to the hook)", () => {
+    const bRoute = path.join(ROOT, "src/app/b/[slug]");
+    expect(fs.existsSync(bRoute)).toBe(true);
+    const loadings = (fs.readdirSync(bRoute, { recursive: true }) as string[]).filter((f) => path.basename(f) === "loading.tsx");
+    expect(loadings).toEqual([]);
+    expect(fs.existsSync(path.join(ROOT, "src/app/b/loading.tsx"))).toBe(false);
+  });
+
+  it.each([
+    "publish/PublishPanel.tsx",
+    "publish/PdfDownload.tsx",
+    "upgrade/UpgradeButton.tsx",
+    "upgrade/UpgradeStatusPoller.tsx",
+    "settings/SettingsClearButton.tsx",
+    "dashboard/BookCardMenu.tsx",
+  ])("%s refreshes via useRefreshTransition()", (file) => {
+    const code = strip(read(`src/components/${file}`));
+    expect(code).toContain("useRefreshTransition()");
+    expect(code).not.toMatch(/useRouter\(/);
+  });
+});

@@ -2,14 +2,15 @@
 
 // Dashboard book card "⋯" menu → "Delete book" → destructive confirm dialog (M9 T10, D-060).
 // The server action is passed in as a prop (dashboard page → BookList → here), so this module never
-// imports server code. <BookCardMenu> wires router.refresh; <BookCardMenuView> takes `refresh` so it
+// imports server code. <BookCardMenu> wires useRefreshTransition (a bare router.refresh can hang
+// under dashboard/loading.tsx); <BookCardMenuView> takes `refresh` so it
 // renders without an app router (unit tests).
 
 import { AlertDialog } from "@base-ui/react/alert-dialog";
 import { Menu } from "@base-ui/react/menu";
 import { Loader2, MoreVertical, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
+import { useRefreshTransition } from "@/components/app/use-refresh-transition";
 import { Button } from "@/components/ui/button";
 import {
   DELETE_BOOK_COPY,
@@ -26,8 +27,8 @@ type Props = {
 };
 
 export function BookCardMenu(props: Props) {
-  const router = useRouter();
-  return <BookCardMenuView {...props} refresh={() => router.refresh()} />;
+  const [, refresh] = useRefreshTransition();
+  return <BookCardMenuView {...props} refresh={refresh} />;
 }
 
 export function BookCardMenuView({

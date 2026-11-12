@@ -11,10 +11,10 @@
 
 import { Circle, CircleCheck, CircleDot, Download, FileDown, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { BTN } from "@/components/app/button-classes";
 import { Notice } from "@/components/app/Notice";
+import { useRefreshTransition } from "@/components/app/use-refresh-transition";
 import { UpgradeButtonView } from "@/components/upgrade/UpgradeButton";
 import { track } from "@/lib/analytics/client";
 import {
@@ -49,8 +49,9 @@ const PRIMARY = BTN.ctaPrimaryWrap;
 const OUTLINE = BTN.ctaOutlineCard;
 
 export function PdfDownload(props: PdfDownloadProps) {
-  const router = useRouter();
-  return <PdfDownloadView {...props} refresh={() => router.refresh()} />;
+  // Not a bare router.refresh(): it can stay pending forever under edit/loading.tsx.
+  const [, refresh] = useRefreshTransition();
+  return <PdfDownloadView {...props} refresh={refresh} />;
 }
 
 export function PdfDownloadView({

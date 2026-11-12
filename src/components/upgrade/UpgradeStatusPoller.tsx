@@ -11,10 +11,10 @@
 
 import { AlertCircle, BookX, Check, CheckCircle2, Clock, ExternalLink, Loader2, LogIn, RotateCw, type LucideIcon } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { BTN } from "@/components/app/button-classes";
 import { EmptyState } from "@/components/app/EmptyState";
+import { useRefreshTransition } from "@/components/app/use-refresh-transition";
 import { LIMITS } from "@/lib/ai/limits";
 import { createUpgradePoller, type UpgradePollPhase } from "@/lib/upgrade/poller";
 import type { UpgradeStatusResult } from "@/lib/upgrade/types";
@@ -35,8 +35,8 @@ const PRIMARY = BTN.ctaPrimary;
 const OUTLINE = BTN.ctaOutlineCard;
 
 export function UpgradeStatusPoller(props: UpgradeStatusPollerProps) {
-  const router = useRouter();
-  const refresh = useCallback(() => router.refresh(), [router]);
+  // Stable refresh that always settles (a bare router.refresh() can hang under a loading.tsx).
+  const [, refresh] = useRefreshTransition();
   return <UpgradeStatusFlow {...props} refresh={refresh} />;
 }
 

@@ -2,17 +2,18 @@
 
 // "Clear what the AI learned" with an inline confirm step (D-032). Rendered at a stable position
 // in /settings so its "done" state survives the router.refresh() that swaps in the empty state.
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { clearMemoryAction } from "@/app/settings/actions";
 import { Notice } from "@/components/app/Notice";
+import { useRefreshTransition } from "@/components/app/use-refresh-transition";
 import { Button } from "@/components/ui/button";
 import { clearOutcome, SETTINGS_COPY } from "@/lib/settings/ui";
 
 type Phase = "idle" | "confirm" | "done";
 
 export function SettingsClearButton({ hasMemory }: { hasMemory: boolean }) {
-  const router = useRouter();
+  // Not router.refresh(): inside a transition it can stay pending forever under settings/loading.tsx.
+  const [, refresh] = useRefreshTransition();
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -47,7 +48,7 @@ export function SettingsClearButton({ hasMemory }: { hasMemory: boolean }) {
       }
       if (outcome.kind === "done") {
         setPhase("done");
-        router.refresh();
+        refresh();
       } else {
         setError(outcome.message);
       }

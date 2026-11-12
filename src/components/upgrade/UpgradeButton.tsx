@@ -12,11 +12,11 @@
 
 import { Gem, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { startUpgradeCheckout } from "@/app/books/[id]/upgrade/actions";
 import { BTN } from "@/components/app/button-classes";
 import { Notice } from "@/components/app/Notice";
+import { useRefreshTransition } from "@/components/app/use-refresh-transition";
 import { track } from "@/lib/analytics/client";
 import type { StartUpgradeCheckoutResult, StartUpgradeErrorCode } from "@/lib/upgrade/types";
 import { PAYMENTS_UNAVAILABLE_HINT, runUpgradeCheckout, UPGRADE_BUTTON_LABEL } from "@/lib/upgrade/ui";
@@ -46,8 +46,9 @@ const VARIANTS: Record<NonNullable<UpgradeButtonProps["variant"]>, string> = {
 };
 
 export function UpgradeButton(props: UpgradeButtonProps) {
-  const router = useRouter();
-  return <UpgradeButtonView {...props} refresh={() => router.refresh()} />;
+  // Not a bare router.refresh(): it can stay pending forever under a route loading.tsx (editor).
+  const [, refresh] = useRefreshTransition();
+  return <UpgradeButtonView {...props} refresh={refresh} />;
 }
 
 type Message = { code: StartUpgradeErrorCode; text: string };
