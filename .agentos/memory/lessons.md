@@ -129,3 +129,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-12, reliability) An idempotent write is useless if a route pre-check rejects the replay first — grep pre-checks. auth-js refresh retries ~30 s: per-request deadlines need a total cap + gate in middleware.
 - (2026-11-12, reliability) When a server adds a new 503 body, every client classifier of that route must separate temporary (unavailable) from permanent (saving_unavailable/ai_unavailable).
 - (2026-11-12, test) In zsh, env $VARS cmd doesn't split $VARS — start servers from a bash script with explicit exports; verify payments on (unsigned webhook → 400 not 503).
+- (2026-11-12, next) router.refresh() in a transition on a route with loading.tsx can hang forever (vendored React drops a ping inside the visible loading boundary) — use useRefreshTransition; debug via root pending/suspended/pinged lanes.
