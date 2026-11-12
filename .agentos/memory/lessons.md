@@ -130,3 +130,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-12, reliability) When a server adds a new 503 body, every client classifier of that route must separate temporary (unavailable) from permanent (saving_unavailable/ai_unavailable).
 - (2026-11-12, test) In zsh, env $VARS cmd doesn't split $VARS — start servers from a bash script with explicit exports; verify payments on (unsigned webhook → 400 not 503).
 - (2026-11-12, next) router.refresh() in a transition on a route with loading.tsx can hang forever (vendored React drops a ping inside the visible loading boundary) — use useRefreshTransition; debug via root pending/suspended/pinged lanes.
+- (2026-11-12, test) When one component hits a framework hang, guard the whole components tree with an explicit exception list.

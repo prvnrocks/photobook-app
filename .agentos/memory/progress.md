@@ -173,3 +173,6 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 
 ## 2026-11-12 — Milestone 12 — deployed
 - main → f6a7bc9; Vercel success; signed-out smoke OK. 27 orphan test agent_runs deleted with user OK. NEXT: AI-off Rebuild album hang fix (branch fix-ai-off-rebuild).
+
+## 2026-11-12 — Refresh-hang fix — deployed
+- React canary drops a ping when router.refresh streams into a visible loading.tsx boundary → transitions never commit (AI-off Rebuild stuck, silent hangs elsewhere). useRefreshTransition everywhere; guard test. 54 orphan test runs deleted with user OK.
