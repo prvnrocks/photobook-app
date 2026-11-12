@@ -205,6 +205,17 @@ Plan: `.agentos/runs/m12.md`, D-069.
 **Done when:** no server route or upload can hang past its time limit; a hung or slow Supabase response shows a retry (never the login page) and the flow recovers on its own; autosave never reports a false conflict after a timeout; goldens unchanged; lint, typecheck, tests and live specs pass.
 > M12 (2026-11-12): built, reviewed (fixes applied: autosave 503 retry, cookie carry, caption serverBusy, getCurrentUser cap), gate PASS on 7862a6f: 6897 vitest, goldens unchanged, e2e/m12-reliability 5/5 live, regressions green (upload-auth Mapbox only; ai-auth e AI-off rebuild refresh hang is pre-existing on main). No migration. Deployed 2026-11-12 (main f6a7bc9).
 
+## Milestone 13 — Easiest flow (photos to shared book in 3 taps)
+Plan: `.agentos/runs/m13.md`, D-070.
+- [ ] Photos first: "Make your book" / "New book" opens the photo picker; the draft book is created with smart defaults
+- [ ] One setup card while uploading (occasion chips; feel, language, shape and style under "Change", prefilled from occasion, device and photos)
+- [ ] AI build starts by itself after the first upload; the build screen shows the draft book while AI polishes
+- [ ] Build goes straight to the editor; "AI kept X of Y" chip opens the left-out photos
+- [ ] Simple editor: at most 3 big tools per selection plus "More"; plain words instead of jargon
+- [ ] "Share" = publish + share screen (WhatsApp first, upgrade and PDF on the same screen); 3-step progress bar
+- [ ] e2e/m13-first-run.spec.ts + usability sign-off (screenshots in docs/design/m13-after-*)
+**Done when:** at 375 px a first-time user (40 photos, AI replay) needs at most 3 app taps after choosing photos to reach the WhatsApp share, the first preview shows in under 60 s, all analytics events fire, all specs and goldens are green, the user signs off the walkthrough, and the reviewer approves.
+
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
 - [ ] AI "story mode": a short paragraph per chapter (AI-picked backgrounds moved into M10c)
