@@ -284,6 +284,91 @@ export async function createBook(input: CreateBookInput): Promise<{ id: string }
   return { id: data.id };
 }
 
+// ---------------------------------------------------------------------------
+// Book setup after a photos-first start (M13 T2, D-070). books.format / design_style are
+// insert-only for users (1900 column guard) and books.doc / page_count are server-only (0900), so
+// the setup write uses the admin client. Callers MUST have loaded the book with getMyBook (RLS =
+// ownership) and re-checked the setup guard (src/lib/book/setup.ts) first; the write is still
+// filtered by the owner and locked on updated_at.
+
+/**
+ * True when the book has ANY agent_runs row (build, rebuild or rewrite; any state) — D-070's
+ * "an AI build has started". Admin read filtered by book_id (rows whose user_id was nulled by an
+ * account deletion still count). Throws BooksQueryError on a DB error (callers fail closed).
+ */
+export async function bookHasAnyRun(bookId: string): Promise<boolean> {
+  if (!isUuid(bookId)) throw new BooksQueryError("check book runs", "invalid_id");
+  const { count, error } = await createAdminClient()
+    .from("agent_runs")
+    .select("id", { count: "exact", head: true })
+    .eq("book_id", bookId);
+  if (error) throw new BooksQueryError("check book runs", error.code);
+  return (count ?? 0) > 0;
+}
+
+export type BookSetupColumns = {
+  occasion?: Occasion;
+  tone?: Tone;
+  caption_lang?: CaptionLang;
+  title?: string | null;
+  format?: BookFormat;
+  design_style?: DesignStyle;
+};
+
+export type WriteBookSetupResult = { ok: true } | { ok: false; reason: "conflict" | "not_found" };
+
+/**
+ * One UPDATE of the setup columns (+ the re-laid-out draft doc / page_count when given)
+ * WHERE id AND user_id = ownerId AND updated_at = expectedUpdatedAt (optimistic lock: the
+ * books_set_updated_at trigger bumps it on every write, so a doc written meanwhile — finalize's
+ * draft, an AI run, an editor save — makes it match 0 rows). 0 rows → a follow-up owner read
+ * tells `conflict` from `not_found`. Enum values are re-checked (typed error beats a 23514).
+ */
+export async function writeBookSetup(
+  bookId: string,
+  ownerId: string,
+  columns: BookSetupColumns,
+  expectedUpdatedAt: string,
+  draft?: { doc: Json; pageCount: number },
+): Promise<WriteBookSetupResult> {
+  if (!isUuid(bookId) || !isUuid(ownerId)) return { ok: false, reason: "not_found" };
+  if (columns.format !== undefined && !BookFormatSchema.safeParse(columns.format).success) {
+    throw new BooksQueryError("save book setup", "invalid_format");
+  }
+  if (columns.design_style !== undefined && !DesignStyleSchema.safeParse(columns.design_style).success) {
+    throw new BooksQueryError("save book setup", "invalid_design_style");
+  }
+  if (draft && (!Number.isSafeInteger(draft.pageCount) || draft.pageCount < 0)) {
+    throw new BooksQueryError("save book setup", "invalid_page_count");
+  }
+  const patch: BookSetupColumns & { doc?: Json; page_count?: number } = { ...columns };
+  if (draft) {
+    patch.doc = draft.doc;
+    patch.page_count = draft.pageCount;
+  }
+  if (Object.keys(patch).length === 0) return { ok: true };
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("books")
+    .update(patch)
+    .eq("id", bookId)
+    .eq("user_id", ownerId)
+    .eq("updated_at", expectedUpdatedAt)
+    .select("id");
+  if (error) throw new BooksQueryError("save book setup", error.code);
+  if (data.length === 1) return { ok: true };
+
+  const { data: existing, error: readError } = await admin
+    .from("books")
+    .select("id")
+    .eq("id", bookId)
+    .eq("user_id", ownerId)
+    .maybeSingle();
+  if (readError) throw new BooksQueryError("save book setup", readError.code);
+  return { ok: false, reason: existing ? "conflict" : "not_found" };
+}
+
 const MY_BOOK_COLUMNS = "id, title, occasion, tone, caption_lang, is_paid, max_pages, page_count, doc, updated_at";
 
 /**
