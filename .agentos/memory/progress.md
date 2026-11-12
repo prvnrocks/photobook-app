@@ -163,3 +163,10 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - Editor: visible-shape tap/drop, shape outlines, masked crop, shaped layout diagrams, new drag-to-swap photos (all styles).
 - Gate PASS (see runs/m10.md); chapter labels stay on every page (opener-only rule reverted — empty bands). ai-auth "stalls" were host idle sleep on battery.
 - NEXT: user phone check (G2): geometric/scrapbook book editor ↔ flipbook ↔ PDF, touch drag-swap, low-end Android flips. Backlog: Supabase fetch deadline (Bug 2), Mapbox, cron env, domain.
+
+## 2026-11-12 — Milestone 12 (Reliability) — built + approved, awaiting deploy
+- Deadline fetch on every Supabase client (per-class budgets, synthetic 504 SUPABASE_TIMEOUT, single retry for reads, postgrest retry off); timeouts → 503 "try again" in routes/actions/middleware (never a login redirect; refreshed cookies kept); getCurrentUser 10 s cap + auth gate.
+- Safe replays: editor save replay accepted (canonical JSON), webhook/export/finalize idempotent; AI tick fails fast on DB timeout (no crash), lease margin 30 s.
+- Client recovery: finalize deadline + 503 back-off, transient 503 in build, photo-link retry, autosave retries 503 unavailable ("Saving delayed – retrying").
+- Small fixes: sliced-cover "Add photo", picker memo, PDF ref walk iterative.
+- Gate PASS (e2e/m12-reliability 5/5). Open: AI-off "Rebuild album" refresh hang (pre-existing, AI_MODE=off only); 27 orphan test agent_runs (needs user OK to delete).

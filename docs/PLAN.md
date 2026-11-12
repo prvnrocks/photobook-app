@@ -197,12 +197,13 @@ App screens take on the book look (Classic serif / Modern clean); app chrome onl
 
 ## Milestone 12 — Reliability (before launch)
 Plan: `.agentos/runs/m12.md`, D-069.
-- [ ] Time limits on every Supabase call (server + browser): reads, RPCs, signed URLs, uploads and downloads each get their own budget; a timeout becomes a typed `SUPABASE_TIMEOUT` → 503 "try again" (never a sign-out or login redirect)
-- [ ] Safe retries after a timeout: editor save replay is not a false "changed in another tab"; finalize, AI tick, PDF export and Stripe webhook stay idempotent; AI lease margin covers database budgets
-- [ ] Upload + build screens recover by themselves: finalize request deadline + 503 back-off; a stalled photo upload is retried
-- [ ] Small fixes: "Add photo" on an empty split-strip cover in the editor; layout picker no longer re-plans every layout on each render; PDF reference walk without a depth limit
-- [ ] e2e/m12-reliability.spec.ts (stalled upload recovers at 375 px) + all live specs green
+- [x] Time limits on every Supabase call (server + browser): reads, RPCs, signed URLs, uploads and downloads each get their own budget; a timeout becomes a typed `SUPABASE_TIMEOUT` → 503 "try again" (never a sign-out or login redirect)
+- [x] Safe retries after a timeout: editor save replay is not a false "changed in another tab"; finalize, AI tick, PDF export and Stripe webhook stay idempotent; AI lease margin covers database budgets
+- [x] Upload + build screens recover by themselves: finalize request deadline + 503 back-off; a stalled photo upload is retried
+- [x] Small fixes: "Add photo" on an empty split-strip cover in the editor; layout picker no longer re-plans every layout on each render; PDF reference walk without a depth limit
+- [x] e2e/m12-reliability.spec.ts (stalled upload recovers at 375 px) + all live specs green
 **Done when:** no server route or upload can hang past its time limit; a hung or slow Supabase response shows a retry (never the login page) and the flow recovers on its own; autosave never reports a false conflict after a timeout; goldens unchanged; lint, typecheck, tests and live specs pass.
+> M12 (2026-11-12): built, reviewed (fixes applied: autosave 503 retry, cookie carry, caption serverBusy, getCurrentUser cap), gate PASS on 7862a6f: 6897 vitest, goldens unchanged, e2e/m12-reliability 5/5 live, regressions green (upload-auth Mapbox only; ai-auth e AI-off rebuild refresh hang is pre-existing on main). No migration. NOT deployed.
 
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)

@@ -128,3 +128,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-12, supabase) postgrest-js retries GET/HEAD 3× on 503/520/network by default — a custom fetch with its own retry needs db:{retry:false}; storage-js wraps Blob uploads in FormData (size from entries).
 - (2026-11-12, reliability) An idempotent write is useless if a route pre-check rejects the replay first — grep pre-checks. auth-js refresh retries ~30 s: per-request deadlines need a total cap + gate in middleware.
 - (2026-11-12, reliability) When a server adds a new 503 body, every client classifier of that route must separate temporary (unavailable) from permanent (saving_unavailable/ai_unavailable).
+- (2026-11-12, test) In zsh, env $VARS cmd doesn't split $VARS — start servers from a bash script with explicit exports; verify payments on (unsigned webhook → 400 not 503).
