@@ -4,11 +4,12 @@
 
 import type { BookDoc } from "@/lib/book/types";
 import { canUseKeepalive, classifySaveResponse, type SaveOutcome } from "./autosave";
-import type { FreshPhotoUrls } from "./photo-urls";
+import { DEFAULT_RETRY_LATER_MS, type FreshPhotoUrls, type PhotoUrlsResult } from "./photo-urls";
 
 export interface EditorTransport {
   save(doc: BookDoc, baseRev: number, opts: { keepalive: boolean }): Promise<SaveOutcome>;
-  photoUrls(ids: string[]): Promise<FreshPhotoUrls[] | null>;
+  /** null = failed; { retryAfterMs } = 503, ask again later (old URLs stay). */
+  photoUrls(ids: string[]): Promise<PhotoUrlsResult>;
 }
 
 async function readJson(res: Response): Promise<unknown> {
@@ -17,6 +18,12 @@ async function readJson(res: Response): Promise<unknown> {
   } catch {
     return null;
   }
+}
+
+/** Retry-After delta seconds → ms; missing / unparsable → DEFAULT_RETRY_LATER_MS. */
+function retryAfterMs(header: string | null): number {
+  const raw = header?.trim();
+  return raw && /^\d+(\.\d+)?$/.test(raw) ? Math.ceil(Number(raw) * 1000) : DEFAULT_RETRY_LATER_MS;
 }
 
 export function httpEditorTransport(bookId: string): EditorTransport {
@@ -48,6 +55,7 @@ export function httpEditorTransport(bookId: string): EditorTransport {
           credentials: "same-origin",
           cache: "no-store",
         });
+        if (res.status === 503) return { retryAfterMs: retryAfterMs(res.headers.get("retry-after")) };
         if (!res.ok) return null;
         const json = (await readJson(res)) as { photos?: unknown } | null;
         if (!json || !Array.isArray(json.photos)) return null;

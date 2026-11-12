@@ -655,6 +655,37 @@ describe("photos: curation", () => {
     expect([...map.keys()]).toEqual([ok]);
     expect(photos.THUMB_MAX_BYTES).toBe(1024 * 1024);
   });
+
+  it("M12: a download timeout (StorageApiError SUPABASE_TIMEOUT) throws SupabaseUnavailableError and stops", async () => {
+    const { SupabaseUnavailableError, isSupabaseTimeout } = await import("@/lib/supabase/deadline");
+    const paths = Array.from({ length: 20 }, (_, i) => `u/b/p${i}/thumb.jpg`);
+    fake.state.downloadResults.set(paths[0], {
+      data: null,
+      error: { statusCode: "SUPABASE_TIMEOUT", message: "timeout" },
+    });
+    const err = await photos.loadThumbBase64(paths).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(SupabaseUnavailableError);
+    expect(isSupabaseTimeout(err)).toBe(true);
+    expect(String((err as Error).message)).not.toContain("u/b/");
+    // Workers stop picking up new paths once one timed out (≤ one round of in-flight downloads).
+    expect(fake.state.downloads.length).toBeLessThan(paths.length);
+  });
+
+  it("M12: a stalled body (SupabaseUnavailableError while reading) is rethrown as is", async () => {
+    const { SupabaseUnavailableError } = await import("@/lib/supabase/deadline");
+    const stalled = new SupabaseUnavailableError();
+    const blob = new Blob([JPEG_SOI]);
+    Object.defineProperty(blob, "arrayBuffer", { value: () => Promise.reject(stalled) });
+    fake.state.downloadResults.set("t/stalled.jpg", { data: blob, error: null });
+    await expect(photos.loadThumbBase64(["t/ok.jpg", "t/stalled.jpg"])).rejects.toBe(stalled);
+  });
+
+  it("M12: other download errors are still skipped (404 / non-timeout 5xx)", async () => {
+    fake.state.downloadResults.set("t/a.jpg", { data: null, error: { statusCode: "404" } });
+    fake.state.downloadResults.set("t/b.jpg", { data: null, error: { statusCode: "500" } });
+    const map = await photos.loadThumbBase64(["t/a.jpg", "t/b.jpg", "t/c.jpg"]);
+    expect([...map.keys()]).toEqual(["t/c.jpg"]);
+  });
 });
 
 describe("photos: user review", () => {

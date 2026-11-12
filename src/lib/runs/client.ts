@@ -54,6 +54,7 @@ export type CommonFailure =
   | { kind: "not_found" } // 404 (or a malformed id, never sent)
   | { kind: "forbidden" } // 403 (cross-origin; should never happen in-app)
   | { kind: "server_error" } // 500 / other 5xx / unparsable body
+  | { kind: "unavailable"; retryAfterMs: number } // 503 (M12: Supabase timeout) — transient, retry after the wait
   | { kind: "network" };
 
 export type StartOutcome =
@@ -75,6 +76,8 @@ export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
 
 /** The advance route sends Retry-After: 2; used if the header is missing. */
 export const DEFAULT_LEASE_WAIT_MS = 2_000;
+/** Routes answer a Supabase timeout with 503 + Retry-After: 3; used if the header is missing. */
+export const DEFAULT_UNAVAILABLE_WAIT_MS = 3_000;
 
 const RUN_STATES: readonly RunState[] = [
   "queued",
@@ -131,10 +134,15 @@ export function parseTick(raw: unknown): RunTick | null {
   };
 }
 
-function commonFailure(status: number): CommonFailure {
+function commonFailure(res: Response): CommonFailure {
+  const { status } = res;
   if (status === 401) return { kind: "signed_out" };
   if (status === 403) return { kind: "forbidden" };
   if (status === 404) return { kind: "not_found" };
+  if (status === 503) {
+    const header = res.headers.get("retry-after");
+    return { kind: "unavailable", retryAfterMs: header ? parseRetryAfter(header) : DEFAULT_UNAVAILABLE_WAIT_MS };
+  }
   return { kind: "server_error" };
 }
 
@@ -189,7 +197,7 @@ export async function startRun(
     return { kind: "limit", limit: isOneOf(LIMITS, body?.limit) ? body.limit : "daily_builds" };
   }
   if (res.status === 400) return { kind: "invalid" };
-  return commonFailure(res.status);
+  return commonFailure(res);
 }
 
 export async function getRun(
@@ -209,7 +217,7 @@ export async function getRun(
     if (!tick || !isOneOf(RUN_MODES, mode)) return { kind: "server_error" };
     return { kind: "view", view: { ...tick, mode } };
   }
-  return commonFailure(res.status);
+  return commonFailure(res);
 }
 
 export async function advanceRun(
@@ -230,5 +238,5 @@ export async function advanceRun(
     const tick = parseTick(await readJson(res));
     return tick ? { kind: "tick", tick } : { kind: "server_error" };
   }
-  return commonFailure(res.status);
+  return commonFailure(res);
 }

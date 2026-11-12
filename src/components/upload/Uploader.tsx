@@ -52,6 +52,7 @@ const FINALIZE_MESSAGES: Record<FinalizeError, string> = {
   not_found: "We couldn't find this book. It may have been deleted.",
   failed: "We couldn't finish setting up your album. Your photos are safe — please try again.",
   rate_limited: "We're still finishing your album. Your photos are safe — please try again in a moment.",
+  unavailable: "Our server is taking longer than usual. Your photos are safe — please try again in a moment.",
 };
 
 const signInLinkClass =
@@ -193,7 +194,7 @@ export function Uploader(props: UploaderProps) {
     // M10c: colours of this queue's uploads ride along (server-written photos.color).
     const queue = queueRef.current;
     const colors = colorsBody(queue?.colors()) ?? {};
-    // Waits on 429 (Retry-After) and spaces follow-ups inside; phase stays "finalizing".
+    // Waits on 429 / 503 / a hung request (Retry-After) and spaces follow-ups inside; phase stays "finalizing".
     const outcome = await finalizeWithPlaces(bookId, undefined, { signal: controller.signal, colors });
     if (outcome.ok) queue?.forgetColors(Object.keys(colors));
     if (unmountedRef.current || controller.signal.aborted) return;
@@ -204,7 +205,9 @@ export function Uploader(props: UploaderProps) {
       setPhase("done");
     } else {
       setFinalizeError(outcome.error);
-      if (outcome.error === "rate_limited") setRetryAt(Date.now() + outcome.retryAfterMs);
+      if (outcome.error === "rate_limited" || outcome.error === "unavailable") {
+        setRetryAt(Date.now() + outcome.retryAfterMs);
+      }
       setPhase("finalize_error");
     }
   }

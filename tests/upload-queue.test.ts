@@ -79,7 +79,7 @@ interface Harness {
   stats: { maxUploads: number; maxProcessing: number; maxHeld: number; maxWaiting: number };
   /** Hooks for fault injection. */
   faults: {
-    upload?: (path: string, attempt: number) => { message: string; statusCode?: string } | null;
+    upload?: (path: string, attempt: number) => { message: string; statusCode?: string; status?: number } | null;
     markReady?: (id: string, attempt: number) => DbError | null;
     insert?: (call: number) => DbError | null;
     reject?: (tag: string) => PhotoRejectReason | null;
@@ -343,6 +343,18 @@ describe("createUploadQueue", () => {
     expect(h.rows.get(firstId!)!.upload_state).toBe("pending");
     expect(h.markCalls.map((m) => m.id)).not.toContain(firstId);
     expect(photoEvents(h).map((e) => e.status)).toEqual(["failed", "uploaded", "uploaded"]);
+  });
+
+  it("M12: a 504 SUPABASE_TIMEOUT upload (deadline fetch) is retried and succeeds", async () => {
+    const h = harness();
+    // The shape createSupabaseUploadDeps passes on for the deadline's synthetic 504.
+    h.faults.upload = (path, n) =>
+      path.endsWith("-web.jpg") && n === 1 ? { message: "timeout", statusCode: "SUPABASE_TIMEOUT", status: 504 } : null;
+    const s = await run(h, files(1));
+    expect(s).toMatchObject({ uploaded: 1, failed: 0 });
+    expect(h.sleeps).toEqual([BACKOFF_MS[0]]);
+    expect(h.uploads.filter((u) => u.path.endsWith("-web.jpg"))).toHaveLength(1);
+    expect(photoEvents(h).map((e) => e.status)).toEqual(["uploaded"]);
   });
 
   it("does not retry storage 4xx (except 408/429)", async () => {

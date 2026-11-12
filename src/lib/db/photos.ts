@@ -16,6 +16,7 @@ import "server-only";
 // paths or other user data.
 import { PHOTO_COLOR_RE } from "@/lib/image/color";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isSupabaseTimeout, SupabaseUnavailableError } from "@/lib/supabase/deadline";
 import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 import { clipText } from "@/lib/text/clip";
@@ -379,6 +380,9 @@ function isJpeg(bytes: Uint8Array): boolean {
  * with the JPEG magic bytes FF D8 FF are simply absent from the map (the
  * caller treats them as "not analysed" — never sent to the model);
  * duplicates are fetched once. Never throws for a single bad object.
+ * M12: a Supabase timeout (download or stalled body) is not a bad object — the remaining
+ * downloads stop and a SupabaseUnavailableError is thrown, so the AI tick fails fast and the
+ * run resumes later (photos are not marked "not analysed" because Storage was slow).
  */
 export async function loadThumbBase64(paths: string[]): Promise<Map<string, string>> {
   const unique = [...new Set(paths.filter((p) => typeof p === "string" && p !== ""))];
@@ -387,17 +391,26 @@ export async function loadThumbBase64(paths: string[]): Promise<Map<string, stri
   const bucket = createAdminClient().storage.from(PHOTOS_BUCKET);
 
   let next = 0;
+  let timedOut: unknown = null;
   const worker = async () => {
-    while (next < unique.length) {
+    while (next < unique.length && !timedOut) {
       const path = unique[next++];
       try {
         const { data, error } = await bucket.download(path);
+        if (error && isSupabaseTimeout(error)) {
+          timedOut ??= error;
+          break;
+        }
         if (error || !data) continue;
         if (typeof data.size === "number" && data.size > THUMB_MAX_BYTES) continue;
         const bytes = new Uint8Array(await data.arrayBuffer());
         if (bytes.length > THUMB_MAX_BYTES || !isJpeg(bytes)) continue;
         out.set(path, Buffer.from(bytes).toString("base64"));
-      } catch {
+      } catch (err) {
+        if (isSupabaseTimeout(err)) {
+          timedOut ??= err;
+          break;
+        }
         // network / decode failure → absent from the map
       }
     }
@@ -405,6 +418,11 @@ export async function loadThumbBase64(paths: string[]): Promise<Map<string, stri
   await Promise.all(
     Array.from({ length: Math.min(THUMB_DOWNLOAD_CONCURRENCY, unique.length) }, worker),
   );
+  if (timedOut) {
+    if (timedOut instanceof SupabaseUnavailableError) throw timedOut;
+    // Code only — never the path (contains user/book ids) or storage message.
+    throw new SupabaseUnavailableError("loadThumbBase64: download (SUPABASE_TIMEOUT)");
+  }
   return out;
 }
 

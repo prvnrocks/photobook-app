@@ -158,7 +158,7 @@ describe("advanceRun", () => {
     [403, "forbidden"],
     [404, "not_found"],
     [500, "server_error"],
-    [503, "server_error"],
+    [502, "server_error"],
   ])("%i → %s", async (status, kind) => {
     expect(await advanceRun(RUN, { fetchImpl: fetchOnce(res(status, { error: "x" })) })).toEqual({ kind });
   });

@@ -21,7 +21,7 @@ import {
   type RunTrigger,
   type StartOutcome,
 } from "@/lib/runs/client";
-import { abortableSleep, DriveWaker, driveRun } from "@/lib/runs/drive";
+import { abortableSleep, DriveWaker, driveRun, startWithRetry, type RetryCause } from "@/lib/runs/drive";
 import { limitCopy, newerSnapshot, stageCopy, type ProgressSnapshot } from "@/lib/runs/stage-copy";
 import { buildChecklist, type ChecklistStepState } from "@/lib/runs/build-checklist";
 import { cn } from "@/lib/utils";
@@ -39,11 +39,13 @@ export type BuildProgressProps = {
 type StopError =
   | "signed_out" // 401
   | "not_found" // book or run gone
-  | "unavailable" // network / 5xx after back-off (resume keeps the same run)
+  | "unavailable" // no answer (network / request timeouts) after back-off (resume keeps the same run)
+  | "server_unavailable" // 5xx / 503 after back-off (resume keeps the same run)
   | "run_failed"; // run finished in state 'failed'
 
 type Status =
-  | { kind: "running"; reconnecting: boolean }
+  /** retrying: null, or why we're in a back-off wait right now (drives the truthful copy). */
+  | { kind: "running"; retrying: RetryCause | null }
   | { kind: "error"; error: StopError }
   | { kind: "user_edited" }
   | { kind: "limit"; limit: RunLimit }
@@ -58,8 +60,19 @@ const ERROR_COPY: Record<StopError, string> = {
   not_found: "We couldn't find this album build. It may have been removed.",
   unavailable:
     "We lost the connection while building your album. Your photos are safe — try again to pick up where we left off.",
+  server_unavailable:
+    "Our server is taking longer than usual to respond. Your photos are safe — try again to pick up where we left off.",
   run_failed: "We couldn't finish with AI. Your photos are safe — open the review to continue.",
 };
+
+/** Shown during a back-off wait; the loop retries by itself. */
+const RETRY_COPY: Record<RetryCause, string> = {
+  network: "Connection lost — reconnecting…",
+  server: "Taking longer than usual — retrying…",
+};
+
+/** Error states the screen recovers from by itself when the user comes back. */
+const RESUMABLE: ReadonlySet<StopError> = new Set(["unavailable", "server_unavailable"]);
 
 const STEP_STATE_SR: Record<ChecklistStepState, string> = {
   done: "done",
@@ -82,7 +95,7 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
   /** Tab visible again / back online → resume a stalled loop (see src/lib/runs/drive.ts). */
   const [waker] = useState(() => new DriveWaker());
 
-  const [status, setStatus] = useState<Status>({ kind: "running", reconnecting: false });
+  const [status, setStatus] = useState<Status>({ kind: "running", retrying: null });
   const [snap, setSnap] = useState<ProgressSnapshot>({ state: "queued", progress: null });
 
   const running = status.kind === "running";
@@ -112,11 +125,23 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
 
   const run = useCallback(
     async (signal: AbortSignal) => {
-      setStatus({ kind: "running", reconnecting: false });
+      setStatus({ kind: "running", retrying: null });
+      const onRetry = (_n: number, _ms: number, cause: RetryCause) => {
+        if (!signal.aborted) setStatus({ kind: "running", retrying: cause });
+      };
 
       let runId = runIdRef.current;
       if (!runId) {
-        startRef.current ??= startRun(bookId, trigger);
+        // Transient failures (network / 5xx / 503) back off and retry inside; a retry after a
+        // start that did land gets already_running + runId. Stops once the screen is left
+        // (the controller of the latest mount is aborted) — not on StrictMode's first unmount.
+        startRef.current ??= startWithRetry({
+          start: () => startRun(bookId, trigger),
+          shouldStop: () => controllerRef.current?.signal.aborted ?? true,
+          onRetry: (_n, _ms, cause) => {
+            if (!controllerRef.current?.signal.aborted) setStatus({ kind: "running", retrying: cause });
+          },
+        });
         const out = await startRef.current;
         if (signal.aborted) return;
         startRef.current = null;
@@ -147,10 +172,13 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
           case "invalid":
             return setStatus({ kind: "error", error: "not_found" });
           case "network":
-          case "server_error":
             return setStatus({ kind: "error", error: "unavailable" });
+          case "server_error":
+          case "unavailable":
+            return setStatus({ kind: "error", error: "server_unavailable" });
         }
         runIdRef.current = runId;
+        setStatus({ kind: "running", retrying: null });
       }
 
       const id = runId;
@@ -173,9 +201,9 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
           waker,
           onTick: (tick) => {
             report(tick);
-            setStatus((s) => (s.kind === "running" && s.reconnecting ? { kind: "running", reconnecting: false } : s));
+            setStatus((s) => (s.kind === "running" && s.retrying ? { kind: "running", retrying: null } : s));
           },
-          onRetry: () => setStatus({ kind: "running", reconnecting: true }),
+          onRetry,
         });
         if (signal.aborted || res.kind === "aborted") return;
         if (res.kind === "done") {
@@ -220,7 +248,7 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
       if (document.visibilityState !== "visible") return;
       const st = statusRef.current;
       if (st.kind === "running") waker.wake();
-      else if (st.kind === "error" && st.error === "unavailable" && navigator.onLine !== false) begin();
+      else if (st.kind === "error" && RESUMABLE.has(st.error) && navigator.onLine !== false) begin();
     };
     document.addEventListener("visibilitychange", resume);
     window.addEventListener("online", resume);
@@ -234,8 +262,8 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
 
   const copy = stageCopy(snap.state, snap.progress);
   const liveText = running
-    ? status.reconnecting
-      ? "Reconnecting…"
+    ? status.retrying
+      ? RETRY_COPY[status.retrying]
       : [copy.text, copy.detail].filter(Boolean).join(" ")
     : "";
   const announced = useThrottledValue(liveText, LIVE_THROTTLE_MS);
@@ -385,9 +413,9 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
         ))}
       </ol>
 
-      {status.kind === "running" && status.reconnecting ? (
-        <p className="type-small text-warning" data-testid="build-reconnecting">
-          Connection lost — reconnecting…
+      {status.kind === "running" && status.retrying ? (
+        <p className="type-small text-warning" data-testid="build-reconnecting" data-cause={status.retrying}>
+          {RETRY_COPY[status.retrying]}
         </p>
       ) : null}
       <Notice tone="info" title="Keep this screen open">

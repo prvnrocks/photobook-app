@@ -3,6 +3,7 @@
 //   200 tick      → report, continue (immediately; tiny gap guards a tight loop)
 //   202 leased    → another tab/tick holds the lease: wait Retry-After, retry (not a failure)
 //   network / 5xx → back off 2 s, 4 s, 8 s, 16 s; after MAX_TRANSIENT_TRIES in a row → error
+//   503 unavailable (M12: Supabase timeout) → transient too; waits max(back-off, Retry-After)
 //   401 / 403 / 404 → stop at once
 // Phones sleep: a request in flight while the device sleeps can hang forever, and timers are
 // frozen. So each advance gets its own deadline (REQUEST_TIMEOUT_MS → retried at once, not shown
@@ -11,9 +12,16 @@
 // Exactly one advance request is outstanding at any time (no duplicate concurrent ticks): a
 // replaced request is aborted before the next one starts, and if the server is still running
 // the abandoned tick the new one just gets 202 (lease held) and waits.
-import type { AdvanceOutcome, RunTick } from "./client";
+import type { AdvanceOutcome, CommonFailure, RunTick, StartOutcome } from "./client";
 
-export type DriveError = "signed_out" | "not_found" | "unavailable";
+/**
+ * unavailable = no answer (network / request timeouts); server_unavailable = the server answered
+ * but kept failing (5xx / 503) — the copy differs, the recovery (same run, "Try again") does not.
+ */
+export type DriveError = "signed_out" | "not_found" | "unavailable" | "server_unavailable";
+
+/** Why a back-off happened: the connection (no answer) or the server (5xx / 503). */
+export type RetryCause = "network" | "server";
 
 export type DriveResult =
   | { kind: "done"; tick: RunTick }
@@ -70,6 +78,22 @@ export function backoffMs(failures: number): number {
   return Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** (n - 1));
 }
 
+type TransientFailure = Extract<CommonFailure, { kind: "network" | "server_error" | "unavailable" }>;
+
+export function isTransient(out: { kind: string }): out is TransientFailure {
+  return out.kind === "network" || out.kind === "server_error" || out.kind === "unavailable";
+}
+
+export function retryCause(out: TransientFailure): RetryCause {
+  return out.kind === "network" ? "network" : "server";
+}
+
+/** Back-off for the n-th consecutive transient failure; a 503's Retry-After is the minimum. */
+export function transientWaitMs(out: TransientFailure, failures: number): number {
+  const base = backoffMs(failures);
+  return out.kind === "unavailable" ? Math.max(base, out.retryAfterMs) : base;
+}
+
 export const abortableSleep: SleepFn = (ms, signal) =>
   new Promise((resolve) => {
     if (signal?.aborted) return resolve();
@@ -86,8 +110,8 @@ export type DriveOptions = {
   runId: string;
   advance: (runId: string, signal?: AbortSignal) => Promise<AdvanceOutcome>;
   onTick?: (tick: RunTick) => void;
-  /** Called before each back-off wait (e.g. to show "Reconnecting…"). */
-  onRetry?: (failures: number, waitMs: number) => void;
+  /** Called before each back-off wait (e.g. to show "Reconnecting…" / "Taking longer than usual"). */
+  onRetry?: (failures: number, waitMs: number, cause: RetryCause) => void;
   signal?: AbortSignal;
   sleep?: SleepFn;
   /** Ends back-off waits early and replaces a stale in-flight request (see top of file). */
@@ -216,14 +240,51 @@ export async function driveRun(opts: DriveOptions): Promise<DriveResult> {
       case "forbidden":
         return { kind: "error", error: "not_found" };
       case "network":
-      case "server_error": {
+      case "server_error":
+      case "unavailable": {
         failures++;
-        if (failures >= MAX_TRANSIENT_TRIES) return { kind: "error", error: "unavailable" };
-        const wait = backoffMs(failures);
-        onRetry?.(failures, wait);
+        const cause = retryCause(out);
+        if (failures >= MAX_TRANSIENT_TRIES) {
+          return { kind: "error", error: cause === "network" ? "unavailable" : "server_unavailable" };
+        }
+        const wait = transientWaitMs(out, failures);
+        onRetry?.(failures, wait, cause);
         await sleep(wait, signal);
         return null;
       }
     }
+  }
+}
+
+export type StartRetryOptions = {
+  start: () => Promise<StartOutcome>;
+  sleep?: SleepFn;
+  /** Checked before each retry and after each wait (screen left / replaced). */
+  shouldStop?: () => boolean;
+  onRetry?: (failures: number, waitMs: number, cause: RetryCause) => void;
+};
+
+/**
+ * POST start with the same transient back-off as driveRun (network / 5xx / 503 Retry-After),
+ * at most MAX_TRANSIENT_TRIES attempts; any other outcome is returned at once. Safe to repeat:
+ * if an earlier attempt created the run, the retry gets 409 already_running with its id.
+ */
+export async function startWithRetry(opts: StartRetryOptions): Promise<StartOutcome> {
+  const { start, sleep = abortableSleep, shouldStop = () => false, onRetry } = opts;
+  let failures = 0;
+  for (;;) {
+    let out: StartOutcome;
+    try {
+      out = await start();
+    } catch {
+      out = { kind: "network" };
+    }
+    if (!isTransient(out)) return out;
+    failures++;
+    if (failures >= MAX_TRANSIENT_TRIES || shouldStop()) return out;
+    const wait = transientWaitMs(out, failures);
+    onRetry?.(failures, wait, retryCause(out));
+    await sleep(wait);
+    if (shouldStop()) return out;
   }
 }
