@@ -60,6 +60,7 @@ let baseURL = "";
 let bookId = "";
 let slug = "";
 let firstExpiresAt = "";
+let shareT0 = 0;
 let migration1000: boolean | null = null;
 let migration0900: boolean | null = null;
 const hasAccessSecret = (process.env.BOOK_ACCESS_SECRET ?? "").trim().length >= 32;
@@ -323,7 +324,7 @@ function needMigrations() {
   test.skip(migration0900 !== true, "migration 0900 is not applied");
 }
 
-test("a. build (replay) → editor → Done lands on /books/<id>/publish", async () => {
+test("a. build (replay) → editor → Share (free 30-day note) publishes and lands on the share screen", async () => {
   needMigrations();
   test.setTimeout(600_000);
   await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
@@ -345,21 +346,24 @@ test("a. build (replay) → editor → Done lands on /books/<id>/publish", async
   await page.waitForURL(new RegExp(`/books/${bookId}/edit$`), { timeout: 30_000 });
   await expect(page.getByTestId("editor-shell")).toBeVisible();
   await expect(page.getByTestId("editor-publish-changes")).toHaveCount(0); // never published
+  // M13 T9: the free 30-day note is on the Share button before the tap.
+  await expect(page.getByTestId("editor-share-note")).toHaveText("Free · 30 days");
+  expect((await bookRow()).published_doc).toBeNull();
+  shareT0 = Date.now();
   await page.getByTestId("editor-done").click();
-  await expect(page).toHaveURL(new RegExp(`/books/${bookId}/publish$`), { timeout: 30_000 });
-  await expect(page.getByTestId("publish-panel")).toHaveAttribute("data-state", "unpublished");
+  await expect(page).toHaveURL(new RegExp(`/books/${bookId}/publish(\\?shared=live)?$`), { timeout: 30_000 });
+  await expect(page.getByTestId("publish-message")).toHaveText("Your book is live", { timeout: 30_000 });
+  await expect(page.getByTestId("publish-panel")).toHaveAttribute("data-state", "published");
+  await expect(page).toHaveURL(new RegExp(`/books/${bookId}/publish$`)); // ?shared= dropped
   await noHorizontalOverflow(page);
 });
 
-test("b. Publish → link shown, expires ≈ 30 days, snapshot = saved doc", async () => {
+test("b. Share published → link shown, expires ≈ 30 days, snapshot = saved doc", async () => {
   needMigrations();
-  test.skip(!bookId, "needs test a");
-  const before = await bookRow();
-  expect(before.published_doc).toBeNull();
-  const t0 = Date.now();
-  await page.getByTestId("publish-button").click();
-  await expect(page.getByTestId("publish-message")).toHaveText("Your book is live", { timeout: 30_000 });
+  test.skip(!bookId || !shareT0, "needs test a");
+  const t0 = shareT0;
   await expect(page.getByTestId("publish-live")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("share-whatsapp")).toHaveAttribute("href", /^https:\/\/wa\.me\/\?text=/);
   await expect(page.getByTestId("publish-expiry")).toHaveText(/^Link expires \d{1,2} [A-Z][a-z]{2}( \d{4})?$/);
   const url = await page.getByTestId("publish-url").inputValue();
   const row = await bookRow();
@@ -522,15 +526,13 @@ test("d. edit a caption → viewer keeps the old snapshot → Publish changes �
   try {
     expect((await viewerHtml(anon.request)).html.includes(NEW_CAPTION)).toBe(false);
 
-    // Editor shows the chip; tapping it opens the publish screen.
+    // M13 T9: the Share button says "Publish changes"; one tap publishes them and opens sharing.
     await page.goto(`/books/${bookId}/edit`);
-    await expect(page.getByTestId("editor-publish-changes")).toBeVisible({ timeout: 30_000 });
-    await page.getByTestId("editor-publish-changes").click();
-    await expect(page).toHaveURL(new RegExp(`/books/${bookId}/publish$`), { timeout: 30_000 });
-    await expect(page.getByTestId("publish-changes")).toBeVisible();
-    await page.getByTestId("publish-changes-button").click();
+    await expect(page.getByTestId("editor-publish-changes")).toHaveText("Publish changes", { timeout: 30_000 });
+    await page.getByTestId("editor-done").click();
     await expect(page.getByTestId("publish-message")).toHaveText("Changes published", { timeout: 30_000 });
-    await expect(page.getByTestId("publish-changes")).toHaveCount(0, { timeout: 30_000 });
+    await expect(page).toHaveURL(new RegExp(`/books/${bookId}/publish$`), { timeout: 30_000 });
+    await expect(page.getByTestId("publish-changes")).toHaveCount(0);
 
     const after = await bookRow();
     expect(after.slug).toBe(slug);
@@ -682,6 +684,15 @@ test("f. expired (admin sets expires_at in the past): owner vs anonymous copy, r
   await expect(page.getByTestId("publish-panel")).toHaveAttribute("data-state", "expired");
   await expect(page.getByTestId("publish-expired")).toContainText("Upgrade to bring it back");
   await expect(page.getByTestId("publish-button")).toHaveCount(0);
+  expect(Date.parse((await bookRow()).expires_at ?? "")).toBe(Date.parse(past));
+
+  // M13 T9: editor Share on an expired free book stays in the editor and points at Upgrade.
+  await page.goto(`/books/${bookId}/edit`);
+  await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId("editor-done").click();
+  await expect(page.getByTestId("editor-done-error")).toContainText("expired", { timeout: 30_000 });
+  await expect(page.getByTestId("editor-done-error-link")).toHaveAttribute("href", `/books/${bookId}/publish`);
+  await expect(page).toHaveURL(new RegExp(`/books/${bookId}/edit$`));
   expect(Date.parse((await bookRow()).expires_at ?? "")).toBe(Date.parse(past));
 });
 

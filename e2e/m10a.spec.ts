@@ -543,10 +543,10 @@ test("b. Background tool: whole book paper, page 1 linen, page 2 faded photo →
 test("c. Done → publish → anonymous viewer at 375 and 1280 shows textures, background photo and veil", async ({ browser }) => {
   test.skip(!bgPhotoId, "needs test b");
   test.setTimeout(240_000);
+  // M13 T9: editor Share publishes and opens the share screen.
   await page.getByTestId("editor-done").click();
-  await expect(page).toHaveURL(new RegExp(`/books/${bookId}/publish$`), { timeout: 30_000 });
-  await page.getByTestId("publish-button").click();
   await expect(page.getByTestId("publish-message")).toHaveText("Your book is live", { timeout: 30_000 });
+  await expect(page).toHaveURL(new RegExp(`/books/${bookId}/publish$`), { timeout: 30_000 });
   const row = await bookRow();
   slug = row.slug ?? "";
   expect(slug).not.toBe("");

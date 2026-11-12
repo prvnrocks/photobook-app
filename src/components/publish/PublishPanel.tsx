@@ -9,7 +9,7 @@
 
 import { Check, ExternalLink, FileText, Info, Loader2, Send, TriangleAlert, X } from "lucide-react";
 import Link from "next/link";
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import type {
   PublishBookResult,
   PublishState,
@@ -52,6 +52,8 @@ export type PublishPanelProps = {
   paymentsEnabled: boolean;
   /** Free vs upgraded card data, built on the server with publishCompare() (src/lib/publish/compare.ts). */
   compare: PublishCompare;
+  /** The editor's Share just published (`?shared=`, M13 T9): shown once as the success message. */
+  shared?: "live" | "changes" | null;
 };
 
 type Message = { tone: "ok" | "error"; text: string; signIn?: boolean };
@@ -79,6 +81,7 @@ export function PublishPanelView({
   actions,
   paymentsEnabled,
   compare,
+  shared = null,
   refresh,
   refreshing = false,
   now,
@@ -96,7 +99,17 @@ export function PublishPanelView({
 }) {
   const [busy, setBusy] = useState<"publish" | "unpublish" | null>(null);
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
-  const [message, setMessage] = useState<Message | null>(null);
+  const [message, setMessage] = useState<Message | null>(() =>
+    shared ? { tone: "ok", text: shared === "changes" ? "Changes published" : "Your book is live" } : null,
+  );
+  // Drop ?shared= so a reload or Back doesn't announce the publish again.
+  useEffect(() => {
+    if (!shared || typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("shared")) return;
+    url.searchParams.delete("shared");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [shared]);
   // The state a first publish succeeded on: until the refresh brings the live state, the draft
   // card (disabled Publish) would sit under "Your book is live" — show a link placeholder instead.
   const [publishedOn, setPublishedOn] = useState<PublishState | null>(null);
@@ -225,7 +238,10 @@ export function PublishPanelView({
               </span>
             ) : null}
           </div>
-          <p className="type-small -mt-2 text-muted-foreground">Send the link to family and friends. It opens as a flipbook on any phone.</p>
+          <p className="type-small -mt-2 text-muted-foreground">
+            Send the link to family and friends. It opens as a flipbook on any phone. Anyone with the link can see it; later
+            edits stay private until you tap Share again.
+          </p>
           <ShareButtons
             url={state.url}
             title={title}

@@ -75,6 +75,28 @@ test("draft (free): Publish → live with link, 30-day expiry label, free notice
   await noHorizontalOverflow(page);
 });
 
+test("landed from the editor's Share (M13 T9): 'Your book is live', WhatsApp first and above the fold, param dropped", async ({ page }) => {
+  await page.goto("/dev-publish?state=live&shared=live");
+  await expect(page.getByTestId("publish-message")).toHaveText("Your book is live");
+  await expect(page).toHaveURL(/\/dev-publish\?state=live$/);
+  const wa = page.getByTestId("share-whatsapp");
+  await expect(wa).toHaveAttribute("href", /^https:\/\/wa\.me\/\?text=/);
+  const box = (await wa.boundingBox())!;
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  expect(box.y + box.height, "WhatsApp is visible without scrolling").toBeLessThanOrEqual(VIEWPORT.height);
+  const y = async (id: string) => (await page.getByTestId(id).boundingBox())!.y;
+  expect(await y("share-whatsapp")).toBeLessThan(await y("share-copy"));
+  expect(await y("share-copy")).toBeLessThan(await y("publish-free-notice"));
+  await expect(page.getByTestId("publish-live")).toContainText("Anyone with the link can see it");
+  await noHorizontalOverflow(page);
+  await page.screenshot({ path: test.info().outputPath("share-landed-375.png"), fullPage: true });
+
+  await page.goto("/dev-publish?state=live&shared=changes");
+  await expect(page.getByTestId("publish-message")).toHaveText("Changes published");
+  await page.goto("/dev-publish?state=live");
+  await expect(page.getByTestId("publish-message")).toHaveCount(0);
+});
+
 test("paid states: permanent link, no free notice", async ({ page }) => {
   await open(page, "live-paid");
   await expect(page.getByTestId("publish-expiry")).toHaveText("Permanent link");

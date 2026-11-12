@@ -700,7 +700,7 @@ test("b. review: header, screenshot + duplicate dropped, toggle persists; DB run
   await expect(page.getByTestId("review-header")).toHaveText(`AI kept ${kept.length} of ${rows.length}`);
   await expect(page.getByTestId("review-banner-partial")).toHaveCount(0);
   await expect(page.getByTestId("review-banner-failed")).toHaveCount(0);
-  await expect(page.getByTestId("rebuild-button")).toHaveText("Rebuild with AI");
+  await expect(page.getByTestId("rebuild-button")).toHaveText("Redo with AI");
 
   // Screenshot → dropped with a "Screenshot" chip.
   const png = rows.filter((r) => r.original_mime === "image/png");
@@ -1068,7 +1068,7 @@ async function expectEditedReview() {
 test("h. user caption (D-031/D-037): rebuild 409 user_edited (API + stale button), doc unchanged; review → continue in editor", async () => {
   // Review loaded while the album is still AI-only (after c) → "Rebuild with AI" is offered.
   await page.goto(`/books/${bookA}/review`);
-  await expect(page.getByTestId("rebuild-button")).toHaveText("Rebuild with AI");
+  await expect(page.getByTestId("rebuild-button")).toHaveText("Redo with AI");
   await expect(page.getByTestId("review-edited")).toHaveCount(0);
 
   const before = await bookRow(bookA);
@@ -1164,8 +1164,8 @@ test("m. Memory Keeper: ≥ 3 short user captions → review → Continue in the
   await expectEditedReview();
   await page.getByTestId("review-open-editor").click();
   await page.waitForURL(new RegExp(`/books/${bookA}/edit$`), { timeout: 30_000 });
-  await page.getByTestId("editor-done").click();
-  await page.waitForURL(new RegExp(`/books/${bookA}/publish$`), { timeout: 30_000 });
+  await page.getByTestId("editor-done").click(); // M13 T9: Share publishes, then the share screen
+  await page.waitForURL(new RegExp(`/books/${bookA}/publish(\\?shared=live)?$`), { timeout: 30_000 });
   await expect(page.getByTestId("editor-done-error")).toHaveCount(0);
   await expect.poll(async () => (await memoryRow()) !== null, { timeout: 15_000 }).toBe(true);
   const prefs = (await memoryRow())!.prefs;
@@ -1393,7 +1393,7 @@ test("p. plant_bad_caption: pre-check + Critic catch the planted captions, one r
   expectValidDoc(book.doc, new Set(rows.filter((r) => r.status !== "dropped").map((r) => r.id)), book.max_pages ?? 20, "p");
   await expect(page.getByTestId("review-banner-partial")).toHaveCount(0);
   await expect(page.getByTestId("review-banner-captions_missing")).toHaveCount(0);
-  await expect(page.getByTestId("rebuild-button")).toHaveText("Rebuild with AI");
+  await expect(page.getByTestId("rebuild-button")).toHaveText("Redo with AI");
 });
 
 test("k. Critic refusal only: captions kept, critic refused, run partial, rule fallback not needed", async () => {
@@ -1427,7 +1427,7 @@ test("k. Critic refusal only: captions kept, critic refused, run partial, rule f
   // SF5: AI album used and every caption present → no "simple rules" / captions banner.
   await expect(page.getByTestId("review-banner-partial")).toHaveCount(0);
   await expect(page.getByTestId("review-banner-captions_missing")).toHaveCount(0);
-  await expect(page.getByTestId("rebuild-button")).toHaveText("Rebuild with AI"); // book done → rebuild variant
+  await expect(page.getByTestId("rebuild-button")).toHaveText("Redo with AI"); // book done → rebuild variant
 });
 
 test("d. refusal scenario: rule album, failed/partial banner, Try AI again", async () => {

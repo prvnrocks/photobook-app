@@ -15,12 +15,11 @@ import type { AiSessionBlock } from "@/lib/editor/caption-tools";
 import { stepSpread } from "@/lib/editor/spreads";
 import { canRedo, canUndo } from "@/lib/editor/store";
 import { httpEditorTransport, type EditorTransport } from "@/lib/editor/transport";
-import type { FinishResult } from "@/lib/editor/done";
+import type { ShareResult } from "@/lib/editor/done";
 import type { EditorShellData } from "@/lib/editor/types";
 import { hasUnpublishedChanges } from "@/lib/publish/ui";
 import { EditorContext, type EditorContextValue } from "./editor-context";
-import { EditorDoneButton } from "./EditorDoneButton";
-import { EditorPublishChip } from "./EditorPublishChip";
+import { EditorShareButton } from "./EditorShareButton";
 import { EditorToastHost } from "./EditorToast";
 import { EditorPanelHost, EditorToolbar } from "./EditorToolbar";
 import { PageCarousel, SpreadCarouselPlaceholder } from "./PageCarousel";
@@ -42,8 +41,8 @@ export type EditorShellProps = {
   tools?: readonly EditorTool[];
   /** Back link target (default /dashboard). */
   backHref?: string;
-  /** Header "Done" (T12): bound finishEditingAction. Absent → Done saves, then goes to backHref. */
-  finish?: () => Promise<FinishResult>;
+  /** Header "Share" (M13 T9): bound shareBookAction. Absent → Share saves, then goes to backHref. */
+  share?: () => Promise<ShareResult>;
   /** isPaymentsEnabled() from the server page; false → the Upgrade sheet shows "Payments unavailable". */
   paymentsEnabled?: boolean;
   /** Force single-page or facing-pages editing (tests / dev); default = by screen width (≥ md → spreads). */
@@ -59,7 +58,7 @@ function isTypingTarget(t: EventTarget | null): boolean {
   return t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT";
 }
 
-export function EditorShell({ data, transport: transportProp, tools: toolsProp, backHref = "/dashboard", finish, paymentsEnabled = false, layout }: EditorShellProps) {
+export function EditorShell({ data, transport: transportProp, tools: toolsProp, backHref = "/dashboard", share, paymentsEnabled = false, layout }: EditorShellProps) {
   // null until the screen width is known (server render + hydration) — see the render below.
   const spreadMode = useSpreadMode(layout);
   const spread = spreadMode === true;
@@ -184,12 +183,8 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
             <h1 dir="auto" className="truncate font-display text-base font-semibold" data-testid="editor-title">
               {title}
             </h1>
-            {/* 375 px: no room for both — the chip replaces "Saved ✓" only while everything is saved. */}
-            {unpublished && (autosave.status.kind === "saved" || autosave.status.kind === "idle") ? (
-              <EditorPublishChip bookId={data.book.id} settle={autosave.settle} />
-            ) : (
-              <SaveStatus status={autosave.status} />
-            )}
+            {/* Unpublished edits show on the Share button ("Publish changes", M13 T9). */}
+            <SaveStatus status={autosave.status} />
           </div>
           <button
             type="button"
@@ -211,7 +206,15 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
           >
             <Redo2 className="size-5" aria-hidden="true" />
           </button>
-          <EditorDoneButton bookId={data.book.id} settle={autosave.settle} finish={finish} fallbackHref={backHref} />
+          <EditorShareButton
+            bookId={data.book.id}
+            settle={autosave.settle}
+            share={share}
+            fallbackHref={backHref}
+            isPaid={data.book.isPaid}
+            hasChanges={unpublished}
+            maxPages={data.book.maxPages}
+          />
         </header>
 
         <SaveBanner status={autosave.status} bookId={data.book.id} />

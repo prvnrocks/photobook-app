@@ -34,7 +34,7 @@ describe("EditorShell render smoke", () => {
     expect(html).toContain('data-testid="page-carousel"');
     expect(html).toContain('data-testid="page-counter"');
     expect(html).toContain("Cover · ");
-    expect(html).toContain("Tap a photo or caption to edit it.");
+    expect(html).toContain("Tap a photo or caption to edit it");
     expect(html).toContain('data-testid="slot-target"');
     expect(html).toContain('data-testid="caption-target"');
     expect(html).toContain('aria-label="Undo"');

@@ -25,6 +25,7 @@ import { getAccessSecret } from "@/lib/publish/access-cookie";
 import { toPublicDoc } from "@/lib/publish/public-doc";
 import { canPublish, isExpired, nextExpiry, type PublishBlockReason } from "@/lib/publish/rules";
 import { makeSlug } from "@/lib/publish/slug";
+import { publishWithRetry } from "@/lib/publish/ui";
 import type { Json } from "@/lib/supabase/database.types";
 import { isUuid } from "@/lib/uuid";
 
@@ -118,7 +119,10 @@ function revalidateBook(bookId: string, slug: string | null): void {
 export async function publishBookAction(bookId: string): Promise<PublishBookResult> {
   const owner = await resolveOwner(bookId, "publish");
   if ("error" in owner) return { ok: false, error: owner.error };
+  return publishForOwner(owner);
+}
 
+async function publishForOwner(owner: Owner): Promise<PublishBookResult> {
   try {
     const siteUrl = getSiteUrl(); // fail before writing if the deploy lacks NEXT_PUBLIC_APP_URL
     const row = await getPublishRow(owner.bookId, owner.userId);
@@ -202,6 +206,63 @@ export async function publishBookAction(bookId: string): Promise<PublishBookResu
     console.error(`[publish] failed (${errorCodeOf(err)})`);
     return { ok: false, error: "failed" };
   }
+}
+
+export type ShareBookResult =
+  | {
+      ok: true;
+      /** Share screen; `?shared=live|changes` when this call published (one-time message). */
+      redirectTo: string;
+      /** `published` analytics props when this call published; null = nothing new to publish. */
+      published: { is_paid: boolean; has_password: boolean; pages: number; first: boolean } | null;
+    }
+  | { ok: false; error: PublishErrorCode };
+
+/**
+ * Editor "Share" (M13 T9, D-070 #4): publish (or publish changes) the SAVED doc, then the client
+ * opens the share screen. The client flushes autosave first. Already live with nothing new →
+ * no write, straight to the share screen (memory still learns, best effort). A `conflict` is
+ * retried once (publishWithRetry). Errors are publishBookAction's codes; the editor shows them
+ * and stays put. Only the book id comes from the client.
+ */
+export async function shareBookAction(bookId: string): Promise<ShareBookResult> {
+  const owner = await resolveOwner(bookId, "share");
+  if ("error" in owner) return { ok: false, error: owner.error };
+  const screen = `/books/${owner.bookId}/publish`;
+
+  let row: PublishRow | null;
+  try {
+    row = await getPublishRow(owner.bookId, owner.userId);
+  } catch (err) {
+    console.error(`[share] load failed (${errorCodeOf(err)})`);
+    return { ok: false, error: "failed" };
+  }
+  if (!row) return { ok: false, error: "not_found" };
+
+  const now = new Date();
+  const upToDate =
+    row.live &&
+    row.published_rev !== null &&
+    row.doc_rev === row.published_rev &&
+    !isExpired({ isPaid: row.is_paid, expiresAt: row.expires_at, now });
+  if (upToDate) {
+    await learnFromBook(owner.userId, owner.bookId, "share");
+    return { ok: true, redirectTo: screen, published: null };
+  }
+
+  const r = await publishWithRetry(() => publishForOwner(owner));
+  if (!r.ok) return { ok: false, error: r.error };
+  const pages = (row.doc as { pages?: unknown } | null)?.pages;
+  return {
+    ok: true,
+    redirectTo: `${screen}?shared=${row.live ? "changes" : "live"}`,
+    published: {
+      is_paid: row.is_paid,
+      has_password: row.hasPassword,
+      pages: Array.isArray(pages) ? pages.length : 0,
+      first: row.published_at === null,
+    },
+  };
 }
 
 /** Unpublish: the link stops working; slug / first publish / expiry stay (D-039). Idempotent. */

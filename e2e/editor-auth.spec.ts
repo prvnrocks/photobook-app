@@ -281,9 +281,9 @@ test("b. before 0900: editor is read-only and PUT doc → 503 saving_unavailable
   expect(res.body).toMatchObject({ error: "saving_unavailable" });
   expect(JSON.stringify((await bookRow()).doc)).toBe(JSON.stringify(before.doc));
 
-  // Done on a read-only editor goes straight to the dashboard.
+  // M13 T9: Share on a read-only editor opens the share screen without publishing.
   await page.getByTestId("editor-done").click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page).toHaveURL(new RegExp(`/books/${bookId}/publish$`), { timeout: 30_000 });
 });
 
 test("c. after 0900: save 200 + rev bump + persisted; 409 stale; 422 page_limit; direct PostgREST doc update is a no-op", async () => {
@@ -351,13 +351,14 @@ test("d. after 0900: edit the cover title in the UI → Saved ✓ → DB + Done 
   // Post-0900 counterpart of test b: the editor is editable, no read-only banner.
   await expect(page.getByTestId("save-banner-readOnly")).toHaveCount(0);
   await expect(page.getByTestId("save-banner-unavailable")).toHaveCount(0);
-  await expect(page.getByTestId("editor-tool-add-page")).toBeVisible();
+  // M13: Add page sits behind More; Background is an editing tool in the row.
+  await expect(page.getByTestId("editor-tool-background")).toBeVisible();
   await page.getByTestId("cover-text-target").click();
   await page.getByTestId("cover-title-input").fill("عطلتنا");
   await expect(page.getByTestId("save-status")).toHaveAttribute("data-state", "saved", { timeout: 15_000 });
   await expect.poll(async () => (await bookRow()).title, { timeout: 10_000 }).toBe("عطلتنا");
   await page.getByTestId("editor-panel-close").click();
   await page.getByTestId("editor-done").click();
-  // M6 (D-040): Done opens the publish step.
-  await expect(page).toHaveURL(new RegExp(`/books/${bookId}/publish$`), { timeout: 30_000 });
+  // M13 T9: Share publishes and opens the share screen.
+  await expect(page).toHaveURL(new RegExp(`/books/${bookId}/publish(\\?shared=live)?$`), { timeout: 30_000 });
 });

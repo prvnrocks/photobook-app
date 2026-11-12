@@ -8,8 +8,9 @@
  * (scripts/stripe-signed-event.mjs) — the same path a real Stripe event takes (webhook → RPC).
  *
  * Flow (serial, one throwaway user `e2e+m9smoke-<random>@example.com`, admin generateLink sign-in):
- *   a. new book → upload 6 synthetic JPEGs → build (replay) → review → editor: edit one caption
- *      (Saved ✓, persisted) → Done → publish ("Your book is live"; the caption is in the snapshot)
+ *   a. photos first (M13): /books/start → pick 6 synthetic JPEGs → upload screen (no second picker; setup
+ *      card: Travel + Modern) → the first build starts by itself (replay) → editor: edit one caption
+ *      (Saved ✓, persisted) → Share = publish ("Your book is live"; the caption is in the snapshot)
  *   b. anonymous phone visit of /b/<slug> at 375 px: watermark + "Made with" footer, no horizontal
  *      overflow, last page = free end card with the "Create yours" CTA
  *   c. owner taps "Upgrade this book — AED 39" (dummy key → error, nothing paid), then a signed
@@ -273,8 +274,9 @@ test.beforeAll(async ({ browser, request }, info) => {
   context = await browser.newContext({ viewport: VIEWPORT, baseURL, hasTouch: true, isMobile: true });
   page = await context.newPage();
   page.on("dialog", (d) => void d.accept());
-  await page.goto(`/auth/confirm?token_hash=${await signInHash()}&type=magiclink&next=/books/new`);
-  await expect(page).toHaveURL(/\/books\/new$/);
+  // M13 T5: landing CTA → login → /books/start (photos first).
+  await page.goto(`/auth/confirm?token_hash=${await signInHash()}&type=magiclink&next=/books/start`);
+  await expect(page).toHaveURL(/\/books\/start$/);
 });
 
 test.afterAll(async () => {
@@ -282,6 +284,8 @@ test.afterAll(async () => {
   if (!uid) return;
   await context?.close().catch(() => {});
   const bookIds = [bookId, draftId].filter(Boolean);
+  // This run's agent_runs (the user delete only nulls their ids) — collected first, deleted by id last.
+  const runIds = ((await admin.from("agent_runs").select("id").eq("user_id", uid)).data ?? []).map((r) => (r as { id: string }).id);
 
   // orders: user_id / book_id are ON DELETE SET NULL → delete explicitly first.
   let ordersDeleted = 0;
@@ -323,6 +327,10 @@ test.afterAll(async () => {
     }
   }
   const { error } = await admin.auth.admin.deleteUser(uid);
+  let runsDeleted = 0;
+  for (let i = 0; i < runIds.length; i += 100) runsDeleted += (await admin.from("agent_runs").delete().in("id", runIds.slice(i, i + 100)).select("id")).data?.length ?? 0;
+  const runsLeft = runIds.length ? (await admin.from("agent_runs").select("id", { count: "exact", head: true }).in("id", runIds)).count ?? 0 : 0;
+  console.log(`[cleanup] agent_runs found=${runIds.length} deleted=${runsDeleted} left=${runsLeft}`);
   let left = 0;
   for (const bucket of BUCKETS) left += (await listAllUserObjects(bucket)).length;
   const books = await admin.from("books").select("id", { count: "exact", head: true }).eq("user_id", uid);
@@ -338,22 +346,31 @@ test.afterAll(async () => {
   expect(orders.count ?? 0).toBe(0);
 });
 
-test("a. login → new book → upload → AI build (replay) → review → edit a caption → Done → publish", async () => {
+test("a. login → choose photos → upload (setup card) → automatic AI build (replay) → edit a caption → Share (publishes)", async () => {
   needBook();
   test.setTimeout(600_000);
-  await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
-  await page.getByRole("radio", { name: /Modern/ }).check(); // D-068: travel now defaults to Geometric; this spec covers Modern.
-  await page.getByTestId("create-book").click();
+  // M13 T5: one "Choose photos" — picking creates the draft and carries the files to the upload screen.
+  await expect(page.getByTestId("start-pick")).toBeVisible();
+  await page.getByTestId("start-pick-input").setInputFiles(await makeSynthetic(page, 6));
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
   bookId = new URL(page.url()).pathname.split("/")[2];
-  await page.getByTestId("upload-input").setInputFiles(await makeSynthetic(page, 6));
-  await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 180_000 });
+  // M13 T6: setup card while uploading; D-068: travel defaults to Geometric — this spec covers Modern.
+  await page.locator("label", { has: page.getByTestId("setup-occasion-travel") }).click();
+  await page.getByTestId("setup-change").click();
+  await page.locator("label", { has: page.getByTestId("setup-style-modern") }).click();
+  await expect(page.getByTestId("setup-status")).toHaveText("Saved", { timeout: 15_000 });
   await noHorizontalOverflow(page);
-  await page.getByTestId("build-album").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/review$/, { timeout: 420_000 });
+  // No Build tap: once uploads + finalize settle the first build starts by itself.
+  await page.waitForURL(new RegExp(`/books/${bookId}/build\\?auto=1$`), { timeout: 240_000 });
+  const setup = (await admin.from("books").select("occasion, tone, design_style").eq("id", bookId).single()).data;
+  expect(setup).toEqual({ occasion: "travel", tone: "fun", design_style: "modern" });
+  // M13 T7 moves the build's hand-off from review to the editor; accept both until it lands.
+  await page.waitForURL(new RegExp(`/books/${bookId}/(review|edit)$`), { timeout: 420_000 });
   await noHorizontalOverflow(page);
-  await page.getByTestId("review-continue").click();
-  await page.waitForURL(new RegExp(`/books/${bookId}/edit$`), { timeout: 30_000 });
+  if (/\/review$/.test(page.url())) {
+    await page.getByTestId("review-continue").click();
+    await page.waitForURL(new RegExp(`/books/${bookId}/edit$`), { timeout: 30_000 });
+  }
   await expect(page.getByTestId("editor-shell")).toBeVisible();
 
   // Editor: walk the carousel to the first page with a caption target and type a new caption.
@@ -378,10 +395,12 @@ test("a. login → new book → upload → AI build (replay) → review → edit
   await page.keyboard.press("Escape");
   expect(hasCaption((await bookRow()).doc.pages)).toBe(true);
 
+  // M13 T9: Share = publish → share screen; WhatsApp is the next tap.
+  await expect(page.getByTestId("editor-share-note")).toHaveText("Free · 30 days");
   await page.getByTestId("editor-done").click();
-  await expect(page).toHaveURL(new RegExp(`/books/${bookId}/publish$`), { timeout: 30_000 });
-  await page.getByTestId("publish-button").click();
   await expect(page.getByTestId("publish-message")).toHaveText("Your book is live", { timeout: 30_000 });
+  await expect(page).toHaveURL(new RegExp(`/books/${bookId}/publish$`), { timeout: 30_000 });
+  await expect(page.getByTestId("share-whatsapp")).toBeVisible();
   await noHorizontalOverflow(page);
   const row = await bookRow();
   slug = row.slug ?? "";

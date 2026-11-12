@@ -446,31 +446,34 @@ test.describe("M11 signed-in flow at 375 px (live)", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("account-menu")).toBeHidden();
 
+    // "Choose style first" (/books/new) is kept; the main start is photos first (M13 T5).
     await page.goto("/books/new");
     await expect(page.getByTestId("create-book")).toBeVisible();
     await audit(page, "books/new", { shot: "new-book" });
+    await page.goto("/books/start");
+    await expect(page.getByTestId("start-pick")).toBeVisible();
+    await audit(page, "books/start", { shot: "start" });
   };
+
+  // Replay ticks take ~0 ms, so the build screen would jump straight to review. Every run API
+  // response is held for STEP_DELAY ms (server work is already done) so each reported state
+  // renders; both sides are timestamped so the checklist can be checked against what the
+  // server had reported at that moment. M13 T6: the build starts by itself from the upload screen,
+  // so the route is installed before the photos are picked, and the automatic start request is
+  // held until step c releases it (step b audits the upload screen meanwhile).
+  const STEP_DELAY = 1_500;
+  const delivered: { t: number; state: string }[] = [];
+  let releaseAuto: () => void = () => {};
+  const autoHeld = new Promise<void>((resolve) => {
+    releaseAuto = resolve;
+  });
 
   const stepB = async () => {
-    await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
-    await page.getByRole("radio", { name: /Modern/ }).check(); // D-068: travel now defaults to Geometric; this spec covers Modern.
-    await page.getByTestId("create-book").click();
-    await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
-    bookId = new URL(page.url()).pathname.split("/")[2];
-    await audit(page, "upload (empty)", { shot: "upload" });
-    await page.getByTestId("upload-input").setInputFiles(await makeSynthetic(page, 6));
-    await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 180_000 });
-    await audit(page, "upload summary", { shot: "upload-summary" });
-  };
-
-  const stepC = async () => {
-    // Replay ticks take ~0 ms, so the build screen would jump straight to review. Every run API
-    // response is held for STEP_DELAY ms (server work is already done) so each reported state
-    // renders; both sides are timestamped so the checklist can be checked against what the
-    // server had reported at that moment.
-    const STEP_DELAY = 1_500;
-    const delivered: { t: number; state: string }[] = [];
     await page.route(/\/api\/ai\/runs(\/|\?|$)/, async (route) => {
+      const req = route.request();
+      if (req.method() === "POST" && /\/api\/ai\/runs$/.test(new URL(req.url()).pathname) && (req.postData() ?? "").includes('"auto":true')) {
+        await autoHeld;
+      }
       const res = await route.fetch();
       const body = await res.text();
       let state = "";
@@ -490,6 +493,20 @@ test.describe("M11 signed-in flow at 375 px (live)", () => {
       }
       if (state) delivered.push({ t: Date.now(), state });
     });
+    await page.getByTestId("start-pick-input").setInputFiles(await makeSynthetic(page, 6));
+    await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
+    bookId = new URL(page.url()).pathname.split("/")[2];
+    // D-068: travel defaults to Geometric; this spec covers Modern.
+    await page.locator("label", { has: page.getByTestId("setup-occasion-travel") }).click();
+    await page.getByTestId("setup-change").click();
+    await page.locator("label", { has: page.getByTestId("setup-style-modern") }).click();
+    await expect(page.getByTestId("setup-status")).toHaveText("Saved", { timeout: 15_000 });
+    await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 180_000 });
+    await expect(page.getByTestId("upload-auto-starting")).toBeVisible();
+    await audit(page, "upload summary (starting)", { shot: "upload-summary" });
+  };
+
+  const stepC = async () => {
     // Record every checklist state the page renders (client navigation keeps this document alive
     // from upload → build → review).
     await page.evaluate(() => {
@@ -503,9 +520,9 @@ test.describe("M11 signed-in flow at 375 px (live)", () => {
       };
       new MutationObserver(snap).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-state"] });
     });
-    // The one deliberate fresh /build load of this run (it starts a replay run).
-    await page.getByTestId("build-album").click();
-    await page.waitForURL(/\/build$/, { timeout: 60_000 });
+    // The one automatic first build of this run (a replay run), released from the hold.
+    releaseAuto();
+    await page.waitForURL(/\/build\?auto=1$/, { timeout: 60_000 });
     await expect(page.getByTestId("build-checklist")).toBeVisible({ timeout: 30_000 });
     await audit(page, "build", { tab: false, shot: "build" });
     await page.waitForURL(/\/review$/, { timeout: 420_000 });
@@ -554,12 +571,10 @@ test.describe("M11 signed-in flow at 375 px (live)", () => {
   };
 
   const stepE = async () => {
+    // M13 T9: editor Share publishes and opens the share screen (no separate draft step).
     await page.getByTestId("editor-done").click();
-    await expect(page).toHaveURL(new RegExp(`/books/${bookId}/publish$`), { timeout: 30_000 });
-    await expect(page.getByTestId("publish-button")).toBeVisible();
-    await audit(page, "publish draft", { shot: "publish-draft" });
-    await page.getByTestId("publish-button").click();
     await expect(page.getByTestId("publish-message")).toHaveText("Your book is live", { timeout: 30_000 });
+    await expect(page).toHaveURL(new RegExp(`/books/${bookId}/publish$`), { timeout: 30_000 });
     const wa = page.getByTestId("share-whatsapp").first();
     await expect(wa).toBeVisible();
     const bg = await wa.evaluate((e) => getComputedStyle(e).backgroundColor);
@@ -629,8 +644,8 @@ test.describe("M11 signed-in flow at 375 px (live)", () => {
   test("dashboard → new → upload → build → review → edit → publish → /b states → settings → sign out", async ({ browser }, info) => {
     test.setTimeout(1_200_000);
     const baseURL = String(info.project.use.baseURL ?? "");
-    await test.step("a. dashboard (empty) + account menu open + new book form", stepA);
-    await test.step("b. upload 6 photos → summary", stepB);
+    await test.step("a. dashboard (empty) + account menu open + new book form + photos-first start", stepA);
+    await test.step("b. choose 6 photos → upload screen (setup card) → summary, auto start held", stepB);
     await test.step("c. AI build (replay): checklist only ticks as the server reports states → review", stepC);
     await test.step("d. editor", stepD);
     await test.step("e. publish draft → live (WhatsApp green)", stepE);

@@ -16,8 +16,17 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "Share your book" };
 
-export default async function PublishPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PublishPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ shared?: string | string[] }>;
+}) {
   const { id } = await params;
+  // Editor Share just published (M13 T9): one-time "Your book is live" / "Changes published".
+  const sharedParam = (await searchParams).shared;
+  const shared = sharedParam === "live" || sharedParam === "changes" ? sharedParam : null;
   const user = await getCurrentUser();
   if (!user) redirect(`/login?next=${encodeURIComponent(`/books/${id}/publish`)}`);
 
@@ -50,6 +59,7 @@ export default async function PublishPage({ params }: { params: Promise<{ id: st
         compare={publishCompare()}
         title={title}
         state={res.state}
+        shared={shared}
         actions={{
           publish: publishBookAction.bind(null, id),
           unpublish: unpublishBookAction.bind(null, id),

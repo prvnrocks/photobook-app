@@ -19,11 +19,13 @@ export function DevPublishClient({
   result,
   paymentsEnabled,
   compare,
+  shared = null,
 }: {
   name: DevPublishStateName;
   result: "ok" | "conflict" | "conflict2" | "failed";
   paymentsEnabled: boolean;
   compare: PublishCompare;
+  shared?: "live" | "changes" | null;
 }) {
   const [state, setState] = useState<PublishState>(() => devPublishState(name));
   const next = useRef<PublishState>(state);
@@ -68,6 +70,7 @@ export function DevPublishClient({
         actions={actions}
         paymentsEnabled={paymentsEnabled}
         compare={compare}
+        shared={shared}
         refresh={() => setState(next.current)}
       />
     </main>

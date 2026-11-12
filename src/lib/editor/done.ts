@@ -1,7 +1,10 @@
-// Editor "Done" (M5 Task 12). Pure + tested in node: wait for pending saves, then decide what the
-// Done button does. The UI (EditorShell) calls finishEditingAction (T13) only when the latest edit
-// is saved (or nothing was pending), so the Memory Keeper learns from what the user sees.
+// Editor header "Share" (M5 Task 12 "Done" → M13 T9, D-070 #4). Pure + tested in node: wait for
+// pending saves, then decide what Share does. The UI (EditorShareButton) calls shareBookAction
+// (publish or publish changes, src/app/books/[id]/publish/actions.ts) only when the latest edit is
+// saved (or nothing was pending), so what goes live is what the user sees.
 
+import { FREE_LINK_DAYS } from "@/lib/publish/free-link";
+import { publishErrorCopy, type PublishError } from "@/lib/publish/ui";
 import { isTerminal, type AutosaveStatus } from "./autosave";
 
 /** What drainSaves needs from AutosaveScheduler. */
@@ -39,36 +42,40 @@ export async function drainSaves(saves: DrainableSaves, maxRounds = MAX_DRAIN_RO
 export type DoneSaveState = AutosaveStatus | { kind: "readOnly" };
 
 export type DoneStep =
-  | { kind: "finish" }
+  | { kind: "share" }
   | { kind: "navigate"; to: string }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string; link?: { href: string; label: string } };
 
 export const DONE_MESSAGES = {
-  unsaved: "We couldn't save your latest changes. Check your connection and tap Done again.",
+  unsaved: "We couldn't save your latest changes. Check your connection and tap Share again.",
   /** Retrying because the server is busy (503 unavailable / 5xx / 429), not offline (M12). */
-  delayed: "Saving is taking longer than usual. Your changes are kept here — wait a moment and tap Done again.",
-  failed: "Something went wrong. Please tap Done again.",
+  delayed: "Saving is taking longer than usual. Your changes are kept here — wait a moment and tap Share again.",
+  failed: "Couldn't publish right now. Check your connection and tap Share again.",
 } as const;
 
 export function loginHref(bookId: string): string {
   return `/login?next=${encodeURIComponent(`/books/${bookId}/edit`)}`;
 }
 
+export function shareScreenHref(bookId: string): string {
+  return `/books/${bookId}/publish`;
+}
+
 /**
- * After drainSaves: what Done does next.
+ * After drainSaves: what Share does next.
  * - saved / nothing pending / last edit rejected as invalid (it can never be saved; the banner
- *   already says so) → finish (Memory Keeper + redirect);
+ *   already says so) → share (publish the saved doc, then the share screen);
  * - still unsaved (offline / retrying / pending) → stay, show an error;
  * - signed out → login, back to the editor;
- * - read-only (conflict / saving unavailable / failed / never available) → straight to the
- *   dashboard: nothing more can be saved, and the saved book may not be what's on screen.
+ * - read-only (conflict / saving unavailable / failed / never available) → the share screen
+ *   WITHOUT publishing: the saved book may not be what's on screen, so the user decides there.
  */
 export function doneStepAfterSave(s: DoneSaveState, bookId: string): DoneStep {
   switch (s.kind) {
     case "idle":
     case "saved":
     case "invalid":
-      return { kind: "finish" };
+      return { kind: "share" };
     case "retrying":
       return {
         kind: "error",
@@ -83,30 +90,52 @@ export function doneStepAfterSave(s: DoneSaveState, bookId: string): DoneStep {
     case "unavailable":
     case "failed":
     case "readOnly":
-      return { kind: "navigate", to: "/dashboard" };
+      return { kind: "navigate", to: shareScreenHref(bookId) };
   }
 }
 
-/** Mirrors FinishEditingResult (src/app/books/[id]/edit/actions.ts) without importing server code. */
-export type FinishResult =
-  | { ok: true; redirectTo: string }
-  | { ok: false; error: "signed_out" | "not_found" | "failed" };
+/** `published` analytics props (M9 T14): flags + page count only. */
+export type SharePublished = { is_paid: boolean; has_password: boolean; pages: number; first: boolean };
+
+/** Mirrors ShareBookResult (src/app/books/[id]/publish/actions.ts) without importing server code. */
+export type ShareResult =
+  | { ok: true; redirectTo: string; published: SharePublished | null }
+  | { ok: false; error: PublishError };
 
 /** Only same-origin app paths are followed (never `//host` or a URL). */
-function safePath(p: unknown): string {
-  return typeof p === "string" && p.startsWith("/") && !p.startsWith("//") && !p.startsWith("/\\") ? p : "/dashboard";
+function safePath(p: unknown, fallback: string): string {
+  return typeof p === "string" && p.startsWith("/") && !p.startsWith("//") && !p.startsWith("/\\") ? p : fallback;
 }
 
-/** After finishEditingAction (null = the call threw / network error). */
-export function doneStepAfterFinish(r: FinishResult | null | undefined, bookId: string): Exclude<DoneStep, { kind: "finish" }> {
+/**
+ * After shareBookAction (null = the call threw / network error). Publish errors keep the user in
+ * the editor with the publish screen's copy; expired / page_limit link to the share screen, where
+ * Upgrade lives.
+ */
+export function doneStepAfterShare(r: ShareResult | null | undefined, bookId: string, maxPages?: number): Exclude<DoneStep, { kind: "share" }> {
   if (!r) return { kind: "error", message: DONE_MESSAGES.failed };
-  if (r.ok) return { kind: "navigate", to: safePath(r.redirectTo) };
+  if (r.ok) return { kind: "navigate", to: safePath(r.redirectTo, shareScreenHref(bookId)) };
   switch (r.error) {
     case "signed_out":
       return { kind: "navigate", to: loginHref(bookId) };
     case "not_found":
       return { kind: "navigate", to: "/dashboard" };
-    default:
+    case "failed":
       return { kind: "error", message: DONE_MESSAGES.failed };
+    case "expired":
+    case "page_limit":
+      return {
+        kind: "error",
+        message: publishErrorCopy(r.error, maxPages),
+        link: { href: shareScreenHref(bookId), label: "See options" },
+      };
+    default:
+      return { kind: "error", message: publishErrorCopy(r.error, maxPages) };
   }
+}
+
+/** Share button subtitle (shown before the tap, D-070 #4). */
+export function shareSubtitle(args: { isPaid: boolean; hasChanges: boolean }): string {
+  if (args.hasChanges) return "Publish changes";
+  return args.isPaid ? "Permanent link" : `Free · ${FREE_LINK_DAYS} days`;
 }

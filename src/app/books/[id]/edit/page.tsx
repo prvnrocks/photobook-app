@@ -11,7 +11,7 @@ import { getEditorData } from "@/lib/db/editor";
 import { editorRedirect, toEditorShellData } from "@/lib/editor/page-data";
 import { isPaymentsEnabled } from "@/lib/stripe";
 import { cn } from "@/lib/utils";
-import { finishEditingAction } from "./actions";
+import { shareBookAction } from "../publish/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -55,11 +55,12 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
     );
   }
 
-  // Header "Done": flush saves client-side, then Memory Keeper + redirect (T12/T13).
-  const finish = finishEditingAction.bind(null, data.book.id);
+  // Header "Share" (M13 T9): flush saves client-side, then publish + share screen (Memory Keeper
+  // learns inside the publish action).
+  const share = shareBookAction.bind(null, data.book.id);
   return (
     <>
-      <EditorShell data={shell} finish={finish} paymentsEnabled={isPaymentsEnabled()} />
+      <EditorShell data={shell} share={share} paymentsEnabled={isPaymentsEnabled()} />
       <Suspense fallback={null}>
         <UpgradeCancelledNotice floating />
       </Suspense>

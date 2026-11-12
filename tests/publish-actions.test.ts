@@ -51,7 +51,7 @@ vi.mock("@/lib/db/photos", () => ({ listPlaceablePhotos: async () => fake.state.
 vi.mock("@/lib/ai/learn-from-book", () => ({ learnFromBook: fake.learnFromBook }));
 vi.mock("next/cache", () => ({ revalidatePath: fake.revalidatePath }));
 
-const { publishBookAction, unpublishBookAction, setBookPasswordAction, getPublishState } = await import(
+const { publishBookAction, unpublishBookAction, setBookPasswordAction, getPublishState, shareBookAction } = await import(
   "@/app/books/[id]/publish/actions"
 );
 const { verifyPassword } = await import("@/lib/publish/password");
@@ -344,6 +344,81 @@ describe("publishBookAction", () => {
     fake.state.results.push({ data: null, error: { code: "08006", message: SECRET } });
     expect(await publishBookAction(BOOK)).toEqual({ ok: false, error: "failed" });
     expect(logs.some((l) => l.includes("08006"))).toBe(true);
+  });
+});
+
+describe("shareBookAction (M13 T9: editor Share = publish)", () => {
+  const LIVE = { slug: "summer-AbCdEfGh12", published_at: "2026-11-01T09:00:00Z", expires_at: "2026-12-01T09:00:00Z", live_version: 1 };
+
+  it("first share publishes and returns the share screen with ?shared=live + first-publish analytics", async () => {
+    fake.state.results.push({ data: row(), error: null }, { data: row(), error: null }, { data: [{ id: BOOK }], error: null });
+    const r = await shareBookAction(BOOK);
+    expect(r).toEqual({
+      ok: true,
+      redirectTo: `/books/${BOOK}/publish?shared=live`,
+      published: { is_paid: false, has_password: false, pages: doc().pages.length, first: true },
+    });
+    expect(updates()).toHaveLength(1);
+    expect(updates()[0].payload).toMatchObject({ published_rev: 7 });
+  });
+
+  it("live with unpublished edits → publishes changes (?shared=changes, first false), expiry unchanged", async () => {
+    const live = row({ ...LIVE, published_rev: 6, doc_rev: 7, password_hash: "scrypt$x" });
+    fake.state.results.push({ data: live, error: null }, { data: live, error: null }, { data: [{ id: BOOK }], error: null });
+    const r = await shareBookAction(BOOK);
+    expect(r).toMatchObject({ ok: true, redirectTo: `/books/${BOOK}/publish?shared=changes`, published: { first: false, has_password: true } });
+    expect(updates()[0].payload).toMatchObject({ expires_at: LIVE.expires_at, published_rev: 7 });
+  });
+
+  it("unpublished after a publish → publishes again as 'live', first false", async () => {
+    const off = row({ ...LIVE, live_version: null, published_rev: 7 });
+    fake.state.results.push({ data: off, error: null }, { data: off, error: null }, { data: [{ id: BOOK }], error: null });
+    expect(await shareBookAction(BOOK)).toMatchObject({ ok: true, redirectTo: `/books/${BOOK}/publish?shared=live`, published: { first: false } });
+  });
+
+  it("already live and up to date → no write, no analytics props, plain share screen", async () => {
+    fake.state.results.push({ data: row({ ...LIVE, published_rev: 7 }), error: null });
+    expect(await shareBookAction(BOOK)).toEqual({ ok: true, redirectTo: `/books/${BOOK}/publish`, published: null });
+    expect(updates()).toHaveLength(0);
+    expect(fake.learnFromBook).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocked: expired / page_limit / empty → the publish error code, no write", async () => {
+    const expired = row({ ...LIVE, expires_at: "2026-10-31T00:00:00Z", published_rev: 6 });
+    fake.state.results.push({ data: expired, error: null }, { data: expired, error: null });
+    expect(await shareBookAction(BOOK)).toEqual({ ok: false, error: "expired" });
+    fake.state.results.push({ data: row({ doc: doc(21) }), error: null }, { data: row({ doc: doc(21) }), error: null });
+    expect(await shareBookAction(BOOK)).toEqual({ ok: false, error: "page_limit" });
+    fake.state.results.push({ data: row({ doc: doc(0) }), error: null }, { data: row({ doc: doc(0) }), error: null });
+    expect(await shareBookAction(BOOK)).toEqual({ ok: false, error: "empty" });
+    expect(updates()).toHaveLength(0);
+  });
+
+  it("a conflict is retried once; a second conflict is returned", async () => {
+    fake.state.results.push(
+      { data: row(), error: null },
+      { data: row(), error: null },
+      { data: [], error: null },
+      { data: row({ doc_rev: 8 }), error: null },
+      { data: [{ id: BOOK }], error: null },
+    );
+    expect((await shareBookAction(BOOK)).ok).toBe(true);
+    expect(updates()).toHaveLength(2);
+    fake.state.chains = [];
+    fake.state.results.push({ data: row(), error: null }, { data: row(), error: null }, { data: [], error: null }, { data: row(), error: null }, { data: [], error: null });
+    expect(await shareBookAction(BOOK)).toEqual({ ok: false, error: "conflict" });
+  });
+
+  it("signed out / foreign book / db error", async () => {
+    fake.state.user = null;
+    expect(await shareBookAction(BOOK)).toEqual({ ok: false, error: "signed_out" });
+    fake.state.user = { id: USER };
+    fake.state.mine = null;
+    expect(await shareBookAction(BOOK)).toEqual({ ok: false, error: "not_found" });
+    expect(fake.state.chains).toHaveLength(0);
+    fake.state.mine = { id: BOOK };
+    fake.state.results.push({ data: null, error: { code: "57014", message: SECRET } });
+    expect(await shareBookAction(BOOK)).toEqual({ ok: false, error: "failed" });
   });
 });
 

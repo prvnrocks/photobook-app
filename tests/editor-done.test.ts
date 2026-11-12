@@ -2,10 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { AutosaveStatus } from "@/lib/editor/autosave";
 import {
   DONE_MESSAGES,
-  doneStepAfterFinish,
   doneStepAfterSave,
+  doneStepAfterShare,
   drainSaves,
   loginHref,
+  shareSubtitle,
   type DrainableSaves,
 } from "@/lib/editor/done";
 
@@ -90,8 +91,8 @@ describe("doneStepAfterSave", () => {
     [{ kind: "idle" }],
     [{ kind: "saved", savedAt: null }],
     [{ kind: "invalid", code: "too_many_pages" }],
-  ] as const)("%o → finish", (s) => {
-    expect(doneStepAfterSave(s, BOOK)).toEqual({ kind: "finish" });
+  ] as const)("%o → share", (s) => {
+    expect(doneStepAfterSave(s, BOOK)).toEqual({ kind: "share" });
   });
 
   it.each([[{ kind: "pending" }], [{ kind: "saving" }], [{ kind: "retrying", attempt: 1 }]] as const)(
@@ -117,35 +118,55 @@ describe("doneStepAfterSave", () => {
   });
 
   it.each([[{ kind: "conflict" }], [{ kind: "unavailable" }], [{ kind: "failed" }], [{ kind: "readOnly" }]] as const)(
-    "read-only %o → dashboard without finishing",
+    "read-only %o → share screen without publishing",
     (s) => {
-      expect(doneStepAfterSave(s, BOOK)).toEqual({ kind: "navigate", to: "/dashboard" });
+      expect(doneStepAfterSave(s, BOOK)).toEqual({ kind: "navigate", to: `/books/${BOOK}/publish` });
     },
   );
 });
 
-describe("doneStepAfterFinish", () => {
-  it("ok → redirectTo", () => {
-    expect(doneStepAfterFinish({ ok: true, redirectTo: "/dashboard" }, BOOK)).toEqual({ kind: "navigate", to: "/dashboard" });
-    expect(doneStepAfterFinish({ ok: true, redirectTo: `/books/${BOOK}/publish` }, BOOK)).toEqual({
+describe("doneStepAfterShare (M13 T9)", () => {
+  const SCREEN = `/books/${BOOK}/publish`;
+  it("ok → redirectTo (share screen, with or without ?shared=)", () => {
+    expect(doneStepAfterShare({ ok: true, redirectTo: `${SCREEN}?shared=live`, published: null }, BOOK)).toEqual({
       kind: "navigate",
-      to: `/books/${BOOK}/publish`,
+      to: `${SCREEN}?shared=live`,
     });
+    expect(doneStepAfterShare({ ok: true, redirectTo: SCREEN, published: null }, BOOK)).toEqual({ kind: "navigate", to: SCREEN });
   });
 
-  it("never follows off-origin redirects", () => {
+  it("never follows off-origin redirects (falls back to the share screen)", () => {
     for (const bad of ["//evil.example", "https://evil.example", "/\\evil", ""]) {
-      expect(doneStepAfterFinish({ ok: true, redirectTo: bad }, BOOK)).toEqual({ kind: "navigate", to: "/dashboard" });
+      expect(doneStepAfterShare({ ok: true, redirectTo: bad, published: null }, BOOK)).toEqual({ kind: "navigate", to: SCREEN });
     }
   });
 
   it("signed_out → login; not_found → dashboard", () => {
-    expect(doneStepAfterFinish({ ok: false, error: "signed_out" }, BOOK)).toEqual({ kind: "navigate", to: loginHref(BOOK) });
-    expect(doneStepAfterFinish({ ok: false, error: "not_found" }, BOOK)).toEqual({ kind: "navigate", to: "/dashboard" });
+    expect(doneStepAfterShare({ ok: false, error: "signed_out" }, BOOK)).toEqual({ kind: "navigate", to: loginHref(BOOK) });
+    expect(doneStepAfterShare({ ok: false, error: "not_found" }, BOOK)).toEqual({ kind: "navigate", to: "/dashboard" });
   });
 
-  it("failed / threw → retry message", () => {
-    expect(doneStepAfterFinish({ ok: false, error: "failed" }, BOOK)).toEqual({ kind: "error", message: DONE_MESSAGES.failed });
-    expect(doneStepAfterFinish(null, BOOK)).toEqual({ kind: "error", message: DONE_MESSAGES.failed });
+  it("failed / threw → retry message, stays in the editor", () => {
+    expect(doneStepAfterShare({ ok: false, error: "failed" }, BOOK)).toEqual({ kind: "error", message: DONE_MESSAGES.failed });
+    expect(doneStepAfterShare(null, BOOK)).toEqual({ kind: "error", message: DONE_MESSAGES.failed });
+  });
+
+  it("blocked publishes stay in the editor with the publish copy; expired / page_limit link to the share screen", () => {
+    expect(doneStepAfterShare({ ok: false, error: "empty" }, BOOK)).toEqual({ kind: "error", message: expect.stringContaining("no pages") });
+    expect(doneStepAfterShare({ ok: false, error: "invalid_doc" }, BOOK)).toMatchObject({ kind: "error" });
+    expect(doneStepAfterShare({ ok: false, error: "conflict" }, BOOK)).toEqual({ kind: "error", message: "Something changed — try again" });
+    const limit = doneStepAfterShare({ ok: false, error: "page_limit" }, BOOK, 20);
+    expect(limit).toEqual({ kind: "error", message: expect.stringContaining("more than 20 pages"), link: { href: SCREEN, label: "See options" } });
+    const expired = doneStepAfterShare({ ok: false, error: "expired" }, BOOK);
+    expect(expired).toMatchObject({ kind: "error", message: expect.stringContaining("expired"), link: { href: SCREEN } });
+  });
+});
+
+describe("shareSubtitle", () => {
+  it("free → 30-day notice; paid → permanent; unpublished edits → Publish changes", () => {
+    expect(shareSubtitle({ isPaid: false, hasChanges: false })).toBe("Free · 30 days");
+    expect(shareSubtitle({ isPaid: true, hasChanges: false })).toBe("Permanent link");
+    expect(shareSubtitle({ isPaid: false, hasChanges: true })).toBe("Publish changes");
+    expect(shareSubtitle({ isPaid: true, hasChanges: true })).toBe("Publish changes");
   });
 });

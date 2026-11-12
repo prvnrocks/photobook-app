@@ -412,12 +412,11 @@ test("a. build (replay) → publish a free book → viewer has watermark + foote
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/review$/, { timeout: 420_000 });
   await page.getByTestId("review-continue").click();
   await page.waitForURL(new RegExp(`/books/${bookId}/edit$`), { timeout: 30_000 });
-  await page.getByTestId("editor-done").click();
-  await expect(page).toHaveURL(new RegExp(`/books/${bookId}/publish$`), { timeout: 30_000 });
-
+  // M13 T9: editor Share publishes and opens the share screen.
   const t0 = Date.now();
-  await page.getByTestId("publish-button").click();
+  await page.getByTestId("editor-done").click();
   await expect(page.getByTestId("publish-message")).toHaveText("Your book is live", { timeout: 30_000 });
+  await expect(page).toHaveURL(new RegExp(`/books/${bookId}/publish$`), { timeout: 30_000 });
   const row = await bookRow();
   slug = row.slug ?? "";
   expect(slug).not.toBe("");

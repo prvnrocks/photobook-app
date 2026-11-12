@@ -158,6 +158,39 @@ describe("hasUnpublishedChanges", () => {
   });
 });
 
+describe("PublishPanelView after the editor's Share (M13 T9)", () => {
+  const shared = (name: DevPublishStateName, flag: "live" | "changes" | null) =>
+    renderToStaticMarkup(
+      <PublishPanelView
+        bookId={BOOK}
+        title="Sara & Omar"
+        state={devPublishState(name)}
+        actions={actions}
+        paymentsEnabled
+        compare={publishCompare()}
+        refresh={() => {}}
+        now={NOW}
+        shared={flag}
+      />,
+    );
+
+  it("?shared=live → 'Your book is live'; ?shared=changes → 'Changes published'; none → no message", () => {
+    expect(shared("live", "live")).toMatch(/data-testid="publish-message">Your book is live</);
+    expect(shared("live", "changes")).toMatch(/data-testid="publish-message">Changes published</);
+    expect(shared("live", null)).not.toContain('data-testid="publish-message"');
+  });
+
+  it("live free: WhatsApp leads, then Copy, then the free vs paid card + Upgrade; copy says the link is public", () => {
+    const html = shared("live", "live");
+    const at = (id: string) => html.indexOf(`data-testid="${id}"`);
+    expect(at("share-whatsapp")).toBeGreaterThan(-1);
+    expect(at("share-whatsapp")).toBeLessThan(at("share-copy"));
+    expect(at("share-copy")).toBeLessThan(at("publish-free-notice"));
+    expect(at("publish-free-notice")).toBeLessThan(at("publish-upgrade"));
+    expect(html).toContain("Anyone with the link can see it");
+  });
+});
+
 describe("PublishPanelView states", () => {
   it.each(DEV_PUBLISH_STATES)("%s renders the message slot and the panel", (name) => {
     const html = panel(name);
@@ -356,17 +389,19 @@ describe("dashboard publish chip", () => {
   });
 });
 
-describe("editor header publish chip", () => {
-  it("shown when published and the loaded rev is past the snapshot", () => {
+describe("editor header: Publish changes folded into Share (M13 T9)", () => {
+  it("Share shows 'Publish changes' when published and the loaded rev is past the snapshot", () => {
     const data = { ...devEditorData("ok"), docRev: 4, publishedRev: 3 };
     const html = renderToStaticMarkup(<EditorShell data={data} transport={devTransport("ok")} tools={[]} />);
-    expect(html).toContain('data-testid="editor-publish-changes"');
+    expect(html).toMatch(/<button[^>]*data-testid="editor-done"[^>]*data-changes="true"/);
+    expect(html).toMatch(/<span[^>]*data-testid="editor-publish-changes"[^>]*>Publish changes<\/span>/);
   });
-  it("hidden when unpublished or up to date", () => {
+  it("no 'Publish changes' when unpublished or up to date", () => {
     for (const publishedRev of [null, 1]) {
       const data = { ...devEditorData("ok"), docRev: 1, publishedRev };
       const html = renderToStaticMarkup(<EditorShell data={data} transport={devTransport("ok")} tools={[]} />);
       expect(html).not.toContain('data-testid="editor-publish-changes"');
+      expect(html).toContain('data-testid="editor-share-note"');
     }
   });
 });

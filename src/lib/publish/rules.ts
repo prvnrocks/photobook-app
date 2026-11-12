@@ -5,7 +5,9 @@
 import { parseBookDoc } from "@/lib/book/schema";
 import type { BookDoc } from "@/lib/book/types";
 
-export const FREE_LINK_DAYS = 30;
+import { FREE_LINK_DAYS } from "./free-link";
+
+export { FREE_LINK_DAYS };
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type DateInput = Date | string | null | undefined;
