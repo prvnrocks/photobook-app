@@ -16,6 +16,11 @@
  *   NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, SUPABASE_SECRET_KEY,
  *   MAPBOX_TOKEN (used by the app server for place names).
  *
+ * M13 T5/T6: the first test starts photos-first (/books/start → upload screen without a second picker,
+ * setup card); every automatic-build request (POST /api/ai/runs { auto: true }) is answered by the
+ * test with 429 daily_builds, so no AI run is ever created here and the "Make my book now" fallback
+ * is checked. The other tests create books through /books/new ("Choose style first").
+ *
  * Run (uses the dev server from playwright.config.ts on :3000):
  *   E2E_AUTH=1 npx playwright test e2e/upload-auth.spec.ts
  * Or against a production build on another port with your own config, e.g.
@@ -62,6 +67,8 @@ let files: FileSpec[] = [];
 const ACCEPTED = 5; // orient6.jpg, orient6.heic, screenshot.png, dupA, dupB
 const TOO_SMALL = 2; // exif-gps.jpg + no-exif.jpg are 32x24 (< 200 px)
 let book1 = "";
+/** Bodies of the automatic-build requests the page sent (answered 429 by the test). */
+const autoRequests: unknown[] = [];
 let book3 = "";
 
 function env(name: string): string {
@@ -113,6 +120,17 @@ async function bookDoc(bookId: string): Promise<unknown> {
   const { data, error } = await admin.from("books").select("doc, max_pages").eq("id", bookId).single();
   if (error) throw new Error(`books select failed (${error.code})`);
   return data.doc;
+}
+
+/** M13 T5: /books/start → pick photos → the upload screen starts uploading them (no second picker). */
+async function startBookWithPhotos(picked: FileSpec[]): Promise<string> {
+  await page.goto("/books/start");
+  await expect(page.getByTestId("start-pick")).toBeVisible();
+  await page.getByTestId("start-pick-input").setInputFiles(picked);
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
+  const id = new URL(page.url()).pathname.split("/")[2];
+  await expect(page.getByTestId("upload-pick")).toHaveCount(0);
+  return id;
 }
 
 async function createBookViaUi(): Promise<string> {
@@ -217,9 +235,26 @@ test.beforeAll(async ({ browser }) => {
   context = await browser.newContext({ viewport: VIEWPORT });
   page = await context.newPage();
   page.on("dialog", (d) => void d.accept()); // beforeunload on reload during upload
+  // Never start an AI run from this spec: answer every automatic first-build request with a limit.
+  await context.route("**/api/ai/runs", async (route) => {
+    const req = route.request();
+    let body: unknown = null;
+    try {
+      body = req.postDataJSON();
+    } catch {
+      body = null;
+    }
+    if (req.method() === "POST" && (body as { auto?: unknown } | null)?.auto === true) {
+      autoRequests.push(body);
+      await route.fulfill({ status: 429, contentType: "application/json", body: JSON.stringify({ error: "limit", limit: "daily_builds" }) });
+      return;
+    }
+    await route.continue();
+  });
   const hashed = await signInLink();
-  await page.goto(`/auth/confirm?token_hash=${hashed}&type=magiclink&next=/books/new`);
-  await expect(page).toHaveURL(/\/books\/new$/);
+  // M13 T5: login → /books/start (the landing CTA's target).
+  await page.goto(`/auth/confirm?token_hash=${hashed}&type=magiclink&next=/books/start`);
+  await expect(page).toHaveURL(/\/books\/start$/);
 
   // A separate user-session client (publishable key, RLS) for live error-shape checks.
   userClient = createClient(url, env("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"), {
@@ -268,12 +303,28 @@ test.afterAll(async () => {
   expect(error).toBeNull();
 });
 
-test("upload at 375px: rows, storage objects, places, fallback album", async () => {
-  book1 = await createBookViaUi();
+test("photos first at 375px: start → upload (no second picker), setup card, auto build asked; rows, storage, places, fallback album", async () => {
+  book1 = await startBookWithPhotos(files);
+  // Draft defaults (startBookAction): occasion other → neutral header, no "Untitled book".
+  await expect(page.getByTestId("upload-book-title")).toHaveText("Your book");
+  await expect(page.getByTestId("setup-occasion-other")).toBeChecked();
+  // Setup card while uploading: Travel (feel follows) + Modern style from the Change panel.
+  await page.locator("label", { has: page.getByTestId("setup-occasion-travel") }).click();
+  await page.getByTestId("setup-change").click();
+  await expect(page.getByTestId("setup-change")).toHaveAttribute("aria-expanded", "true");
+  await page.locator("label", { has: page.getByTestId("setup-style-modern") }).click();
+  await expect(page.getByTestId("setup-status")).toHaveText("Saved", { timeout: 15_000 });
   await expect(page.getByTestId("upload-occasion")).toHaveText("Travel");
+  const setupRow = (await admin.from("books").select("occasion, tone, design_style, title").eq("id", book1).single()).data;
+  expect(setupRow).toEqual({ occasion: "travel", tone: "fun", design_style: "modern", title: null });
 
-  await page.getByTestId("upload-input").setInputFiles(files);
   await waitForSummary();
+  // The first build was asked for automatically (the test answered 429) → fallback with the limit copy.
+  await expect(page.getByTestId("build-album")).toHaveText("Make my book now", { timeout: 30_000 });
+  await expect(page.getByTestId("upload-auto-fallback")).toContainText("free AI builds");
+  expect(autoRequests).toEqual([{ bookId: book1, auto: true }]);
+  await expect(page.getByTestId("setup-occasion-wedding")).toBeEnabled(); // editable again: no run was created
+  await page.screenshot({ path: test.info().outputPath("m13-upload-setup-375.png"), fullPage: true });
 
   await expect(page.getByTestId("summary-added")).toHaveText(`${ACCEPTED} photos added`);
   await expect(page.getByTestId("summary-skipped-too_small")).toHaveText(`${TOO_SMALL} too small`);

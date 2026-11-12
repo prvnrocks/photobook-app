@@ -1,12 +1,15 @@
 "use client";
 // What happened after an upload run (+ finalize counts when available). Presentational, plus
 // the D-020 iOS location hint (device check runs client-side only, after hydration).
-// M11 T10 (D-067): result card + a sticky next-step bar — "Build my album" is the call to action,
-// "Add more photos" the secondary action.
+// M11 T10 (D-067): result card + a sticky next-step bar.
+// M13 T6 (D-070): the first AI build starts by itself, so the bar shows "Starting your book…" while
+// that happens; "Make my book now" (testid build-album) is only the fallback (fewer than 5 photos,
+// a limit or an error); a book that already had a build continues to it instead.
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useSyncExternalStore } from "react";
 import { ActionBar } from "@/components/app/ActionBar";
+import { LoadingState } from "@/components/app/LoadingState";
 import { Notice } from "@/components/app/Notice";
 import { Button, buttonVariants } from "@/components/ui/button";
 import type { FinalizeResult } from "@/lib/upload/finalize-client";
@@ -15,11 +18,21 @@ import { plural, skippedLines } from "@/lib/upload/summary-text";
 import { isIosDevice } from "@/lib/device";
 import { cn } from "@/lib/utils";
 
+/** What the next-step bar offers. */
+export type SummaryNext =
+  /** The automatic first build is being asked for / the screen is moving on. */
+  | { kind: "starting" }
+  /** Fallback: "Make my book now" → the build screen (with an optional explanation). */
+  | { kind: "build"; note?: string }
+  /** The book already had a build: continue there. */
+  | { kind: "continue"; href: string; label: string };
+
 type UploadSummaryProps = {
   bookId: string;
   summary: QueueSummary;
   finalize: FinalizeResult | null;
   onAddMore: () => void;
+  next: SummaryNext;
 };
 
 const noSubscribe = () => () => undefined;
@@ -27,7 +40,7 @@ const readIsIos = () =>
   isIosDevice(navigator.userAgent, navigator.platform ?? "", navigator.maxTouchPoints ?? 0);
 const serverIsIos = () => false;
 
-export function UploadSummary({ bookId, summary, finalize, onAddMore }: UploadSummaryProps) {
+export function UploadSummary({ bookId, summary, finalize, onAddMore, next }: UploadSummaryProps) {
   const isIos = useSyncExternalStore(noSubscribe, readIsIos, serverIsIos);
   const showGpsHint = isIos && finalize !== null && finalize.photos > 0 && finalize.withGps === 0;
   const skipped = skippedLines(summary.skippedBy);
@@ -105,25 +118,49 @@ export function UploadSummary({ bookId, summary, finalize, onAddMore }: UploadSu
 
       </section>
 
+      {next.kind === "build" && next.note ? (
+        <Notice tone="info" data-testid="upload-auto-fallback">
+          {next.note}
+        </Notice>
+      ) : null}
+
       <ActionBar label="Next step">
-        <Link
-          href={`/books/${bookId}/build`}
-          className={cn(buttonVariants({ variant: "accent", size: "cta" }))}
-          data-testid="build-album"
-        >
-          Build my album
-        </Link>
-        <Button
-          type="button"
-          variant="outline"
-          size="touch"
-          onClick={onAddMore}
-          className="w-full text-base sm:h-12"
-          data-testid="upload-add-more"
-        >
-          <Plus aria-hidden="true" data-icon="inline-start" />
-          Add more photos
-        </Button>
+        {next.kind === "starting" ? (
+          <LoadingState
+            label="Starting your book…"
+            description="AI is picking your best photos and writing captions."
+            data-testid="upload-auto-starting"
+          />
+        ) : next.kind === "build" ? (
+          <Link
+            href={`/books/${bookId}/build`}
+            className={cn(buttonVariants({ variant: "accent", size: "cta" }))}
+            data-testid="build-album"
+          >
+            Make my book now
+          </Link>
+        ) : (
+          <Link
+            href={next.href}
+            className={cn(buttonVariants({ variant: "accent", size: "cta" }))}
+            data-testid="upload-continue"
+          >
+            {next.label}
+          </Link>
+        )}
+        {next.kind !== "starting" ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="touch"
+            onClick={onAddMore}
+            className="w-full text-base sm:h-12"
+            data-testid="upload-add-more"
+          >
+            <Plus aria-hidden="true" data-icon="inline-start" />
+            Add more photos
+          </Button>
+        ) : null}
       </ActionBar>
     </div>
   );

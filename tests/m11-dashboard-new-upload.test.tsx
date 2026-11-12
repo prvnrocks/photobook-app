@@ -5,10 +5,15 @@ import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/app/books/actions", () => ({ createBookAction: vi.fn(), deleteUnfinishedAction: vi.fn() }));
+vi.mock("@/app/books/actions", () => ({
+  createBookAction: vi.fn(),
+  deleteUnfinishedAction: vi.fn(),
+  startBookAction: vi.fn(),
+  updateBookSetupAction: vi.fn(),
+}));
 vi.mock("next/navigation", async (orig) => ({
   ...(await orig<typeof import("next/navigation")>()),
-  useRouter: () => ({ refresh: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ refresh: vi.fn(), replace: vi.fn(), push: vi.fn() }),
 }));
 
 const { BookList } = await import("@/components/dashboard/BookList");
@@ -20,6 +25,22 @@ const { UploadSummary } = await import("@/components/upload/UploadSummary");
 const { UploadProgress } = await import("@/components/upload/UploadProgress");
 type BookListItem = import("@/lib/db/books").BookListItem;
 type QueueSummary = import("@/lib/upload/queue").QueueSummary;
+type UploaderProps = import("@/components/upload/Uploader").UploaderProps;
+
+const uploaderProps: UploaderProps = {
+  bookId: "b1",
+  userId: "u1",
+  isPaid: false,
+  existing: [],
+  maxUpload: 150,
+  readyCount: 0,
+  pendingCount: 0,
+  hasDoc: false,
+  setup: { occasion: "other", tone: "minimal", captionLang: "en", title: null, format: "A5_PORTRAIT", designStyle: "modern" },
+  locks: { details: null, design: null },
+  firstRun: "none",
+  dailyCap: 3,
+};
 
 const src = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const NOW = new Date("2026-11-11T08:00:00Z");
@@ -91,14 +112,16 @@ describe("T8 dashboard cards", () => {
     const empty = renderToStaticMarkup(<EmptyState />);
     expect(empty).toMatch(/<section[^>]*data-testid="dashboard-empty"/);
     expect(empty).toMatch(/<h2 dir="auto"[^>]*>No books yet<\/h2>/);
-    expect(empty).toMatch(/bg-accent-strong[^"]*"[^>]*data-testid="create-first-book"[^>]*>Create your first book/);
+    // M13 T5: the call to action is the photo picker's label (input inside), plus "Choose style first".
+    expect(empty).toMatch(/<label[^>]*bg-accent-strong[^"]*"[^>]*data-testid="create-first-book"[^>]*>[\s\S]*?<input type="file"[^>]*data-testid="create-first-book-input"[\s\S]*?Create your first book<\/label>/);
+    expect(empty).toMatch(/<a [^>]*data-testid="empty-choose-style" href="\/books\/new">Choose style first/);
   });
 
   it("page: shared PageHeader keeps the heading testid, error as an error Notice", () => {
     const page = src("src/app/dashboard/page.tsx");
     expect(page).toContain("<PageHeader");
     expect(page).toContain('titleTestId="dashboard-heading"');
-    expect(page).toContain('data-testid="new-book"');
+    expect(page).toContain('<StartPicker variant="button" testId="new-book" />');
     expect(page).toContain('<Notice tone="error" data-testid="dashboard-error">');
   });
 });
@@ -160,9 +183,7 @@ describe("T10 Upload", () => {
   } as unknown as QueueSummary;
 
   it("idle: a large drop-zone style Choose photos area (≥ 120 px), no keep-open notice yet", () => {
-    const html = renderToStaticMarkup(
-      <Uploader bookId="b1" userId="u1" isPaid={false} existing={[]} maxUpload={150} readyCount={0} pendingCount={0} hasDoc={false} />,
-    );
+    const html = renderToStaticMarkup(<Uploader {...uploaderProps} />);
     const pick = html.match(/<button[^>]*data-testid="upload-pick"[^>]*>/)?.[0] ?? "";
     expect(pick).toContain("min-h-40"); // 160 px
     expect(pick).toContain("border-dashed");
@@ -173,9 +194,7 @@ describe("T10 Upload", () => {
   });
 
   it("resume state is a warn Notice with the remove button", () => {
-    const html = renderToStaticMarkup(
-      <Uploader bookId="b1" userId="u1" isPaid={false} existing={[]} maxUpload={150} readyCount={2} pendingCount={1} hasDoc={false} />,
-    );
+    const html = renderToStaticMarkup(<Uploader {...uploaderProps} readyCount={2} pendingCount={1} />);
     expect(html).toMatch(/data-tone="warn" data-testid="upload-resume"/);
     expect(html).toContain('data-testid="remove-unfinished"');
   });
@@ -188,8 +207,10 @@ describe("T10 Upload", () => {
     expect(src("src/components/upload/Uploader.tsx")).toMatch(/<Notice tone="info" title="Keep this screen open"/);
   });
 
-  it("summary: Build my album is the cta, Add more photos secondary, in a sticky next-step bar", () => {
-    const html = renderToStaticMarkup(<UploadSummary bookId="b1" summary={summary} finalize={null} onAddMore={() => {}} />);
+  it("summary fallback: Make my book now is the cta, Add more photos secondary, in a sticky next-step bar", () => {
+    const html = renderToStaticMarkup(
+      <UploadSummary bookId="b1" summary={summary} finalize={null} onAddMore={() => {}} next={{ kind: "build" }} />,
+    );
     expect(html).toMatch(/role="group" aria-label="Next step"[^>]*sticky/);
     const build = html.match(/<a[^>]*data-testid="build-album"[^>]*>/)?.[0] ?? "";
     expect(build).toContain('href="/books/b1/build"');

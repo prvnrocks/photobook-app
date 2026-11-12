@@ -6,14 +6,43 @@
 // except the user's own Supabase rows/files.
 // M11 T10 (D-067): a large drop-zone style "Choose photos" area (tap to pick; desktop can also drop
 // files on it), status boxes as shared <Notice>s and "Keep this screen open" as an info notice.
+// M13 T5/T6 (D-070): photos picked on /books/start arrive in memory (pending-files) and start
+// uploading on mount — no second picker; the setup card sits beside the progress; when uploads +
+// finalize settle with ≥ 5 photos the first AI build is asked for automatically (the server decides,
+// src/lib/upload/auto-build-client.ts) and the screen moves on — "Make my book now" is the fallback.
 import { ImagePlus } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState, useTransition, type ChangeEvent, type DragEvent } from "react";
+import { useRouter } from "next/navigation";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useTransition,
+  type ChangeEvent,
+  type DragEvent,
+} from "react";
 import { deleteUnfinishedAction } from "@/app/books/actions";
 import { LoadingState } from "@/components/app/LoadingState";
 import { Notice } from "@/components/app/Notice";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { track } from "@/lib/analytics/client";
+import { msBucket } from "@/lib/analytics/events";
+import type { BookSetup } from "@/lib/book/setup";
+import type { BookFormat } from "@/lib/book/types";
+import type { RunLimit } from "@/lib/runs/client";
+import { limitCopy } from "@/lib/runs/stage-copy";
+import {
+  AUTO_BUILD_MIN_PHOTOS,
+  autoStartNext,
+  buildHref,
+  editorHref,
+  NOT_READY_RETRY_MS,
+  requestAutoBuild,
+  shouldAutoStart,
+  type FirstRunState,
+} from "@/lib/upload/auto-build-client";
 import {
   colorsBody,
   finalizeWithPlaces,
@@ -27,9 +56,14 @@ import type {
   QueueSummary,
   UploadQueue,
 } from "@/lib/upload/queue";
+import type { SetupLocks } from "@/lib/upload/setup-ui";
 import { plural } from "@/lib/upload/summary-text";
+import { cn } from "@/lib/utils";
+import { hasPendingFiles, takePendingFiles } from "./pending-files";
+import { SetupCard } from "./SetupCard";
 import { UploadProgress } from "./UploadProgress";
-import { UploadSummary } from "./UploadSummary";
+import { UploadSummary, type SummaryNext } from "./UploadSummary";
+import { useBookSetup } from "./use-book-setup";
 import { useWakeLock, useWarnOnLeave } from "./use-keep-awake";
 
 export type UploaderProps = {
@@ -43,7 +77,22 @@ export type UploaderProps = {
   pendingCount: number;
   /** Book already has an album doc (finalize wrote one before). */
   hasDoc: boolean;
+  /** The book's setup as stored (M13 T6 setup card). */
+  setup: BookSetup;
+  /** Which setup fields can still change (src/lib/book/setup.ts), as of page load. */
+  locks: SetupLocks;
+  /** AI build state at page load: none = the automatic first build may start. */
+  firstRun: FirstRunState;
+  /** D-026 daily cap for the limit copy. */
+  dailyCap: number;
 };
+
+type AutoState =
+  | { kind: "idle" }
+  /** The automatic first build will be / is being asked for, or the screen is moving on. */
+  | { kind: "starting" }
+  /** It didn't start: show "Make my book now" (with the limit copy when that was the reason). */
+  | { kind: "fallback"; limit?: RunLimit; few?: number };
 
 type Phase = "idle" | "running" | "finalizing" | "finalize_error" | "done";
 
@@ -60,8 +109,17 @@ const signInLinkClass =
   "inline-flex min-h-11 items-center rounded-md font-medium text-foreground underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export function Uploader(props: UploaderProps) {
-  const { bookId, userId, isPaid, maxUpload } = props;
+  const { bookId, userId, isPaid, maxUpload, firstRun } = props;
   const loginHref = `/login?next=${encodeURIComponent(`/books/${bookId}/upload`)}`;
+  const router = useRouter();
+  const setupCtl = useBookSetup(bookId, props.setup, props.locks);
+  /** The setup card is for fresh books only (no build yet). */
+  const [showSetup] = useState(() => firstRun === "none" && props.locks.details === null);
+  const [auto, setAuto] = useState<AutoState>({ kind: "idle" });
+  const autoBusyRef = useRef(false);
+  /** Photos handed over from /books/start: they start uploading on mount (no second picker). */
+  const [handoff, setHandoff] = useState(false);
+  const [suggestedFormat, setSuggestedFormat] = useState<BookFormat | undefined>(undefined);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<UploadQueue | null>(null);
@@ -113,6 +171,28 @@ export function Uploader(props: UploaderProps) {
       queueRef.current?.cancel();
     };
   }, []);
+
+  // Before paint: hide the picker when files are waiting (no flash of "Choose photos").
+  useLayoutEffect(() => {
+    if (hasPendingFiles(bookId)) setHandoff(true);
+  }, [bookId]);
+
+  // Take the handed-over files after StrictMode's mount/unmount/mount settles (timer cleared on the
+  // first unmount), then upload them like a selection.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const pending = takePendingFiles(bookId);
+      if (!pending) {
+        setHandoff(false);
+        return;
+      }
+      setSuggestedFormat(pending.suggestedFormat);
+      void handleFiles(pending.files);
+    }, 0);
+    return () => clearTimeout(t);
+    // Mount only: handleFiles reads refs/props at call time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookId]);
 
   // A file dropped beside the drop zone would make the browser open it, leaving the page and
   // aborting a running upload. While this screen is open, swallow file drags/drops the zone didn't
@@ -185,7 +265,7 @@ export function Uploader(props: UploaderProps) {
     return queueLoadRef.current;
   }
 
-  async function runFinalize(uploadedMark: number) {
+  async function runFinalize(uploadedMark: number): Promise<boolean> {
     setPhase("finalizing");
     setFinalizeError(null);
     setRetryAt(null);
@@ -198,19 +278,81 @@ export function Uploader(props: UploaderProps) {
     // Waits on 429 / 503 / a hung request (Retry-After) and spaces follow-ups inside; phase stays "finalizing".
     const outcome = await finalizeWithPlaces(bookId, undefined, { signal: controller.signal, colors });
     if (outcome.ok) queue?.forgetColors(Object.keys(colors));
-    if (unmountedRef.current || controller.signal.aborted) return;
+    if (unmountedRef.current || controller.signal.aborted) return false;
     if (outcome.ok) {
       setFinalize(outcome.result);
       finalizedAtRef.current = uploadedMark;
       if (outcome.result.wroteDoc || outcome.result.pages > 0) hasDocRef.current = true;
       setPhase("done");
+      return true;
     } else {
       setFinalizeError(outcome.error);
       if (outcome.error === "rate_limited" || outcome.error === "unavailable") {
         setRetryAt(Date.now() + outcome.retryAfterMs);
       }
       setPhase("finalize_error");
+      return false;
     }
+  }
+
+  /**
+   * The automatic first build (D-070 (3)) once uploads + finalize settled. The server decides; this
+   * only maps its answer to the next screen. Pending setup changes are saved first so the AI reads
+   * them; the card is frozen while the request runs and editable again on a fallback.
+   */
+  async function autoStart(ready: number, s: QueueSummary) {
+    if (firstRun !== "none" || unmountedRef.current) return;
+    if (!shouldAutoStart({ firstRun, ready, pendingLeft: s.pendingLeft, fatal: Boolean(s.fatal), cancelled: s.cancelled })) {
+      setAuto({ kind: "fallback", few: ready < AUTO_BUILD_MIN_PHOTOS && s.pendingLeft === 0 ? ready : undefined });
+      return;
+    }
+    if (autoBusyRef.current) return;
+    autoBusyRef.current = true;
+    setAuto({ kind: "starting" });
+    const startedAt = Date.now();
+    try {
+      await setupCtl.flush();
+      setupCtl.freeze();
+      let retried = false;
+      for (;;) {
+        const outcome = await requestAutoBuild(bookId);
+        if (unmountedRef.current) return;
+        const next = autoStartNext(bookId, outcome, { retried, activeAtLoad: false });
+        if (next.kind === "retry") {
+          retried = true;
+          await new Promise((r) => setTimeout(r, NOT_READY_RETRY_MS));
+          if (unmountedRef.current) return;
+          continue;
+        }
+        if (next.kind === "go") {
+          if (next.rules) {
+            // A rule run (AI off) finished inside the request; the build screen would start another.
+            track("ai_build_done", {
+              mode: "rules",
+              outcome: next.rules.outcome,
+              ms_bucket: msBucket(Date.now() - startedAt),
+              auto: true,
+            });
+          }
+          router.push(next.href);
+          return; // stay "starting" until the next screen replaces this one
+        }
+        setupCtl.unfreeze();
+        setAuto({ kind: "fallback", limit: next.limit });
+        autoBusyRef.current = false;
+        return;
+      }
+    } catch {
+      setupCtl.unfreeze();
+      setAuto({ kind: "fallback" });
+      autoBusyRef.current = false;
+    }
+  }
+
+  async function retryFinalize() {
+    const s = summary;
+    if (!s) return;
+    if (await runFinalize(s.uploaded)) await autoStart(baseReadyRef.current + s.uploaded, s);
   }
 
   async function afterRun(s: QueueSummary, base: number) {
@@ -226,15 +368,24 @@ export function Uploader(props: UploaderProps) {
     // analytics (M9 T14): counts only.
     track("upload_done", { photos: s.uploaded, failed: s.failed, skipped: s.skipped });
     const ready = base + s.uploaded;
+    // Show "Starting your book…" from the start of finalize (no flash of the fallback button).
+    if (shouldAutoStart({ firstRun, ready, pendingLeft: s.pendingLeft, fatal: false, cancelled: false })) {
+      setAuto({ kind: "starting" });
+    }
+    let settled = true;
     if (s.uploaded > finalizedAtRef.current || (!hasDocRef.current && ready > 0)) {
-      await runFinalize(s.uploaded);
+      settled = await runFinalize(s.uploaded);
     } else {
       setPhase("done");
     }
+    if (unmountedRef.current) return;
+    if (settled) await autoStart(ready, s);
+    else if (firstRun === "none") setAuto({ kind: "fallback" });
   }
 
   async function handleFiles(files: File[]) {
     if (files.length === 0) return;
+    if (autoBusyRef.current) return; // the build is starting with the photos already added
     setLoadFailed(false);
     setRemoveError(null);
     let q: UploadQueue;
@@ -242,8 +393,10 @@ export function Uploader(props: UploaderProps) {
       q = await getQueue();
     } catch {
       setLoadFailed(true);
+      setHandoff(false);
       return;
     }
+    setHandoff(false);
     q.add(files);
     addedRef.current += files.length;
     if (runningRef.current) return; // the running loop picks the new files up
@@ -254,6 +407,7 @@ export function Uploader(props: UploaderProps) {
     setFinalizeError(null);
     setLimitNotice(null);
     setPaused(false);
+    setAuto({ kind: "idle" });
     setPhase("running");
     let s: QueueSummary;
     try {
@@ -329,8 +483,27 @@ export function Uploader(props: UploaderProps) {
     });
   }
 
-  const showResume = pending > 0 && !busy && !fatal;
-  const showPicker = !busy && !fatal && summary === null;
+  const showResume = pending > 0 && !busy && !fatal && !handoff;
+  const showPicker = !busy && !fatal && summary === null && !handoff;
+  const starting = auto.kind === "starting";
+
+  // Next step under the results (and on a return visit before any new upload).
+  const fewNote =
+    auto.kind === "fallback" && auto.few !== undefined
+      ? `Add ${plural(AUTO_BUILD_MIN_PHOTOS - auto.few, "more photo")} and we'll start your book by itself — or start it now.`
+      : undefined;
+  const summaryNext: SummaryNext =
+    firstRun === "active"
+      ? { kind: "continue", href: buildHref(bookId, false), label: "See your book being made" }
+      : firstRun === "done"
+        ? { kind: "continue", href: `/books/${bookId}/review`, label: "Add them to your book" }
+        : starting
+          ? { kind: "starting" }
+          : {
+              kind: "build",
+              note: auto.kind === "fallback" && auto.limit ? limitCopy(auto.limit, isPaid, props.dailyCap) : fewNote,
+            };
+  const showIdleNext = showPicker && readyCount > 0 && pending === 0;
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-4">
@@ -408,6 +581,28 @@ export function Uploader(props: UploaderProps) {
         </div>
       ) : null}
 
+      {showIdleNext ? (
+        firstRun === "none" ? (
+          <Link
+            href={buildHref(bookId, false)}
+            className={cn(buttonVariants({ variant: "accent", size: "cta" }))}
+            data-testid="build-album"
+          >
+            Make my book now
+          </Link>
+        ) : (
+          <Link
+            href={firstRun === "active" ? buildHref(bookId, false) : editorHref(bookId)}
+            className={cn(buttonVariants({ variant: "outline", size: "cta" }))}
+            data-testid="upload-continue"
+          >
+            {firstRun === "active" ? "See your book being made" : "Back to your book"}
+          </Link>
+        )
+      ) : null}
+
+      {handoff ? <LoadingState label="Getting your photos ready…" data-testid="upload-handoff" /> : null}
+
       {loadFailed ? (
         <Notice tone="error" data-testid="upload-error">
           We couldn&apos;t start the upload. Check your connection and choose your photos again.
@@ -468,7 +663,7 @@ export function Uploader(props: UploaderProps) {
               type="button"
               variant="outline"
               size="touch"
-              onClick={() => void runFinalize(summary?.uploaded ?? 0)}
+              onClick={() => void retryFinalize()}
               disabled={retryWaitSec > 0}
               className="w-full text-base"
               data-testid="finalize-retry"
@@ -479,8 +674,16 @@ export function Uploader(props: UploaderProps) {
         </div>
       ) : null}
 
+      {showSetup && !fatal ? <SetupCard controller={setupCtl} suggestedFormat={suggestedFormat} /> : null}
+
       {summary && !fatal && (phase === "done" || phase === "finalize_error") ? (
-        <UploadSummary bookId={bookId} summary={summary} finalize={finalize} onAddMore={openPicker} />
+        <UploadSummary
+          bookId={bookId}
+          summary={summary}
+          finalize={finalize}
+          onAddMore={openPicker}
+          next={summaryNext}
+        />
       ) : null}
 
       {summary && phase === "done" && !fatal ? (

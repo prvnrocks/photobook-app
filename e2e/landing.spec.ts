@@ -13,8 +13,8 @@ test.describe("landing page at 375px", () => {
     await expect(page.getByTestId("hero-heading")).toContainText("AI builds your album");
     const cta = page.getByTestId("cta-create");
     await expect(cta).toBeVisible();
-    await expect(cta).toHaveText("Start your book");
-    await expect(cta).toHaveAttribute("href", "/login?next=%2Fbooks%2Fnew");
+    await expect(cta).toHaveText("Make your book");
+    await expect(cta).toHaveAttribute("href", "/login?next=%2Fbooks%2Fstart");
     for (const id of ["section-hero", "section-how", "section-pricing", "section-faq", "site-footer"]) {
       await expect(page.getByTestId(id)).toBeAttached();
     }

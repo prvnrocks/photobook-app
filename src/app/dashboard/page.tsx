@@ -1,14 +1,12 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Plus } from "lucide-react";
 import { deleteBookAction } from "@/app/books/actions";
 import { Notice } from "@/components/app/Notice";
 import { PageHeader } from "@/components/app/PageHeader";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { BookList } from "@/components/dashboard/BookList";
 import { EmptyState } from "@/components/dashboard/EmptyState";
-import { buttonVariants } from "@/components/ui/button-variants";
+import { StartPicker } from "@/components/upload/StartPicker";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getOwnEmailReminders } from "@/lib/db/account";
 import { listMyBooks, type BookListItem } from "@/lib/db/books";
@@ -66,12 +64,8 @@ export default async function DashboardPage() {
           actionsInline
           actions={
             // Empty library: the EmptyState's call to action is the only "new book" button.
-            count > 0 || books === null ? (
-              <Link href="/books/new" className={buttonVariants({ size: "touch" })} data-testid="new-book">
-                <Plus aria-hidden="true" data-icon="inline-start" />
-                New book
-              </Link>
-            ) : undefined
+            // M13 T5: "New book" is the photo picker's label — picking photos starts the book.
+            count > 0 || books === null ? <StartPicker variant="button" testId="new-book" /> : undefined
           }
         />
         {books === null ? (
