@@ -74,6 +74,16 @@ export function PublishPanel(props: PublishPanelProps) {
   return <PublishPanelView {...props} refresh={refresh} refreshing={pending} />;
 }
 
+const LIVE_TEXT = "Your book is live";
+
+/**
+ * Heading of the live card: "Your book is live" — unless the notice above already says exactly
+ * that (just published), then the card names the next step instead (M13 polish: shown once).
+ */
+export function liveHeading(message: { text: string } | null): string {
+  return message?.text === LIVE_TEXT ? "Share your link" : LIVE_TEXT;
+}
+
 export function PublishPanelView({
   bookId,
   title,
@@ -100,7 +110,7 @@ export function PublishPanelView({
   const [busy, setBusy] = useState<"publish" | "unpublish" | null>(null);
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
   const [message, setMessage] = useState<Message | null>(() =>
-    shared ? { tone: "ok", text: shared === "changes" ? "Changes published" : "Your book is live" } : null,
+    shared ? { tone: "ok", text: shared === "changes" ? "Changes published" : LIVE_TEXT } : null,
   );
   // Drop ?shared= so a reload or Back doesn't announce the publish again.
   useEffect(() => {
@@ -135,7 +145,7 @@ export function PublishPanelView({
         pages: state.pageCount,
         first: state.publishedAt === null,
       });
-      setMessage({ tone: "ok", text: state.published ? "Changes published" : "Your book is live" });
+      setMessage({ tone: "ok", text: state.published ? "Changes published" : LIVE_TEXT });
       if (!state.published) setPublishedOn(state);
       refresh();
     } else {
@@ -228,9 +238,10 @@ export function PublishPanelView({
       ) : live && state.url ? (
         <section className={CARD} data-testid="publish-live">
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-            <h2 className="type-h2 flex items-center gap-2 text-foreground">
+            {/* M13 polish: say "Your book is live" once — the notice says it right after a publish. */}
+            <h2 className="type-h2 flex items-center gap-2 text-foreground" data-testid="publish-live-heading">
               <span className="size-2.5 shrink-0 rounded-full bg-success" aria-hidden="true" />
-              Your book is live
+              {liveHeading(message)}
             </h2>
             {expiry ? (
               <span className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground" data-testid="publish-expiry">

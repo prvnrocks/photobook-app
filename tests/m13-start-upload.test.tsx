@@ -273,12 +273,16 @@ describe("setup-ui", () => {
 });
 
 describe("displayBookTitle (no more 'Untitled book' vs cover mismatch)", () => {
-  it("user title, else an AI / edited cover title, else 'Your book'", () => {
+  it("user title, else the album's cover title (rule draft, AI or edited), else 'Your book'", () => {
     expect(displayBookTitle("  عطلتنا  ", null)).toBe("عطلتنا");
     expect(displayBookTitle(null, { meta: { generator: "ai" }, cover: { title: "Desert Days" } })).toBe("Desert Days");
     expect(displayBookTitle(null, { meta: { generator: "rule", userEdited: true }, cover: { title: "Ours" } })).toBe("Ours");
-    // The rule draft's placeholder cover title isn't anybody's title.
-    expect(displayBookTitle(null, { meta: { generator: "rule" }, cover: { title: "Our Story" } })).toBe(UNTITLED_BOOK_LABEL);
+    // M13 polish: the rule draft's cover title is what the book shows — the chrome uses it too.
+    expect(displayBookTitle(null, { meta: { generator: "rule" }, cover: { title: "Our Photobook" } })).toBe("Our Photobook");
+    expect(displayBookTitle("Trip", { meta: { generator: "ai" }, cover: { title: "Desert Days" } })).toBe("Trip");
+    // No album yet (books.doc is '{}' or has no generator) → neutral label.
+    expect(displayBookTitle(null, { cover: { title: "Stray" } })).toBe(UNTITLED_BOOK_LABEL);
+    expect(displayBookTitle(null, { meta: { generator: "ai" }, cover: { title: "  " } })).toBe(UNTITLED_BOOK_LABEL);
     expect(displayBookTitle("", {})).toBe("Your book");
   });
 });
@@ -342,6 +346,15 @@ describe("SetupCard", () => {
     expect(html).toMatch(/<input id="[^"]+" type="text" dir="auto"[^>]*data-testid="setup-title"/);
     expect(html).toMatch(/<span lang="ar" dir="rtl" class="font-arabic">العربية<\/span>/);
     for (const m of html.match(/<label class="relative inline-flex[^"]*"/g) ?? []) expect(m).toContain("min-h-11");
+  });
+
+  it("selection snaps: radio chips / cards / segments have no colour transition (ring and fill change together)", () => {
+    const html = renderToStaticMarkup(<SetupCard controller={controller()} />);
+    const labels = html.match(/<label class="relative [^"]*"/g) ?? [];
+    expect(labels.length).toBeGreaterThan(10);
+    for (const l of labels) expect(l).not.toContain("transition");
+    expect(html).toMatch(/class="[^"]*transition-transform motion-reduce:transition-none[^"]*"/);
+    expect(renderToStaticMarkup(<SetupCard controller={controller()} aiOn={false} />)).toContain("Title: Our Photobook");
   });
 
   it("suggested shape hint; locked states say why", () => {

@@ -10,6 +10,7 @@ import { Share2 } from "lucide-react";
 import Link from "next/link";
 import { BookCardMenu, type DeleteBookFn } from "@/components/dashboard/BookCardMenu";
 import { BookCover } from "@/components/dashboard/BookCover";
+import { displayBookTitle } from "@/lib/book/display-title";
 import { bookCardHref } from "@/lib/dashboard/card-target";
 import { bookDeletionChip } from "@/lib/dashboard/deletion-chip";
 import { bookPublishChip, bookShareHref, type PublishChip } from "@/lib/dashboard/publish-chip";
@@ -79,7 +80,7 @@ export function BookList({
               <BookCover url={book.coverThumbUrl} format={book.format} designStyle={book.designStyle} />
               <div className="flex min-w-0 flex-1 flex-col gap-2 py-1">
                 <p dir="auto" className="type-h2 line-clamp-2 break-words text-foreground">
-                  {book.title || "Untitled book"}
+                  {book.displayTitle ?? displayBookTitle(book.title)}
                 </p>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Chip tone={chip.tone} testId="book-publish-chip">
@@ -113,7 +114,7 @@ export function BookList({
                     Share
                   </Link>
                 ) : null}
-                {deleteBook ? <BookCardMenu bookId={book.id} title={book.title} deleteBook={deleteBook} /> : null}
+                {deleteBook ? <BookCardMenu bookId={book.id} title={book.displayTitle ?? displayBookTitle(book.title)} deleteBook={deleteBook} /> : null}
               </div>
             ) : null}
           </li>

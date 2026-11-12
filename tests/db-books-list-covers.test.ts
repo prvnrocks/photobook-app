@@ -111,6 +111,23 @@ describe("listMyBooks cover thumbs (M11 task 4)", () => {
     expect(cols).not.toMatch(/(^|[ ,])doc(?!->)/);
   });
 
+  it("displayTitle: title, else the album cover title (JSON paths), else 'Your book' (M13 polish)", async () => {
+    fake.state.results.push({
+      data: [
+        bookRow(B1, { title: "Trip", cover_title: "Desert Days", generator: "ai" }),
+        bookRow(B2, { title: null, cover_title: "Our Photobook", generator: "rule" }),
+        bookRow(B3, { title: null, cover_title: null, generator: null }),
+      ],
+      error: null,
+    });
+    const books = await listMyBooks();
+    expect(books.map((b) => b.displayTitle)).toEqual(["Trip", "Our Photobook", "Your book"]);
+    const cols = String(fake.state.chains[0]!.calls.find((c) => c[0] === "select")?.[1]);
+    expect(cols).toContain("cover_title:doc->cover->>title");
+    expect(cols).toContain("generator:doc->meta->>generator");
+    expect(books[0]).not.toHaveProperty("cover_title");
+  });
+
   it("signs every cover in ONE createSignedUrls call with the user client and the thumb TTL", async () => {
     fake.state.results.push({
       data: [

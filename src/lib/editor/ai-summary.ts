@@ -3,8 +3,15 @@
 // same status the review grid shows); nothing about photo content is used.
 
 export type AiSummary = {
-  /** "AI kept 34 of 40" (AI album) or "34 of 40 in your book" (rule album — no AI claim; review wording). */
+  /**
+   * "AI kept 34 of 40 photos" (AI album) or "34 of 40 photos in your book" (rule album — no AI
+   * claim). The total is the photos ADDED to the book (the upload counter's "40 added"), which can
+   * be fewer than the user chose: exact copies are skipped at upload (M13 polish: "33 of 38" after
+   * choosing 40 read as lost photos) — `detail` says so.
+   */
   label: string;
+  /** Full sentence for the link's title / screen readers: what the total counts. */
+  detail?: string;
   /** "See 6 left out", or "See all photos" when nothing was left out. */
   linkText: string;
   kept: number;
@@ -27,7 +34,10 @@ export function aiSummary(
   const ai = generator === "ai";
   if (!ai && left === 0) return null;
   return {
-    label: ai ? `AI kept ${kept} of ${total}` : `${kept} of ${total} in your book`,
+    label: ai ? `AI kept ${kept} of ${total} photos` : `${kept} of ${total} photos in your book`,
+    detail: `${total === 1 ? "1 photo was" : `${total} photos were`} added to this book (copies of the same photo are added once). ${
+      ai ? "AI" : "We"
+    } left ${left === 0 ? "none" : left} out — tap to see them and change it.`,
     linkText: left > 0 ? `See ${left} left out` : "See all photos",
     kept,
     total,

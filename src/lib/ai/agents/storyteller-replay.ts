@@ -26,6 +26,7 @@
 // but fails plan validation (wrong slot count + unknown photo), exercising the retry path.
 
 import { dayRange } from "@/lib/autolayout";
+import { DEFAULT_TITLES } from "@/lib/book/default-titles";
 import { DEFAULT_BOOK_DESIGN, type BookDesign } from "@/lib/book/book-design";
 import { layoutsFor } from "@/lib/book/spreads";
 import { bestPageLayout, fitScore } from "@/lib/layouts/fit";
@@ -325,7 +326,8 @@ function synthLayoutPlan(meta: StorytellerScenarioMeta): AlbumPlanAi {
     });
 
   return {
-    title: meta.userTitle ?? (ar ? "حكايتنا" : "Our Story"),
+    // M13 polish: an English replay album keeps the draft's occasion cover title (one book name).
+    title: meta.userTitle ?? (ar ? "حكايتنا" : (DEFAULT_TITLES[meta.occasion] ?? DEFAULT_TITLES.other)),
     subtitle: "",
     coverPhotoId: pickCover(meta.photos, design.format === "A5_LANDSCAPE" ? "portrait" : "landscape")?.alias ?? "p1",
     moments,

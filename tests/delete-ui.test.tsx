@@ -132,7 +132,7 @@ describe("dashboard: BookList + delete menu", () => {
     );
     expect(html).toMatch(/data-testid="book-menu"/);
     expect(html).toContain("min-h-11 min-w-11");
-    expect(html).toContain('aria-label="Book options: Untitled book"');
+    expect(html).toContain('aria-label="Book options: Your book"');
     expect(has(html, "delete-book-dialog")).toBe(false);
   });
 

@@ -1,6 +1,6 @@
 "use client";
 
-// "AI kept 34 of 40 · See 6 left out" (M13 T7, D-070 (3)). The build screen goes straight to the
+// "AI kept 34 of 40 photos · See 6 left out" (M13 T7, D-070 (3)). The build screen goes straight to the
 // editor; this row keeps every AI choice one tap away: it links to the review screen (unchanged
 // logic, D-031/D-037), where photos can be put back or left out. Dismissible per book (localStorage,
 // guarded — src/lib/editor/ai-summary.ts). Hidden when the editor is read-only. 44 px targets.
@@ -31,10 +31,12 @@ export function AiSummaryChipView({ bookId, summary, onDismiss }: { bookId: stri
       <Link
         href={`/books/${bookId}/review`}
         className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+        title={summary.detail}
         data-testid="ai-summary-link"
       >
         <Sparkles className="size-4 shrink-0 text-accent-strong" aria-hidden="true" />
-        <span className="min-w-0 truncate">
+        {/* Two lines at most (3-digit counts at 375 px) so "See N left out" is never cut off. */}
+        <span className="line-clamp-2 min-w-0 break-words">
           <span className="text-foreground" data-testid="ai-summary-label">
             {summary.label}
           </span>
@@ -42,6 +44,7 @@ export function AiSummaryChipView({ bookId, summary, onDismiss }: { bookId: stri
             {" · "}
           </span>
           <span className="font-medium text-primary underline underline-offset-2">{summary.linkText}</span>
+          {summary.detail ? <span className="sr-only">. {summary.detail}</span> : null}
         </span>
       </Link>
       <button

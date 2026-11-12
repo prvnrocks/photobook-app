@@ -11,6 +11,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { resolveAiMode } from "@/lib/ai/client";
 import { limitsFor } from "@/lib/ai/limits";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { displayBookTitle } from "@/lib/book/display-title";
 import { docOrigin } from "@/lib/book/replaceable";
 import { countLiveRebuilds, getActiveRunForBook } from "@/lib/db/agent-runs";
 import { getBookForRun, getMyBook } from "@/lib/db/books";
@@ -108,8 +109,8 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
           step="review"
           title="Review your photos"
           description={
-            <span className="block truncate" data-testid="review-book-title">
-              {book.title || "Untitled book"}
+            <span dir="auto" className="block truncate" data-testid="review-book-title">
+              {displayBookTitle(book.title, book.doc)}
             </span>
           }
         />

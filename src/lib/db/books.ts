@@ -18,6 +18,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Json, Tables } from "@/lib/supabase/database.types";
 import type { CaptionLang, Occasion, Tone } from "@/lib/book/options";
 import type { BookFormat, DesignStyle } from "@/lib/book/types";
+import { displayBookTitle } from "@/lib/book/display-title";
 import { canonicalJson } from "@/lib/json/canonical";
 import { isUuid } from "@/lib/uuid";
 
@@ -54,6 +55,11 @@ export type BookListItem = Pick<
    * not this book's / signing failed. Never makes the list fail.
    */
   coverThumbUrl: string | null;
+  /**
+   * The name the card shows (displayBookTitle, M13 polish): title, else the album's cover title
+   * (doc->cover->>title, doc->meta->>generator as JSON paths), else "Your book".
+   */
+  displayTitle?: string;
 };
 
 export type MyBook = Pick<
@@ -134,7 +140,7 @@ export async function listMyBooks(): Promise<BookListItem[]> {
 // No pre-1900 retry for format / design_style: like published_doc (pre-1000), the list assumes
 // the migration is applied everywhere (M10b is deployed).
 const BOOK_LIST_COLUMNS =
-  "id, title, updated_at, page_count, published_at, is_paid, ai_status, slug, expires_at, draft_warning_sent_at, format, design_style, user_edited:doc->meta->userEdited, live:published_doc->version, cover_photo:doc->cover->>photoId, first_photo:doc->pages->0->slots->0->>photoId, photos(count)";
+  "id, title, updated_at, page_count, published_at, is_paid, ai_status, slug, expires_at, draft_warning_sent_at, format, design_style, user_edited:doc->meta->userEdited, generator:doc->meta->>generator, cover_title:doc->cover->>title, live:published_doc->version, cover_photo:doc->cover->>photoId, first_photo:doc->pages->0->slots->0->>photoId, photos(count)";
 
 /** Same lifetime as the other thumb-only list (review grid). */
 export const COVER_THUMB_TTL_SECONDS = REVIEW_URL_TTL_SECONDS;
@@ -144,8 +150,11 @@ const COVER_ID_CHUNK = 100;
 
 type BookListRow = Omit<
   BookListItem,
-  "photo_count" | "user_edited" | "published" | "format" | "designStyle" | "coverThumbUrl"
+  "photo_count" | "user_edited" | "published" | "format" | "designStyle" | "coverThumbUrl" | "displayTitle"
 > & {
+  /** doc->meta->>generator / doc->cover->>title (text or null) — only for displayTitle. */
+  generator?: unknown;
+  cover_title?: unknown;
   format: unknown;
   design_style: unknown;
   user_edited: unknown;
@@ -240,6 +249,10 @@ function toBookListItem(row: BookListRow, coverThumbUrl: string | null): BookLis
     format: format.success ? format.data : DEFAULT_FORMAT,
     designStyle: designStyle.success ? designStyle.data : DEFAULT_DESIGN_STYLE,
     coverThumbUrl,
+    displayTitle: displayBookTitle(row.title, {
+      meta: { generator: row.generator, userEdited: row.user_edited === true },
+      cover: { title: row.cover_title },
+    }),
   };
 }
 

@@ -8,6 +8,7 @@ import { BuildProgress } from "@/components/review/BuildProgress";
 import { resolveAiMode } from "@/lib/ai/client";
 import { limitsFor } from "@/lib/ai/limits";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { displayBookTitle } from "@/lib/book/display-title";
 import { parseBookDoc } from "@/lib/book/schema";
 import type { BookDoc } from "@/lib/book/types";
 import { getActiveRunForBook } from "@/lib/db/agent-runs";
@@ -93,8 +94,8 @@ export default async function BuildPage({
           step="build"
           title="Making your book"
           description={
-            <span className="break-words" data-testid="build-book-title">
-              {book.title || "Untitled book"}
+            <span dir="auto" className="break-words" data-testid="build-book-title">
+              {displayBookTitle(book.title, book.doc)}
             </span>
           }
         />

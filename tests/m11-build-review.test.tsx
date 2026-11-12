@@ -28,6 +28,12 @@ const states = (s: RunState, p: RunProgress | null = null, finished = false) =>
   buildChecklist(s, p, finished).map((x) => x.state);
 
 describe("buildChecklist (T11)", () => {
+  it("labels say 'book', never 'album' (M13 polish: one word for the thing)", () => {
+    const labels = buildChecklist("queued", null).map((x) => x.label);
+    expect(labels).toEqual(["Look at your photos", "Find your moments", "Write captions", "Check and save your book"]);
+    expect(labels.join(" ")).not.toMatch(/album/i);
+  });
+
   it("queued: nothing started", () => {
     expect(states("queued")).toEqual(["todo", "todo", "todo", "todo"]);
   });

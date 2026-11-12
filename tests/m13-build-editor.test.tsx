@@ -129,13 +129,21 @@ describe("aiSummary", () => {
   ];
 
   it("AI album: 'AI kept X of Y · See N left out'", () => {
-    expect(aiSummary("ai", ph(34, 6))).toEqual({ label: "AI kept 34 of 40", linkText: "See 6 left out", kept: 34, total: 40 });
-    expect(aiSummary("ai", ph(12, 0))).toMatchObject({ label: "AI kept 12 of 12", linkText: "See all photos" });
+    expect(aiSummary("ai", ph(34, 6))).toMatchObject({ label: "AI kept 34 of 40 photos", linkText: "See 6 left out", kept: 34, total: 40 });
+    expect(aiSummary("ai", ph(12, 0))).toMatchObject({ label: "AI kept 12 of 12 photos", linkText: "See all photos" });
+  });
+
+  it("M13 polish: the total is the photos added (copies skipped at upload) — the detail says so", () => {
+    const s = aiSummary("ai", ph(33, 5))!;
+    expect(s.label).toBe("AI kept 33 of 38 photos");
+    expect(s.detail).toBe("38 photos were added to this book (copies of the same photo are added once). AI left 5 out — tap to see them and change it.");
+    expect(aiSummary("rule", ph(0, 1))!.detail).toContain("1 photo was added");
+    expect(aiSummary("ai", ph(3, 0))!.detail).toContain("AI left none out");
   });
 
   it("rule album: no AI claim, only when photos were left out", () => {
-    expect(aiSummary("rule", ph(8, 2))).toMatchObject({ label: "8 of 10 in your book", linkText: "See 2 left out" });
-    expect(aiSummary(undefined, ph(8, 2))).toMatchObject({ label: "8 of 10 in your book" });
+    expect(aiSummary("rule", ph(8, 2))).toMatchObject({ label: "8 of 10 photos in your book", linkText: "See 2 left out" });
+    expect(aiSummary(undefined, ph(8, 2))).toMatchObject({ label: "8 of 10 photos in your book" });
     expect(aiSummary("rule", ph(10, 0))).toBeNull();
     expect(aiSummary("ai", [])).toBeNull();
   });
@@ -168,14 +176,18 @@ describe("aiSummary", () => {
 
 describe("AiSummaryChip", () => {
   beforeEach(() => resetAiSummaryMemoryForTests());
-  const summary = { label: "AI kept 34 of 40", linkText: "See 6 left out", kept: 34, total: 40 };
+  const summary = { label: "AI kept 34 of 40 photos", linkText: "See 6 left out", kept: 34, total: 40, detail: "40 photos were added to this book." };
 
   it("links to the review screen; 44 px link + dismiss with visible focus", () => {
     const html = renderToStaticMarkup(<AiSummaryChipView bookId="b1" summary={summary} onDismiss={() => {}} />);
     expect(html).toContain('data-testid="ai-summary-chip"');
     expect(html).toMatch(/<a [^>]*href="\/books\/b1\/review"[^>]*data-testid="ai-summary-link"|<a [^>]*data-testid="ai-summary-link"[^>]*href="\/books\/b1\/review"/);
-    expect(html).toContain("AI kept 34 of 40");
+    expect(html).toContain("AI kept 34 of 40 photos");
     expect(html).toContain("See 6 left out");
+    // What the total counts: title for pointer users, sr-only for screen readers; 2 lines max, never cut.
+    expect(html).toContain('title="40 photos were added to this book."');
+    expect(html).toContain('<span class="sr-only">. 40 photos were added to this book.</span>');
+    expect(html).toContain("line-clamp-2");
     expect(html).toMatch(/class="flex min-h-11[^"]*focus-visible:ring-2/);
     expect(html).toMatch(/aria-label="Hide photo summary" class="flex size-11[^"]*focus-visible:ring-2/);
   });

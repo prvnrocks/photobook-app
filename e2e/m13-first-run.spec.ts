@@ -221,7 +221,8 @@ async function shot(p: Page, name: string) {
       window.scrollTo(0, 0); // a sticky header otherwise lands mid-image in a full-page shot
     })
     .catch(() => {});
-  await p.screenshot({ path: path.join(SHOT_DIR, `m13-after-${name}-375.png`), fullPage: true });
+  // animations "disabled": finish CSS transitions first (a mid-fade card / chevron is not what users see).
+  await p.screenshot({ path: path.join(SHOT_DIR, `m13-after-${name}-375.png`), fullPage: true, animations: "disabled" });
 }
 
 /** Waits (≤ 10 s) for in-viewport images so a screenshot shows what a user sees. */

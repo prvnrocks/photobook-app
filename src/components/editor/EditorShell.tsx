@@ -13,6 +13,7 @@
 import { ArrowLeft, Redo2, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { displayBookTitle } from "@/lib/book/display-title";
 import { sessionAiPath } from "@/lib/editor/ai-path";
 import type { AiSummary } from "@/lib/editor/ai-summary";
 import type { AiSessionBlock } from "@/lib/editor/caption-tools";
@@ -182,7 +183,8 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
     return () => window.removeEventListener("keydown", onKey);
   }, [actions, activeTool, spread, page, pageCount]);
 
-  const title = state.doc.cover.title || data.book.title || "Untitled book";
+  // The live cover title is the user's title here (saving syncs it to books.title, D-037 (7)).
+  const title = displayBookTitle(state.doc.cover.title || data.book.title, state.doc);
   const unpublished = hasUnpublishedChanges(data.publishedRev, autosave.rev);
 
   return (

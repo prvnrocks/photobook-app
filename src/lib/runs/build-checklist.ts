@@ -32,7 +32,7 @@ const STEPS: readonly { id: ChecklistStepId; label: string; states: readonly Run
   { id: "photos", label: "Look at your photos", states: ["curating"] },
   { id: "moments", label: "Find your moments", states: ["storytelling"] },
   { id: "captions", label: "Write captions", states: ["captioning"] },
-  { id: "check", label: "Check and save your album", states: ["critiquing", "repairing", "validating"] },
+  { id: "check", label: "Check and save your book", states: ["critiquing", "repairing", "validating"] },
 ];
 
 function rank(state: RunState): number {

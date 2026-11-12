@@ -82,7 +82,8 @@ export function EditorShareButton({ bookId, settle, share, fallbackHref, isPaid,
             r = null;
           }
           // analytics (M9 T14): flags + page count only, only when this tap published.
-          if (r?.ok && r.published) track("published", r.published);
+          // Beacon: the next screen hands off to WhatsApp (app switch) — send now, not batched.
+          if (r?.ok && r.published) track("published", r.published, { beacon: true });
           step = doneStepAfterShare(r, bookId, maxPages);
         }
       }

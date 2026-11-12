@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { EditorShell } from "@/components/editor/EditorShell";
@@ -58,5 +60,11 @@ describe("editor header Share button (M13 T9; was Done, T12)", () => {
     const btn = html.match(/<button[^>]*data-testid="editor-done"[^>]*>/)?.[0] ?? "";
     expect(btn).not.toBe("");
     expect(btn).not.toContain('disabled=""');
+  });
+
+  it("sends 'published' with the beacon transport (survives the switch to WhatsApp), once, only when the tap published", () => {
+    const code = readFileSync(join(process.cwd(), "src/components/editor/EditorShareButton.tsx"), "utf8");
+    expect(code).toContain('if (r?.ok && r.published) track("published", r.published, { beacon: true });');
+    expect(code.match(/track\("published"/g)).toHaveLength(1);
   });
 });

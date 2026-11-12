@@ -99,6 +99,10 @@ describe("AI-off copy (D-024)", () => {
     expect(titleCopy(true).hint).toContain("suggest");
     expect(titleCopy(false).hint).not.toContain("suggest");
     expect(titleCopy(false).summary).not.toContain("suggest");
+    // M13 polish: AI off names the cover title the book really gets (the occasion default).
+    expect(titleCopy(false)).toEqual({ summary: "Title: Our Photobook", hint: "Leave empty for \u201cOur Photobook\u201d" });
+    expect(titleCopy(false, "wedding").summary).toBe("Title: Our Wedding");
+    expect(titleCopy(true, "wedding").summary).toBe("Title: we'll suggest one");
   });
   it("pages pass resolveAiMode() through", () => {
     expect(src("src/app/books/[id]/upload/page.tsx")).toContain('aiOn={resolveAiMode() !== "off"}');

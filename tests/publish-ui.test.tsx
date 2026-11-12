@@ -180,6 +180,18 @@ describe("PublishPanelView after the editor's Share (M13 T9)", () => {
     expect(shared("live", null)).not.toContain('data-testid="publish-message"');
   });
 
+  it("M13 polish: 'Your book is live' shows once — the card heading names the next step after a publish", () => {
+    const count = (h: string) => h.split("Your book is live").length - 1;
+    const justShared = shared("live", "live");
+    expect(count(justShared)).toBe(1);
+    expect(justShared).toMatch(/data-testid="publish-message">Your book is live</);
+    expect(justShared).toMatch(/data-testid="publish-live-heading">.*Share your link<\/h2>/);
+    // Later visit (no notice) or a changes publish: the card itself says the book is live.
+    expect(count(shared("live", null))).toBe(1);
+    expect(shared("live", null)).toMatch(/data-testid="publish-live-heading">.*Your book is live<\/h2>/);
+    expect(shared("live", "changes")).toMatch(/data-testid="publish-live-heading">.*Your book is live<\/h2>/);
+  });
+
   it("live free: WhatsApp leads, then Copy, then the free vs paid card + Upgrade; copy says the link is public", () => {
     const html = shared("live", "live");
     const at = (id: string) => html.indexOf(`data-testid="${id}"`);

@@ -90,6 +90,7 @@
 import { limitsFor } from "@/lib/ai/limits";
 import { assertSupportedDesign, DEFAULT_BOOK_DESIGN, type BookDesign } from "@/lib/book/book-design";
 import { orientationOf as formatOrientation } from "@/lib/book/format";
+import { DEFAULT_TITLES } from "@/lib/book/default-titles";
 import { BOOK_TITLE_MAX_CODE_POINTS, type CaptionLang, type Occasion } from "@/lib/book/options";
 import { DocMetaSchema, parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import { layoutsFor } from "@/lib/book/spreads";
@@ -140,14 +141,8 @@ function ruleMeta(opts: AutolayoutOptions): DocMeta {
   return { generator: "rule", generatorVersion: AUTOLAYOUT_VERSION, runId: opts.runId ?? null, userEdited: false };
 }
 
-export const DEFAULT_TITLES: Record<Occasion, string> = {
-  wedding: "Our Wedding",
-  travel: "Our Travels",
-  baby: "Our Little One",
-  graduation: "Graduation Day",
-  family: "Family Moments",
-  other: "Our Photobook",
-};
+// Cover title for a book without a user title (lives in a light module so client UI can name it).
+export { DEFAULT_TITLES } from "@/lib/book/default-titles";
 
 /** Asia/Dubai is UTC+4 all year (no DST). */
 const DUBAI_OFFSET_MS = 4 * 60 * 60 * 1000;

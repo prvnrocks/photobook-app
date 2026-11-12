@@ -324,6 +324,14 @@ describe("analytics client", () => {
 
     track("checkout_started", {}, { beacon: true });
     expect(fake.capture).toHaveBeenLastCalledWith("checkout_started", {}, { send_instantly: true, transport: "sendBeacon" });
+
+    // M13 polish: the editor's Share publishes and the user leaves for WhatsApp — beacon too.
+    track("published", { is_paid: false, has_password: false, pages: 12, first: true }, { beacon: true });
+    expect(fake.capture).toHaveBeenLastCalledWith(
+      "published",
+      { is_paid: false, has_password: false, pages: 12, first: true },
+      { send_instantly: true, transport: "sendBeacon" },
+    );
   });
 });
 

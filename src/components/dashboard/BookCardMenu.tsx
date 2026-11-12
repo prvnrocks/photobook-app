@@ -12,6 +12,7 @@ import { Loader2, MoreVertical, Trash2 } from "lucide-react";
 import { useId, useState, useTransition } from "react";
 import { useRefreshTransition } from "@/components/app/use-refresh-transition";
 import { Button } from "@/components/ui/button";
+import { displayBookTitle } from "@/lib/book/display-title";
 import {
   DELETE_BOOK_COPY,
   deleteBookErrorCopy,
@@ -41,7 +42,7 @@ export function BookCardMenuView({
   const [confirmOpen, setConfirmOpen] = useState(initialConfirmOpen);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const shownTitle = title || "Untitled book";
+  const shownTitle = displayBookTitle(title);
   const titleId = useId();
   const detailId = useId();
 

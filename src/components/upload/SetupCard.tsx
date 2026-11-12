@@ -15,7 +15,9 @@ import {
   OCCASIONS,
   TONE_LABELS,
   TONES,
+  type Occasion,
 } from "@/lib/book/options";
+import { DEFAULT_TITLES } from "@/lib/book/default-titles";
 import type { BookFormat } from "@/lib/book/types";
 import {
   DESIGN_STYLE_HINTS,
@@ -34,8 +36,8 @@ const COUNTER_FROM = 100;
 const focusRing =
   "has-focus-visible:ring-2 has-focus-visible:ring-ring has-focus-visible:ring-offset-2 has-focus-visible:ring-offset-card";
 const disabledLook = "has-disabled:cursor-not-allowed has-disabled:opacity-60";
-const chipClass = `relative inline-flex min-h-11 cursor-pointer items-center rounded-full border border-border bg-card px-4 text-base select-none transition-colors hover:bg-muted has-checked:border-primary has-checked:bg-primary has-checked:text-primary-foreground ${focusRing} ${disabledLook}`;
-const cardClass = `relative flex min-h-11 min-w-0 cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-border bg-background p-3 text-center select-none transition-colors hover:bg-muted has-checked:border-primary has-checked:bg-secondary has-checked:ring-1 has-checked:ring-primary ${focusRing} ${disabledLook}`;
+const chipClass = `relative inline-flex min-h-11 cursor-pointer items-center rounded-full border border-border bg-card px-4 text-base select-none hover:bg-muted has-checked:border-primary has-checked:bg-primary has-checked:text-primary-foreground ${focusRing} ${disabledLook}`;
+const cardClass = `relative flex min-h-11 min-w-0 cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-border bg-background p-3 text-center select-none hover:bg-muted has-checked:border-primary has-checked:bg-secondary has-checked:ring-1 has-checked:ring-primary ${focusRing} ${disabledLook}`;
 const radioInput = "absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed";
 const legendClass = "mb-2 text-base font-medium";
 const inputClass =
@@ -49,15 +51,19 @@ export type SetupCardProps = {
   aiOn?: boolean;
 };
 
-/** Title copy: AI suggests a title only when AI is on (exported for tests). */
-export function titleCopy(aiOn: boolean): { summary: string; hint: string } {
+/**
+ * Title copy: AI suggests a title only when AI is on; otherwise a blank title becomes the
+ * occasion's cover title (the rule album's DEFAULT_TITLES) — name exactly that (exported for tests).
+ */
+export function titleCopy(aiOn: boolean, occasion: Occasion = "other"): { summary: string; hint: string } {
+  const fallback = DEFAULT_TITLES[occasion];
   return aiOn
     ? { summary: "Title: we'll suggest one", hint: "Leave empty and we'll suggest one" }
-    : { summary: "Title: Your book", hint: "Leave empty for \u201cYour book\u201d" };
+    : { summary: `Title: ${fallback}`, hint: `Leave empty for \u201c${fallback}\u201d` };
 }
 
 export function SetupCard({ controller: c, suggestedFormat, aiOn = true }: SetupCardProps) {
-  const titleText = titleCopy(aiOn);
+  const titleText = titleCopy(aiOn, c.setup.occasion);
   const uid = useId();
   const [open, setOpen] = useState(false);
   const { setup, locks, status, frozen } = c;
@@ -126,7 +132,7 @@ export function SetupCard({ controller: c, suggestedFormat, aiOn = true }: Setup
           data-testid="setup-change"
         >
           Change
-          <ChevronDown aria-hidden="true" className={cn("size-4 transition-transform", open && "rotate-180")} />
+          <ChevronDown aria-hidden="true" className={cn("size-4 transition-transform motion-reduce:transition-none", open && "rotate-180")} />
         </button>
       </div>
 
@@ -157,7 +163,7 @@ export function SetupCard({ controller: c, suggestedFormat, aiOn = true }: Setup
             {CAPTION_LANGS.map((id) => (
               <label
                 key={id}
-                className={`relative flex min-h-11 cursor-pointer items-center justify-center rounded-lg text-base text-muted-foreground transition-colors select-none has-checked:bg-card has-checked:font-medium has-checked:text-foreground has-checked:shadow-card ${focusRing} ${disabledLook}`}
+                className={`relative flex min-h-11 cursor-pointer items-center justify-center rounded-lg text-base text-muted-foreground select-none has-checked:bg-card has-checked:font-medium has-checked:text-foreground has-checked:shadow-card ${focusRing} ${disabledLook}`}
               >
                 <input
                   type="radio"
