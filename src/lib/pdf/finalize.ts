@@ -200,20 +200,29 @@ function deepSame(context: PDFContext, a: PDFObject | undefined, b: PDFObject | 
   return a.toString() === b.toString();
 }
 
-/** Every indirect ref reachable from `o` (following refs, dicts, arrays and stream dicts). */
-function collectRefs(context: PDFContext, o: PDFObject | undefined, out: Set<string>, depth = 0): void {
-  if (o === undefined || depth > 64) return;
-  if (o instanceof PDFRef) {
-    const k = o.toString();
-    if (out.has(k)) return;
-    out.add(k);
-    collectRefs(context, context.lookup(o), out, depth + 1);
-  } else if (o instanceof PDFDict) {
-    for (const [, v] of o.entries()) collectRefs(context, v, out, depth + 1);
-  } else if (o instanceof PDFArray) {
-    for (const v of o.asArray()) collectRefs(context, v, out, depth + 1);
-  } else if (o instanceof PDFStream) {
-    collectRefs(context, o.dict, out, depth + 1);
+/**
+ * Every indirect ref reachable from `o` (following refs, dicts, arrays and stream dicts). Iterative
+ * (explicit stack + the `out` visited set), so arbitrarily deep chains are walked in full — a depth
+ * cap here would let the orphan sweep delete an object that is still referenced (M12 T7).
+ */
+function collectRefs(context: PDFContext, o: PDFObject | undefined, out: Set<string>): void {
+  const stack: PDFObject[] = [];
+  if (o !== undefined) stack.push(o);
+  while (stack.length > 0) {
+    const cur = stack.pop()!;
+    if (cur instanceof PDFRef) {
+      const k = cur.toString();
+      if (out.has(k)) continue;
+      out.add(k);
+      const target = context.lookup(cur);
+      if (target !== undefined) stack.push(target);
+    } else if (cur instanceof PDFDict) {
+      for (const [, v] of cur.entries()) stack.push(v);
+    } else if (cur instanceof PDFArray) {
+      for (const v of cur.asArray()) stack.push(v);
+    } else if (cur instanceof PDFStream) {
+      stack.push(cur.dict);
+    }
   }
 }
 
