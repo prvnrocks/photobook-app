@@ -2045,3 +2045,182 @@ describe("orchestrator — Storyteller v6 backgrounds (M10c T12)", () => {
     expect(String(story?.messages[0].content)).not.toContain("colour ");
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// M12 T4 (D-069): lease budgets vs the Supabase deadlines; a database timeout fails the tick fast.
+
+const { DEADLINE_BUDGETS, SUPABASE_TIMEOUT, SupabaseUnavailableError, isSupabaseTimeout } = await import("@/lib/supabase/deadline");
+const { AgentRunsQueryError } = await import("@/lib/db/agent-runs");
+const { PhotosQueryError } = await import("@/lib/db/photos");
+
+describe("orchestrator — database timeouts (M12)", () => {
+  const server = DEADLINE_BUDGETS.server;
+
+  /** What a postgrest call under the deadline fetch looks like after its budget: the db layer's error with code SUPABASE_TIMEOUT. */
+  function slow<T extends unknown[], R>(db: FakeDb, budgetMs: number, err: () => Error, real: (...a: T) => Promise<R>, failOn: (n: number) => boolean) {
+    let n = 0;
+    return async (...a: T): Promise<R> => {
+      if (failOn(++n)) {
+        db.now += budgetMs; // the call hung for its whole budget
+        throw err();
+      }
+      return real(...a);
+    };
+  }
+
+  async function expectUnavailable(p: Promise<unknown>) {
+    const err = await p.then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(SupabaseUnavailableError);
+    expect(isSupabaseTimeout(err)).toBe(true);
+    return err as InstanceType<typeof SupabaseUnavailableError>;
+  }
+
+  it("invariants: Storyteller time + margin fits the lease; margin covers a write + the release RPC", async () => {
+    const { AGENT_TIMEOUT_MS } = await import("@/lib/ai/client");
+    expect(AGENT_TIMEOUT_MS.storyteller + orch.LEASE_MARGIN_MS).toBeLessThanOrEqual(orch.LEASE_SECONDS * 1000);
+    expect(orch.LEASE_MARGIN_MS).toBeGreaterThanOrEqual(Math.max(server.restMs, server.rpcMs) + orch.RELEASE_BUDGET_MS);
+    expect(orch.LEASE_MARGIN_MS).toBeGreaterThanOrEqual(server.restMs + server.rpcMs);
+    expect(orch.RELEASE_BUDGET_MS).toBe(server.rpcMs);
+    expect(orch.LEASE_MARGIN_MS).toBe(30_000);
+  });
+
+  it("a checkpoint timeout throws SupabaseUnavailableError, releases the lease and leaves the run resumable", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 10));
+    const s = await start(deps);
+    const releases: string[] = [];
+    const realRelease = deps.releaseRun;
+    const d: OrchestratorDeps = {
+      ...deps,
+      checkpointRun: slow(db, server.restMs, () => new AgentRunsQueryError("checkpoint run", SUPABASE_TIMEOUT), deps.checkpointRun, (n) => n === 1),
+      releaseRun: async (id, token) => {
+        releases.push(token);
+        return realRelease(id, token);
+      },
+    };
+    await expectUnavailable(orch.advance(s.runId, {}, d));
+    const run = db.run(s.runId);
+    expect(releases).toHaveLength(1);
+    expect(run.lease_token).toBeNull(); // released → the retry can claim at once
+    expect(run.state).toBe("queued"); // not failed
+    expect(run.error_code).toBeNull();
+    expect(db.writes).toEqual([]); // no rule album, no ai_status write
+    expect(transport.calls).toHaveLength(0);
+
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok" });
+  });
+
+  it("a writeCuration timeout after the Curator calls throws, releases and the retry re-bills nothing twice", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 10));
+    const s = await start(deps);
+    const d: OrchestratorDeps = {
+      ...deps,
+      writeCuration: slow(db, server.restMs, () => new PhotosQueryError("write photo analysis", SUPABASE_TIMEOUT), deps.writeCuration, (n) => n === 1),
+    };
+    await expectUnavailable(orch.advance(s.runId, {}, d));
+    expect(transport.count("curator")).toBe(1);
+    expect(db.run(s.runId).lease_token).toBeNull();
+    expect(db.run(s.runId).state).toBe("curating");
+    expect(db.book.ai_status).toBe("analyzing");
+
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok" });
+    // the batch was re-curated without colliding with the first call's agent_steps row
+    const keys = db.steps.map((x) => `${x.stepKey}#${x.attempt}`);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("a thumb load timeout throws and releases", async () => {
+    const { db, deps } = setup(photos150().slice(0, 10));
+    const s = await start(deps);
+    const d: OrchestratorDeps = {
+      ...deps,
+      loadThumbBase64: async () => {
+        db.now += server.downloadMs;
+        throw new SupabaseUnavailableError();
+      },
+    };
+    await expectUnavailable(orch.advance(s.runId, {}, d));
+    expect(db.run(s.runId).lease_token).toBeNull();
+    expect(db.run(s.runId).state).toBe("curating");
+  });
+
+  it("a memory read timeout fails the tick instead of snapshotting 'no memory'", async () => {
+    const { db, deps } = setup(photos150().slice(0, 10));
+    const s = await start(deps);
+    const d: OrchestratorDeps = {
+      ...deps,
+      getUserMemory: async () => {
+        throw Object.assign(new Error("Failed to load memory (SUPABASE_TIMEOUT)"), { code: SUPABASE_TIMEOUT });
+      },
+    };
+    await expectUnavailable(orch.advance(s.runId, {}, d));
+    expect(db.run(s.runId)).toMatchObject({ state: "queued", lease_token: null });
+  });
+
+  it("crash path: a timed-out failure checkpoint throws without the best-effort album writes", async () => {
+    const { db, deps } = setup(photos150().slice(0, 10));
+    const s = await start(deps);
+    const d: OrchestratorDeps = {
+      ...deps,
+      listPhotosForCuration: async () => {
+        throw new Error("boom"); // unexpected → crash()
+      },
+      checkpointRun: slow(db, server.restMs, () => new AgentRunsQueryError("checkpoint run", SUPABASE_TIMEOUT), deps.checkpointRun, () => true),
+    };
+    await expectUnavailable(orch.advance(s.runId, {}, d));
+    expect(db.run(s.runId)).toMatchObject({ state: "queued", lease_token: null });
+    expect(db.writes).toEqual([]);
+  });
+
+  it("other errors still crash to a failed run (no regression)", async () => {
+    const { deps } = setup(photos150().slice(0, 10));
+    const s = await start(deps);
+    const d: OrchestratorDeps = {
+      ...deps,
+      listPhotosForCuration: async () => {
+        throw new PhotosQueryError("list photos", "42501");
+      },
+    };
+    expect(await orch.advance(s.runId, {}, d)).toMatchObject({ state: "failed", errorCode: "internal_42501" });
+  });
+
+  it("a hanging release never holds the tick longer than RELEASE_BUDGET_MS", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const { db, deps } = setup(photos150().slice(0, 10));
+      const s = await start(deps);
+      let released = 0;
+      const d: OrchestratorDeps = {
+        ...deps,
+        checkpointRun: slow(db, server.restMs, () => new AgentRunsQueryError("checkpoint run", SUPABASE_TIMEOUT), deps.checkpointRun, () => true),
+        releaseRun: () => {
+          released++;
+          return new Promise<void>(() => undefined); // the release RPC hangs too
+        },
+      };
+      let settled: unknown = "pending";
+      const p = orch.advance(s.runId, {}, d).then(
+        () => "resolved",
+        (e: unknown) => e,
+      );
+      void p.then((v) => (settled = v));
+      await vi.advanceTimersByTimeAsync(orch.RELEASE_BUDGET_MS - 1);
+      expect(settled).toBe("pending");
+      expect(released).toBe(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(isSupabaseTimeout(await p)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("releaseLease swallows a failing release RPC", async () => {
+    await expect(
+      orch.releaseLease({ releaseRun: async () => Promise.reject(new AgentRunsQueryError("release run", SUPABASE_TIMEOUT)) }, "r", "t"),
+    ).resolves.toBeUndefined();
+  });
+});

@@ -37,6 +37,13 @@ import "server-only";
 // before them. A model call starts only when its timeout (+ margin) fits in the remaining lease;
 // runAgentStep retries only within the same bound (SDK retries are off).
 //
+// Database timeouts (M12, D-069): every Supabase call has a deadline (src/lib/supabase/deadline.ts)
+// and a timed-out call surfaces as an error with code SUPABASE_TIMEOUT. Such an error is NOT a
+// crash: the tick stops at once (no "failed" run, no rule-album writes — they would only time out
+// too), advance() releases the lease under its own budget (RELEASE_BUDGET_MS) and rethrows a
+// SupabaseUnavailableError, which the advance route maps to 503. Every chunk is idempotent, so the
+// client's retry resumes from the last checkpoint. LEASE_MARGIN_MS covers one write + the release.
+//
 // Guards (M4 review): the cursor is measured before every checkpoint (cursorBytes vs
 // cursorByteLimit — AI_MAX_CURSOR_BYTES, default the DB check); a caption-phase cursor that would
 // not fit sheds its pending caption work and the run finishes with the AI album and the captions
@@ -85,6 +92,7 @@ import { applyBackgroundSuggestions } from "@/lib/design/background-suggest";
 import { colorFromThumbBase64 } from "@/lib/image/color-server";
 import type { CurationPhotoRow, CurationWrite } from "@/lib/db/photos";
 import type { Json } from "@/lib/supabase/database.types";
+import { DEADLINE_BUDGETS, isSupabaseTimeout, SupabaseUnavailableError } from "@/lib/supabase/deadline";
 import { curateBatch, needsCuration, CURATOR_PROMPT_VERSION } from "./agents/curator";
 import { captionWriterMaxTokens, writeCaptions, type WriteCaptionsResult } from "./agents/caption-writer";
 import { critiqueBook, criticMaxTokens } from "./agents/critic";
@@ -141,8 +149,17 @@ import type { AgentName, AgentTransport } from "./transport";
 export const LEASE_SECONDS = 240;
 /** Upper bound accepted by claim_agent_run. */
 export const MAX_LEASE_SECONDS = 300;
-/** Time reserved after the last model call of a tick for writes + checkpoint + release. */
-export const LEASE_MARGIN_MS = 20_000;
+/**
+ * Time reserved after the last model call of a tick for writes + checkpoint + release. M12: must
+ * cover at least one server write under its deadline (DEADLINE_BUDGETS.server.restMs, 10 s) plus
+ * the release RPC (RELEASE_BUDGET_MS, 15 s) — 20 s did not (tests/ai/orchestrator.test.ts, "database timeouts").
+ */
+export const LEASE_MARGIN_MS = 30_000;
+/**
+ * Upper bound the tick waits for release_agent_run (the RPC's own deadline, server profile). Past
+ * it the tick gives up on the release (the lease then simply expires, ≤ LEASE_SECONDS).
+ */
+export const RELEASE_BUDGET_MS = DEADLINE_BUDGETS.server.rpcMs;
 /**
  * Soft work budget of one advance() call: no new Curator wave starts after
  * CURATOR_WAVE_CUTOFF of it (keeps progress updates frequent). The hard bound is the lease.
@@ -1015,7 +1032,7 @@ async function startRuleRun(input: StartInput, book: BookForRun, deps: Orchestra
       .catch(() => false);
     return { ok: true, runId, mode: "rule", state: saved ? "failed" : "queued" };
   } finally {
-    await deps.releaseRun(runId, token).catch(() => undefined);
+    await releaseLease(deps, runId, token);
   }
 }
 
@@ -1048,9 +1065,44 @@ export async function advance(
     result = await tick(runId, token, t0, budgetMs, deps);
     return result;
   } finally {
-    // A stale tick (lease taken over) must not touch the new holder's lease.
-    if (!result || !("leased" in result)) await deps.releaseRun(runId, token).catch(() => undefined);
+    // A stale tick (lease taken over) must not touch the new holder's lease. A tick that threw
+    // (database timeout → SupabaseUnavailableError → 503) releases so the retry can claim at once.
+    if (!result || !("leased" in result)) await releaseLease(deps, runId, token);
   }
+}
+
+/**
+ * release_agent_run under its own budget. Never throws and never waits longer than
+ * RELEASE_BUDGET_MS (the RPC keeps its own deadline; past the budget we stop waiting and the lease
+ * expires by itself). Exported for tests.
+ */
+export async function releaseLease(
+  deps: Pick<OrchestratorDeps, "releaseRun">,
+  runId: string,
+  token: string,
+  budgetMs: number = RELEASE_BUDGET_MS,
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const gaveUp = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, budgetMs);
+  });
+  try {
+    await Promise.race([deps.releaseRun(runId, token).catch(() => undefined), gaveUp]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * A database deadline hit during a tick, as the error the advance route maps to 503
+ * (isSupabaseTimeout() is true for it). The message carries op + code only (no user data).
+ */
+function unavailable(e: unknown): SupabaseUnavailableError {
+  if (e instanceof SupabaseUnavailableError) return e;
+  const op = e instanceof Error ? e.message.replace(/[^\w ():-]/g, "").slice(0, 120) : "database call";
+  const err = new SupabaseUnavailableError(`orchestrator tick: ${op} (SUPABASE_TIMEOUT)`);
+  (err as Error & { cause?: unknown }).cause = e;
+  return err;
 }
 
 function finishedResult(run: Pick<RunForTick, "state" | "progress" | "ai_status" | "error_code">): AdvanceResult {
@@ -1166,18 +1218,24 @@ async function tick(runId: string, token: string, t0: number, budgetMs: number, 
     return await loop(ctx);
   } catch (e) {
     if (e instanceof StaleLeaseError) return { leased: true };
+    // M12: a database timeout is transient, not a crash — stop now, keep the run resumable.
+    if (isSupabaseTimeout(e)) throw unavailable(e);
     return crash(deps, run, token, ctx, errorCodeOf(e));
   }
 }
 
-/** Sanitised, non-empty memory of the user, or null. Best effort: any error → no memory. */
+/**
+ * Sanitised, non-empty memory of the user, or null. Best effort: any error → no memory — except a
+ * database timeout, which fails the tick (503) so the run's one-time snapshot is not lost to it.
+ */
 async function loadMemory(deps: OrchestratorDeps, userId: string): Promise<UserMemory | null> {
   try {
     const raw = await deps.getUserMemory(userId);
     if (raw === null || raw === undefined) return null;
     const mem = sanitizeMemory(raw);
     return isEmptyMemory(mem) ? null : mem;
-  } catch {
+  } catch (e) {
+    if (isSupabaseTimeout(e)) throw e;
     return null;
   }
 }
@@ -2310,7 +2368,12 @@ async function crash(
       ...(cursor ? { cursor: toJson(stripCursorText(cursor, null)) } : {}),
       finished_at: new Date(deps.now()).toISOString(),
     })
-    .catch(() => null);
+    .catch((err: unknown) => {
+      // M12: the database is not answering — the best-effort writes below would only time out too
+      // (and could outlive the lease). The run stays resumable; the route answers 503.
+      if (isSupabaseTimeout(err)) throw unavailable(err);
+      return null;
+    });
   if (saved === false) return { leased: true };
 
   const bookId = run.book_id;
