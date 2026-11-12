@@ -3,10 +3,13 @@
 // Secondary "Rebuild with AI" / "Try AI again" on the review screen (re-plans the whole story;
 // the free "Update album" bar is the primary way choices reach the album, D-028) → POST /api/ai/runs.
 // AI runs continue on /books/[id]/build; a rule run (AI off) finishes inside the request, so
-// we stay here and refresh.
-import { useState, useTransition } from "react";
+// we stay here and refresh. The refresh goes through useRefreshTransition: a plain
+// startTransition(() => router.refresh()) could stay pending forever under this route's loading.tsx,
+// leaving "Rebuilding…" on screen (lost React ping, see src/lib/app/refresh-nudge.ts).
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
+import { useRefreshTransition } from "@/components/app/use-refresh-transition";
 import { Button } from "@/components/ui/button";
 import {
   REBUILD_LABELS,
@@ -26,7 +29,7 @@ type RebuildButtonProps = {
 export function RebuildButton({ bookId, variant, rebuildsLeft }: RebuildButtonProps) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [refreshing, startRefresh] = useTransition();
+  const [refreshing, refresh] = useRefreshTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
@@ -48,7 +51,7 @@ export function RebuildButton({ bookId, variant, rebuildsLeft }: RebuildButtonPr
     setBusy(false);
     if (outcome.kind === "refreshed") {
       setDone(true);
-      startRefresh(() => router.refresh());
+      refresh();
     } else {
       setMessage(outcome.message);
     }

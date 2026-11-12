@@ -6,11 +6,11 @@
 // (unsyncedPhotoIds over the grid's optimistic state and the album's photo ids from the server).
 import { ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { ActionBar } from "@/components/app/ActionBar";
 import { Notice } from "@/components/app/Notice";
+import { useRefreshTransition } from "@/components/app/use-refresh-transition";
 import { RebuildButton } from "@/components/review/RebuildButton";
 import { ReviewGrid, type ToggleResult } from "@/components/review/ReviewGrid";
 import { UpdateAlbumBar } from "@/components/review/UpdateAlbumBar";
@@ -73,12 +73,13 @@ export function ReviewBody({
   captions,
   empty,
 }: ReviewBodyProps) {
-  const router = useRouter();
   const [current, setCurrent] = useState<ReviewTilePhoto[]>(photos);
   /** id → status at the last successful update: still-unsynced ids the relayout couldn't place. */
   const [settled, setSettled] = useState<Map<string, string>>(() => new Map());
   const [pending, setPending] = useState(false);
-  const [refreshing, startRefresh] = useTransition();
+  // Not a plain startTransition(router.refresh): that can stay pending forever under the review
+  // loading.tsx (src/lib/app/refresh-nudge.ts), which would leave "Update album" disabled.
+  const [refreshing, refresh] = useRefreshTransition();
   const [error, setError] = useState<Extract<UpdateAlbumOutcome, { kind: "error" }> | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -127,11 +128,11 @@ export function ReviewBody({
         return n;
       });
       setToast(outcome.toast);
-      startRefresh(() => router.refresh());
+      refresh();
     } else {
       setError(outcome);
     }
-  }, [pending, refreshing, current, unsynced, updateAlbum, bookId, router]);
+  }, [pending, refreshing, current, unsynced, updateAlbum, bookId, refresh]);
 
   const editedPanel = userEdited && !building;
   // Toasts sit above the sticky bar (taller while it carries the Update album row).

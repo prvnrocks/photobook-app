@@ -1536,9 +1536,18 @@ test("e. AI off: Build my album → straight to review, rule album, ai_off banne
   // "Rebuild album" in off mode re-runs the rules in place.
   await expect(page.getByTestId("rebuild-button")).toHaveText("Rebuild album");
   await page.getByTestId("rebuild-button").click();
+  await expect(page.getByTestId("rebuild-button")).toHaveText("Rebuilding…");
+  await expect(page.getByTestId("rebuild-button")).toBeDisabled();
+  // fix-ai-off-rebuild: the refresh under review/loading.tsx used to stay pending forever (lost React
+  // ping) → "Rebuilding…" never cleared. Now the refresh commits: done line, button usable again.
   await expect(page.getByTestId("rebuild-done")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("rebuild-button")).toHaveText("Rebuild album");
+  await expect(page.getByTestId("rebuild-button")).toBeEnabled();
+  await expect(page.getByTestId("rebuild-error")).toHaveCount(0);
   expect(new URL(page.url()).pathname).toBe(`/books/${bookC}/review`);
   const runs2 = await runsFor(bookC);
   expect(runs2.length).toBe(2);
   expect(runs2[1]).toMatchObject({ mode: "rule", trigger: "rebuild", state: "done" });
+  expect(metaOf((await bookRow(bookC)).doc).runId).toBe(runs2[1].id);
+  await expect(page.getByTestId("review-header")).toHaveText(`Kept ${kept} of ${rows.length}`);
 });

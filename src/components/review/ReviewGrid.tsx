@@ -4,7 +4,7 @@
 // through the `toggle` server action (user_override = true, so the AI never changes it again).
 // Tiles the user toggled stay where they are until the tab changes, so nothing jumps under a tap.
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRefreshTransition } from "@/components/app/use-refresh-transition";
 import { PhotoTile } from "@/components/review/PhotoTile";
 import {
   applyUserChoice,
@@ -40,7 +40,9 @@ const TOAST_MS = 4000;
 const RESIGN_MIN_GAP_MS = 60_000;
 
 export function ReviewGrid({ photos, aiUsed, toggle, onPhotosChange, toastClassName = "bottom-4" }: ReviewGridProps) {
-  const router = useRouter();
+  // Re-sign refresh: a bare router.refresh() can stay pending forever under the review loading.tsx,
+  // so the new thumb URLs would never arrive (src/lib/app/refresh-nudge.ts).
+  const [, refresh] = useRefreshTransition();
   const [overrides, setOverrides] = useState<Map<string, Choice>>(() => new Map());
   const [pending, setPending] = useState<Set<string>>(() => new Set());
   const [tab, setTab] = useState<ReviewTab>("kept");
@@ -113,8 +115,8 @@ export function ReviewGrid({ photos, aiUsed, toggle, onPhotosChange, toastClassN
     const now = Date.now();
     if (now - lastResign.current < RESIGN_MIN_GAP_MS) return;
     lastResign.current = now;
-    router.refresh();
-  }, [router]);
+    refresh();
+  }, [refresh]);
 
   const selectTab = (t: ReviewTab) => {
     setTab(t);
