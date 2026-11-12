@@ -170,3 +170,6 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - Client recovery: finalize deadline + 503 back-off, transient 503 in build, photo-link retry, autosave retries 503 unavailable ("Saving delayed – retrying").
 - Small fixes: sliced-cover "Add photo", picker memo, PDF ref walk iterative.
 - Gate PASS (e2e/m12-reliability 5/5). Open: AI-off "Rebuild album" refresh hang (pre-existing, AI_MODE=off only); 27 orphan test agent_runs (needs user OK to delete).
+
+## 2026-11-12 — Milestone 12 — deployed
+- main → f6a7bc9; Vercel success; signed-out smoke OK. 27 orphan test agent_runs deleted with user OK. NEXT: AI-off Rebuild album hang fix (branch fix-ai-off-rebuild).
