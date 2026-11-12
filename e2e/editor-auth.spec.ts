@@ -302,9 +302,20 @@ test("c. after 0900: save 200 + rev bump + persisted; 409 stale; 422 page_limit;
   expect(after.title).toBe("E2E edited title");
   expect((after.doc as { meta?: { userEdited?: boolean } }).meta?.userEdited).toBe(true);
 
-  const stale = await putDoc(doc, rev0);
+  // M12 T3: re-sending the SAME doc on rev0 is an identical replay of the save that made rev0 + 1
+  // (its response may have been lost) → 200 with that rev, nothing written again.
+  const replay = await putDoc(doc, rev0);
+  expect(replay.status).toBe(200);
+  expect(Number(replay.body.rev)).toBe(Number(ok.body.rev));
+  expect(Number((await bookRow()).doc_rev)).toBe(Number(ok.body.rev));
+
+  // A DIFFERENT doc on the stale rev is a real conflict.
+  const changed = structuredClone(doc);
+  changed.cover.title = "E2E stale tab title";
+  const stale = await putDoc(changed, rev0);
   expect(stale.status).toBe(409);
   expect(stale.body).toMatchObject({ error: "conflict" });
+  expect((await bookRow()).title).toBe("E2E edited title");
 
   const big = structuredClone(after.doc) as { pages: { id: string }[] };
   const first = big.pages[0];
