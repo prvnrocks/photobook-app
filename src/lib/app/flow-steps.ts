@@ -1,42 +1,64 @@
-// The book-making flow shown by <StepProgress> (M11, D-067): New → Photos → AI build → Review →
-// Edit → Share. Pure: safe on client and server, tested in node.
+// The book-making flow shown by <StepProgress> (M13 T7, D-070): three plain steps,
+// Photos → Your book → Share (was six in M11: New → Photos → AI build → Review → Edit → Share).
+// Pure: safe on client and server, tested in node.
 //
-// Where a book "is" reuses the dashboard card rules (src/lib/dashboard/card-target.ts) so the step
-// bar and the card link can never disagree; a live snapshot (published) on a built album is "share".
+// Screens still name themselves by route ("new", "build", "review", …: `FlowStepId`); each maps to
+// one of the three shown steps (`FlowDisplayStepId`). Where a book "is" reuses the dashboard card
+// rules (src/lib/dashboard/card-target.ts) so the step bar and the card link can never disagree; a
+// live snapshot (published) on a built album is "share".
 
 import { bookCardStep, RUNNING_AI_STATUSES, type BookCardState } from "@/lib/dashboard/card-target";
 
+/** The steps the bar shows, in order. */
 export const FLOW_STEPS = [
-  { id: "new", label: "New book" },
   { id: "photos", label: "Photos" },
-  { id: "build", label: "AI build" },
-  { id: "review", label: "Review" },
-  { id: "edit", label: "Edit" },
+  { id: "book", label: "Your book" },
   { id: "share", label: "Share" },
 ] as const;
 
-export type FlowStepId = (typeof FLOW_STEPS)[number]["id"];
+export type FlowDisplayStepId = (typeof FLOW_STEPS)[number]["id"];
+
+/** Route-level step a screen passes to <PageHeader step> / <StepProgress current>. */
+export const FLOW_STEP_IDS = ["new", "photos", "build", "review", "edit", "share"] as const;
+
+export type FlowStepId = (typeof FLOW_STEP_IDS)[number];
 
 export const FLOW_STEP_COUNT = FLOW_STEPS.length;
 
+/** Which of the three shown steps a screen belongs to. */
+const DISPLAY_STEP: Record<FlowStepId, FlowDisplayStepId> = {
+  new: "photos",
+  photos: "photos",
+  build: "book",
+  review: "book",
+  edit: "book",
+  share: "share",
+};
+
 export function isFlowStepId(raw: unknown): raw is FlowStepId {
-  return FLOW_STEPS.some((s) => s.id === raw);
+  return typeof raw === "string" && (FLOW_STEP_IDS as readonly string[]).includes(raw);
 }
 
-/** 0-based position of a step. */
+export function displayStep(id: FlowStepId): FlowDisplayStepId {
+  return DISPLAY_STEP[id];
+}
+
+/** 0-based position of a step in the bar. */
 export function flowStepIndex(id: FlowStepId): number {
-  return FLOW_STEPS.findIndex((s) => s.id === id);
+  const shown = DISPLAY_STEP[id];
+  return FLOW_STEPS.findIndex((s) => s.id === shown);
 }
 
-/** "Step 3 of 6: AI build" — the StepProgress label (1-based for people). */
+/** "Step 2 of 3: Your book" — the StepProgress label (1-based for people). */
 export function flowStepLabel(id: FlowStepId): string {
   const i = flowStepIndex(id);
   return `Step ${i + 1} of ${FLOW_STEP_COUNT}: ${FLOW_STEPS[i].label}`;
 }
 
-/** The step a route under /books belongs to (`/books/new`, `/books/[id]/<segment>`). */
+/** The step a route under /books belongs to (`/books/new`, `/books/start`, `/books/[id]/<segment>`). */
 const ROUTE_STEP: Record<string, FlowStepId> = {
   new: "new",
+  start: "photos",
   upload: "photos",
   build: "build",
   review: "review",
@@ -53,7 +75,7 @@ export type FlowBookState = Omit<BookCardState, "id"> & {
   published: boolean;
 };
 
-/** Where the book currently is in the flow (the step its next screen belongs to). */
+/** Where the book currently is in the flow (the route-level step its next screen belongs to). */
 export function bookFlowStep(b: FlowBookState): FlowStepId {
   const card = bookCardStep(b);
   if (card === "upload") return "photos";
@@ -64,6 +86,7 @@ export function bookFlowStep(b: FlowBookState): FlowStepId {
   return card;
 }
 
+/** 0-based position in the three-step bar. */
 export function bookFlowStepIndex(b: FlowBookState): number {
   return flowStepIndex(bookFlowStep(b));
 }

@@ -407,13 +407,13 @@ describe("editor header: Publish changes folded into Share (M13 T9)", () => {
 });
 
 describe("PublishHeader on the shared PageHeader (M11 review)", () => {
-  it("keeps publish-back / publish-title testids, step 6 and an Arabic-safe title line", async () => {
+  it("keeps publish-back / publish-title testids, step 3 of 3 and an Arabic-safe title line", async () => {
     const { PublishHeader } = await import("@/components/publish/PublishHeader");
     const html = renderToStaticMarkup(<PublishHeader bookId="b1" title="سارة وعمر" />);
     expect(html).toContain('data-testid="page-header"');
     expect(html).toMatch(/<a data-testid="publish-back"[^>]*href="\/books\/b1\/edit"/);
     expect(html).toContain("Back to editor");
-    expect(html).toContain("Step 6 of 6: Share");
+    expect(html).toContain("Step 3 of 3: Share");
     expect(html).toMatch(/<p dir="auto" class="type-small[^"]*" data-testid="publish-title">سارة وعمر<\/p>/);
     expect(html).not.toContain("type-eyebrow");
     expect(html).toMatch(/<h1[^>]*>Share your book<\/h1>/);

@@ -1,18 +1,19 @@
-// Where the user is in the book flow (M11, D-067): "Step 3 of 6: AI build" plus six segments.
-// At 375 px only the label line + bars show; step names appear under the bars from sm up.
-// Not interactive (no links): it orients, the page's own buttons move the user on.
+// Where the user is in the book flow (M13 T7, D-070): "Step 2 of 3: Your book" plus three segments
+// (Photos → Your book → Share). `current` is the screen's route-level step; it maps to one of the
+// three (src/lib/app/flow-steps.ts). At 375 px the label line + bars show; step names appear under
+// the bars from sm up. Not interactive (no links): it orients, the page's own buttons move the user on.
 
-import { FLOW_STEPS, flowStepIndex, flowStepLabel, type FlowStepId } from "@/lib/app/flow-steps";
+import { displayStep, FLOW_STEPS, flowStepIndex, flowStepLabel, type FlowStepId } from "@/lib/app/flow-steps";
 import { cn } from "@/lib/utils";
 
 export function StepProgress({ current, className }: { current: FlowStepId; className?: string }) {
   const at = flowStepIndex(current);
   return (
-    <nav aria-label="Book steps" className={cn("w-full", className)} data-testid="step-progress" data-step={current}>
+    <nav aria-label="Book steps" className={cn("w-full", className)} data-testid="step-progress" data-step={displayStep(current)}>
       <p className="type-small text-muted-foreground">
         <span className="font-medium text-foreground">{flowStepLabel(current)}</span>
       </p>
-      <ol className="mt-2 grid grid-cols-6 gap-1">
+      <ol className="mt-2 grid grid-cols-3 gap-1">
         {FLOW_STEPS.map((s, i) => {
           const state = i < at ? "done" : i === at ? "current" : "todo";
           return (

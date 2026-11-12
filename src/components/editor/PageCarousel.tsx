@@ -13,7 +13,7 @@
 // Facing pages (M10a A9, ctx.spread — ≥ md): items are open spreads instead (src/lib/editor/
 // spreads.ts: item 0 = cover alone, item k = pages 2(k-1) + 2(k-1)+1, same pairing as the
 // flipbook). Swipe/arrows move by spread and land on its left page; tapping a page makes it the
-// current page (what page tools act on). Phones keep one page + a read-only "View spread" sheet.
+// current page (what page tools act on). Phones keep one page + a read-only "Two pages" sheet (facing pages; plain words, M13 T7).
 
 import { BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -241,13 +241,13 @@ export function PageCarousel() {
             type="button"
             onClick={() => setPreview(true)}
             disabled={pageCount === 0}
-            aria-label="View spread"
-            className="absolute right-1 flex h-11 items-center gap-1 rounded-full px-2 text-xs font-medium text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"
+            aria-label="See facing pages"
+            className="absolute right-1 flex h-11 min-w-11 flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 text-[11px] leading-none font-medium text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"
             data-testid="view-spread"
           >
             <BookOpen className="size-4" aria-hidden="true" />
-            {/* < 360 px the label would sit on the Next button: icon only (aria-label stays). */}
-            <span className="max-[359px]:sr-only">Spread</span>
+            {/* Label under the icon keeps the button clear of Next at 375 px; < 360 px icon only (aria-label stays). */}
+            <span className="whitespace-nowrap max-[359px]:sr-only">Two pages</span>
           </button>
         )}
       </div>

@@ -14,19 +14,26 @@ const html = (el: React.ReactElement) => renderToStaticMarkup(el);
 const count = (s: string, needle: string) => s.split(needle).length - 1;
 
 describe("StepProgress", () => {
-  it("labels the current step and marks it aria-current", () => {
+  it("labels the current step and marks it aria-current (M13: three steps)", () => {
     const h = html(<StepProgress current="build" />);
     expect(h).toContain('aria-label="Book steps"');
-    expect(h).toContain("Step 3 of 6: AI build");
+    expect(h).toContain("Step 2 of 3: Your book");
+    expect(h).toContain('data-step="book"');
     expect(count(h, 'aria-current="step"')).toBe(1);
-    expect(h).toMatch(/<li aria-current="step" data-state="current"[^>]*>.*?AI build/);
-    expect(count(h, 'data-state="done"')).toBe(2);
-    expect(count(h, 'data-state="todo"')).toBe(3);
-    expect(count(h, "<li")).toBe(6);
+    expect(h).toMatch(/<li aria-current="step" data-state="current"[^>]*>.*?Your book/);
+    expect(count(h, 'data-state="done"')).toBe(1);
+    expect(count(h, 'data-state="todo"')).toBe(1);
+    expect(count(h, "<li")).toBe(3);
   });
-  it("fits 375 px: six equal grid columns, names hidden below sm", () => {
+  it("maps review and edit to Your book, new to Photos", () => {
+    expect(html(<StepProgress current="review" />)).toContain("Step 2 of 3: Your book");
+    expect(html(<StepProgress current="edit" />)).toContain("Step 2 of 3: Your book");
+    expect(html(<StepProgress current="new" />)).toContain("Step 1 of 3: Photos");
+    expect(html(<StepProgress current="share" />)).toContain("Step 3 of 3: Share");
+  });
+  it("fits 375 px: three equal grid columns, names hidden below sm", () => {
     const h = html(<StepProgress current="new" />);
-    expect(h).toContain("grid-cols-6");
+    expect(h).toContain("grid-cols-3");
     expect(h).toContain("sr-only sm:not-sr-only");
   });
 });
@@ -42,7 +49,7 @@ describe("PageHeader", () => {
     expect(h).toMatch(/<p dir="auto"[^>]*>Pick your photos<\/p>/);
     expect(h).toContain('href="/dashboard"');
     expect(h).toContain("h-11");
-    expect(h).toContain("Step 2 of 6: Photos");
+    expect(h).toContain("Step 1 of 3: Photos");
   });
   it("display size and no optional parts", () => {
     const h = html(<PageHeader title="Your books" size="display" />);

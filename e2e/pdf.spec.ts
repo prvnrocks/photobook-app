@@ -446,10 +446,11 @@ test("a. build (replay) from 40 large GPS-tagged photos", async () => {
   console.log(`[a] uploading ${files.length} photos, ${(bytes / 1048576).toFixed(1)} MB`);
   const t0 = Date.now();
   await page.getByTestId("upload-input").setInputFiles(files);
-  await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 600_000 });
+  // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build\?auto=1$/, { timeout: 600_000 });
   console.log(`[a] upload ${((Date.now() - t0) / 1000).toFixed(1)} s`);
-  await page.getByTestId("build-album").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/review$/, { timeout: 420_000 });
+  // M13 T7: the build hands over to the editor (review is reached from the "AI kept X of Y" chip).
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/edit$/, { timeout: 420_000 });
   const { data: photos, error } = await admin
     .from("photos")
     .select("id")

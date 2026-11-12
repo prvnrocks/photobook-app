@@ -1,12 +1,14 @@
 "use client";
 // AI build progress (D-022): resumes `activeRunId` or starts a run, then loops advance until
-// done and replaces the URL with the review screen. Never blocks the user: every stop state
-// links to the review screen, where the rule album already exists.
+// done and replaces the URL with the editor (M13 T7, D-070 (3): review is reached from the
+// editor's "AI kept X of Y" chip). While it runs, the draft book (rule album) shows above the
+// checklist when the page passes one (`preview`). Never blocks the user: every stop state links to
+// the editor, where the rule album already exists.
 // Only ids and counts are sent; nothing about photos is logged.
 import { Check, Circle, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useWakeLock, useWarnOnLeave } from "@/components/upload/use-keep-awake";
 import { useThrottledValue } from "@/components/upload/use-throttled-value";
 import { Notice } from "@/components/app/Notice";
@@ -34,6 +36,13 @@ export type BuildProgressProps = {
   isPaid: boolean;
   /** D-026 daily cap for this book's plan (for the limit message). */
   dailyCap: number;
+  /**
+   * The run is the automatic first build (M13 T4: the upload screen got `auto: true` from the
+   * POST and opened /build?auto=1) — reported as ai_build_done { auto }.
+   */
+  auto?: boolean;
+  /** Read-only draft book (server-rendered <BuildDraftPreview>), shown while the run works. */
+  preview?: ReactNode;
 };
 
 type StopError =
@@ -62,7 +71,7 @@ const ERROR_COPY: Record<StopError, string> = {
     "We lost the connection while building your album. Your photos are safe — try again to pick up where we left off.",
   server_unavailable:
     "Our server is taking longer than usual to respond. Your photos are safe — try again to pick up where we left off.",
-  run_failed: "We couldn't finish with AI. Your photos are safe — open the review to continue.",
+  run_failed: "We couldn't finish with AI. Your photos are safe — open your book to continue.",
 };
 
 /** Shown during a back-off wait; the loop retries by itself. */
@@ -80,9 +89,9 @@ const STEP_STATE_SR: Record<ChecklistStepState, string> = {
   todo: "not started",
 };
 
-export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }: BuildProgressProps) {
+export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap, auto = false, preview }: BuildProgressProps) {
   const router = useRouter();
-  const reviewHref = `/books/${bookId}/review`;
+  const editorHref = `/books/${bookId}/edit`;
   const loginHref = `/login?next=${encodeURIComponent(`/books/${bookId}/build`)}`;
 
   const runIdRef = useRef<string | null>(activeRunId);
@@ -113,15 +122,15 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
     (mode: "ai" | "rules", outcome: "ok" | "failed") => {
       if (sentRef.current) return;
       sentRef.current = true;
-      track("ai_build_done", { mode, outcome, ms_bucket: msBucket(Date.now() - mountedAt) });
+      track("ai_build_done", { mode, outcome, ms_bucket: msBucket(Date.now() - mountedAt), auto });
     },
-    [mountedAt],
+    [mountedAt, auto],
   );
 
-  const goToReview = useCallback(() => {
+  const goToEditor = useCallback(() => {
     setStatus({ kind: "leaving" });
-    router.replace(reviewHref);
-  }, [router, reviewHref]);
+    router.replace(editorHref);
+  }, [router, editorHref]);
 
   const run = useCallback(
     async (signal: AbortSignal) => {
@@ -149,7 +158,7 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
           case "started":
             if (out.state === "done") {
               trackDone("rules", "ok");
-              return goToReview(); // rule mode: album written already
+              return goToEditor(); // rule mode: album written already
             }
             if (out.state === "failed") {
               trackDone("ai", "failed");
@@ -213,7 +222,7 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
             return setStatus({ kind: "error", error: "run_failed" });
           }
           trackDone("ai", "ok");
-          return goToReview();
+          return goToEditor();
         }
         if (res.error === "not_found") runIdRef.current = null; // "Try again" starts a new run
         setStatus({ kind: "error", error: res.error });
@@ -221,7 +230,7 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
         clearInterval(poll);
       }
     },
-    [bookId, trigger, goToReview, report, waker, trackDone],
+    [bookId, trigger, goToEditor, report, waker, trackDone],
   );
 
   const begin = useCallback(() => {
@@ -275,8 +284,8 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
           tone="info"
           title="You've edited this album, so we won't replace it."
           action={
-            <Link href={reviewHref} className={cn(buttonVariants({ size: "cta" }))} data-testid="build-to-review">
-              Back to your album
+            <Link href={editorHref} className={cn(buttonVariants({ size: "cta" }))} data-testid="build-to-editor">
+              Back to your book
             </Link>
           }
         />
@@ -291,12 +300,12 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
           tone="warn"
           title={limitCopy(status.limit, isPaid, dailyCap)}
           action={
-            <Link href={reviewHref} className={cn(buttonVariants({ size: "cta" }))} data-testid="build-to-review">
-              See your album
+            <Link href={editorHref} className={cn(buttonVariants({ size: "cta" }))} data-testid="build-to-editor">
+              Open your book
             </Link>
           }
         >
-          Your draft album is ready to look at and change.
+          Your draft book is ready to look at and change.
         </Notice>
       </div>
     );
@@ -320,11 +329,11 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
                   Try again
                 </Button>
                 <Link
-                  href={reviewHref}
+                  href={editorHref}
                   className={cn(buttonVariants({ variant: "outline", size: "cta" }))}
-                  data-testid="build-to-review"
+                  data-testid="build-to-editor"
                 >
-                  See your album
+                  Open your book
                 </Link>
               </>
             )
@@ -338,6 +347,8 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
   const leaving = status.kind === "leaving";
   const percent = leaving ? 100 : copy.percent;
   const steps = buildChecklist(snap.state, snap.progress, leaving);
+  // With the draft on screen the checklist is secondary: tighter rows (not interactive).
+  const compact = !!preview;
   return (
     <section
       className="flex min-w-0 flex-col gap-4 rounded-2xl border border-border bg-card p-gutter shadow-card sm:p-6"
@@ -370,12 +381,26 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
         />
       </div>
 
+      {preview ? (
+        <div className="flex min-w-0 flex-col gap-2">
+          {preview}
+          <p className="type-small text-muted-foreground" data-testid="build-ai-note">
+            {leaving ? "Opening your book…" : "AI is choosing your best photos and writing captions…"}
+          </p>
+        </div>
+      ) : null}
+
       {/* Stages the server has reported — never a timer (src/lib/runs/build-checklist.ts). */}
-      <ol className="flex flex-col gap-1" aria-label="Build steps" data-testid="build-checklist">
+      <ol
+        className={cn("flex flex-col", compact ? "gap-0" : "gap-1")}
+        aria-label="Build steps"
+        data-testid="build-checklist"
+        data-compact={compact ? "true" : undefined}
+      >
         {steps.map((s) => (
           <li
             key={s.id}
-            className="flex min-h-11 min-w-0 items-center gap-3"
+            className={cn("flex min-w-0 items-center gap-3", compact ? "min-h-8" : "min-h-11")}
             data-testid={`build-step-${s.id}`}
             data-state={s.state}
             aria-current={s.state === "current" ? "step" : undefined}
@@ -383,7 +408,8 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap }
             <span
               aria-hidden="true"
               className={cn(
-                "flex size-7 shrink-0 items-center justify-center rounded-full",
+                "flex shrink-0 items-center justify-center rounded-full",
+                compact ? "size-6" : "size-7",
                 s.state === "done" && "bg-primary text-primary-foreground",
                 s.state === "current" && "bg-accent-strong/10 text-accent-strong",
                 s.state === "todo" && "text-input",

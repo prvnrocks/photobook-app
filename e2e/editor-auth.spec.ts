@@ -210,9 +210,10 @@ test("a. build an album (replay) → review → Continue opens the editor at 375
 
   const files = await makeSynthetic(page, 6);
   await page.getByTestId("upload-input").setInputFiles(files);
-  await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 180_000 });
-  await page.getByTestId("build-album").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/review$/, { timeout: 420_000 });
+  // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build\?auto=1$/, { timeout: 180_000 });
+  // M13 T7: the build hands over to the editor (review is reached from the "AI kept X of Y" chip).
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/edit$/, { timeout: 420_000 });
 
   // Dashboard: a built, never-edited book opens review.
   await page.goto("/dashboard");

@@ -360,12 +360,8 @@ async function uploadAndBuild(id: string, files: { name: string; mimeType: strin
   await page.getByTestId("upload-input").setInputFiles(files);
   // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).
   await page.waitForURL(new RegExp(`/books/${id}/build\\?auto=1$`), { timeout: 240_000 });
-  // M13 T7 moves the build's hand-off from review to the editor; accept both until it lands.
-  await page.waitForURL(new RegExp(`/books/${id}/(review|edit)$`), { timeout: 420_000 });
-  if (/\/review$/.test(page.url())) {
-    await page.getByTestId("review-continue").click();
-    await page.waitForURL(new RegExp(`/books/${id}/edit$`), { timeout: 30_000 });
-  }
+  // M13 T7: the build hands over to the editor (review is reached from the "AI kept X of Y" chip).
+  await page.waitForURL(new RegExp(`/books/${id}/edit$`), { timeout: 420_000 });
   await expect(page.getByTestId("editor-shell")).toBeVisible();
 }
 

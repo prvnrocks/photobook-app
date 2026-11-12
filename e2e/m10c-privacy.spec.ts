@@ -280,9 +280,10 @@ test("a. scrapbook replay build has an AI faded-photo chapter-opener background"
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
   bookId = new URL(page.url()).pathname.split("/")[2];
   await page.getByTestId("upload-input").setInputFiles(await makePhotos(page, uploadSpecs(5300), "priv"));
-  await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 240_000 });
-  await page.getByTestId("build-album").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/review$/, { timeout: 420_000 });
+  // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build\?auto=1$/, { timeout: 240_000 });
+  // M13 T7: the build hands over to the editor (review is reached from the "AI kept X of Y" chip).
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/edit$/, { timeout: 420_000 });
   const { doc } = await row();
   const i = doc.pages.findIndex((p) => p.background?.kind === "photo" && p.background.source === "ai");
   console.log(`[a] pages=${doc.pages.length} aiPhotoBgPage=${i} bookBg=${doc.style.background.kind}/${doc.style.backgroundSource} pageBgs=${JSON.stringify(doc.pages.map((p, j) => (p.background ? `${j}:${p.background.kind}:${p.background.source}` : null)).filter(Boolean))}`);

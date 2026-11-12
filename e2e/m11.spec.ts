@@ -525,7 +525,8 @@ test.describe("M11 signed-in flow at 375 px (live)", () => {
     await page.waitForURL(/\/build\?auto=1$/, { timeout: 60_000 });
     await expect(page.getByTestId("build-checklist")).toBeVisible({ timeout: 30_000 });
     await audit(page, "build", { tab: false, shot: "build" });
-    await page.waitForURL(/\/review$/, { timeout: 420_000 });
+    // M13 T7: the build hands over to the editor; review is reached from the "AI kept X of Y" chip.
+    await page.waitForURL(/\/edit$/, { timeout: 420_000 });
     await page.unrouteAll({ behavior: "ignoreErrors" });
     const steps = await page.evaluate(() => (window as unknown as { __m11Steps?: { t: number; s: string }[] }).__m11Steps ?? []);
     console.log(`[build] server states delivered: ${delivered.map((d) => d.state).join(">")}`);
@@ -558,6 +559,9 @@ test.describe("M11 signed-in flow at 375 px (live)", () => {
     }
     expect.soft(steps.length, "checklist rendered more than its first state").toBeGreaterThan(1);
     expect.soft(progressed, "checklist showed progress").toBeGreaterThan(0);
+    await expect(page.getByTestId("ai-summary-chip")).toBeVisible({ timeout: 30_000 });
+    await page.getByTestId("ai-summary-link").click();
+    await page.waitForURL(/\/review$/, { timeout: 30_000 });
     await expect(page.getByTestId("review-continue")).toBeVisible({ timeout: 30_000 });
     await audit(page, "review", { shot: "review" });
   };

@@ -8,6 +8,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { touchWarnedDraft } from "@/lib/db/draft-activity";
 import { getEditorData } from "@/lib/db/editor";
+import { aiSummary } from "@/lib/editor/ai-summary";
 import { editorRedirect, toEditorShellData } from "@/lib/editor/page-data";
 import { isPaymentsEnabled } from "@/lib/stripe";
 import { cn } from "@/lib/utils";
@@ -58,9 +59,11 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
   // Header "Share" (M13 T9): flush saves client-side, then publish + share screen (Memory Keeper
   // learns inside the publish action).
   const share = shareBookAction.bind(null, data.book.id);
+  // "AI kept X of Y · See left out" (M13 T7): counts from the photos' kept/dropped status.
+  const summary = aiSummary(shell.doc.meta?.generator, shell.photos);
   return (
     <>
-      <EditorShell data={shell} share={share} paymentsEnabled={isPaymentsEnabled()} />
+      <EditorShell data={shell} share={share} paymentsEnabled={isPaymentsEnabled()} aiSummary={summary} />
       <Suspense fallback={null}>
         <UpgradeCancelledNotice floating />
       </Suspense>

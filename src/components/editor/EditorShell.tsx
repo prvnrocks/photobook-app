@@ -3,6 +3,7 @@
 // Editor shell (M5 Task 8): full-height, mobile-first layout
 //   header (back · title + save status · undo/redo)
 //   save banner (read-only / conflict / rejected / signed out)
+//   "AI kept X of Y · See left out" chip → review screen (M13 T7, D-070 (3))
 //   [desktop: page strip] · page carousel · [desktop: tool panel]
 //   toolbar (registered tools for the current selection) — mobile: bottom sheet for panels
 // State: useEditorStore (doc + undo/redo + position + selection); autosave: useAutosave;
@@ -11,6 +12,7 @@
 import { ArrowLeft, Redo2, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { AiSummary } from "@/lib/editor/ai-summary";
 import type { AiSessionBlock } from "@/lib/editor/caption-tools";
 import { stepSpread } from "@/lib/editor/spreads";
 import { canRedo, canUndo } from "@/lib/editor/store";
@@ -18,6 +20,7 @@ import { httpEditorTransport, type EditorTransport } from "@/lib/editor/transpor
 import type { ShareResult } from "@/lib/editor/done";
 import type { EditorShellData } from "@/lib/editor/types";
 import { hasUnpublishedChanges } from "@/lib/publish/ui";
+import { AiSummaryChip } from "./AiSummaryChip";
 import { EditorContext, type EditorContextValue } from "./editor-context";
 import { EditorShareButton } from "./EditorShareButton";
 import { EditorToastHost } from "./EditorToast";
@@ -47,6 +50,11 @@ export type EditorShellProps = {
   paymentsEnabled?: boolean;
   /** Force single-page or facing-pages editing (tests / dev); default = by screen width (≥ md → spreads). */
   layout?: "single" | "spread";
+  /**
+   * "AI kept X of Y · See left out" chip (M13 T7): computed by the edit page (aiSummary in
+   * src/lib/editor/ai-summary.ts). Absent/null → no chip (dev fixture, rule album with nothing left out).
+   */
+  aiSummary?: AiSummary | null;
 };
 
 /** Header icon buttons: 44 px, visible focus ring (M11 tokens). */
@@ -58,7 +66,7 @@ function isTypingTarget(t: EventTarget | null): boolean {
   return t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT";
 }
 
-export function EditorShell({ data, transport: transportProp, tools: toolsProp, backHref = "/dashboard", share, paymentsEnabled = false, layout }: EditorShellProps) {
+export function EditorShell({ data, transport: transportProp, tools: toolsProp, backHref = "/dashboard", share, paymentsEnabled = false, layout, aiSummary = null }: EditorShellProps) {
   // null until the screen width is known (server render + hydration) — see the render below.
   const spreadMode = useSpreadMode(layout);
   const spread = spreadMode === true;
@@ -218,6 +226,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
         </header>
 
         <SaveBanner status={autosave.status} bookId={data.book.id} />
+        <AiSummaryChip bookId={data.book.id} summary={aiSummary} readOnly={state.readOnly} />
 
         {/* Column on mobile so a docked panel (on-page text editing) sits under the page. */}
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">

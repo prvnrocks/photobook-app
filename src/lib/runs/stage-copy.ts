@@ -72,7 +72,7 @@ export function limitCopy(limit: LimitKind, isPaid: boolean, dailyCap: number): 
         ? `You've used today's ${dailyCap} AI builds — try again tomorrow.`
         : `You've used today's ${dailyCap} free AI builds — try again tomorrow.`;
     case "rebuilds":
-      return "No AI rebuilds left for this book.";
+      return "No AI redos left for this book.";
     case "analysed_photos":
       return "This book has more photos than AI can look at on your plan.";
     case "rate":

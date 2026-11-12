@@ -334,16 +334,15 @@ test("a. build (replay) → editor → Share (free 30-day note) publishes and la
   bookId = new URL(page.url()).pathname.split("/")[2];
 
   await page.getByTestId("upload-input").setInputFiles(await makeSynthetic(page, 6));
-  await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 180_000 });
+  // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build\?auto=1$/, { timeout: 180_000 });
   // The originals really carried GPS (else the EXIF check in c proves nothing).
   const gps = await admin.from("photos").select("lat").eq("book_id", bookId).not("lat", "is", null);
   console.log(`[a] photos with gps=${gps.data?.length ?? 0}`);
   expect((gps.data ?? []).length).toBeGreaterThan(0);
 
-  await page.getByTestId("build-album").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/review$/, { timeout: 420_000 });
-  await page.getByTestId("review-continue").click();
-  await page.waitForURL(new RegExp(`/books/${bookId}/edit$`), { timeout: 30_000 });
+  // M13 T7: the build hands over to the editor (review is reached from the "AI kept X of Y" chip).
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/edit$/, { timeout: 420_000 });
   await expect(page.getByTestId("editor-shell")).toBeVisible();
   await expect(page.getByTestId("editor-publish-changes")).toHaveCount(0); // never published
   // M13 T9: the free 30-day note is on the Share button before the tap.

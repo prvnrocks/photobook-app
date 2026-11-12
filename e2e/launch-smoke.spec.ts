@@ -362,16 +362,27 @@ test("a. login → choose photos → upload (setup card) → automatic AI build 
   await noHorizontalOverflow(page);
   // No Build tap: once uploads + finalize settle the first build starts by itself.
   await page.waitForURL(new RegExp(`/books/${bookId}/build\\?auto=1$`), { timeout: 240_000 });
+  // M13 T7: the build screen shows the draft book (rule album) while AI works.
+  await expect(page.getByTestId("build-draft")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("build-ai-note")).toBeVisible();
+  // The draft's photos really load (signed 512 px thumbs), not just empty frames.
+  const draftImgs = () =>
+    page
+      .locator('[data-testid="build-draft"] img')
+      .evaluateAll((imgs) => imgs.filter((i) => (i as HTMLImageElement).complete && (i as HTMLImageElement).naturalWidth > 0).length);
+  await expect.poll(draftImgs, { timeout: 15_000 }).toBeGreaterThan(0);
+  await noHorizontalOverflow(page);
+  await page.screenshot({ path: test.info().outputPath("m13-build-375.png"), fullPage: true });
   const setup = (await admin.from("books").select("occasion, tone, design_style").eq("id", bookId).single()).data;
   expect(setup).toEqual({ occasion: "travel", tone: "fun", design_style: "modern" });
-  // M13 T7 moves the build's hand-off from review to the editor; accept both until it lands.
-  await page.waitForURL(new RegExp(`/books/${bookId}/(review|edit)$`), { timeout: 420_000 });
+  // M13 T7: the build hands over to the editor (review is reached from the "AI kept X of Y" chip).
+  await page.waitForURL(new RegExp(`/books/${bookId}/edit$`), { timeout: 420_000 });
   await noHorizontalOverflow(page);
-  if (/\/review$/.test(page.url())) {
-    await page.getByTestId("review-continue").click();
-    await page.waitForURL(new RegExp(`/books/${bookId}/edit$`), { timeout: 30_000 });
-  }
   await expect(page.getByTestId("editor-shell")).toBeVisible();
+  await expect(page.getByTestId("ai-summary-chip")).toBeVisible();
+  await expect(page.getByTestId("ai-summary-link")).toHaveAttribute("href", `/books/${bookId}/review`);
+  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.screenshot({ path: test.info().outputPath("m13-editor-chip-375.png") });
 
   // Editor: walk the carousel to the first page with a caption target and type a new caption.
   const cur = page.locator('[data-testid="carousel-item"][aria-hidden="false"]');

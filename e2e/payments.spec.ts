@@ -407,11 +407,10 @@ test("a. build (replay) → publish a free book → viewer has watermark + foote
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
   bookId = new URL(page.url()).pathname.split("/")[2];
   await page.getByTestId("upload-input").setInputFiles(await makeSynthetic(page, 6));
-  await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 180_000 });
-  await page.getByTestId("build-album").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/review$/, { timeout: 420_000 });
-  await page.getByTestId("review-continue").click();
-  await page.waitForURL(new RegExp(`/books/${bookId}/edit$`), { timeout: 30_000 });
+  // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build\?auto=1$/, { timeout: 180_000 });
+  // M13 T7: the build hands over to the editor (review is reached from the "AI kept X of Y" chip).
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/edit$/, { timeout: 420_000 });
   // M13 T9: editor Share publishes and opens the share screen.
   const t0 = Date.now();
   await page.getByTestId("editor-done").click();

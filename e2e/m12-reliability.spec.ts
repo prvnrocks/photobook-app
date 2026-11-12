@@ -315,11 +315,12 @@ test("a. a held storage upload hits its budget → queue retries → upload, fin
   const row = await bookRow(book1);
   expect((row.doc?.pages ?? []).length).toBeGreaterThan(0); // finalize wrote the fallback album
 
-  // Build continues (replay) to review.
+  // Build continues (replay) to the editor (M13 T7).
   await page.getByTestId("build-album").click();
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build$/, { timeout: 30_000 });
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/review$/, { timeout: 240_000 });
-  await reviewLoaded();
+  // M13 T7: the build hands over to the editor.
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/edit$/, { timeout: 240_000 });
+  await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 30_000 });
   const runs = await runsOf(book1);
   console.log(`[a] runs=${runs.length} states=${runs.map((r) => r.state).join(",")} modes=${runs.map((r) => r.mode).join(",")}`);
   expect(runs.some((r) => r.state === "done")).toBe(true);
@@ -393,8 +394,9 @@ test("c. advance answers 503 once → build shows 'Taking longer than usual — 
   await expect(reconnecting).toContainText(RETRY_COPY);
   await expect(page.getByTestId("build-error")).toHaveCount(0);
   await noHorizontalOverflow();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/review$/, { timeout: 240_000 });
-  await reviewLoaded();
+  // M13 T7: the build hands over to the editor.
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/edit$/, { timeout: 240_000 });
+  await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 30_000 });
   await page.unroute("**/api/ai/runs/*/advance");
 
   const causes = await page.evaluate(() => (window as unknown as { __buildCauses?: string[] }).__buildCauses ?? []);

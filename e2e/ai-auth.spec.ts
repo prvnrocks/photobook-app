@@ -468,7 +468,20 @@ async function createBookAt(
   return id;
 }
 
+/**
+ * M13 T6: the first build starts by itself once the upload settles (POST /api/ai/runs { auto: true }).
+ * The test holds that request until buildToReview() releases it, so the upload summary can be checked.
+ */
+let releaseAuto: () => void = () => {};
+let autoGate: Promise<void> = Promise.resolve();
+function armAutoGate() {
+  autoGate = new Promise<void>((resolve) => {
+    releaseAuto = resolve;
+  });
+}
+
 async function uploadAndWaitSummary(files: FileSpec[], expected: number) {
+  armAutoGate();
   await page.getByTestId("upload-input").setInputFiles(files);
   await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 180_000 });
   await expect(page.getByTestId("finalize-error")).toHaveCount(0);
@@ -491,12 +504,23 @@ async function buildTexts(): Promise<string[]> {
   return page.evaluate(() => (window as unknown as { __buildTexts?: string[] }).__buildTexts ?? []);
 }
 
-/** Build my album on the upload screen → build → review. */
+/**
+ * Release the automatic first build → build screen → editor (M13 T7) → "AI kept X of Y" chip →
+ * review (the review screen is reached from the editor now).
+ */
 async function buildToReview() {
   await resetBuildStates();
-  await page.getByTestId("build-album").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build$/, { timeout: 30_000 });
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/review$/, { timeout: 180_000 });
+  releaseAuto();
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build\?auto=1$/, { timeout: 30_000 });
+  await editorThenReview(180_000);
+}
+
+/** Build finished → the editor opens; the chip leads to the review screen. */
+async function editorThenReview(timeout: number) {
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/edit$/, { timeout });
+  await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId("ai-summary-link").click();
+  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/review$/, { timeout: 30_000 });
   await reviewLoaded();
 }
 
@@ -575,6 +599,12 @@ test.beforeAll(async ({ browser }, info) => {
       const t = document.querySelector('[data-testid="build-stage"]')?.textContent?.trim();
       if (t && w.__buildTexts[w.__buildTexts.length - 1] !== t) w.__buildTexts.push(t);
     }).observe(document, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["data-state"] });
+  });
+  // M13 T6: hold each automatic first-build request until the test releases it (armAutoGate).
+  await context.route("**/api/ai/runs", async (route) => {
+    const req = route.request();
+    if (req.method() === "POST" && (req.postData() ?? "").includes('"auto":true')) await autoGate;
+    await route.continue();
   });
   page = await context.newPage();
   page.on("dialog", (d) => void d.accept());
@@ -1002,7 +1032,7 @@ test("c. rebuild: build → review; 0 new curator calls; user choice untouched; 
   await resetBuildStates();
   await page.getByTestId("rebuild-button").click();
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build$/, { timeout: 30_000 });
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/review$/, { timeout: 180_000 });
+  await editorThenReview(180_000);
   const states = await buildStates();
   console.log(`[c] states=${states.join(">")}`);
 
@@ -1435,8 +1465,7 @@ test("d. refusal scenario: rule album, failed/partial banner, Try AI again", asy
   const bookB = await createBookAt(REFUSAL_URL);
   const files = [fixture("screenshot.png", "image/png"), ...synth.slice(0, 4)];
   await uploadAndWaitSummary(files, files.length);
-  await page.getByTestId("build-album").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/review$/, { timeout: 180_000 });
+  await buildToReview();
 
   const book = await bookRow(bookB);
   const meta = metaOf(book.doc);
@@ -1491,8 +1520,8 @@ test("e. AI off: Build my album → straight to review, rule album, ai_off banne
   const bookC = await createBookAt(OFF_URL);
   const files = [fixture("screenshot.png", "image/png"), ...synth.slice(2, 5)];
   await uploadAndWaitSummary(files, files.length);
-  await page.getByTestId("build-album").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/review$/, { timeout: 60_000 });
+  releaseAuto(); // AI off: the rule run finishes inside the auto POST → straight to the editor
+  await editorThenReview(60_000);
 
   await expect(page.getByTestId("review-banner-ai_off")).toBeVisible();
   await expect(page.getByTestId("try-ai-disabled")).toBeVisible();

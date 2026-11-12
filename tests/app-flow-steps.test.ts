@@ -1,8 +1,10 @@
-// M11 task 2: book state → flow step (src/lib/app/flow-steps.ts).
+// M11 task 2 / M13 T7: book state → flow step (src/lib/app/flow-steps.ts). Three shown steps.
 import { describe, expect, it } from "vitest";
 import {
   bookFlowStep,
   bookFlowStepIndex,
+  displayStep,
+  FLOW_STEP_IDS,
   FLOW_STEPS,
   flowStepForRoute,
   flowStepIndex,
@@ -15,21 +17,38 @@ import { bookCardStep } from "@/lib/dashboard/card-target";
 const base: FlowBookState = { page_count: 0, photo_count: 0, ai_status: "idle", user_edited: false, published: false };
 
 describe("flow steps", () => {
-  it("has the six steps in order", () => {
-    expect(FLOW_STEPS.map((s) => s.label)).toEqual(["New book", "Photos", "AI build", "Review", "Edit", "Share"]);
+  it("has the three steps in order", () => {
+    expect(FLOW_STEPS.map((s) => s.label)).toEqual(["Photos", "Your book", "Share"]);
     expect(flowStepIndex("new")).toBe(0);
-    expect(flowStepIndex("share")).toBe(5);
+    expect(flowStepIndex("photos")).toBe(0);
+    expect(flowStepIndex("build")).toBe(1);
+    expect(flowStepIndex("review")).toBe(1);
+    expect(flowStepIndex("edit")).toBe(1);
+    expect(flowStepIndex("share")).toBe(2);
+  });
+
+  it("maps every route-level step to a shown step", () => {
+    const shown = FLOW_STEP_IDS.map((id) => [id, displayStep(id)]);
+    expect(Object.fromEntries(shown)).toEqual({
+      new: "photos",
+      photos: "photos",
+      build: "book",
+      review: "book",
+      edit: "book",
+      share: "share",
+    });
   });
 
   it("labels steps 1-based", () => {
-    expect(flowStepLabel("build")).toBe("Step 3 of 6: AI build");
-    expect(flowStepLabel("new")).toBe("Step 1 of 6: New book");
-    expect(flowStepLabel("share")).toBe("Step 6 of 6: Share");
+    expect(flowStepLabel("build")).toBe("Step 2 of 3: Your book");
+    expect(flowStepLabel("new")).toBe("Step 1 of 3: Photos");
+    expect(flowStepLabel("share")).toBe("Step 3 of 3: Share");
   });
 
   it("maps routes to steps", () => {
     expect(flowStepForRoute("new")).toBe("new");
     expect(flowStepForRoute("upload")).toBe("photos");
+    expect(flowStepForRoute("start")).toBe("photos");
     expect(flowStepForRoute("build")).toBe("build");
     expect(flowStepForRoute("review")).toBe("review");
     expect(flowStepForRoute("edit")).toBe("edit");
@@ -48,7 +67,8 @@ describe("flow steps", () => {
     expect(bookFlowStep({ ...base, photo_count: 12, page_count: 10, ai_status: "done", user_edited: true })).toBe("edit");
     expect(bookFlowStep({ ...base, photo_count: 12, page_count: 10, ai_status: "done", user_edited: true, published: true })).toBe("share");
     expect(bookFlowStep({ ...base, photo_count: 12, page_count: 10, published: true })).toBe("share");
-    expect(bookFlowStepIndex({ ...base, photo_count: 12 })).toBe(2);
+    expect(bookFlowStepIndex({ ...base, photo_count: 12 })).toBe(1);
+    expect(bookFlowStepIndex(base)).toBe(0);
   });
 
   it("a running rebuild beats published", () => {

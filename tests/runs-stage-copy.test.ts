@@ -135,7 +135,7 @@ describe("limitCopy", () => {
   it("per limit", () => {
     expect(limitCopy("daily_builds", false, 3)).toBe("You've used today's 3 free AI builds — try again tomorrow.");
     expect(limitCopy("daily_builds", true, 20)).toBe("You've used today's 20 AI builds — try again tomorrow.");
-    expect(limitCopy("rebuilds", false, 3)).toBe("No AI rebuilds left for this book.");
+    expect(limitCopy("rebuilds", false, 3)).toBe("No AI redos left for this book.");
     expect(limitCopy("analysed_photos", false, 3)).toMatch(/more photos/);
     expect(limitCopy("rate", false, 3)).toMatch(/wait a few seconds/);
     // D-059: global daily budget used up — same copy on free and paid.
