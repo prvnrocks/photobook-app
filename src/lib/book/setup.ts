@@ -6,7 +6,9 @@
 // started) AND its doc is not user-edited (`{}` or an untouched rule draft). After that they are
 // fixed, as before. Occasion, feel (tone), caption language and title can change until the first
 // AI build starts (the AI has read them by then; later changes would silently not apply to the
-// album). The server re-checks every rule (src/app/books/actions.ts updateBookSetupAction) — the
+// album) — and, since the M13 review (D-037 #7: a user's cover title must win), only while the doc
+// is not user-edited either: a user-edited album keeps its own cover title, so a setup title change
+// would make books.title and the cover disagree. Same rule as shape + style. The server re-checks every rule (src/app/books/actions.ts updateBookSetupAction) — the
 // client copy is only for showing / hiding the controls.
 // Client-safe and light: the rule-draft rebuild (autolayout + layout catalogue) lives in
 // ./rule-draft.ts so importing this guard doesn't ship the layout engine.
@@ -40,9 +42,13 @@ export function designLockReason(input: SetupLockInput): SetupLockReason | null 
   return null;
 }
 
-/** Occasion / tone / caption language / title: unlocked until the first AI run exists. */
-export function detailsLockReason(input: Pick<SetupLockInput, "hasRun">): SetupLockReason | null {
-  return input.hasRun ? "ai_started" : null;
+/**
+ * Occasion / tone / caption language / title: unlocked until the first AI run exists AND while the
+ * doc is not user-edited (M13 review, D-037 #7 — the user's cover title wins; the setup card never
+ * rewrites an edited album, so its details lock with it). Same outcome as designLockReason.
+ */
+export function detailsLockReason(input: SetupLockInput): SetupLockReason | null {
+  return designLockReason(input);
 }
 
 export function isDesignUnlocked(input: SetupLockInput): boolean {

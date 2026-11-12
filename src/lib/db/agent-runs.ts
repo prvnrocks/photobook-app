@@ -571,12 +571,15 @@ export async function hasFinishedLiveAiRun(bookId: string): Promise<boolean> {
 }
 
 /**
- * M13 T4 (auto first build): true when the book has ANY agent_run (any trigger, any state),
- * optionally ignoring one run id (the run the caller just created). Admin client — callers
- * must have checked ownership first (getMyBook under RLS).
+ * True when the book has ANY agent_runs row (build, rebuild or rewrite; any state; rows whose
+ * user_id was nulled by an account deletion still count), optionally ignoring one run id (the run
+ * the caller just created). The single "an AI build has started" check: M13 T4 auto first build
+ * and the D-070 setup lock (updateBookSetupAction, upload page). Admin client — callers must have
+ * checked ownership first (getMyBook under RLS). Throws AgentRunsQueryError on a DB error or a
+ * malformed id (callers fail closed).
  */
 export async function hasAnyRunForBook(bookId: string, exceptRunId?: string): Promise<boolean> {
-  if (!isUuid(bookId)) return false;
+  if (!isUuid(bookId)) throw new AgentRunsQueryError("check runs", "invalid_id");
   let query = createAdminClient()
     .from("agent_runs")
     .select("id", { count: "exact", head: true })

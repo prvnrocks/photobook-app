@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-// M13 T2 (D-070): bookHasAnyRun + writeBookSetup (admin client, owner filter, updated_at lock).
+// M13 T2 (D-070): hasAnyRunForBook (the one run check, src/lib/db/agent-runs.ts) + writeBookSetup
+// (admin client, owner filter, updated_at lock).
 
 type Call = { table: string; op: string; payload?: unknown; filters: [string, string, unknown][]; head?: boolean };
 
@@ -34,6 +35,10 @@ const fake = vi.hoisted(() => {
         call.filters.push(["eq", col, v]);
         return chain();
       };
+      b.neq = (col: string, v: unknown) => {
+        call.filters.push(["neq", col, v]);
+        return chain();
+      };
       b.maybeSingle = async () => state.readResult;
       b.then = (resolve: (v: unknown) => void) =>
         resolve(call.op === "update" ? state.updateResult : state.countResult);
@@ -52,7 +57,9 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: async () => ({ id: "u" }) }));
 
-const { bookHasAnyRun, writeBookSetup } = await import("@/lib/db/books");
+const { writeBookSetup } = await import("@/lib/db/books");
+const { hasAnyRunForBook } = await import("@/lib/db/agent-runs");
+const booksModule = await import("@/lib/db/books");
 
 const BOOK = "22222222-2222-4222-8222-222222222222";
 const OWNER = "11111111-1111-4111-8111-111111111111";
@@ -66,23 +73,37 @@ beforeEach(() => {
   fake.state.userClientUsed = false;
 });
 
-describe("bookHasAnyRun", () => {
+describe("hasAnyRunForBook", () => {
   it("counts agent_runs of the book (any trigger/state) with a head count", async () => {
     fake.state.countResult = { count: 1, error: null };
-    await expect(bookHasAnyRun(BOOK)).resolves.toBe(true);
+    await expect(hasAnyRunForBook(BOOK)).resolves.toBe(true);
     expect(fake.state.calls[0]).toMatchObject({ table: "agent_runs", head: true, filters: [["eq", "book_id", BOOK]] });
   });
 
   it("false for 0 / null count", async () => {
-    await expect(bookHasAnyRun(BOOK)).resolves.toBe(false);
+    await expect(hasAnyRunForBook(BOOK)).resolves.toBe(false);
     fake.state.countResult = { count: null, error: null };
-    await expect(bookHasAnyRun(BOOK)).resolves.toBe(false);
+    await expect(hasAnyRunForBook(BOOK)).resolves.toBe(false);
   });
 
   it("throws (fail closed) on a DB error or malformed id", async () => {
     fake.state.countResult = { count: null, error: { code: "57014" } };
-    await expect(bookHasAnyRun(BOOK)).rejects.toMatchObject({ code: "57014" });
-    await expect(bookHasAnyRun("nope")).rejects.toMatchObject({ code: "invalid_id" });
+    await expect(hasAnyRunForBook(BOOK)).rejects.toMatchObject({ code: "57014" });
+    await expect(hasAnyRunForBook("nope")).rejects.toMatchObject({ code: "invalid_id" });
+    await expect(hasAnyRunForBook(BOOK, "nope")).rejects.toMatchObject({ code: "invalid_id" });
+  });
+
+  it("can ignore the run the caller just created", async () => {
+    const RUN = "33333333-3333-4333-8333-333333333333";
+    await expect(hasAnyRunForBook(BOOK, RUN)).resolves.toBe(false);
+    expect(fake.state.calls[0].filters).toEqual([
+      ["eq", "book_id", BOOK],
+      ["neq", "id", RUN],
+    ]);
+  });
+
+  it("is the only run check (the books.ts duplicate is gone)", () => {
+    expect("bookHasAnyRun" in booksModule).toBe(false);
   });
 });
 

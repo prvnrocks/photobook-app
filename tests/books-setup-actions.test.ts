@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   memoryError: false,
   createBook: vi.fn(),
   getMyBook: vi.fn(),
-  bookHasAnyRun: vi.fn(),
+  hasAnyRunForBook: vi.fn(),
   writeBookSetup: vi.fn(),
   listReadyPhotosForFinalize: vi.fn(),
   revalidatePath: vi.fn(),
@@ -45,9 +45,12 @@ vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: async () => mocks.us
 vi.mock("@/lib/db/books", () => ({
   createBook: mocks.createBook,
   getMyBook: mocks.getMyBook,
-  bookHasAnyRun: mocks.bookHasAnyRun,
   writeBookSetup: mocks.writeBookSetup,
   stripPhotoFromBookDoc: vi.fn(),
+}));
+vi.mock("@/lib/db/agent-runs", async (orig) => ({
+  ...(await orig<typeof import("@/lib/db/agent-runs")>()),
+  hasAnyRunForBook: mocks.hasAnyRunForBook,
 }));
 vi.mock("@/lib/db/memory", () => ({
   getOwnMemoryView: async () => {
@@ -110,7 +113,7 @@ beforeEach(() => {
   mocks.draftFails = false;
   mocks.createBook.mockReset().mockResolvedValue({ id: BOOK_ID });
   mocks.getMyBook.mockReset().mockResolvedValue(book());
-  mocks.bookHasAnyRun.mockReset().mockResolvedValue(false);
+  mocks.hasAnyRunForBook.mockReset().mockResolvedValue(false);
   mocks.writeBookSetup.mockReset().mockResolvedValue({ ok: true });
   mocks.listReadyPhotosForFinalize.mockReset().mockResolvedValue(PHOTOS);
   mocks.revalidatePath.mockReset();
@@ -238,23 +241,47 @@ describe("updateBookSetupAction — details", () => {
     const r = await updateBookSetupAction(BOOK_ID, { occasion: "other", format: "A5_PORTRAIT", designStyle: "modern" });
     expect(r).toMatchObject({ ok: true, relaidOut: false });
     expect(mocks.writeBookSetup).not.toHaveBeenCalled();
-    expect(mocks.bookHasAnyRun).not.toHaveBeenCalled();
+    expect(mocks.hasAnyRunForBook).not.toHaveBeenCalled();
   });
 
   it("details are locked once an AI run exists", async () => {
-    mocks.bookHasAnyRun.mockResolvedValue(true);
+    mocks.hasAnyRunForBook.mockResolvedValue(true);
     const r = await updateBookSetupAction(BOOK_ID, { occasion: "travel" });
     expect(r).toEqual({ ok: false, error: "locked", reason: "ai_started" });
     expect(mocks.writeBookSetup).not.toHaveBeenCalled();
   });
 
-  it("details still change on a user-edited album, without touching its doc", async () => {
+  it.each([
+    ["title", { title: "New title" }],
+    ["occasion", { occasion: "baby" }],
+    ["tone", { tone: "fun" }],
+    ["captionLang", { captionLang: "ar" }],
+  ] as const)("%s is locked on a user-edited album (M13 review, D-037 #7: the user's cover title wins)", async (_f, patch) => {
+    const doc = ruleDraft();
+    doc.meta.userEdited = true;
+    (doc.cover as { title?: string }).title = "My own cover";
+    mocks.getMyBook.mockResolvedValue(book({ doc, title: "Old" }));
+    const r = await updateBookSetupAction(BOOK_ID, patch);
+    expect(r).toEqual({ ok: false, error: "locked", reason: "user_edited" });
+    expect(mocks.writeBookSetup).not.toHaveBeenCalled();
+    expect(mocks.listReadyPhotosForFinalize).not.toHaveBeenCalled();
+  });
+
+  it("details are locked on an AI album even if its run row is gone", async () => {
+    const doc = ruleDraft();
+    doc.meta.generator = "ai";
+    mocks.getMyBook.mockResolvedValue(book({ doc }));
+    const r = await updateBookSetupAction(BOOK_ID, { title: "Eid" });
+    expect(r).toEqual({ ok: false, error: "locked", reason: "ai_started" });
+    expect(mocks.writeBookSetup).not.toHaveBeenCalled();
+  });
+
+  it("sending the unchanged setup back to a user-edited album is still a no-op success", async () => {
     const doc = ruleDraft();
     doc.meta.userEdited = true;
     mocks.getMyBook.mockResolvedValue(book({ doc }));
-    const r = await updateBookSetupAction(BOOK_ID, { occasion: "baby" });
-    expect(r).toMatchObject({ ok: true, relaidOut: false });
-    expect(mocks.writeBookSetup.mock.calls[0][4]).toBeUndefined();
+    expect(await updateBookSetupAction(BOOK_ID, { occasion: "other" })).toMatchObject({ ok: true, relaidOut: false });
+    expect(mocks.writeBookSetup).not.toHaveBeenCalled();
   });
 
   it("re-lays out an untouched rule draft when the title changes", async () => {
@@ -304,7 +331,7 @@ describe("updateBookSetupAction — shape / style (D-070)", () => {
   });
 
   it("rejected after an AI run started", async () => {
-    mocks.bookHasAnyRun.mockResolvedValue(true);
+    mocks.hasAnyRunForBook.mockResolvedValue(true);
     const r = await updateBookSetupAction(BOOK_ID, { format: "A5_LANDSCAPE" });
     expect(r).toEqual({ ok: false, error: "locked", reason: "ai_started" });
     expect(mocks.writeBookSetup).not.toHaveBeenCalled();
@@ -320,7 +347,7 @@ describe("updateBookSetupAction — shape / style (D-070)", () => {
   });
 
   it("rejected when a run appears between the check and the write", async () => {
-    mocks.bookHasAnyRun.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    mocks.hasAnyRunForBook.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
     const r = await updateBookSetupAction(BOOK_ID, { format: "A5_LANDSCAPE" });
     expect(r).toEqual({ ok: false, error: "locked", reason: "ai_started" });
     expect(mocks.writeBookSetup).not.toHaveBeenCalled();
@@ -411,7 +438,7 @@ describe("updateBookSetupAction — ownership, validation, races", () => {
   });
 
   it("a DB error → failed (no stack trace)", async () => {
-    mocks.bookHasAnyRun.mockRejectedValue(new Error("Failed to check book runs (500)"));
+    mocks.hasAnyRunForBook.mockRejectedValue(new Error("Failed to check book runs (500)"));
     expect(await updateBookSetupAction(BOOK_ID, { occasion: "travel" })).toEqual({ ok: false, error: "failed" });
   });
 });

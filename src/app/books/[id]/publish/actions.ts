@@ -119,10 +119,16 @@ function revalidateBook(bookId: string, slug: string | null): void {
 export async function publishBookAction(bookId: string): Promise<PublishBookResult> {
   const owner = await resolveOwner(bookId, "publish");
   if ("error" in owner) return { ok: false, error: owner.error };
-  return publishForOwner(owner);
+  const r = await publishForOwner(owner);
+  if (!r.ok) return r;
+  return { ok: true, slug: r.slug, url: r.url, expiresAt: r.expiresAt };
 }
 
-async function publishForOwner(owner: Owner): Promise<PublishBookResult> {
+/** Facts of the row publishForOwner itself read and published (for analytics / the share screen). */
+type PublishedFacts = { isPaid: boolean; hasPassword: boolean; pages: number; first: boolean; wasLive: boolean };
+type PublishOutcome = (Extract<PublishBookResult, { ok: true }> & { facts: PublishedFacts }) | Extract<PublishBookResult, { ok: false }>;
+
+async function publishForOwner(owner: Owner): Promise<PublishOutcome> {
   try {
     const siteUrl = getSiteUrl(); // fail before writing if the deploy lacks NEXT_PUBLIC_APP_URL
     const row = await getPublishRow(owner.bookId, owner.userId);
@@ -201,7 +207,19 @@ async function publishForOwner(owner: Owner): Promise<PublishBookResult> {
       console.error(`[publish] memory update failed (${errorCodeOf(err)})`);
     }
     revalidateBook(owner.bookId, slug);
-    return { ok: true, slug, url: `${siteUrl}/b/${slug}`, expiresAt };
+    return {
+      ok: true,
+      slug,
+      url: `${siteUrl}/b/${slug}`,
+      expiresAt,
+      facts: {
+        isPaid: row.is_paid,
+        hasPassword: row.hasPassword,
+        pages: doc.pages.length,
+        first: row.published_at === null,
+        wasLive: row.live,
+      },
+    };
   } catch (err) {
     console.error(`[publish] failed (${errorCodeOf(err)})`);
     return { ok: false, error: "failed" };
@@ -250,17 +268,18 @@ export async function shareBookAction(bookId: string): Promise<ShareBookResult> 
     return { ok: true, redirectTo: screen, published: null };
   }
 
+  // Analytics props + the one-time message come from the row publishForOwner itself read and
+  // published (after a conflict retry that is the re-read row, not the pre-read above).
   const r = await publishWithRetry(() => publishForOwner(owner));
   if (!r.ok) return { ok: false, error: r.error };
-  const pages = (row.doc as { pages?: unknown } | null)?.pages;
   return {
     ok: true,
-    redirectTo: `${screen}?shared=${row.live ? "changes" : "live"}`,
+    redirectTo: `${screen}?shared=${r.facts.wasLive ? "changes" : "live"}`,
     published: {
-      is_paid: row.is_paid,
-      has_password: row.hasPassword,
-      pages: Array.isArray(pages) ? pages.length : 0,
-      first: row.published_at === null,
+      is_paid: r.facts.isPaid,
+      has_password: r.facts.hasPassword,
+      pages: r.facts.pages,
+      first: r.facts.first,
     },
   };
 }

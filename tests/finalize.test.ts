@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { appendFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -582,5 +584,97 @@ describe("finalizeBook — photo colours (M10c)", () => {
     expect(logs).toContain("[finalize] photo colours not saved (PGRST301)");
     expect(logs.join("\n")).not.toContain(HEX);
     expect(logs.join("\n")).not.toContain(pid(1));
+  });
+});
+
+// M13 review fix 6: finalize's fallback album now comes from buildRuleDraft (src/lib/book/rule-draft.ts).
+// These hashes were recorded with the pre-refactor inline pipeline (HEAD cde3d07) — the stored doc
+// must stay byte-identical for every format × style × tier × photo mix. Re-record only for an
+// intended album change: RECORD_FINALIZE=/tmp/x npx vitest run tests/finalize.test.ts -t byte-identical.
+describe("fallback album is byte-identical to the pre-M13 inline pipeline", () => {
+  const RECORDED: Record<string, string> = {
+    "A5_LANDSCAPE/classic/free/big140": "e5f6dabff89b72f4",
+    "A5_LANDSCAPE/classic/free/mixed30": "00b9ea8e5bcd2374",
+    "A5_LANDSCAPE/classic/free/plain12": "90067372c4ce1c89",
+    "A5_LANDSCAPE/classic/paid/big140": "07807c1d9944eaff",
+    "A5_LANDSCAPE/classic/paid/mixed30": "bc41ee60d1d5b65d",
+    "A5_LANDSCAPE/classic/paid/plain12": "90067372c4ce1c89",
+    "A5_LANDSCAPE/geometric/free/big140": "6f2baf0bf68a30ac",
+    "A5_LANDSCAPE/geometric/free/mixed30": "56bcfa30c2e1248d",
+    "A5_LANDSCAPE/geometric/free/plain12": "75cfda261e389efe",
+    "A5_LANDSCAPE/geometric/paid/big140": "76f4e7bc3565ca28",
+    "A5_LANDSCAPE/geometric/paid/mixed30": "880700e952c4319a",
+    "A5_LANDSCAPE/geometric/paid/plain12": "75cfda261e389efe",
+    "A5_LANDSCAPE/modern/free/big140": "43166fa9570970e6",
+    "A5_LANDSCAPE/modern/free/mixed30": "40d2125a4ab3dbb9",
+    "A5_LANDSCAPE/modern/free/plain12": "5ce15b2aaf156167",
+    "A5_LANDSCAPE/modern/paid/big140": "43166fa9570970e6",
+    "A5_LANDSCAPE/modern/paid/mixed30": "6a1c52c7752741b0",
+    "A5_LANDSCAPE/modern/paid/plain12": "5ce15b2aaf156167",
+    "A5_LANDSCAPE/scrapbook/free/big140": "37ea4e9fc434e764",
+    "A5_LANDSCAPE/scrapbook/free/mixed30": "530a4fc18ba9e2f1",
+    "A5_LANDSCAPE/scrapbook/free/plain12": "c51b1306f266d80a",
+    "A5_LANDSCAPE/scrapbook/paid/big140": "309d42c27a4c7408",
+    "A5_LANDSCAPE/scrapbook/paid/mixed30": "e1c4415b7031cf44",
+    "A5_LANDSCAPE/scrapbook/paid/plain12": "c51b1306f266d80a",
+    "A5_PORTRAIT/classic/free/big140": "2b9731de7dd5a655",
+    "A5_PORTRAIT/classic/free/mixed30": "521e5a38ffa630a2",
+    "A5_PORTRAIT/classic/free/plain12": "43748980a732d98a",
+    "A5_PORTRAIT/classic/paid/big140": "3afb1f12d355bdec",
+    "A5_PORTRAIT/classic/paid/mixed30": "4ffba02e87461c7c",
+    "A5_PORTRAIT/classic/paid/plain12": "43748980a732d98a",
+    "A5_PORTRAIT/geometric/free/big140": "f981231b6c4a1b8c",
+    "A5_PORTRAIT/geometric/free/mixed30": "88843ce40e12b8b3",
+    "A5_PORTRAIT/geometric/free/plain12": "ab3d85cb36822276",
+    "A5_PORTRAIT/geometric/paid/big140": "683bd5c37ff6c2e4",
+    "A5_PORTRAIT/geometric/paid/mixed30": "69544ba271435b52",
+    "A5_PORTRAIT/geometric/paid/plain12": "ab3d85cb36822276",
+    "A5_PORTRAIT/modern/free/big140": "ab889bd0c9517231",
+    "A5_PORTRAIT/modern/free/mixed30": "ac2ab2ba5bf63274",
+    "A5_PORTRAIT/modern/free/plain12": "f59830eec897a09b",
+    "A5_PORTRAIT/modern/paid/big140": "ab889bd0c9517231",
+    "A5_PORTRAIT/modern/paid/mixed30": "7aca7b52fa984507",
+    "A5_PORTRAIT/modern/paid/plain12": "f59830eec897a09b",
+    "A5_PORTRAIT/scrapbook/free/big140": "ae188ceff20b3ffb",
+    "A5_PORTRAIT/scrapbook/free/mixed30": "dd5977691126491d",
+    "A5_PORTRAIT/scrapbook/free/plain12": "4a4d5e3fa604bdd3",
+    "A5_PORTRAIT/scrapbook/paid/big140": "686dc234030cf502",
+    "A5_PORTRAIT/scrapbook/paid/mixed30": "fa017387c7d9b186",
+    "A5_PORTRAIT/scrapbook/paid/plain12": "4a4d5e3fa604bdd3",
+  };
+  const mixes: Record<string, () => FakePhoto[]> = {
+    plain12: () => Array.from({ length: 12 }, (_, i) => photo(i + 1)),
+    mixed30: () =>
+      Array.from({ length: 30 }, (_, i) =>
+        photo(i + 1, {
+          width: i % 3 === 0 ? 4000 : i % 5 === 0 ? null : 3000,
+          height: i % 3 === 0 ? 3000 : 4000,
+          status: i % 7 === 6 ? "dropped" : "kept",
+          color: i % 2 ? "#6f8f63" : "#a05a3c",
+          blur_score: i % 4 === 0 ? 5 : 120,
+          date_source: i % 6 === 0 ? "file" : "exif",
+          taken_at: `2026-${String(1 + (i % 3)).padStart(2, "0")}-1${i % 10}T10:00:00Z`,
+        }),
+      ),
+    big140: () => Array.from({ length: 140 }, (_, i) => photo(i + 1, { color: "#334455" })),
+  };
+  const cases: string[] = [];
+  for (const format of ["A5_PORTRAIT", "A5_LANDSCAPE"])
+    for (const style of ["classic", "modern", "geometric", "scrapbook"])
+      for (const paid of [false, true]) for (const mix of Object.keys(mixes)) cases.push(`${format}/${style}/${paid ? "paid" : "free"}/${mix}`);
+
+  it.each(cases)("%s", async (key) => {
+    const [format, style, tier, mix] = key.split("/");
+    const { db, book } = makeDb({ photos: mixes[mix](), isPaid: tier === "paid" });
+    book.format = format;
+    book.design_style = style;
+    book.title = mix === "mixed30" ? "رحلة العيد 2026" : null;
+    book.caption_lang = mix === "mixed30" ? "ar" : "en";
+    book.occasion = mix === "big140" ? "wedding" : "travel";
+    const r = await fin(BOOK, { db, geocoder: makeGeocoder() });
+    const out = r?.wroteDoc ? `${r.pages}:${JSON.stringify(book.doc)}` : `nowrite:${r?.pages}`;
+    const hash = createHash("sha256").update(out).digest("hex").slice(0, 16);
+    if (process.env.RECORD_FINALIZE) appendFileSync(process.env.RECORD_FINALIZE, `    ${JSON.stringify(key)}: ${JSON.stringify(hash)},\n`);
+    else expect(hash).toBe(RECORDED[key]);
   });
 });

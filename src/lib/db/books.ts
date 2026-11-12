@@ -288,23 +288,9 @@ export async function createBook(input: CreateBookInput): Promise<{ id: string }
 // Book setup after a photos-first start (M13 T2, D-070). books.format / design_style are
 // insert-only for users (1900 column guard) and books.doc / page_count are server-only (0900), so
 // the setup write uses the admin client. Callers MUST have loaded the book with getMyBook (RLS =
-// ownership) and re-checked the setup guard (src/lib/book/setup.ts) first; the write is still
+// ownership) and re-checked the setup guard (src/lib/book/setup.ts; run check = hasAnyRunForBook in
+// src/lib/db/agent-runs.ts) first; the write is still
 // filtered by the owner and locked on updated_at.
-
-/**
- * True when the book has ANY agent_runs row (build, rebuild or rewrite; any state) — D-070's
- * "an AI build has started". Admin read filtered by book_id (rows whose user_id was nulled by an
- * account deletion still count). Throws BooksQueryError on a DB error (callers fail closed).
- */
-export async function bookHasAnyRun(bookId: string): Promise<boolean> {
-  if (!isUuid(bookId)) throw new BooksQueryError("check book runs", "invalid_id");
-  const { count, error } = await createAdminClient()
-    .from("agent_runs")
-    .select("id", { count: "exact", head: true })
-    .eq("book_id", bookId);
-  if (error) throw new BooksQueryError("check book runs", error.code);
-  return (count ?? 0) > 0;
-}
 
 export type BookSetupColumns = {
   occasion?: Occasion;

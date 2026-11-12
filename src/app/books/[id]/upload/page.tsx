@@ -18,8 +18,8 @@ import {
   type Tone,
 } from "@/lib/book/options";
 import { designLockReason, detailsLockReason, type BookSetup } from "@/lib/book/setup";
-import { getActiveRunForBook } from "@/lib/db/agent-runs";
-import { bookHasAnyRun, getMyBook } from "@/lib/db/books";
+import { getActiveRunForBook, hasAnyRunForBook } from "@/lib/db/agent-runs";
+import { getMyBook } from "@/lib/db/books";
 import { listUploadState } from "@/lib/db/photos";
 import { getMyProfile } from "@/lib/db/profiles";
 import type { Json } from "@/lib/supabase/database.types";
@@ -54,7 +54,7 @@ export default async function UploadPage({ params }: { params: Promise<{ id: str
     listUploadState(book.id),
     getMyProfile().catch(() => null),
     // Unknown (read error) → treated as "no run": the server still decides (auto start → not_first).
-    bookHasAnyRun(book.id).catch(() => false),
+    hasAnyRunForBook(book.id).catch(() => false),
     getActiveRunForBook(book.id).catch(() => null),
   ]);
   const existing: ExistingPhoto[] = rows.map((r) => ({
@@ -78,7 +78,7 @@ export default async function UploadPage({ params }: { params: Promise<{ id: str
     designStyle: design.designStyle,
   };
   const locks = {
-    details: detailsLockReason({ hasRun }),
+    details: detailsLockReason({ hasRun, doc: book.doc }),
     design: designLockReason({ hasRun, doc: book.doc }),
   };
   const firstRun: FirstRunState = active ? "active" : hasRun ? "done" : "none";

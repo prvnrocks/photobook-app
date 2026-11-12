@@ -34,34 +34,37 @@ describe("designLockReason / detailsLockReason", () => {
   it("unlocked for an empty doc without runs", () => {
     expect(designLockReason({ hasRun: false, doc: {} })).toBeNull();
     expect(isDesignUnlocked({ hasRun: false, doc: {} })).toBe(true);
-    expect(detailsLockReason({ hasRun: false })).toBeNull();
+    expect(detailsLockReason({ hasRun: false, doc: {} })).toBeNull();
   });
 
   it("unlocked for an untouched rule draft", () => {
     expect(designLockReason({ hasRun: false, doc: draft() })).toBeNull();
+    expect(detailsLockReason({ hasRun: false, doc: draft() })).toBeNull();
   });
 
   it("locked once any run exists", () => {
     expect(designLockReason({ hasRun: true, doc: {} })).toBe("ai_started");
-    expect(detailsLockReason({ hasRun: true })).toBe("ai_started");
+    expect(detailsLockReason({ hasRun: true, doc: {} })).toBe("ai_started");
   });
 
-  it("design locked once the doc is user-edited (details stay open)", () => {
+  it("design AND details locked once the doc is user-edited (M13 review, D-037 #7: the user's cover title wins)", () => {
     const doc = draft();
     const edited = { ...doc, meta: { ...doc.meta!, userEdited: true } };
     expect(docOrigin(edited).userEdited).toBe(true);
     expect(designLockReason({ hasRun: false, doc: edited })).toBe("user_edited");
-    expect(detailsLockReason({ hasRun: false })).toBeNull();
+    expect(detailsLockReason({ hasRun: false, doc: edited })).toBe("user_edited");
   });
 
   it("an unparsable doc counts as user-edited (safe side)", () => {
     expect(designLockReason({ hasRun: false, doc: { pages: "nope" } })).toBe("user_edited");
+    expect(detailsLockReason({ hasRun: false, doc: { pages: "nope" } })).toBe("user_edited");
   });
 
   it("an AI album without a run row is past the first build", () => {
     const doc = draft();
     const ai = { ...doc, meta: { ...doc.meta!, generator: "ai" as const } };
     expect(designLockReason({ hasRun: false, doc: ai })).toBe("ai_started");
+    expect(detailsLockReason({ hasRun: false, doc: ai })).toBe("ai_started");
   });
 });
 

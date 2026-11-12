@@ -409,6 +409,32 @@ describe("shareBookAction (M13 T9: editor Share = publish)", () => {
     expect(await shareBookAction(BOOK)).toEqual({ ok: false, error: "conflict" });
   });
 
+  it("after a conflict retry, analytics props + message come from the row that was actually published (M13 review)", async () => {
+    // Pre-read: never published, no password. Meanwhile another tab published with a password and
+    // the doc changed size — the retry publishes that re-read row, so its facts must win.
+    const reread = row({ ...LIVE, published_rev: 6, doc_rev: 8, password_hash: "scrypt$x", doc: doc(5) });
+    expect(doc().pages.length).not.toBe(5);
+    fake.state.results.push(
+      { data: row(), error: null },
+      { data: row(), error: null },
+      { data: [], error: null },
+      { data: reread, error: null },
+      { data: [{ id: BOOK }], error: null },
+    );
+    expect(await shareBookAction(BOOK)).toEqual({
+      ok: true,
+      redirectTo: `/books/${BOOK}/publish?shared=changes`,
+      published: { is_paid: false, has_password: true, pages: 5, first: false },
+    });
+  });
+
+  it("publishBookAction keeps its public result shape (no internal facts leak)", async () => {
+    fake.state.results.push({ data: row(), error: null }, { data: [{ id: BOOK }], error: null });
+    const r = await publishBookAction(BOOK);
+    expect(r.ok).toBe(true);
+    expect(Object.keys(r).sort()).toEqual(["expiresAt", "ok", "slug", "url"]);
+  });
+
   it("signed out / foreign book / db error", async () => {
     fake.state.user = null;
     expect(await shareBookAction(BOOK)).toEqual({ ok: false, error: "signed_out" });

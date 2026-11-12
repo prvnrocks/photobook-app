@@ -32,8 +32,8 @@ import {
 } from "@/lib/book/setup";
 import { deleteBookCompletely } from "@/lib/cleanup/delete-book";
 import type { DeleteBookActionResult } from "@/lib/dashboard/delete-book";
+import { hasAnyRunForBook } from "@/lib/db/agent-runs";
 import {
-  bookHasAnyRun,
   createBook,
   getMyBook,
   stripPhotoFromBookDoc,
@@ -240,8 +240,8 @@ const pickEnum = <T extends string>(v: string | null, values: readonly T[], fall
 /**
  * Changes a book's setup (the upload screen's setup card). Owner only (getMyBook under RLS + owner
  * filter on the admin write). Rules (src/lib/book/setup.ts, re-checked here every time):
- *   - occasion / tone / captionLang / title: until the first AI run exists → else "locked";
- *   - format / designStyle (D-070): only while no AI run exists AND the doc isn't user-edited.
+ *   - every field (D-070 + M13 review / D-037 #7): only while no AI run exists AND the doc isn't
+ *     user-edited (a user's cover title must win, so an edited album locks title / details too).
  * Only fields whose value actually differs count (sending the unchanged setup back is a no-op).
  * When a non-edited rule draft exists and occasion / title / language / shape / style changed, the
  * draft is re-laid out like finalize does (columns + doc in ONE write, so books.format /
@@ -291,8 +291,8 @@ export async function updateBookSetupAction(
       if (changed.length === 0) return { ok: true, setup: current, relaidOut: false };
       const designChanged = changed.some((f) => DESIGN_FIELDS.includes(f));
 
-      const hasRun = await bookHasAnyRun(book.id);
-      const detailsLock = detailsLockReason({ hasRun });
+      const hasRun = await hasAnyRunForBook(book.id);
+      const detailsLock = detailsLockReason({ hasRun, doc: book.doc });
       if (detailsLock) return { ok: false, error: "locked", reason: detailsLock };
       if (designChanged) {
         const designLock = designLockReason({ hasRun, doc: book.doc });
@@ -331,7 +331,12 @@ export async function updateBookSetupAction(
       }
 
       // Re-check right before the write: a run may have started since the first check.
-      if (await bookHasAnyRun(book.id)) return { ok: false, error: "locked", reason: "ai_started" };
+      // Residual race (M13 review SHOULD 5, accepted for now): a run created between this check and
+      // the UPDATE below isn't seen — the updated_at lock only catches a run that already wrote the
+      // doc, not one that is merely queued / reading the setup. The window is one round trip
+      // (~tens of ms). Closing it needs one atomic RPC ("update setup WHERE NOT EXISTS agent_runs")
+      // in a migration — deliberately not added in M13.
+      if (await hasAnyRunForBook(book.id)) return { ok: false, error: "locked", reason: "ai_started" };
 
       const columns: BookSetupColumns = {};
       if (changed.includes("occasion")) columns.occasion = next.occasion;

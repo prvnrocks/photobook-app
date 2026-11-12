@@ -1,6 +1,7 @@
-// Rule-based draft album rebuild for a changed book setup (M13 T2, D-070). Pure, server or client.
-// Re-creates the draft exactly like finalize's fallback album (src/lib/photos/finalize.ts):
-// autolayout → withBookDesign → applyBackgroundSuggestions → validate.
+// The ONE rule-based draft album pipeline (M13 T2, D-070; review fix 6). Pure, server or client.
+// Used by finalize's fallback album (src/lib/photos/finalize.ts) and the setup card re-layout
+// (updateBookSetupAction): autolayout → withBookDesign → applyBackgroundSuggestions → validate.
+// Page cap = limitsFor(isPaid).maxPages in both callers (the same cap autolayout fills to).
 
 import { autolayout, type AutoPhoto } from "@/lib/autolayout";
 import { limitsFor } from "@/lib/ai/limits";
@@ -41,8 +42,7 @@ const asDateSource = (v: string | null): AutoPhoto["dateSource"] => (v === "exif
 const asStatus = (v: string): "kept" | "dropped" => (v === "dropped" ? "dropped" : "kept");
 
 /**
- * The rule-based draft album for `photos` (ready photos of the book) with the given setup — the
- * same pipeline and photo mapping as finalize's fallback album (src/lib/photos/finalize.ts):
+ * The rule-based draft album for `photos` (ready photos of the book) with the given setup:
  * autolayout, stamped with the book design, rule background suggestions, then validated against
  * the photo ids and the tier's page cap. Never throws for an unsupported style (typed refusal).
  */

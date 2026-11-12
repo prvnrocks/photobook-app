@@ -12,7 +12,8 @@ import "server-only";
 //      ≤ GEOCODE_DAILY_CAP per book per UTC day (reserved up front), bounded
 //      concurrency + overall time budget → write place, and place_checked_at for
 //      every attempted cluster whatever the result (so failures aren't retried forever)
-//   5. fallback album: only when books.doc is {} (conditional update, see writeDocIfEmpty)
+//   5. fallback album (buildRuleDraft, src/lib/book/rule-draft.ts): only when books.doc is {}
+//      (conditional update, see writeDocIfEmpty)
 //   6. return counts only
 // Writes of server-only photo columns (dup_group, place, place_checked_at, color) and the
 // rate-limit RPCs use the admin client (src/lib/db/photos.ts, finalize-runs.ts) — only
@@ -20,13 +21,12 @@ import "server-only";
 // Idempotent: a re-run with nothing new makes no geocoder calls and no writes.
 // Privacy: never logs or returns coordinates, places, dates or ids — counts and codes only.
 
-import { autolayout, type AutoPhoto } from "@/lib/autolayout";
-import { limitsFor } from "@/lib/ai/limits";
+import type { AutoPhoto } from "@/lib/autolayout";
 import { CAPTION_LANGS, OCCASIONS, type CaptionLang, type Occasion } from "@/lib/book/options";
-import { bookDesignOf, isSupportedDesign, withBookDesign } from "@/lib/book/book-design";
+import { bookDesignOf, isSupportedDesign } from "@/lib/book/book-design";
 import { serializeDoc } from "@/lib/book/doc-version";
-import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
-import type { BookDoc } from "@/lib/book/types";
+import { buildRuleDraft } from "@/lib/book/rule-draft";
+import { parseBookDoc } from "@/lib/book/schema";
 import { getMyBook, writeDocIfEmpty, type MyBook } from "@/lib/db/books";
 import { claimFinalizeRun, reserveGeocodeCalls, type ClaimResult } from "@/lib/db/finalize-runs";
 import {
@@ -42,7 +42,6 @@ import {
   reverseGeocodeMany,
   type ReverseGeocoder,
 } from "@/lib/geo/reverse-geocode";
-import { applyBackgroundSuggestions, type SuggestPhoto } from "@/lib/design/background-suggest";
 import { PHOTO_COLOR_RE } from "@/lib/image/color";
 import { groupDuplicates } from "@/lib/photos/dupes";
 import { clusterPoints } from "@/lib/photos/geo-cluster";
@@ -160,34 +159,6 @@ const asCaptionLang = (v: string): CaptionLang =>
   (CAPTION_LANGS as readonly string[]).includes(v) ? (v as CaptionLang) : "en";
 const asDateSource = (v: string | null): AutoPhoto["dateSource"] =>
   v === "exif" || v === "file" ? v : null;
-const positive = (v: number | null): number => (v !== null && Number.isFinite(v) && v > 0 ? v : 1);
-
-function toAutoPhoto(p: FinalizePhotoRow): AutoPhoto {
-  return {
-    id: p.id,
-    // Unknown dimensions → 1×1 (treated as square, fits any slot).
-    width: positive(p.width),
-    height: positive(p.height),
-    takenAt: p.taken_at,
-    dateSource: asDateSource(p.date_source),
-    place: p.place,
-    status: p.status === "dropped" ? "dropped" : "kept",
-    dupGroup: p.dup_group,
-    blurScore: p.blur_score,
-  };
-}
-
-function toSuggestPhoto(p: FinalizePhotoRow): SuggestPhoto {
-  return {
-    id: p.id,
-    status: p.status === "dropped" ? "dropped" : "kept",
-    color: p.color,
-    width: p.width,
-    height: p.height,
-    blurScore: p.blur_score,
-  };
-}
-
 const hasGps = (p: FinalizePhotoRow) => p.lat !== null && p.lng !== null;
 
 /**
@@ -328,35 +299,27 @@ export async function finalizeBook(
     // gets no fallback album — the doc stays {} and finalize still reports its counts (no 500).
     console.error("[finalize] fallback album skipped (unsupported_design)");
   } else if (isEmptyDoc(book.doc)) {
-    const isPaid = book.is_paid;
-    // M10c T11: rule background suggestions (Modern/Geometric/Scrapbook; classic unchanged).
-    const doc: BookDoc = applyBackgroundSuggestions(
-      withBookDesign(
-        autolayout(photos.map(toAutoPhoto), {
-          occasion: asOccasion(book.occasion),
-          title: book.title,
-          captionLang: asCaptionLang(book.caption_lang),
-          isPaid,
-          design,
-        }),
-        design,
-      ),
-      photos.map(toSuggestPhoto),
-    );
-    const parsed = parseBookDoc(doc);
-    const issues = parsed.ok
-      ? validateBookDoc(parsed.doc, { photoIds: readyIds, maxPages: limitsFor(isPaid).maxPages })
-      : parsed.issues;
-    if (issues.length > 0) {
-      console.error(`[finalize] fallback album failed validation (${issues.length} issues)`);
+    // M13 review fix 6: one rule-album pipeline (autolayout → withBookDesign → background
+    // suggestions → validate against the ready photo ids and limitsFor(is_paid).maxPages), shared
+    // with the setup card re-layout (updateBookSetupAction). Output is byte-identical to the
+    // pre-M13 inline pipeline (tests/finalize.test.ts hash table).
+    const built = buildRuleDraft(photos, {
+      occasion: asOccasion(book.occasion),
+      title: book.title,
+      captionLang: asCaptionLang(book.caption_lang),
+      isPaid: book.is_paid,
+      design,
+    });
+    if (!built.ok) {
+      console.error(`[finalize] fallback album failed validation (${built.reason})`);
     } else {
       wroteDoc = await db.writeDocIfEmpty(
         book.id,
-        serializeDoc(doc) as unknown as Json,
-        doc.pages.length,
+        serializeDoc(built.doc) as unknown as Json,
+        built.pageCount,
         book.updated_at,
       );
-      if (wroteDoc) pages = doc.pages.length;
+      if (wroteDoc) pages = built.pageCount;
     }
   } else {
     const refs = referencedPhotoIds(book.doc);
