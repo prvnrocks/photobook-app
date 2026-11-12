@@ -450,6 +450,7 @@ function PlatedTextPanel({ panel, ink }: { panel: RenderTextPanel; ink: Ink }) {
  * Split-strip cover photo (M10b A9): the slot box (data-slot-index 0, the edit overlay's target)
  * holds one window per slice; each window clips the SAME photo, laid out over the whole slot box
  * with the usual crop maths, so the strips read as one picture with gaps showing the background.
+ * Empty in edit mode: a dashed box per slice and ONE centred "Add photo" over the slot box (M12 T6).
  */
 export function SlicedPhotoSlot({
   slot,
@@ -502,6 +503,16 @@ export function SlicedPhotoSlot({
           ) : null}
         </Box>
       ))}
+      {empty && mode === "edit" ? (
+        // M12 T6: one centred label for the whole strip set (each slice only draws its dashed box).
+        <div
+          className="pointer-events-none absolute inset-0 flex items-center justify-center text-neutral-500"
+          style={{ fontSize: "3cqw" }}
+          data-testid="slot-placeholder-label"
+        >
+          Add photo
+        </div>
+      ) : null}
       {mode === "edit" ? overlay : null}
     </Box>
   );

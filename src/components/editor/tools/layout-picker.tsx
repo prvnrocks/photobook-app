@@ -13,7 +13,7 @@
 // their M5 markup.
 
 import { LayoutTemplate } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { changeLayout, type ChangeLayoutResult } from "@/lib/book/edit-ops";
 import { pageAspectStyle } from "@/lib/book/format-style";
 import { paintOrder } from "@/lib/book/slot-geometry";
@@ -116,10 +116,11 @@ export function LayoutPickerPanel({ ctx, close }: EditorPanelProps) {
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pageIdx = layoutTargetPage(ctx);
-  if (pageIdx === null) return null;
   const doc = ctx.state.doc;
   const maxPages = ctx.book.maxPages;
-  const opts = layoutOptions(doc, pageIdx, maxPages);
+  // M12 T6: layoutOptions dry-runs planChangeLayout for every layout — only redo it when its inputs change.
+  const opts = useMemo(() => (pageIdx === null ? null : layoutOptions(doc, pageIdx, maxPages)), [doc, pageIdx, maxPages]);
+  if (pageIdx === null || opts === null) return null;
 
   const apply = (layout: Layout, confirmed: boolean) => {
     if (ctx.readOnly) return;
