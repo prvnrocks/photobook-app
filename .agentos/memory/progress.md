@@ -156,3 +156,10 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 ## 2026-11-11 — Milestone 11 — deployed
 - main fast-forwarded d922e15 → 97bcbd8 on user's "deploy"; prod alpha live after ~165 s (theme-color #fbf8f2). Signed-out smoke OK (/, /login, /privacy 200; /books 307 → login; unknown /b 404; /dev-style + /dev-print 404). No migration.
 - NEXT: user phone check of the new flow; then M10c (geometric + scrapbook styles).
+
+## 2026-11-12 — Milestone 10c — done + deployed
+- Geometric (18 layouts) + Scrapbook (18) styles: shapes (clip-path), tilt, polaroid/border frames, crisp drawn shadows (no soft masks), own stickers incl. Eid/Ramadan, label plates; New book form offers 4 styles with occasion defaults (D-068).
+- Photo colour at upload + Curator backfill; rule-based + Storyteller v6 AI background suggestions (catalogue only, kept photos only, user choices never overwritten; dropped photos stripped at review/publish/export).
+- Editor: visible-shape tap/drop, shape outlines, masked crop, shaped layout diagrams, new drag-to-swap photos (all styles).
+- Gate PASS (see runs/m10.md); chapter labels stay on every page (opener-only rule reverted — empty bands). ai-auth "stalls" were host idle sleep on battery.
+- NEXT: user phone check (G2): geometric/scrapbook book editor ↔ flipbook ↔ PDF, touch drag-swap, low-end Android flips. Backlog: Supabase fetch deadline (Bug 2), Mapbox, cron env, domain.
