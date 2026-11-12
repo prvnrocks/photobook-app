@@ -28,8 +28,12 @@ export const EVENT_SCHEMAS = {
   book_created: {},
   /** One upload run finished (not cancelled / not refused). */
   upload_done: { photos: "count", failed: "count", skipped: "count" },
-  /** The build screen handed over to review. `failed` = AI stopped, the rule album is shown. */
-  ai_build_done: { mode: AI_BUILD_MODES, outcome: AI_BUILD_OUTCOMES, ms_bucket: MS_BUCKETS },
+  /**
+   * The build screen handed over to review. `failed` = AI stopped, the rule album is shown.
+   * `auto` (optional, M13 T4): true when the run was the automatic first build — the client
+   * gets it from the POST /api/ai/runs { auto: true } 201 response (`auto: true`).
+   */
+  ai_build_done: { mode: AI_BUILD_MODES, outcome: AI_BUILD_OUTCOMES, ms_bucket: MS_BUCKETS, auto: "bool" },
   published: { is_paid: "bool", has_password: "bool", pages: "count", first: "bool" },
   /** Stripe Checkout URL received; the browser is navigating to it. */
   checkout_started: {},
@@ -40,11 +44,25 @@ export const EVENT_SCHEMAS = {
 
 export type AnalyticsEventName = keyof typeof EVENT_SCHEMAS;
 
+/**
+ * Properties a caller may leave out (type level only — sanitizeEventProperties already drops
+ * missing keys). Everything not listed here is required.
+ */
+export const OPTIONAL_EVENT_PROPS = {
+  ai_build_done: ["auto"],
+} as const satisfies { [E in AnalyticsEventName]?: readonly (keyof (typeof EVENT_SCHEMAS)[E])[] };
+
+type OptionalKeys<E extends AnalyticsEventName> = E extends keyof typeof OPTIONAL_EVENT_PROPS
+  ? (typeof OPTIONAL_EVENT_PROPS)[E][number]
+  : never;
+
 type PropType<K> = K extends "count" ? number : K extends "bool" ? boolean : K extends readonly (infer S)[] ? S : never;
 
 /** Typed properties of one event. */
 export type AnalyticsProps<E extends AnalyticsEventName> = {
-  [P in keyof (typeof EVENT_SCHEMAS)[E]]: PropType<(typeof EVENT_SCHEMAS)[E][P]>;
+  [P in Exclude<keyof (typeof EVENT_SCHEMAS)[E], OptionalKeys<E>>]: PropType<(typeof EVENT_SCHEMAS)[E][P]>;
+} & {
+  [P in Extract<keyof (typeof EVENT_SCHEMAS)[E], OptionalKeys<E>>]?: PropType<(typeof EVENT_SCHEMAS)[E][P]>;
 };
 
 /** Discriminated union of every allow-listed event with its properties. */

@@ -570,6 +570,44 @@ export async function hasFinishedLiveAiRun(bookId: string): Promise<boolean> {
   return (count ?? 0) > 0;
 }
 
+/**
+ * M13 T4 (auto first build): true when the book has ANY agent_run (any trigger, any state),
+ * optionally ignoring one run id (the run the caller just created). Admin client — callers
+ * must have checked ownership first (getMyBook under RLS).
+ */
+export async function hasAnyRunForBook(bookId: string, exceptRunId?: string): Promise<boolean> {
+  if (!isUuid(bookId)) return false;
+  let query = createAdminClient()
+    .from("agent_runs")
+    .select("id", { count: "exact", head: true })
+    .eq("book_id", bookId);
+  if (exceptRunId !== undefined) {
+    if (!isUuid(exceptRunId)) throw new AgentRunsQueryError("check runs", "invalid_id");
+    query = query.neq("id", exceptRunId);
+  }
+  const { count, error } = await query;
+  if (error) throw new AgentRunsQueryError("check runs", error.code);
+  return (count ?? 0) > 0;
+}
+
+/**
+ * M13 T4: removes a run the caller created a moment ago and must not keep (a concurrent
+ * automatic start lost the race). Only an untouched run matches: still queued, never claimed
+ * (attempts 0), of this book. Returns true when a row was deleted. Admin client.
+ */
+export async function deleteUnclaimedRun(runId: string, bookId: string): Promise<boolean> {
+  if (!isUuid(runId) || !isUuid(bookId)) return false;
+  const { count, error } = await createAdminClient()
+    .from("agent_runs")
+    .delete({ count: "exact" })
+    .eq("id", runId)
+    .eq("book_id", bookId)
+    .eq("state", "queued")
+    .eq("attempts", 0);
+  if (error) throw new AgentRunsQueryError("delete run", error.code);
+  return (count ?? 0) > 0;
+}
+
 /** Newest BUILD run of the book visible to the signed-in user (RLS, owner columns only), or null. */
 export async function getLatestRunForBook(
   bookId: string,

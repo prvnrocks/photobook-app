@@ -108,6 +108,20 @@ describe("event guard", () => {
     expect(sanitizeEventProperties("viewer_opened", { pages: { slug: "x" } })).toEqual({});
   });
 
+  it("ai_build_done admits an optional auto bool (M13 T4)", () => {
+    expect(sanitizeEventProperties("ai_build_done", { mode: "ai", outcome: "ok", ms_bucket: "<30s", auto: true })).toEqual({
+      mode: "ai",
+      outcome: "ok",
+      ms_bucket: "<30s",
+      auto: true,
+    });
+    expect(sanitizeEventProperties("ai_build_done", { mode: "rules", outcome: "ok", ms_bucket: "<30s", auto: "yes" })).toEqual({
+      mode: "rules",
+      outcome: "ok",
+      ms_bucket: "<30s",
+    });
+  });
+
   it("rejects unknown events", () => {
     expect(sanitizeEventProperties("caption_written", { text: "hi" })).toBeNull();
     expect(sanitizeEventProperties("$autocapture", {})).toBeNull();
