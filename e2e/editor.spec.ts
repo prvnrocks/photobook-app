@@ -1255,7 +1255,7 @@ test.describe("backgrounds at 375 px (/dev-editor?bg=1)", () => {
     await expect(sheet).toBeVisible();
     await expect(sheet).toHaveAttribute("role", "dialog");
     const inSheet = await sheet.locator('[data-testid^="editor-tool-"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.replace("editor-tool-", "")));
-    expect(inSheet.filter((id) => !id.startsWith("dev-"))).toEqual(["add-page", "page-menu", "upgrade"]);
+    expect(inSheet.filter((id) => !id.startsWith("dev-"))).toEqual(["add-page", "page-menu", "see-photos", "upgrade"]); // see-photos: M13 review fix (review via More)
     // Focus moves into the sheet: its first tool (here a /dev-editor demo tool sorts first).
     await expect(sheet.locator("li button").first()).toBeFocused();
     for (const b of await sheet.locator("button").all()) expect((await b.boundingBox())!.height).toBeGreaterThanOrEqual(44);

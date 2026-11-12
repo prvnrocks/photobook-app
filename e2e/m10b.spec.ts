@@ -280,8 +280,15 @@ async function createViaForm(format: "A5_LANDSCAPE" | "A5_PORTRAIT", style: "mod
 
 async function uploadAndBuild(id: string, files: { name: string; mimeType: string; buffer: Buffer }[]) {
   await page.getByTestId("upload-input").setInputFiles(files);
-  // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build\?auto=1$/, { timeout: 180_000 });
+  if (files.length >= 5) {
+    // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).
+    await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build\?auto=1$/, { timeout: 180_000 });
+  } else {
+    // Fewer than 5 photos: no automatic build; the fallback "Make my book now" starts it.
+    await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 180_000 });
+    await page.getByTestId("build-album").click();
+    await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build(\?.*)?$/, { timeout: 60_000 });
+  }
   // M13 T7: the build hands over to the editor (review is reached from the "AI kept X of Y" chip).
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/edit$/, { timeout: 420_000 });
   await expect(page.getByTestId("editor-shell")).toBeVisible();

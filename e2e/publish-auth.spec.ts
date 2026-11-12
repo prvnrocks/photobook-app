@@ -685,13 +685,15 @@ test("f. expired (admin sets expires_at in the past): owner vs anonymous copy, r
   await expect(page.getByTestId("publish-button")).toHaveCount(0);
   expect(Date.parse((await bookRow()).expires_at ?? "")).toBe(Date.parse(past));
 
-  // M13 T9: editor Share on an expired free book stays in the editor and points at Upgrade.
+  // M13 review fix: editor Share on an expired free book says "Link expired" and, instead of trying
+  // to republish (blocked, D-039), opens the share screen where Upgrade lives. Expiry unchanged.
   await page.goto(`/books/${bookId}/edit`);
   await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("editor-done")).toContainText("Link expired");
   await page.getByTestId("editor-done").click();
-  await expect(page.getByTestId("editor-done-error")).toContainText("expired", { timeout: 30_000 });
-  await expect(page.getByTestId("editor-done-error-link")).toHaveAttribute("href", `/books/${bookId}/publish`);
-  await expect(page).toHaveURL(new RegExp(`/books/${bookId}/edit$`));
+  await expect(page).toHaveURL(new RegExp(`/books/${bookId}/publish$`), { timeout: 30_000 });
+  await expect(page.getByTestId("publish-panel")).toHaveAttribute("data-state", "expired");
+  await expect(page.getByTestId("publish-message")).toHaveCount(0); // nothing was published
   expect(Date.parse((await bookRow()).expires_at ?? "")).toBe(Date.parse(past));
 });
 

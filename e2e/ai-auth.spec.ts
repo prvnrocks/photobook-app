@@ -519,7 +519,16 @@ async function buildToReview() {
 async function editorThenReview(timeout: number) {
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/edit$/, { timeout });
   await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 30_000 });
-  await page.getByTestId("ai-summary-link").click();
+  // M13 review fix: a rule album without an AI build shows "Make it with AI" (ai-make-chip) instead
+  // of the "AI kept X of Y" chip; review is then reached from More → See all photos.
+  const chip = page.getByTestId("ai-summary-link").or(page.getByTestId("ai-make-chip"));
+  await expect(chip.first()).toBeVisible({ timeout: 30_000 });
+  if (await page.getByTestId("ai-summary-link").isVisible()) {
+    await page.getByTestId("ai-summary-link").click();
+  } else {
+    await page.getByTestId("editor-more").click();
+    await page.getByTestId("editor-tool-see-photos").click();
+  }
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/review$/, { timeout: 30_000 });
   await reviewLoaded();
 }
@@ -1510,7 +1519,7 @@ test("d. refusal scenario: rule album, failed/partial banner, Try AI again", asy
   await expect(page.getByTestId("rebuild-button")).toHaveText("Try AI again");
   await expect(page.getByTestId("review-header")).toHaveText(
     book.ai_status === "failed"
-      ? `Kept ${rows.filter((r) => r.status !== "dropped").length} of ${rows.length}`
+      ? `${rows.filter((r) => r.status !== "dropped").length} of ${rows.length} in your book`
       : `AI kept ${rows.filter((r) => r.status !== "dropped").length} of ${rows.length}`,
   );
 });
@@ -1518,7 +1527,8 @@ test("d. refusal scenario: rule album, failed/partial banner, Try AI again", asy
 test("e. AI off: Build my album → straight to review, rule album, ai_off banner, Try AI disabled", async () => {
   test.skip(!OFF_URL, "set E2E_OFF_URL (server with AI_MODE=off)");
   const bookC = await createBookAt(OFF_URL);
-  const files = [fixture("screenshot.png", "image/png"), ...synth.slice(2, 5)];
+  // 5 photos: the automatic first build needs ≥ 5 ready (M13 T4), below that the fallback shows.
+  const files = [fixture("screenshot.png", "image/png"), ...synth.slice(2, 6)];
   await uploadAndWaitSummary(files, files.length);
   releaseAuto(); // AI off: the rule run finishes inside the auto POST → straight to the editor
   await editorThenReview(60_000);
@@ -1528,7 +1538,7 @@ test("e. AI off: Build my album → straight to review, rule album, ai_off banne
   await expect(page.getByTestId("try-ai-disabled")).toBeDisabled();
   const rows = await photoRows(bookC);
   const kept = rows.filter((r) => r.status !== "dropped").length;
-  await expect(page.getByTestId("review-header")).toHaveText(`Kept ${kept} of ${rows.length}`);
+  await expect(page.getByTestId("review-header")).toHaveText(`${kept} of ${rows.length} in your book`);
 
   const runs = await runsFor(bookC);
   const book = await bookRow(bookC);
@@ -1578,5 +1588,5 @@ test("e. AI off: Build my album → straight to review, rule album, ai_off banne
   expect(runs2.length).toBe(2);
   expect(runs2[1]).toMatchObject({ mode: "rule", trigger: "rebuild", state: "done" });
   expect(metaOf((await bookRow(bookC)).doc).runId).toBe(runs2[1].id);
-  await expect(page.getByTestId("review-header")).toHaveText(`Kept ${kept} of ${rows.length}`);
+  await expect(page.getByTestId("review-header")).toHaveText(`${kept} of ${rows.length} in your book`);
 });
