@@ -127,3 +127,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-12, e2e) Live-gate 'stalls' with no error = host idle sleep on battery (DarkWake ~45 s every 15 min freezes timers) — check pmset -g log; run gates on AC with caffeinate -dims.
 - (2026-11-12, supabase) postgrest-js retries GET/HEAD 3× on 503/520/network by default — a custom fetch with its own retry needs db:{retry:false}; storage-js wraps Blob uploads in FormData (size from entries).
 - (2026-11-12, reliability) An idempotent write is useless if a route pre-check rejects the replay first — grep pre-checks. auth-js refresh retries ~30 s: per-request deadlines need a total cap + gate in middleware.
+- (2026-11-12, reliability) When a server adds a new 503 body, every client classifier of that route must separate temporary (unavailable) from permanent (saving_unavailable/ai_unavailable).
