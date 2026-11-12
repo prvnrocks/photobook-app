@@ -1,5 +1,5 @@
 // The signed-in user's books as tappable cards (D-017). Each card opens the step the book is at
-// (upload / build / review / edit) — rules in src/lib/dashboard/card-target.ts (M5 Task 12).
+// (upload / build / edit) — rules in src/lib/dashboard/card-target.ts (M5 Task 12).
 // Published books show their link state and a Share link to /books/[id]/publish (M6 T8).
 // M9 T10: deletion chips (src/lib/dashboard/deletion-chip.ts) and a "⋯" menu with "Delete book"
 // (rendered only when the page passes the deleteBook server action).

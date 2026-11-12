@@ -51,11 +51,11 @@ export function stageCopy(state: RunState, progress: RunProgress | null): StageC
     case "repairing":
       return { text: "Polishing…", detail: null, percent: 96 };
     case "validating":
-      return { text: "Saving your album…", detail: null, percent: 98 };
+      return { text: "Saving your book…", detail: null, percent: 98 };
     case "done":
-      return { text: "Your album is ready", detail: null, percent: 100 };
+      return { text: "Your book is ready", detail: null, percent: 100 };
     case "failed":
-      return { text: "We couldn't finish the AI album", detail: null, percent: 100 };
+      return { text: "We couldn't finish the AI book", detail: null, percent: 100 };
   }
 }
 
@@ -76,7 +76,7 @@ export function limitCopy(limit: LimitKind, isPaid: boolean, dailyCap: number): 
     case "analysed_photos":
       return "This book has more photos than AI can look at on your plan.";
     case "rate":
-      return "Your album was just built. Please wait a few seconds and try again.";
+      return "Your book was just made. Please wait a few seconds and try again.";
     case "budget_exhausted":
       return AI_BREAK_COPY;
   }

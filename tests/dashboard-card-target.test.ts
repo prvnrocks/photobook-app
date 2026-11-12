@@ -18,9 +18,9 @@ describe("bookCardStep / bookCardHref", () => {
     expect(bookCardStep({ ...base, ai_status: s, page_count: 12, photo_count: 40 })).toBe("build");
   });
 
-  it("built, never edited → review (keep/drop step not skipped)", () => {
+  it("built (AI or rule album), never edited → editor (D-070: review only via the chip)", () => {
     for (const ai_status of ["done", "partial", "failed", "idle", null]) {
-      expect(bookCardHref({ ...base, page_count: 10, photo_count: 30, ai_status })).toBe(`/books/${ID}/review`);
+      expect(bookCardHref({ ...base, page_count: 10, photo_count: 30, ai_status })).toBe(`/books/${ID}/edit`);
     }
   });
 
@@ -30,8 +30,8 @@ describe("bookCardStep / bookCardHref", () => {
     );
   });
 
-  it("page_count wins over photo_count: album with 0 ready photos still opens review/edit", () => {
-    expect(bookCardStep({ ...base, page_count: 4 })).toBe("review");
+  it("page_count wins over photo_count: album with 0 ready photos still opens the editor", () => {
+    expect(bookCardStep({ ...base, page_count: 4 })).toBe("edit");
     expect(bookCardStep({ ...base, page_count: 4, user_edited: true })).toBe("edit");
   });
 });

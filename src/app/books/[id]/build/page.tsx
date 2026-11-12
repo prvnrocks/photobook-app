@@ -17,7 +17,7 @@ import { draftPreviewItems, draftPreviewPhotoIds, draftPreviewPhotos } from "@/l
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "Building your album" };
+export const metadata: Metadata = { title: "Making your book" };
 
 // Progress screen for an AI build (D-022): resumes the book's active run, else starts one.
 // `?trigger=rebuild` starts a rebuild instead of a build (used by "Try AI again").
@@ -82,7 +82,7 @@ export default async function BuildPage({
       <main className="mx-auto flex w-full max-w-app min-w-0 flex-col gap-stack px-gutter py-6 sm:py-10">
         <PageHeader
           step="build"
-          title="Building your album"
+          title="Making your book"
           description={
             <span className="break-words" data-testid="build-book-title">
               {book.title || "Untitled book"}

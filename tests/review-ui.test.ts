@@ -388,7 +388,7 @@ describe("updateAlbumOutcome", () => {
 describe("rebuild as secondary (D-028)", () => {
   it("labels + rebuilds-left copy", () => {
     expect(REBUILD_LABELS.rebuild).toBe("Redo with AI");
-    expect(REBUILD_LABELS.ai_off).toBe("Rebuild album");
+    expect(REBUILD_LABELS.ai_off).toBe("Make the book again");
     expect(rebuildsLeftCopy(null)).toBeNull();
     expect(rebuildsLeftCopy(1)).toBe("1 AI redo left");
     expect(rebuildsLeftCopy(3)).toBe("3 AI redos left");

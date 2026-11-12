@@ -42,8 +42,8 @@ describe("stageCopy", () => {
     ["captioning", "Writing captions…"],
     ["critiquing", "Final check…"],
     ["repairing", "Polishing…"],
-    ["validating", "Saving your album…"],
-    ["done", "Your album is ready"],
+    ["validating", "Saving your book…"],
+    ["done", "Your book is ready"],
   ] as const)("%s → %s", (state, text) => {
     expect(stageCopy(state, p()).text).toBe(text);
   });

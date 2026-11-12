@@ -97,10 +97,10 @@ type AutoState =
 type Phase = "idle" | "running" | "finalizing" | "finalize_error" | "done";
 
 const FINALIZE_MESSAGES: Record<FinalizeError, string> = {
-  signed_out: "You've been signed out. Please sign in again to finish your album.",
+  signed_out: "You've been signed out. Please sign in again to finish your book.",
   not_found: "We couldn't find this book. It may have been deleted.",
-  failed: "We couldn't finish setting up your album. Your photos are safe — please try again.",
-  rate_limited: "We're still finishing your album. Your photos are safe — please try again in a moment.",
+  failed: "We couldn't finish setting up your book. Your photos are safe — please try again.",
+  rate_limited: "We're still finishing your book. Your photos are safe — please try again in a moment.",
   // Neutral (M12 review): blame neither the server nor the phone; the "Try again in Ns" button shows the wait.
   unavailable: "This is taking longer than usual. Your photos are safe — please try again in a moment.",
 };
@@ -619,7 +619,7 @@ export function Uploader(props: UploaderProps) {
       {busy ? (
         <Notice tone="info" title="Keep this screen open" data-testid="upload-keep-open">
           {phase === "finalizing"
-            ? "We're finishing your album. Leaving now skips places and duplicates until your next visit."
+            ? "We're finishing your book. Leaving now skips places and duplicates until your next visit."
             : "The upload stops if you leave. Choose the same photos again later and we'll continue where you left off."}
         </Notice>
       ) : null}

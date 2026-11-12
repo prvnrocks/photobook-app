@@ -1,21 +1,18 @@
+// Memory Keeper trigger (D-032) as the editor "Share" uses it (M13 T9: shareBookAction /
+// publishBookAction call learnFromBook; the old editor Done action is gone). Tests the learning
+// rules on the SAVED doc, the ownership belt and braces, and code-only logging (D-027).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
 const mocks = vi.hoisted(() => ({
-  user: null as { id: string } | null,
-  getMyBook: vi.fn(),
   getBookForRun: vi.fn(),
   writeDocIfReplaceable: vi.fn(),
   writeFallbackDocIfEmpty: vi.fn(),
   getUserMemoryAdmin: vi.fn(),
   upsertUserMemory: vi.fn(),
-  revalidatePath: vi.fn(),
-  redirect: vi.fn(),
 }));
-vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: async () => mocks.user }));
 vi.mock("@/lib/db/books", () => ({
-  getMyBook: mocks.getMyBook,
   getBookForRun: mocks.getBookForRun,
   writeDocIfReplaceable: mocks.writeDocIfReplaceable,
   writeFallbackDocIfEmpty: mocks.writeFallbackDocIfEmpty,
@@ -24,10 +21,8 @@ vi.mock("@/lib/db/memory", () => ({
   getUserMemoryAdmin: mocks.getUserMemoryAdmin,
   upsertUserMemory: mocks.upsertUserMemory,
 }));
-vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
-vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 
-const { finishEditingAction } = await import("@/app/books/[id]/edit/actions");
+const { learnFromBook } = await import("@/lib/ai/learn-from-book");
 const { UserMemorySchema } = await import("@/lib/ai/schemas");
 
 const USER = "33333333-3333-4333-8333-333333333333";
@@ -91,8 +86,6 @@ let logs: ReturnType<typeof vi.spyOn>[] = [];
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.user = { id: USER };
-  mocks.getMyBook.mockResolvedValue({ id: BOOK });
   mocks.getBookForRun.mockResolvedValue(runBook());
   mocks.getUserMemoryAdmin.mockResolvedValue(null);
   mocks.upsertUserMemory.mockResolvedValue(undefined);
@@ -110,16 +103,15 @@ const loggedText = () => JSON.stringify(logs.flatMap((s) => s.mock.calls));
 function expectNoDocWrite() {
   expect(mocks.writeDocIfReplaceable).not.toHaveBeenCalled();
   expect(mocks.writeFallbackDocIfEmpty).not.toHaveBeenCalled();
-  expect(mocks.redirect).not.toHaveBeenCalled();
 }
 
-describe("finishEditingAction", () => {
+describe("learnFromBook (editor Share / publish)", () => {
   it("learns caption length from the saved user captions only, leaves the doc untouched", async () => {
     const book = runBook();
     const before = structuredClone(book.doc);
     mocks.getBookForRun.mockResolvedValue(book);
 
-    await expect(finishEditingAction(BOOK)).resolves.toEqual({ ok: true, redirectTo: `/books/${BOOK}/publish` });
+    await expect(learnFromBook(USER, BOOK, "share")).resolves.toBe("updated");
 
     expect(mocks.getBookForRun).toHaveBeenCalledWith(BOOK);
     expect(mocks.getUserMemoryAdmin).toHaveBeenCalledWith(USER);
@@ -138,7 +130,6 @@ describe("finishEditingAction", () => {
 
     expect(book.doc).toEqual(before);
     expectNoDocWrite();
-    expect(mocks.revalidatePath).toHaveBeenCalledWith("/dashboard");
     expect(logs.every((s) => s.mock.calls.length === 0)).toBe(true);
   });
 
@@ -146,56 +137,32 @@ describe("finishEditingAction", () => {
     const d = editorDoc();
     d.pages[2].caption = caption(words(14), "ai");
     mocks.getBookForRun.mockResolvedValue(runBook({ doc: d }));
-    await expect(finishEditingAction(BOOK)).resolves.toMatchObject({ ok: true });
+    await expect(learnFromBook(USER, BOOK, "share")).resolves.toBe("updated");
     const prefs = mocks.upsertUserMemory.mock.calls[0][1];
     expect(prefs).not.toHaveProperty("captionLength");
   });
 
-  it("signed out → signed_out, no reads or writes", async () => {
-    mocks.user = null;
-    await expect(finishEditingAction(BOOK)).resolves.toEqual({ ok: false, error: "signed_out" });
-    expect(mocks.getMyBook).not.toHaveBeenCalled();
-    expect(mocks.getBookForRun).not.toHaveBeenCalled();
-    expect(mocks.upsertUserMemory).not.toHaveBeenCalled();
-    expectNoDocWrite();
-  });
-
-  it("invalid id → not_found without any query", async () => {
-    await expect(finishEditingAction("nope")).resolves.toEqual({ ok: false, error: "not_found" });
-    await expect(finishEditingAction(7 as unknown as string)).resolves.toEqual({ ok: false, error: "not_found" });
-    expect(mocks.getMyBook).not.toHaveBeenCalled();
-  });
-
-  it("non-owner (RLS → null) → not_found, no memory read or write", async () => {
-    mocks.getMyBook.mockResolvedValue(null);
-    await expect(finishEditingAction(BOOK)).resolves.toEqual({ ok: false, error: "not_found" });
-    expect(mocks.getBookForRun).not.toHaveBeenCalled();
+  it("missing book → skipped, no memory read or write", async () => {
+    mocks.getBookForRun.mockResolvedValue(null);
+    await expect(learnFromBook(USER, BOOK, "share")).resolves.toBe("skipped");
     expect(mocks.getUserMemoryAdmin).not.toHaveBeenCalled();
     expect(mocks.upsertUserMemory).not.toHaveBeenCalled();
     expectNoDocWrite();
   });
 
-  it("admin read owned by someone else (belt and braces) → no memory write", async () => {
+  it("admin read owned by someone else (belt and braces) → skipped, no memory write", async () => {
     mocks.getBookForRun.mockResolvedValue(runBook({ user_id: OTHER }));
-    await expect(finishEditingAction(BOOK)).resolves.toMatchObject({ ok: true });
+    await expect(learnFromBook(USER, BOOK, "share")).resolves.toBe("skipped");
     expect(mocks.getUserMemoryAdmin).not.toHaveBeenCalled();
     expect(mocks.upsertUserMemory).not.toHaveBeenCalled();
     expectNoDocWrite();
   });
 
-  it("getMyBook error → failed, code only logged", async () => {
-    mocks.getMyBook.mockRejectedValue(Object.assign(new Error(SECRET), { code: "08006" }));
-    await expect(finishEditingAction(BOOK)).resolves.toEqual({ ok: false, error: "failed" });
-    expect(mocks.upsertUserMemory).not.toHaveBeenCalled();
-    expect(loggedText()).toMatch(/\[editor\] finish: load failed \(08006\)/);
-    expect(loggedText()).not.toContain(SECRET);
-  });
-
-  it("memory write error → still ok, logs a code only (no captions, prefs or ids)", async () => {
+  it("memory write error → failed (never throws), logs a code only (no captions, prefs or ids)", async () => {
     mocks.upsertUserMemory.mockRejectedValue(Object.assign(new Error(SECRET), { code: "too_large" }));
-    await expect(finishEditingAction(BOOK)).resolves.toEqual({ ok: true, redirectTo: `/books/${BOOK}/publish` });
+    await expect(learnFromBook(USER, BOOK, "share")).resolves.toBe("failed");
     const text = loggedText();
-    expect(text).toMatch(/\[editor\] memory update failed \(too_large\)/);
+    expect(text).toMatch(/\[share\] memory update failed \(too_large\)/);
     expect(text).not.toContain(SECRET);
     expect(text).not.toContain("sea sea");
     expect(text).not.toContain(USER);
@@ -207,7 +174,7 @@ describe("finishEditingAction", () => {
       prefs: { v: 1, captionLength: "medium", language: "en", sources: { captionLength: "user_captions" } },
       updatedAt: UPDATED,
     });
-    await expect(finishEditingAction(BOOK)).resolves.toMatchObject({ ok: true });
+    await expect(learnFromBook(USER, BOOK, "share")).resolves.toBe("unchanged");
     expect(mocks.upsertUserMemory).not.toHaveBeenCalled();
   });
 
@@ -216,7 +183,7 @@ describe("finishEditingAction", () => {
       prefs: { v: 1, tonePreference: "romantic", language: "en", sources: { tone: "explicit" } },
       updatedAt: UPDATED,
     });
-    await expect(finishEditingAction(BOOK)).resolves.toMatchObject({ ok: true });
+    await expect(learnFromBook(USER, BOOK, "share")).resolves.toBe("updated");
     const prefs = mocks.upsertUserMemory.mock.calls[0][1];
     expect(prefs).toMatchObject({ tonePreference: "romantic", sources: { tone: "explicit" } });
   });

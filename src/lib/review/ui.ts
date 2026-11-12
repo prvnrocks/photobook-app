@@ -173,7 +173,7 @@ export function rebuildsLeftLabel(n: number): string {
  * - 'rebuild'  → AI picked these (done): "Redo with AI" (trigger rebuild, counts toward the limit)
  * - 'retry_ai' → AI partial/failed: "Try AI again" (trigger rebuild)
  * - 'first_ai' → AI available but never used on this book: "Build with AI" (trigger build)
- * - 'ai_off'   → AI unavailable: "Rebuild album" re-runs the simple rules; "Try AI again" disabled
+ * - 'ai_off'   → AI unavailable: "Make the book again" re-runs the simple rules; "Try AI again" disabled
  */
 export type RebuildVariant = "rebuild" | "retry_ai" | "first_ai" | "ai_off";
 
@@ -188,7 +188,7 @@ export const REBUILD_LABELS: Record<RebuildVariant, string> = {
   rebuild: "Redo with AI",
   retry_ai: "Try AI again",
   first_ai: "Build with AI",
-  ai_off: "Rebuild album",
+  ai_off: "Make the book again",
 };
 
 export function rebuildTrigger(variant: RebuildVariant): "build" | "rebuild" {
@@ -202,12 +202,12 @@ export type RebuildOutcome =
   | { kind: "error"; message: string };
 
 export const REBUILD_MESSAGES = {
-  ruleFailed: "We couldn't rebuild the album. Please try again.",
-  userEdited: "You've edited this album, so we won't rebuild it over your changes.",
-  limitRebuilds: "You've used all the rebuilds for this book.",
+  ruleFailed: "We couldn't make the book again. Please try again.",
+  userEdited: "You've edited this book, so we won't redo it over your changes.",
+  limitRebuilds: "You've used all the AI redos for this book.",
   limitDaily: "You've reached today's AI limit. Please try again tomorrow.",
   limitPhotos: "This book has more photos than AI can check on this plan.",
-  limitRate: "Your album was just rebuilt. Please wait a few seconds and try again.",
+  limitRate: "Your book was just made again. Please wait a few seconds and try again.",
   /** D-059: global daily AI budget used up (same copy as the build screen). */
   aiBreak: AI_BREAK_COPY,
   signedOut: "Please sign in again.",

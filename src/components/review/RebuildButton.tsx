@@ -5,7 +5,7 @@
 // AI runs continue on /books/[id]/build; a rule run (AI off) finishes inside the request, so
 // we stay here and refresh. The refresh goes through useRefreshTransition: a plain
 // startTransition(() => router.refresh()) could stay pending forever under this route's loading.tsx,
-// leaving "Rebuilding…" on screen (lost React ping, see src/lib/app/refresh-nudge.ts).
+// leaving "Making…" on screen (lost React ping, see src/lib/app/refresh-nudge.ts).
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
@@ -59,9 +59,9 @@ export function RebuildButton({ bookId, variant, rebuildsLeft }: RebuildButtonPr
 
   const leftCopy = usesRebuild ? rebuildsLeftCopy(rebuildsLeft) : null;
   const hint = outOfRebuilds
-    ? "You've used all the AI rebuilds for this book. You can still keep or drop photos."
+    ? "You've used all the AI redos for this book. You can still keep or drop photos."
     : variant === "ai_off"
-      ? "Builds the album again from the photos you kept."
+      ? "Makes the book again from the photos you kept."
       : usesRebuild
         ? "Re-plans the whole story with AI. Your keep / drop choices stay."
         : "Your keep / drop choices stay as they are.";
@@ -79,7 +79,7 @@ export function RebuildButton({ bookId, variant, rebuildsLeft }: RebuildButtonPr
         aria-describedby="rebuild-hint"
       >
         {variant === "ai_off" ? null : <Sparkles data-icon="inline-start" aria-hidden="true" />}
-        {working ? (variant === "ai_off" ? "Rebuilding…" : "Starting…") : REBUILD_LABELS[variant]}
+        {working ? (variant === "ai_off" ? "Making…" : "Starting…") : REBUILD_LABELS[variant]}
       </Button>
 
       <p id="rebuild-hint" className="type-small text-muted-foreground" data-testid="rebuild-hint">

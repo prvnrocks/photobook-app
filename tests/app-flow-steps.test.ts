@@ -63,7 +63,7 @@ describe("flow steps", () => {
     expect(bookFlowStep(base)).toBe("photos");
     expect(bookFlowStep({ ...base, photo_count: 12 })).toBe("build");
     expect(bookFlowStep({ ...base, photo_count: 12, ai_status: "planning" })).toBe("build");
-    expect(bookFlowStep({ ...base, photo_count: 12, page_count: 10, ai_status: "done" })).toBe("review");
+    expect(bookFlowStep({ ...base, photo_count: 12, page_count: 10, ai_status: "done" })).toBe("edit");
     expect(bookFlowStep({ ...base, photo_count: 12, page_count: 10, ai_status: "done", user_edited: true })).toBe("edit");
     expect(bookFlowStep({ ...base, photo_count: 12, page_count: 10, ai_status: "done", user_edited: true, published: true })).toBe("share");
     expect(bookFlowStep({ ...base, photo_count: 12, page_count: 10, published: true })).toBe("share");
@@ -81,7 +81,7 @@ describe("flow steps", () => {
       for (const photo_count of [0, 5])
         for (const ai_status of [null, "idle", "analyzing", "done", "failed"])
           for (const user_edited of [false, true]) states.push({ page_count, photo_count, ai_status, user_edited, published: false });
-    const cardToFlow = { upload: "photos", build: "build", review: "review", edit: "edit" } as const;
+    const cardToFlow = { upload: "photos", build: "build", edit: "edit" } as const;
     for (const s of states) expect(bookFlowStep(s)).toBe(cardToFlow[bookCardStep(s)]);
   });
 });

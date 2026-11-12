@@ -119,7 +119,7 @@ export function SpreadPreviewSheet({ onClose, returnFocus }: { onClose: () => vo
     <>
       <button
         type="button"
-        aria-label="Close spread preview"
+        aria-label="Close two-page preview"
         tabIndex={-1}
         onClick={onClose}
         className="fixed inset-0 z-30 bg-black/40"
@@ -128,7 +128,7 @@ export function SpreadPreviewSheet({ onClose, returnFocus }: { onClose: () => vo
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Spread preview"
+        aria-label="Two-page preview"
         className="fixed inset-x-0 bottom-0 z-40 flex max-h-[85dvh] flex-col rounded-t-2xl border-t bg-background pb-[env(safe-area-inset-bottom)] shadow-xl"
         data-testid="spread-preview"
       >
@@ -176,7 +176,7 @@ export function SpreadPreviewSheet({ onClose, returnFocus }: { onClose: () => vo
             type="button"
             onClick={() => go(-1)}
             disabled={shown <= 0}
-            aria-label="Previous spread"
+            aria-label="Previous pages"
             className="flex size-11 items-center justify-center rounded-full disabled:opacity-30"
             data-testid="spread-preview-prev"
           >
@@ -189,7 +189,7 @@ export function SpreadPreviewSheet({ onClose, returnFocus }: { onClose: () => vo
             type="button"
             onClick={() => go(1)}
             disabled={shown >= spreads.length - 1}
-            aria-label="Next spread"
+            aria-label="Next pages"
             className="flex size-11 items-center justify-center rounded-full disabled:opacity-30"
             data-testid="spread-preview-next"
           >

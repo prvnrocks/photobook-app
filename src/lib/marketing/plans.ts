@@ -33,7 +33,7 @@ export function plans(): Plan[] {
       features: [
         { key: "pages", text: `Up to ${f.maxPages} pages`, included: true },
         { key: "ai_photos", text: `AI picks from up to ${f.maxAnalyzedPhotos} photos`, included: true },
-        { key: "rebuilds", text: `${f.maxRebuilds} AI rebuilds, ${f.maxCaptionRewrites} caption rewrites`, included: true },
+        { key: "rebuilds", text: `${f.maxRebuilds} AI redos, ${f.maxCaptionRewrites} caption rewrites`, included: true },
         { key: "link", text: `Share link lasts ${FREE_LINK_DAYS} days`, included: true },
         { key: "watermark", text: "Small watermark on pages", included: false },
         { key: "pdf", text: "No PDF download", included: false },
@@ -47,7 +47,7 @@ export function plans(): Plan[] {
       features: [
         { key: "pages", text: `Up to ${p.maxPages} pages`, included: true },
         { key: "ai_photos", text: `AI picks from up to ${p.maxAnalyzedPhotos} photos`, included: true },
-        { key: "rebuilds", text: `${p.maxRebuilds} AI rebuilds, ${p.maxCaptionRewrites} caption rewrites`, included: true },
+        { key: "rebuilds", text: `${p.maxRebuilds} AI redos, ${p.maxCaptionRewrites} caption rewrites`, included: true },
         { key: "link", text: "Permanent share link", included: true },
         { key: "watermark", text: "No watermark", included: true },
         { key: "pdf", text: "Print-quality PDF download", included: true },

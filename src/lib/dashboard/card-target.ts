@@ -5,10 +5,8 @@
 //    (its progress screen resumes the run) — same as the editor's own redirect.
 // 2. No album yet (page_count 0): no upload-finished photos → upload; photos → build
 //    (= the upload page's "Continue" and editorRedirect in src/lib/editor/page-data.ts).
-// 3. Album built and edited by the user (editor save sets doc.meta.userEdited) → editor.
-// 4. Album built, never edited → review, so the keep/drop step isn't skipped. Review "Continue"
-//    then opens the editor. There is no persisted "confirmed" marker, so a book confirmed on review
-//    but not yet edited still opens review (one tap to the editor).
+// 3. Book built (AI or rule album, edited or not) → editor (M13, D-070: build goes straight to the
+//    editor; review stays reachable from the editor's "AI kept X of Y" chip).
 
 export const RUNNING_AI_STATUSES = ["analyzing", "planning", "captioning"] as const;
 
@@ -18,16 +16,16 @@ export interface BookCardState {
   /** Upload-finished photos (upload_state = 'ready'). */
   photo_count: number;
   ai_status: string | null;
-  /** doc.meta.userEdited === true. */
+  /** doc.meta.userEdited === true (no longer changes the card target since M13 / D-070). */
   user_edited: boolean;
 }
 
-export type BookCardStep = "upload" | "build" | "review" | "edit";
+export type BookCardStep = "upload" | "build" | "edit";
 
 export function bookCardStep(b: Omit<BookCardState, "id">): BookCardStep {
   if ((RUNNING_AI_STATUSES as readonly string[]).includes(b.ai_status ?? "")) return "build";
   if (!(b.page_count > 0)) return b.photo_count > 0 ? "build" : "upload";
-  return b.user_edited ? "edit" : "review";
+  return "edit";
 }
 
 export function bookCardHref(b: BookCardState): string {

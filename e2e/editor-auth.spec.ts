@@ -215,9 +215,9 @@ test("a. build an album (replay) → review → Continue opens the editor at 375
   // M13 T7: the build hands over to the editor (review is reached from the "AI kept X of Y" chip).
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/edit$/, { timeout: 420_000 });
 
-  // Dashboard: a built, never-edited book opens review.
+  // Dashboard: a built book opens the editor even before any edit (M13, D-070).
   await page.goto("/dashboard");
-  await expect(page.getByTestId("book-card")).toHaveAttribute("href", `/books/${bookId}/review`);
+  await expect(page.getByTestId("book-card")).toHaveAttribute("href", `/books/${bookId}/edit`);
 
   await page.goto(`/books/${bookId}/review`);
   await page.getByTestId("review-continue").click();
@@ -340,7 +340,7 @@ test("c. after 0900: save 200 + rev bump + persisted; 409 stale; 422 page_limit;
   // scope "local": the default "global" sign-out would also end the browser session.
   await anon.auth.signOut({ scope: "local" }).catch(() => {});
 
-  // Edited book → dashboard card opens the editor.
+  // Edited book → dashboard card still opens the editor.
   await page.goto("/dashboard");
   await expect(page.getByTestId("book-card")).toHaveAttribute("href", `/books/${bookId}/edit`);
 });

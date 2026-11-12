@@ -74,7 +74,7 @@ export function UploadSummary({ bookId, summary, finalize, onAddMore, next }: Up
             ) : null}
             {finalize.pages > 0 ? (
               <li data-testid="summary-pages">
-                {plural(finalize.pages, "page")} in your draft album
+                {plural(finalize.pages, "page")} in your draft book
               </li>
             ) : null}
           </ul>

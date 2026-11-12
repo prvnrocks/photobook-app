@@ -27,7 +27,6 @@ vi.mock("@/lib/auth/current-user", async () => {
 const books = await import("@/app/books/actions");
 const settings = await import("@/app/settings/actions");
 const review = await import("@/app/books/[id]/review/actions");
-const edit = await import("@/app/books/[id]/edit/actions");
 const publish = await import("@/app/books/[id]/publish/actions");
 const upgrade = await import("@/app/books/[id]/upgrade/actions");
 const { SupabaseUnavailableError } = await import("@/lib/supabase/deadline");
@@ -58,12 +57,12 @@ describe("server actions on an Auth timeout → generic error", () => {
     expect(await settings.deleteAccountAction("DELETE")).toEqual({ ok: false, error: "failed" });
   });
 
-  it("review / edit / publish / upgrade", async () => {
+  it("review / share / publish / upgrade", async () => {
     const toggled = await review.togglePhotoAction(BOOK, PHOTO, true);
     expect(toggled.ok).toBe(false);
     expect((toggled as { error: string }).error).not.toMatch(/sign in/i);
     expect(await review.updateAlbumAction(BOOK)).toEqual({ ok: false, error: "failed" });
-    expect(await edit.finishEditingAction(BOOK)).toEqual({ ok: false, error: "failed" });
+    expect(await publish.shareBookAction(BOOK)).toEqual({ ok: false, error: "failed" });
     expect(await publish.getPublishState(BOOK)).toEqual({ ok: false, error: "failed" });
     expect(await upgrade.startUpgradeCheckout(BOOK)).toEqual({ error: "failed" });
     expect(await upgrade.getUpgradeStatus(BOOK)).toEqual({ error: "failed" });
@@ -78,6 +77,6 @@ describe("server actions on an Auth timeout → generic error", () => {
     auth.fail = false;
     expect(await settings.clearMemoryAction()).toEqual({ ok: false, error: "signed_out" });
     expect(await books.deleteBookAction(BOOK)).toEqual({ ok: false, error: "unauthenticated" });
-    expect(await edit.finishEditingAction(BOOK)).toEqual({ ok: false, error: "signed_out" });
+    expect(await publish.shareBookAction(BOOK)).toEqual({ ok: false, error: "signed_out" });
   });
 });

@@ -39,10 +39,10 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
     // docError 'invalid': the stored album doesn't parse. Never show a half-broken editor.
     return (
       <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-4 px-4 py-10" data-testid="editor-invalid">
-        <h1 className="text-2xl font-semibold">We can&apos;t open this album</h1>
+        <h1 className="text-2xl font-semibold">We can&apos;t open this book</h1>
         <p className="text-base text-muted-foreground">
-          Something in this album&apos;s data doesn&apos;t look right, so the editor can&apos;t open it safely. Your photos
-          are fine. You can go back to your photos and rebuild the album.
+          Something in this book&apos;s data doesn&apos;t look right, so the editor can&apos;t open it safely. Your photos
+          are fine. You can go back to your photos and make the book again.
         </p>
         <div className="flex flex-wrap gap-2">
           <Link href={`/books/${data.book.id}/review`} className={cn(buttonVariants({ variant: "default" }), "h-11 px-4 text-base")}>

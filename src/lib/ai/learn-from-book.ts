@@ -1,6 +1,6 @@
 import "server-only";
 // Memory Keeper trigger (D-032): best-effort "learn from this book" used by review Continue and
-// the M5 editor Done (later also M6 publish). Code only — no model call.
+// the editor Share / publish (M13 T9: shareBookAction, publishBookAction). Code only — no model call.
 //
 // Reads the SAVED book server-side with the admin client (never a client-supplied doc), checks the
 // row still belongs to `userId` (resolved by the caller from the session), derives the update with

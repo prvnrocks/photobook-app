@@ -65,10 +65,10 @@ const POLL_MS = 4_000;
 const LIVE_THROTTLE_MS = 2_000;
 
 const ERROR_COPY: Record<StopError, string> = {
-  signed_out: "You've been signed out. Sign in again to finish building your album.",
-  not_found: "We couldn't find this album build. It may have been removed.",
+  signed_out: "You've been signed out. Sign in again to finish making your book.",
+  not_found: "We couldn't find this book. It may have been removed.",
   unavailable:
-    "We lost the connection while building your album. Your photos are safe — try again to pick up where we left off.",
+    "We lost the connection while making your book. Your photos are safe — try again to pick up where we left off.",
   server_unavailable:
     "Our server is taking longer than usual to respond. Your photos are safe — try again to pick up where we left off.",
   run_failed: "We couldn't finish with AI. Your photos are safe — open your book to continue.",
@@ -282,7 +282,7 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap, 
       <div data-testid="build-user-edited">
         <Notice
           tone="info"
-          title="You've edited this album, so we won't replace it."
+          title="You've edited this book, so we won't replace it."
           action={
             <Link href={editorHref} className={cn(buttonVariants({ size: "cta" }))} data-testid="build-to-editor">
               Back to your book
@@ -358,7 +358,7 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap, 
     >
       <div className="flex min-w-0 flex-col gap-1">
         <p id="build-stage" className="type-h2 break-words text-foreground" data-testid="build-stage">
-          {leaving ? "Your album is ready" : copy.text}
+          {leaving ? "Your book is ready" : copy.text}
         </p>
         {copy.detail && !leaving ? (
           <p className="type-small text-muted-foreground" data-testid="build-capped">
@@ -368,7 +368,7 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap, 
       </div>
       <div
         role="progressbar"
-        aria-label="Building your album"
+        aria-label="Making your book"
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={percent}

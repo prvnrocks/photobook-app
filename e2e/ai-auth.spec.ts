@@ -72,7 +72,7 @@ const PLANT_URL = process.env.E2E_PLANT_URL ?? "";
 const CRITIC_REFUSAL_URL = process.env.E2E_CRITIC_REFUSAL_URL ?? "";
 const FIXED_UID = process.env.E2E_USER_ID ?? "";
 const IS_ADMIN = process.env.E2E_ADMIN === "1" && !!FIXED_UID;
-const USER_EDITED_MSG = "You've edited this album, so we won't rebuild it over your changes.";
+const USER_EDITED_MSG = "You've edited this book, so we won't redo it over your changes.";
 const EDITED_TITLE = "You've edited this album — continue in the editor"; // EDITED_ALBUM_COPY.title
 
 type FileSpec = { name: string; mimeType: string; buffer: Buffer };
@@ -1189,7 +1189,7 @@ test("m. Memory Keeper: ≥ 3 short user captions → review → Continue in the
   expect(metaOf((await bookRow(bookA)).doc).userEdited).toBe(false);
 
   // D-037 #2: user captions → review offers only "Continue in the editor"; the Memory Keeper
-  // learns on editor Done (finishEditingAction, D-032) — review Continue is not shown.
+  // learns on editor Share (shareBookAction / publish, D-032) — review Continue is not shown.
   await page.goto(`/books/${bookA}/review`);
   await expectEditedReview();
   await page.getByTestId("review-open-editor").click();
@@ -1563,14 +1563,14 @@ test("e. AI off: Build my album → straight to review, rule album, ai_off banne
   expect(limited.body).toMatchObject({ error: "limit", limit: "rate" });
   await page.waitForTimeout(11_000);
   // "Rebuild album" in off mode re-runs the rules in place.
-  await expect(page.getByTestId("rebuild-button")).toHaveText("Rebuild album");
+  await expect(page.getByTestId("rebuild-button")).toHaveText("Make the book again");
   await page.getByTestId("rebuild-button").click();
-  await expect(page.getByTestId("rebuild-button")).toHaveText("Rebuilding…");
+  await expect(page.getByTestId("rebuild-button")).toHaveText("Making…");
   await expect(page.getByTestId("rebuild-button")).toBeDisabled();
   // fix-ai-off-rebuild: the refresh under review/loading.tsx used to stay pending forever (lost React
   // ping) → "Rebuilding…" never cleared. Now the refresh commits: done line, button usable again.
   await expect(page.getByTestId("rebuild-done")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId("rebuild-button")).toHaveText("Rebuild album");
+  await expect(page.getByTestId("rebuild-button")).toHaveText("Make the book again");
   await expect(page.getByTestId("rebuild-button")).toBeEnabled();
   await expect(page.getByTestId("rebuild-error")).toHaveCount(0);
   expect(new URL(page.url()).pathname).toBe(`/books/${bookC}/review`);
