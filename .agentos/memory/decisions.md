@@ -225,3 +225,7 @@ Decision: New book form offers Modern (default for every occasion via DEFAULT_ST
 - Decision: (1) D-063 amended: page shape and style are editable on the setup card until the first AI build starts (no run yet, album not user-edited), then fixed. (2) The first AI build starts automatically when the first upload settles (≥5 ready photos, no prior run, normal caps D-021/026/035/059; never an automatic rebuild). (3) Build goes straight to the editor; review is reached from an "AI kept X of Y" chip (AI choices stay visible + editable, D-031/D-037 logic unchanged). (4) Editor "Share" publishes + opens the share screen (30-day free notice on the button); WhatsApp stays a separate tap. (5) Guest mode deferred to M13b after measuring login drop-off.
 - Why: user asked for the easiest flow vs competitors; chose all recommended options 2026-11-12.
 - Alternatives rejected: style-first screen; review before editor; Done then Publish; guest mode now.
+
+## D-070a — setup details also lock on user-edited albums (2026-11-12)
+- Decision: occasion, feel, caption language and title (not only shape/style) lock once the album is user-edited or an AI run exists, so a user's cover title always wins (D-037 #7). Residual race (run created between the last run check and the setup UPDATE) documented; closing it needs an atomic RPC in a future migration.
+- Why: M13 review NIT; avoids books.title drifting from a user-edited cover.
