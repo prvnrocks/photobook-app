@@ -88,7 +88,7 @@ describe("coach line storage", () => {
     const html = renderToStaticMarkup(<EditorShell data={devEditorData("ok")} transport={devTransport("ok")} />);
     expect(html).not.toContain('data-testid="editor-coach"');
     // Serif editor title keeps dir="auto".
-    expect(html).toMatch(/<h1 dir="auto" class="[^"]*font-display[^"]*" data-testid="editor-title"/);
+    expect(html).toMatch(/<h1 class="[^"]*font-display[^"]*" data-testid="editor-title"><span dir="auto">/);
   });
 });
 

@@ -285,7 +285,7 @@ export function SetupCard({ controller: c, suggestedFormat, aiOn = true }: Setup
         </fieldset>
       </div>
 
-      <p id={ids.status} aria-live="polite" className="type-small min-h-5 text-muted-foreground" data-testid="setup-status">
+      <p id={ids.status} aria-live="polite" className="type-small min-h-5 text-muted-foreground empty:-mt-4 empty:min-h-0" data-testid="setup-status">
         {lockReason ? (
           <span data-testid="setup-locked">{LOCK_COPY[lockReason]}</span>
         ) : status.kind === "saving" ? (

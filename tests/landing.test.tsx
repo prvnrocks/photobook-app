@@ -30,6 +30,8 @@ describe("landing hero", () => {
   it("headline is the HERO_CLAIM constant and uses the free AI photo limit", () => {
     expect(HERO_CLAIM).toContain(String(LIMITS.free.maxAnalyzedPhotos));
     expect(HERO_CLAIM).toContain(BUILD_TIME_CLAIM);
+    expect(HERO_CLAIM).toContain("AI builds your book");
+    expect(HERO_CLAIM).not.toContain("album");
     expect(html).toContain(esc(HERO_CLAIM));
   });
 

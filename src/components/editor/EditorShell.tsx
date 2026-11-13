@@ -200,8 +200,10 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
             <ArrowLeft className="size-5" aria-hidden="true" />
           </Link>
           <div className="flex min-w-0 flex-1 flex-col leading-tight">
-            <h1 dir="auto" className="truncate font-display text-base font-semibold" data-testid="editor-title">
-              {title}
+            {/* Block stays start-aligned for every script (status line under it); only the text
+                gets dir="auto", so an Arabic title reads RTL without jumping to the far side. */}
+            <h1 className="truncate text-start font-display text-base font-semibold" data-testid="editor-title">
+              <span dir="auto">{title}</span>
             </h1>
             {/* Unpublished edits show on the Share button ("Publish changes", M13 T9). */}
             <SaveStatus status={autosave.status} />

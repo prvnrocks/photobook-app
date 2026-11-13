@@ -43,7 +43,7 @@ describe("EditorShell render smoke", () => {
     const captions = html.match(/<span[^>]*data-testid="page-caption"[^>]*>/g) ?? [];
     expect(captions.length).toBeGreaterThan(0);
     for (const c of captions) expect(c).toContain('dir="auto"');
-    expect(html).toMatch(/<h1 dir="auto"[^>]*data-testid="editor-title"/);
+    expect(html).toMatch(/<h1 [^>]*data-testid="editor-title"><span dir="auto">/);
   });
 
   it("read-only: banner, no tap targets, static captions", () => {

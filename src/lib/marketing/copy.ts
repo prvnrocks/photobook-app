@@ -11,7 +11,7 @@ import { LIMITS } from "@/lib/ai/limits";
 export const BUILD_TIME_CLAIM = "in about a minute";
 
 /** Hero headline — the one claim we make about speed and size (approved in M9 plan). */
-export const HERO_CLAIM = `Upload up to ${LIMITS.free.maxAnalyzedPhotos} photos → AI builds your album ${BUILD_TIME_CLAIM}`;
+export const HERO_CLAIM = `Upload up to ${LIMITS.free.maxAnalyzedPhotos} photos → AI builds your book ${BUILD_TIME_CLAIM}`;
 
 export const HERO_SUBCOPY =
   "Share it as a flipbook link that opens on any phone — perfect for WhatsApp — and download a print-quality PDF when you upgrade.";
@@ -33,7 +33,7 @@ export const HOW_IT_WORKS = [
     text: "Pick them straight from your phone. We skip screenshots, blurry shots and duplicates for you.",
   },
   {
-    title: "AI builds the album",
+    title: "AI builds the book",
     text: "Photos are grouped into moments by date and place, laid out on pages and given short captions. You can change everything.",
   },
   {
@@ -49,7 +49,7 @@ export const HERO_SAMPLE_CAPTION_AR = "أجمل الذكريات تبدأ بصو
 /** SEO title + description for "/". */
 export const LANDING_TITLE = "AI photobooks you share as a link";
 export const LANDING_DESCRIPTION =
-  "Upload your photos, AI builds the album and writes the captions (English or Arabic), and you share it as a flipbook link on WhatsApp. Made in Abu Dhabi.";
+  "Upload your photos, AI builds the book and writes the captions (English or Arabic), and you share it as a flipbook link on WhatsApp. Made in Abu Dhabi.";
 
 /**
  * Text drawn on the static OG card. ASCII only: next/og's bundled font covers basic Latin, and any

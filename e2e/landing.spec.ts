@@ -10,7 +10,7 @@ test.describe("landing page at 375px", () => {
   test("renders hero, CTA and all sections", async ({ page }) => {
     await expect(page).toHaveTitle(/^Photobook — /);
     await expect(page.getByTestId("hero-heading")).toBeVisible();
-    await expect(page.getByTestId("hero-heading")).toContainText("AI builds your album");
+    await expect(page.getByTestId("hero-heading")).toContainText("AI builds your book");
     const cta = page.getByTestId("cta-create");
     await expect(cta).toBeVisible();
     await expect(cta).toHaveText("Make your book");
