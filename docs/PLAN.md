@@ -207,14 +207,15 @@ Plan: `.agentos/runs/m12.md`, D-069.
 
 ## Milestone 13 — Easiest flow (photos to shared book in 3 taps)
 Plan: `.agentos/runs/m13.md`, D-070.
-- [ ] Photos first: "Make your book" / "New book" opens the photo picker; the draft book is created with smart defaults
-- [ ] One setup card while uploading (occasion chips; feel, language, shape and style under "Change", prefilled from occasion, device and photos)
-- [ ] AI build starts by itself after the first upload; the build screen shows the draft book while AI polishes
-- [ ] Build goes straight to the editor; "AI kept X of Y" chip opens the left-out photos
-- [ ] Simple editor: at most 3 big tools per selection plus "More"; plain words instead of jargon
-- [ ] "Share" = publish + share screen (WhatsApp first, upgrade and PDF on the same screen); 3-step progress bar
-- [ ] e2e/m13-first-run.spec.ts + usability sign-off (screenshots in docs/design/m13-after-*)
+- [x] Photos first: "Make your book" / "New book" opens the photo picker; the draft book is created with smart defaults
+- [x] One setup card while uploading (occasion chips; feel, language, shape and style under "Change", prefilled from occasion, device and photos)
+- [x] AI build starts by itself after the first upload; the build screen shows the draft book while AI polishes
+- [x] Build goes straight to the editor; "AI kept X of Y" chip opens the left-out photos
+- [x] Simple editor: at most 3 big tools per selection plus "More"; plain words instead of jargon
+- [x] "Share" = publish + share screen (WhatsApp first, upgrade and PDF on the same screen); 3-step progress bar
+- [x] e2e/m13-first-run.spec.ts + usability sign-off (screenshots in docs/design/m13-after-*)
 **Done when:** at 375 px a first-time user (40 photos, AI replay) needs at most 3 app taps after choosing photos to reach the WhatsApp share, the first preview shows in under 60 s, all analytics events fire, all specs and goldens are green, the user signs off the walkthrough, and the reviewer approves.
+> M13 (2026-11-13): built, reviewed APPROVED (fixes applied), gate PASS: 7221 vitest, goldens unchanged, e2e/m13-first-run (2 taps after photos vs 5; first preview ~36 s vs ~75 s; WhatsApp ~61 s vs ~80 s), all live specs green (upload-auth Mapbox only). User signed off the walkthrough. Deployed 2026-11-13. No migration. Open: guest mode (M13b) after measuring login drop-off; Arabic default cover title for untitled Arabic books.
 
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)

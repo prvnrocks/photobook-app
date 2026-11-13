@@ -176,3 +176,8 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 
 ## 2026-11-12 — Refresh-hang fix — deployed
 - React canary drops a ping when router.refresh streams into a visible loading.tsx boundary → transitions never commit (AI-off Rebuild stuck, silent hangs elsewhere). useRefreshTransition everywhere; guard test. 54 orphan test runs deleted with user OK.
+
+## 2026-11-13 — Milestone 13 (Easiest flow) — done + deployed
+- Photos first (/books/start, dashboard picker), setup card while uploading (occasion chips + Change; smart defaults from locale/photos/occasion; shape/style lock at first AI run — D-070/D-070a), automatic first AI build, build screen previews the draft then opens the editor, "AI kept X of Y photos" chip + More → See all photos / Redo with AI, "Make it with AI" for books without a build, simple editor (≤3 tools + More, plain words), Share = publish + share screen (truthful free-link days), 3-step bar, one book name everywhere.
+- Gate: 2 taps after photos (was 5), first preview ~36 s (was ~75 s), WhatsApp ~61 s (was ~80 s); analytics once each; Arabic + setup variants; all live specs green. User signed off; deployed.
+- NEXT: phone check (iPhone from WhatsApp, low-end Android); measure login drop-off → decide guest mode (M13b).
