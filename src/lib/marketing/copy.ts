@@ -57,8 +57,12 @@ export const LANDING_DESCRIPTION =
   "Upload your photos, AI builds the book and writes the captions (English or Arabic), and you share it as a flipbook link on WhatsApp. Made in Abu Dhabi.";
 
 /**
- * Text drawn on the static OG card. ASCII only: next/og's bundled font covers basic Latin, and any
- * other glyph would make it fetch fonts from Google at request time (tests/landing.test.tsx).
+ * Text drawn on the static OG card (M16 emerald & gold). Basic Latin + Latin-1 only (the "·" is
+ * U+00B7): next/og's bundled Noto Sans latin subset covers those, and any other glyph would make it
+ * fetch fonts from Google at request time (tests/landing.test.tsx).
  */
-export const OG_HEADLINE = "Your photos, an AI-built album, one link to share";
-export const OG_SUBLINE = "Flipbook link + PDF. Made in Abu Dhabi.";
+export const OG_EYEBROW = "AI PHOTOBOOKS · ABU DHABI";
+export const OG_HEADLINE_LEAD = "Your memories,";
+export const OG_HEADLINE_ACCENT = "in print.";
+export const OG_HEADLINE = `${OG_HEADLINE_LEAD} ${OG_HEADLINE_ACCENT}`;
+export const OG_SUBLINE = "AI builds the book. Share it as one link.";

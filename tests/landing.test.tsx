@@ -21,7 +21,10 @@ import {
   HERO_TAG_LINE,
   HERO_TAG_TITLE_AR,
   MARQUEE_ITEMS,
+  OG_EYEBROW,
   OG_HEADLINE,
+  OG_HEADLINE_ACCENT,
+  OG_HEADLINE_LEAD,
   OG_SUBLINE,
   SECTION_LABELS,
 } from "@/lib/marketing/copy";
@@ -239,8 +242,12 @@ describe("SEO", () => {
     expect(JSON.stringify(metadata.title)).toContain("Photobook");
   });
 
-  it("OG card text is ASCII only (no runtime font fetch)", () => {
-    expect(OG_HEADLINE + OG_SUBLINE).toMatch(/^[\x20-\x7E]+$/);
+  it("OG card text stays in the bundled Latin font (no runtime font fetch)", () => {
+    // Basic Latin + Latin-1 (U+00A0-U+00FF) = the Noto Sans latin subset next/og bundles.
+    expect(OG_EYEBROW + OG_HEADLINE + OG_SUBLINE).toMatch(/^[\x20-\x7E\u00A0-\u00FF]+$/);
+    expect(OG_EYEBROW).toBe("AI PHOTOBOOKS \u00B7 ABU DHABI");
+    expect(OG_HEADLINE).toBe(`${OG_HEADLINE_LEAD} ${OG_HEADLINE_ACCENT}`);
+    expect(OG_HEADLINE).toBe("Your memories, in print.");
   });
 
   it("sitemap lists only /, /privacy, /terms — never /b/", () => {

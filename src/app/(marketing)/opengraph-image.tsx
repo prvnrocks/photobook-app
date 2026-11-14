@@ -1,14 +1,42 @@
-// Static brand card for "/", /privacy and /terms link previews. No external fetches: ASCII text in
-// next/og's bundled font, shapes drawn with CSS (see OG_HEADLINE in src/lib/marketing/copy.ts).
+// Static brand card for "/", /privacy and /terms link previews (M16 emerald & gold, mirrors the home
+// hero): deep emerald field framed by two gold foil rules, pale-gold small caps, cream + gold headline
+// and the hero book on the right. Text uses next/og's bundled font only (Latin subset — see OG_* in
+// src/lib/marketing/copy.ts); the book PNG is read from /public and inlined as a data URL. No dynamic
+// APIs, so Next prerenders this at build time (process.cwd() = project root).
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { ImageResponse } from "next/og";
 import { APP_NAME } from "@/lib/brand";
-import { OG_HEADLINE, OG_SUBLINE } from "@/lib/marketing/copy";
+import { OG_EYEBROW, OG_HEADLINE, OG_HEADLINE_ACCENT, OG_HEADLINE_LEAD, OG_SUBLINE } from "@/lib/marketing/copy";
+import { HERO_BOOK } from "@/lib/marketing/hero";
 
 export const alt = `${APP_NAME} — ${OG_HEADLINE}`;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-export default function OpengraphImage() {
+const EMERALD = "#0e3b2e";
+const GOLD = "#c9a227";
+const PALE_GOLD = "#e3c766";
+const CREAM = "#f2e8d8";
+
+const BOOK_H = 430;
+const BOOK_W = Math.round((BOOK_H * HERO_BOOK.w) / HERO_BOOK.h);
+
+async function loadBook(): Promise<string | null> {
+  try {
+    const png = await readFile(join(process.cwd(), "public", HERO_BOOK.src));
+    return `data:image/png;base64,${png.toString("base64")}`;
+  } catch {
+    return null; // card still renders, text-only
+  }
+}
+
+function Rule({ left }: { left: number }) {
+  return <div style={{ display: "flex", position: "absolute", top: 0, bottom: 0, left, width: 2, background: GOLD }} />;
+}
+
+export default async function OpengraphImage() {
+  const book = await loadBook();
   return new ImageResponse(
     (
       <div
@@ -16,59 +44,29 @@ export default function OpengraphImage() {
           width: "100%",
           height: "100%",
           display: "flex",
+          position: "relative",
           alignItems: "center",
-          gap: 64,
-          padding: "0 80px",
-          background: "linear-gradient(135deg, #fff7ed 0%, #fde68a 55%, #fb923c 100%)",
-          color: "#1c1917",
+          padding: "0 100px 0 108px",
+          background: `radial-gradient(circle at 70% 40%, #155040 0%, ${EMERALD} 60%)`,
+          color: CREAM,
         }}
       >
-        <div style={{ display: "flex", position: "relative", width: 300, height: 420, flexShrink: 0 }}>
-          <div
-            style={{
-              display: "flex",
-              position: "absolute",
-              left: 36,
-              top: 0,
-              width: 264,
-              height: 374,
-              borderRadius: 16,
-              background: "linear-gradient(135deg, #bae6fd, #0ea5e9)",
-              transform: "rotate(6deg)",
-            }}
-          />
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              position: "absolute",
-              left: 0,
-              top: 30,
-              width: 264,
-              height: 374,
-              padding: 18,
-              borderRadius: 16,
-              background: "#ffffff",
-              boxShadow: "0 20px 40px rgba(0,0,0,0.18)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                flex: 1,
-                borderRadius: 8,
-                background: "linear-gradient(135deg, #fde68a, #fb7185)",
-              }}
-            />
-            <div style={{ display: "flex", marginTop: 14, height: 10, width: "80%", borderRadius: 5, background: "#d6d3d1" }} />
-            <div style={{ display: "flex", marginTop: 8, height: 10, width: "55%", borderRadius: 5, background: "#e7e5e4" }} />
-          </div>
-        </div>
+        <Rule left={56} />
+        <Rule left={1142} />
         <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-          <div style={{ display: "flex", fontSize: 40, fontWeight: 700, letterSpacing: 1, color: "#9a3412" }}>{APP_NAME}</div>
-          <div style={{ display: "flex", marginTop: 20, fontSize: 60, fontWeight: 700, lineHeight: 1.1 }}>{OG_HEADLINE}</div>
-          <div style={{ display: "flex", marginTop: 28, fontSize: 30, color: "#44403c" }}>{OG_SUBLINE}</div>
+          <div style={{ display: "flex", fontSize: 24, fontWeight: 700, letterSpacing: 6, color: PALE_GOLD }}>
+            {OG_EYEBROW}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", marginTop: 28, fontSize: 76, fontWeight: 700, lineHeight: 1.05 }}>
+            <div style={{ display: "flex", color: CREAM, whiteSpace: "nowrap" }}>{OG_HEADLINE_LEAD}</div>
+            <div style={{ display: "flex", color: GOLD }}>{OG_HEADLINE_ACCENT}</div>
+          </div>
+          <div style={{ display: "flex", marginTop: 30, width: 72, height: 2, background: GOLD }} />
+          <div style={{ display: "flex", marginTop: 26, fontSize: 30, color: CREAM, opacity: 0.88 }}>{OG_SUBLINE}</div>
         </div>
+        {book ? (
+          <img src={book} width={BOOK_W} height={BOOK_H} alt="" style={{ flexShrink: 0, marginLeft: 24 }} />
+        ) : null}
       </div>
     ),
     size,
