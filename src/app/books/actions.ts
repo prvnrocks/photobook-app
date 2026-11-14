@@ -26,8 +26,6 @@ import {
   type BookSetup,
   type BookSetupField,
   type BookSetupPatch,
-  type StartBookInput,
-  type StartBookResult,
   type UpdateBookSetupResult,
 } from "@/lib/book/setup";
 import { deleteBookCompletely } from "@/lib/cleanup/delete-book";
@@ -70,8 +68,13 @@ const NewBookSchema = z.object({
       error: `Title must be ${TITLE_MAX_CHARS} characters or fewer.`,
     }),
   occasion: z.enum(OCCASIONS, { error: "Please choose an occasion." }),
-  tone: z.enum(TONES, { error: "Please choose a tone." }),
-  captionLang: z.enum(CAPTION_LANGS, { error: "Please choose a caption language." }),
+  // M19 (D-071): the wizard doesn't ask for tone / caption language. Absent → worked out here
+  // (remembered value, D-032, else occasion default / Accept-Language); any value sent is validated.
+  tone: z.preprocess(absentToUndefined, z.enum(TONES, { error: "Please choose a tone." }).optional()),
+  captionLang: z.preprocess(
+    absentToUndefined,
+    z.enum(CAPTION_LANGS, { error: "Please choose a caption language." }).optional(),
+  ),
   // D-063: fixed at creation. Absent (a form rendered before M10b) → portrait / the occasion's
   // default style (D-068); any value sent must be in the enum and one the form offers (all four
   // since M10c).
@@ -95,10 +98,12 @@ function absentToUndefined(v: unknown): unknown {
 const FIELDS: readonly NewBookField[] = ["title", "occasion", "tone", "captionLang", "format", "designStyle"];
 
 /**
- * Creates a book. Form fields: `title` (optional), `occasion`, `tone`,
- * `captionLang`, `format` + `designStyle` (D-063, fixed at creation; absent → portrait / the
- * occasion's default style, D-068). On success
- * redirects to /books/<id>/upload (never returns); signed out → /login?next=/books/new.
+ * Creates a book. Form fields: `title` (optional), `occasion`, `tone` + `captionLang` (optional
+ * since M19 / D-071: absent → remembered tone / language (D-032, best effort) else
+ * DEFAULT_TONE[occasion] / the request's Accept-Language ("ar" first → "ar", else "en")),
+ * `format` + `designStyle` (D-063, fixed at creation; absent → portrait / the occasion's default
+ * style, D-068). On success redirects to /books/<id>/upload (never returns); signed out →
+ * /login?next=/books/new.
  */
 export async function createBookAction(
   _prevState: NewBookFormState,
@@ -127,34 +132,35 @@ export async function createBookAction(
     return { ok: false, error: MSG_FIX_FIELDS, fieldErrors };
   }
 
+  const { format, designStyle, tone, captionLang, title, occasion } = parsed.data;
+  // Only read memory / headers when something must be worked out (memory read is best effort).
+  const needsDefaults = tone === undefined || captionLang === undefined;
+  const [memory, acceptLanguage] = needsDefaults
+    ? await Promise.all([
+        getOwnMemoryView().catch(() => null),
+        captionLang === undefined ? requestAcceptLanguage() : Promise.resolve(""),
+      ])
+    : [null, ""];
+
   let id: string;
   try {
-    const { format, designStyle, ...rest } = parsed.data;
     ({ id } = await createBook({
-      ...rest,
+      title,
+      occasion,
+      tone: tone ?? toneForOccasion(occasion, memory?.tone),
+      captionLang: captionLang ?? suggestCaptionLang(acceptLanguage, memory?.language),
       format: format ?? DEFAULT_FORM_FORMAT,
-      designStyle: designStyle ?? defaultStyleFor(rest.occasion),
+      designStyle: designStyle ?? defaultStyleFor(occasion),
     }));
   } catch (err) {
     console.error("[books] create failed:", err instanceof Error ? err.message : "unknown");
     return { ok: false, error: MSG_CREATE_FAILED };
   }
 
+  revalidatePath("/dashboard");
   // analytics (M9 T14): one-shot ?_ev=book_created only when PostHog is configured.
   redirect(withAnalyticsFlash(`/books/${id}/upload`, "book_created"));
 }
-
-// ---------------------------------------------------------------------------------------------
-// Photos-first start (M13 T2, D-070)
-
-const StartBookSchema = z
-  .object({
-    format: z.enum(BookFormatSchema.options).optional(),
-  })
-  .strict();
-
-/** The new draft's occasion; the user picks a real one on the setup card. */
-const START_OCCASION: Occasion = "other";
 
 /** Accept-Language of the current request ("" when unavailable). */
 async function requestAcceptLanguage(): Promise<string> {
@@ -163,49 +169,6 @@ async function requestAcceptLanguage(): Promise<string> {
   } catch {
     return "";
   }
-}
-
-/**
- * Creates a draft book with defaults, without asking anything (the start flow is client-driven:
- * the picked files stay in memory, so this RETURNS instead of redirecting):
- *   occasion "other"; tone = remembered tone (D-032) else the occasion default; caption language =
- *   remembered language else the request's Accept-Language (Arabic first → "ar", else "en");
- *   format = `input.format` hint (suggestFormat on the picked photos) else A5 portrait; design
- *   style = DEFAULT_STYLE_BY_OCCASION.other (D-068); title null (the AI suggests one).
- * Analytics parity with createBookAction: `next` is the upload path carrying `?_ev=book_created`
- * when PostHog is configured — the client must navigate to `next` (router.push/replace), and
- * <Analytics> fires book_created on that pathname change. Memory read is best effort.
- */
-export async function startBookAction(input: StartBookInput = {}): Promise<StartBookResult> {
-  const parsed = StartBookSchema.safeParse(input ?? {});
-  if (!parsed.success) return { ok: false, error: "invalid" };
-
-  const user = await getActionUser();
-  if (user === AUTH_UNAVAILABLE) return { ok: false, error: "failed" };
-  if (!user) return { ok: false, error: "unauthenticated" };
-
-  const [memory, acceptLanguage] = await Promise.all([
-    getOwnMemoryView().catch(() => null),
-    requestAcceptLanguage(),
-  ]);
-
-  let id: string;
-  try {
-    ({ id } = await createBook({
-      title: null,
-      occasion: START_OCCASION,
-      tone: toneForOccasion(START_OCCASION, memory?.tone),
-      captionLang: suggestCaptionLang(acceptLanguage, memory?.language),
-      format: parsed.data.format ?? DEFAULT_FORM_FORMAT,
-      designStyle: defaultStyleFor(START_OCCASION),
-    }));
-  } catch (err) {
-    console.error("[books] start failed:", err instanceof Error ? err.message : "unknown");
-    return { ok: false, error: "failed" };
-  }
-
-  revalidatePath("/dashboard");
-  return { ok: true, bookId: id, next: withAnalyticsFlash(`/books/${id}/upload`, "book_created") };
 }
 
 const BookSetupPatchSchema = z

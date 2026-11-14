@@ -1,24 +1,20 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import type { ReactNode } from "react";
 import { PageHeader } from "@/components/app/PageHeader";
 import { AppHeader } from "@/components/layout/AppHeader";
-import { Uploader } from "@/components/upload/Uploader";
+import { Uploader, type UploaderProps } from "@/components/upload/Uploader";
+import { WIZARD_BACK_CLASS } from "@/components/wizard/WizardNav";
+import { WizardHeadline, WizardShell } from "@/components/wizard/WizardShell";
 import { resolveAiMode } from "@/lib/ai/client";
 import { limitsFor } from "@/lib/ai/limits";
 import { getCurrentUser } from "@/lib/auth/current-user";
-import { bookDesignOf } from "@/lib/book/book-design";
 import { displayBookTitle } from "@/lib/book/display-title";
-import {
-  CAPTION_LANGS,
-  DEFAULT_TONE,
-  OCCASION_LABELS,
-  OCCASIONS,
-  TONES,
-  type CaptionLang,
-  type Occasion,
-  type Tone,
-} from "@/lib/book/options";
-import { designLockReason, detailsLockReason, type BookSetup } from "@/lib/book/setup";
+import { OCCASION_LABELS, OCCASIONS, type Occasion } from "@/lib/book/options";
+import { detailsLockReason } from "@/lib/book/setup";
+import { isWizardUpload, wizardBackHref } from "@/lib/books/wizard-routes";
+import { wizardHeadline } from "@/lib/books/wizard-steps";
 import { getActiveRunForBook, hasAnyRunForBook } from "@/lib/db/agent-runs";
 import { getMyBook } from "@/lib/db/books";
 import { listUploadState } from "@/lib/db/photos";
@@ -33,10 +29,6 @@ export const metadata: Metadata = { title: "Add photos" };
 
 function isOccasion(v: string | null): v is Occasion {
   return v !== null && (OCCASIONS as readonly string[]).includes(v);
-}
-
-function pick<T extends string>(v: string | null, values: readonly T[], fallback: T): T {
-  return (values as readonly string[]).includes(v ?? "") ? (v as T) : fallback;
 }
 
 function docHasContent(doc: Json | null): boolean {
@@ -67,22 +59,45 @@ export default async function UploadPage({ params }: { params: Promise<{ id: str
   const pendingCount = existing.length - readyCount;
   const displayName = profile?.name ?? profile?.email ?? user.email ?? null;
 
-  // M13 T6 setup card (D-070): the stored setup + which parts can still change.
-  const occasion = pick<Occasion>(book.occasion, OCCASIONS, "other");
-  const design = bookDesignOf(book);
-  const setup: BookSetup = {
-    occasion,
-    tone: pick<Tone>(book.tone, TONES, DEFAULT_TONE[occasion]),
-    captionLang: pick<CaptionLang>(book.caption_lang, CAPTION_LANGS, "en"),
-    title: book.title,
-    format: design.format,
-    designStyle: design.designStyle,
-  };
-  const locks = {
-    details: detailsLockReason({ hasRun, doc: book.doc }),
-    design: designLockReason({ hasRun, doc: book.doc }),
-  };
   const firstRun: FirstRunState = active ? "active" : hasRun ? "done" : "none";
+  const wizard = isWizardUpload(firstRun, detailsLockReason({ hasRun, doc: book.doc }));
+  const title = displayBookTitle(book.title, book.doc);
+
+  const uploaderProps: UploaderProps = {
+    bookId: book.id,
+    userId: user.id,
+    isPaid: book.is_paid,
+    existing,
+    maxUpload: limitsFor(book.is_paid).maxUploadPhotos,
+    readyCount,
+    pendingCount,
+    hasDoc: docHasContent(book.doc),
+    firstRun,
+    dailyCap: limitsFor(book.is_paid).maxLiveBuildsPerUserPerDay,
+    aiOn: resolveAiMode() !== "off",
+  };
+
+  if (wizard) {
+    // Server-rendered Back (lesson: no next/link inside the client island).
+    const back: ReactNode = (
+      <Link href={wizardBackHref(book.id)} className={WIZARD_BACK_CLASS} data-testid="wizard-back">
+        Back
+      </Link>
+    );
+    return (
+      <WizardShell step={5} displayName={displayName}>
+        <WizardHeadline>{wizardHeadline(5)}</WizardHeadline>
+        <p className="mt-2 text-center type-small text-muted-foreground">
+          <span dir="auto" className="break-words" data-testid="upload-book-title">
+            {title}
+          </span>
+        </p>
+        <div className="mt-6 flex min-w-0 flex-col">
+          <Uploader {...uploaderProps} variant="wizard" back={back} />
+        </div>
+      </WizardShell>
+    );
+  }
 
   return (
     <>
@@ -94,7 +109,7 @@ export default async function UploadPage({ params }: { params: Promise<{ id: str
           step="photos"
           eyebrow={isOccasion(book.occasion) && book.occasion !== "other" ? OCCASION_LABELS[book.occasion] : "Photobook"}
           eyebrowTestId="upload-occasion"
-          title={displayBookTitle(book.title, book.doc)}
+          title={title}
           titleTestId="upload-book-title"
           description={
             firstRun === "none"
@@ -102,21 +117,7 @@ export default async function UploadPage({ params }: { params: Promise<{ id: str
               : "Add more photos to your book."
           }
         />
-        <Uploader
-          bookId={book.id}
-          userId={user.id}
-          isPaid={book.is_paid}
-          existing={existing}
-          maxUpload={limitsFor(book.is_paid).maxUploadPhotos}
-          readyCount={readyCount}
-          pendingCount={pendingCount}
-          hasDoc={docHasContent(book.doc)}
-          setup={setup}
-          locks={locks}
-          firstRun={firstRun}
-          dailyCap={limitsFor(book.is_paid).maxLiveBuildsPerUserPerDay}
-          aiOn={resolveAiMode() !== "off"}
-        />
+        <Uploader {...uploaderProps} />
       </main>
     </>
   );

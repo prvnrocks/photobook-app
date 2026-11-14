@@ -229,3 +229,8 @@ Decision: New book form offers Modern (default for every occasion via DEFAULT_ST
 ## D-070a — setup details also lock on user-edited albums (2026-11-12)
 - Decision: occasion, feel, caption language and title (not only shape/style) lock once the album is user-edited or an AI run exists, so a user's cover title always wins (D-037 #7). Residual race (run created between the last run check and the setup UPDATE) documented; closing it needs an atomic RPC in a future migration.
 - Why: M13 review NIT; avoids books.title drifting from a user-edited cover.
+
+## D-071 — M19 creation wizard replaces photos-first (2026-11-14)
+- Decision: book creation is a 6-step full-page wizard: /books/new steps 1–4 (Title → What's it for → Page shape → Book style; ?step= in URL via history.pushState, sessionStorage draft, book created on step-4 Continue), step 5 = first-run /books/[id]/upload in wizard chrome, step 6 = first-run /build ("Sorting your photos"), then editor. Reverses D-070 (1) photos-first and its "≤3 taps after picking photos" budget (now counted from step-4 Continue). SetupCard + StartPicker removed; /books/start → /books/new. Tone automatic (memory else occasion default). Back on step 5 re-opens steps 1–4 (?book=<id>) while detailsLockReason is null, via updateBookSetupAction. Shape/style cards use enlarged vector DesignPreview art. Layout from user's wizard.png, colours/typography stay M17 emerald/gold.
+- Why: user request 2026-11-14 ("flow should be new book > title > what's it for > shape > style > photos > sorting > editor, all in a wizard"); full page not modal because mobile keyboard, minutes-long uploads must survive refresh, back button.
+- Alternatives rejected: modal wizard; keep photos-first; tone step; sample-photo card art.

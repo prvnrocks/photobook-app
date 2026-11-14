@@ -5,6 +5,8 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { BuildDraftPreview } from "@/components/review/BuildDraftPreview";
 import { BuildProgress } from "@/components/review/BuildProgress";
+import { PhotoFan } from "@/components/review/PhotoFan";
+import { WizardHeadline, WizardShell } from "@/components/wizard/WizardShell";
 import { resolveAiMode } from "@/lib/ai/client";
 import { limitsFor } from "@/lib/ai/limits";
 import { getCurrentUser } from "@/lib/auth/current-user";
@@ -15,7 +17,15 @@ import { getActiveRunForBook } from "@/lib/db/agent-runs";
 import { getMyBook } from "@/lib/db/books";
 import { listReviewPhotos } from "@/lib/db/photos";
 import { getMyProfile } from "@/lib/db/profiles";
-import { draftPreviewItems, draftPreviewPhotoIds, draftPreviewPhotos } from "@/lib/runs/draft-preview";
+import { isWizardBuild } from "@/lib/books/wizard-routes";
+import { wizardHeadline } from "@/lib/books/wizard-steps";
+import {
+  draftPreviewItems,
+  draftPreviewPhotoIds,
+  draftPreviewPhotos,
+  FAN_PHOTOS,
+  fanPhotoUrls,
+} from "@/lib/runs/draft-preview";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +36,9 @@ export const metadata: Metadata = { title: "Making your book" };
 // `?auto=1` (M13 T4): the upload screen started the automatic first build → ai_build_done { auto }.
 // M13 T7 (D-070 (3)): the draft book (books.doc, the rule album) shows read-only while the run
 // works; when it finishes the screen goes straight to the editor.
+// M19 T7 (D-071): the first AI build wears the creation wizard chrome (step 6 "Sorting your
+// photos": photo fan from the draft's signed thumbs + three-row checklist). Rebuilds, AI off and
+// edited / AI-made albums keep the classic screen below.
 
 /** The stored album as a draft preview, or null (empty / unparsable doc → checklist only). */
 function draftDoc(raw: unknown): BookDoc | null {
@@ -65,6 +78,36 @@ export default async function BuildPage({
   // 409 already_running + runId for a run that is still queued (or starts one when none is).
   if (auto && activeRead.ok && !active) redirect(`/books/${book.id}/edit`);
 
+  const aiOn = resolveAiMode() !== "off";
+  const progressProps = {
+    bookId: book.id,
+    activeRunId: active?.id ?? null,
+    trigger,
+    isPaid: book.is_paid,
+    dailyCap: limitsFor(book.is_paid).maxLiveBuildsPerUserPerDay,
+    auto,
+    aiOn,
+  } as const;
+
+  if (isWizardBuild({ trigger, aiOn, doc: book.doc })) {
+    // Fan: the draft's first photos (cover first). Sign a few spares in case some aren't signed.
+    const doc = draftDoc(book.doc);
+    let urls: string[] = [];
+    if (doc) {
+      const wanted = draftPreviewPhotoIds(doc, draftPreviewItems(doc)).slice(0, FAN_PHOTOS * 2);
+      const photos = await listReviewPhotos(book.id, wanted).catch(() => null);
+      if (photos) urls = fanPhotoUrls(wanted, photos);
+    }
+    return (
+      <WizardShell step={6} displayName={displayName}>
+        <WizardHeadline>{wizardHeadline(6)}</WizardHeadline>
+        <div className="mt-4 flex min-w-0 flex-col">
+          <BuildProgress {...progressProps} variant="wizard" preview={<PhotoFan urls={urls} />} />
+        </div>
+      </WizardShell>
+    );
+  }
+
   // Draft preview: cover + first pages, 512 px thumbs signed for exactly those photos (only their
   // ids are loaded and signed). A read error only drops the preview (the checklist still shows).
   const doc = draftDoc(book.doc);
@@ -84,8 +127,6 @@ export default async function BuildPage({
       );
     }
   }
-  const aiOn = resolveAiMode() !== "off";
-
   return (
     <>
       <AppHeader displayName={displayName} />
@@ -99,16 +140,7 @@ export default async function BuildPage({
             </span>
           }
         />
-        <BuildProgress
-          bookId={book.id}
-          activeRunId={active?.id ?? null}
-          trigger={trigger}
-          isPaid={book.is_paid}
-          dailyCap={limitsFor(book.is_paid).maxLiveBuildsPerUserPerDay}
-          auto={auto}
-          aiOn={aiOn}
-          preview={preview}
-        />
+        <BuildProgress {...progressProps} preview={preview} />
       </main>
     </>
   );

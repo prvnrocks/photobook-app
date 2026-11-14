@@ -54,3 +54,21 @@ export function draftPreviewPhotos(wanted: readonly string[], photos: readonly D
   }
   return out;
 }
+
+/** Photos on the wizard's "Sorting your photos" fan (M19 T7, D-071). */
+export const FAN_PHOTOS = 3;
+
+/**
+ * Up to `n` signed thumb URLs for the fan, in the draft's order (cover photo first), skipping
+ * photos that weren't signed. [] → the fan shows placeholders.
+ */
+export function fanPhotoUrls(wanted: readonly string[], photos: readonly DraftPreviewPhoto[], n = FAN_PHOTOS): string[] {
+  const byId = new Map(photos.map((p) => [p.id, p.thumbUrl] as const));
+  const out: string[] = [];
+  for (const id of wanted) {
+    const url = byId.get(id);
+    if (url && !out.includes(url)) out.push(url);
+    if (out.length >= n) break;
+  }
+  return out;
+}

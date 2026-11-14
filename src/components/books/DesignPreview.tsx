@@ -27,12 +27,15 @@ function Frame({ format, className, children }: { format: BookFormat; className?
   );
 }
 
+/** Size override for the svg (default size-16), e.g. the wizard's large cards (M19). */
+type PreviewSize = { className?: string };
+
 /** Shape choice: an empty page of that shape with one photo block. */
-export function ShapePreview({ format }: { format: BookFormat }) {
+export function ShapePreview({ format, className }: { format: BookFormat } & PreviewSize) {
   const p = PAGE[format];
   const m = 4;
   return (
-    <Frame format={format}>
+    <Frame format={format} className={className}>
       <rect x={p.x + m} y={p.y + m} width={p.w - 2 * m} height={p.h * 0.62 - m} rx="0.8" className={photo} />
       <line x1={p.x + m} x2={p.x + p.w * 0.6} y1={p.y + p.h * 0.78} y2={p.y + p.h * 0.78} strokeWidth="1.4" strokeLinecap="round" className={ink} />
     </Frame>
@@ -47,21 +50,25 @@ export function ShapePreview({ format }: { format: BookFormat }) {
  *             g-*-five-hex).
  * scrapbook = a tilted polaroid with a strip of tape and a small heart (s-*-one-polaroid).
  */
-export function StylePreview({ style, format }: { style: FormDesignStyle; format: BookFormat }) {
-  if (style === "modern") return <ModernPreview format={format} />;
-  if (style === "geometric") return <GeometricPreview format={format} />;
-  if (style === "scrapbook") return <ScrapbookPreview format={format} />;
-  return <ClassicPreview format={format} />;
+export function StylePreview({
+  style,
+  format,
+  className,
+}: { style: FormDesignStyle; format: BookFormat } & PreviewSize) {
+  if (style === "modern") return <ModernPreview format={format} className={className} />;
+  if (style === "geometric") return <GeometricPreview format={format} className={className} />;
+  if (style === "scrapbook") return <ScrapbookPreview format={format} className={className} />;
+  return <ClassicPreview format={format} className={className} />;
 }
 
-function ModernPreview({ format }: { format: BookFormat }) {
+function ModernPreview({ format, className }: { format: BookFormat } & PreviewSize) {
   const p = PAGE[format];
   const g = 1; // thin gutter
   const top = p.h * 0.7;
   const half = (p.w - g) / 2;
   const titleY = p.y + top + (p.h - top) / 2;
   return (
-    <Frame format={format}>
+    <Frame format={format} className={className}>
       <rect x={p.x} y={p.y} width={half} height={top} className={photo} />
       <rect x={p.x + half + g} y={p.y} width={half} height={(top - g) / 2} className={photo} />
       <rect x={p.x + half + g} y={p.y + (top + g) / 2} width={half} height={(top - g) / 2} className={photo} />
@@ -78,14 +85,14 @@ function ModernPreview({ format }: { format: BookFormat }) {
   );
 }
 
-function ClassicPreview({ format }: { format: BookFormat }) {
+function ClassicPreview({ format, className }: { format: BookFormat } & PreviewSize) {
   const p = PAGE[format];
   const mat = Math.min(p.w, p.h) * 0.16;
   const fw = p.w - 2 * mat;
   const fh = p.h * 0.62 - mat;
   const capY = p.y + mat + fh + (p.h - mat - fh) / 2;
   return (
-    <Frame format={format}>
+    <Frame format={format} className={className}>
       <rect x={p.x + mat - 1.5} y={p.y + mat - 1.5} width={fw + 3} height={fh + 3} fill="none" strokeWidth="0.6" className={ink} />
       <rect x={p.x + mat} y={p.y + mat} width={fw} height={fh} className={photo} />
       <line x1={p.x + p.w * 0.3} x2={p.x + p.w * 0.7} y1={capY} y2={capY} strokeWidth="1.2" strokeLinecap="round" className={ink} />
@@ -105,7 +112,7 @@ function hexagon(cx: number, cy: number, r: number): string {
     .join(" ");
 }
 
-function GeometricPreview({ format }: { format: BookFormat }) {
+function GeometricPreview({ format, className }: { format: BookFormat } & PreviewSize) {
   const p = PAGE[format];
   const m = Math.min(p.w, p.h);
   // Band: full bleed at the top, bottom edge slopes down to the left.
@@ -125,7 +132,7 @@ function GeometricPreview({ format }: { format: BookFormat }) {
   const hy = p.y + p.h - hr - m * 0.14;
   const capY = hy; // landscape: the line stops before the circle
   return (
-    <Frame format={format}>
+    <Frame format={format} className={className}>
       <polygon points={band} className={photo} />
       <circle cx={r1(cx)} cy={r1(cy)} r={r1(cr)} strokeWidth="1.2" className={cn(photo, "stroke-background")} />
       <polygon points={hexagon(hx, hy, hr)} className={photo} />
@@ -142,7 +149,7 @@ function GeometricPreview({ format }: { format: BookFormat }) {
   );
 }
 
-function ScrapbookPreview({ format }: { format: BookFormat }) {
+function ScrapbookPreview({ format, className }: { format: BookFormat } & PreviewSize) {
   const p = PAGE[format];
   const landscape = format === "A5_LANDSCAPE";
   // Polaroid card: portrait-ish, white border, wider bottom lip; tilted like s-*-one-polaroid.
@@ -162,7 +169,7 @@ function ScrapbookPreview({ format }: { format: BookFormat }) {
   const hx = landscape ? p.x + p.w * 0.77 : x + cw + 0.6;
   const hy = landscape ? p.y + p.h * 0.36 : y + 2.4;
   return (
-    <Frame format={format}>
+    <Frame format={format} className={className}>
       <g transform={`rotate(-5 ${r1(cx)} ${r1(cy)})`}>
         {/* crisp drawn shadow (no blur), like the real render */}
         <rect x={r1(x + 0.9)} y={r1(y + 1.1)} width={r1(cw)} height={r1(ch)} className="fill-foreground/15" />

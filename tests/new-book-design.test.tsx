@@ -12,58 +12,63 @@ vi.mock("next/navigation", async (orig) => ({
   useRouter: () => ({ refresh: vi.fn(), replace: vi.fn() }),
 }));
 
-const { NewBookForm } = await import("@/components/books/NewBookForm");
+const { StepShape } = await import("@/components/books/wizard/StepShape");
+const { StepStyle } = await import("@/components/books/wizard/StepStyle");
 const { PagesSheet } = await import("@/components/editor/tools/pages");
 
 const STYLE_IDS = ["style-modern", "style-classic", "style-geometric", "style-scrapbook"];
 
-function inputTag(html: string, testId: string): string {
-  const m = html.match(new RegExp(`<input[^>]*data-testid="${testId}"[^>]*>`));
-  if (!m) throw new Error(`no input ${testId}`);
+function inputTag(html: string, value: string): string {
+  const m = html.match(new RegExp(`<input[^>]*value="${value}"[^>]*>`));
+  if (!m) throw new Error(`no input ${value}`);
   return m[0];
 }
 
-describe("NewBookForm shape + style (M10b A12)", () => {
-  const html = renderToStaticMarkup(<NewBookForm />);
+// M19 (D-071): shape and style are wizard steps 3 and 4 (was the New book form, M10b A12).
+describe("wizard shape + style steps (M10b A12 → M19)", () => {
+  const shape = renderToStaticMarkup(<StepShape format={null} onFormat={() => {}} headlineId="h" />);
+  const style = renderToStaticMarkup(
+    <StepStyle designStyle="modern" format="A5_LANDSCAPE" onStyle={() => {}} headlineId="h" />,
+  );
 
   it("renders Portrait/Landscape and all four styles as named radio groups in fieldsets", () => {
-    expect(html).toContain("Page shape");
-    expect(html).toContain("Design style");
-    for (const id of ["format-A5_PORTRAIT", "format-A5_LANDSCAPE"]) {
-      expect(inputTag(html, id)).toMatch(/type="radio"[^>]*name="format"/);
+    for (const id of ["format-A5_PORTRAIT", "format-A5_LANDSCAPE"]) expect(shape).toContain(`data-testid="${id}"`);
+    expect(inputTag(shape, "A5_PORTRAIT")).toMatch(/type="radio"[^>]*name="wizard-format"/);
+    for (const id of STYLE_IDS) expect(style).toContain(`data-testid="${id}"`);
+    for (const v of ["modern", "classic", "geometric", "scrapbook"]) {
+      expect(inputTag(style, v)).toMatch(/type="radio"[^>]*name="wizard-designStyle"/);
     }
-    for (const id of STYLE_IDS) {
-      expect(inputTag(html, id)).toMatch(/type="radio"[^>]*name="designStyle"/);
-    }
-    // Display order Modern, Classic, Geometric, Scrapbook; one 2-column grid (2×2 on phones).
-    const at = STYLE_IDS.map((id) => html.indexOf(`data-testid="${id}"`));
+    // Display order Modern, Classic, Geometric, Scrapbook; one 2-column grid (2×2 also on phones).
+    const at = STYLE_IDS.map((id) => style.indexOf(`data-testid="${id}"`));
     expect(at).toEqual([...at].sort((a, b) => a - b));
-    const grid = html.slice(html.lastIndexOf("<div", at[0]), at[0]);
-    expect(grid).toMatch(/class="grid grid-cols-2/);
+    expect(style).toMatch(/<fieldset[\s\S]*class="grid grid-cols-2/);
+    expect(shape).toMatch(/<fieldset[\s\S]*class="grid grid-cols-2/);
   });
 
-  it("defaults: Portrait + Modern (no occasion yet)", () => {
-    expect(inputTag(html, "format-A5_PORTRAIT")).toContain("checked");
-    expect(inputTag(html, "format-A5_LANDSCAPE")).not.toContain("checked");
-    expect(inputTag(html, "style-modern")).toContain("checked");
-    for (const id of ["style-classic", "style-geometric", "style-scrapbook"]) expect(inputTag(html, id)).not.toContain("checked");
+  it("no shape is preselected; the given style is checked", () => {
+    expect(inputTag(shape, "A5_PORTRAIT")).not.toContain("checked");
+    expect(inputTag(shape, "A5_LANDSCAPE")).not.toContain("checked");
+    expect(inputTag(style, "modern")).toContain("checked");
+    for (const v of ["classic", "geometric", "scrapbook"]) expect(inputTag(style, v)).not.toContain("checked");
   });
 
-  it("each option has a visible label + described-by hint; previews are decorative", () => {
-    for (const id of ["format-A5_PORTRAIT", "format-A5_LANDSCAPE", ...STYLE_IDS]) {
-      const hint = inputTag(html, id).match(/aria-describedby="([^"]+)"/)?.[1];
-      expect(hint).toBeTruthy();
-      expect(html).toContain(`id="${hint}"`);
+  it("each option has a visible label; previews are decorative and enlarged", () => {
+    for (const label of [">Portrait<", ">Landscape<", ">Modern<", ">Classic<", ">Geometric<", ">Scrapbook<"]) {
+      expect(shape + style).toContain(label);
     }
-    expect(html).toContain(">Portrait<");
-    expect(html).toContain(">Landscape<");
-    expect(html).toContain(">Modern<");
-    expect(html).toContain(">Classic<");
-    expect(html).toContain(">Geometric<");
-    expect(html).toContain(">Scrapbook<");
-    expect(html).not.toMatch(/<svg(?![^>]*aria-hidden="true")/);
-    // M11 T9 (D-063): the fixed-at-creation note describes both design fieldsets.
-    expect(html).toContain("Set when the book is created — these two can&#x27;t be changed later.");
+    expect(shape).toContain("148 × 210 mm");
+    expect(shape + style).not.toMatch(/<svg(?![^>]*aria-hidden="true")/);
+    expect(shape).toContain("size-28 sm:size-40");
+    expect(style).toContain("size-24 sm:size-36");
+    // style previews are drawn in the chosen shape (landscape page box)
+    expect(style).toContain('width="45" height="31"');
+  });
+
+  it("locked design shows only the current choice, read-only, with a note", () => {
+    const locked = renderToStaticMarkup(<StepShape format="A5_LANDSCAPE" onFormat={() => {}} headlineId="h" locked />);
+    expect(locked).toContain('data-testid="wizard-design-locked"');
+    expect(locked).not.toContain('data-testid="format-A5_PORTRAIT"');
+    expect(inputTag(locked, "A5_LANDSCAPE")).toMatch(/checked=""[^>]*readOnly=""|readOnly=""[^>]*checked=""/i);
   });
 
   it("previews: the page box follows the shape", () => {

@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/app/books/actions", () => ({ startBookAction: vi.fn() }));
 vi.mock("next/navigation", async (orig) => ({
   ...(await orig<typeof import("next/navigation")>()),
   useRouter: () => ({ refresh: vi.fn(), replace: vi.fn(), push: vi.fn() }),
@@ -206,12 +205,13 @@ describe("collection grid markup", () => {
     expect(none).toContain("No books match your search");
   });
 
-  it("empty library: gold photo-picker CTA + Choose style first, h2 keeps dir=auto", () => {
+  it("empty library: gold CTA link into the wizard, h2 keeps dir=auto", () => {
     const e = renderToStaticMarkup(<EmptyState />);
-    expect(e).toMatch(/<label[^>]*bg-accent-strong[^"]*"[^>]*data-testid="create-first-book"/);
+    expect(e).toMatch(/<a [^>]*bg-accent-strong[^"]*"[^>]*data-testid="create-first-book"/);
     expect(e).toContain("Make your first book");
     expect(e).toMatch(/<h2 dir="auto"[^>]*>No books yet<\/h2>/);
-    expect(e).toContain('data-testid="empty-choose-style" href="/books/new"');
+    expect(e).toMatch(/data-testid="create-first-book" href="\/books\/new"/);
+    expect(e).not.toContain("empty-choose-style");
   });
 
   it("client island stays light: no next/link, cn or button recipes", () => {

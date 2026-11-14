@@ -57,6 +57,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.29",
+    "jsdom": "^29.1.1",
     "pdfjs-dist": "6.5.438",
     "supabase": "2.122.1",
     "tailwindcss": "^4",

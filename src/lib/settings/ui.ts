@@ -1,14 +1,12 @@
-// Pure helpers for /settings ("What the AI has learned", D-032) and the new-book prefill.
+// Pure helpers for /settings ("What the AI has learned", D-032).
 // Safe on client and server: no imports from src/lib/ai or src/lib/db (server-only); the
 // caption-length values mirror CAPTION_LENGTHS in src/lib/ai/schemas.ts.
 import {
   CAPTION_LANG_LABELS,
   CAPTION_LANGS,
-  DEFAULT_TONE,
   TONE_LABELS,
   TONES,
   type CaptionLang,
-  type Occasion,
   type Tone,
 } from "@/lib/book/options";
 
@@ -113,40 +111,4 @@ export function clearOutcome(result: ClearResultLike | null | undefined): ClearO
     return { kind: "error", message: "Your session has ended. Please sign in again." };
   }
   return { kind: "error", message: "Couldn't clear this right now. Please try again." };
-}
-
-/** Initial NewBookForm state from memory (D-032). A remembered tone counts as a manual choice. */
-export function newBookInitialState(props: { initialTone?: unknown; initialLang?: unknown }): {
-  manualTone: Tone | null;
-  captionLang: CaptionLang;
-} {
-  return {
-    manualTone: isTone(props.initialTone) ? props.initialTone : null,
-    captionLang: isLang(props.initialLang) ? props.initialLang : "en",
-  };
-}
-
-/** Tone shown in the form: manual choice (incl. remembered) wins over the occasion default. */
-export function effectiveTone(manualTone: Tone | null, occasion: Occasion | null): Tone {
-  return manualTone ?? (occasion ? DEFAULT_TONE[occasion] : DEFAULT_TONE.other);
-}
-
-/**
- * Show "From your last book" only when a remembered value is still selected AND differs from what
- * the form would show anyway (tone ≠ the current occasion's default — DEFAULT_TONE.other while no
- * occasion is picked — or language ≠ 'en'). Seeding is unaffected (newBookInitialState).
- */
-export function showFromMemoryHint(input: {
-  fromMemory: boolean;
-  rememberedTone: Tone | null;
-  rememberedLang: CaptionLang | null;
-  occasion: Occasion | null;
-  tone: Tone;
-  captionLang: CaptionLang;
-}): boolean {
-  if (!input.fromMemory) return false;
-  const defaultTone = input.occasion ? DEFAULT_TONE[input.occasion] : DEFAULT_TONE.other;
-  const toneHint = input.rememberedTone !== null && input.tone === input.rememberedTone && input.rememberedTone !== defaultTone;
-  const langHint = input.rememberedLang !== null && input.captionLang === input.rememberedLang && input.rememberedLang !== "en";
-  return toneHint || langHint;
 }

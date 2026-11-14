@@ -8,7 +8,6 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/app/books/actions", () => ({
   createBookAction: vi.fn(),
   deleteUnfinishedAction: vi.fn(),
-  startBookAction: vi.fn(),
   updateBookSetupAction: vi.fn(),
 }));
 vi.mock("next/navigation", async (orig) => ({
@@ -19,7 +18,6 @@ vi.mock("next/navigation", async (orig) => ({
 const { BookList } = await import("@/components/dashboard/BookList");
 const { BookCover } = await import("@/components/dashboard/BookCover");
 const { EmptyState } = await import("@/components/dashboard/EmptyState");
-const { NewBookForm } = await import("@/components/books/NewBookForm");
 const { Uploader } = await import("@/components/upload/Uploader");
 const { UploadSummary } = await import("@/components/upload/UploadSummary");
 const { UploadProgress } = await import("@/components/upload/UploadProgress");
@@ -36,8 +34,6 @@ const uploaderProps: UploaderProps = {
   readyCount: 0,
   pendingCount: 0,
   hasDoc: false,
-  setup: { occasion: "other", tone: "minimal", captionLang: "en", title: null, format: "A5_PORTRAIT", designStyle: "modern" },
-  locks: { details: null, design: null },
   firstRun: "none",
   dailyCap: 3,
 };
@@ -112,64 +108,38 @@ describe("T8 dashboard cards", () => {
     expect(html).not.toMatch(/<a [^>]*>(?:(?!<\/a>)[\s\S])*<a /);
   });
 
-  it("empty state: emerald & gold shelf with the gold photo-picker call to action", () => {
+  it("empty state: emerald & gold shelf with the gold call to action into the wizard", () => {
     const empty = renderToStaticMarkup(<EmptyState />);
     expect(empty).toMatch(/<section[^>]*data-testid="dashboard-empty"/);
     expect(empty).toMatch(/<h2 dir="auto"[^>]*>No books yet<\/h2>/);
-    // M13 T5: the call to action is the photo picker's label (input inside), plus "Choose style first".
-    expect(empty).toMatch(/<label[^>]*bg-accent-strong[^"]*"[^>]*data-testid="create-first-book"[^>]*>[\s\S]*?<input type="file"[^>]*data-testid="create-first-book-input"[\s\S]*?Make your first book<\/label>/);
-    expect(empty).toMatch(/<a [^>]*data-testid="empty-choose-style" href="\/books\/new">Choose style first/);
+    // M19 (D-071): a plain link to the creation wizard (no photo picker, no "Choose style first").
+    const cta = empty.match(/<a [^>]*data-testid="create-first-book"[^>]*>Make your first book<\/a>/)?.[0] ?? "";
+    expect(cta).toContain('href="/books/new"');
+    expect(cta).toContain("bg-accent-strong");
+    expect(cta).toContain("h-12 w-full");
+    expect(empty).not.toContain("empty-choose-style");
+    expect(empty).not.toContain('type="file"');
   });
 
-  it("page: library header band keeps the heading testid + gold New book picker, error as an error Notice", () => {
+  it("page: library header band keeps the heading testid + gold New book link, error as an error Notice", () => {
     const page = src("src/app/dashboard/page.tsx");
     expect(page).toContain("<LibraryHeader");
     expect(src("src/components/dashboard/LibraryHeader.tsx")).toContain('data-testid="dashboard-heading"');
-    expect(page).toContain('<StartPicker variant="button" tone="gold" testId="new-book" />');
+    expect(page).toMatch(/<Link href="\/books\/new" className=\{buttonVariants\(\{ variant: "accent", size: "touch" \}\)\} data-testid="new-book">/);
+    expect(page).not.toContain("StartPicker");
     expect(page).toContain('<Notice tone="error" data-testid="dashboard-error">');
   });
 });
 
-describe("T9 New book form", () => {
-  const html = renderToStaticMarkup(<NewBookForm />);
-
-  it("groups fields under About the book / Look of the book, in that order", () => {
-    const about = html.indexOf(">About the book<");
-    const look = html.indexOf(">Look of the book<");
-    expect(about).toBeGreaterThan(-1);
-    expect(look).toBeGreaterThan(about);
-    for (const id of ["occasion-wedding", "tone-minimal", "lang-en", "book-title"]) {
-      const at = html.indexOf(`data-testid="${id}"`);
-      expect(at, id).toBeGreaterThan(about);
-      expect(at, id).toBeLessThan(look);
-    }
-    for (const id of ["format-A5_PORTRAIT", "style-classic"]) expect(html.indexOf(`data-testid="${id}"`)).toBeGreaterThan(look);
-  });
-
-  it("both design fieldsets point at the fixed-at-creation note", () => {
-    const note = html.match(/<p id="([^"]+)"[^>]*>Set when the book is created/)?.[1];
-    expect(note).toBeTruthy();
-    expect(html.match(new RegExp(`<fieldset[^>]*aria-describedby="${note}`, "g"))?.length).toBe(2);
-  });
-
-  it("create-book is a sticky accent call to action", () => {
-    expect(html).toMatch(/role="group" aria-label="Create book"[^>]*class="[^"]*sticky bottom-0/);
-    const submit = html.match(/<button type="submit"[^>]*data-testid="create-book"[^>]*>Continue to photos</)?.[0] ?? "";
-    expect(submit).toContain("bg-accent-strong");
-    expect(submit).toContain("h-12 w-full");
-  });
-
-  it("page: shared PageHeader with step 1, testids and copy that only promises real edit paths", () => {
+// T9's New book form became the M19 creation wizard (tests/m19-new-book-wizard.test.tsx).
+describe("T9 New book page (M19 wizard)", () => {
+  it("page: wizard shell with a client step header, signed-out → login, step-1 Back to the dashboard", () => {
     const page = src("src/app/books/new/page.tsx");
-    expect(page).toContain("<PageHeader");
-    expect(page).toContain('step="new"');
-    expect(page).toContain('testId: "back-to-dashboard"');
-    expect(page).toContain('titleTestId="new-book-heading"');
-    expect(page).toContain('descriptionTestId="new-book-intro"');
-    expect(page).toContain("Page shape and style are set now. You can change the title, photos and captions later.");
-    expect(page).not.toContain("Everything else can change later");
-    expect(page).not.toContain("change most of this later");
-    expect(page).toContain("pb-0 sm:pt-6 sm:pb-6");
+    expect(page).toContain("<WizardShell");
+    expect(page).toContain('stepHeader="client"');
+    expect(page).toContain('redirect(`/login?next=${encodeURIComponent(next)}`)');
+    expect(page).toContain('<Link href="/dashboard" className={WIZARD_BACK_CLASS} data-testid="wizard-back">');
+    expect(page).not.toContain("NewBookForm");
   });
 });
 

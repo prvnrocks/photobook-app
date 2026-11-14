@@ -6,22 +6,25 @@
 // except the user's own Supabase rows/files.
 // M11 T10 (D-067): a large drop-zone style "Choose photos" area (tap to pick; desktop can also drop
 // files on it), status boxes as shared <Notice>s and "Keep this screen open" as an info notice.
-// M13 T5/T6 (D-070): photos picked on /books/start arrive in memory (pending-files) and start
-// uploading on mount — no second picker; the setup card sits beside the progress; when uploads +
-// finalize settle with ≥ 5 photos the first AI build is asked for automatically (the server decides,
-// src/lib/upload/auto-build-client.ts) and the screen moves on — "Make my book now" is the fallback.
+// M13 T6 (D-070): when uploads + finalize settle with ≥ 5 photos the first AI build is asked for
+// automatically (the server decides, src/lib/upload/auto-build-client.ts) and the screen moves on —
+// "Make my book now" is the fallback.
+// M19 T6 (D-071): the setup card and the /books/start hand-off are gone (setup = wizard steps 1–4).
+// variant "wizard" (step 5 of a fresh book) = the wizard.png card: big pick area, then the progress
+// card with the last three thumbnails, Pause/Resume and "Keep this tab open…"; `back` (a
+// server-rendered link to step 4) shows only until the first photo is picked.
 import { ImagePlus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   useEffect,
   useId,
-  useLayoutEffect,
   useRef,
   useState,
   useTransition,
   type ChangeEvent,
   type DragEvent,
+  type ReactNode,
 } from "react";
 import { deleteUnfinishedAction } from "@/app/books/actions";
 import { LoadingState } from "@/components/app/LoadingState";
@@ -29,8 +32,6 @@ import { Notice } from "@/components/app/Notice";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { track } from "@/lib/analytics/client";
 import { msBucket } from "@/lib/analytics/events";
-import type { BookSetup } from "@/lib/book/setup";
-import type { BookFormat } from "@/lib/book/types";
 import type { RunLimit } from "@/lib/runs/client";
 import { limitCopy } from "@/lib/runs/stage-copy";
 import {
@@ -56,14 +57,11 @@ import type {
   QueueSummary,
   UploadQueue,
 } from "@/lib/upload/queue";
-import type { SetupLocks } from "@/lib/upload/setup-ui";
 import { plural } from "@/lib/upload/summary-text";
 import { cn } from "@/lib/utils";
-import { hasPendingFiles, takePendingFiles } from "./pending-files";
-import { SetupCard } from "./SetupCard";
 import { UploadProgress } from "./UploadProgress";
 import { UploadSummary, type SummaryNext } from "./UploadSummary";
-import { useBookSetup } from "./use-book-setup";
+import { UploadThumbs, useThumbStrip } from "./UploadThumbs";
 import { useWakeLock, useWarnOnLeave } from "./use-keep-awake";
 
 export type UploaderProps = {
@@ -77,17 +75,21 @@ export type UploaderProps = {
   pendingCount: number;
   /** Book already has an album doc (finalize wrote one before). */
   hasDoc: boolean;
-  /** The book's setup as stored (M13 T6 setup card). */
-  setup: BookSetup;
-  /** Which setup fields can still change (src/lib/book/setup.ts), as of page load. */
-  locks: SetupLocks;
   /** AI build state at page load: none = the automatic first build may start. */
   firstRun: FirstRunState;
   /** D-026 daily cap for the limit copy. */
   dailyCap: number;
   /** resolveAiMode() !== "off" from the page (D-024): false → neutral copy, no AI claims. Default true. */
   aiOn?: boolean;
+  /** "wizard" = step 5 of the creation wizard (fresh book, M19 D-071). Default "default". */
+  variant?: "default" | "wizard";
+  /** Wizard only: server-rendered Back link (to step 4), shown until the first photo is picked. */
+  back?: ReactNode;
 };
+
+/** Wizard helper lines under the card (exported for tests). */
+export const WIZARD_KEEP_OPEN_COPY = "Keep this tab open while your photos upload.";
+export const WIZARD_FINALIZING_KEEP_OPEN_COPY = "Keep this tab open while we finish adding your photos.";
 
 /** Shown when photos are picked while the automatic first build is starting (they aren't added). */
 export const PICKS_WHILE_STARTING_COPY = "Your book is being made — add more photos from the editor.";
@@ -118,14 +120,12 @@ export function Uploader(props: UploaderProps) {
   const aiOn = props.aiOn ?? true;
   const loginHref = `/login?next=${encodeURIComponent(`/books/${bookId}/upload`)}`;
   const router = useRouter();
-  const setupCtl = useBookSetup(bookId, props.setup, props.locks);
-  /** The setup card is for fresh books only (no build yet). */
-  const [showSetup] = useState(() => firstRun === "none" && props.locks.details === null);
+  const wizard = props.variant === "wizard";
+  const thumbs = useThumbStrip(wizard);
   const [auto, setAuto] = useState<AutoState>({ kind: "idle" });
   const autoBusyRef = useRef(false);
-  /** Photos handed over from /books/start: they start uploading on mount (no second picker). */
-  const [handoff, setHandoff] = useState(false);
-  const [suggestedFormat, setSuggestedFormat] = useState<BookFormat | undefined>(undefined);
+  /** Photos were picked on this visit (hides the wizard Back link so an upload can't be lost). */
+  const [picked, setPicked] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<UploadQueue | null>(null);
@@ -180,28 +180,6 @@ export function Uploader(props: UploaderProps) {
     };
   }, []);
 
-  // Before paint: hide the picker when files are waiting (no flash of "Choose photos").
-  useLayoutEffect(() => {
-    if (hasPendingFiles(bookId)) setHandoff(true);
-  }, [bookId]);
-
-  // Take the handed-over files after StrictMode's mount/unmount/mount settles (timer cleared on the
-  // first unmount), then upload them like a selection.
-  useEffect(() => {
-    const t = setTimeout(() => {
-      const pending = takePendingFiles(bookId);
-      if (!pending) {
-        setHandoff(false);
-        return;
-      }
-      setSuggestedFormat(pending.suggestedFormat);
-      void handleFiles(pending.files);
-    }, 0);
-    return () => clearTimeout(t);
-    // Mount only: handleFiles reads refs/props at call time.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookId]);
-
   // A file dropped beside the drop zone would make the browser open it, leaving the page and
   // aborting a running upload. While this screen is open, swallow file drags/drops the zone didn't
   // handle (the zone's own handlers call preventDefault first, so it keeps its "copy" effect).
@@ -242,6 +220,7 @@ export function Uploader(props: UploaderProps) {
   const fatal = summary?.fatal === "not_allowed";
 
   function onEvent(e: QueueEvent) {
+    thumbs.onQueueEvent(e);
     if (e.type === "progress") setProgress(e);
     else if (e.type === "limit") {
       setLimitNotice((prev) => ({ limit: e.limit, skipped: (prev?.skipped ?? 0) + e.skipped }));
@@ -260,6 +239,7 @@ export function Uploader(props: UploaderProps) {
           onEvent,
         });
         queueRef.current = q;
+        thumbs.reset(); // keys restart at 0 with a new queue
         addedRef.current = 0;
         finalizedAtRef.current = 0;
         baseReadyRef.current = props.readyCount;
@@ -305,8 +285,7 @@ export function Uploader(props: UploaderProps) {
 
   /**
    * The automatic first build (D-070 (3)) once uploads + finalize settled. The server decides; this
-   * only maps its answer to the next screen. Pending setup changes are saved first so the AI reads
-   * them; the card is frozen while the request runs and editable again on a fallback.
+   * only maps its answer to the next screen (setup was saved by wizard steps 1–4, M19 D-071).
    */
   async function autoStart(ready: number, s: QueueSummary) {
     if (firstRun !== "none" || unmountedRef.current) return;
@@ -319,8 +298,6 @@ export function Uploader(props: UploaderProps) {
     setAuto({ kind: "starting" });
     const startedAt = Date.now();
     try {
-      await setupCtl.flush();
-      setupCtl.freeze();
       let retried = false;
       for (;;) {
         const outcome = await requestAutoBuild(bookId);
@@ -345,13 +322,11 @@ export function Uploader(props: UploaderProps) {
           router.push(next.href);
           return; // stay "starting" until the next screen replaces this one
         }
-        setupCtl.unfreeze();
         setAuto({ kind: "fallback", limit: next.limit });
         autoBusyRef.current = false;
         return;
       }
     } catch {
-      setupCtl.unfreeze();
       setAuto({ kind: "fallback" });
       autoBusyRef.current = false;
     }
@@ -399,6 +374,7 @@ export function Uploader(props: UploaderProps) {
       return;
     }
     setPicksIgnored(false);
+    setPicked(true);
     setLoadFailed(false);
     setRemoveError(null);
     let q: UploadQueue;
@@ -406,11 +382,10 @@ export function Uploader(props: UploaderProps) {
       q = await getQueue();
     } catch {
       setLoadFailed(true);
-      setHandoff(false);
       return;
     }
-    setHandoff(false);
     q.add(files);
+    thumbs.track(addedRef.current, files);
     addedRef.current += files.length;
     if (runningRef.current) return; // the running loop picks the new files up
 
@@ -496,8 +471,8 @@ export function Uploader(props: UploaderProps) {
     });
   }
 
-  const showResume = pending > 0 && !busy && !fatal && !handoff;
-  const showPicker = !busy && !fatal && summary === null && !handoff;
+  const showResume = pending > 0 && !busy && !fatal;
+  const showPicker = !busy && !fatal && summary === null;
   const starting = auto.kind === "starting";
 
   // Next step under the results (and on a return visit before any new upload).
@@ -570,7 +545,7 @@ export function Uploader(props: UploaderProps) {
             onDrop={onDrop}
             aria-describedby={capacityId}
             data-drag={dragOver ? "over" : undefined}
-            className="group flex min-h-40 w-full flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-input bg-card px-6 py-8 text-center shadow-card transition-colors outline-none hover:border-accent-strong hover:bg-secondary/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[drag=over]:border-accent-strong data-[drag=over]:bg-secondary"
+            className={`group flex ${wizard ? "min-h-56" : "min-h-40"} w-full flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-input bg-card px-6 py-8 text-center shadow-card transition-colors outline-none hover:border-accent-strong hover:bg-secondary/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[drag=over]:border-accent-strong data-[drag=over]:bg-secondary`}
             data-testid="upload-pick"
           >
             <span
@@ -594,6 +569,12 @@ export function Uploader(props: UploaderProps) {
         </div>
       ) : null}
 
+      {wizard && props.back && !picked && !busy ? (
+        <div className="flex justify-center" data-testid="upload-wizard-back">
+          {props.back}
+        </div>
+      ) : null}
+
       {showIdleNext ? (
         firstRun === "none" ? (
           <Link
@@ -614,8 +595,6 @@ export function Uploader(props: UploaderProps) {
         )
       ) : null}
 
-      {handoff ? <LoadingState label="Getting your photos ready…" data-testid="upload-handoff" /> : null}
-
       {loadFailed ? (
         <Notice tone="error" data-testid="upload-error">
           We couldn&apos;t start the upload. Check your connection and choose your photos again.
@@ -629,7 +608,7 @@ export function Uploader(props: UploaderProps) {
         </Notice>
       ) : null}
 
-      {busy ? (
+      {busy && !wizard ? (
         <Notice tone="info" title="Keep this screen open" data-testid="upload-keep-open">
           {phase === "finalizing"
             ? "We're finishing your book. Leaving now skips places and duplicates until your next visit."
@@ -638,7 +617,13 @@ export function Uploader(props: UploaderProps) {
       ) : null}
 
       {uploading && progress ? (
-        <UploadProgress progress={progress} paused={paused} onTogglePause={togglePause} />
+        <UploadProgress
+          progress={progress}
+          paused={paused}
+          onTogglePause={togglePause}
+          variant={wizard ? "wizard" : "default"}
+          thumbs={wizard ? <UploadThumbs items={thumbs.items} /> : undefined}
+        />
       ) : uploading ? (
         <LoadingState label="Getting ready…" data-testid="upload-preparing" />
       ) : null}
@@ -649,6 +634,13 @@ export function Uploader(props: UploaderProps) {
           className="rounded-2xl border border-border bg-card p-4 shadow-card"
           data-testid="upload-finalizing"
         />
+      ) : null}
+
+      {busy && wizard ? (
+        // wizard.png: a plain centred line under the card (the classic screen uses a Notice).
+        <p className="type-small text-center text-muted-foreground" data-testid="upload-keep-open">
+          {phase === "finalizing" ? WIZARD_FINALIZING_KEEP_OPEN_COPY : WIZARD_KEEP_OPEN_COPY}
+        </p>
       ) : null}
 
       {fatal ? (
@@ -692,8 +684,6 @@ export function Uploader(props: UploaderProps) {
           {PICKS_WHILE_STARTING_COPY}
         </Notice>
       ) : null}
-
-      {showSetup && !fatal ? <SetupCard controller={setupCtl} suggestedFormat={suggestedFormat} aiOn={aiOn} /> : null}
 
       {summary && !fatal && (phase === "done" || phase === "finalize_error") ? (
         <UploadSummary

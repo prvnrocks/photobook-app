@@ -3,7 +3,7 @@ import { buildRuleDraft, type DraftPhotoRow } from "@/lib/book/rule-draft";
 
 vi.mock("server-only", () => ({}));
 
-// M13 T2 (D-070): startBookAction + updateBookSetupAction.
+// M13 T2 (D-070): updateBookSetupAction.
 
 const OWNER = "11111111-1111-4111-8111-111111111111";
 const BOOK_ID = "22222222-2222-4222-8222-222222222222";
@@ -64,7 +64,7 @@ vi.mock("@/lib/db/photos", () => ({
   listReadyPhotosForFinalize: mocks.listReadyPhotosForFinalize,
 }));
 
-const { startBookAction, updateBookSetupAction } = await import("@/app/books/actions");
+const { updateBookSetupAction } = await import("@/app/books/actions");
 
 const pid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const PHOTOS: DraftPhotoRow[] = Array.from({ length: 8 }, (_, i) => ({
@@ -124,80 +124,8 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe("startBookAction", () => {
-  it("creates a draft with defaults: other / minimal / en / portrait / modern / no title", async () => {
-    vi.stubEnv("NEXT_PUBLIC_POSTHOG_KEY", "");
-    const r = await startBookAction();
-    expect(r).toEqual({ ok: true, bookId: BOOK_ID, next: `/books/${BOOK_ID}/upload` });
-    expect(mocks.createBook).toHaveBeenCalledWith({
-      title: null,
-      occasion: "other",
-      tone: "minimal",
-      captionLang: "en",
-      format: "A5_PORTRAIT",
-      designStyle: "modern",
-    });
-  });
-
-  it("fires book_created like createBookAction: next carries ?_ev=book_created when analytics is on", async () => {
-    vi.stubEnv("NEXT_PUBLIC_POSTHOG_KEY", "phc_test");
-    const r = await startBookAction();
-    expect(r).toMatchObject({ ok: true, next: `/books/${BOOK_ID}/upload?_ev=book_created` });
-  });
-
-  it.each([
-    ["ar-AE,ar;q=0.9,en;q=0.8", "ar"],
-    ["ar", "ar"],
-    ["en-AE,en;q=0.9,ar;q=0.8", "en"],
-    [null, "en"],
-  ])("caption language from Accept-Language %s → %s", async (header, lang) => {
-    mocks.acceptLanguage = header;
-    await startBookAction();
-    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ captionLang: lang });
-  });
-
-  it("remembered language and tone win (D-032)", async () => {
-    mocks.acceptLanguage = "en-US";
-    mocks.memory = { language: "ar", tone: "fun" };
-    await startBookAction();
-    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ captionLang: "ar", tone: "fun" });
-  });
-
-  it("a memory error never blocks the start", async () => {
-    mocks.memoryError = true;
-    mocks.acceptLanguage = "ar-SA";
-    const r = await startBookAction();
-    expect(r.ok).toBe(true);
-    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ captionLang: "ar", tone: "minimal" });
-  });
-
-  it("uses a landscape format hint", async () => {
-    await startBookAction({ format: "A5_LANDSCAPE" });
-    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ format: "A5_LANDSCAPE", designStyle: "modern" });
-  });
-
-  it.each([
-    [{ format: "A4_PORTRAIT" }],
-    [{ format: "a5_landscape" }],
-    [{ designStyle: "classic" }],
-    [{ occasion: "wedding" }],
-  ])("rejects a bad input %j without creating", async (input) => {
-    const r = await startBookAction(input as never);
-    expect(r).toEqual({ ok: false, error: "invalid" });
-    expect(mocks.createBook).not.toHaveBeenCalled();
-  });
-
-  it("signed out → unauthenticated, no book", async () => {
-    mocks.user = null;
-    expect(await startBookAction()).toEqual({ ok: false, error: "unauthenticated" });
-    expect(mocks.createBook).not.toHaveBeenCalled();
-  });
-
-  it("create failure → failed (no stack, no redirect)", async () => {
-    mocks.createBook.mockRejectedValue(new Error("Failed to create book (23514)"));
-    expect(await startBookAction()).toEqual({ ok: false, error: "failed" });
-  });
-});
+// startBookAction (photos-first start) was removed in M19 (D-071); createBookAction's defaults from
+// memory / Accept-Language are covered in tests/books-actions.test.ts.
 
 describe("updateBookSetupAction — details", () => {
   it("changes occasion / tone / language / title on an empty book (columns only)", async () => {

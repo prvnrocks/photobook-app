@@ -1,0 +1,302 @@
+// M19 T6 + T7 (D-071): wizard step 5 (upload) and step 6 (sorting) — chrome choice, no setup card,
+// thumbnail URLs revoked, truthful checklist mapping. Node environment: pure helpers directly,
+// components via renderToStaticMarkup, pages via source.
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
+import type { RunState } from "@/lib/runs/client";
+
+vi.mock("@/app/books/actions", () => ({ deleteUnfinishedAction: vi.fn(), updateBookSetupAction: vi.fn() }));
+vi.mock("next/navigation", async (orig) => ({
+  ...(await orig<typeof import("next/navigation")>()),
+  useRouter: () => ({ refresh: vi.fn(), replace: vi.fn(), push: vi.fn() }),
+}));
+
+const { isWizardUpload, isWizardBuild, wizardBackHref } = await import("@/lib/books/wizard-routes");
+const { wizardChecklist } = await import("@/lib/runs/build-checklist");
+const { createThumbStrip } = await import("@/lib/upload/thumb-strip");
+const { fanPhotoUrls } = await import("@/lib/runs/draft-preview");
+const { devPreviewDoc } = await import("@/lib/book/dev-preview");
+const { docOrigin } = await import("@/lib/book/replaceable");
+const { Uploader, WIZARD_KEEP_OPEN_COPY } = await import("@/components/upload/Uploader");
+const { UploadProgress, uploadProgressText } = await import("@/components/upload/UploadProgress");
+const { UploadThumbs } = await import("@/components/upload/UploadThumbs");
+const { BuildProgress, WIZARD_BUILD_KEEP_OPEN_COPY } = await import("@/components/review/BuildProgress");
+const { PhotoFan } = await import("@/components/review/PhotoFan");
+type UploaderProps = import("@/components/upload/Uploader").UploaderProps;
+type QueueProgress = import("@/lib/upload/queue").QueueProgress;
+
+const src = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
+const BOOK = "11111111-1111-4111-8111-111111111111";
+
+// --- chrome choice ---------------------------------------------------------------------------------
+
+describe("wizard chrome choice", () => {
+  it("upload: wizard only for a fresh book (no run, setup unlocked)", () => {
+    expect(isWizardUpload("none", null)).toBe(true);
+    expect(isWizardUpload("none", "user_edited")).toBe(false);
+    expect(isWizardUpload("none", "ai_started")).toBe(false);
+    expect(isWizardUpload("active", null)).toBe(false);
+    expect(isWizardUpload("done", null)).toBe(false);
+    expect(wizardBackHref(BOOK)).toBe(`/books/new?book=${BOOK}&step=4`);
+  });
+
+  it("build: wizard only for the first AI build of an unedited, non-AI album", () => {
+    const rule = { ...devPreviewDoc(), meta: { generator: "rule" as const, generatorVersion: 1, runId: null, userEdited: false } };
+    const ai = { ...rule, meta: { ...rule.meta, generator: "ai" as const } };
+    const edited = { ...rule, meta: { ...rule.meta, userEdited: true } };
+    // fixtures say what they claim
+    expect(docOrigin(rule)).toEqual({ generator: "rule", userEdited: false });
+    expect(docOrigin(ai)).toEqual({ generator: "ai", userEdited: false });
+    expect(docOrigin(edited).userEdited).toBe(true);
+
+    expect(isWizardBuild({ trigger: "build", aiOn: true, doc: {} })).toBe(true);
+    expect(isWizardBuild({ trigger: "build", aiOn: true, doc: rule })).toBe(true);
+    expect(isWizardBuild({ trigger: "rebuild", aiOn: true, doc: rule })).toBe(false);
+    expect(isWizardBuild({ trigger: "build", aiOn: false, doc: rule })).toBe(false);
+    expect(isWizardBuild({ trigger: "build", aiOn: true, doc: ai })).toBe(false);
+    expect(isWizardBuild({ trigger: "build", aiOn: true, doc: edited })).toBe(false);
+    // unparsable → treated as edited (safe side)
+    expect(isWizardBuild({ trigger: "build", aiOn: true, doc: { pages: "nope" } })).toBe(false);
+  });
+
+  it("upload page: WizardShell step 5 for a fresh book, classic header otherwise; server-rendered Back", () => {
+    const page = src("src/app/books/[id]/upload/page.tsx");
+    expect(page).toContain("isWizardUpload(firstRun, detailsLockReason({ hasRun, doc: book.doc }))");
+    expect(page).toMatch(/<WizardShell step=\{5\}[\s\S]*<WizardHeadline>\{wizardHeadline\(5\)\}<\/WizardHeadline>/);
+    expect(page).toMatch(/<Link href=\{wizardBackHref\(book\.id\)\} className=\{WIZARD_BACK_CLASS\} data-testid="wizard-back">/);
+    expect(page).toContain('<Uploader {...uploaderProps} variant="wizard" back={back} />');
+    expect(page).toContain("<AppHeader displayName={displayName} />");
+    expect(page).toContain("<Uploader {...uploaderProps} />");
+  });
+
+  it("build page: WizardShell step 6 + photo fan for the first build, classic screen otherwise", () => {
+    const page = src("src/app/books/[id]/build/page.tsx");
+    expect(page).toContain("if (isWizardBuild({ trigger, aiOn, doc: book.doc })) {");
+    expect(page).toMatch(/<WizardShell step=\{6\}[\s\S]*<WizardHeadline>\{wizardHeadline\(6\)\}<\/WizardHeadline>/);
+    expect(page).toContain('<BuildProgress {...progressProps} variant="wizard" preview={<PhotoFan urls={urls} />} />');
+    // The auto redirect still runs before either screen.
+    expect(page.indexOf("if (auto && activeRead.ok && !active) redirect(")).toBeLessThan(page.indexOf("isWizardBuild({"));
+  });
+});
+
+// --- step 5: upload --------------------------------------------------------------------------------
+
+describe("Uploader (step 5)", () => {
+  const props: UploaderProps = {
+    bookId: BOOK, userId: "u1", isPaid: false, existing: [], maxUpload: 150, readyCount: 0, pendingCount: 0,
+    hasDoc: false, firstRun: "none", dailyCap: 3,
+  };
+  const back = <a href="/back" data-testid="wizard-back">Back</a>;
+
+  it("wizard: big pick area + Back before any photo is picked; no setup card", () => {
+    const html = renderToStaticMarkup(<Uploader {...props} variant="wizard" back={back} />);
+    expect(html).toMatch(/<button[^>]*min-h-56[^>]*data-testid="upload-pick"/);
+    expect(html).toContain('data-testid="upload-wizard-back"');
+    expect(html).toContain('data-testid="wizard-back"');
+    expect(html).not.toContain("setup-card");
+    expect(html).not.toContain("upload-handoff");
+  });
+
+  it("classic: never shows Back (even if passed) and keeps the smaller pick area", () => {
+    const html = renderToStaticMarkup(<Uploader {...props} back={back} />);
+    expect(html).toMatch(/<button[^>]*min-h-40[^>]*data-testid="upload-pick"/);
+    expect(html).not.toContain("wizard-back");
+  });
+
+  it("no setup card, no /books/start hand-off, Back hidden once photos are picked or uploading", () => {
+    const u = src("src/components/upload/Uploader.tsx");
+    for (const gone of ["SetupCard", "useBookSetup", "setupCtl", "takePendingFiles", "hasPendingFiles", "pending-files", "setup-ui"]) {
+      expect(u).not.toContain(gone);
+    }
+    expect(u).toContain("{wizard && props.back && !picked && !busy ? (");
+    expect(u).toContain("setPicked(true);");
+    expect(existsSync(join(process.cwd(), "src/components/upload/SetupCard.tsx"))).toBe(false);
+    expect(existsSync(join(process.cwd(), "src/components/upload/use-book-setup.ts"))).toBe(false);
+    expect(existsSync(join(process.cwd(), "src/lib/upload/setup-ui.ts"))).toBe(false);
+    expect(existsSync(join(process.cwd(), "src/components/upload/pending-files.ts"))).toBe(false);
+  });
+
+  it("wizard keep-open is a plain line; classic keeps the info Notice", () => {
+    const u = src("src/components/upload/Uploader.tsx");
+    expect(WIZARD_KEEP_OPEN_COPY).toBe("Keep this tab open while your photos upload.");
+    expect(u).toMatch(/\{busy && !wizard \? \(\s*<Notice tone="info" title="Keep this screen open" data-testid="upload-keep-open">/);
+    expect(u).toMatch(/\{busy && wizard \? \([\s\S]*data-testid="upload-keep-open"/);
+  });
+});
+
+describe("UploadProgress wizard card", () => {
+  const p = (over: Partial<QueueProgress> = {}): QueueProgress => ({
+    type: "progress", done: 12, total: 20, uploaded: 12, failed: 0, skipped: 0, retried: 0, ...over,
+  });
+
+  it("'12 of 20 uploaded' + bar + thumbs + Pause, same testids", () => {
+    const html = renderToStaticMarkup(
+      <UploadProgress progress={p()} paused={false} onTogglePause={() => {}} variant="wizard" thumbs={<UploadThumbs items={[]} />} />,
+    );
+    expect(html).toMatch(/data-testid="upload-progress">12 of 20 uploaded</);
+    expect(html).toContain('role="progressbar"');
+    expect(html).toContain('data-testid="upload-thumbs"');
+    expect(html).toMatch(/data-testid="upload-pause"[^>]*>Pause</);
+    expect(html).not.toContain("upload-counts"); // nothing skipped / failed
+    expect(renderToStaticMarkup(<UploadProgress progress={p({ skipped: 2, failed: 1 })} paused={false} onTogglePause={() => {}} variant="wizard" />))
+      .toMatch(/data-testid="upload-counts">2 skipped · 1 failed</);
+  });
+
+  it("text per variant and paused", () => {
+    expect(uploadProgressText(p(), true, "wizard")).toBe("Paused · 12 of 20 uploaded");
+    expect(uploadProgressText(p(), false, "default")).toBe("Uploading 13 of 20");
+    expect(uploadProgressText(p(), true, "default")).toBe("Paused · 12 of 20 done");
+  });
+
+  it("thumbs: three stable slots, decorative, object URLs as img src", () => {
+    const html = renderToStaticMarkup(<UploadThumbs items={[{ key: 4, url: "blob:a" }]} />);
+    expect(html).toMatch(/<ul aria-hidden="true"/);
+    expect(html.match(/<li /g)).toHaveLength(3);
+    expect(html).toContain('src="blob:a"');
+    expect(html).toContain('alt=""');
+  });
+});
+
+describe("thumb strip (object URLs)", () => {
+  const setup = () => {
+    let n = 0;
+    const live = new Set<string>();
+    const revoked: string[] = [];
+    const strip = createThumbStrip({
+      createUrl: () => {
+        const u = `blob:${n++}`;
+        live.add(u);
+        return u;
+      },
+      revokeUrl: (u) => {
+        live.delete(u);
+        revoked.push(u);
+      },
+    });
+    return { strip, live, revoked };
+  };
+  const files = (k: number) => Array.from({ length: k }, () => new Blob(["x"]));
+
+  it("keeps the last 3 uploaded; revokes each URL as it leaves the strip", () => {
+    const { strip, live, revoked } = setup();
+    strip.track(0, files(5));
+    strip.uploaded(0);
+    strip.uploaded(1);
+    strip.uploaded(2);
+    expect(live.size).toBe(3);
+    expect(revoked).toEqual([]);
+    expect(strip.uploaded(3).map((t) => t.key)).toEqual([1, 2, 3]);
+    expect(revoked).toEqual(["blob:0"]);
+    expect(live.size).toBe(3);
+  });
+
+  it("failed / skipped / unknown keys never get a URL; duplicates are ignored", () => {
+    const { strip, live } = setup();
+    strip.track(10, files(3));
+    strip.settled(10);
+    expect(strip.uploaded(10)).toEqual([]); // forgotten
+    expect(strip.uploaded(99)).toEqual([]); // never tracked
+    strip.uploaded(11);
+    strip.uploaded(11);
+    expect(strip.items().map((t) => t.key)).toEqual([11]);
+    expect(live.size).toBe(1);
+  });
+
+  it("dispose (unmount / new queue) revokes every shown URL", () => {
+    const { strip, live, revoked } = setup();
+    strip.track(0, files(2));
+    strip.uploaded(0);
+    strip.uploaded(1);
+    strip.dispose();
+    expect(live.size).toBe(0);
+    expect(revoked).toHaveLength(2);
+    expect(strip.items()).toEqual([]);
+    expect(strip.uploaded(0)).toEqual([]); // files forgotten too
+  });
+
+  it("the hook disposes on unmount and on queue reset", () => {
+    const t = src("src/components/upload/UploadThumbs.tsx");
+    expect(t).toMatch(/return \(\) => \{\s*mountedRef\.current = false;\s*stripRef\.current\?\.dispose\(\);/);
+    expect(src("src/components/upload/Uploader.tsx")).toMatch(/queueRef\.current = q;\s*thumbs\.reset\(\);/);
+  });
+});
+
+// --- step 6: sorting -------------------------------------------------------------------------------
+
+describe("wizardChecklist (truthful mapping of every RunState)", () => {
+  const states = (s: RunState, finished = false) => wizardChecklist(s, finished).map((r) => r.state);
+
+  it("labels in order", () => {
+    expect(wizardChecklist("queued").map((r) => r.label)).toEqual([
+      "Checking for duplicates and blurry photos",
+      "Finding places and moments",
+      "Preparing your book",
+    ]);
+  });
+
+  it.each<[RunState, string[]]>([
+    ["queued", ["todo", "todo", "todo"]],
+    ["curating", ["current", "todo", "todo"]],
+    ["storytelling", ["done", "current", "todo"]],
+    ["captioning", ["done", "done", "current"]],
+    ["critiquing", ["done", "done", "current"]],
+    ["repairing", ["done", "done", "current"]],
+    ["validating", ["done", "done", "current"]],
+    ["done", ["done", "done", "done"]],
+    ["failed", ["todo", "todo", "todo"]],
+  ])("%s", (state, want) => {
+    expect(states(state)).toEqual(want);
+  });
+
+  it("finished (leaving for the editor) → all done, from any state", () => {
+    for (const s of ["queued", "curating", "validating"] as const) expect(states(s, true)).toEqual(["done", "done", "done"]);
+  });
+});
+
+describe("BuildProgress wizard variant", () => {
+  const base = { bookId: "b1", activeRunId: null, trigger: "build" as const, isPaid: false, dailyCap: 3 };
+
+  it("fan first, three checklist rows, keep-open line; no classic bar / draft note", () => {
+    const html = renderToStaticMarkup(<BuildProgress {...base} variant="wizard" preview={<PhotoFan urls={["https://x/1.jpg"]} />} />);
+    expect(html).toMatch(/data-testid="build-progress"[^>]*data-variant="wizard"|data-variant="wizard"[^>]*data-testid="build-progress"/);
+    expect(html.indexOf("build-photo-fan")).toBeLessThan(html.indexOf('data-testid="build-checklist"'));
+    for (const id of ["sift", "moments", "book"]) expect(html).toContain(`data-testid="build-step-${id}"`);
+    expect(html.match(/data-state="todo"/g)).toHaveLength(3); // queued
+    expect(html).toContain(WIZARD_BUILD_KEEP_OPEN_COPY);
+    expect(html).not.toContain("build-bar");
+    expect(html).not.toContain("build-ai-note");
+    for (const m of html.match(/<li [^>]*>/g) ?? []) expect(m).toContain("min-h-12");
+  });
+
+  it("classic variant unchanged", () => {
+    const html = renderToStaticMarkup(<BuildProgress {...base} />);
+    expect(html).toContain('data-testid="build-bar"');
+    expect(html).toContain('data-testid="build-step-photos"');
+    expect(html).not.toContain("data-variant");
+  });
+});
+
+describe("PhotoFan", () => {
+  it("three tilted cards; placeholders for missing photos; motion only when allowed", () => {
+    const html = renderToStaticMarkup(<PhotoFan urls={["https://x/1.jpg", "https://x/2.jpg"]} />);
+    expect(html.match(/data-testid="build-photo-fan-item"/g)).toHaveLength(3);
+    expect(html.match(/<img /g)).toHaveLength(2);
+    expect(html).toContain("-rotate-6");
+    expect(html).toContain("rotate-6");
+    expect(html).toContain('aria-hidden="true"');
+    const anim = html.match(/class="[^"]*animate-in[^"]*"/g) ?? [];
+    expect(anim.length).toBeGreaterThan(0);
+    for (const c of anim) expect(c).not.toMatch(/(^|\s|")animate-in/); // only motion-safe:animate-in
+    expect(renderToStaticMarkup(<PhotoFan urls={[]} />).match(/<img /g)).toBeNull();
+  });
+
+  it("fanPhotoUrls: draft order, skips unsigned, max 3", () => {
+    const ph = (id: string, url: string | null) => ({ id, thumbUrl: url, width: 1, height: 1 });
+    const photos = [ph("a", "u-a"), ph("b", null), ph("c", "u-c"), ph("d", "u-d"), ph("e", "u-e")];
+    expect(fanPhotoUrls(["d", "b", "a", "c", "e"], photos)).toEqual(["u-d", "u-a", "u-c"]);
+    expect(fanPhotoUrls(["b"], photos)).toEqual([]);
+    expect(fanPhotoUrls([], [])).toEqual([]);
+  });
+});

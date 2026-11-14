@@ -62,3 +62,35 @@ export function buildChecklist(state: RunState, progress: RunProgress | null, fi
     return { id: s.id, label: s.label, state: st, count: st === "current" ? countOf(s.id, progress) : null };
   });
 }
+
+// --- M19 T7 (D-071): the wizard's "Sorting your photos" checklist ------------------------------
+// Three rows (layout after wizard.png). Same rule as buildChecklist: a row is "done" only once the
+// server reported a state past every state it covers, "current" while the run is in one of them —
+// so each line only says what the server confirmed (no timers, no guessed progress).
+
+export type WizardChecklistStepId = "sift" | "moments" | "book";
+
+export type WizardChecklistStep = {
+  id: WizardChecklistStepId;
+  label: string;
+  state: ChecklistStepState;
+};
+
+const WIZARD_STEPS: readonly { id: WizardChecklistStepId; label: string; states: readonly RunState[] }[] = [
+  { id: "sift", label: "Checking for duplicates and blurry photos", states: ["curating"] },
+  { id: "moments", label: "Finding places and moments", states: ["storytelling"] },
+  { id: "book", label: "Preparing your book", states: ["captioning", "critiquing", "repairing", "validating"] },
+];
+
+/**
+ * The wizard checklist for a run state. `finished` = the client saw the run finish (leaving for the
+ * editor): every row done. queued → all pending; failed → all pending (shown as an error elsewhere).
+ */
+export function wizardChecklist(state: RunState, finished = false): WizardChecklistStep[] {
+  const r = finished ? rank("done") : state === "failed" ? -1 : rank(state);
+  return WIZARD_STEPS.map((s) => {
+    const last = Math.max(...s.states.map(rank));
+    const st: ChecklistStepState = r > last ? "done" : s.states.includes(state) && !finished ? "current" : "todo";
+    return { id: s.id, label: s.label, state: st };
+  });
+}

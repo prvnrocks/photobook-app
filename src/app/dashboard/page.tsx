@@ -1,4 +1,6 @@
+import { Plus } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { deleteBookAction } from "@/app/books/actions";
 import { Notice } from "@/components/app/Notice";
@@ -7,7 +9,7 @@ import { BookList } from "@/components/dashboard/BookList";
 import { EmptyState } from "@/components/dashboard/EmptyState";
 import { LibraryHeader } from "@/components/dashboard/LibraryHeader";
 import { LIBRARY_CONTAINER } from "@/components/dashboard/library-classes";
-import { StartPicker } from "@/components/upload/StartPicker";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { libraryCounts, librarySummary, parseLibraryQuery } from "@/lib/dashboard/library";
 import { libraryChip } from "@/lib/dashboard/library-cards";
@@ -80,8 +82,13 @@ export default async function DashboardPage({
           summary={summary}
           action={
             // Empty library: the EmptyState's call to action is the only "new book" button (and the one
-            // gold CTA). M13 T5: "New book" is the photo picker's label — picking photos starts the book.
-            count > 0 || books === null ? <StartPicker variant="button" tone="gold" testId="new-book" /> : undefined
+            // gold CTA). M19 (D-071): "New book" opens the creation wizard.
+            count > 0 || books === null ? (
+              <Link href="/books/new" className={buttonVariants({ variant: "accent", size: "touch" })} data-testid="new-book">
+                <Plus aria-hidden="true" data-icon="inline-start" />
+                New book
+              </Link>
+            ) : undefined
           }
         />
         <div className={`${LIBRARY_CONTAINER} pt-6 sm:pt-8`}>

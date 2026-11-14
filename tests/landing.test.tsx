@@ -64,7 +64,7 @@ describe("landing hero", () => {
   });
 
   it("CTA goes to login, then to a new book", () => {
-    expect(CTA_HREF).toBe("/login?next=%2Fbooks%2Fstart");
+    expect(CTA_HREF).toBe("/login?next=%2Fbooks%2Fnew");
     expect(fullText("cta-create")).toBe(HERO_CTA_LABEL);
     expect(HERO_CTA_LABEL).toBe("Make my book");
     expect(html).toContain(`href="${esc(CTA_HREF)}"`);

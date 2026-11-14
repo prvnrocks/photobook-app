@@ -1,5 +1,5 @@
 // M13 review fixes (UI): free-link state, the editor's AI path (Make it with AI / Redo with AI),
-// AI-off copy (D-024), toolbar selection key, picks-while-starting message.
+// AI-off copy (D-024), toolbar selection key, picks-while-starting message. (Setup-card copy removed in M19, D-071.)
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -12,13 +12,11 @@ import { EditorShell } from "@/components/editor/EditorShell";
 import { selectionKey } from "@/components/editor/EditorToolbar";
 import { MAKE_WITH_AI_LABEL } from "@/components/editor/MakeWithAiChip";
 import { buildNoteCopy } from "@/components/review/BuildProgress";
-import { titleCopy } from "@/components/upload/SetupCard";
 import { PICKS_WHILE_STARTING_COPY } from "@/components/upload/Uploader";
 import { startingCopy } from "@/components/upload/UploadSummary";
 import { editorAiPath, NO_AI_PATH, sessionAiPath } from "@/lib/editor/ai-path";
 import { devEditorData, devTransport } from "@/lib/editor/dev-fixture";
 import { freeLinkState } from "@/lib/publish/free-link";
-import { LOCK_COPY } from "@/lib/upload/setup-ui";
 
 const src = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
@@ -90,22 +88,15 @@ describe("editor Make it with AI chip", () => {
 });
 
 describe("AI-off copy (D-024)", () => {
-  it("build note, upload starting line, setup title", () => {
+  it("build note, upload starting line", () => {
     expect(buildNoteCopy(false, true)).toContain("AI");
     expect(buildNoteCopy(false, false)).toBe("Laying out your book…");
     expect(buildNoteCopy(true, false)).toBe("Opening your book…");
     expect(startingCopy(true)).toContain("AI");
     expect(startingCopy(false)).not.toMatch(/AI/);
-    expect(titleCopy(true).hint).toContain("suggest");
-    expect(titleCopy(false).hint).not.toContain("suggest");
-    expect(titleCopy(false).summary).not.toContain("suggest");
-    // M13 polish: AI off names the cover title the book really gets (the occasion default).
-    expect(titleCopy(false)).toEqual({ summary: "Title: Our Photobook", hint: "Leave empty for \u201cOur Photobook\u201d" });
-    expect(titleCopy(false, "wedding").summary).toBe("Title: Our Wedding");
-    expect(titleCopy(true, "wedding").summary).toBe("Title: we'll suggest one");
   });
   it("pages pass resolveAiMode() through", () => {
-    expect(src("src/app/books/[id]/upload/page.tsx")).toContain('aiOn={resolveAiMode() !== "off"}');
+    expect(src("src/app/books/[id]/upload/page.tsx")).toContain('aiOn: resolveAiMode() !== "off",');
     expect(src("src/app/books/[id]/build/page.tsx")).toContain('const aiOn = resolveAiMode() !== "off";');
   });
 });
@@ -120,9 +111,5 @@ describe("small fixes", () => {
   it("picks while the build starts are announced, not dropped silently", () => {
     expect(PICKS_WHILE_STARTING_COPY).toMatch(/add more photos from the editor/);
     expect(src("src/components/upload/Uploader.tsx")).toContain("setPicksIgnored(true)");
-  });
-  it("lock copy covers the details, not just shape/style", () => {
-    expect(LOCK_COPY.user_edited).not.toMatch(/^Page shape and style/);
-    expect(LOCK_COPY.user_edited).toContain("edited");
   });
 });

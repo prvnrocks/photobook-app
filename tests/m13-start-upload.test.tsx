@@ -1,12 +1,11 @@
-// M13 T5 + T6 (D-070): photos-first start + upload screen setup card and automatic first build.
+// M13 T5 + T6 (D-070): photos-first start + automatic first build (the setup card was removed in M19, D-071).
 // Node environment: pure helpers directly, components via renderToStaticMarkup, pages via source.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/books/actions", () => ({
-  startBookAction: vi.fn(),
   updateBookSetupAction: vi.fn(),
   deleteUnfinishedAction: vi.fn(),
 }));
@@ -16,19 +15,13 @@ vi.mock("next/navigation", async (orig) => ({
 }));
 
 const { readImageSizeFromBytes, probeFormat } = await import("@/lib/upload/image-size");
-const pending = await import("@/components/upload/pending-files");
 const auto = await import("@/lib/upload/auto-build-client");
-const setupUi = await import("@/lib/upload/setup-ui");
 const { displayBookTitle, UNTITLED_BOOK_LABEL } = await import("@/lib/book/display-title");
-const { StartPicker } = await import("@/components/upload/StartPicker");
-const { SetupCard } = await import("@/components/upload/SetupCard");
 const { UploadSummary } = await import("@/components/upload/UploadSummary");
 const { Uploader } = await import("@/components/upload/Uploader");
 const { EmptyState } = await import("@/components/dashboard/EmptyState");
 const copy = await import("@/lib/marketing/copy");
-type BookSetup = import("@/lib/book/setup").BookSetup;
 type UploaderProps = import("@/components/upload/Uploader").UploaderProps;
-type BookSetupController = import("@/components/upload/use-book-setup").BookSetupController;
 type QueueSummary = import("@/lib/upload/queue").QueueSummary;
 
 /** The opening tag carrying data-testid="id" (attribute order independent). */
@@ -66,37 +59,6 @@ function png(width: number, height: number): Uint8Array {
 
 const blob = (bytes: Uint8Array) => new Blob([bytes as BlobPart]);
 
-const SETUP: BookSetup = {
-  occasion: "other",
-  tone: "minimal",
-  captionLang: "en",
-  title: null,
-  format: "A5_PORTRAIT",
-  designStyle: "modern",
-};
-
-function controller(over: Partial<BookSetupController> = {}): BookSetupController {
-  const noop = () => {};
-  return {
-    setup: SETUP,
-    titleDraft: "",
-    titleError: null,
-    locks: { details: null, design: null },
-    status: { kind: "idle" },
-    frozen: false,
-    setOccasion: noop,
-    setTone: noop,
-    setCaptionLang: noop,
-    setFormat: noop,
-    setStyle: noop,
-    setTitle: noop,
-    flush: async () => {},
-    freeze: noop,
-    unfreeze: noop,
-    ...over,
-  } as BookSetupController;
-}
-
 // --- T5: page-shape hint from file headers -------------------------------------------------------
 
 describe("image-size (start format hint)", () => {
@@ -130,45 +92,6 @@ describe("image-size (start format hint)", () => {
   it("probeFormat gives up after the time box (portrait default on the server)", async () => {
     const slow = { slice: () => ({ arrayBuffer: () => new Promise<ArrayBuffer>(() => {}) }) } as unknown as Blob;
     expect(await probeFormat([slow], { timeoutMs: 5 })).toBeUndefined();
-  });
-});
-
-// --- T5: in-memory hand-off ----------------------------------------------------------------------
-
-describe("pending-files store", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-  const file = (name: string) => new File([new Uint8Array([1])], name, { type: "image/jpeg" });
-
-  it("is a no-op on the server (no window)", () => {
-    pending.stashPendingFiles(BOOK, { files: [file("a.jpg")] });
-    expect(pending.takePendingFiles(BOOK)).toBeNull();
-    expect(pending.hasPendingFiles(BOOK)).toBe(false);
-  });
-
-  it("hands the files over once, for that book only", () => {
-    vi.stubGlobal("window", {});
-    const files = [file("a.jpg"), file("b.jpg")];
-    pending.stashPendingFiles(BOOK, { files, suggestedFormat: "A5_LANDSCAPE" }, 1000);
-    expect(pending.hasPendingFiles("other", 1000)).toBe(false);
-    expect(pending.hasPendingFiles(BOOK, 1000)).toBe(true);
-    const got = pending.takePendingFiles(BOOK, 1001);
-    expect(got?.files.map((f) => f.name)).toEqual(["a.jpg", "b.jpg"]);
-    expect(got?.suggestedFormat).toBe("A5_LANDSCAPE");
-    expect(pending.takePendingFiles(BOOK, 1002)).toBeNull();
-  });
-
-  it("drops stale hand-offs and replaces an older book's", () => {
-    vi.stubGlobal("window", {});
-    pending.stashPendingFiles(BOOK, { files: [file("a.jpg")] }, 0);
-    expect(pending.takePendingFiles(BOOK, pending.PENDING_MAX_AGE_MS + 1)).toBeNull();
-    pending.stashPendingFiles("first", { files: [file("a.jpg")] }, 0);
-    pending.stashPendingFiles(BOOK, { files: [file("b.jpg")] }, 0);
-    expect(pending.takePendingFiles("first", 1)).toBeNull();
-    expect(pending.takePendingFiles(BOOK, 1)?.files).toHaveLength(1);
-    pending.stashPendingFiles(BOOK, { files: [] }, 0);
-    expect(pending.hasPendingFiles(BOOK, 0)).toBe(false);
   });
 });
 
@@ -243,32 +166,10 @@ describe("auto-build client", () => {
     const u = src("src/components/upload/Uploader.tsx");
     expect(u).toContain('track("upload_done", { photos: s.uploaded, failed: s.failed, skipped: s.skipped });');
     expect(u).toMatch(/if \(settled\) await autoStart\(ready, s\);/);
-    expect(u).toContain("await setupCtl.flush();");
+    // M19 (D-071): the setup card is gone — nothing to flush before the auto start.
+    expect(u).not.toContain("setupCtl");
     expect(u).toMatch(/track\("ai_build_done", \{\s*mode: "rules",[\s\S]*auto: true,/);
     expect(u).toContain("router.push(next.href);");
-  });
-});
-
-// --- T6: setup card rules ------------------------------------------------------------------------
-
-describe("setup-ui", () => {
-  it("feel and style follow the occasion until picked; locked design is never sent", () => {
-    const follow = setupUi.initialFollow(SETUP);
-    expect(follow).toEqual({ manualTone: false, manualStyle: false });
-    const open = { details: null, design: null };
-    expect(setupUi.occasionPatch("travel", follow, open)).toEqual({ occasion: "travel", tone: "fun", designStyle: "geometric" });
-    expect(setupUi.occasionPatch("wedding", { manualTone: true, manualStyle: false }, open)).toEqual({ occasion: "wedding", designStyle: "modern" });
-    expect(setupUi.occasionPatch("baby", follow, { details: null, design: "user_edited" })).toEqual({ occasion: "baby", tone: "nostalgic" });
-    // A remembered tone / earlier style pick counts as picked.
-    expect(setupUi.initialFollow({ ...SETUP, tone: "romantic", designStyle: "classic" })).toEqual({ manualTone: true, manualStyle: true });
-  });
-
-  it("withoutDesign / hasFields / summary", () => {
-    expect(setupUi.withoutDesign({ occasion: "baby", format: "A5_LANDSCAPE", designStyle: "classic" })).toEqual({ occasion: "baby" });
-    expect(setupUi.hasFields({})).toBe(false);
-    expect(setupUi.hasFields({ title: null })).toBe(true);
-    expect(setupUi.setupSummary(SETUP)).toBe("Modern style · Portrait · English captions · Minimal feel");
-    expect(setupUi.setupSummary({ ...SETUP, captionLang: "ar", format: "A5_LANDSCAPE" })).toContain("Landscape · Arabic captions");
   });
 });
 
@@ -289,91 +190,23 @@ describe("displayBookTitle (no more 'Untitled book' vs cover mismatch)", () => {
 
 // --- Markup --------------------------------------------------------------------------------------
 
-describe("StartPicker / dashboard / start page", () => {
-  it("hero: the whole card is the file input's label (iOS opens the picker from a direct tap)", () => {
-    const html = renderToStaticMarkup(<StartPicker variant="hero" testId="start-pick" />);
-    expect(html).toMatch(/^<div[^>]*><label[^>]*data-testid="start-pick"/);
-    expect(html).toMatch(/<label[^>]*min-h-56[\s\S]*<input type="file" multiple="" accept="image\/\*,\.heic,\.heif" class="sr-only" data-testid="start-pick-input"\/>/);
-    expect(html).toContain("has-focus-visible:ring-2");
-    expect(html).toContain("Choose photos");
-    expect(html).not.toContain('tabindex="-1"');
-  });
-
-  it("dashboard button keeps the new-book testid at 44 px", () => {
-    const html = renderToStaticMarkup(<StartPicker variant="button" testId="new-book" />);
-    expect(html).toMatch(/<label[^>]*h-11[^>]*data-testid="new-book"/);
-    expect(html).toContain('data-testid="new-book-input"');
-    expect(html).toContain("New book");
-  });
-
-  it("empty state: picker cta + Choose style first", () => {
+// M19 (D-071): the photos-first StartPicker is gone — every entry point opens the creation wizard.
+describe("dashboard / start page", () => {
+  it("empty state: a plain link to the wizard (no file input)", () => {
     const html = renderToStaticMarkup(<EmptyState />);
-    expect(html).toContain('data-testid="create-first-book-input"');
-    expect(html).toContain('href="/books/new"');
+    expect(html).not.toContain('type="file"');
+    expect(html).toMatch(/data-testid="create-first-book" href="\/books\/new"/);
   });
 
-  it("start page: signed-out → login with next=/books/start; Choose style first link", () => {
+  it("start page (M19, D-071): redirects to /books/new; signed-out → login with next=/books/new", () => {
     const page = src("src/app/books/start/page.tsx");
-    expect(page).toContain('redirect("/login?next=%2Fbooks%2Fstart")');
-    expect(page).toContain('<StartPicker variant="hero" testId="start-pick" />');
-    expect(page).toContain('href="/books/new"');
-    expect(page).toContain('data-testid="start-choose-style"');
-    const picker = src("src/components/upload/StartPicker.tsx");
-    expect(picker).toContain('export const START_LOGIN_HREF = "/login?next=%2Fbooks%2Fstart";');
-    expect(picker).toMatch(/stashPendingFiles\(res\.bookId[\s\S]*router\.push\(res\.next\)/);
+    expect(page).toContain('redirect("/login?next=%2Fbooks%2Fnew")');
+    expect(page).toContain('redirect("/books/new")');
   });
 
-  it("landing CTA goes to login → /books/start", () => {
-    expect(copy.CTA_HREF).toBe("/login?next=%2Fbooks%2Fstart");
+  it("landing CTA goes to login → /books/new (M19, D-071)", () => {
+    expect(copy.CTA_HREF).toBe("/login?next=%2Fbooks%2Fnew");
     expect(copy.CTA_LABEL).toBe("Make my book");
-  });
-});
-
-describe("SetupCard", () => {
-  it("occasion chips (Other checked), summary, Change disclosure collapsed", () => {
-    const html = renderToStaticMarkup(<SetupCard controller={controller()} />);
-    expect(html).toContain("What&#x27;s this book for?");
-    for (const id of ["wedding", "travel", "baby", "graduation", "family", "other"]) {
-      expect(html).toContain(`data-testid="setup-occasion-${id}"`);
-    }
-    expect(tag(html, "setup-occasion-other")).toContain('checked=""');
-    expect(tag(html, "setup-occasion-wedding")).not.toContain("checked");
-    expect(html).toMatch(/aria-expanded="false" aria-controls="[^"]+"[^>]*data-testid="setup-change"/);
-    expect(html).toMatch(/<div id="[^"]+" hidden=""[^>]*data-testid="setup-panel"/);
-    expect(html).toContain("Modern style · Portrait · English captions · Minimal feel");
-    expect(html).toContain("Title: we&#x27;ll suggest one");
-    // title input is dir=auto (Arabic titles); Arabic chip label renders RTL in the Arabic font
-    expect(html).toMatch(/<input id="[^"]+" type="text" dir="auto"[^>]*data-testid="setup-title"/);
-    expect(html).toMatch(/<span lang="ar" dir="rtl" class="font-arabic">العربية<\/span>/);
-    for (const m of html.match(/<label class="relative inline-flex[^"]*"/g) ?? []) expect(m).toContain("min-h-11");
-  });
-
-  it("selection snaps: radio chips / cards / segments have no colour transition (ring and fill change together)", () => {
-    const html = renderToStaticMarkup(<SetupCard controller={controller()} />);
-    const labels = html.match(/<label class="relative [^"]*"/g) ?? [];
-    expect(labels.length).toBeGreaterThan(10);
-    for (const l of labels) expect(l).not.toContain("transition");
-    expect(html).toMatch(/class="[^"]*transition-transform motion-reduce:transition-none[^"]*"/);
-    expect(renderToStaticMarkup(<SetupCard controller={controller()} aiOn={false} />)).toContain("Title: Our Photobook");
-  });
-
-  it("suggested shape hint; locked states say why", () => {
-    const hinted = renderToStaticMarkup(<SetupCard controller={controller()} suggestedFormat="A5_LANDSCAPE" />);
-    expect(hinted).toContain("Suggested for your photos");
-    const started = renderToStaticMarkup(<SetupCard controller={controller({ locks: { details: "ai_started", design: "ai_started" } })} />);
-    expect(started).toMatch(/data-locked="ai_started"/);
-    expect(started).toContain('data-testid="setup-locked"');
-    expect(started.match(/<fieldset[^>]*disabled=""/g)?.length).toBe(5);
-    const edited = renderToStaticMarkup(<SetupCard controller={controller({ locks: { details: null, design: "user_edited" } })} />);
-    expect(edited).toContain('data-testid="setup-design-locked"');
-    expect(edited.match(/<fieldset[^>]*disabled=""/g)?.length).toBe(2);
-    const frozen = renderToStaticMarkup(<SetupCard controller={controller({ frozen: true })} />);
-    expect(frozen).toContain('data-testid="setup-locked"');
-  });
-
-  it("status line is polite: saving / saved / error", () => {
-    expect(renderToStaticMarkup(<SetupCard controller={controller({ status: { kind: "saving" } })} />)).toMatch(/aria-live="polite"[^>]*data-testid="setup-status">Saving…/);
-    expect(renderToStaticMarkup(<SetupCard controller={controller({ status: { kind: "error", message: "Nope" } })} />)).toContain('data-testid="setup-error">Nope');
   });
 });
 
@@ -405,14 +238,14 @@ describe("UploadSummary next step + Uploader", () => {
 
   const props: UploaderProps = {
     bookId: "b1", userId: "u1", isPaid: false, existing: [], maxUpload: 150, readyCount: 0, pendingCount: 0, hasDoc: false,
-    setup: SETUP, locks: { details: null, design: null }, firstRun: "none", dailyCap: 3,
+    firstRun: "none", dailyCap: 3,
   };
 
-  it("fresh book: picker + setup card; built book: no setup card", () => {
+  it("fresh book: picker, no setup card (M19: setup = wizard steps 1–4); built book: continue", () => {
     const fresh = renderToStaticMarkup(<Uploader {...props} />);
     expect(fresh).toContain('data-testid="upload-pick"');
-    expect(fresh).toContain('data-testid="setup-card"');
-    const built = renderToStaticMarkup(<Uploader {...props} firstRun="done" locks={{ details: "ai_started", design: "ai_started" }} readyCount={8} />);
+    expect(fresh).not.toContain('data-testid="setup-card"');
+    const built = renderToStaticMarkup(<Uploader {...props} firstRun="done" readyCount={8} />);
     expect(built).not.toContain('data-testid="setup-card"');
     expect(tag(built, "upload-continue")).toContain('href="/books/b1/edit"');
   });
@@ -425,11 +258,12 @@ describe("UploadSummary next step + Uploader", () => {
     expect(active).toMatch(/data-testid="upload-continue"[^>]*>See your book being made/);
   });
 
-  it("upload page: consistent title, setup + locks from the server, auto start context", () => {
+  it("upload page: consistent title, wizard rule from the server, auto start context", () => {
     const page = src("src/app/books/[id]/upload/page.tsx");
-    expect(page).toContain("title={displayBookTitle(book.title, book.doc)}");
+    expect(page).toContain("const title = displayBookTitle(book.title, book.doc);");
+    expect(page).toContain("title={title}");
     expect(page).not.toContain("Untitled book");
-    expect(page).toContain("designLockReason({ hasRun, doc: book.doc })");
+    expect(page).toContain("isWizardUpload(firstRun, detailsLockReason({ hasRun, doc: book.doc }))");
     expect(page).toContain('const firstRun: FirstRunState = active ? "active" : hasRun ? "done" : "none";');
   });
 });

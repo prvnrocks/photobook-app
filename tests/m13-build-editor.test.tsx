@@ -114,9 +114,9 @@ describe("BuildProgress (T7)", () => {
     // Review fix: redirect only on a confirmed "no run"; a read error renders BuildProgress.
     expect(s).toContain("if (auto && activeRead.ok && !active) redirect(`/books/${book.id}/edit`);");
     expect(s).not.toContain("getActiveRunForBook(book.id).catch(() => null)");
-    expect(s).toContain("auto={auto}");
-    expect(s).toContain("aiOn={aiOn}");
-    expect(s).toContain("preview={preview}");
+    // M19 T7: shared props object for the classic and wizard screens.
+    expect(s).toMatch(/const progressProps = \{[\s\S]*auto,\n    aiOn,\n  \} as const;/);
+    expect(s).toContain("<BuildProgress {...progressProps} preview={preview} />");
     // Only the preview's photos are loaded + signed.
     expect(s).toContain("listReviewPhotos(book.id, wanted).catch(() => null)");
   });

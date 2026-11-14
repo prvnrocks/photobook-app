@@ -16,10 +16,10 @@ export const HERO_CTA_LABEL = "Make my book";
 /** Pricing CTA — same words as the hero (M14 final, user decision 2026-11-14). */
 export const CTA_LABEL = HERO_CTA_LABEL;
 /**
- * M13 T5 (D-070): photos first — /books/start is one big "Choose photos". Signed-in visitors skip
+ * M19 (D-071): the creation wizard at /books/new (was /books/start, D-070). Signed-in visitors skip
  * the login form: /login redirects straight to `next`.
  */
-export const CTA_HREF = "/login?next=%2Fbooks%2Fstart";
+export const CTA_HREF = "/login?next=%2Fbooks%2Fnew";
 
 /** Small caps line above the hero headline (M16). */
 export const HERO_EYEBROW = "AI photobooks · Abu Dhabi";

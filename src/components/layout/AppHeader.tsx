@@ -16,6 +16,15 @@ type AppHeaderProps = {
   displayName?: string | null;
   /** "library": the books screen's full desktop width (M18), so the wordmark lines up with the grid. */
   width?: HeaderWidth;
+  /** "plain" (M19 wizard): not sticky, no hairline or fill, so the page background shows through. */
+  variant?: HeaderVariant;
+};
+
+type HeaderVariant = "bar" | "plain";
+
+const BAR: Record<HeaderVariant, string> = {
+  bar: "sticky top-0 z-30 border-b border-accent-strong/45 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85",
+  plain: "relative z-30",
 };
 
 type HeaderWidth = "wide" | "library";
@@ -28,9 +37,17 @@ const INNER: Record<HeaderWidth, string> = {
 const MENU_ITEM =
   "flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-start text-sm font-medium text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring";
 
-function HeaderBar({ children, width = "wide" }: { children?: React.ReactNode; width?: HeaderWidth }) {
+function HeaderBar({
+  children,
+  width = "wide",
+  variant = "bar",
+}: {
+  children?: React.ReactNode;
+  width?: HeaderWidth;
+  variant?: HeaderVariant;
+}) {
   return (
-    <header className="sticky top-0 z-30 border-b border-accent-strong/45 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+    <header className={BAR[variant]}>
       <div className={cn("mx-auto flex h-14 w-full items-center gap-3", INNER[width])}>
         <Wordmark />
         <div className="ms-auto flex min-w-0 items-center">{children}</div>
@@ -52,9 +69,9 @@ function Wordmark() {
   );
 }
 
-export function AppHeader({ displayName, width }: AppHeaderProps) {
+export function AppHeader({ displayName, width, variant }: AppHeaderProps) {
   return (
-    <HeaderBar width={width}>
+    <HeaderBar width={width} variant={variant}>
       <AccountMenu displayName={displayName}>
         {displayName ? (
           <div className="border-b border-border px-3 pt-2 pb-3">
@@ -86,9 +103,9 @@ export function AppHeader({ displayName, width }: AppHeaderProps) {
 }
 
 /** Header shown by route loading.tsx files: same bar, a placeholder where the account button sits. */
-export function AppHeaderPlaceholder({ width }: { width?: HeaderWidth } = {}) {
+export function AppHeaderPlaceholder({ width, variant }: { width?: HeaderWidth; variant?: HeaderVariant } = {}) {
   return (
-    <HeaderBar width={width}>
+    <HeaderBar width={width} variant={variant}>
       <Skeleton className="size-9 rounded-full" />
     </HeaderBar>
   );

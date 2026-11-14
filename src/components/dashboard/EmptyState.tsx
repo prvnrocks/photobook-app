@@ -1,9 +1,9 @@
-// Shown on the dashboard when the user has no books yet. M13 T5 (D-070): the call to action is the
-// photo picker's label — picking photos starts the book; "Choose style first" keeps the form-first
-// path. M18: an empty library shelf in emerald & gold, three short steps, and the screen's one gold
-// call to action ("Make your first book"; the header band shows no New book button then).
+// Shown on the dashboard when the user has no books yet. M18: an empty library shelf in emerald &
+// gold, three short steps, and the screen's one gold call to action ("Make your first book"; the
+// header band shows no New book button then). M19 (D-071): the call to action opens the creation
+// wizard (/books/new).
 import Link from "next/link";
-import { StartPicker } from "@/components/upload/StartPicker";
+import { buttonVariants } from "@/components/ui/button-variants";
 
 /** Three emerald hard covers with gold foil on a shelf, the fourth slot a dashed "your book" outline. */
 function ShelfArt() {
@@ -68,13 +68,8 @@ export function EmptyState() {
             Choose your photos and we&apos;ll lay out the first draft for you. Nothing is shared until you say so.
           </p>
           <div className="mt-7 flex w-full max-w-xs flex-col gap-2">
-            <StartPicker variant="cta" label="Make your first book" testId="create-first-book" />
-            <Link
-              href="/books/new"
-              className="mx-auto inline-flex min-h-11 items-center rounded-md text-sm font-medium text-muted-foreground underline underline-offset-4 outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring lg:mx-0"
-              data-testid="empty-choose-style"
-            >
-              Choose style first
+            <Link href="/books/new" className={buttonVariants({ variant: "accent", size: "cta" })} data-testid="create-first-book">
+              Make your first book
             </Link>
           </div>
         </div>

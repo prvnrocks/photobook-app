@@ -57,24 +57,6 @@ export function isDesignUnlocked(input: SetupLockInput): boolean {
 
 // --- Action contracts (types live here: a "use server" file may only export async functions) ---
 
-export type StartBookInput = {
-  /** Page-shape hint from the picked photos (suggestFormat); absent → A5 portrait. */
-  format?: BookFormat;
-};
-
-export type StartBookResult =
-  | {
-      ok: true;
-      bookId: string;
-      /**
-       * Where to go next: /books/<id>/upload, with `?_ev=book_created` when analytics is on.
-       * Navigate client-side (router.push / replace) — <Analytics> reads the flash on the pathname
-       * change and strips it, exactly like createBookAction's redirect.
-       */
-      next: string;
-    }
-  | { ok: false; error: "unauthenticated" | "invalid" | "failed" };
-
 export type BookSetupField = "occasion" | "tone" | "captionLang" | "title" | "format" | "designStyle";
 
 export type BookSetupPatch = {

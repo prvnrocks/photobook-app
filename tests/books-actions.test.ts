@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   deleteUnfinished: vi.fn(),
   stripPhotoFromBookDoc: vi.fn(),
   revalidatePath: vi.fn(),
+  getOwnMemoryView: vi.fn(),
+  acceptLanguage: null as string | null,
 }));
 
 class RedirectError extends Error {
@@ -23,6 +25,10 @@ vi.mock("next/navigation", () => ({
   },
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
+vi.mock("next/headers", () => ({
+  headers: async () => new Headers(mocks.acceptLanguage === null ? {} : { "accept-language": mocks.acceptLanguage }),
+}));
+vi.mock("@/lib/db/memory", () => ({ getOwnMemoryView: mocks.getOwnMemoryView }));
 vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: async () => mocks.user }));
 vi.mock("@/lib/db/books", () => ({ createBook: mocks.createBook, stripPhotoFromBookDoc: mocks.stripPhotoFromBookDoc }));
 vi.mock("@/lib/db/photos", () => ({
@@ -34,6 +40,7 @@ const { createBookAction, deletePhotoAction, deleteUnfinishedAction } = await im
   "@/app/books/actions"
 );
 const { initialNewBookFormState } = await import("@/app/books/form-state");
+const { DEFAULT_TONE } = await import("@/lib/book/options");
 
 const BOOK_ID = "22222222-2222-4222-8222-222222222222";
 const PHOTO_ID = "33333333-3333-4333-8333-333333333333";
@@ -62,6 +69,8 @@ beforeEach(() => {
   mocks.stripPhotoFromBookDoc.mockReset().mockResolvedValue("updated");
   mocks.deleteUnfinished.mockReset().mockResolvedValue(0);
   mocks.revalidatePath.mockReset();
+  mocks.getOwnMemoryView.mockReset().mockResolvedValue({});
+  mocks.acceptLanguage = null;
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -77,6 +86,52 @@ describe("createBookAction", () => {
       format: "A5_LANDSCAPE",
       designStyle: "classic",
     });
+  });
+
+  it("revalidates the dashboard; redirect unchanged", async () => {
+    const r = await run(valid);
+    expect(r.redirect).toBe(`/books/${BOOK_ID}/upload`);
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/dashboard");
+  });
+
+  it("tone / captionLang present → used as sent; memory not read", async () => {
+    mocks.getOwnMemoryView.mockResolvedValue({ tone: "nostalgic", language: "ar" });
+    await run({ ...valid, tone: "minimal", captionLang: "en" });
+    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ tone: "minimal", captionLang: "en" });
+    expect(mocks.getOwnMemoryView).not.toHaveBeenCalled();
+  });
+
+  it("tone / captionLang absent, no memory → DEFAULT_TONE[occasion] + en (D-071)", async () => {
+    const r = await run({ title: "", occasion: "wedding" });
+    expect(r.redirect).toBe(`/books/${BOOK_ID}/upload`);
+    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({
+      title: null,
+      occasion: "wedding",
+      tone: DEFAULT_TONE.wedding,
+      captionLang: "en",
+      format: "A5_PORTRAIT",
+      designStyle: "modern",
+    });
+  });
+
+  it("tone / captionLang absent → remembered tone + language (D-032)", async () => {
+    mocks.getOwnMemoryView.mockResolvedValue({ tone: "nostalgic", language: "ar" });
+    mocks.acceptLanguage = "en-US,en;q=0.9";
+    await run({ occasion: "travel" });
+    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ tone: "nostalgic", captionLang: "ar" });
+  });
+
+  it("captionLang absent, no remembered language → Accept-Language (Arabic first → ar)", async () => {
+    mocks.acceptLanguage = "ar-AE,ar;q=0.9,en;q=0.8";
+    await run({ occasion: "travel", tone: "fun" });
+    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ tone: "fun", captionLang: "ar" });
+  });
+
+  it("memory read failing is best effort → defaults, book still created", async () => {
+    mocks.getOwnMemoryView.mockRejectedValue(new Error("db down"));
+    const r = await run({ occasion: "baby" });
+    expect(r.redirect).toBe(`/books/${BOOK_ID}/upload`);
+    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ tone: DEFAULT_TONE.baby, captionLang: "en" });
   });
 
   it("absent shape / style (pre-M10b form) → portrait + the occasion's default style (travel → geometric, D-068)", async () => {
@@ -121,8 +176,9 @@ describe("createBookAction", () => {
     ["occasion", { occasion: "birthday" }],
     ["occasion", { occasion: undefined }],
     ["tone", { tone: "sad" }],
+    ["tone", { tone: "" }],
     ["captionLang", { captionLang: "fr" }],
-    ["captionLang", { captionLang: undefined }],
+    ["captionLang", { captionLang: "" }],
     ["format", { format: "A4_PORTRAIT" }],
     ["format", { format: "" }],
     ["format", { format: "a5_landscape" }],

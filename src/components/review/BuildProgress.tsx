@@ -5,6 +5,9 @@
 // checklist when the page passes one (`preview`). Never blocks the user: every stop state links to
 // the editor, where the rule album already exists.
 // Only ids and counts are sent; nothing about photos is logged.
+// M19 T7 (D-071): variant "wizard" = step 6 "Sorting your photos" (first build): `preview` is the
+// photo fan, then a three-row checklist (wizardChecklist — only states the server reported) and
+// "Keep this tab open…". Run loop, redirect and every stop state are the same as the classic screen.
 import { Check, Circle, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -25,7 +28,7 @@ import {
 } from "@/lib/runs/client";
 import { abortableSleep, DriveWaker, driveRun, startWithRetry, type RetryCause } from "@/lib/runs/drive";
 import { limitCopy, newerSnapshot, stageCopy, type ProgressSnapshot } from "@/lib/runs/stage-copy";
-import { buildChecklist, type ChecklistStepState } from "@/lib/runs/build-checklist";
+import { buildChecklist, wizardChecklist, type ChecklistStepState } from "@/lib/runs/build-checklist";
 import { cn } from "@/lib/utils";
 
 export type BuildProgressProps = {
@@ -45,7 +48,12 @@ export type BuildProgressProps = {
   preview?: ReactNode;
   /** resolveAiMode() !== "off" from the page (D-024): false → neutral copy, no AI claims. Default true. */
   aiOn?: boolean;
+  /** "wizard" = creation wizard step 6 (M19, D-071): `preview` is the photo fan. Default "default". */
+  variant?: "default" | "wizard";
 };
+
+/** Wizard helper line (exported for tests). */
+export const WIZARD_BUILD_KEEP_OPEN_COPY = "Keep this tab open while we sort your photos.";
 
 /** The line under the draft preview (exported for tests). */
 export function buildNoteCopy(leaving: boolean, aiOn: boolean): string {
@@ -97,7 +105,17 @@ const STEP_STATE_SR: Record<ChecklistStepState, string> = {
   todo: "not started",
 };
 
-export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap, auto = false, preview, aiOn = true }: BuildProgressProps) {
+export function BuildProgress({
+  bookId,
+  activeRunId,
+  trigger,
+  isPaid,
+  dailyCap,
+  auto = false,
+  preview,
+  aiOn = true,
+  variant = "default",
+}: BuildProgressProps) {
   const router = useRouter();
   const editorHref = `/books/${bookId}/edit`;
   const loginHref = `/login?next=${encodeURIComponent(`/books/${bookId}/build`)}`;
@@ -353,6 +371,73 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap, 
 
   // running | leaving
   const leaving = status.kind === "leaving";
+  if (variant === "wizard") {
+    const rows = wizardChecklist(snap.state, leaving);
+    return (
+      <section
+        className="flex min-w-0 flex-col gap-5"
+        data-testid="build-progress"
+        data-variant="wizard"
+        data-state={snap.state}
+        aria-label="Sorting your photos"
+      >
+        {preview}
+        {/* Stages the server has reported — never a timer (src/lib/runs/build-checklist.ts). */}
+        <ol className="flex flex-col gap-2" aria-label="Build steps" data-testid="build-checklist">
+          {rows.map((s) => (
+            <li
+              key={s.id}
+              className={cn(
+                "flex min-h-12 min-w-0 items-center gap-3 rounded-xl border px-4 py-2.5",
+                s.state === "current" ? "border-accent-strong/40 bg-secondary" : "border-border bg-card",
+              )}
+              data-testid={`build-step-${s.id}`}
+              data-state={s.state}
+              aria-current={s.state === "current" ? "step" : undefined}
+            >
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "flex size-7 shrink-0 items-center justify-center rounded-full",
+                  s.state === "done" && "bg-primary text-primary-foreground",
+                  s.state === "current" && "text-accent-text",
+                  s.state === "todo" && "text-input",
+                )}
+              >
+                {s.state === "done" ? (
+                  <Check className="size-4" />
+                ) : s.state === "current" ? (
+                  <LoaderCircle className="size-6 animate-spin motion-reduce:animate-none" />
+                ) : (
+                  <Circle className="size-6" />
+                )}
+              </span>
+              <span
+                className={cn(
+                  "type-small min-w-0 flex-1 break-words",
+                  s.state === "todo" ? "text-muted-foreground" : "font-medium text-foreground",
+                )}
+              >
+                {s.label}
+                <span className="sr-only"> ({STEP_STATE_SR[s.state]})</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+        {status.kind === "running" && status.retrying ? (
+          <p className="type-small text-center text-warning" data-testid="build-reconnecting" data-cause={status.retrying}>
+            {RETRY_COPY[status.retrying]}
+          </p>
+        ) : null}
+        <p className="type-small text-center text-muted-foreground" data-testid="build-keep-open">
+          {leaving ? buildNoteCopy(true, aiOn) : WIZARD_BUILD_KEEP_OPEN_COPY}
+        </p>
+        <p className="sr-only" role="status" aria-live="polite">
+          {announced}
+        </p>
+      </section>
+    );
+  }
   const percent = leaving ? 100 : copy.percent;
   const steps = buildChecklist(snap.state, snap.progress, leaving);
   // With the draft on screen the checklist is secondary: tighter rows (not interactive).
