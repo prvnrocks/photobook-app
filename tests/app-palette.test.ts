@@ -1,5 +1,6 @@
-// M11 task 1/3: the app palette data matches globals.css and meets WCAG AA; book-facing tokens are
+// M11 task 1/3 (M17: emerald & gold values): the app palette data matches globals.css and meets WCAG AA; book-facing tokens are
 // unchanged (book text inherits --foreground, Watermark uses font-sans).
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CONTRAST_PAIRS, contrastRatio, PALETTE, paletteHex } from "@/lib/app/palette";
@@ -19,6 +20,16 @@ describe("app palette", () => {
     expect(root).toContain("  --foreground: oklch(0.145 0 0);\n");
     expect(css).toContain("  --font-sans: var(--font-inter), var(--font-cairo), system-ui, sans-serif;\n");
     expect(css).toContain("  --font-arabic: var(--font-cairo), var(--font-tajawal), sans-serif;\n");
+  });
+
+  it("leaves the M16 marketing .theme-home scope byte-identical (M17 only retunes :root)", () => {
+    const start = css.indexOf(".theme-home {");
+    const block = css.slice(start, css.indexOf("\n}\n", start) + 3);
+    expect(createHash("sha256").update(block).digest("hex")).toBe("2131dbdfd6a94f62c467d4dbad3d749d366ab08f4e69797013a1e6a21ac43426");
+    // type-eyebrow now reads --accent-text; marketing inherits it from :root and must keep rendering
+    // its eyebrows in the same antique gold it set as its own --accent-strong.
+    expect(block).toContain("  --accent-strong: #7a5f0e;\n");
+    expect(paletteHex("accent-text")).toBe("#7a5f0e");
   });
 
   it("display font falls through to Cairo before any Latin fallback face", () => {

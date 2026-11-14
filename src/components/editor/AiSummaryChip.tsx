@@ -34,7 +34,7 @@ export function AiSummaryChipView({ bookId, summary, onDismiss }: { bookId: stri
         title={summary.detail}
         data-testid="ai-summary-link"
       >
-        <Sparkles className="size-4 shrink-0 text-accent-strong" aria-hidden="true" />
+        <Sparkles className="size-4 shrink-0 text-accent-text" aria-hidden="true" />
         {/* Two lines at most (3-digit counts at 375 px) so "See N left out" is never cut off. */}
         <span className="line-clamp-2 min-w-0 break-words">
           <span className="text-foreground" data-testid="ai-summary-label">

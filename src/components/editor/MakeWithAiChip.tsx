@@ -19,7 +19,7 @@ export function makeWithAiHref(bookId: string): string {
 export function MakeWithAiChip({ bookId }: { bookId: string }) {
   return (
     <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card py-1 ps-4 pe-2" data-testid="ai-make-chip">
-      <Sparkles className="size-4 shrink-0 text-accent-strong" aria-hidden="true" />
+      <Sparkles className="size-4 shrink-0 text-accent-text" aria-hidden="true" />
       <p className="type-small line-clamp-2 min-w-0 flex-1 text-muted-foreground">{MAKE_WITH_AI_HINT}</p>
       <Link
         href={makeWithAiHref(bookId)}

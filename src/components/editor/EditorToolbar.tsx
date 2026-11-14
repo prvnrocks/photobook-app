@@ -6,7 +6,7 @@
 // M13 T8 (simple editor): at most 3 big primary tools per selection + a "More" button that opens
 // MoreSheet with the rest (registry.splitTools) — ≤ 4 buttons, no sideways scroll at 375 px,
 // every tool ≤ 2 taps away. Focus returns to More when its sheet (or a tool opened from it) closes.
-// M11 T13: app tokens; the active tool is filled navy with a terracotta marker (aria-pressed); a
+// M11 T13: app tokens; the active tool is filled navy with a terracotta marker (M17: deep emerald with a gold marker) (aria-pressed); a
 // one-time coach line sits in the toolbar (in flow, never over the page); panels get a grab handle
 // and a serif title.
 
@@ -50,7 +50,7 @@ export function EditorCoachLine({ show }: { show: boolean }) {
 export function CoachLineView({ onDismiss }: { onDismiss(): void }) {
   return (
     <div className="flex items-center gap-2 border-b border-border bg-secondary/60 ps-4 pe-1" data-testid="editor-coach">
-      <Lightbulb className="size-4 shrink-0 text-accent-strong" aria-hidden="true" />
+      <Lightbulb className="size-4 shrink-0 text-accent-text" aria-hidden="true" />
       <p className="type-small min-w-0 flex-1 py-1.5 text-secondary-foreground">{EDITOR_COACH_TEXT}</p>
       <button
         type="button"
@@ -79,7 +79,7 @@ function ToolButtonFace({ tool, active }: { tool: Pick<EditorTool, "icon" | "lab
     <>
       <Icon className="size-6" aria-hidden="true" />
       <span className="max-w-full truncate">{tool.label}</span>
-      {/* Not colour alone: the open tool also gets a terracotta bar. */}
+      {/* Not colour alone: the open tool also gets a gold bar (5.16:1 on deep emerald). */}
       {active ? <span aria-hidden="true" className="absolute inset-x-3 bottom-0.5 h-0.5 rounded-full bg-accent-strong" /> : null}
     </>
   );

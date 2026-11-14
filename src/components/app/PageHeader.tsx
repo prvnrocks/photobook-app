@@ -83,7 +83,7 @@ export function PageHeader({
               </p>
             )
           ) : null}
-          <h1 dir="auto" data-testid={titleTestId} className={cn("break-words text-foreground", size === "display" ? "type-display" : "type-h1")}>
+          <h1 dir="auto" data-testid={titleTestId} className={cn("break-words text-heading", size === "display" ? "type-display" : "type-h1")}>
             {title}
           </h1>
           {description ? (

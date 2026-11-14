@@ -39,13 +39,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   return (
     <div className="flex min-h-dvh flex-col bg-gradient-to-b from-secondary/70 via-background to-background">
       <div className="mx-auto flex h-14 w-full max-w-wide items-center px-gutter sm:px-6">
-        <SiteWordmark />
+        <SiteWordmark className="text-heading" />
       </div>
       <main className="mx-auto flex w-full max-w-sm min-w-0 flex-1 flex-col gap-6 px-gutter pt-6 pb-12 sm:justify-center sm:pt-0">
         <div className="flex min-w-0 flex-col gap-6 rounded-2xl border border-border bg-card px-5 py-7 shadow-lift sm:px-7">
           <header className="flex flex-col gap-2">
             <p className="type-eyebrow">Welcome</p>
-            <h1 className="type-h1 break-words text-foreground">Sign in to {APP_NAME}</h1>
+            <h1 className="type-h1 break-words text-heading">Sign in to {APP_NAME}</h1>
             <p className="type-body text-muted-foreground">No password needed. We&apos;ll email you a link and a code.</p>
           </header>
           <LoginForm next={next} error={error === "auth"} />

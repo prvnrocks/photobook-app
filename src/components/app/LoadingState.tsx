@@ -18,7 +18,7 @@ export function LoadingState({
 }) {
   return (
     <div role="status" aria-live="polite" data-testid={testId} className={cn("flex items-start gap-3 py-2", className)}>
-      <LoaderCircle className="mt-0.5 size-5 shrink-0 animate-spin text-accent-strong motion-reduce:animate-none" aria-hidden="true" />
+      <LoaderCircle className="mt-0.5 size-5 shrink-0 animate-spin text-accent-text motion-reduce:animate-none" aria-hidden="true" />
       <div className="type-small min-w-0">
         <p className="font-medium text-foreground">{label}</p>
         {description ? <p className="mt-0.5 text-muted-foreground">{description}</p> : null}

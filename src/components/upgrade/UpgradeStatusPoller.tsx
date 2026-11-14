@@ -98,7 +98,7 @@ export function upgradeSuccessPath(bookId: string): string {
 type Tone = "busy" | "success" | "error" | "neutral";
 
 const TONE_RING: Record<Tone, string> = {
-  busy: "bg-secondary text-accent-strong",
+  busy: "bg-secondary text-accent-text",
   success: "bg-success-soft text-success",
   error: "bg-destructive-soft text-destructive",
   neutral: "bg-secondary text-primary",
@@ -181,7 +181,7 @@ export function UpgradeStatusView({
           <span className={`flex size-16 items-center justify-center rounded-full ${TONE_RING.success}`}>
             <CheckCircle2 className="size-8" aria-hidden="true" />
           </span>
-          <h1 className="type-h1 text-foreground">Your book is upgraded</h1>
+          <h1 className="type-h1 text-heading">Your book is upgraded</h1>
           <p className="type-body text-muted-foreground">Thank you! Here&apos;s what you get:</p>
         </div>
         <ul className="type-small flex flex-col divide-y divide-border rounded-2xl border border-border bg-card px-4 shadow-card" data-testid="upgrade-benefits">

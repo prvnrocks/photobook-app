@@ -22,6 +22,8 @@
   --font-brand-ar: var(--font-lalezar-home), var(--font-cairo), sans-serif;
   --color-accent-strong: var(--accent-strong);
   --color-accent-strong-foreground: var(--accent-strong-foreground);
+  --color-accent-text: var(--accent-text);
+  --color-heading: var(--heading);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
   --color-info-border: var(--info-border);
@@ -50,7 +52,8 @@
   --text-body--line-height: 1.6;
   --text-small: 0.875rem;
   --text-small--line-height: 1.45;
-  /* Shadows: card = resting surfaces, lift = sheets, menus, book thumbnails. Warm navy tint. */
+  /* Shadows: card = resting surfaces, lift = sheets, menus, book thumbnails. Warm navy tint (kept in
+     M17: the marketing pages share these, and at 5–28 % alpha the tint reads neutral on ivory). */
   --shadow-card: 0 1px 2px rgb(30 42 71 / 0.05), 0 1px 3px rgb(30 42 71 / 0.07);
   --shadow-lift: 0 4px 10px -6px rgb(30 42 71 / 0.14), 0 14px 32px -14px rgb(30 42 71 / 0.28);
   /* Spacing rhythm: p-gutter (page side padding), gap-stack (between blocks), mt-section. */
@@ -99,40 +102,47 @@
 }
 
 :root {
-  /* Warm paper palette from the M10 book swatches; contrast ratios on /dev-style. */
-  --background: #fbf8f2;
+  /* M17 app palette "Emerald & gold" (D-067 tokens, M16 colours; .agentos/runs/m17.md). Light ivory
+     page, white cards, deep emerald #0E3B2E primary, gold #C9A227 for the one CTA per screen (ink
+     text), antique gold #7A5F0E for small gold text, emerald #1F6F54 focus ring. Gold never carries
+     text on light surfaces (2.24 on ivory). Contrast table: src/lib/app/palette.ts + /dev-style. */
+  --background: #faf6ee;
   --foreground: oklch(0.145 0 0);
   --card: #ffffff;
   --card-foreground: oklch(0.145 0 0);
   --popover: #ffffff;
   --popover-foreground: oklch(0.145 0 0);
-  --primary: #1e2a47;
-  --primary-foreground: #fbf8f2;
-  --secondary: #f1ebe1;
-  --secondary-foreground: #1e2a47;
-  --muted: #f3eee6;
-  --muted-foreground: #6b6257;
-  /* --accent stays the shadcn "subtle hover" surface; terracotta is --accent-strong. */
-  --accent: #f1ebe1;
-  --accent-foreground: #1e2a47;
+  --primary: #0e3b2e;
+  --primary-foreground: #faf6ee;
+  --secondary: #f1eadb;
+  --secondary-foreground: #0e3b2e;
+  --muted: #f2ece0;
+  --muted-foreground: #56625a;
+  /* --accent stays the shadcn "subtle hover" surface; gold is --accent-strong. */
+  --accent: #f1eadb;
+  --accent-foreground: #0e3b2e;
   --destructive: #b42318;
-  --border: #e6ded1;
-  --input: #8c8172;
-  --ring: #a65a3f;
+  --border: #e5dccb;
+  --input: #7c857a;
+  --ring: #1f6f54;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.75rem;
-  --accent-strong: #a65a3f;
-  --accent-strong-foreground: #ffffff;
-  --info: #2b4c8c;
-  --info-soft: #eef2f8;
-  --info-border: #c9d3e6;
-  --success: #1e6b45;
-  --success-soft: #edf5ef;
-  --success-border: #bfdcc8;
+  --accent-strong: #c9a227;
+  --accent-strong-foreground: #1b1b1d;
+  /* small gold text and icons on light surfaces (eyebrows, AI sparkle): antique gold */
+  --accent-text: #7a5f0e;
+  /* page titles and the header wordmark */
+  --heading: #0e3b2e;
+  --info: #2f5a78;
+  --info-soft: #edf3f5;
+  --info-border: #c5d6de;
+  --success: #1f6f54;
+  --success-soft: #ebf4ee;
+  --success-border: #bcd8c8;
   --warning: #8a5a12;
   --warning-soft: #fbf2e2;
   --warning-border: #ebcf9a;
@@ -322,7 +332,7 @@
   }
 }
 
-/* M11 type roles (app chrome). Headings: serif display; eyebrow: small tracked caps in terracotta. */
+/* M11 type roles (app chrome). Headings: serif display; eyebrow: small tracked caps in antique gold. */
 @utility type-display {
   font-family: var(--font-display);
   font-size: var(--text-display);
@@ -368,7 +378,7 @@
   letter-spacing: var(--text-eyebrow--letter-spacing);
   font-weight: 600;
   text-transform: uppercase;
-  color: var(--accent-strong);
+  color: var(--accent-text);
   /* tracking breaks Arabic joining (dir="auto" text resolving to RTL) */
   &:dir(rtl) {
     letter-spacing: 0;

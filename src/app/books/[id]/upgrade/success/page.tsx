@@ -33,7 +33,7 @@ export default async function UpgradeSuccessPage({ params }: { params: Promise<{
   } catch {
     return (
       <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-4 px-gutter py-10" data-testid="upgrade-load-error">
-        <h1 className="type-h1 text-foreground">We couldn&apos;t load this page</h1>
+        <h1 className="type-h1 text-heading">We couldn&apos;t load this page</h1>
         <p className="type-body text-muted-foreground">Please check your connection and try again.</p>
         <Link href={`/books/${id}/upgrade/success`} className={buttonVariants({ variant: "default", size: "cta" })}>
           Try again

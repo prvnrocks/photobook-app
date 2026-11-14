@@ -419,7 +419,7 @@ export function BuildProgress({ bookId, activeRunId, trigger, isPaid, dailyCap, 
                 "flex shrink-0 items-center justify-center rounded-full",
                 compact ? "size-6" : "size-7",
                 s.state === "done" && "bg-primary text-primary-foreground",
-                s.state === "current" && "bg-accent-strong/10 text-accent-strong",
+                s.state === "current" && "bg-accent-strong/15 text-accent-text",
                 s.state === "todo" && "text-input",
               )}
             >

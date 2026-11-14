@@ -1,4 +1,5 @@
-// Sticky top bar for signed-in pages (M11 T5, D-067): serif wordmark (home = dashboard) and one
+// Sticky top bar for signed-in pages (M11 T5, D-067; M17: deep emerald wordmark, gold dot and a gold
+// hairline under the bar): serif wordmark (home = dashboard) and one
 // account button. The account menu holds the user's name/email, Settings and Sign out, so nothing
 // is truncated at 375 px and sign-out is never one stray tap away.
 // Testids kept: header-user (name/email), header-settings (Settings link), sign-out (submit).
@@ -20,7 +21,7 @@ const MENU_ITEM =
 
 function HeaderBar({ children }: { children?: React.ReactNode }) {
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+    <header className="sticky top-0 z-30 border-b border-accent-strong/45 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
       <div className="mx-auto flex h-14 w-full max-w-wide items-center gap-3 px-gutter">
         <Wordmark />
         <div className="ms-auto flex min-w-0 items-center">{children}</div>
@@ -33,7 +34,7 @@ function Wordmark() {
   return (
     <Link
       href="/dashboard"
-      className="-ms-1 flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-1 font-display text-xl font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      className="-ms-1 flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-1 font-display text-xl font-semibold text-heading outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       data-testid="header-home"
     >
       <span aria-hidden="true" className="size-2 rounded-full bg-accent-strong" />

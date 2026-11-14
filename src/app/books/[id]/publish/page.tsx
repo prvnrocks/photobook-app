@@ -36,7 +36,7 @@ export default async function PublishPage({
     if (res.error === "not_found") notFound();
     return (
       <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-4 px-gutter py-10" data-testid="publish-load-error">
-        <h1 className="type-h1 text-foreground">We couldn&apos;t load this page</h1>
+        <h1 className="type-h1 text-heading">We couldn&apos;t load this page</h1>
         <p className="type-body text-muted-foreground">Please check your connection and try again.</p>
         <Link href={`/books/${id}/publish`} className={buttonVariants({ variant: "default", size: "cta" })}>
           Try again

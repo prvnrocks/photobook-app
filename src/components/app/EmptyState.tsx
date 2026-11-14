@@ -47,7 +47,7 @@ export function EmptyState({ title, description, action, art, className, heading
       className={`flex flex-col items-center rounded-2xl border border-border bg-card px-6 py-10 text-center shadow-card${className ? ` ${className}` : ""}`}
     >
       {art ?? <OpenBookArt />}
-      <Heading dir="auto" className="type-h2 mt-5 text-foreground">
+      <Heading dir="auto" className="type-h2 mt-5 text-heading">
         {title}
       </Heading>
       {description ? (

@@ -51,7 +51,7 @@ export function UpgradeSheet({ reason = "general", ctx }: { reason?: UpgradeReas
         </p>
       ) : null}
       <div className="flex items-start gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-strong/10 text-accent-strong">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-strong/15 text-accent-text">
           <Gem className="size-5" aria-hidden="true" />
         </span>
         <div className="min-w-0">

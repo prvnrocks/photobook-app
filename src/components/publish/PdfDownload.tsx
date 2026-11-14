@@ -199,7 +199,7 @@ function PdfProgress({ state, copy }: { state: PdfUiState; copy: string }) {
   return (
     <div className="type-small rounded-xl border border-border bg-background p-4" data-testid="pdf-progress">
       <p className="flex items-start gap-2 font-medium text-foreground">
-        <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-accent-strong motion-reduce:animate-none" aria-hidden="true" />
+        <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-accent-text motion-reduce:animate-none" aria-hidden="true" />
         <span className="min-w-0" data-testid="pdf-status-text">
           {copy}
         </span>
@@ -219,7 +219,7 @@ function PdfProgress({ state, copy }: { state: PdfUiState; copy: string }) {
               {step.state === "done" ? (
                 <CircleCheck className="size-4 shrink-0 text-success" aria-hidden="true" />
               ) : step.state === "current" ? (
-                <CircleDot className="size-4 shrink-0 text-accent-strong" aria-hidden="true" />
+                <CircleDot className="size-4 shrink-0 text-accent-text" aria-hidden="true" />
               ) : (
                 <Circle className="size-4 shrink-0 text-input" aria-hidden="true" />
               )}

@@ -114,7 +114,7 @@ export function EditorShareButton({ bookId, settle, share, fallbackHref, isPaid,
         aria-busy={busy}
         aria-describedby={descId}
         title={linkKind === "expired" ? "Opens sharing" : "Publishes your book and opens sharing"}
-        className="flex h-11 min-w-16 shrink-0 items-center justify-center rounded-lg bg-primary px-3 text-primary-foreground shadow-card outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:opacity-70"
+        className="flex h-11 min-w-16 shrink-0 items-center justify-center rounded-lg bg-accent-strong px-3 text-accent-strong-foreground shadow-card outline-none hover:bg-accent-strong/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:opacity-70"
         data-testid="editor-done"
         data-changes={hasChanges ? "true" : "false"}
         data-link={linkKind}
@@ -125,7 +125,7 @@ export function EditorShareButton({ bookId, settle, share, fallbackHref, isPaid,
             Share
           </span>
           <span
-            className="whitespace-nowrap text-[11px] font-medium text-primary-foreground/80"
+            className="whitespace-nowrap text-[11px] font-medium text-accent-strong-foreground/85"
             data-testid={showsChanges ? "editor-publish-changes" : "editor-share-note"}
           >
             {subtitle}

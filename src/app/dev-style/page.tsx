@@ -1,6 +1,6 @@
 // Dev-only style board (M11 task 3, D-067): the app tokens and shared components next to real
-// Classic and Modern <BookPage> thumbnails, for the user's sign-off. 404s in production builds
-// (incl. Vercel previews, which run NODE_ENV=production). Screenshots: docs/design/m11-style-board-*.png.
+// Classic and Modern <BookPage> thumbnails, for the user's sign-off (M17: emerald & gold palette). 404s in production builds
+// (incl. Vercel previews, which run NODE_ENV=production). Screenshots: docs/design/m11-style-board-*.png, m17-style-board-*.png.
 
 import { notFound } from "next/navigation";
 import { Ellipsis, Plus, Share2 } from "lucide-react";
@@ -141,9 +141,9 @@ export default function DevStyleBoard() {
     <BookFonts>
       <main className="mx-auto flex max-w-wide flex-col gap-section px-gutter py-8 sm:px-8 sm:py-12" data-testid="dev-style-board">
         <PageHeader
-          eyebrow="Photobook · M11 style board"
-          title="Classic paper, modern clarity"
-          description="App screens borrow the books' paper, ink and serif. Playfair Display for headings, Inter for reading, Cairo for Arabic. One terracotta call to action per screen."
+          eyebrow="Photobook · M17 style board"
+          title="Emerald & gold, quietly"
+          description="App screens wear the home page's emerald and gold on light ivory. Playfair Display for headings, Inter for reading, Cairo for Arabic. Deep emerald for actions, one gold call to action per screen."
           size="display"
         />
 

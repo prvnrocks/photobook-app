@@ -65,7 +65,7 @@ export function UploadSummary({ bookId, summary, finalize, onAddMore, next, aiOn
         </h2>
 
         {finalize && finalize.photos > 0 ? (
-          <ul className="flex list-disc flex-col gap-1.5 ps-5 text-base marker:text-accent-strong">
+          <ul className="flex list-disc flex-col gap-1.5 ps-5 text-base marker:text-accent-text">
             <li data-testid="summary-dates">
               {finalize.withDate} of {finalize.photos} with a date from the camera
             </li>
