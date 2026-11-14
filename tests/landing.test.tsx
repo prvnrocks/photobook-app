@@ -14,15 +14,18 @@ import {
   CTA_LABEL,
   HERO_CTA_LABEL,
   HERO_HEADLINE,
-  HERO_STICKER,
+  HERO_HEADLINE_ACCENT,
+  HERO_HEADLINE_LEAD,
+  HERO_SEAL,
   HERO_SUBCOPY,
+  HERO_TAG_LINE,
+  HERO_TAG_TITLE_AR,
   MARQUEE_ITEMS,
   OG_HEADLINE,
   OG_SUBLINE,
-  SHELF_SECTION_TITLE,
+  SECTION_LABELS,
 } from "@/lib/marketing/copy";
-import { CONFETTI, CONFETTI_COLORS, HERO_BOOK } from "@/lib/marketing/hero";
-import { SHELF_BOOKS, SHELF_DEFAULT_ID, SHELF_FILTERS } from "@/lib/marketing/shelf";
+import { FOIL_FLECKS, HERO_BOOK } from "@/lib/marketing/hero";
 import { EXAMPLE_BOOKS } from "@/lib/marketing/examples";
 import { faqItems } from "@/lib/marketing/faq";
 import { plans } from "@/lib/marketing/plans";
@@ -47,9 +50,12 @@ const fullText = (testId: string) => {
 const tagOf = (testId: string) => html.match(new RegExp(`<[^>]*data-testid="${testId}"[^>]*>`))?.[0] ?? "";
 
 describe("landing hero", () => {
-  it("headline is exactly the user's line (M14, kept in M15) in the hero heading", () => {
+  it("headline is exactly the user's line (M14, kept in M15/M16) in the hero heading", () => {
     expect(HERO_HEADLINE).toBe("Your memories, in print.");
-    expect(text("hero-heading")).toBe(HERO_HEADLINE);
+    // M16 sets the last words in foil; the heading's text is still exactly the line
+    expect(HERO_HEADLINE_LEAD + HERO_HEADLINE_ACCENT).toBe(HERO_HEADLINE);
+    expect(HERO_HEADLINE_ACCENT).toBe("in print.");
+    expect(fullText("hero-heading")).toBe(HERO_HEADLINE);
     expect(html).toContain(esc(HERO_SUBCOPY));
     expect(HERO_SUBCOPY).toBe("Upload your photos. AI turns them into a book you can share.");
   });
@@ -70,12 +76,20 @@ describe("landing hero", () => {
   });
 });
 
-describe("M15 hero (Direction A · Confetti)", () => {
-  it("one h1 (the headline) in the Bricolage brand face; CTA is the AA pink pill", () => {
+describe("M16 hero (Emerald & gold)", () => {
+  it("one h1 (the headline) in the Bricolage brand face; CTA is the gold foil pill with ink text", () => {
     expect(html.match(/<h1[\s>]/g)).toHaveLength(1);
     expect(tagOf("hero-heading")).toContain("font-brand");
-    expect(tagOf("cta-create")).toContain("bg-accent-strong");
+    expect(tagOf("cta-create")).toContain("home-foil-fill");
+    expect(tagOf("cta-create")).toContain("text-[#1b1b1d]");
     expect(tagOf("cta-create")).toContain("rounded-full");
+    expect(tagOf("section-hero")).toContain("home-leather");
+  });
+
+  it("two gold foil rules frame the hero; small caps eyebrow over a foil hairline", () => {
+    const hero = html.slice(html.indexOf('data-testid="section-hero"'), html.indexOf('data-testid="section-marquee"'));
+    expect(hero.match(/<span aria-hidden="true" class="home-foil-v /g)).toHaveLength(2);
+    expect(hero).toContain(esc("AI photobooks · Abu Dhabi"));
   });
 
   it("the hero book is HERO_BOOK: sized, described, the only high-priority image", () => {
@@ -86,23 +100,31 @@ describe("M15 hero (Direction A · Confetti)", () => {
     expect(img).toContain(`alt="${esc(HERO_BOOK.alt)}"`);
     // React also emits a <link rel="preload"> for it; count <img> tags only
     expect(html.match(/<img[^>]*fetchPriority="high"/gi)).toHaveLength(1);
+    // the only image on the page now that the shelf is gone
+    expect(html.match(/<img[\s>]/g)).toHaveLength(1);
   });
 
-  it("confetti is decorative CSS in the four confetti colours, every piece inside its box", () => {
-    expect(Object.values(CONFETTI_COLORS)).toEqual(["#ff1f84", "#ffc93c", "#18b8a6", "#ffffff"]);
-    for (const p of CONFETTI) {
-      expect(p.layer === "front" ? p.x >= -15 && p.x <= 100 : p.x >= 0 && p.x <= 100).toBe(true);
+  it("gold flecks: few, slow, decorative, every fleck inside its box; no confetti left", () => {
+    expect(FOIL_FLECKS.length).toBeLessThanOrEqual(10);
+    for (const p of FOIL_FLECKS) {
+      expect(p.layer === "front" ? p.x >= -15 && p.x <= 105 : p.x >= 0 && p.x <= 100).toBe(true);
       expect(p.y).toBeGreaterThanOrEqual(0);
       expect(p.y).toBeLessThanOrEqual(100);
-      expect(p.dur).toBeGreaterThanOrEqual(10);
+      expect(p.dur).toBeGreaterThanOrEqual(20);
+      expect(Math.max(p.w, p.h)).toBeLessThanOrEqual(12);
     }
-    expect(html.match(/class="home-confetti /g)?.length).toBe(CONFETTI.length);
-    expect(html).toMatch(/<div aria-hidden="true" class="pointer-events-none absolute inset-0 \[--cs/);
+    expect(html.match(/class="home-fleck /g)?.length).toBe(FOIL_FLECKS.length);
+    expect(html).not.toContain("home-confetti");
+    expect(html).toMatch(/<div aria-hidden="true" class="pointer-events-none absolute inset-0 \[--fs/);
   });
 
-  it("sticker + Arabic paper tag: true copy, Arabic in lang=ar with dir=auto", () => {
-    expect(HERO_STICKER.join(" ")).toBe("Free to try");
-    expect(html).toMatch(/<p lang="ar" class="[^"]*font-brand-ar[^"]*"><span dir="auto">لمّة العائلة<\/span>/);
+  it("foil seal + Arabic card: true copy, Arabic in lang=ar with dir=auto in the Lalezar face", () => {
+    expect(HERO_SEAL.join(" ")).toBe("Free to try");
+    expect(HERO_TAG_TITLE_AR).toBe("لمّة العائلة");
+    expect(html).toMatch(/<p lang="ar" data-testid="hero-tag-ar" class="[^"]*font-brand-ar[^"]*"><span dir="auto">لمّة العائلة<\/span>/);
+    expect(html).toContain(esc(HERO_TAG_LINE));
+    // the card is shown at every width (it is the landing's Arabic proof since M16)
+    expect(tagOf("hero-tag")).not.toMatch(/(^|\s)hidden(\s|")/);
   });
 
   it("marquee: true benefits once for readers, copies hidden, pause toggle", () => {
@@ -121,55 +143,14 @@ describe("M15 hero (Direction A · Confetti)", () => {
     expect(marquee).toContain("Pause scrolling text");
   });
 
-  it("section order: hero, marquee, how it works, shelf, pricing, FAQ", () => {
-    const order = ["section-hero", "section-marquee", "section-how", "section-shelf", "section-pricing", "section-faq"].map((id) =>
-      html.indexOf(`data-testid="${id}"`),
-    );
+  it("section order: hero, marquee, how it works, pricing, FAQ; the shelf is gone", () => {
+    const order = ["section-hero", "section-marquee", "section-how", "section-pricing", "section-faq"].map((id) => html.indexOf(`data-testid="${id}"`));
     expect(order.every((i) => i > 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(html).toContain(`>${SHELF_SECTION_TITLE}</h2>`);
-  });
-});
-
-describe("bookshelf (server render)", () => {
-
-  it("is a labelled carousel with one button per book, named by its title", () => {
-    expect(html).toContain('aria-roledescription="carousel"');
-    expect(html).toContain('aria-label="Sample books"');
-    for (const b of SHELF_BOOKS) {
-      expect(html).toContain(`data-testid="shelf-book-${b.id}"`);
-      expect(html).toContain(`aria-label="${esc(b.title)}"`);
-    }
-  });
-
-  it("default selection is The Day We Said Yes: current, only tab stop, title + View sample album", () => {
-    expect(SHELF_DEFAULT_ID).toBe("the-day-we-said-yes");
-    expect(tagOf(`shelf-book-${SHELF_DEFAULT_ID}`)).toContain("data-selected");
-    expect(html.match(/aria-current="true"/g)).toHaveLength(1);
-    expect(html.match(/<button[^>]*aria-current="true"[^>]*>/)?.[0]).toContain('aria-label="The Day We Said Yes"');
-    expect(html.match(/<button[^>]*aria-label="[^"]*"[^>]*tabindex="0"|<button[^>]*tabindex="0"[^>]*aria-label/g)?.length).toBe(1);
-    expect(html).toMatch(/data-testid="shelf-title"[^>]*><span dir="auto">The Day We Said Yes<\/span>/);
-    expect(text("shelf-view-sample")).toBe("View sample album");
-  });
-
-  it("the shelf sits below the fold: its cover is not high priority; far spines are lazy", () => {
-    const shelf = html.slice(html.indexOf('data-testid="bookshelf"'));
-    expect(shelf).not.toMatch(/fetchPriority="high"/i);
-    expect(html).toMatch(/<img[^>]*loading="lazy"[^>]*src="\/home\/books\/01-our-family.png"|<img[^>]*src="\/home\/books\/01-our-family.png"[^>]*loading="lazy"/);
-  });
-
-  it("filter chips: All pressed, one per filter, 44 px targets on phones", () => {
-    for (const f of SHELF_FILTERS) {
-      const tag = tagOf(`shelf-filter-${f.id}`);
-      expect(tag).toContain(`aria-pressed="${f.id === "all"}"`);
-      expect(tag).toContain("h-11");
-    }
-  });
-
-  it("book titles use dir=auto; preview dialog is closed (no second accent CTA in HTML)", () => {
-    expect(html.match(/<span dir="auto">[^<]+<\/span>/g)!.length).toBeGreaterThanOrEqual(2);
-    expect(html).toContain('data-testid="shelf-preview"');
-    expect(html).not.toContain('data-testid="shelf-preview-cta"');
+    expect(html).not.toContain("section-shelf");
+    expect(html).not.toContain("Pick a style to start");
+    expect(html).not.toContain("bookshelf");
+    for (const label of Object.values(SECTION_LABELS)) expect(html).toContain(esc(label));
   });
 });
 
@@ -205,8 +186,8 @@ describe("pricing equals the constants", () => {
 });
 
 describe("sections", () => {
-  it("renders hero, marquee, how it works, shelf, pricing, FAQ", () => {
-    for (const id of ["section-hero", "section-marquee", "section-how", "section-shelf", "section-pricing", "section-faq"]) {
+  it("renders hero, marquee, how it works, pricing, FAQ", () => {
+    for (const id of ["section-hero", "section-marquee", "section-how", "section-pricing", "section-faq"]) {
       expect(html).toContain(`data-testid="${id}"`);
     }
   });

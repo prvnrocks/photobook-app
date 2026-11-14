@@ -178,12 +178,14 @@ describe("settings (T7)", () => {
 describe("landing (T6)", () => {
   const html = renderToStaticMarkup(<LandingPage />);
 
-  it("hero: Bricolage display headline (M15), one accent CTA", () => {
+  it("hero: Bricolage display headline (M15), gold foil CTA with ink text (M16)", () => {
     expect(tagOf(html, "hero-heading")).toContain("font-brand");
-    expect(tagOf(html, "cta-create")).toContain("bg-accent-strong");
-    expect(html.match(/bg-accent-strong text-accent-strong-foreground/g)?.length).toBe(1);
+    expect(tagOf(html, "cta-create")).toContain("home-foil-fill");
+    expect(tagOf(html, "cta-create")).toContain("text-[#1b1b1d]");
     expect(html).toContain(CTA_LABEL);
-    expect(html).toContain(HERO_HEADLINE);
+    // M16 wraps the last words in a foil span; the heading text is unchanged
+    const heading = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)![1].replace(/<[^>]+>/g, "");
+    expect(heading).toBe(HERO_HEADLINE);
   });
 
   it("no raw amber/emerald palette classes left on public pages", () => {

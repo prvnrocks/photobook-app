@@ -194,60 +194,96 @@
   }
 }
 
-/* M15 home palette, Direction A "Confetti" (.agentos/runs/m15.md), scoped to the (marketing) layout.
-   Blush #FFD1EA hero with #FFB3DA blobs, ink #16121C text (13.7:1 on blush), CTA pink #D1006A with
-   white text (5.36:1), pop pink #FF1F84 only behind ink text (5.08:1) or as decoration, deep pink
-   #A3004F for pink text on blush (5.83:1). Sun/sea are confetti only. The page commits to one light
-   look (color-scheme: light, explicit colours) so a dark OS setting cannot make it unreadable.
-   App screens, the book render and print keep :root tokens. */
+/* M16 home palette "Emerald & gold" (.agentos/runs/m16.md; ref docs/design/m16-color-combos-ref.png),
+   scoped to the (marketing) layout. Deep emerald #0E3B2E leather hero, emerald #1F6F54 cards, cream
+   #F2E8D8 text on emerald and as the light page background, gold #C9A227 foil (CTA, rules, marquee,
+   focus on dark), ink #1B1B1D on cream/gold and in the footer. Contrast (WCAG 2.x):
+     cream on deep emerald 10.28 · gold on deep emerald 5.16 · ink on gold 7.11 · ink on cream 14.18
+     cream on emerald 5.00 · antique gold #7A5F0E on cream 4.99 (small caps on light) · gold on ink 7.11
+     focus: gold on deep emerald 5.16, deep emerald on cream 10.28, ink on gold 7.11.
+   Gold never carries text on cream (1.99) or on #1F6F54 (2.51) — rules/decoration only there.
+   One light look (color-scheme: light, explicit colours) so a dark OS setting cannot make it
+   unreadable. App screens, the book render and print keep :root tokens. */
 .theme-home {
   color-scheme: light;
-  --home-blush: #ffd1ea;
-  --home-blob: #ffb3da;
-  --home-pop: #ff1f84;
-  --home-pink-deep: #a3004f;
-  --home-ink: #16121c;
-  --home-ink-soft: #4a3b4d;
-  --home-paper: #fff7fb;
-  --background: #fff7fb;
-  --foreground: #16121c;
-  --card: #ffffff;
-  --card-foreground: #16121c;
-  --popover: #ffffff;
-  --popover-foreground: #16121c;
-  --primary: #16121c;
-  --primary-foreground: #ffffff;
-  --secondary: #ffd1ea;
-  --secondary-foreground: #16121c;
-  --muted: #ffe8f4;
-  --muted-foreground: #4a3b4d;
-  --accent: #ffe8f4;
-  --accent-foreground: #16121c;
-  --border: #f3c3dc;
-  --ring: #16121c;
-  --accent-strong: #d1006a;
-  --accent-strong-foreground: #ffffff;
+  --home-deep: #0e3b2e;
+  --home-emerald: #1f6f54;
+  --home-gold: #c9a227;
+  --home-gold-text: #7a5f0e;
+  --home-cream: #f2e8d8;
+  --home-ivory: #faf5ec;
+  --home-ink: #1b1b1d;
+  --home-ink-soft: #4a4740;
+  --background: #f2e8d8;
+  --foreground: #1b1b1d;
+  --card: #faf5ec;
+  --card-foreground: #1b1b1d;
+  --popover: #faf5ec;
+  --popover-foreground: #1b1b1d;
+  --primary: #0e3b2e;
+  --primary-foreground: #f2e8d8;
+  --secondary: #ebe0cc;
+  --secondary-foreground: #1b1b1d;
+  --muted: #ebe0cc;
+  --muted-foreground: #4a4740;
+  --accent: #ebe0cc;
+  --accent-foreground: #1b1b1d;
+  --border: #dccfb6;
+  --ring: #0e3b2e;
+  /* type-eyebrow and other accent text sit on cream: antique gold (4.99), not foil gold (1.99) */
+  --accent-strong: #7a5f0e;
+  --accent-strong-foreground: #faf5ec;
 }
 
-/* Paper confetti: slow drift + turn from each piece's resting rotation (--r). CSS only. */
-@keyframes home-confetti {
+/* Deep emerald leather: faint fine grain + softer pebble mottling (inline SVG noise, no image
+   requests), a soft emerald glow from above and a vignette at the foot. Text contrast is checked
+   against the lightest possible point (glow peak + pebble, #1f5443): cream 7.19, cream-muted
+   #d7cdb9 5.53, pale gold #e3c766 5.25 (small gold text in the hero), headline foil #d9b84a→#e8d290
+   ≥ 4.53. Foil gold #c9a227 (3.61 there) is used in the hero for rules, seal and CTA fill only. */
+@utility home-leather {
+  background-color: #0e3b2e;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .2 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.045' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse 70% 55% at 50% 0%, rgb(31 111 84 / 0.3), transparent 72%),
+    radial-gradient(ellipse 90% 50% at 50% 110%, rgb(0 0 0 / 0.32), transparent 70%);
+}
+/* Gold foil: a vertical rule that fades in and out at its ends, a horizontal hairline, a fill. */
+@utility home-foil-v {
+  background-image: linear-gradient(180deg, transparent, #c9a227 7%, #e6cf7a 38%, #b8962a 64%, #c9a227 90%, transparent);
+}
+@utility home-foil-h {
+  background-image: linear-gradient(90deg, #b8962a, #e6cf7a 45%, #c9a227);
+}
+@utility home-foil-fill {
+  background-color: #c9a227;
+  background-image: linear-gradient(115deg, #c9a227 0%, #ddc163 38%, #c9a227 58%, #bf9a23 100%);
+}
+/* Round foil seal: lightest #f0dc94 to darkest #b8962a — ink text stays ≥ 6.09:1 everywhere. */
+/* Headline foil text: the lightest gold stops only, so contrast holds on the leather (≥ 4.53). */
+@utility home-foil-text {
+  color: #e3c766;
+  background-image: linear-gradient(100deg, #d9b84a 0%, #e8d290 40%, #d9b84a 70%, #e3c766 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+@utility home-seal {
+  background-image: radial-gradient(circle at 32% 26%, #f0dc94 0%, #d4b244 42%, #c9a227 66%, #b8962a 100%);
+}
+
+/* Foil flecks: slow drift + a soft shimmer from each fleck's resting rotation (--r). CSS only. */
+@keyframes home-fleck {
   0% {
     transform: translate3d(0, 0, 0) rotate(var(--r));
+    opacity: 0.55;
   }
   50% {
-    transform: translate3d(5px, 10px, 0) rotate(calc(var(--r) + 14deg));
+    opacity: 0.95;
   }
   100% {
-    transform: translate3d(-4px, 18px, 0) rotate(calc(var(--r) - 8deg));
-  }
-}
-/* Organic blobs breathe very slowly (border-radius morph, no layout). */
-@keyframes home-blob {
-  0% {
-    border-radius: 46% 54% 38% 62% / 58% 42% 58% 42%;
-  }
-  100% {
-    border-radius: 58% 42% 52% 48% / 44% 58% 42% 56%;
+    transform: translate3d(4px, 12px, 0) rotate(calc(var(--r) + 20deg));
+    opacity: 0.7;
   }
 }
 @keyframes home-marquee {
@@ -255,16 +291,14 @@
     transform: translate3d(-50%, 0, 0);
   }
 }
-@utility home-confetti {
+@utility home-fleck {
   transform: rotate(var(--r));
+  opacity: 0.8;
+  border-radius: 1px;
+  background-image: linear-gradient(135deg, #f3e2a0, #c9a227 50%, #8a6d12);
+  box-shadow: 0 0 6px rgb(201 162 39 / 0.35);
   @media (prefers-reduced-motion: no-preference) {
-    animation: home-confetti var(--dur, 14s) ease-in-out var(--delay, 0s) infinite alternate;
-  }
-}
-@utility home-blob {
-  border-radius: 46% 54% 38% 62% / 58% 42% 58% 42%;
-  @media (prefers-reduced-motion: no-preference) {
-    animation: home-blob 22s ease-in-out infinite alternate;
+    animation: home-fleck var(--dur, 26s) ease-in-out var(--delay, 0s) infinite alternate;
   }
 }
 /* Marquee: two copies of the list, the track slides by half its width. Hover, keyboard focus or

@@ -4,6 +4,9 @@
 
 /** Hero headline (M14, user decision 2026-11-14: use exactly as written). */
 export const HERO_HEADLINE = "Your memories, in print.";
+/** M16: the headline's last words are set in gold foil; the text itself never changes. */
+export const HERO_HEADLINE_ACCENT = "in print.";
+export const HERO_HEADLINE_LEAD = HERO_HEADLINE.slice(0, HERO_HEADLINE.length - HERO_HEADLINE_ACCENT.length);
 
 export const HERO_SUBCOPY = "Upload your photos. AI turns them into a book you can share.";
 
@@ -12,19 +15,21 @@ export const HERO_CTA_LABEL = "Make my book";
 
 /** Pricing CTA — same words as the hero (M14 final, user decision 2026-11-14). */
 export const CTA_LABEL = HERO_CTA_LABEL;
-/** CTA in the bookshelf preview card (M14). */
-export const SHELF_PREVIEW_CTA_LABEL = "Make a book like this";
-/** Small line under the bookshelf preview CTA. */
-export const CTA_NOTE = "Free to try. No card needed.";
 /**
  * M13 T5 (D-070): photos first — /books/start is one big "Choose photos". Signed-in visitors skip
  * the login form: /login redirects straight to `next`.
  */
 export const CTA_HREF = "/login?next=%2Fbooks%2Fstart";
 
-/** Sticker on the hero book (M15, Omsom-style starburst), one entry per line. True for every new book. */
-export const HERO_STICKER = ["Free", "to try"] as const;
-/** Paper tag on the desktop hero: the Arabic sample title + one true line about captions. */
+/** Small caps line above the hero headline (M16). */
+export const HERO_EYEBROW = "AI photobooks · Abu Dhabi";
+/** Gold foil seal on the hero book (M16), one entry per line. True for every new book. */
+export const HERO_SEAL = ["Free", "to try"] as const;
+/**
+ * Cream card on the hero (M16): an Arabic sample title + one true line about captions. It is the
+ * landing page's proof that Arabic renders (Lalezar, RTL) since the M15 shelf was removed.
+ */
+export const HERO_TAG_TITLE_AR = "لمّة العائلة";
 export const HERO_TAG_LINE = "Captions in Arabic or English";
 
 /** Scrolling strip under the hero (M15). True benefits only — no invented claims. */
@@ -36,11 +41,10 @@ export const MARQUEE_ITEMS = [
   "Made in Abu Dhabi",
 ] as const;
 
-/** Bookshelf section below the hero (M15). */
-export const SHELF_SECTION_TITLE = "Pick a style to start";
-export const SHELF_SECTION_TEXT = "Tap a book to open a sample. Captions can be in English or Arabic.";
+/** Small caps labels above the section headings (M16). */
+export const SECTION_LABELS = { how: "Three steps", pricing: "Per book, not per month", faq: "Good to know" } as const;
 
-/** "How it works" row under the bookshelf (M14 mockup: icon + title, one short line each). */
+/** "How it works" row under the marquee (M14 mockup: icon + title, one short line each). */
 export const HOW_IT_WORKS = [
   { icon: "upload", title: "Upload photos", text: "Straight from your phone. Screenshots, blurry shots and duplicates are skipped." },
   { icon: "ai", title: "AI builds your book", text: "Grouped into moments by date and place, laid out, captioned. You can change everything." },

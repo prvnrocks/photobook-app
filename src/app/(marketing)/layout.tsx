@@ -1,5 +1,5 @@
 // Public marketing + legal pages: shared header/footer. No session reads (stays static).
-// theme-home (globals.css) maps the M15 "Confetti" palette onto the app tokens for these pages only.
+// theme-home (globals.css) maps the M16 "Emerald & gold" palette onto the app tokens for these pages only.
 // The display faces are loaded here only, so app screens, the book render and print never download them.
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque } from "next/font/google";
@@ -18,7 +18,7 @@ const bricolage = Bricolage_Grotesque({
   display: "swap",
 });
 
-// Arabic display for the Arabic sample book (same file the book fonts use; Next dedupes the asset).
+// Arabic display for the hero's Arabic sample card (same file the book fonts use; Next dedupes the asset).
 // No fallback face: next/font's adjusted fallback has Arabic glyphs and would mask Cairo.
 const lalezar = localFont({
   variable: "--font-lalezar-home",
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ffd1ea",
+  themeColor: "#0e3b2e",
 };
 
 export default function MarketingLayout({ children }: Readonly<{ children: React.ReactNode }>) {
