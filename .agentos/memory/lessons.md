@@ -139,3 +139,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-14, ui) With a glow/noise background, check text contrast at the lightest point, not the base colour.
 - (2026-11-14, next) OG routes inside a route group serve at a hashed path — read og:image from the page meta.
 - (2026-11-14, ui) .theme-home overrides only some tokens; after changing :root, diff '/' pixels against HEAD.
+- (2026-11-14, ui) sr-only text inside an overflow-x-auto scroller that isn't positioned escapes and widens the page — make the scroller relative.
