@@ -181,3 +181,6 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - Photos first (/books/start, dashboard picker), setup card while uploading (occasion chips + Change; smart defaults from locale/photos/occasion; shape/style lock at first AI run — D-070/D-070a), automatic first AI build, build screen previews the draft then opens the editor, "AI kept X of Y photos" chip + More → See all photos / Redo with AI, "Make it with AI" for books without a build, simple editor (≤3 tools + More, plain words), Share = publish + share screen (truthful free-link days), 3-step bar, one book name everywhere.
 - Gate: 2 taps after photos (was 5), first preview ~36 s (was ~75 s), WhatsApp ~61 s (was ~80 s); analytics once each; Arabic + setup variants; all live specs green. User signed off; deployed.
 - NEXT: phone check (iPhone from WhatsApp, low-end Android); measure login drop-off → decide guest mode (M13b).
+
+## 2026-11-14 — Milestone 14 (Home hero) — done + deployed
+- Mockup-based home: animated bookshelf (selected book turns to cover, hover lift, arrows/swipe/keys, filters), clickable books → preview card with "Make a book like this", palette scoped to marketing pages, responsive 375–1536, one Arabic sample book. "/" +8 kB.

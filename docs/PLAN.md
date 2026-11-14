@@ -217,6 +217,9 @@ Plan: `.agentos/runs/m13.md`, D-070.
 **Done when:** at 375 px a first-time user (40 photos, AI replay) needs at most 3 app taps after choosing photos to reach the WhatsApp share, the first preview shows in under 60 s, all analytics events fire, all specs and goldens are green, the user signs off the walkthrough, and the reviewer approves.
 > M13 (2026-11-13): built, reviewed APPROVED (fixes applied), gate PASS: 7221 vitest, goldens unchanged, e2e/m13-first-run (2 taps after photos vs 5; first preview ~36 s vs ~75 s; WhatsApp ~61 s vs ~80 s), all live specs green (upload-auth Mapbox only). User signed off the walkthrough. Deployed 2026-11-13. No migration. Open: guest mode (M13b) after measuring login drop-off; Arabic default cover title for untitled Arabic books.
 
+## Milestone 14 — Home page hero (2026-11-14)
+- [x] New home hero from the user's mockup: "Your memories, in print.", animated clickable bookshelf (filters, pulled-out covers, preview card), mockup palette, responsive; one Arabic sample book. Plan/report: `.agentos/runs/m14.md`. Deployed 2026-11-14.
+
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
 - [ ] AI "story mode": a short paragraph per chapter (AI-picked backgrounds moved into M10c)
