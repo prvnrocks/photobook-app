@@ -22,6 +22,24 @@ export const CTA_NOTE = "Free to try. No card needed.";
  */
 export const CTA_HREF = "/login?next=%2Fbooks%2Fstart";
 
+/** Sticker on the hero book (M15, Omsom-style starburst), one entry per line. True for every new book. */
+export const HERO_STICKER = ["Free", "to try"] as const;
+/** Paper tag on the desktop hero: the Arabic sample title + one true line about captions. */
+export const HERO_TAG_LINE = "Captions in Arabic or English";
+
+/** Scrolling strip under the hero (M15). True benefits only — no invented claims. */
+export const MARQUEE_ITEMS = [
+  "AI picks your best photos",
+  "Arabic & English captions",
+  "Share on WhatsApp",
+  "Print-ready PDF",
+  "Made in Abu Dhabi",
+] as const;
+
+/** Bookshelf section below the hero (M15). */
+export const SHELF_SECTION_TITLE = "Pick a style to start";
+export const SHELF_SECTION_TEXT = "Tap a book to open a sample. Captions can be in English or Arabic.";
+
 /** "How it works" row under the bookshelf (M14 mockup: icon + title, one short line each). */
 export const HOW_IT_WORKS = [
   { icon: "upload", title: "Upload photos", text: "Straight from your phone. Screenshots, blurry shots and duplicates are skipped." },

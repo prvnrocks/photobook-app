@@ -9,7 +9,19 @@ import { ExampleBooks } from "@/components/marketing/ExampleBooks";
 import { LIMITS } from "@/lib/ai/limits";
 import { SUPPORT_EMAIL } from "@/lib/brand";
 import { retentionSummary } from "@/lib/cleanup/rules";
-import { CTA_HREF, CTA_LABEL, HERO_CTA_LABEL, HERO_HEADLINE, HERO_SUBCOPY, OG_HEADLINE, OG_SUBLINE } from "@/lib/marketing/copy";
+import {
+  CTA_HREF,
+  CTA_LABEL,
+  HERO_CTA_LABEL,
+  HERO_HEADLINE,
+  HERO_STICKER,
+  HERO_SUBCOPY,
+  MARQUEE_ITEMS,
+  OG_HEADLINE,
+  OG_SUBLINE,
+  SHELF_SECTION_TITLE,
+} from "@/lib/marketing/copy";
+import { CONFETTI, CONFETTI_COLORS, HERO_BOOK } from "@/lib/marketing/hero";
 import { SHELF_BOOKS, SHELF_DEFAULT_ID, SHELF_FILTERS } from "@/lib/marketing/shelf";
 import { EXAMPLE_BOOKS } from "@/lib/marketing/examples";
 import { faqItems } from "@/lib/marketing/faq";
@@ -26,9 +38,16 @@ const text = (testId: string) => {
   const m = html.match(new RegExp(`data-testid="${testId}"[^>]*>([\\s\\S]*?)</`));
   return m?.[1] ?? null;
 };
+/** Visible text of an element whose children include markup (e.g. the CTA's arrow badge). */
+const fullText = (testId: string) => {
+  const m = html.match(new RegExp(`<(\\w+)[^>]*data-testid="${testId}"[^>]*>([\\s\\S]*?)</\\1>`));
+  return m ? m[2].replace(/<[^>]+>/g, "") : null;
+};
+
+const tagOf = (testId: string) => html.match(new RegExp(`<[^>]*data-testid="${testId}"[^>]*>`))?.[0] ?? "";
 
 describe("landing hero", () => {
-  it("headline is exactly the user's line (M14) in the hero heading", () => {
+  it("headline is exactly the user's line (M14, kept in M15) in the hero heading", () => {
     expect(HERO_HEADLINE).toBe("Your memories, in print.");
     expect(text("hero-heading")).toBe(HERO_HEADLINE);
     expect(html).toContain(esc(HERO_SUBCOPY));
@@ -37,7 +56,7 @@ describe("landing hero", () => {
 
   it("CTA goes to login, then to a new book", () => {
     expect(CTA_HREF).toBe("/login?next=%2Fbooks%2Fstart");
-    expect(text("cta-create")).toBe(HERO_CTA_LABEL);
+    expect(fullText("cta-create")).toBe(HERO_CTA_LABEL);
     expect(HERO_CTA_LABEL).toBe("Make my book");
     expect(html).toContain(`href="${esc(CTA_HREF)}"`);
     // pricing repeats the hero's words (M14 final)
@@ -51,8 +70,68 @@ describe("landing hero", () => {
   });
 });
 
+describe("M15 hero (Direction A · Confetti)", () => {
+  it("one h1 (the headline) in the Bricolage brand face; CTA is the AA pink pill", () => {
+    expect(html.match(/<h1[\s>]/g)).toHaveLength(1);
+    expect(tagOf("hero-heading")).toContain("font-brand");
+    expect(tagOf("cta-create")).toContain("bg-accent-strong");
+    expect(tagOf("cta-create")).toContain("rounded-full");
+  });
+
+  it("the hero book is HERO_BOOK: sized, described, the only high-priority image", () => {
+    expect(HERO_BOOK.src).toBe("/home/books/08-the-day-we-said-yes-cover.png");
+    const img = html.match(new RegExp(`<img[^>]*src="${HERO_BOOK.src}"[^>]*>`))![0];
+    expect(img).toContain(`width="${HERO_BOOK.w}"`);
+    expect(img).toContain(`height="${HERO_BOOK.h}"`);
+    expect(img).toContain(`alt="${esc(HERO_BOOK.alt)}"`);
+    // React also emits a <link rel="preload"> for it; count <img> tags only
+    expect(html.match(/<img[^>]*fetchPriority="high"/gi)).toHaveLength(1);
+  });
+
+  it("confetti is decorative CSS in the four confetti colours, every piece inside its box", () => {
+    expect(Object.values(CONFETTI_COLORS)).toEqual(["#ff1f84", "#ffc93c", "#18b8a6", "#ffffff"]);
+    for (const p of CONFETTI) {
+      expect(p.layer === "front" ? p.x >= -15 && p.x <= 100 : p.x >= 0 && p.x <= 100).toBe(true);
+      expect(p.y).toBeGreaterThanOrEqual(0);
+      expect(p.y).toBeLessThanOrEqual(100);
+      expect(p.dur).toBeGreaterThanOrEqual(10);
+    }
+    expect(html.match(/class="home-confetti /g)?.length).toBe(CONFETTI.length);
+    expect(html).toMatch(/<div aria-hidden="true" class="pointer-events-none absolute inset-0 \[--cs/);
+  });
+
+  it("sticker + Arabic paper tag: true copy, Arabic in lang=ar with dir=auto", () => {
+    expect(HERO_STICKER.join(" ")).toBe("Free to try");
+    expect(html).toMatch(/<p lang="ar" class="[^"]*font-brand-ar[^"]*"><span dir="auto">لمّة العائلة<\/span>/);
+  });
+
+  it("marquee: true benefits once for readers, copies hidden, pause toggle", () => {
+    expect(MARQUEE_ITEMS).toEqual([
+      "AI picks your best photos",
+      "Arabic & English captions",
+      "Share on WhatsApp",
+      "Print-ready PDF",
+      "Made in Abu Dhabi",
+    ]);
+    const marquee = html.slice(html.indexOf('data-testid="section-marquee"'), html.indexOf('data-testid="section-how"'));
+    expect(marquee.match(/<ul class=/g)).toHaveLength(1);
+    expect(marquee.match(/<ul aria-hidden="true"/g)).toHaveLength(3);
+    for (const item of MARQUEE_ITEMS) expect(marquee).toContain(esc(item));
+    expect(marquee).toMatch(/<input type="checkbox" data-testid="marquee-pause"/);
+    expect(marquee).toContain("Pause scrolling text");
+  });
+
+  it("section order: hero, marquee, how it works, shelf, pricing, FAQ", () => {
+    const order = ["section-hero", "section-marquee", "section-how", "section-shelf", "section-pricing", "section-faq"].map((id) =>
+      html.indexOf(`data-testid="${id}"`),
+    );
+    expect(order.every((i) => i > 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(html).toContain(`>${SHELF_SECTION_TITLE}</h2>`);
+  });
+});
+
 describe("bookshelf (server render)", () => {
-  const tagOf = (testId: string) => html.match(new RegExp(`<[^>]*data-testid="${testId}"[^>]*>`))?.[0] ?? "";
 
   it("is a labelled carousel with one button per book, named by its title", () => {
     expect(html).toContain('aria-roledescription="carousel"');
@@ -73,8 +152,9 @@ describe("bookshelf (server render)", () => {
     expect(text("shelf-view-sample")).toBe("View sample album");
   });
 
-  it("the real cover loads with high priority; far spines are lazy", () => {
-    expect(html).toMatch(/<img[^>]*src="\/home\/books\/08-the-day-we-said-yes-cover.png"[^>]*fetchPriority="high"/i);
+  it("the shelf sits below the fold: its cover is not high priority; far spines are lazy", () => {
+    const shelf = html.slice(html.indexOf('data-testid="bookshelf"'));
+    expect(shelf).not.toMatch(/fetchPriority="high"/i);
     expect(html).toMatch(/<img[^>]*loading="lazy"[^>]*src="\/home\/books\/01-our-family.png"|<img[^>]*src="\/home\/books\/01-our-family.png"[^>]*loading="lazy"/);
   });
 
@@ -125,8 +205,8 @@ describe("pricing equals the constants", () => {
 });
 
 describe("sections", () => {
-  it("renders hero, how it works, pricing, FAQ", () => {
-    for (const id of ["section-hero", "section-how", "section-pricing", "section-faq"]) {
+  it("renders hero, marquee, how it works, shelf, pricing, FAQ", () => {
+    for (const id of ["section-hero", "section-marquee", "section-how", "section-shelf", "section-pricing", "section-faq"]) {
       expect(html).toContain(`data-testid="${id}"`);
     }
   });

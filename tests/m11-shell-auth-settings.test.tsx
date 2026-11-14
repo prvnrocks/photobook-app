@@ -178,8 +178,8 @@ describe("settings (T7)", () => {
 describe("landing (T6)", () => {
   const html = renderToStaticMarkup(<LandingPage />);
 
-  it("hero: serif display headline, one accent CTA", () => {
-    expect(tagOf(html, "hero-heading")).toContain("type-display");
+  it("hero: Bricolage display headline (M15), one accent CTA", () => {
+    expect(tagOf(html, "hero-heading")).toContain("font-brand");
     expect(tagOf(html, "cta-create")).toContain("bg-accent-strong");
     expect(html.match(/bg-accent-strong text-accent-strong-foreground/g)?.length).toBe(1);
     expect(html).toContain(CTA_LABEL);

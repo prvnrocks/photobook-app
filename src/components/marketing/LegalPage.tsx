@@ -18,7 +18,7 @@ type LegalPageProps = {
 
 export function LegalPage({ title, intro, lastUpdated, draft, sections }: LegalPageProps) {
   return (
-    <main className="mx-auto flex w-full max-w-app min-w-0 flex-col gap-8 px-gutter py-10 sm:px-6">
+    <main className="mx-auto flex w-full max-w-app min-w-0 flex-col gap-8 px-gutter pt-28 pb-16 sm:px-6 sm:pt-32">
       <header className="flex flex-col gap-3">
         {draft ? (
           <p

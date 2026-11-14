@@ -1,5 +1,5 @@
 "use client";
-// Book preview card for the home bookshelf (M14). Native <dialog> (modal: focus stays inside, the
+// Book preview card for the home bookshelf (M14; M15 Confetti palette, Lalezar Arabic heading). Native <dialog> (modal: focus stays inside, the
 // page behind is inert, Esc closes); the card grows out of the shelf cover with a slight tilt
 // (Web Animations API, FLIP from the cover's rect) and shrinks back on close. Reduced motion: fades.
 import { X } from "lucide-react";
@@ -130,12 +130,12 @@ export function ShelfPreview({
           <div
             ref={backdropRef}
             aria-hidden="true"
-            className="fixed inset-0 bg-[#26221E]/55 backdrop-blur-[2px]"
+            className="fixed inset-0 bg-[#16121c]/60 backdrop-blur-[2px]"
             onClick={() => void close()}
           />
           <div
             ref={cardRef}
-            className="relative m-4 grid w-full max-w-3xl gap-5 rounded-2xl bg-background p-5 pt-12 shadow-[0_30px_80px_-20px_rgb(38_34_30/0.55)] sm:p-8 sm:pt-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:items-center md:gap-8"
+            className="relative m-4 grid w-full max-w-3xl gap-5 rounded-[2rem] bg-white p-5 pt-12 text-[#16121c] shadow-[0_8px_0_#16121c,0_30px_80px_-20px_rgb(22_18_28/0.55)] ring-2 ring-[#16121c] sm:p-8 sm:pt-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:items-center md:gap-8"
           >
             <button
               type="button"
@@ -143,47 +143,47 @@ export function ShelfPreview({
               aria-label="Close"
               data-testid="shelf-preview-close"
               onClick={() => void close()}
-              className="absolute top-2 right-2 flex size-11 items-center justify-center rounded-full text-foreground outline-none hover:bg-secondary/70 focus-visible:ring-2 focus-visible:ring-ring"
+              className="absolute top-3 right-3 flex size-11 items-center justify-center rounded-full bg-[#ffd1ea] text-[#16121c] outline-none hover:bg-[#ffb3da] focus-visible:ring-2 focus-visible:ring-[#16121c] focus-visible:ring-offset-2"
             >
               <X aria-hidden="true" className="size-5" />
             </button>
-            <div className="mx-auto aspect-[362/419] w-[min(62vw,15rem)] sm:w-[min(60vw,19rem)] md:w-full md:max-w-[21rem]">
+            <div className="mx-auto aspect-[362/419] w-[min(62vw,15rem)] rotate-[-2deg] sm:w-[min(60vw,19rem)] md:w-full md:max-w-[21rem]">
               <ShelfCover book={book} priority />
             </div>
             <div className="flex min-w-0 flex-col gap-3 text-center md:text-start">
-              <p data-reveal className="type-eyebrow">{`${category} · sample book`}</p>
+              <p data-reveal className="self-center rounded-full bg-[#ffd1ea] px-3 py-1 text-xs font-bold tracking-[0.08em] text-[#16121c] uppercase md:self-start">{`${category} · sample book`}</p>
               {book.arabic ? (
                 <div data-reveal className="flex flex-col gap-1">
                   {/* Arabic heading; the English title stays part of the dialog's accessible name. */}
-                  <h2 id={titleId} className="font-arabic text-3xl leading-snug font-bold break-words text-foreground sm:text-4xl">
+                  <h2 id={titleId} className="font-brand-ar text-4xl leading-snug break-words text-[#16121c] sm:text-5xl">
                     <span lang="ar" dir="auto">
                       {book.arabic.title}
                     </span>
                     <span className="sr-only">{` (${book.title})`}</span>
                   </h2>
-                  <p aria-hidden="true" className="font-display text-lg text-muted-foreground italic">
+                  <p aria-hidden="true" className="font-brand text-lg font-semibold text-[#4a3b4d]">
                     <span dir="auto">{book.title}</span>
                   </p>
                 </div>
               ) : (
-                <h2 data-reveal id={titleId} className="font-display text-3xl font-semibold break-words text-foreground sm:text-4xl">
+                <h2 data-reveal id={titleId} className="font-brand text-3xl leading-[1.05] font-extrabold tracking-[-0.025em] break-words text-[#16121c] sm:text-[2.6rem]">
                   <span dir="auto">{book.title}</span>
                 </h2>
               )}
               {book.arabic ? (
-                <blockquote data-reveal className="rounded-xl bg-secondary/60 px-4 py-3">
+                <blockquote data-reveal className="rounded-2xl bg-[#ffe8f4] px-4 py-3">
                   {/* dir on the block so the line sits at its RTL start (right) on desktop */}
-                  <p lang="ar" dir="auto" data-testid="sample-caption-ar" className="font-arabic text-lg leading-relaxed text-foreground">
+                  <p lang="ar" dir="auto" data-testid="sample-caption-ar" className="font-arabic text-lg leading-relaxed text-[#16121c]">
                     {book.arabic.line}
                   </p>
                 </blockquote>
               ) : null}
-              <p data-reveal className="type-body text-muted-foreground">
+              <p data-reveal className="type-body text-[#4a3b4d]">
                 {book.blurb}
               </p>
               <div data-reveal className="flex flex-col gap-2 pt-2">
                 {cta}
-                <p className="type-small text-muted-foreground">{CTA_NOTE}</p>
+                <p className="type-small text-[#4a3b4d]">{CTA_NOTE}</p>
               </div>
             </div>
           </div>

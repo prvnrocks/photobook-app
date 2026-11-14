@@ -28,9 +28,9 @@ describe("Arabic sample book", () => {
     expect(displayTitle(other)).toEqual({ text: other.title, lang: "en" });
   });
 
-  it("built cover shows the Arabic title (lang=ar, dir=auto, Arabic font) with the English subtitle", () => {
+  it("built cover shows the Arabic title (lang=ar, dir=auto, Lalezar display face) with the English subtitle", () => {
     const html = renderToStaticMarkup(<ShelfCover book={reunion} />);
-    expect(html).toMatch(/<p lang="ar" data-testid="shelf-cover-title-ar" class="[^"]*font-arabic[^"]*"[^>]*><span dir="auto">لمّة العائلة<\/span>/);
+    expect(html).toMatch(/<p lang="ar" data-testid="shelf-cover-title-ar" class="[^"]*font-brand-ar[^"]*"[^>]*><span dir="auto">لمّة العائلة<\/span>/);
     expect(html).toContain('<span dir="auto">Family Reunion</span>');
     // other built covers unchanged: English title only, no Arabic
     const plain = renderToStaticMarkup(<ShelfCover book={SHELF_BOOKS.find((b) => b.id === "sunday-walks")!} />);
@@ -38,11 +38,11 @@ describe("Arabic sample book", () => {
     expect(plain).not.toContain("shelf-cover-title-ar");
   });
 
-  it("preview: Arabic heading (English in its accessible name) and an RTL-safe Arabic sample line", () => {
+  it("preview: Arabic heading in Lalezar (English in its accessible name) and an RTL-safe Arabic sample line", () => {
     const html = renderToStaticMarkup(
       <ShelfPreview book={reunion} open originEl={() => null} onClose={() => {}} cta={<a href="/x">cta</a>} />,
     );
-    expect(html).toMatch(/<h2 id="[^"]+" class="[^"]*font-arabic[^"]*"><span lang="ar" dir="auto">لمّة العائلة<\/span><span class="sr-only"> \(Family Reunion\)<\/span><\/h2>/);
+    expect(html).toMatch(/<h2 id="[^"]+" class="[^"]*font-brand-ar[^"]*"><span lang="ar" dir="auto">لمّة العائلة<\/span><span class="sr-only"> \(Family Reunion\)<\/span><\/h2>/);
     expect(html).toMatch(/<p lang="ar" dir="auto" data-testid="sample-caption-ar" class="[^"]*font-arabic[^"]*">اجتمعنا/);
     expect(html).not.toMatch(/type-eyebrow[^>]*>[^<]*[؀-ۿ]/);
     const plain = renderToStaticMarkup(

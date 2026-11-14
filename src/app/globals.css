@@ -16,6 +16,10 @@
      Cairo; var(--font-playfair) would put "Playfair Display Fallback" (local Times New Roman, which
      has Arabic glyphs) before Cairo (lessons 2026-11-11, fonts). */
   --font-display: "Playfair Display", var(--font-cairo), "Playfair Display Fallback", serif;
+  /* M15 marketing display faces, loaded only by the (marketing) layout: Bricolage Grotesque (Latin)
+     and Lalezar (Arabic display). Other routes never use these classes. */
+  --font-brand: var(--font-bricolage), var(--font-inter), system-ui, sans-serif;
+  --font-brand-ar: var(--font-lalezar-home), var(--font-cairo), sans-serif;
   --color-accent-strong: var(--accent-strong);
   --color-accent-strong-foreground: var(--accent-strong-foreground);
   --color-info: var(--info);
@@ -190,28 +194,98 @@
   }
 }
 
-/* M14 home palette (docs/design/m14-home-mockup.png), scoped to the (marketing) layout: paper
-   #F8F3EA, terracotta #9B4B35 (white text 6.1:1), ink #26221E, soft sand #E8D9C8. App screens, the
-   book render and print keep :root tokens. */
+/* M15 home palette, Direction A "Confetti" (.agentos/runs/m15.md), scoped to the (marketing) layout.
+   Blush #FFD1EA hero with #FFB3DA blobs, ink #16121C text (13.7:1 on blush), CTA pink #D1006A with
+   white text (5.36:1), pop pink #FF1F84 only behind ink text (5.08:1) or as decoration, deep pink
+   #A3004F for pink text on blush (5.83:1). Sun/sea are confetti only. The page commits to one light
+   look (color-scheme: light, explicit colours) so a dark OS setting cannot make it unreadable.
+   App screens, the book render and print keep :root tokens. */
 .theme-home {
-  --background: #f8f3ea;
-  --foreground: #26221e;
-  --card: #fffcf7;
-  --card-foreground: #26221e;
-  --popover: #fffcf7;
-  --popover-foreground: #26221e;
-  --primary: #26221e;
-  --primary-foreground: #f8f3ea;
-  --secondary: #e8d9c8;
-  --secondary-foreground: #26221e;
-  --muted: #f0e6d8;
-  --muted-foreground: #675b4f;
-  --accent: #efe4d6;
-  --accent-foreground: #26221e;
-  --border: #e3d4c1;
-  --ring: #9b4b35;
-  --accent-strong: #9b4b35;
+  color-scheme: light;
+  --home-blush: #ffd1ea;
+  --home-blob: #ffb3da;
+  --home-pop: #ff1f84;
+  --home-pink-deep: #a3004f;
+  --home-ink: #16121c;
+  --home-ink-soft: #4a3b4d;
+  --home-paper: #fff7fb;
+  --background: #fff7fb;
+  --foreground: #16121c;
+  --card: #ffffff;
+  --card-foreground: #16121c;
+  --popover: #ffffff;
+  --popover-foreground: #16121c;
+  --primary: #16121c;
+  --primary-foreground: #ffffff;
+  --secondary: #ffd1ea;
+  --secondary-foreground: #16121c;
+  --muted: #ffe8f4;
+  --muted-foreground: #4a3b4d;
+  --accent: #ffe8f4;
+  --accent-foreground: #16121c;
+  --border: #f3c3dc;
+  --ring: #16121c;
+  --accent-strong: #d1006a;
   --accent-strong-foreground: #ffffff;
+}
+
+/* Paper confetti: slow drift + turn from each piece's resting rotation (--r). CSS only. */
+@keyframes home-confetti {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(var(--r));
+  }
+  50% {
+    transform: translate3d(5px, 10px, 0) rotate(calc(var(--r) + 14deg));
+  }
+  100% {
+    transform: translate3d(-4px, 18px, 0) rotate(calc(var(--r) - 8deg));
+  }
+}
+/* Organic blobs breathe very slowly (border-radius morph, no layout). */
+@keyframes home-blob {
+  0% {
+    border-radius: 46% 54% 38% 62% / 58% 42% 58% 42%;
+  }
+  100% {
+    border-radius: 58% 42% 52% 48% / 44% 58% 42% 56%;
+  }
+}
+@keyframes home-marquee {
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+@utility home-confetti {
+  transform: rotate(var(--r));
+  @media (prefers-reduced-motion: no-preference) {
+    animation: home-confetti var(--dur, 14s) ease-in-out var(--delay, 0s) infinite alternate;
+  }
+}
+@utility home-blob {
+  border-radius: 46% 54% 38% 62% / 58% 42% 58% 42%;
+  @media (prefers-reduced-motion: no-preference) {
+    animation: home-blob 22s ease-in-out infinite alternate;
+  }
+}
+/* Marquee: two copies of the list, the track slides by half its width. Hover, keyboard focus or
+   the pause toggle stop it (WCAG 2.2.2); reduced motion shows one static, wrapping copy. */
+@utility home-marquee-track {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: home-marquee 42s linear infinite;
+    .home-marquee:hover &,
+    .home-marquee:focus-within &,
+    .home-marquee:has(input:checked) & {
+      animation-play-state: paused;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+    & > [aria-hidden="true"] {
+      display: none;
+    }
+  }
 }
 
 /* M11 type roles (app chrome). Headings: serif display; eyebrow: small tracked caps in terracotta. */

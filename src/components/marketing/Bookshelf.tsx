@@ -1,5 +1,5 @@
 "use client";
-// Home hero bookshelf (M14): filter chips, a row of spines with the selected book pulled out to its
+// Home bookshelf (M14; M15 moved it below the hero as "Pick a style to start", restyled): filter chips, a row of spines with the selected book pulled out to its
 // cover, title + "View sample album", arrows. Motion is CSS transitions only: the track is anchored at
 // 50 % and shifted by a calc() of CSS size variables (trackShift in src/lib/marketing/shelf.ts), so
 // it is centred from the first server render at every width with no measuring. Swipe = pointer
@@ -142,16 +142,16 @@ export function Bookshelf({ previewCta }: { previewCta: ReactNode }) {
       data-testid="bookshelf"
       className="flex w-full min-w-0 flex-col items-center [--cover-h:calc(var(--spine-h)*1.1)] [--cover-w:calc(var(--cover-h)*0.864)] [--gap:max(2px,calc(var(--spine-h)*0.011))] [--room:calc(var(--spine-h)*0.022)] [--slot-w:calc(var(--cover-w)+2*var(--room))] [--spine-h:clamp(180px,min(calc(17vw+116px),calc(56svh-150px)),380px)]"
     >
-      <div className="w-full max-w-full overflow-x-auto px-gutter [scrollbar-width:none] sm:w-auto [&::-webkit-scrollbar]:hidden">
+      <div className="w-full max-w-full overflow-x-auto px-3 pt-1 pb-2 [scrollbar-width:none] sm:w-auto [&::-webkit-scrollbar]:hidden">
         <div
           role="group"
           aria-label="Filter sample books"
-          className="mx-auto flex w-max items-center rounded-full border border-[#dccbb7] bg-white/40 p-1"
+          className="mx-auto flex w-max items-center rounded-full bg-white p-1 shadow-[0_4px_0_#16121c] ring-2 ring-[#16121c]"
         >
           {SHELF_FILTERS.map((f, i) => (
             <span key={f.id} className="flex items-center">
               {i > 0 && filter !== f.id && filter !== SHELF_FILTERS[i - 1].id ? (
-                <span aria-hidden="true" className="h-4 w-px bg-[#dccbb7]" />
+                <span aria-hidden="true" className="h-4 w-px bg-[#16121c]/20" />
               ) : (
                 <span aria-hidden="true" className="w-px" />
               )}
@@ -161,8 +161,8 @@ export function Bookshelf({ previewCta }: { previewCta: ReactNode }) {
                 data-testid={`shelf-filter-${f.id}`}
                 onClick={() => changeFilter(f.id)}
                 className={cx(
-                  "h-11 min-w-11 rounded-full px-3 text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:h-10 sm:px-6 motion-reduce:transition-none",
-                  filter === f.id ? "bg-accent-strong text-white shadow-card" : "text-foreground hover:bg-secondary/70",
+                  "h-11 min-w-11 rounded-full px-2.5 text-[0.8125rem] font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#16121c] focus-visible:ring-offset-2 focus-visible:ring-offset-white sm:h-11 sm:px-6 sm:text-[0.95rem] motion-reduce:transition-none",
+                  filter === f.id ? "bg-[#d1006a] text-white" : "text-[#16121c] hover:bg-[#ffd1ea]",
                 )}
               >
                 {f.label}
@@ -186,7 +186,7 @@ export function Bookshelf({ previewCta }: { previewCta: ReactNode }) {
           {/* floor shadow under the row */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 bottom-5 h-6 bg-[radial-gradient(ellipse_at_center,rgb(38_34_30/0.16),transparent_70%)]"
+            className="pointer-events-none absolute inset-x-0 bottom-5 h-6 bg-[radial-gradient(ellipse_at_center,rgb(22_18_28/0.2),transparent_70%)]"
           />
           <ul
             ref={trackRef}
@@ -244,7 +244,7 @@ export function Bookshelf({ previewCta }: { previewCta: ReactNode }) {
                     <span
                       data-spine-face
                       className={cx(
-                        "absolute bottom-0 left-1/2 block h-[var(--spine-h)] drop-shadow-[0_10px_8px_rgb(38_34_30/0.22)] transition-[transform,opacity] duration-500 group-focus-visible:outline-2 group-focus-visible:outline-offset-4 group-focus-visible:outline-ring motion-reduce:transition-none",
+                        "absolute bottom-0 left-1/2 block h-[var(--spine-h)] drop-shadow-[0_10px_8px_rgb(22_18_28/0.22)] transition-[transform,opacity] duration-500 group-focus-visible:outline-2 group-focus-visible:outline-offset-4 group-focus-visible:outline-ring motion-reduce:transition-none",
                         EASE_SLIDE,
                         isSel ? "opacity-0" : "opacity-100 delay-100",
                       )}
@@ -267,7 +267,7 @@ export function Bookshelf({ previewCta }: { previewCta: ReactNode }) {
                         "pointer-events-none absolute bottom-0 left-1/2 block h-[var(--cover-h)] w-[var(--cover-w)] origin-bottom transition-[transform,opacity] duration-[650ms] group-focus-visible:outline-2 group-focus-visible:outline-offset-4 group-focus-visible:outline-ring motion-reduce:transition-none",
                         EASE_SLIDE,
                         isSel ? "opacity-100 delay-150" : "opacity-0",
-                        book.cover ? "" : "drop-shadow-[0_14px_14px_rgb(38_34_30/0.28)]",
+                        book.cover ? "" : "drop-shadow-[0_14px_14px_rgb(22_18_28/0.28)]",
                       )}
                       style={{
                         transform: isSel
@@ -275,7 +275,7 @@ export function Bookshelf({ previewCta }: { previewCta: ReactNode }) {
                           : "translateX(-50%) translateY(10%) rotateY(78deg) scale(0.6)",
                       }}
                     >
-                      <ShelfCover book={book} priority={book.id === SHELF_DEFAULT_ID} />
+                      <ShelfCover book={book} />
                     </span>
                   </button>
                 </li>
@@ -291,13 +291,13 @@ export function Bookshelf({ previewCta }: { previewCta: ReactNode }) {
           </ul>
         </div>
 
-        <div className="mx-auto grid w-full max-w-[96rem] grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-start gap-2 px-gutter sm:px-6 lg:px-12">
+        <div className="mx-auto grid w-full max-w-[96rem] grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] sm:grid-cols-[3rem_minmax(0,1fr)_3rem] items-start gap-2 px-gutter sm:px-6 lg:px-12">
           <ArrowButton dir="prev" disabled={index <= 0} onClick={() => step(-1)} />
           <div className="flex min-w-0 flex-col items-center text-center">
             <p
               id={titleId}
               data-testid="shelf-title"
-              className="font-display text-2xl font-medium break-words text-foreground sm:text-[2rem] sm:leading-tight"
+              className="font-brand text-[1.5rem] leading-tight font-extrabold tracking-[-0.02em] break-words text-[#16121c] sm:text-[2.25rem]"
             >
               <span dir="auto">{selected.title}</span>
             </p>
@@ -307,7 +307,7 @@ export function Bookshelf({ previewCta }: { previewCta: ReactNode }) {
               aria-haspopup="dialog"
               aria-describedby={titleId}
               onClick={() => setOpen(true)}
-              className="inline-flex min-h-11 items-center rounded-md px-2 text-[0.95rem] text-accent-strong underline underline-offset-4 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex min-h-11 items-center rounded-full px-3 text-[0.95rem] font-semibold text-[#a3004f] underline decoration-2 underline-offset-4 outline-none hover:text-[#16121c] focus-visible:ring-2 focus-visible:ring-[#16121c]"
             >
               View sample album
             </button>
@@ -349,9 +349,9 @@ function ArrowButton({ dir, disabled, onClick }: { dir: "prev" | "next"; disable
       data-testid={`shelf-${dir}`}
       disabled={disabled}
       onClick={onClick}
-      className="flex size-11 items-center justify-center rounded-full text-foreground transition outline-none hover:bg-secondary/70 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30 motion-reduce:transition-none"
+      className="flex size-11 items-center justify-center rounded-full bg-white text-[#16121c] shadow-[0_3px_0_#16121c] ring-2 ring-[#16121c] transition outline-none hover:bg-[#d1006a] hover:text-white focus-visible:ring-[3px] focus-visible:ring-offset-2 focus-visible:ring-offset-[#ffd1ea] disabled:pointer-events-none disabled:opacity-35 disabled:shadow-none motion-reduce:transition-none sm:size-12"
     >
-      <Icon aria-hidden="true" className="size-6 stroke-[1.5]" />
+      <Icon aria-hidden="true" className="size-5 stroke-[2.25]" />
     </button>
   );
 }

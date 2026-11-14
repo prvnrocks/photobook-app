@@ -55,7 +55,7 @@ export function ShelfCover({ book, priority = false, className }: { book: ShelfB
             <p
               lang="ar"
               data-testid="shelf-cover-title-ar"
-              className="w-full text-center font-arabic text-[11cqw] leading-[1.25] font-bold text-balance"
+              className="w-full text-center font-brand-ar text-[12cqw] leading-[1.3] text-balance"
               style={{ color: titleColor(book) }}
             >
               <span dir="auto">{book.arabic.title}</span>
