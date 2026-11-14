@@ -10,13 +10,16 @@
  *      h1, text contrast AA (computed colours); Arabic title with dir="auto" (input + cover art); browser
  *      back / forward across steps 1–4; refresh on step 3 keeps the choices; deep link to a later step
  *      bounces to the first missing one; create → the books row has the chosen title / occasion /
- *      format / design_style; step 5 in wizard chrome.
+ *      format / design_style; step 5 in wizard chrome; browser Back after create → this book in edit
+ *      mode at step 4 (prefilled), Forward → step 5, exactly 1 book (BUG-2 regression).
  *   b. step-5 Back (before any pick) re-opens step 4 prefilled (edit mode); walking back shows every
  *      answer; saving a change returns to step 5 and updates the row.
  *   c. step 5 → 6 photos → automatic first build (replay, responses held so step 6 renders) → step 6
  *      (photo fan, 3-row checklist, keep-open note) → editor. "Add more photos" on the built book =
  *      the normal (non-wizard) upload chrome.
  *   d. 1280 px pass: steps 1–6 audited + screenshotted on a second book (reaches the editor).
+ *   f. 375: leave mid-wizard → revisit /books/new shows "Start over" (≥ 44 px); it resets to step 1 empty.
+ *   (b also: an occasion change in edit mode re-derives books.tone = the new occasion's default.)
  *   e. (E2E_ANALYTICS=1 too: server built with NEXT_PUBLIC_POSTHOG_KEY=phc_e2e_fake +
  *      NEXT_PUBLIC_POSTHOG_HOST=https://ph.e2e.invalid, intercepted here) book_created fires exactly once
  *      for a wizard create, and not again after a step-5 Back + save.
@@ -341,25 +344,59 @@ test.describe("m19 wizard (live)", () => {
     await audit(page, "step 5 (375)");
     await shot(page, 5, 375);
 
+    // BUG-2 regression: browser Back right after create re-opens THIS book (edit mode, step 4,
+    // prefilled) — never an empty create wizard; Forward returns to step 5; still exactly 1 book.
+    await page.goBack();
+    await page.waitForURL(new RegExp(`/books/new\\?book=${bookA}&step=4$`), { timeout: 30_000 });
+    await expect(page.getByTestId("new-book-wizard")).toHaveAttribute("data-mode", "edit", { timeout: 30_000 });
+    await expectWizardStep(page, 4, 30_000);
+    await expect(cardRadio(page, "style-scrapbook")).toBeChecked();
+    await expect(page.getByTestId("wizard-save")).toBeVisible();
+    await expect(page.getByTestId("create-book")).toHaveCount(0);
+    // Browser Forward → step 5 again (the upload entry we pushed).
+    await page.goForward();
+    await page.waitForURL(new RegExp(`/books/${bookA}/upload$`), { timeout: 30_000 });
+    await expect(page.getByTestId("wizard-step-label")).toHaveText("Step 5 of 6", { timeout: 30_000 });
+    // Back once more and walk the in-app Back to step 1: every answer is prefilled from the book.
+    await page.goBack();
+    await page.waitForURL(new RegExp(`/books/new\\?book=${bookA}&step=4$`), { timeout: 30_000 });
+    await expect(page.getByTestId("new-book-wizard")).toHaveAttribute("data-mode", "edit", { timeout: 30_000 });
+    await expectWizardStep(page, 4, 30_000);
+    await page.getByTestId("wizard-back").click();
+    await expectWizardStep(page, 3);
+    await expect(cardRadio(page, "format-A5_LANDSCAPE")).toBeChecked();
+    await page.getByTestId("wizard-back").click();
+    await expectWizardStep(page, 2);
+    await expect(cardRadio(page, "occasion-graduation")).toBeChecked();
+    await page.getByTestId("wizard-back").click();
+    await expectWizardStep(page, 1);
+    await expect(page.getByTestId("book-title")).toHaveValue(ARABIC_TITLE);
+    await expect(page.getByTestId("new-book-wizard")).toHaveAttribute("data-mode", "edit");
+    const owned = await admin.from("books").select("id").eq("user_id", uid);
+    if (owned.error) throw new Error(`books select failed (${owned.error.code})`);
+    for (const b of owned.data ?? []) bookIds.add((b as { id: string }).id);
+    expect(owned.data?.map((b) => (b as { id: string }).id)).toEqual([bookA]);
+
+    // BUG-3 regression: one more browser Back → the create-mode step-3 entry from before the
+    // create. It must be a fresh, empty wizard (never the existing book's answers → no duplicate).
+    await page.goBack();
+    await page.waitForTimeout(2_000);
+    const older = await page.evaluate(() => {
+      const w = document.querySelector('[data-testid="new-book-wizard"]');
+      const t = document.querySelector<HTMLInputElement>('[data-testid="book-title"]');
+      const checked = Array.from(document.querySelectorAll<HTMLInputElement>('[data-testid="new-book-wizard"] input[type="radio"]:checked')).map((r) => r.value);
+      const cont = document.querySelector<HTMLButtonElement>('[data-testid="wizard-continue"]');
+      return { url: location.pathname + location.search, step: w?.getAttribute("data-step") ?? null, mode: w?.getAttribute("data-mode") ?? null, titleEmpty: t ? t.value === "" : null, checked, continueEnabled: cont ? !cont.disabled : null, stored: sessionStorage.length };
+    });
+    console.log(`[a] browser Back past the edit entry → ${JSON.stringify(older)}`);
+    expect(older.mode).toBe("create");
+    expect(older.checked).toEqual([]);
+    expect(older.titleEmpty).not.toBe(false);
+
     // A fresh deep link to step 3 (the draft was cleared on create) starts again at step 1.
     await page.goto("/books/new?step=3");
     await expectWizardStep(page, 1, 30_000);
     await expect(page.getByTestId("book-title")).toHaveValue("");
-
-    // Observation (reported, not asserted): browser Back twice → the create-mode step-4 URL we
-    // submitted from. What does the wizard show there — an empty new-book wizard (duplicate risk)?
-    await page.goBack(); // → step 5 (upload)
-    await page.waitForURL(new RegExp(`/books/${bookA}/upload$`), { timeout: 30_000 });
-    await page.goBack(); // → /books/new?step=4 (create)
-    await page.waitForURL(/\/books\/new\?step=4$|\/books\/new\?step=1$|\/books\/new$/, { timeout: 30_000 }).catch(() => {});
-    await page.waitForTimeout(1_500);
-    const after = await page.evaluate(() => {
-      const w = document.querySelector('[data-testid="new-book-wizard"]');
-      const t = document.querySelector<HTMLInputElement>('[data-testid="book-title"]');
-      return { url: location.pathname + location.search, step: w?.getAttribute("data-step") ?? null, mode: w?.getAttribute("data-mode") ?? null, titleEmpty: t ? t.value === "" : null };
-    });
-    console.log(`[a] browser Back from step 5 → ${JSON.stringify(after)}`);
-    test.info().annotations.push({ type: "observation", description: `browser Back from step 5: ${JSON.stringify(after)}` });
     await page.goto(`/books/${bookA}/upload`);
   });
 
@@ -402,6 +439,31 @@ test.describe("m19 wizard (live)", () => {
       format: "A5_LANDSCAPE",
       design_style: "classic",
     });
+
+    // Tone follows the occasion in edit mode (review fix): no memory tone for this fresh user →
+    // DEFAULT_TONE[occasion]. graduation = fun → wedding = romantic → back to graduation = fun.
+    expect((await bookRow(bookA)).tone).toBe("fun");
+    for (const [occasion, tone] of [
+      ["wedding", "romantic"],
+      ["graduation", "fun"],
+    ] as const) {
+      await page.getByTestId("upload-wizard-back").getByTestId("wizard-back").click();
+      await page.waitForURL(new RegExp(`/books/new\\?book=${bookA}&step=4$`), { timeout: 30_000 });
+      await expectWizardStep(page, 4, 30_000);
+      await expect(page.getByTestId("wizard-start-over")).toHaveCount(0); // edit mode never offers it
+      await page.getByTestId("wizard-back").click();
+      await expectWizardStep(page, 3);
+      await page.getByTestId("wizard-back").click();
+      await expectWizardStep(page, 2);
+      await page.getByTestId(`occasion-${occasion}`).click();
+      await expect(cardRadio(page, `occasion-${occasion}`)).toBeChecked();
+      await wizardContinue(page, 2);
+      await wizardContinue(page, 3);
+      await expect(cardRadio(page, "style-classic")).toBeChecked(); // an explicit style is kept
+      await page.getByTestId("wizard-save").click();
+      await page.waitForURL(new RegExp(`/books/${bookA}/upload$`), { timeout: 30_000 });
+      expect(await bookRow(bookA)).toMatchObject({ occasion, tone, design_style: "classic", format: "A5_LANDSCAPE", title: ARABIC_TITLE });
+    }
   });
 
   test("c. step 5 → photos → step 6 (replay) → editor; add more photos = normal chrome", async () => {
@@ -536,6 +598,49 @@ test.describe("m19 wizard (live)", () => {
     } finally {
       await context.close();
     }
+  });
+
+  test("f. 375: leave mid-wizard, revisit /books/new → Start over (≥ 44 px) resets to step 1 empty", async () => {
+    test.setTimeout(120_000);
+    const { page } = phone;
+    const countBooks = async () => (await admin.from("books").select("id", { count: "exact", head: true }).eq("user_id", uid)).count ?? 0;
+    const before = await countBooks();
+    await walkWizardToStyle(page, { title: "Half done", occasion: "baby", format: "A5_PORTRAIT" });
+    await expect(page.getByTestId("wizard-start-over")).toHaveCount(0); // nothing restored on this visit
+    // Leave mid-wizard, come back later.
+    await page.goto("/dashboard");
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
+    await page.goto("/books/new");
+    await expect(page.getByTestId("new-book-wizard")).toHaveAttribute("data-mode", "create", { timeout: 30_000 });
+    const so = page.getByTestId("wizard-start-over");
+    await expect(so).toBeVisible({ timeout: 30_000 });
+    const box = await so.boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(43.5);
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(43.5);
+    await audit(page, "restored draft with Start over (375)");
+    // The restored answers are there before Start over.
+    await page.goto("/books/new?step=1");
+    await expectWizardStep(page, 1, 30_000);
+    await expect(page.getByTestId("book-title")).toHaveValue("Half done");
+    await expect(so).toBeVisible({ timeout: 30_000 });
+    await page.getByTestId("wizard-continue").click();
+    await expectWizardStep(page, 2);
+    await expect(cardRadio(page, "occasion-baby")).toBeChecked();
+    await so.click();
+    await expectWizardStep(page, 1);
+    expect(new URL(page.url()).searchParams.get("step")).toBe("1");
+    await expect(page.getByTestId("book-title")).toHaveValue("");
+    await expect(so).toHaveCount(0);
+    await expect(page.getByTestId("wizard-continue")).toBeEnabled(); // blank title is allowed
+    await page.getByTestId("wizard-continue").click();
+    await expectWizardStep(page, 2);
+    await expect(page.locator('[data-testid^="occasion-"] input[type="radio"]:checked')).toHaveCount(0);
+    // Gone for good: a reload starts empty, no Start over.
+    await page.goto("/books/new");
+    await expectWizardStep(page, 1, 30_000);
+    await expect(page.getByTestId("book-title")).toHaveValue("");
+    await expect(page.getByTestId("wizard-start-over")).toHaveCount(0);
+    expect(await countBooks()).toBe(before); // abandoning / starting over creates nothing
   });
 
   test("z. audit summary: no horizontal scroll, ≥ 44 px targets, one h1, visible focus, AA text contrast", () => {

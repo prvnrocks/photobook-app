@@ -90,7 +90,10 @@ export default async function NewBookPage({ searchParams }: { searchParams: Sear
 
   return (
     <WizardShell step={step} displayName={displayName} stepHeader="client" wide>
+      {/* Keyed by mode: both modes share this route, so a soft Back from edit → create would
+          otherwise reuse the mounted wizard and carry an existing book's answers into a new one. */}
       <NewBookWizard
+        key={mode.kind === "edit" ? `edit-${mode.bookId}` : "create"}
         initialStep={step}
         mode={mode}
         dashboardBack={
