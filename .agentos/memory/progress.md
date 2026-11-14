@@ -184,3 +184,6 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 
 ## 2026-11-14 — Milestone 14 (Home hero) — done + deployed
 - Mockup-based home: animated bookshelf (selected book turns to cover, hover lift, arrows/swipe/keys, filters), clickable books → preview card with "Make a book like this", palette scoped to marketing pages, responsive 375–1536, one Arabic sample book. "/" +8 kB.
+
+## 2026-11-14 — Milestone 15 (Home Direction A) — done + deployed
+- Confetti hero (Bricolage Grotesque, blush/pop pink, CSS confetti + blobs, book bursting out, "Free to try" sticker, Arabic tag), marquee, playful cards; M14 shelf below. Swap point for real photos: src/lib/marketing/hero.ts HERO_BOOK.

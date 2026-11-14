@@ -220,6 +220,9 @@ Plan: `.agentos/runs/m13.md`, D-070.
 ## Milestone 14 — Home page hero (2026-11-14)
 - [x] New home hero from the user's mockup: "Your memories, in print.", animated clickable bookshelf (filters, pulled-out covers, preview card), mockup palette, responsive; one Arabic sample book. Plan/report: `.agentos/runs/m14.md`. Deployed 2026-11-14.
 
+## Milestone 15 — Home page Direction A "Confetti" (2026-11-14)
+- [x] Research board (13 live references) → user picked Direction A: giant playful headline, blush + pop pink, CSS confetti and blobs, book bursting out of the hero, benefits marquee, playful how-it-works, bookshelf moved to "Pick a style to start". AA contrast; "/" +0.2 kB JS. Report: `.agentos/runs/m15.md`. Deployed 2026-11-14. Next: swap HERO_BOOK for real printed-book photos.
+
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
 - [ ] AI "story mode": a short paragraph per chapter (AI-picked backgrounds moved into M10c)
