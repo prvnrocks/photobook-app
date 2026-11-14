@@ -134,3 +134,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-12, next) In a route handler, return helper() inside try without await skips the catch — use return await so timeouts map to 503.
 - (2026-11-12, git) A builder's staged change (git mv) is swept into any orchestrator commit — commit with an explicit pathspec (git commit -- paths) and tell builders never to stage.
 - (2026-11-13, ui) Put dir="auto" on an inner span, not the block, when the block's alignment must not flip with script.
+- (2026-11-14, next) cn()/buttonVariants/next/link in a client island on a first-load route costs ~10 kB — use a plain joiner and pass server-rendered links as props.
