@@ -37,6 +37,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBookViaWizard } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live PDF export flow");
@@ -422,14 +423,9 @@ test.afterAll(async () => {
 
 test("a. build (replay) from 40 large GPS-tagged photos", async () => {
   test.setTimeout(900_000);
-  await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
-  // M10b A12: the form defaults to Modern; this M8 gate pads with classic portrait layouts
-  // (Cairo + Playfair captions), so the book must be Classic (D-063: layouts must match the style).
-  await page.getByRole("radio", { name: /Classic/ }).check();
-  await expect(page.getByTestId("style-classic")).toBeChecked();
-  await page.getByTestId("create-book").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
-  bookId = new URL(page.url()).pathname.split("/")[2];
+  // This M8 gate pads with classic portrait layouts (Cairo + Playfair captions), so the book must be
+  // Classic (D-063: layouts must match the style). M19: created through the wizard.
+  bookId = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", style: "classic", goto: false });
   // On disk: Playwright refuses > 50 MB of in-memory buffers in setInputFiles.
   const photoDir = path.join(outDir, "photos");
   mkdirSync(photoDir, { recursive: true });

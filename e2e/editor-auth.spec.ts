@@ -23,6 +23,7 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBookViaWizard } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live signed-in editor flow");
@@ -202,11 +203,8 @@ test.afterAll(async () => {
 });
 
 test("a. build an album (replay) → review → Continue opens the editor at 375 px", async () => {
-  await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
-  await page.getByRole("radio", { name: /Modern/ }).check(); // D-068: travel now defaults to Geometric; this spec covers Modern.
-  await page.getByTestId("create-book").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
-  bookId = new URL(page.url()).pathname.split("/")[2];
+  // M19 wizard. D-068: travel defaults to Geometric; this spec covers Modern.
+  bookId = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", style: "modern", goto: false });
 
   const files = await makeSynthetic(page, 6);
   await page.getByTestId("upload-input").setInputFiles(files);

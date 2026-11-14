@@ -5,6 +5,8 @@
  * Measures today's path for a brand-new user with 40 photos, taking every default:
  *   landing "Start your book" → login (simulated: admin generateLink → /auth/confirm, no email) →
  *   new book form (occasion = Travel, everything else default) → Continue to photos → Choose photos
+ *   (M19: the form is now the 4-step creation wizard — walked with Travel + Portrait + defaults. This
+ *   spec records the pre-M13 path ("Build my album", review Continue) and is not a gate.)
  *   (native picker = filechooser, excluded) → upload + finalize → Build my album → build (replay) →
  *   review → Continue → editor (first page preview) → Done → Publish → Send on WhatsApp (wa.me stubbed).
  *
@@ -35,6 +37,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBookViaWizard } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live M13 baseline walkthrough");
@@ -358,13 +361,9 @@ test("baseline: landing → login → new book → upload 40 → build → revie
   await page.goto(`/auth/confirm?token_hash=${await signInHash()}&type=magiclink&next=/books/new`);
   await expect(page).toHaveURL(/\/books\/new$/, { timeout: 30_000 });
 
-  // 3. New book form — first-time user takes the defaults, picks the required occasion.
-  await expect(page.getByTestId("create-book")).toBeVisible({ timeout: 30_000 });
+  // 3. M19 creation wizard — first-time user takes the defaults, picks the required occasion + shape.
   await screen("new-book");
-  await tap(page.locator("label", { has: page.getByTestId("occasion-travel") }), "Occasion: Travel");
-  await tap(page.getByTestId("create-book"), "Continue to photos");
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
-  bookId = new URL(page.url()).pathname.split("/")[2];
+  bookId = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", goto: false, press: tap });
 
   // 4. Upload — tap Choose photos; the native picker (filechooser) is excluded from taps.
   await expect(page.getByTestId("upload-pick")).toBeVisible({ timeout: 30_000 });

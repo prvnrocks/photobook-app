@@ -22,6 +22,7 @@ import path from "node:path";
 import { gunzipSync } from "node:zlib";
 import { expect, test, type BrowserContext, type Page, type Request } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBookViaWizard } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_ANALYTICS === "1";
 const LIVE = ENABLED && process.env.E2E_AUTH === "1";
@@ -230,9 +231,8 @@ test.describe("analytics (live sign-up)", () => {
     await expect.poll(() => cap.events.find((e) => e.event === "signed_up")?.properties.method, { timeout: 20_000 }).toBe("email");
     await expect(page).not.toHaveURL(/_ev=/);
 
-    await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
-    await expect(page.getByTestId("occasion-travel")).toBeChecked();
-    await page.getByTestId("create-book").click();
+    // M19: the creation wizard (title → occasion → shape → style → create).
+    await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", goto: false });
     await expect(page).toHaveURL(/\/books\/[0-9a-f-]{36}\/upload/, { timeout: 30_000 });
     const bookId = /\/books\/([0-9a-f-]{36})\//.exec(page.url())?.[1] ?? "";
     await expect.poll(() => cap.events.some((e) => e.event === "book_created"), { timeout: 20_000 }).toBe(true);

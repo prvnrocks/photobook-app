@@ -45,6 +45,7 @@ import path from "node:path";
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { buildEvent, postEvent } from "../scripts/stripe-signed-event.mjs";
+import { createBookViaWizard } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live M10a gate");
@@ -450,13 +451,8 @@ test.afterAll(async () => {
 test("a. new book → upload → build (replay) → editor at 1024 shows facing pages", async () => {
   test.setTimeout(600_000);
   const t0 = Date.now();
-  await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
-  // M10b A12: the form defaults to Modern; this gate is about a classic portrait book (v1 until a v2 feature).
-  await page.getByRole("radio", { name: /Classic/ }).check();
-  await expect(page.getByTestId("style-classic")).toBeChecked();
-  await page.getByTestId("create-book").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
-  bookId = new URL(page.url()).pathname.split("/")[2];
+  // This gate is about a classic portrait book (v1 until a v2 feature). M19: through the wizard.
+  bookId = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", style: "classic", goto: false });
   await page.getByTestId("upload-input").setInputFiles(await makeSynthetic(page, 6));
   // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build\?auto=1$/, { timeout: 180_000 });

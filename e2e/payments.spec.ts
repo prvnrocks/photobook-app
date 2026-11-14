@@ -34,6 +34,7 @@ import path from "node:path";
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { buildEvent, postEvent, signPayload } from "../scripts/stripe-signed-event.mjs";
+import { createBookViaWizard } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live payments flow");
@@ -401,11 +402,8 @@ test.afterAll(async () => {
 test("a. build (replay) → publish a free book → viewer has watermark + footer, link expires in 30 days", async ({ browser }) => {
   needBook();
   test.setTimeout(600_000);
-  await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
-  await page.getByRole("radio", { name: /Modern/ }).check(); // D-068: travel now defaults to Geometric; this spec covers Modern.
-  await page.getByTestId("create-book").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
-  bookId = new URL(page.url()).pathname.split("/")[2];
+  // M19 wizard. D-068: travel defaults to Geometric; this spec covers Modern.
+  bookId = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", style: "modern", goto: false });
   await page.getByTestId("upload-input").setInputFiles(await makeSynthetic(page, 6));
   // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build\?auto=1$/, { timeout: 180_000 });

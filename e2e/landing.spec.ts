@@ -14,7 +14,7 @@ test.describe("landing page at 375px", () => {
     const cta = page.getByTestId("cta-create");
     await expect(cta).toBeVisible();
     await expect(cta).toHaveText("Make my book");
-    await expect(cta).toHaveAttribute("href", "/login?next=%2Fbooks%2Fstart");
+    await expect(cta).toHaveAttribute("href", "/login?next=%2Fbooks%2Fnew");
     for (const id of ["section-hero", "section-marquee", "section-how", "section-pricing", "section-faq", "site-footer"]) {
       await expect(page.getByTestId(id)).toBeAttached();
     }

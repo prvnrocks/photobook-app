@@ -33,6 +33,7 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { expect, test, type BrowserContext, type Page, type Route } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBookViaWizard } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live M12 reliability flow");
@@ -138,12 +139,8 @@ async function makeSynthetic(p: Page, n: number, seedBase: number): Promise<File
 }
 
 async function createBook(): Promise<string> {
-  await page.goto("/books/new");
-  await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
-  await page.getByRole("radio", { name: /Modern/ }).check(); // D-068: travel defaults to Geometric; Modern keeps captions simple.
-  await page.getByTestId("create-book").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
-  const id = new URL(page.url()).pathname.split("/")[2];
+  // M19 wizard. D-068: travel defaults to Geometric; Modern keeps captions simple.
+  const id = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", style: "modern" });
   await expect(page.getByTestId("upload-pick")).toBeVisible();
   return id;
 }

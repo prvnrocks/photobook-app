@@ -37,6 +37,7 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { expect, test, type Browser, type BrowserContext, type Page, type TestInfo } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBookViaWizard } from "./helpers/create-book";
 
 const VIEWPORT = { width: 375, height: 812 };
 const TAB_STOPS = 6;
@@ -446,13 +447,11 @@ test.describe("M11 signed-in flow at 375 px (live)", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("account-menu")).toBeHidden();
 
-    // "Choose style first" (/books/new) is kept; the main start is photos first (M13 T5).
-    await page.goto("/books/new");
-    await expect(page.getByTestId("create-book")).toBeVisible();
-    await audit(page, "books/new", { shot: "new-book" });
+    // M19: /books/new is the creation wizard (steps 1–4); /books/start redirects there.
     await page.goto("/books/start");
-    await expect(page.getByTestId("start-pick")).toBeVisible();
-    await audit(page, "books/start", { shot: "start" });
+    await page.waitForURL(/\/books\/new(\?|$)/, { timeout: 30_000 });
+    await expect(page.getByTestId("new-book-wizard")).toHaveAttribute("data-step", "1");
+    await audit(page, "books/new step 1", { shot: "new-book" });
   };
 
   // Replay ticks take ~0 ms, so the build screen would jump straight to review. Every run API
@@ -493,14 +492,9 @@ test.describe("M11 signed-in flow at 375 px (live)", () => {
       }
       if (state) delivered.push({ t: Date.now(), state });
     });
-    await page.getByTestId("start-pick-input").setInputFiles(await makeSynthetic(page, 6));
-    await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
-    bookId = new URL(page.url()).pathname.split("/")[2];
-    // D-068: travel defaults to Geometric; this spec covers Modern.
-    await page.locator("label", { has: page.getByTestId("setup-occasion-travel") }).click();
-    await page.getByTestId("setup-change").click();
-    await page.locator("label", { has: page.getByTestId("setup-style-modern") }).click();
-    await expect(page.getByTestId("setup-status")).toHaveText("Saved", { timeout: 15_000 });
+    // M19 wizard; D-068: travel defaults to Geometric — this spec covers Modern.
+    bookId = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", style: "modern" });
+    await page.getByTestId("upload-input").setInputFiles(await makeSynthetic(page, 6));
     await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 180_000 });
     await expect(page.getByTestId("upload-auto-starting")).toBeVisible();
     await audit(page, "upload summary (starting)", { shot: "upload-summary" });
@@ -533,11 +527,11 @@ test.describe("M11 signed-in flow at 375 px (live)", () => {
     console.log(`[build] checklist: ${steps.map((x) => x.s.replace(/=(\w)\w+/g, "=$1")).join(" | ")}`);
 
     const ORDER = ["queued", "curating", "storytelling", "captioning", "critiquing", "repairing", "validating", "done"];
+    // M19 T7: the first build is wizard step 6 — three rows (src/lib/runs/build-checklist.ts).
     const COVERS: Record<string, string[]> = {
-      photos: ["curating"],
+      sift: ["curating"],
       moments: ["storytelling"],
-      captions: ["captioning"],
-      check: ["critiquing", "repairing", "validating"],
+      book: ["captioning", "critiquing", "repairing", "validating"],
     };
     const rankOf = (st: string) => ORDER.indexOf(st);
     const order = { todo: 0, current: 1, done: 2 } as Record<string, number>;
@@ -648,8 +642,8 @@ test.describe("M11 signed-in flow at 375 px (live)", () => {
   test("dashboard → new → upload → build → review → edit → publish → /b states → settings → sign out", async ({ browser }, info) => {
     test.setTimeout(1_200_000);
     const baseURL = String(info.project.use.baseURL ?? "");
-    await test.step("a. dashboard (empty) + account menu open + new book form + photos-first start", stepA);
-    await test.step("b. choose 6 photos → upload screen (setup card) → summary, auto start held", stepB);
+    await test.step("a. dashboard (empty) + account menu open + /books/start → wizard step 1", stepA);
+    await test.step("b. wizard steps 1–4 → step 5 upload, 6 photos → summary, auto start held", stepB);
     await test.step("c. AI build (replay): checklist only ticks as the server reports states → review", stepC);
     await test.step("d. editor", stepD);
     await test.step("e. publish draft → live (WhatsApp green)", stepE);

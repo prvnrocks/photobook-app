@@ -8,8 +8,8 @@
  * (scripts/stripe-signed-event.mjs) — the same path a real Stripe event takes (webhook → RPC).
  *
  * Flow (serial, one throwaway user `e2e+m9smoke-<random>@example.com`, admin generateLink sign-in):
- *   a. photos first (M13): /books/start → pick 6 synthetic JPEGs → upload screen (no second picker; setup
- *      card: Travel + Modern) → the first build starts by itself (replay) → editor: edit one caption
+ *   a. creation wizard (M19): /books/new steps 1–4 (Travel, Portrait, Modern) → step 5 upload → pick
+ *      6 synthetic JPEGs → the first build starts by itself (replay, step 6) → editor: edit one caption
  *      (Saved ✓, persisted) → Share = publish ("Your book is live"; the caption is in the snapshot)
  *   b. anonymous phone visit of /b/<slug> at 375 px: watermark + "Made with" footer, no horizontal
  *      overflow, last page = free end card with the "Create yours" CTA
@@ -42,6 +42,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBookViaWizard } from "./helpers/create-book";
 import { buildEvent, postEvent, signPayload } from "../scripts/stripe-signed-event.mjs";
 
 const ENABLED = process.env.E2E_AUTH === "1";
@@ -274,9 +275,9 @@ test.beforeAll(async ({ browser, request }, info) => {
   context = await browser.newContext({ viewport: VIEWPORT, baseURL, hasTouch: true, isMobile: true });
   page = await context.newPage();
   page.on("dialog", (d) => void d.accept());
-  // M13 T5: landing CTA → login → /books/start (photos first).
-  await page.goto(`/auth/confirm?token_hash=${await signInHash()}&type=magiclink&next=/books/start`);
-  await expect(page).toHaveURL(/\/books\/start$/);
+  // M19: landing CTA → login → /books/new (the creation wizard).
+  await page.goto(`/auth/confirm?token_hash=${await signInHash()}&type=magiclink&next=/books/new`);
+  await expect(page).toHaveURL(/\/books\/new$/);
 });
 
 test.afterAll(async () => {
@@ -346,29 +347,22 @@ test.afterAll(async () => {
   expect(orders.count ?? 0).toBe(0);
 });
 
-test("a. login → choose photos → upload (setup card) → automatic AI build (replay) → edit a caption → Share (publishes)", async () => {
+test("a. login → wizard → upload (step 5) → automatic AI build (replay, step 6) → edit a caption → Share (publishes)", async () => {
   needBook();
   test.setTimeout(600_000);
-  // M13 T5: one "Choose photos" — picking creates the draft and carries the files to the upload screen.
-  await expect(page.getByTestId("start-pick")).toBeVisible();
-  await page.getByTestId("start-pick-input").setInputFiles(await makeSynthetic(page, 6));
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
-  bookId = new URL(page.url()).pathname.split("/")[2];
-  // M13 T6: setup card while uploading; D-068: travel defaults to Geometric — this spec covers Modern.
-  await page.locator("label", { has: page.getByTestId("setup-occasion-travel") }).click();
-  await page.getByTestId("setup-change").click();
-  await page.locator("label", { has: page.getByTestId("setup-style-modern") }).click();
-  await expect(page.getByTestId("setup-status")).toHaveText("Saved", { timeout: 15_000 });
+  // M19: creation wizard; D-068: travel defaults to Geometric — this spec covers Modern.
+  bookId = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", style: "modern", goto: false });
+  await page.getByTestId("upload-input").setInputFiles(await makeSynthetic(page, 6));
   await noHorizontalOverflow(page);
   // No Build tap: once uploads + finalize settle the first build starts by itself.
   await page.waitForURL(new RegExp(`/books/${bookId}/build\\?auto=1$`), { timeout: 240_000 });
-  // M13 T7: the build screen shows the draft book (rule album) while AI works.
-  await expect(page.getByTestId("build-draft")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId("build-ai-note")).toBeVisible();
-  // The draft's photos really load (signed 512 px thumbs), not just empty frames.
+  // M19 T7: the first build is wizard step 6 — a fan of the draft's photos + a 3-row checklist.
+  await expect(page.getByTestId("build-photo-fan")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("build-step-sift")).toBeVisible();
+  // The fan's photos really load (signed 512 px thumbs), not just placeholders.
   const draftImgs = () =>
     page
-      .locator('[data-testid="build-draft"] img')
+      .locator('[data-testid="build-photo-fan"] img')
       .evaluateAll((imgs) => imgs.filter((i) => (i as HTMLImageElement).complete && (i as HTMLImageElement).naturalWidth > 0).length);
   await expect.poll(draftImgs, { timeout: 15_000 }).toBeGreaterThan(0);
   await noHorizontalOverflow(page);

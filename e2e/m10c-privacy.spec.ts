@@ -21,6 +21,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { buildEvent, postEvent } from "../scripts/stripe-signed-event.mjs";
 import { getLayout } from "../src/lib/layouts";
+import { createBookViaWizard } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1");
@@ -271,14 +272,8 @@ test.afterAll(async () => {
 
 test("a. scrapbook replay build has an AI faded-photo chapter-opener background", async () => {
   test.setTimeout(720_000);
-  await page.goto("/books/new");
-  await page.getByTestId("book-title").fill("Privacy Days");
-  await page.locator("label", { has: page.getByTestId("occasion-baby") }).click();
-  await expect(page.getByTestId("style-scrapbook")).toBeChecked();
-  await page.getByRole("radio", { name: /Portrait/ }).check();
-  await page.getByTestId("create-book").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
-  bookId = new URL(page.url()).pathname.split("/")[2];
+  // M19 wizard: baby → Scrapbook by default.
+  bookId = await createBookViaWizard(page, { title: "Privacy Days", occasion: "baby", format: "A5_PORTRAIT", expectStyle: "scrapbook" });
   await page.getByTestId("upload-input").setInputFiles(await makePhotos(page, uploadSpecs(5300), "priv"));
   // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build\?auto=1$/, { timeout: 240_000 });

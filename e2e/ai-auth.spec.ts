@@ -44,6 +44,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBookViaWizard, walkWizardToStyle } from "./helpers/create-book";
 import { PLANTED_PRECHECK_TEXT, isPlantedMismatch } from "../src/lib/ai/agents/caption-writer-replay";
 import { buildCaptionContext, checkCaption } from "../src/lib/ai/caption-check";
 import { hasCaptionArea } from "../src/lib/ai/captions";
@@ -444,27 +445,27 @@ async function createBookAt(
   base: string,
   opts: { tone?: string; lang?: "en" | "ar"; style?: "classic" | "modern" } = {},
 ): Promise<string> {
+  // M19: the creation wizard. D-068: travel defaults to Geometric; these specs cover Modern (default
+  // here) or Classic. The wizard has no tone choice (picked by the server: memory, else the occasion's
+  // default) — a non-default tone is asserted as stored, then set on the row before the build.
   await page.goto(`${base}/books/new`);
-  await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
-  await expect(page.getByTestId("occasion-travel")).toBeChecked();
-  {
-    // D-068: travel defaults to Geometric; these specs cover Modern (default here) or Classic.
-    const style = opts.style ?? "modern";
-    await page.getByRole("radio", { name: style === "classic" ? /Classic/ : /Modern/ }).check();
-    await expect(page.getByTestId(`style-${style}`)).toBeChecked();
-  }
-  if (opts.tone) {
-    await page.locator("label", { has: page.getByTestId(`tone-${opts.tone}`) }).click();
-    await expect(page.getByTestId(`tone-${opts.tone}`)).toBeChecked();
-  }
-  if (opts.lang) {
-    await page.locator("label", { has: page.getByTestId(`lang-${opts.lang}`) }).click();
-    await expect(page.getByTestId(`lang-${opts.lang}`)).toBeChecked();
-  }
-  await page.getByTestId("create-book").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
-  const id = new URL(page.url()).pathname.split("/")[2];
+  const id = await createBookViaWizard(page, {
+    occasion: "travel",
+    format: "A5_PORTRAIT",
+    style: opts.style ?? "modern",
+    lang: opts.lang,
+    goto: false,
+  });
   await expect(page.getByTestId("upload-pick")).toBeVisible();
+  if (opts.tone) {
+    const created = await admin.from("books").select("tone").eq("id", id).single();
+    expect(created.error).toBeNull();
+    // No memory yet in this run → the server stored the travel default.
+    expect((created.data as { tone: string }).tone).toBe("fun");
+    const upd = await admin.from("books").update({ tone: opts.tone }).eq("id", id).select("tone").single();
+    expect(upd.error).toBeNull();
+    expect((upd.data as { tone: string }).tone).toBe(opts.tone);
+  }
   return id;
 }
 
@@ -1254,21 +1255,20 @@ test("f. userEdited guard (meta.userEdited only): rebuild refused 409 user_edite
   expect((await runsFor(bookA)).length).toBe(runsBefore);
 });
 
-test("n. memory → new book prefilled (tone + hint); book 2 build gets memory; replay captions ≤ 10 words", async () => {
+test("n. memory → new book gets the remembered tone; book 2 build gets memory; replay captions ≤ 10 words", async () => {
+  // M19: the wizard has no tone UI / memory hint any more — the remembered tone is applied by the
+  // server on create (asserted on the stored row below, even though travel's default is "fun").
   await page.goto(`${baseURL}/books/new`);
-  await expect(page.getByTestId("new-book-from-memory")).toBeVisible();
-  await expect(page.getByTestId("tone-nostalgic")).toBeChecked();
-  await expect(page.getByTestId("lang-en")).toBeChecked();
-  await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
-  await page.getByRole("radio", { name: /Modern/ }).check(); // D-068: travel now defaults to Geometric; this spec covers Modern.
-  // The remembered tone survives picking an occasion whose default differs (travel → fun).
-  await expect(page.getByTestId("tone-nostalgic")).toBeChecked();
-  await expect(page.getByTestId("new-book-from-memory")).toBeVisible();
+  await walkWizardToStyle(page, { occasion: "travel", format: "A5_PORTRAIT", style: "modern", goto: false });
+  await expect(page.getByTestId("new-book-from-memory")).toHaveCount(0);
+  await expect(page.locator('[data-testid^="tone-"]')).toHaveCount(0);
   const sw = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(sw).toBeLessThanOrEqual(VIEWPORT.width);
   await page.getByTestId("create-book").click();
   await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
   const bookM = new URL(page.url()).pathname.split("/")[2];
+  const stored = await admin.from("books").select("tone, caption_lang").eq("id", bookM).single();
+  expect(stored.data).toEqual({ tone: "nostalgic", caption_lang: "en" });
   const files = synth.slice(0, 6);
   await uploadAndWaitSummary(files, files.length);
   await buildToReview();
@@ -1329,7 +1329,7 @@ test("s. /settings shows learned rows; Clear → confirm → row deleted; next n
   await expect(page.getByTestId("settings-clear")).toHaveCount(0);
 
   await page.goto(`${baseURL}/books/new`);
-  await expect(page.getByTestId("create-book")).toBeVisible();
+  await expect(page.getByTestId("new-book-wizard")).toHaveAttribute("data-step", "1");
   await expect(page.getByTestId("new-book-from-memory")).toHaveCount(0);
 });
 

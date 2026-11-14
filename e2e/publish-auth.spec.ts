@@ -26,6 +26,7 @@ import { expect, test, type APIRequestContext, type Browser, type BrowserContext
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import exifr from "exifr";
 import { hasCaptionArea } from "../src/lib/ai/captions";
+import { createBookViaWizard } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live publish/viewer flow");
@@ -327,11 +328,8 @@ function needMigrations() {
 test("a. build (replay) → editor → Share (free 30-day note) publishes and lands on the share screen", async () => {
   needMigrations();
   test.setTimeout(600_000);
-  await page.locator("label", { has: page.getByTestId("occasion-travel") }).click();
-  await page.getByRole("radio", { name: /Modern/ }).check(); // D-068: travel now defaults to Geometric; this spec covers Modern.
-  await page.getByTestId("create-book").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
-  bookId = new URL(page.url()).pathname.split("/")[2];
+  // M19 wizard. D-068: travel defaults to Geometric; this spec covers Modern.
+  bookId = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", style: "modern", goto: false });
 
   await page.getByTestId("upload-input").setInputFiles(await makeSynthetic(page, 6));
   // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).

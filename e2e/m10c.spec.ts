@@ -54,6 +54,7 @@ import { expect, test, type Browser, type BrowserContext, type Page } from "@pla
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { buildEvent, postEvent } from "../scripts/stripe-signed-event.mjs";
 import { getLayout, hasCaptionArea } from "../src/lib/layouts";
+import { createBookViaWizard } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live M10c gate");
@@ -343,17 +344,8 @@ async function applyLayout(p: Page, layoutId: string) {
 }
 
 async function createViaForm(occasion: "travel" | "baby", expectStyle: "geometric" | "scrapbook", format: "A5_LANDSCAPE" | "A5_PORTRAIT", title: string) {
-  await page.goto("/books/new");
-  await page.getByTestId("book-title").fill(title);
-  await page.locator("label", { has: page.getByTestId(`occasion-${occasion}`) }).click();
-  // D-068: the occasion picks the default style — no click on the style card.
-  await expect(page.getByTestId(`style-${expectStyle}`)).toBeChecked();
-  await page.getByRole("radio", { name: format === "A5_LANDSCAPE" ? /Landscape/ : /Portrait/ }).check();
-  await expect(page.getByTestId(`format-${format}`)).toBeChecked();
-  await expect(page.getByTestId(`style-${expectStyle}`)).toBeChecked();
-  await page.getByTestId("create-book").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
-  return new URL(page.url()).pathname.split("/")[2];
+  // M19 wizard. D-068: the occasion picks the default style — no click on the style card.
+  return createBookViaWizard(page, { title, occasion, format, expectStyle });
 }
 
 async function uploadAndBuild(id: string, files: { name: string; mimeType: string; buffer: Buffer }[]) {
