@@ -190,3 +190,6 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 
 ## 2026-11-14 — Milestone 16 (Home emerald & gold) — done + deployed
 - Emerald/gold luxury home + OG image; shelf section removed. Open: real book photos (HERO_BOOK), real support email in footer.
+
+## 2026-11-14 — Milestone 17 (App emerald & gold) — done + deployed
+- Whole app now matches the emerald/gold home. Gold is fill-only on light surfaces; gold text uses #7a5f0e.

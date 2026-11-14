@@ -226,6 +226,9 @@ Plan: `.agentos/runs/m13.md`, D-070.
 ## Milestone 16 — Home emerald & gold (2026-11-14)
 - [x] Luxury palette from the user's reference (#0e3b2e / #1f6f54 / #c9a227 / #f2e8d8 / #1b1b1d): leather hero with gold foil rules, gold CTA + seal + foil flecks, cream Arabic card, restyled marquee/cards/pricing/FAQ/footer, OG image to match; "Pick a style to start" shelf removed ("/" JS 11.6→3.7 kB). Report: `.agentos/runs/m16.md`. Deployed 2026-11-14.
 
+## Milestone 17 — App screens emerald & gold (2026-11-14)
+- [x] App tokens moved to the emerald/gold palette (ivory page, emerald primary + titles, gold accent CTA with ink text, antique-gold labels, gold hairline header); AA-tested; book render, print and marketing pixel-identical. Report: `.agentos/runs/m17.md`. Deployed 2026-11-14.
+
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
 - [ ] AI "story mode": a short paragraph per chapter (AI-picked backgrounds moved into M10c)
