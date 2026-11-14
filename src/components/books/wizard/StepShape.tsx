@@ -18,7 +18,7 @@ export type StepShapeProps = {
   format: WizardFormat | null;
   onFormat: (format: WizardFormat) => void;
   headlineId: string;
-  /** Shape can't change any more: show the current one read-only with a note. */
+  /** Shape can't change any more: show the current one read-only with a note. Defensive only — never true today (see DesignLockedNote). */
   locked?: boolean;
   error?: string;
 };

@@ -40,6 +40,9 @@ export function orientationOf(width: unknown, height: unknown, exifOrientation?:
   return "square";
 }
 
+// countOrientations / suggestFormat have no caller since M19 (the wizard asks for the shape); kept
+// deliberately for a future photos-first shape hint.
+
 /** Tally of orientationOf over a list of photo sizes. */
 export function countOrientations(
   photos: readonly { width?: unknown; height?: unknown; exifOrientation?: unknown }[],

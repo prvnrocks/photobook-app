@@ -77,6 +77,7 @@ export default async function NewBookPage({ searchParams }: { searchParams: Sear
       format: design.format,
       designStyle: isFormDesignStyle(design.designStyle) ? design.designStyle : defaultStyleFor(occasion),
     };
+    // Always null today (same rule as the details lock, which redirected above); kept as defence.
     mode = { kind: "edit", bookId: book.id, draft, designLock: designLockReason({ hasRun, doc: book.doc }) };
   } else {
     // Best effort (D-032): a memory error must never block creating a book.

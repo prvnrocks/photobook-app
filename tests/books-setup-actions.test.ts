@@ -228,6 +228,48 @@ describe("updateBookSetupAction — details", () => {
   });
 });
 
+describe("updateBookSetupAction — tone follows occasion (M19 review)", () => {
+  it("an occasion change without a tone re-derives the tone from the new occasion", async () => {
+    const r = await updateBookSetupAction(BOOK_ID, { occasion: "wedding" });
+    expect(r).toMatchObject({ ok: true, setup: { occasion: "wedding", tone: "romantic" } });
+    expect(mocks.writeBookSetup.mock.calls[0][2]).toEqual({ occasion: "wedding", tone: "romantic" });
+  });
+
+  it("a remembered tone wins over the occasion default", async () => {
+    mocks.memory = { tone: "fun" };
+    const r = await updateBookSetupAction(BOOK_ID, { occasion: "wedding" });
+    expect(r).toMatchObject({ ok: true, setup: { tone: "fun" } });
+    expect(mocks.writeBookSetup.mock.calls[0][2]).toEqual({ occasion: "wedding", tone: "fun" });
+  });
+
+  it("an explicit tone wins (no memory read needed)", async () => {
+    mocks.memory = { tone: "fun" };
+    const r = await updateBookSetupAction(BOOK_ID, { occasion: "wedding", tone: "nostalgic" });
+    expect(r).toMatchObject({ ok: true, setup: { occasion: "wedding", tone: "nostalgic" } });
+    expect(mocks.writeBookSetup.mock.calls[0][2]).toEqual({ occasion: "wedding", tone: "nostalgic" });
+  });
+
+  it("an unchanged occasion keeps the book's tone", async () => {
+    mocks.getMyBook.mockResolvedValue(book({ occasion: "wedding", tone: "fun" }));
+    const r = await updateBookSetupAction(BOOK_ID, { occasion: "wedding", title: "Us" });
+    expect(r).toMatchObject({ ok: true, setup: { tone: "fun", title: "Us" } });
+    expect(mocks.writeBookSetup.mock.calls[0][2]).toEqual({ title: "Us" });
+  });
+
+  it("a memory read failure falls back to the occasion default", async () => {
+    mocks.memoryError = true;
+    const r = await updateBookSetupAction(BOOK_ID, { occasion: "baby" });
+    expect(r).toMatchObject({ ok: true, setup: { occasion: "baby", tone: "nostalgic" } });
+    expect(mocks.writeBookSetup.mock.calls[0][2]).toEqual({ occasion: "baby", tone: "nostalgic" });
+  });
+
+  it("revalidates the upload screen and the dashboard", async () => {
+    await updateBookSetupAction(BOOK_ID, { title: "Eid" });
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/books/${BOOK_ID}/upload`);
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/dashboard");
+  });
+});
+
 describe("updateBookSetupAction — shape / style (D-070)", () => {
   it("changes shape + style on an empty book (columns only; finalize lays out later)", async () => {
     const r = await updateBookSetupAction(BOOK_ID, { format: "A5_LANDSCAPE", designStyle: "scrapbook" });

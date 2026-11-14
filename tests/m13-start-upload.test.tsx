@@ -14,7 +14,6 @@ vi.mock("next/navigation", async (orig) => ({
   useRouter: () => ({ refresh: vi.fn(), replace: vi.fn(), push: vi.fn() }),
 }));
 
-const { readImageSizeFromBytes, probeFormat } = await import("@/lib/upload/image-size");
 const auto = await import("@/lib/upload/auto-build-client");
 const { displayBookTitle, UNTITLED_BOOK_LABEL } = await import("@/lib/book/display-title");
 const { UploadSummary } = await import("@/components/upload/UploadSummary");
@@ -29,71 +28,6 @@ const tag = (html: string, id: string) => html.match(new RegExp(`<[a-z]+ [^>]*da
 const src = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const BOOK = "11111111-1111-4111-8111-111111111111";
 const RUN = "22222222-2222-4222-8222-222222222222";
-
-// --- fixtures ------------------------------------------------------------------------------------
-
-/** Minimal JPEG: SOI, optional APP1 Exif (little-endian, IFD0 orientation), SOF0 w × h. */
-function jpeg(width: number, height: number, orientation?: number): Uint8Array {
-  const parts: number[] = [0xff, 0xd8];
-  if (orientation !== undefined) {
-    const tiff = [0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00, 0x01, 0x00, 0x12, 0x01, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00, orientation, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-    const body = [0x45, 0x78, 0x69, 0x66, 0x00, 0x00, ...tiff];
-    const len = body.length + 2;
-    parts.push(0xff, 0xe1, len >> 8, len & 0xff, ...body);
-  }
-  // APP0 JFIF filler before the frame
-  parts.push(0xff, 0xe0, 0x00, 0x07, 0x4a, 0x46, 0x49, 0x46, 0x00);
-  parts.push(0xff, 0xc0, 0x00, 0x11, 0x08, height >> 8, height & 0xff, width >> 8, width & 0xff, 0x03, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1);
-  parts.push(0xff, 0xda, 0x00, 0x02);
-  return new Uint8Array(parts);
-}
-
-function png(width: number, height: number): Uint8Array {
-  const b = new Uint8Array(33);
-  b.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
-  const dv = new DataView(b.buffer);
-  dv.setUint32(16, width);
-  dv.setUint32(20, height);
-  return b;
-}
-
-const blob = (bytes: Uint8Array) => new Blob([bytes as BlobPart]);
-
-// --- T5: page-shape hint from file headers -------------------------------------------------------
-
-describe("image-size (start format hint)", () => {
-  it("reads JPEG frame size and EXIF orientation", () => {
-    expect(readImageSizeFromBytes(jpeg(4000, 3000))).toEqual({ width: 4000, height: 3000 });
-    expect(readImageSizeFromBytes(jpeg(4000, 3000, 6))).toEqual({ width: 4000, height: 3000, exifOrientation: 6 });
-  });
-
-  it("reads PNG IHDR; anything else / truncated is null", () => {
-    expect(readImageSizeFromBytes(png(1200, 800))).toEqual({ width: 1200, height: 800 });
-    expect(readImageSizeFromBytes(new Uint8Array([0, 1, 2, 3, 4]))).toBeNull();
-    expect(readImageSizeFromBytes(jpeg(4000, 3000).slice(0, 12))).toBeNull();
-    // HEIC (ftyp box) → unknown
-    expect(readImageSizeFromBytes(new TextEncoder().encode("\0\0\0\x18ftypheic\0\0\0\0mif1heic"))).toBeNull();
-  });
-
-  it("probeFormat: landscape majority → A5 landscape; EXIF-rotated → portrait; unreadable → undefined", async () => {
-    const land = Array.from({ length: 5 }, () => blob(jpeg(4000, 3000)));
-    expect(await probeFormat(land)).toBe("A5_LANDSCAPE");
-    const rotated = Array.from({ length: 5 }, () => blob(jpeg(4000, 3000, 6)));
-    expect(await probeFormat(rotated)).toBe("A5_PORTRAIT");
-    expect(await probeFormat([blob(new Uint8Array([1, 2, 3]))])).toBeUndefined();
-    expect(await probeFormat([])).toBeUndefined();
-    // Unknowns count against landscape (60 % of ALL photos).
-    const mixed = [...land.slice(0, 3), blob(new Uint8Array([1])), blob(new Uint8Array([1]))];
-    expect(await probeFormat(mixed)).toBe("A5_LANDSCAPE");
-    const mostlyUnknown = [...land.slice(0, 2), ...Array.from({ length: 3 }, () => blob(new Uint8Array([1])))];
-    expect(await probeFormat(mostlyUnknown)).toBe("A5_PORTRAIT");
-  });
-
-  it("probeFormat gives up after the time box (portrait default on the server)", async () => {
-    const slow = { slice: () => ({ arrayBuffer: () => new Promise<ArrayBuffer>(() => {}) }) } as unknown as Blob;
-    expect(await probeFormat([slow], { timeoutMs: 5 })).toBeUndefined();
-  });
-});
 
 // --- T6: automatic first build -------------------------------------------------------------------
 

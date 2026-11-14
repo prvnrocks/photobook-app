@@ -215,6 +215,7 @@ const pickEnum = <T extends string>(v: string | null, values: readonly T[], fall
  * design_style and doc.format / designStyle always agree); a shape/style change whose draft can't
  * be rebuilt is refused ("failed"). Write = admin + owner filter + updated_at lock; one retry on a
  * conflict. Enums / title limits are validated like createBookAction (invalid → fieldErrors).
+ * An occasion change without a `tone` re-derives the tone (remembered tone, else occasion default).
  */
 export async function updateBookSetupAction(
   bookId: string,
@@ -239,6 +240,7 @@ export async function updateBookSetupAction(
   if (user === AUTH_UNAVAILABLE) return { ok: false, error: "failed" };
   if (!user) return { ok: false, error: "unauthenticated" };
 
+  let memory: Awaited<ReturnType<typeof getOwnMemoryView>> | undefined;
   try {
     for (let attempt = 1; attempt <= 2; attempt++) {
       const book = await getMyBook(bookId);
@@ -270,6 +272,17 @@ export async function updateBookSetupAction(
 
       const next: BookSetup = { ...current };
       for (const f of changed) (next as Record<BookSetupField, unknown>)[f] = wanted[f];
+      // M19 review: a new occasion without an explicit tone re-derives the tone like createBookAction
+      // (remembered tone wins, D-032, else the occasion default) — otherwise the wizard's edit mode
+      // leaves the old occasion's tone behind. Memory read is best effort and done once.
+      if (changed.includes("occasion") && wanted.tone === undefined) {
+        if (memory === undefined) memory = await getOwnMemoryView().catch(() => null);
+        const derived = toneForOccasion(next.occasion, memory?.tone);
+        if (derived !== current.tone) {
+          next.tone = derived;
+          changed.push("tone");
+        }
+      }
 
       // Re-lay out an untouched rule draft (never a user-edited or AI album; `{}` waits for finalize).
       let draft: { doc: Json; pageCount: number } | undefined;
@@ -316,6 +329,7 @@ export async function updateBookSetupAction(
       const written = await writeBookSetup(book.id, user.id, columns, book.updated_at, draft);
       if (written.ok) {
         revalidatePath(`/books/${book.id}/upload`);
+        revalidatePath("/dashboard");
         return { ok: true, setup: next, relaidOut: draft !== undefined };
       }
       if (written.reason === "not_found") return { ok: false, error: "not_found" };

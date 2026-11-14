@@ -292,6 +292,43 @@ describe("new book wizard — draft restore and missing steps", () => {
   });
 });
 
+describe("new book wizard — start over (M19 review)", () => {
+  it("no restored draft → no Start over", async () => {
+    await mount("/books/new?step=1");
+    expect($("wizard-start-over")).toBeNull();
+  });
+
+  it("a restored draft offers Start over (44px); it clears storage and resets to an empty step 1", async () => {
+    store({ title: "Old trip", occasion: "travel", format: "A5_LANDSCAPE" });
+    await mount("/books/new?step=3");
+    const btn = $<HTMLButtonElement>("wizard-start-over");
+    expect(btn).toBeTruthy();
+    expect(btn.type).toBe("button");
+    expect(btn.className).toContain("min-h-11");
+    expect(btn.textContent).toBe("Start over");
+    await click(btn);
+    expect(stored()).toBeNull();
+    expect(shownStep()).toBe("1");
+    expect(urlStep()).toBe("1");
+    expect($<HTMLInputElement>("book-title").value).toBe("");
+    expect($("wizard-start-over")).toBeNull();
+    await click($("wizard-continue"));
+    expect(radio("occasion-travel").checked).toBe(false);
+    expect($<HTMLButtonElement>("wizard-continue").disabled).toBe(true);
+  });
+
+  it("never shown in edit mode", async () => {
+    store({ title: "Old trip", occasion: "travel", format: "A5_LANDSCAPE" });
+    await mount(`/books/new?book=${BOOK}&step=2`, {
+      kind: "edit",
+      bookId: BOOK,
+      draft: { title: "Mine", occasion: "family", captionLang: "en", format: "A5_PORTRAIT", designStyle: "modern" },
+      designLock: null,
+    });
+    expect($("wizard-start-over")).toBeNull();
+  });
+});
+
 describe("new book wizard — shape, style and submit", () => {
   it("shape: no default; Continue disabled until a shape is picked", async () => {
     store({ title: "", occasion: "travel" });
@@ -324,7 +361,7 @@ describe("new book wizard — shape, style and submit", () => {
     expect(radio("style-classic").checked).toBe(true);
   });
 
-  it("Continue on step 4 submits the hidden fields to createBookAction (no tone) and clears the draft", async () => {
+  it("Continue on step 4 submits the hidden fields to createBookAction (no tone); the draft stays stored while it runs", async () => {
     let sent: FormData | null = null;
     let storedDuringSubmit: string | null = "unset";
     let release = () => {};
@@ -351,7 +388,8 @@ describe("new book wizard — shape, style and submit", () => {
     expect(fd.get("designStyle")).toBe("geometric");
     expect(fd.has("tone")).toBe(false);
     expect(fd.getAll("designStyle")).toHaveLength(1);
-    expect(storedDuringSubmit).toBeNull();
+    // Cleared only on success (M19 review): a thrown action must not lose steps 1–4.
+    expect(JSON.parse(storedDuringSubmit ?? "null")?.title).toBe("Days by the Sea");
     expect($("create-book").textContent).toContain("Creating your book…");
     expect($<HTMLButtonElement>("create-book").disabled).toBe(true);
     await act(async () => {
@@ -408,6 +446,32 @@ describe("new book wizard — shape, style and submit", () => {
       expect(window.location.search).toBe(`?book=${BOOK}&step=4`);
     } finally {
       reload.mockRestore();
+    }
+  });
+
+  it("a thrown createBookAction keeps the stored draft (steps 1–4 survive a reload)", async () => {
+    // The thrown action goes to an error boundary; use a root that swallows it.
+    act(() => root.unmount());
+    const uncaught = vi.fn();
+    root = createRoot(container, { onUncaughtError: uncaught });
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      mocks.createBookAction.mockRejectedValue(new Error("network down"));
+      store({ title: "Kept", occasion: "family", format: "A5_PORTRAIT" });
+      await mount("/books/new?step=4");
+      // act() rethrows the error React reported; the point is what is left in storage.
+      try {
+        await click($("create-book"));
+        await act(async () => {
+          await tick(20);
+        });
+      } catch {
+        // expected: "network down"
+      }
+      expect(mocks.createBookAction).toHaveBeenCalledTimes(1);
+      expect(stored()).toMatchObject({ title: "Kept", occasion: "family", format: "A5_PORTRAIT" });
+    } finally {
+      err.mockRestore();
     }
   });
 

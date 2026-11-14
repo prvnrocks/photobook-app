@@ -17,7 +17,7 @@ const {
   EMPTY_WIZARD_DRAFT,
   parseStep,
   firstMissingStep,
-  canEnter,
+  wizardBackHref,
   parseWizardDraft,
   serializeWizardDraft,
   wizardHeadline,
@@ -74,14 +74,8 @@ describe("wizard steps", () => {
     expect(firstMissingStep({ ...full, occasion: null, format: null })).toBe(2);
   });
 
-  it("canEnter allows the first missing step and earlier ones", () => {
-    const d = { ...full, format: null, designStyle: null };
-    expect(canEnter(1, d)).toBe(true);
-    expect(canEnter(3, d)).toBe(true);
-    expect(canEnter(4, d)).toBe(false);
-    expect(canEnter(2, EMPTY_WIZARD_DRAFT)).toBe(true);
-    expect(canEnter(3, EMPTY_WIZARD_DRAFT)).toBe(false);
-    expect(canEnter(4, full)).toBe(true);
+  it("wizardBackHref points at steps 1–4 of an existing book", () => {
+    expect(wizardBackHref("abc")).toBe("/books/new?book=abc&step=4");
   });
 
   it("draft round-trips through serialize/parse", () => {

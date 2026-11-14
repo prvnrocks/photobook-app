@@ -13,10 +13,8 @@ export function isWizardUpload(firstRun: FirstRunState, detailsLock: SetupLockRe
   return firstRun === "none" && detailsLock === null;
 }
 
-/** Step 5 Back: re-opens steps 1–4 for this book (the /books/new edit mode). */
-export function wizardBackHref(bookId: string): string {
-  return `/books/new?book=${encodeURIComponent(bookId)}&step=4`;
-}
+/** Step 5 Back: re-opens steps 1–4 for this book (the /books/new edit mode). Defined in wizard-steps. */
+export { wizardBackHref } from "./wizard-steps";
 
 /**
  * Step 6 ("Sorting your photos") = the first AI build: not a rebuild, AI on, and the album is

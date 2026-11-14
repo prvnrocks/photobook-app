@@ -111,10 +111,13 @@ export function firstMissingStep(draft: WizardDraft): WizardFormStep | null {
   return null;
 }
 
-/** A step can be shown once every earlier step is answered (deep links to later steps bounce back). */
-export function canEnter(step: WizardFormStep, draft: WizardDraft): boolean {
-  const missing = firstMissingStep(draft);
-  return missing === null || step <= missing;
+/**
+ * Steps 1–4 of an existing draft (the /books/new edit mode): step-5 Back, and where browser Back from
+ * step 5 lands after the wizard created the book (M19 BUG-2). Lives here (not in wizard-routes, which
+ * re-exports it) so the first-load wizard island doesn't pull the book schema.
+ */
+export function wizardBackHref(bookId: string): string {
+  return `/books/new?book=${encodeURIComponent(bookId)}&step=4`;
 }
 
 // ---- sessionStorage draft -------------------------------------------------------------------------

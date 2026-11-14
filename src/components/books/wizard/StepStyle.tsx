@@ -21,6 +21,7 @@ export type StepStyleProps = {
   format: WizardFormat;
   onStyle: (style: FormDesignStyle) => void;
   headlineId: string;
+  /** Defensive only — never true today (see DesignLockedNote). */
   locked?: boolean;
   error?: string;
 };

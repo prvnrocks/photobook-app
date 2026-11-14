@@ -5,8 +5,10 @@
 //     popstate drives the step, so browser back / forward work. Step label + progress render here.
 //   - New book: the draft is mirrored to sessionStorage (WIZARD_DRAFT_STORAGE_KEY) so a refresh keeps
 //     the choices; entering a step whose earlier answers are missing goes to the first missing step
-//     (a visit with no stored draft starts at step 1). Step-4 Continue submits hidden fields to
-//     createBookAction (tone is picked by the server). It returns the new id: the current history
+//     (a visit with no stored draft starts at step 1). A restored draft shows a "Start over" button
+//     (clears it, back to step 1). The stored draft is only cleared once the create succeeds.
+//     Step-4 Continue submits hidden fields to createBookAction (tone is picked by the server). It
+//     returns the new id: the current history
 //     entry is replaced with the edit URL (/books/new?book=<id>&step=4) and we push
 //     /books/<id>/upload (= step 5), so browser Back re-opens THIS book, never an empty wizard
 //     (M19 BUG-2: duplicate drafts). If the router restores the cached create-mode page for that
@@ -33,6 +35,7 @@ import {
   parseWizardDraft,
   serializeWizardDraft,
   WIZARD_DRAFT_STORAGE_KEY,
+  wizardBackHref,
   type WizardDraft,
   type WizardFormStep,
 } from "@/lib/books/wizard-steps";
@@ -97,11 +100,6 @@ export function allowedStep(target: WizardFormStep, draft: WizardDraft, fresh: b
   if (fresh) return 1;
   const missing = firstMissingStep(draft);
   return missing === null || target <= missing ? target : missing;
-}
-
-/** Steps 1–4 of an existing draft: where browser Back from step 5 lands after creating it. */
-export function editUrlFor(bookId: string): string {
-  return `/books/new?book=${encodeURIComponent(bookId)}&step=4`;
 }
 
 /**
@@ -169,6 +167,8 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
   );
   const [saving, startSaving] = useTransition();
   const [leaving, setLeaving] = useState(false);
+  /** Create mode: steps 1–4 came back from sessionStorage (offer "Start over"). */
+  const [restored, setRestored] = useState(false);
   // Create mode remounted on a created book's entry (see isCreatedBookEntry): render nothing but a
   // pending shell while the mount effect reloads. Always false on the server and on hydration (the
   // server renders ?book= in edit mode), so no mismatch.
@@ -203,6 +203,7 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
       if (stored) {
         current = { ...stored, captionLang: stored.captionLang ?? null };
         setDraft(current);
+        setRestored(true);
       } else {
         fresh = true;
       }
@@ -244,10 +245,13 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
     if (!state.ok || !state.bookId || !state.next || createdRef.current === state) return;
     createdRef.current = state; // once per result, whatever re-runs the effect
     setLeaving(true);
+    // Only now is the stored draft done with (a failed or thrown action must not lose steps 1–4).
+    writeStored(null);
+    setRestored(false);
     window.history.replaceState(
       { ...(window.history.state ?? {}), wizardStep: 4, wizardPrev: undefined },
       "",
-      editUrlFor(state.bookId),
+      wizardBackHref(state.bookId),
     );
     router.push(state.next);
   }, [state, router]);
@@ -331,10 +335,18 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
       saveEdit(edit.bookId);
       return;
     }
-    // Create: the form action runs next. Clear the stored draft now (success leaves the wizard); an
-    // error response writes it back (effect above).
+    // Create: the form action runs next. The stored draft stays until it succeeds (success effect).
     setStepError(null);
+  }
+
+  /** Create mode: drop a restored draft (e.g. an abandoned one) and start again at step 1. */
+  function startOver() {
     writeStored(null);
+    dirtyRef.current = false;
+    setRestored(false);
+    setStepError(null);
+    setDraft(EMPTY_WIZARD_DRAFT);
+    showStep(1, "replace");
   }
 
   const pending = creating || saving || leaving || state.ok;
@@ -432,6 +444,16 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
           className="mx-auto max-w-[28rem]"
         />
       </form>
+      {restored && !edit && !pending ? (
+        <button
+          type="button"
+          onClick={startOver}
+          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring focus-visible:ring-offset-background mx-auto mt-4 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full px-4 text-sm font-medium underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-offset-2"
+          data-testid="wizard-start-over"
+        >
+          Start over
+        </button>
+      ) : null}
     </div>
   );
 }
