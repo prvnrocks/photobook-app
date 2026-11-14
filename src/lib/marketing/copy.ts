@@ -7,10 +7,11 @@ export const HERO_HEADLINE = "Your memories, in print.";
 
 export const HERO_SUBCOPY = "Upload your photos. AI turns them into a book you can share.";
 
-/** The hero's terracotta pill (M14 mockup). Pricing keeps CTA_LABEL. */
+/** The hero's terracotta pill (M14 mockup). */
 export const HERO_CTA_LABEL = "Make my book";
 
-export const CTA_LABEL = "Make your book";
+/** Pricing CTA — same words as the hero (M14 final, user decision 2026-11-14). */
+export const CTA_LABEL = HERO_CTA_LABEL;
 /** CTA in the bookshelf preview card (M14). */
 export const SHELF_PREVIEW_CTA_LABEL = "Make a book like this";
 /** Small line under the bookshelf preview CTA. */

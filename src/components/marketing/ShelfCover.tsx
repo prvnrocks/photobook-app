@@ -50,12 +50,28 @@ export function ShelfCover({ book, priority = false, className }: { book: ShelfB
           aria-hidden="true"
           className="absolute inset-y-0 left-[5.5%] w-[1.6%] bg-gradient-to-r from-black/20 via-white/10 to-black/10"
         />
-        <p
-          className="w-full text-center font-display text-[10cqw] leading-[1.08] font-semibold text-balance"
-          style={{ color: titleColor(book) }}
-        >
-          <span dir="auto">{book.title}</span>
-        </p>
+        {book.arabic ? (
+          <>
+            <p
+              lang="ar"
+              data-testid="shelf-cover-title-ar"
+              className="w-full text-center font-arabic text-[11cqw] leading-[1.25] font-bold text-balance"
+              style={{ color: titleColor(book) }}
+            >
+              <span dir="auto">{book.arabic.title}</span>
+            </p>
+            <p className="mt-[1.5%] w-full text-center font-display text-[5cqw] leading-tight italic opacity-80" style={{ color: titleColor(book) }}>
+              <span dir="auto">{book.title}</span>
+            </p>
+          </>
+        ) : (
+          <p
+            className="w-full text-center font-display text-[10cqw] leading-[1.08] font-semibold text-balance"
+            style={{ color: titleColor(book) }}
+          >
+            <span dir="auto">{book.title}</span>
+          </p>
+        )}
         {photo ? (
           <div
             aria-hidden="true"

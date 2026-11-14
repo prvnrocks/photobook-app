@@ -4,7 +4,7 @@
  * SKIPPED unless E2E_AUTH=1. Never calls Anthropic (server: AI_MODE=replay, empty ANTHROPIC_API_KEY),
  * never calls Stripe (dummy key). Same 40 canvas fixtures as e2e/m13-baseline.spec.ts.
  *
- * Main test (timed, fresh user): landing "Make your book" → login (simulated: admin generateLink →
+ * Main test (timed, fresh user): landing "Make my book" → login (simulated: admin generateLink →
  * /auth/confirm, no email) → /books/start "Choose photos" (native picker = filechooser, excluded) →
  * NO setup taps → upload + finalize → automatic first build (replay) with the draft strip → editor →
  * Share → share screen → Send on WhatsApp (wa.me stubbed). Asserts:
@@ -586,10 +586,10 @@ test("first run: landing → login → choose photos → auto build → editor �
   await page.goto("/");
   const cta = page.getByTestId("cta-create");
   await expect(cta).toBeVisible();
-  await expect(cta).toContainText("Make your book");
+  await expect(cta).toContainText("Make my book");
   await screen(1, "landing");
   await audit(page, "landing");
-  await tap(cta, "Make your book (landing)");
+  await tap(cta, "Make my book (landing)");
 
   // 2. Login (typing excluded; magic link simulated) → next=/books/start.
   await page.waitForURL(/\/login\?/, { timeout: 30_000 });

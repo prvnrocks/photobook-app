@@ -86,6 +86,26 @@ test.describe("landing page at 375px", () => {
     await expect(dialog).toBeHidden();
   });
 
+  test("bookshelf: the Arabic sample book renders its Arabic title and sample line in Cairo, RTL", async ({ page }) => {
+    await page.getByTestId("shelf-filter-family").click();
+    await page.getByRole("button", { name: "Family Reunion" }).click();
+    await expect(page.getByTestId("shelf-title")).toHaveText("Family Reunion");
+    const coverTitle = page.getByTestId("shelf-book-family-reunion").getByTestId("shelf-cover-title-ar");
+    await expect(coverTitle).toHaveText("لمّة العائلة");
+    await expect(coverTitle).toBeInViewport();
+    await page.getByRole("button", { name: "Family Reunion" }).click();
+    const dialog = page.getByRole("dialog", { name: /لمّة العائلة/ });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("heading", { level: 2 })).toContainText("لمّة العائلة");
+    const line = page.getByTestId("sample-caption-ar");
+    await expect(line).toBeVisible();
+    await expect(line).toContainText("اجتمعنا");
+    expect(await line.evaluate((el) => getComputedStyle(el).direction)).toBe("rtl");
+    expect(await line.evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/Cairo/);
+    expect(await page.evaluate(() => document.fonts.check('18px "Cairo"', "لمّة"))).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+  });
+
   test("bookshelf: keyboard arrows move selection and focus", async ({ page }) => {
     await page.getByRole("button", { name: "The Day We Said Yes" }).focus();
     await page.keyboard.press("ArrowRight");

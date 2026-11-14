@@ -325,7 +325,7 @@ describe("StartPicker / dashboard / start page", () => {
 
   it("landing CTA goes to login → /books/start", () => {
     expect(copy.CTA_HREF).toBe("/login?next=%2Fbooks%2Fstart");
-    expect(copy.CTA_LABEL).toBe("Make your book");
+    expect(copy.CTA_LABEL).toBe("Make my book");
   });
 });
 

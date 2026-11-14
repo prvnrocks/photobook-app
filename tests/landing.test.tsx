@@ -40,8 +40,9 @@ describe("landing hero", () => {
     expect(text("cta-create")).toBe(HERO_CTA_LABEL);
     expect(HERO_CTA_LABEL).toBe("Make my book");
     expect(html).toContain(`href="${esc(CTA_HREF)}"`);
-    // pricing repeat keeps the older label
-    expect(html).toContain(CTA_LABEL);
+    // pricing repeats the hero's words (M14 final)
+    expect(CTA_LABEL).toBe(HERO_CTA_LABEL);
+    expect(html.split(`>${CTA_LABEL}<`).length - 1).toBeGreaterThanOrEqual(2);
   });
 
   it("does not render the mockup's colour palette note", () => {

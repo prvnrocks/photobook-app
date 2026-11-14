@@ -152,9 +152,32 @@ export function ShelfPreview({
             </div>
             <div className="flex min-w-0 flex-col gap-3 text-center md:text-start">
               <p data-reveal className="type-eyebrow">{`${category} · sample book`}</p>
-              <h2 data-reveal id={titleId} className="font-display text-3xl font-semibold break-words text-foreground sm:text-4xl">
-                <span dir="auto">{book.title}</span>
-              </h2>
+              {book.arabic ? (
+                <div data-reveal className="flex flex-col gap-1">
+                  {/* Arabic heading; the English title stays part of the dialog's accessible name. */}
+                  <h2 id={titleId} className="font-arabic text-3xl leading-snug font-bold break-words text-foreground sm:text-4xl">
+                    <span lang="ar" dir="auto">
+                      {book.arabic.title}
+                    </span>
+                    <span className="sr-only">{` (${book.title})`}</span>
+                  </h2>
+                  <p aria-hidden="true" className="font-display text-lg text-muted-foreground italic">
+                    <span dir="auto">{book.title}</span>
+                  </p>
+                </div>
+              ) : (
+                <h2 data-reveal id={titleId} className="font-display text-3xl font-semibold break-words text-foreground sm:text-4xl">
+                  <span dir="auto">{book.title}</span>
+                </h2>
+              )}
+              {book.arabic ? (
+                <blockquote data-reveal className="rounded-xl bg-secondary/60 px-4 py-3">
+                  {/* dir on the block so the line sits at its RTL start (right) on desktop */}
+                  <p lang="ar" dir="auto" data-testid="sample-caption-ar" className="font-arabic text-lg leading-relaxed text-foreground">
+                    {book.arabic.line}
+                  </p>
+                </blockquote>
+              ) : null}
               <p data-reveal className="type-body text-muted-foreground">
                 {book.blurb}
               </p>

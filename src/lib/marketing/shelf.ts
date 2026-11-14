@@ -31,6 +31,11 @@ export interface ShelfBook {
   cover?: { src: string; w: number; h: number };
   /** One short line about this kind of book (preview card). */
   blurb: string;
+  /**
+   * Arabic sample (M14 final): shown as the built cover's title, the preview title and a sample line.
+   * `title` stays the English accessible name (spine PNGs are English images).
+   */
+  arabic?: { title: string; line: string };
 }
 
 /** Natural spine height of every spine PNG; sizes on screen are ratios of the CSS --spine-h. */
@@ -186,8 +191,20 @@ export const SHELF_BOOKS: readonly ShelfBook[] = [
     tone: "dark",
     spine: spine("14-family-reunion.png", 99, 19, 84, 145),
     blurb: "Everyone together for once — every cousin, every table.",
+    arabic: {
+      title: "لمّة العائلة",
+      line: "اجتمعنا أخيرًا، كل الأبناء والأحفاد حول سفرة واحدة، وضحكات تستحق أن تبقى.",
+    },
   },
 ];
+
+/** Max words in a sample line (same rule as AI quotes, CLAUDE.md). */
+export const SAMPLE_LINE_MAX_WORDS = 18;
+
+/** Title drawn on the cover / preview heading: the Arabic title when the book has one. */
+export function displayTitle(book: ShelfBook): { text: string; lang: "ar" | "en" } {
+  return book.arabic ? { text: book.arabic.title, lang: "ar" } : { text: book.title, lang: "en" };
+}
 
 export const SHELF_DEFAULT_ID = "the-day-we-said-yes";
 
