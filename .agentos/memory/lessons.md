@@ -136,3 +136,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-13, ui) Put dir="auto" on an inner span, not the block, when the block's alignment must not flip with script.
 - (2026-11-14, next) cn()/buttonVariants/next/link in a client island on a first-load route costs ~10 kB — use a plain joiner and pass server-rendered links as props.
 - (2026-11-14, ui) A sticky header with negative margin-bottom lets the hero colour run behind it; every page under that layout then needs explicit top padding.
+- (2026-11-14, ui) With a glow/noise background, check text contrast at the lightest point, not the base colour.
