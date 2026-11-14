@@ -27,6 +27,11 @@ export type StartPickerProps = {
   label?: string;
   /** data-testid of the label (the tap target); the input gets `${testId}-input`. */
   testId: string;
+  /**
+   * "button" variant only: "gold" = the screen's one gold call to action (M18 dashboard header band,
+   * where an emerald button would vanish on the emerald band). Default: the emerald primary.
+   */
+  tone?: "primary" | "gold";
   className?: string;
 };
 
@@ -42,7 +47,7 @@ const focusRing =
   "has-focus-visible:ring-2 has-focus-visible:ring-ring has-focus-visible:ring-offset-2 has-focus-visible:ring-offset-background";
 const disabledLook = "has-disabled:cursor-progress has-disabled:opacity-70";
 
-export function StartPicker({ variant, label, testId, className }: StartPickerProps) {
+export function StartPicker({ variant, label, testId, tone = "primary", className }: StartPickerProps) {
   const router = useRouter();
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -131,7 +136,9 @@ export function StartPicker({ variant, label, testId, className }: StartPickerPr
       <label
         aria-busy={starting || undefined}
         className={cn(
-          buttonVariants(variant === "cta" ? { variant: "accent", size: "cta" } : { size: "touch" }),
+          buttonVariants(
+            variant === "cta" ? { variant: "accent", size: "cta" } : { variant: tone === "gold" ? "accent" : "default", size: "touch" },
+          ),
           "cursor-pointer",
           focusRing,
           disabledLook,

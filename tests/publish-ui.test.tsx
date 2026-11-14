@@ -391,13 +391,16 @@ describe("dashboard publish chip", () => {
       coverThumbUrl: null,
     };
     const html = renderToStaticMarkup(<BookList books={[book, { ...book, id: "x", published: false }]} now={NOW} />);
-    expect(html).toContain("Published · expires 12 Dec");
+    // M18 chip: "Live · N days left" (expires 12 Dec 08:00, now 10 Nov 10:00 → 31.9 days → 32).
+    expect(html).toContain("Live · 32 days left");
     expect(html).toContain("Draft");
     expect(html.match(/data-testid="book-share"/g)?.length).toBe(1);
+    // The built draft's Share is the publish entry (D-070) under its own testid.
+    expect(html.match(/data-testid="book-publish"/g)?.length).toBe(1);
     expect(html).toContain(`href="/books/${BOOK}/publish"`);
-    expect(html).toMatch(/<p dir="auto"[^>]*>عطلتنا<\/p>/);
+    expect(html).toMatch(/<span dir="auto"[^>]*>عطلتنا<\/span>/);
     // No nested anchors.
-    expect(html).not.toMatch(/<a[^>]*>(?:(?!<\/a>)[\s\S])*<a /);
+    expect(html).not.toMatch(/<a [^>]*>(?:(?!<\/a>)[\s\S])*<a /);
   });
 });
 

@@ -94,34 +94,38 @@ describe("T8 dashboard cards", () => {
   });
 
   it("title keeps dir=auto; chips use status tokens, not raw palette colours", () => {
-    expect(html).toMatch(/<p dir="auto"[^>]*>عطلتنا في العين<\/p>/);
+    // M18: the title is the card's (stretched) link text, inside a card heading.
+    expect(html).toMatch(/<h2[^>]*><a [^>]*data-testid="book-card"[^>]*><span class="line-clamp-2"><span dir="auto">عطلتنا في العين<\/span><\/span><\/a><\/h2>/);
     expect(html).toMatch(/bg-success-soft[^"]*"[^>]*data-testid="book-publish-chip"/);
-    expect(html).toContain("bg-info-soft");
+    // Paid: gold on deep emerald (brand foil), exact text "Paid" (live specs assert it).
+    expect(html).toMatch(/bg-primary text-accent-strong"[^>]*data-testid="book-paid-chip">Paid</);
     expect(html).not.toMatch(/(emerald|amber)-\d/);
   });
 
-  it("Share and ⋯ are ≥ 44 px targets outside the card link", () => {
+  it("quick actions and Options are ≥ 44 px targets outside the card link", () => {
     const tag = (id: string) => html.match(new RegExp(`<(?:a|button)[^>]*data-testid="${id}"[^>]*>`))?.[0] ?? "";
     expect(tag("book-share")).toContain("min-h-11");
+    expect(tag("book-open")).toContain("min-h-11 min-w-11");
+    expect(tag("book-card")).toContain("min-h-11");
     expect(tag("book-menu")).toContain("min-h-11 min-w-11");
     expect(html.match(/data-testid="book-share"/g)?.length).toBe(1);
-    expect(html).not.toMatch(/<a[^>]*>(?:(?!<\/a>)[\s\S])*<a /);
+    expect(html).not.toMatch(/<a [^>]*>(?:(?!<\/a>)[\s\S])*<a /);
   });
 
-  it("empty state uses the shared EmptyState with an accent call to action", () => {
+  it("empty state: emerald & gold shelf with the gold photo-picker call to action", () => {
     const empty = renderToStaticMarkup(<EmptyState />);
     expect(empty).toMatch(/<section[^>]*data-testid="dashboard-empty"/);
     expect(empty).toMatch(/<h2 dir="auto"[^>]*>No books yet<\/h2>/);
     // M13 T5: the call to action is the photo picker's label (input inside), plus "Choose style first".
-    expect(empty).toMatch(/<label[^>]*bg-accent-strong[^"]*"[^>]*data-testid="create-first-book"[^>]*>[\s\S]*?<input type="file"[^>]*data-testid="create-first-book-input"[\s\S]*?Create your first book<\/label>/);
+    expect(empty).toMatch(/<label[^>]*bg-accent-strong[^"]*"[^>]*data-testid="create-first-book"[^>]*>[\s\S]*?<input type="file"[^>]*data-testid="create-first-book-input"[\s\S]*?Make your first book<\/label>/);
     expect(empty).toMatch(/<a [^>]*data-testid="empty-choose-style" href="\/books\/new">Choose style first/);
   });
 
-  it("page: shared PageHeader keeps the heading testid, error as an error Notice", () => {
+  it("page: library header band keeps the heading testid + gold New book picker, error as an error Notice", () => {
     const page = src("src/app/dashboard/page.tsx");
-    expect(page).toContain("<PageHeader");
-    expect(page).toContain('titleTestId="dashboard-heading"');
-    expect(page).toContain('<StartPicker variant="button" testId="new-book" />');
+    expect(page).toContain("<LibraryHeader");
+    expect(src("src/components/dashboard/LibraryHeader.tsx")).toContain('data-testid="dashboard-heading"');
+    expect(page).toContain('<StartPicker variant="button" tone="gold" testId="new-book" />');
     expect(page).toContain('<Notice tone="error" data-testid="dashboard-error">');
   });
 });

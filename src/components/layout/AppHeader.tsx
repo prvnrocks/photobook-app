@@ -14,15 +14,24 @@ import { AccountMenu } from "./AccountMenu";
 type AppHeaderProps = {
   /** name ?? email of the signed-in user; omitted when unknown. */
   displayName?: string | null;
+  /** "library": the books screen's full desktop width (M18), so the wordmark lines up with the grid. */
+  width?: HeaderWidth;
+};
+
+type HeaderWidth = "wide" | "library";
+
+const INNER: Record<HeaderWidth, string> = {
+  wide: "max-w-wide px-gutter",
+  library: "max-w-library px-gutter sm:px-6 lg:px-10",
 };
 
 const MENU_ITEM =
   "flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-start text-sm font-medium text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring";
 
-function HeaderBar({ children }: { children?: React.ReactNode }) {
+function HeaderBar({ children, width = "wide" }: { children?: React.ReactNode; width?: HeaderWidth }) {
   return (
     <header className="sticky top-0 z-30 border-b border-accent-strong/45 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
-      <div className="mx-auto flex h-14 w-full max-w-wide items-center gap-3 px-gutter">
+      <div className={cn("mx-auto flex h-14 w-full items-center gap-3", INNER[width])}>
         <Wordmark />
         <div className="ms-auto flex min-w-0 items-center">{children}</div>
       </div>
@@ -43,9 +52,9 @@ function Wordmark() {
   );
 }
 
-export function AppHeader({ displayName }: AppHeaderProps) {
+export function AppHeader({ displayName, width }: AppHeaderProps) {
   return (
-    <HeaderBar>
+    <HeaderBar width={width}>
       <AccountMenu displayName={displayName}>
         {displayName ? (
           <div className="border-b border-border px-3 pt-2 pb-3">
@@ -77,9 +86,9 @@ export function AppHeader({ displayName }: AppHeaderProps) {
 }
 
 /** Header shown by route loading.tsx files: same bar, a placeholder where the account button sits. */
-export function AppHeaderPlaceholder() {
+export function AppHeaderPlaceholder({ width }: { width?: HeaderWidth } = {}) {
   return (
-    <HeaderBar>
+    <HeaderBar width={width}>
       <Skeleton className="size-9 rounded-full" />
     </HeaderBar>
   );

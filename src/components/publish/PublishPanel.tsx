@@ -220,7 +220,7 @@ export function PublishPanelView({
       </div>
 
       {state.expired ? (
-        <section className={CARD_WARN} data-testid="publish-expired">
+        <section id="upgrade" className={CARD_WARN} data-testid="publish-expired">
           <div className="flex items-start gap-3">
             <TriangleAlert className="mt-0.5 size-5 shrink-0 text-warning" aria-hidden="true" />
             <div className="min-w-0">
@@ -322,7 +322,7 @@ export function PublishPanelView({
       {!state.isPaid && !state.expired ? <PlanCompareCard compare={compare}>{upgrade("outline")}</PlanCompareCard> : null}
 
       {state.isPaid ? (
-        <section className={CARD} data-testid="publish-pdf">
+        <section id="pdf" className={CARD} data-testid="publish-pdf">
           <div className="flex items-start gap-3">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-primary">
               <FileText className="size-4" aria-hidden="true" />
@@ -404,7 +404,7 @@ function BlockNotice({ text }: { text: string }) {
 /** Free vs upgraded, numbers from publishCompare() (LIMITS / UPGRADE / FREE_LINK_DAYS). */
 function PlanCompareCard({ compare, children }: { compare: PublishCompare; children: ReactNode }) {
   return (
-    <section className={CARD} data-testid="publish-free-notice" aria-labelledby="publish-compare-title">
+    <section id="upgrade" className={CARD} data-testid="publish-free-notice" aria-labelledby="publish-compare-title">
       <div>
         <h2 id="publish-compare-title" className="type-h2 text-foreground">
           Free or upgraded

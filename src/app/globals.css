@@ -3,6 +3,19 @@
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
+/* M18 library cards: "hover pane" = a mouse/trackpad on a ≥ 640 px screen, where card quick actions
+   slide up over the cover on hover/focus. Everywhere else (touch, phones) they are an always-visible
+   row — no hover dependence. Exactly one of the two variants matches. */
+@custom-variant hover-pane {
+  @media (hover: hover) and (pointer: fine) and (min-width: 40rem) {
+    @slot;
+  }
+}
+@custom-variant touch-row {
+  @media not all and (hover: hover) and (pointer: fine) and (min-width: 40rem) {
+    @slot;
+  }
+}
 
 @theme inline {
   --color-background: var(--background);
@@ -63,6 +76,8 @@
   /* Content widths: max-w-app (forms, flow screens), max-w-wide (dashboard, editor). */
   --container-app: 40rem;
   --container-wide: 64rem;
+  /* M18: the books screen uses most of a desktop viewport (1600 px incl. gutters). */
+  --container-library: 100rem;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

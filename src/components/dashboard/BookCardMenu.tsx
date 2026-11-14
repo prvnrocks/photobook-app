@@ -8,7 +8,7 @@
 
 import { AlertDialog } from "@base-ui/react/alert-dialog";
 import { Menu } from "@base-ui/react/menu";
-import { Loader2, MoreVertical, Trash2 } from "lucide-react";
+import { Loader2, MoreHorizontal, MoreVertical, Trash2 } from "lucide-react";
 import { useId, useState, useTransition } from "react";
 import { useRefreshTransition } from "@/components/app/use-refresh-transition";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,16 @@ type Props = {
   bookId: string;
   title: string | null;
   deleteBook: DeleteBookFn;
+  /**
+   * M18 quick-action bar: the trigger's classes and a visible label under the icon ("Options" — a
+   * word of its accessible name "Book options: …", WCAG 2.5.3). Default: the icon-only 44 px trigger.
+   */
+  triggerClassName?: string;
+  label?: string;
 };
+
+const TRIGGER_CLASS =
+  "flex min-h-11 min-w-11 flex-1 items-center justify-center text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-popup-open:bg-muted";
 
 export function BookCardMenu(props: Props) {
   const [, refresh] = useRefreshTransition();
@@ -37,6 +46,8 @@ export function BookCardMenuView({
   title,
   deleteBook,
   refresh,
+  triggerClassName,
+  label,
   initialConfirmOpen = false,
 }: Props & { refresh: () => void; initialConfirmOpen?: boolean }) {
   const [confirmOpen, setConfirmOpen] = useState(initialConfirmOpen);
@@ -69,11 +80,18 @@ export function BookCardMenuView({
     <>
       <Menu.Root>
         <Menu.Trigger
-          className="flex min-h-11 min-w-11 flex-1 items-center justify-center text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-popup-open:bg-muted"
+          className={triggerClassName ?? TRIGGER_CLASS}
           aria-label={`${DELETE_BOOK_COPY.menuLabel}: ${shownTitle}`}
           data-testid="book-menu"
         >
-          <MoreVertical className="size-5" aria-hidden="true" />
+          {label ? (
+            <>
+              <MoreHorizontal className="size-[1.125rem]" aria-hidden="true" />
+              <span>{label}</span>
+            </>
+          ) : (
+            <MoreVertical className="size-5" aria-hidden="true" />
+          )}
         </Menu.Trigger>
         <Menu.Portal>
           <Menu.Positioner sideOffset={4} align="end" className="z-50 outline-none">
