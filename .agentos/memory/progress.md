@@ -193,3 +193,6 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 
 ## 2026-11-14 — Milestone 17 (App emerald & gold) — done + deployed
 - Whole app now matches the emerald/gold home. Gold is fill-only on light surfaces; gold text uses #7a5f0e.
+
+## 2026-11-14 — Milestone 18 (Books screen) — done + deployed
+- Interactive library grid; Ecommerce 9 (React Bits Pro) not used — no licence key; built in-house in the same pattern.

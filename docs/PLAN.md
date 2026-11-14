@@ -229,6 +229,9 @@ Plan: `.agentos/runs/m13.md`, D-070.
 ## Milestone 17 — App screens emerald & gold (2026-11-14)
 - [x] App tokens moved to the emerald/gold palette (ivory page, emerald primary + titles, gold accent CTA with ink text, antique-gold labels, gold hairline header); AA-tested; book render, print and marketing pixel-identical. Report: `.agentos/runs/m17.md`. Deployed 2026-11-14.
 
+## Milestone 18 — Books screen redesign (2026-11-14)
+- [x] /dashboard as a full-width interactive collection grid (emerald band, filter tabs + search + sort in the URL, real covers with status chips, hover/touch quick actions, new empty library); responsive 1–6 columns. Report: `.agentos/runs/m18.md`. Deployed 2026-11-14.
+
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
 - [ ] AI "story mode": a short paragraph per chapter (AI-picked backgrounds moved into M10c)
