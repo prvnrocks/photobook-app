@@ -30,7 +30,7 @@ const { EmailRemindersToggleView } = await import("@/components/settings/EmailRe
 const { SiteHeader } = await import("@/components/marketing/SiteHeader");
 const { SiteFooter } = await import("@/components/marketing/SiteFooter");
 const LandingPage = (await import("@/app/(marketing)/page")).default;
-const { CTA_LABEL, HERO_CLAIM } = await import("@/lib/marketing/copy");
+const { CTA_LABEL, HERO_HEADLINE } = await import("@/lib/marketing/copy");
 
 const has = (html: string, id: string) => html.includes(`data-testid="${id}"`);
 const tagOf = (html: string, id: string) => html.match(new RegExp(`<[^>]*data-testid="${id}"[^>]*>`))?.[0] ?? "";
@@ -183,7 +183,7 @@ describe("landing (T6)", () => {
     expect(tagOf(html, "cta-create")).toContain("bg-accent-strong");
     expect(html.match(/bg-accent-strong text-accent-strong-foreground/g)?.length).toBe(1);
     expect(html).toContain(CTA_LABEL);
-    expect(html.length).toBeGreaterThan(HERO_CLAIM.length);
+    expect(html).toContain(HERO_HEADLINE);
   });
 
   it("no raw amber/emerald palette classes left on public pages", () => {

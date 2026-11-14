@@ -2,49 +2,31 @@
 // Numbers never appear here as literals: prices come from src/lib/pricing.ts, limits from
 // src/lib/ai/limits.ts, retention from src/lib/cleanup/rules.ts.
 
-import { LIMITS } from "@/lib/ai/limits";
+/** Hero headline (M14, user decision 2026-11-14: use exactly as written). */
+export const HERO_HEADLINE = "Your memories, in print.";
 
-/**
- * How long a build takes, as promised in the hero. Switch to "in minutes" if live timings
- * (M4b / launch smoke) are slower than about a minute for a full free book.
- */
-export const BUILD_TIME_CLAIM = "in about a minute";
+export const HERO_SUBCOPY = "Upload your photos. AI turns them into a book you can share.";
 
-/** Hero headline — the one claim we make about speed and size (approved in M9 plan). */
-export const HERO_CLAIM = `Upload up to ${LIMITS.free.maxAnalyzedPhotos} photos → AI builds your book ${BUILD_TIME_CLAIM}`;
-
-export const HERO_SUBCOPY =
-  "Share it as a flipbook link that opens on any phone — perfect for WhatsApp — and download a print-quality PDF when you upgrade.";
+/** The hero's terracotta pill (M14 mockup). Pricing keeps CTA_LABEL. */
+export const HERO_CTA_LABEL = "Make my book";
 
 export const CTA_LABEL = "Make your book";
-/** Small line under the hero CTA. */
+/** CTA in the bookshelf preview card (M14). */
+export const SHELF_PREVIEW_CTA_LABEL = "Make a book like this";
+/** Small line under the bookshelf preview CTA. */
 export const CTA_NOTE = "Free to try. No card needed.";
-/** Tracked caps above the hero headline (M11). */
-export const HERO_EYEBROW = "AI photobooks · Flipbook links";
 /**
  * M13 T5 (D-070): photos first — /books/start is one big "Choose photos". Signed-in visitors skip
  * the login form: /login redirects straight to `next`.
  */
 export const CTA_HREF = "/login?next=%2Fbooks%2Fstart";
 
+/** "How it works" row under the bookshelf (M14 mockup: icon + title, one short line each). */
 export const HOW_IT_WORKS = [
-  {
-    title: "Upload your photos",
-    text: "Pick them straight from your phone. We skip screenshots, blurry shots and duplicates for you.",
-  },
-  {
-    title: "AI builds the book",
-    text: "Photos are grouped into moments by date and place, laid out on pages and given short captions. You can change everything.",
-  },
-  {
-    title: "Share on WhatsApp",
-    text: "Publish and send one link. Friends and family flip through it on any phone, anywhere in the world.",
-  },
+  { icon: "upload", title: "Upload photos", text: "Straight from your phone. Screenshots, blurry shots and duplicates are skipped." },
+  { icon: "ai", title: "AI builds your book", text: "Grouped into moments by date and place, laid out, captioned. You can change everything." },
+  { icon: "share", title: "Share your flipbook", text: "Send one link on WhatsApp. It opens on any phone, anywhere." },
 ] as const;
-
-/** Sample captions in the hero illustration (one English, one Arabic). */
-export const HERO_SAMPLE_CAPTION_EN = "Golden hour on the Corniche, just the two of us.";
-export const HERO_SAMPLE_CAPTION_AR = "أجمل الذكريات تبدأ بصورة";
 
 /** SEO title + description for "/". */
 export const LANDING_TITLE = "AI photobooks you share as a link";

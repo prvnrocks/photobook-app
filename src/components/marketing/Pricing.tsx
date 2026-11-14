@@ -48,7 +48,7 @@ export function Pricing() {
         ))}
       </div>
       {/* The hero holds the one accent CTA; this repeat is the navy primary. */}
-      <Link href={CTA_HREF} className={cn(buttonVariants({ size: "cta" }), "sm:w-auto sm:self-start sm:px-8")}>
+      <Link href={CTA_HREF} className={cn(buttonVariants({ size: "cta" }), "rounded-full sm:w-auto sm:self-start sm:px-8")}>
         {CTA_LABEL}
       </Link>
     </section>

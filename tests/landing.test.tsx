@@ -9,7 +9,8 @@ import { ExampleBooks } from "@/components/marketing/ExampleBooks";
 import { LIMITS } from "@/lib/ai/limits";
 import { SUPPORT_EMAIL } from "@/lib/brand";
 import { retentionSummary } from "@/lib/cleanup/rules";
-import { BUILD_TIME_CLAIM, CTA_HREF, HERO_CLAIM, OG_HEADLINE, OG_SUBLINE } from "@/lib/marketing/copy";
+import { CTA_HREF, CTA_LABEL, HERO_CTA_LABEL, HERO_HEADLINE, HERO_SUBCOPY, OG_HEADLINE, OG_SUBLINE } from "@/lib/marketing/copy";
+import { SHELF_BOOKS, SHELF_DEFAULT_ID, SHELF_FILTERS } from "@/lib/marketing/shelf";
 import { EXAMPLE_BOOKS } from "@/lib/marketing/examples";
 import { faqItems } from "@/lib/marketing/faq";
 import { plans } from "@/lib/marketing/plans";
@@ -27,24 +28,67 @@ const text = (testId: string) => {
 };
 
 describe("landing hero", () => {
-  it("headline is the HERO_CLAIM constant and uses the free AI photo limit", () => {
-    expect(HERO_CLAIM).toContain(String(LIMITS.free.maxAnalyzedPhotos));
-    expect(HERO_CLAIM).toContain(BUILD_TIME_CLAIM);
-    expect(HERO_CLAIM).toContain("AI builds your book");
-    expect(HERO_CLAIM).not.toContain("album");
-    expect(html).toContain(esc(HERO_CLAIM));
+  it("headline is exactly the user's line (M14) in the hero heading", () => {
+    expect(HERO_HEADLINE).toBe("Your memories, in print.");
+    expect(text("hero-heading")).toBe(HERO_HEADLINE);
+    expect(html).toContain(esc(HERO_SUBCOPY));
+    expect(HERO_SUBCOPY).toBe("Upload your photos. AI turns them into a book you can share.");
   });
 
   it("CTA goes to login, then to a new book", () => {
     expect(CTA_HREF).toBe("/login?next=%2Fbooks%2Fstart");
-    expect(html).toMatch(/data-testid="cta-create"/);
+    expect(text("cta-create")).toBe(HERO_CTA_LABEL);
+    expect(HERO_CTA_LABEL).toBe("Make my book");
     expect(html).toContain(`href="${esc(CTA_HREF)}"`);
+    // pricing repeat keeps the older label
+    expect(html).toContain(CTA_LABEL);
   });
 
-  it("Arabic sample caption uses dir=auto + the Arabic font", () => {
-    const tag = html.match(/<p[^>]*data-testid="sample-caption-ar"[^>]*>/)?.[0] ?? "";
-    expect(tag).toContain('dir="auto"');
-    expect(tag).toContain("font-arabic");
+  it("does not render the mockup's colour palette note", () => {
+    expect(html).not.toMatch(/color palette/i);
+    expect(html).not.toContain("#F8F3EA");
+  });
+});
+
+describe("bookshelf (server render)", () => {
+  const tagOf = (testId: string) => html.match(new RegExp(`<[^>]*data-testid="${testId}"[^>]*>`))?.[0] ?? "";
+
+  it("is a labelled carousel with one button per book, named by its title", () => {
+    expect(html).toContain('aria-roledescription="carousel"');
+    expect(html).toContain('aria-label="Sample books"');
+    for (const b of SHELF_BOOKS) {
+      expect(html).toContain(`data-testid="shelf-book-${b.id}"`);
+      expect(html).toContain(`aria-label="${esc(b.title)}"`);
+    }
+  });
+
+  it("default selection is The Day We Said Yes: current, only tab stop, title + View sample album", () => {
+    expect(SHELF_DEFAULT_ID).toBe("the-day-we-said-yes");
+    expect(tagOf(`shelf-book-${SHELF_DEFAULT_ID}`)).toContain("data-selected");
+    expect(html.match(/aria-current="true"/g)).toHaveLength(1);
+    expect(html.match(/<button[^>]*aria-current="true"[^>]*>/)?.[0]).toContain('aria-label="The Day We Said Yes"');
+    expect(html.match(/<button[^>]*aria-label="[^"]*"[^>]*tabindex="0"|<button[^>]*tabindex="0"[^>]*aria-label/g)?.length).toBe(1);
+    expect(html).toMatch(/data-testid="shelf-title"[^>]*><span dir="auto">The Day We Said Yes<\/span>/);
+    expect(text("shelf-view-sample")).toBe("View sample album");
+  });
+
+  it("the real cover loads with high priority; far spines are lazy", () => {
+    expect(html).toMatch(/<img[^>]*src="\/home\/books\/08-the-day-we-said-yes-cover.png"[^>]*fetchPriority="high"/i);
+    expect(html).toMatch(/<img[^>]*loading="lazy"[^>]*src="\/home\/books\/01-our-family.png"|<img[^>]*src="\/home\/books\/01-our-family.png"[^>]*loading="lazy"/);
+  });
+
+  it("filter chips: All pressed, one per filter, 44 px targets on phones", () => {
+    for (const f of SHELF_FILTERS) {
+      const tag = tagOf(`shelf-filter-${f.id}`);
+      expect(tag).toContain(`aria-pressed="${f.id === "all"}"`);
+      expect(tag).toContain("h-11");
+    }
+  });
+
+  it("book titles use dir=auto; preview dialog is closed (no second accent CTA in HTML)", () => {
+    expect(html.match(/<span dir="auto">[^<]+<\/span>/g)!.length).toBeGreaterThanOrEqual(2);
+    expect(html).toContain('data-testid="shelf-preview"');
+    expect(html).not.toContain('data-testid="shelf-preview-cta"');
   });
 });
 

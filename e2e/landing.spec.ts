@@ -10,10 +10,10 @@ test.describe("landing page at 375px", () => {
   test("renders hero, CTA and all sections", async ({ page }) => {
     await expect(page).toHaveTitle(/^Photobook — /);
     await expect(page.getByTestId("hero-heading")).toBeVisible();
-    await expect(page.getByTestId("hero-heading")).toContainText("AI builds your book");
+    await expect(page.getByTestId("hero-heading")).toHaveText("Your memories, in print.");
     const cta = page.getByTestId("cta-create");
     await expect(cta).toBeVisible();
-    await expect(cta).toHaveText("Make your book");
+    await expect(cta).toHaveText("Make my book");
     await expect(cta).toHaveAttribute("href", "/login?next=%2Fbooks%2Fstart");
     for (const id of ["section-hero", "section-how", "section-pricing", "section-faq", "site-footer"]) {
       await expect(page.getByTestId(id)).toBeAttached();
@@ -37,17 +37,62 @@ test.describe("landing page at 375px", () => {
     await expect(faq).toContainText("deleted");
   });
 
-  test("Arabic caption renders RTL in Cairo", async ({ page }) => {
-    const ar = page.getByTestId("sample-caption-ar");
-    await expect(ar).toBeVisible();
-    await expect(ar).toHaveAttribute("dir", "auto");
-    await expect(ar).toHaveText("أجمل الذكريات تبدأ بصورة");
-    const style = await ar.evaluate((el) => {
-      const cs = getComputedStyle(el);
-      return { direction: cs.direction, fontFamily: cs.fontFamily };
-    });
-    expect(style.direction).toBe("rtl");
-    expect(style.fontFamily).toMatch(/cairo/i);
+  test("bookshelf: default cover visible, arrows move the selection, no page overflow", async ({ page }) => {
+    await expect(page.getByTestId("shelf-title")).toHaveText("The Day We Said Yes");
+    const cover = page.getByRole("button", { name: "The Day We Said Yes" });
+    await expect(cover).toHaveAttribute("aria-current", "true");
+    await expect(cover).toBeInViewport();
+    await page.getByTestId("shelf-next").click();
+    await expect(page.getByTestId("shelf-title")).toHaveText("The Wedding");
+    await expect(page.getByRole("button", { name: "The Wedding" })).toHaveAttribute("aria-current", "true");
+    await page.getByTestId("shelf-prev").click();
+    await page.getByTestId("shelf-prev").click();
+    await expect(page.getByTestId("shelf-title")).toHaveText("First Steps");
+    // tap targets on the shelf controls are at least 44 px
+    for (const id of ["shelf-prev", "shelf-next", "shelf-view-sample", "shelf-filter-all", "shelf-filter-kids"]) {
+      const box = await page.getByTestId(id).boundingBox();
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+  });
+
+  test("bookshelf: filter chips re-filter; tapping a spine selects it", async ({ page }) => {
+    await page.getByTestId("shelf-filter-kids").click();
+    await expect(page.getByTestId("shelf-filter-kids")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("shelf-title")).toHaveText("First Steps");
+    await expect(page.getByTestId("shelf-book-the-wedding")).toHaveAttribute("aria-hidden", "true");
+    await page.getByRole("button", { name: "New Beginnings" }).click();
+    await expect(page.getByTestId("shelf-title")).toHaveText("New Beginnings");
+    await page.getByTestId("shelf-filter-all").click();
+    await expect(page.getByTestId("shelf-title")).toHaveText("New Beginnings");
+  });
+
+  test("bookshelf: clicking the selected cover opens the preview; Esc closes and returns focus", async ({ page }) => {
+    const cover = page.getByRole("button", { name: "The Day We Said Yes" });
+    await cover.click();
+    const dialog = page.getByRole("dialog", { name: "The Day We Said Yes" });
+    await expect(dialog).toBeVisible();
+    await expect(page.getByTestId("shelf-preview-close")).toBeFocused();
+    await expect(page.getByTestId("shelf-preview-cta")).toHaveAttribute("href", "/login?next=%2Fbooks%2Fstart");
+    await expect(page.getByTestId("shelf-preview-cta")).toHaveText("Make a book like this");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(cover).toBeFocused();
+    // View sample album opens it too; the close button closes it
+    await page.getByTestId("shelf-view-sample").click();
+    await expect(dialog).toBeVisible();
+    await page.getByTestId("shelf-preview-close").click();
+    await expect(dialog).toBeHidden();
+  });
+
+  test("bookshelf: keyboard arrows move selection and focus", async ({ page }) => {
+    await page.getByRole("button", { name: "The Day We Said Yes" }).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByRole("button", { name: "The Wedding" })).toBeFocused();
+    await page.keyboard.press("Home");
+    await expect(page.getByRole("button", { name: "Our Family" })).toBeFocused();
+    await expect(page.getByTestId("shelf-prev")).toBeDisabled();
   });
 
   test("footer links open Privacy and Terms", async ({ page }) => {

@@ -190,6 +190,30 @@
   }
 }
 
+/* M14 home palette (docs/design/m14-home-mockup.png), scoped to the (marketing) layout: paper
+   #F8F3EA, terracotta #9B4B35 (white text 6.1:1), ink #26221E, soft sand #E8D9C8. App screens, the
+   book render and print keep :root tokens. */
+.theme-home {
+  --background: #f8f3ea;
+  --foreground: #26221e;
+  --card: #fffcf7;
+  --card-foreground: #26221e;
+  --popover: #fffcf7;
+  --popover-foreground: #26221e;
+  --primary: #26221e;
+  --primary-foreground: #f8f3ea;
+  --secondary: #e8d9c8;
+  --secondary-foreground: #26221e;
+  --muted: #f0e6d8;
+  --muted-foreground: #675b4f;
+  --accent: #efe4d6;
+  --accent-foreground: #26221e;
+  --border: #e3d4c1;
+  --ring: #9b4b35;
+  --accent-strong: #9b4b35;
+  --accent-strong-foreground: #ffffff;
+}
+
 /* M11 type roles (app chrome). Headings: serif display; eyebrow: small tracked caps in terracotta. */
 @utility type-display {
   font-family: var(--font-display);
