@@ -140,3 +140,7 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-14, next) OG routes inside a route group serve at a hashed path — read og:image from the page meta.
 - (2026-11-14, ui) .theme-home overrides only some tokens; after changing :root, diff '/' pixels against HEAD.
 - (2026-11-14, ui) sr-only text inside an overflow-x-auto scroller that isn't positioned escapes and widens the page — make the scroller relative.
+- (M19) A client component shared by two modes on one route (edit/create) must be keyed by mode/id, or soft Back reuses its state (caused a duplicate-book path).
+- (M19) Next app router: replaceState on the current entry can redraw the cached old tree on Back; have the client detect the mismatch (create mode + ?book=) and reload.
+- (M19) Never run `next build` while a `next dev` e2e suite runs (33 false timeouts); specs reading .next manifests run from the scratch copy's own e2e dir; signed-out runs overwrite committed docs/design screenshots — git checkout them after.
+- (M19) Keep zod-schema libs (docOrigin etc.) out of first-load client islands; put pure helpers in the light module and re-export.

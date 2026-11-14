@@ -232,6 +232,9 @@ Plan: `.agentos/runs/m13.md`, D-070.
 ## Milestone 18 — Books screen redesign (2026-11-14)
 - [x] /dashboard as a full-width interactive collection grid (emerald band, filter tabs + search + sort in the URL, real covers with status chips, hover/touch quick actions, new empty library); responsive 1–6 columns. Report: `.agentos/runs/m18.md`. Deployed 2026-11-14.
 
+## Milestone 19 — Book creation wizard (2026-11-15)
+- [x] 6-step full-page wizard (D-071): /books/new Title → What's it for (+ caption language) → Page shape → Book style; book created on step-4 Continue; step 5 Add your photos and step 6 Sorting your photos in wizard chrome; then editor. Browser back/refresh safe; step-5 Back re-opens steps 1–4 until the AI build; Start over for restored drafts; photos-first StartPicker and SetupCard retired. Report: `.agentos/runs/m19.md`.
+
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
 - [ ] AI "story mode": a short paragraph per chapter (AI-picked backgrounds moved into M10c)

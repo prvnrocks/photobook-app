@@ -392,6 +392,11 @@ test.describe("m19 wizard (live)", () => {
     expect(older.mode).toBe("create");
     expect(older.checked).toEqual([]);
     expect(older.titleEmpty).not.toBe(false);
+    // Still exactly 1 book after the double Back.
+    const afterBack = await admin.from("books").select("id").eq("user_id", uid);
+    if (afterBack.error) throw new Error(`books select failed (${afterBack.error.code})`);
+    for (const b of afterBack.data ?? []) bookIds.add((b as { id: string }).id);
+    expect(afterBack.data?.map((b) => (b as { id: string }).id)).toEqual([bookA]);
 
     // A fresh deep link to step 3 (the draft was cleared on create) starts again at step 1.
     await page.goto("/books/new?step=3");
