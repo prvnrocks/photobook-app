@@ -46,7 +46,7 @@ vi.mock("@/lib/db/agent-runs", () => ({ hasAnyRunForBook: async () => mocks.hasR
 vi.mock("@/lib/db/memory", () => ({ getOwnMemoryView: async () => mocks.memory }));
 vi.mock("@/lib/db/profiles", () => ({ getMyProfile: async () => null }));
 
-const { NewBookWizard } = await import("@/components/books/NewBookWizard");
+const { NewBookWizard, wizardWindow } = await import("@/components/books/NewBookWizard");
 const { default: NewBookPage } = await import("@/app/books/new/page");
 type Mode = import("@/components/books/NewBookWizard").NewBookWizardMode;
 const { WIZARD_DRAFT_STORAGE_KEY, serializeWizardDraft, EMPTY_WIZARD_DRAFT } = await import("@/lib/books/wizard-steps");
@@ -374,6 +374,41 @@ describe("new book wizard — shape, style and submit", () => {
     expect($("new-book-error-message").textContent).toBe("Please choose a shape.");
     expect($("new-book-error").getAttribute("role")).toBe("alert");
     expect(stored()?.occasion).toBe("family");
+  });
+
+  it("success: the history entry becomes the book's edit URL, then step 5 is pushed (M19 BUG-2)", async () => {
+    mocks.createBookAction.mockResolvedValue({
+      ok: true,
+      bookId: BOOK,
+      next: `/books/${BOOK}/upload?_ev=book_created`,
+    });
+    store({ title: "T", occasion: "family", format: "A5_PORTRAIT" });
+    await mount("/books/new?step=4");
+    const before = window.history.length;
+    await click($("create-book"));
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledTimes(1));
+    expect(mocks.push).toHaveBeenCalledWith(`/books/${BOOK}/upload?_ev=book_created`);
+    // Replaced, not pushed: browser Back from step 5 lands on /books/new?book=<id>&step=4.
+    expect(window.location.pathname + window.location.search).toBe(`/books/new?book=${BOOK}&step=4`);
+    expect(window.history.length).toBe(before);
+    expect(stored()).toBeNull();
+    expect($<HTMLButtonElement>("create-book").disabled).toBe(true);
+    expect($("create-book").textContent).toContain("Creating your book…");
+  });
+
+  it("create mode remounted on a created book's entry (browser Back) reloads it — never an empty wizard", async () => {
+    const reload = vi.spyOn(wizardWindow, "reload").mockImplementation(() => {});
+    try {
+      await mount(`/books/new?book=${BOOK}&step=4`);
+      expect(reload).toHaveBeenCalledWith(`${window.location.origin}/books/new?book=${BOOK}&step=4`);
+      expect($("new-book-wizard").getAttribute("data-reopening")).toBe("true");
+      expect($("wizard-step-label")).toBeNull();
+      expect($("create-book")).toBeNull();
+      // The URL is left alone (no bounce to ?step=1).
+      expect(window.location.search).toBe(`?book=${BOOK}&step=4`);
+    } finally {
+      reload.mockRestore();
+    }
   });
 
   it("a non-field error stays on step 4", async () => {

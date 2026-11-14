@@ -9,6 +9,12 @@ import { wizardHeadline, type WizardFormat } from "@/lib/books/wizard-steps";
 import { DESIGN_STYLE_LABELS, FORM_DESIGN_STYLES, type FormDesignStyle } from "@/lib/design/defaults";
 import { DesignLockedNote } from "./DesignLockedNote";
 
+/** Card art sized by height (the card variant's viewBox hugs the page): ~2/3 of the card. */
+const STYLE_ART: Record<WizardFormat, string> = {
+  A5_PORTRAIT: "h-32 max-w-full sm:h-48",
+  A5_LANDSCAPE: "h-24 max-w-full sm:h-36",
+};
+
 export type StepStyleProps = {
   /** The style shown as selected (the user's pick, else the occasion default). */
   designStyle: FormDesignStyle;
@@ -36,7 +42,7 @@ export function StepStyle({ designStyle, format, onStyle, headlineId, locked = f
               name="wizard-designStyle"
               value={id}
               label={DESIGN_STYLE_LABELS[id]}
-              media={<StylePreview style={id} format={format} className="size-24 sm:size-36" />}
+              media={<StylePreview style={id} format={format} variant="card" className={STYLE_ART[format]} />}
               checked={designStyle === id}
               onChange={locked ? undefined : () => onStyle(id)}
               size="large"

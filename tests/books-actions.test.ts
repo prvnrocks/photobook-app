@@ -53,9 +53,14 @@ function form(fields: Record<string, string | undefined>): FormData {
 
 const valid = { title: "Our trip", occasion: "travel", tone: "fun", captionLang: "en" };
 
+/**
+ * `redirect` = where the user ends up: a thrown server redirect (signed out) or, since M19 BUG-2, the
+ * success result's `next` (the wizard navigates there itself after fixing its history entry).
+ */
 async function run(fields: Record<string, string | undefined>) {
   try {
-    return { state: await createBookAction(initialNewBookFormState, form(fields)), redirect: null };
+    const state = await createBookAction(initialNewBookFormState, form(fields));
+    return { state, redirect: state.ok ? (state.next ?? null) : null };
   } catch (e) {
     if (e instanceof RedirectError) return { state: null, redirect: e.url };
     throw e;
@@ -86,6 +91,23 @@ describe("createBookAction", () => {
       format: "A5_LANDSCAPE",
       designStyle: "classic",
     });
+  });
+
+  it("success returns the new id + next instead of redirecting (M19 BUG-2)", async () => {
+    const state = await createBookAction(initialNewBookFormState, form(valid));
+    expect(state).toEqual({ ok: true, bookId: BOOK_ID, next: `/books/${BOOK_ID}/upload` });
+    expect(mocks.createBook).toHaveBeenCalledTimes(1);
+  });
+
+  it("analytics on → next carries the one-shot ?_ev=book_created exactly once", async () => {
+    vi.stubEnv("NEXT_PUBLIC_POSTHOG_KEY", "phc_test");
+    try {
+      const state = await createBookAction(initialNewBookFormState, form(valid));
+      expect(state.next).toBe(`/books/${BOOK_ID}/upload?_ev=book_created`);
+      expect(state.next?.match(/_ev=/g)).toHaveLength(1);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("revalidates the dashboard; redirect unchanged", async () => {

@@ -1,7 +1,8 @@
 // Back + Continue row for the book creation wizard (M19 T2, D-071). No hooks and no cn/next/link,
 // so it is cheap inside first-load client islands. Back is one of: a server-rendered slot (e.g. a
 // <Link> passed in), a plain href, or an onClick (pushState step changes); omitted on step 1.
-// Continue is the screen's one gold pill (gold fill, ink text 7.1:1), a submit button by default.
+// Continue is the screen's one gold pill (gold fill, ink text 7.1:1), a submit button by default;
+// disabled it turns into a muted outlined pill (not a faded gold one).
 
 import type { ReactNode } from "react";
 
@@ -18,8 +19,11 @@ export const WIZARD_BACK_CLASS = join(
 
 /** Gold pill Continue (same fill as the M18 gold "New book"). */
 export const WIZARD_CONTINUE_CLASS = join(
-  "inline-flex min-h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-accent-strong px-6 text-base font-semibold text-accent-strong-foreground shadow-card transition-colors hover:bg-accent-strong/90 motion-reduce:transition-none",
-  "disabled:cursor-not-allowed disabled:opacity-60 aria-busy:cursor-progress",
+  "inline-flex min-h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-full border border-transparent bg-accent-strong px-6 text-base font-semibold text-accent-strong-foreground shadow-card transition-colors hover:bg-accent-strong/90 motion-reduce:transition-none",
+  // Disabled (nothing chosen yet): a deliberate muted pill — full-opacity border, muted surface and
+  // label (5.4:1), no shadow — instead of a faded gold. Busy (pending) keeps the gold fill.
+  "disabled:cursor-not-allowed disabled:not-aria-busy:border-input disabled:not-aria-busy:bg-muted disabled:not-aria-busy:text-muted-foreground disabled:not-aria-busy:shadow-none",
+  "aria-busy:cursor-progress aria-busy:opacity-90",
   FOCUS,
 );
 

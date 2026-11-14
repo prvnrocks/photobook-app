@@ -102,8 +102,9 @@ const FIELDS: readonly NewBookField[] = ["title", "occasion", "tone", "captionLa
  * since M19 / D-071: absent → remembered tone / language (D-032, best effort) else
  * DEFAULT_TONE[occasion] / the request's Accept-Language ("ar" first → "ar", else "en")),
  * `format` + `designStyle` (D-063, fixed at creation; absent → portrait / the occasion's default
- * style, D-068). On success redirects to /books/<id>/upload (never returns); signed out →
- * /login?next=/books/new.
+ * style, D-068). On success returns { ok, bookId, next } (next = /books/<id>/upload, plus
+ * ?_ev=book_created when analytics is on; the wizard navigates there — M19 BUG-2); signed out →
+ * redirects to /login?next=/books/new.
  */
 export async function createBookAction(
   _prevState: NewBookFormState,
@@ -158,8 +159,11 @@ export async function createBookAction(
   }
 
   revalidatePath("/dashboard");
+  // M19 BUG-2: return instead of redirecting, so the wizard can first point its own history entry at
+  // the edit URL (/books/new?book=<id>&step=4) — browser Back from step 5 then re-opens this book
+  // instead of an empty create wizard (duplicate drafts). The client navigates to `next`.
   // analytics (M9 T14): one-shot ?_ev=book_created only when PostHog is configured.
-  redirect(withAnalyticsFlash(`/books/${id}/upload`, "book_created"));
+  return { ok: true, bookId: id, next: withAnalyticsFlash(`/books/${id}/upload`, "book_created") };
 }
 
 /** Accept-Language of the current request ("" when unavailable). */

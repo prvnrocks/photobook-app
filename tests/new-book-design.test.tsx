@@ -58,8 +58,12 @@ describe("wizard shape + style steps (M10b A12 → M19)", () => {
     }
     expect(shape).toContain("148 × 210 mm");
     expect(shape + style).not.toMatch(/<svg(?![^>]*aria-hidden="true")/);
-    expect(shape).toContain("size-28 sm:size-40");
-    expect(style).toContain("size-24 sm:size-36");
+    // M19 polish: wizard cards use the "card" art (viewBox hugs the page, sized by height ~2/3 of the card).
+    expect(shape).toContain('viewBox="14 7 36.5 50.5"');
+    expect(shape).toContain("h-36 max-w-full sm:h-56");
+    expect(shape).toContain("h-[6.5rem] max-w-full sm:h-40");
+    expect(style).toContain("h-24 max-w-full sm:h-36");
+    expect(style).toContain('viewBox="7 14 50.5 36.5"');
     // style previews are drawn in the chosen shape (landscape page box)
     expect(style).toContain('width="45" height="31"');
   });
@@ -69,6 +73,20 @@ describe("wizard shape + style steps (M10b A12 → M19)", () => {
     expect(locked).toContain('data-testid="wizard-design-locked"');
     expect(locked).not.toContain('data-testid="format-A5_PORTRAIT"');
     expect(inputTag(locked, "A5_LANDSCAPE")).toMatch(/checked=""[^>]*readOnly=""|readOnly=""[^>]*checked=""/i);
+  });
+
+  it("card variant: warm palette photo tints + a photo motif; default look unchanged (M19 polish)", () => {
+    for (const style of ["modern", "classic", "geometric", "scrapbook"] as const) {
+      const card = renderToStaticMarkup(<StylePreview style={style} format="A5_PORTRAIT" variant="card" />);
+      expect(card).not.toContain("fill-muted-foreground/35");
+      expect(card).toMatch(/fill-success\/35|fill-warning-border|fill-success-border/);
+      expect(card).not.toContain("NaN");
+      const plain = renderToStaticMarkup(<StylePreview style={style} format="A5_PORTRAIT" />);
+      expect(plain).toMatch(/^<svg viewBox="0 0 64 64"[^>]*class="size-16 shrink-0"/);
+      expect(plain).toContain("fill-muted-foreground/35");
+      expect(plain).not.toMatch(/fill-success|fill-warning-soft/);
+    }
+    expect(renderToStaticMarkup(<ShapePreview format="A5_LANDSCAPE" variant="card" />)).toContain("fill-warning-soft");
   });
 
   it("previews: the page box follows the shape", () => {

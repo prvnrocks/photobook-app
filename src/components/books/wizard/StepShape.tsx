@@ -8,6 +8,12 @@ import { wizardHeadline, type WizardFormat } from "@/lib/books/wizard-steps";
 import { FORM_FORMATS, FORMAT_HINTS, FORMAT_SHORT_LABELS } from "@/lib/design/defaults";
 import { DesignLockedNote } from "./DesignLockedNote";
 
+/** Card art sized by height (the card variant's viewBox hugs the page): ~2/3 of the card. */
+const SHAPE_ART: Record<WizardFormat, string> = {
+  A5_PORTRAIT: "h-36 max-w-full sm:h-56",
+  A5_LANDSCAPE: "h-[6.5rem] max-w-full sm:h-40",
+};
+
 export type StepShapeProps = {
   format: WizardFormat | null;
   onFormat: (format: WizardFormat) => void;
@@ -35,7 +41,12 @@ export function StepShape({ format, onFormat, headlineId, locked = false, error 
               value={id}
               label={FORMAT_SHORT_LABELS[id]}
               hint={FORMAT_HINTS[id]}
-              media={<ShapePreview format={id} className="size-28 sm:size-40" />}
+              media={
+                // One art box height for both cards (the portrait's), so the labels line up.
+                <span className="flex h-36 w-full items-center justify-center sm:h-56">
+                  <ShapePreview format={id} variant="card" className={SHAPE_ART[id]} />
+                </span>
+              }
               checked={format === id}
               onChange={locked ? undefined : () => onFormat(id)}
               size="large"

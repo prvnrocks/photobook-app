@@ -121,6 +121,15 @@ describe("T8 dashboard cards", () => {
     expect(empty).not.toContain('type="file"');
   });
 
+  it("empty state copy follows the wizard: name it → pick the style → add photos → we lay it out (M19)", () => {
+    const empty = renderToStaticMarkup(<EmptyState />);
+    const titles = [...empty.matchAll(/<span class="text-sm font-semibold text-heading">([^<]+)<\/span>/g)].map((m) => m[1]);
+    expect(titles).toEqual(["Name it", "Pick the style", "Add your photos", "We lay it out"]);
+    expect(empty).toContain("Name it, pick a style and add your photos");
+    expect(empty).not.toContain("Choose your photos");
+    expect(empty).toMatch(/<ol class="grid[^"]*sm:grid-cols-2/);
+  });
+
   it("page: library header band keeps the heading testid + gold New book link, error as an error Notice", () => {
     const page = src("src/app/dashboard/page.tsx");
     expect(page).toContain("<LibraryHeader");

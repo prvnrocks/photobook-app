@@ -29,7 +29,7 @@ export type WizardShellProps = {
 };
 
 const FOOTER_LINK =
-  "inline-flex min-h-11 items-center rounded-md px-2 text-muted-foreground underline-offset-4 outline-none hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring";
+  "inline-flex min-h-11 min-w-11 items-center justify-center rounded-md px-2 text-muted-foreground underline-offset-4 outline-none hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring";
 
 export function WizardShell({ step, displayName, wide = false, stepHeader = "shell", children }: WizardShellProps) {
   const shellHeader = stepHeader === "shell";

@@ -6,7 +6,12 @@
 //   - New book: the draft is mirrored to sessionStorage (WIZARD_DRAFT_STORAGE_KEY) so a refresh keeps
 //     the choices; entering a step whose earlier answers are missing goes to the first missing step
 //     (a visit with no stored draft starts at step 1). Step-4 Continue submits hidden fields to
-//     createBookAction (it redirects to /books/<id>/upload = step 5; tone is picked by the server).
+//     createBookAction (tone is picked by the server). It returns the new id: the current history
+//     entry is replaced with the edit URL (/books/new?book=<id>&step=4) and we push
+//     /books/<id>/upload (= step 5), so browser Back re-opens THIS book, never an empty wizard
+//     (M19 BUG-2: duplicate drafts). If the router restores the cached create-mode page for that
+//     entry, the mount sees ?book= in create mode and reloads it from the server (edit mode, or the
+//     editor when the details are locked).
 //   - Edit (T8, ?book=<id>): prefilled from the book (sessionStorage unused); step-4 Continue saves
 //     with updateBookSetupAction and goes to /books/<id>/upload.
 // First-load island: no cn / buttonVariants / next/link (the step-1 Back link comes from the server).
@@ -94,6 +99,26 @@ export function allowedStep(target: WizardFormStep, draft: WizardDraft, fresh: b
   return missing === null || target <= missing ? target : missing;
 }
 
+/** Steps 1–4 of an existing draft: where browser Back from step 5 lands after creating it. */
+export function editUrlFor(bookId: string): string {
+  return `/books/new?book=${encodeURIComponent(bookId)}&step=4`;
+}
+
+/**
+ * Create mode can only see ?book= when the router restored a cached create page for a history entry
+ * that we pointed at a created book (the server always renders ?book= in edit mode) → reload it.
+ */
+export function isCreatedBookEntry(href: string): boolean {
+  return new URL(href).searchParams.has("book");
+}
+
+/** Full-page navigation, behind an object so DOM tests can observe it (jsdom can't navigate). */
+export const wizardWindow = {
+  reload(href: string) {
+    window.location.replace(href);
+  },
+};
+
 function urlForStep(step: WizardFormStep): string {
   const u = new URL(window.location.href);
   u.searchParams.set("step", String(step));
@@ -144,6 +169,12 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
   );
   const [saving, startSaving] = useTransition();
   const [leaving, setLeaving] = useState(false);
+  // Create mode remounted on a created book's entry (see isCreatedBookEntry): render nothing but a
+  // pending shell while the mount effect reloads. Always false on the server and on hydration (the
+  // server renders ?book= in edit mode), so no mismatch.
+  const [reopening] = useState(
+    () => mode.kind === "create" && typeof window !== "undefined" && isCreatedBookEntry(window.location.href),
+  );
 
   const captionLang: CaptionLang = draft.captionLang ?? (mode.kind === "create" ? mode.initialLang : "en");
   const style = effectiveStyle(draft.designStyle, draft.occasion);
@@ -161,6 +192,10 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
 
   // Mount: restore the stored draft (create) and bounce a step whose earlier answers are missing.
   useEffect(() => {
+    if (reopening) {
+      wizardWindow.reload(window.location.href);
+      return;
+    }
     let current = draftRef.current;
     let fresh = false;
     if (mode.kind === "create") {
@@ -203,7 +238,21 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
     document.getElementById(HEADLINE_ID)?.focus();
   }, [step]);
 
-  // createBookAction came back (it only returns on errors): keep the draft, jump to the failed step.
+  // createBookAction succeeded: point this history entry at the new book's edit URL, then go to step 5.
+  const createdRef = useRef<NewBookFormState | null>(null);
+  useEffect(() => {
+    if (!state.ok || !state.bookId || !state.next || createdRef.current === state) return;
+    createdRef.current = state; // once per result, whatever re-runs the effect
+    setLeaving(true);
+    window.history.replaceState(
+      { ...(window.history.state ?? {}), wizardStep: 4, wizardPrev: undefined },
+      "",
+      editUrlFor(state.bookId),
+    );
+    router.push(state.next);
+  }, [state, router]);
+
+  // createBookAction failed: keep the draft, jump to the failed step.
   useEffect(() => {
     if (state === initialNewBookFormState || state.ok) return;
     writeStored(draftRef.current);
@@ -282,13 +331,13 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
       saveEdit(edit.bookId);
       return;
     }
-    // Create: the form action runs next. Clear the stored draft now (success redirects away); an
+    // Create: the form action runs next. Clear the stored draft now (success leaves the wizard); an
     // error response writes it back (effect above).
     setStepError(null);
     writeStored(null);
   }
 
-  const pending = creating || saving || leaving;
+  const pending = creating || saving || leaving || state.ok;
   const canContinue =
     step === 1
       ? isAcceptableWizardTitle(draft.title)
@@ -299,6 +348,16 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
           : draft.occasion !== null && draft.format !== null;
   const errorHere = stepError && stepError.step === step ? stepError : null;
   const fieldError = (f: NewBookField) => (errorHere?.field === f ? errorHere.message : undefined);
+
+  if (reopening) {
+    return (
+      <div className="flex w-full min-w-0 flex-col" data-testid="new-book-wizard" data-reopening="true" aria-busy="true">
+        <p className="text-muted-foreground mt-8 text-center text-sm" role="status">
+          Opening your book…
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex w-full min-w-0 flex-col" data-testid="new-book-wizard" data-step={step} data-mode={mode.kind}>

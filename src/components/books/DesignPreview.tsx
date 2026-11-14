@@ -12,14 +12,67 @@ const PAGE: Record<BookFormat, { x: number; y: number; w: number; h: number }> =
   A5_LANDSCAPE: { x: 9.5, y: 16.5, w: 45, h: 31 },
 };
 
-const photo = "fill-muted-foreground/35";
+/**
+ * "default": the original 64 × 64 square with flat grey photo blocks (size-16).
+ * "card" (M19 wizard cards): the viewBox hugs the page so the art fills its box (size it by height,
+ * e.g. h-40 w-auto), and photo blocks get warm palette tints (soft emerald / sand / sage) with a
+ * tiny sun-and-hills motif in the main block so they read as photos.
+ */
+export type PreviewVariant = "default" | "card";
+
 const page = "fill-background stroke-border";
 const ink = "stroke-muted-foreground";
+const PHOTO_DEFAULT = "fill-muted-foreground/35";
+/** Card tints, cycled per block: soft emerald, sand, sage. */
+const PHOTO_CARD = ["fill-success/35", "fill-warning-border", "fill-success-border"] as const;
 
-function Frame({ format, className, children }: { format: BookFormat; className?: string; children: React.ReactNode }) {
-  const p = PAGE[format];
+function photoClass(variant: PreviewVariant, i = 0): string {
+  return variant === "card" ? PHOTO_CARD[i % PHOTO_CARD.length] : PHOTO_DEFAULT;
+}
+
+/** Card variant only: a small sun + two hills inside a photo rect (stays inside it, no clipping). */
+function PhotoMotif({ variant, x, y, w, h }: { variant: PreviewVariant; x: number; y: number; w: number; h: number }) {
+  if (variant !== "card" || w < 8 || h < 6) return null;
+  const m = Math.min(w, h);
+  const base = y + h;
+  const hills = [
+    `${r1(x)},${r1(base)}`,
+    `${r1(x)},${r1(base - h * 0.28)}`,
+    `${r1(x + w * 0.32)},${r1(base - h * 0.5)}`,
+    `${r1(x + w * 0.58)},${r1(base - h * 0.26)}`,
+    `${r1(x + w * 0.76)},${r1(base - h * 0.4)}`,
+    `${r1(x + w)},${r1(base - h * 0.18)}`,
+    `${r1(x + w)},${r1(base)}`,
+  ].join(" ");
   return (
-    <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false" className={cn("size-16 shrink-0", className)}>
+    <>
+      <circle cx={r1(x + w * 0.74)} cy={r1(y + h * 0.3)} r={r1(m * 0.12)} className="fill-warning-soft" />
+      <polygon points={hills} className="fill-success/45" />
+    </>
+  );
+}
+
+function Frame({
+  format,
+  className,
+  variant = "default",
+  children,
+}: {
+  format: BookFormat;
+  className?: string;
+  variant?: PreviewVariant;
+  children: React.ReactNode;
+}) {
+  const p = PAGE[format];
+  // "card": hug the page (+ room for the drop shadow and the scrapbook tape / tilt).
+  const viewBox = variant === "card" ? `${p.x - 2.5} ${p.y - 2.5} ${p.w + 5.5} ${p.h + 5.5}` : "0 0 64 64";
+  return (
+    <svg
+      viewBox={viewBox}
+      aria-hidden="true"
+      focusable="false"
+      className={cn(variant === "card" ? "h-16 w-auto shrink-0" : "size-16 shrink-0", className)}
+    >
       <rect x={p.x + 1.2} y={p.y + 1.2} width={p.w} height={p.h} rx="1.5" className="fill-foreground/10" />
       <rect x={p.x} y={p.y} width={p.w} height={p.h} rx="1.5" strokeWidth="1" className={page} />
       {children}
@@ -27,16 +80,18 @@ function Frame({ format, className, children }: { format: BookFormat; className?
   );
 }
 
-/** Size override for the svg (default size-16), e.g. the wizard's large cards (M19). */
-type PreviewSize = { className?: string };
+/** Size override for the svg (default size-16) and the look (M19 wizard cards: variant="card"). */
+type PreviewSize = { className?: string; variant?: PreviewVariant };
 
 /** Shape choice: an empty page of that shape with one photo block. */
-export function ShapePreview({ format, className }: { format: BookFormat } & PreviewSize) {
+export function ShapePreview({ format, className, variant = "default" }: { format: BookFormat } & PreviewSize) {
   const p = PAGE[format];
   const m = 4;
+  const ph = { x: p.x + m, y: p.y + m, w: p.w - 2 * m, h: p.h * 0.62 - m };
   return (
-    <Frame format={format} className={className}>
-      <rect x={p.x + m} y={p.y + m} width={p.w - 2 * m} height={p.h * 0.62 - m} rx="0.8" className={photo} />
+    <Frame format={format} className={className} variant={variant}>
+      <rect x={ph.x} y={ph.y} width={ph.w} height={ph.h} rx="0.8" className={photoClass(variant)} />
+      <PhotoMotif variant={variant} {...ph} />
       <line x1={p.x + m} x2={p.x + p.w * 0.6} y1={p.y + p.h * 0.78} y2={p.y + p.h * 0.78} strokeWidth="1.4" strokeLinecap="round" className={ink} />
     </Frame>
   );
@@ -54,24 +109,27 @@ export function StylePreview({
   style,
   format,
   className,
+  variant = "default",
 }: { style: FormDesignStyle; format: BookFormat } & PreviewSize) {
-  if (style === "modern") return <ModernPreview format={format} className={className} />;
-  if (style === "geometric") return <GeometricPreview format={format} className={className} />;
-  if (style === "scrapbook") return <ScrapbookPreview format={format} className={className} />;
-  return <ClassicPreview format={format} className={className} />;
+  const props = { format, className, variant };
+  if (style === "modern") return <ModernPreview {...props} />;
+  if (style === "geometric") return <GeometricPreview {...props} />;
+  if (style === "scrapbook") return <ScrapbookPreview {...props} />;
+  return <ClassicPreview {...props} />;
 }
 
-function ModernPreview({ format, className }: { format: BookFormat } & PreviewSize) {
+function ModernPreview({ format, className, variant = "default" }: { format: BookFormat } & PreviewSize) {
   const p = PAGE[format];
   const g = 1; // thin gutter
   const top = p.h * 0.7;
   const half = (p.w - g) / 2;
   const titleY = p.y + top + (p.h - top) / 2;
   return (
-    <Frame format={format} className={className}>
-      <rect x={p.x} y={p.y} width={half} height={top} className={photo} />
-      <rect x={p.x + half + g} y={p.y} width={half} height={(top - g) / 2} className={photo} />
-      <rect x={p.x + half + g} y={p.y + (top + g) / 2} width={half} height={(top - g) / 2} className={photo} />
+    <Frame format={format} className={className} variant={variant}>
+      <rect x={p.x} y={p.y} width={half} height={top} className={photoClass(variant, 0)} />
+      <PhotoMotif variant={variant} x={p.x} y={p.y} w={half} h={top} />
+      <rect x={p.x + half + g} y={p.y} width={half} height={(top - g) / 2} className={photoClass(variant, 1)} />
+      <rect x={p.x + half + g} y={p.y + (top + g) / 2} width={half} height={(top - g) / 2} className={photoClass(variant, 2)} />
       {/* script title: a looping flourish */}
       <path
         d={`M ${p.x + p.w * 0.22} ${titleY + 1.5} c 2 -5 4 -5 3 0 s 2 4 4 -1 s 3 -3 4 1 s 3 2 5 -2`}
@@ -85,16 +143,17 @@ function ModernPreview({ format, className }: { format: BookFormat } & PreviewSi
   );
 }
 
-function ClassicPreview({ format, className }: { format: BookFormat } & PreviewSize) {
+function ClassicPreview({ format, className, variant = "default" }: { format: BookFormat } & PreviewSize) {
   const p = PAGE[format];
   const mat = Math.min(p.w, p.h) * 0.16;
   const fw = p.w - 2 * mat;
   const fh = p.h * 0.62 - mat;
   const capY = p.y + mat + fh + (p.h - mat - fh) / 2;
   return (
-    <Frame format={format} className={className}>
+    <Frame format={format} className={className} variant={variant}>
       <rect x={p.x + mat - 1.5} y={p.y + mat - 1.5} width={fw + 3} height={fh + 3} fill="none" strokeWidth="0.6" className={ink} />
-      <rect x={p.x + mat} y={p.y + mat} width={fw} height={fh} className={photo} />
+      <rect x={p.x + mat} y={p.y + mat} width={fw} height={fh} className={photoClass(variant, 0)} />
+      <PhotoMotif variant={variant} x={p.x + mat} y={p.y + mat} w={fw} h={fh} />
       <line x1={p.x + p.w * 0.3} x2={p.x + p.w * 0.7} y1={capY} y2={capY} strokeWidth="1.2" strokeLinecap="round" className={ink} />
     </Frame>
   );
@@ -112,7 +171,7 @@ function hexagon(cx: number, cy: number, r: number): string {
     .join(" ");
 }
 
-function GeometricPreview({ format, className }: { format: BookFormat } & PreviewSize) {
+function GeometricPreview({ format, className, variant = "default" }: { format: BookFormat } & PreviewSize) {
   const p = PAGE[format];
   const m = Math.min(p.w, p.h);
   // Band: full bleed at the top, bottom edge slopes down to the left.
@@ -132,10 +191,10 @@ function GeometricPreview({ format, className }: { format: BookFormat } & Previe
   const hy = p.y + p.h - hr - m * 0.14;
   const capY = hy; // landscape: the line stops before the circle
   return (
-    <Frame format={format} className={className}>
-      <polygon points={band} className={photo} />
-      <circle cx={r1(cx)} cy={r1(cy)} r={r1(cr)} strokeWidth="1.2" className={cn(photo, "stroke-background")} />
-      <polygon points={hexagon(hx, hy, hr)} className={photo} />
+    <Frame format={format} className={className} variant={variant}>
+      <polygon points={band} className={photoClass(variant, 0)} />
+      <circle cx={r1(cx)} cy={r1(cy)} r={r1(cr)} strokeWidth="1.2" className={cn(photoClass(variant, 1), "stroke-background")} />
+      <polygon points={hexagon(hx, hy, hr)} className={photoClass(variant, 2)} />
       <line
         x1={r1(hx + hr + m * 0.12)}
         x2={r1(Math.min(p.x + p.w - m * 0.14, hx + hr + m * 0.12 + p.w * 0.32, format === "A5_LANDSCAPE" ? cx - cr - 1.5 : Infinity))}
@@ -149,7 +208,7 @@ function GeometricPreview({ format, className }: { format: BookFormat } & Previe
   );
 }
 
-function ScrapbookPreview({ format, className }: { format: BookFormat } & PreviewSize) {
+function ScrapbookPreview({ format, className, variant = "default" }: { format: BookFormat } & PreviewSize) {
   const p = PAGE[format];
   const landscape = format === "A5_LANDSCAPE";
   // Polaroid card: portrait-ish, white border, wider bottom lip; tilted like s-*-one-polaroid.
@@ -169,12 +228,13 @@ function ScrapbookPreview({ format, className }: { format: BookFormat } & Previe
   const hx = landscape ? p.x + p.w * 0.77 : x + cw + 0.6;
   const hy = landscape ? p.y + p.h * 0.36 : y + 2.4;
   return (
-    <Frame format={format} className={className}>
+    <Frame format={format} className={className} variant={variant}>
       <g transform={`rotate(-5 ${r1(cx)} ${r1(cy)})`}>
         {/* crisp drawn shadow (no blur), like the real render */}
         <rect x={r1(x + 0.9)} y={r1(y + 1.1)} width={r1(cw)} height={r1(ch)} className="fill-foreground/15" />
         <rect x={r1(x)} y={r1(y)} width={r1(cw)} height={r1(ch)} strokeWidth="0.5" className="fill-background stroke-border" />
-        <rect x={r1(x + inset)} y={r1(y + inset)} width={r1(cw - 2 * inset)} height={r1(ch - inset - cw * 0.26)} className={photo} />
+        <rect x={r1(x + inset)} y={r1(y + inset)} width={r1(cw - 2 * inset)} height={r1(ch - inset - cw * 0.26)} className={photoClass(variant, 0)} />
+        <PhotoMotif variant={variant} x={x + inset} y={y + inset} w={cw - 2 * inset} h={ch - inset - cw * 0.26} />
       </g>
       <rect
         x={r1(cx - tapeW / 2)}

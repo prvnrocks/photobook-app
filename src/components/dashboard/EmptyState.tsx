@@ -1,7 +1,7 @@
 // Shown on the dashboard when the user has no books yet. M18: an empty library shelf in emerald &
-// gold, three short steps, and the screen's one gold call to action ("Make your first book"; the
-// header band shows no New book button then). M19 (D-071): the call to action opens the creation
-// wizard (/books/new).
+// gold, short steps, and the screen's one gold call to action ("Make your first book"; the header
+// band shows no New book button then). M19 (D-071): the call to action opens the creation wizard
+// (/books/new) and the steps follow it: name it → pick the style → add photos → we lay it out.
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button-variants";
 
@@ -44,10 +44,11 @@ function ShelfArt() {
   );
 }
 
-const STEPS = [
-  { n: "1", title: "Choose your photos", text: "Pick as many as you like — iPhone photos work too." },
-  { n: "2", title: "We draft the album", text: "AI drops the blurry shots, groups moments and writes captions." },
-  { n: "3", title: "Share the link", text: "Tweak anything, then send a flipbook on WhatsApp." },
+export const EMPTY_STEPS = [
+  { n: "1", title: "Name it", text: "A title and the occasion — that's all." },
+  { n: "2", title: "Pick the style", text: "Choose a page shape and a look you love." },
+  { n: "3", title: "Add your photos", text: "As many as you like — iPhone photos work too." },
+  { n: "4", title: "We lay it out", text: "AI picks the best shots, groups moments and writes captions." },
 ] as const;
 
 export function EmptyState() {
@@ -65,7 +66,8 @@ export function EmptyState() {
             No books yet
           </h2>
           <p dir="auto" className="type-body mt-3 max-w-md text-muted-foreground">
-            Choose your photos and we&apos;ll lay out the first draft for you. Nothing is shared until you say so.
+            Name it, pick a style and add your photos — we&apos;ll lay out the first draft. Nothing is shared until
+            you say so.
           </p>
           <div className="mt-7 flex w-full max-w-xs flex-col gap-2">
             <Link href="/books/new" className={buttonVariants({ variant: "accent", size: "cta" })} data-testid="create-first-book">
@@ -75,8 +77,8 @@ export function EmptyState() {
         </div>
         <div className="flex flex-col items-center gap-8">
           <ShelfArt />
-          <ol className="grid w-full max-w-md gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-            {STEPS.map((s) => (
+          <ol className="grid w-full max-w-md gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+            {EMPTY_STEPS.map((s) => (
               <li key={s.n} className="flex gap-3 rounded-2xl bg-background p-3.5 ring-1 ring-border sm:flex-col sm:gap-2 lg:flex-row xl:flex-col">
                 <span
                   aria-hidden="true"
