@@ -223,6 +223,9 @@ Plan: `.agentos/runs/m13.md`, D-070.
 ## Milestone 15 — Home page Direction A "Confetti" (2026-11-14)
 - [x] Research board (13 live references) → user picked Direction A: giant playful headline, blush + pop pink, CSS confetti and blobs, book bursting out of the hero, benefits marquee, playful how-it-works, bookshelf moved to "Pick a style to start". AA contrast; "/" +0.2 kB JS. Report: `.agentos/runs/m15.md`. Deployed 2026-11-14. Next: swap HERO_BOOK for real printed-book photos.
 
+## Milestone 16 — Home emerald & gold (2026-11-14)
+- [x] Luxury palette from the user's reference (#0e3b2e / #1f6f54 / #c9a227 / #f2e8d8 / #1b1b1d): leather hero with gold foil rules, gold CTA + seal + foil flecks, cream Arabic card, restyled marquee/cards/pricing/FAQ/footer, OG image to match; "Pick a style to start" shelf removed ("/" JS 11.6→3.7 kB). Report: `.agentos/runs/m16.md`. Deployed 2026-11-14.
+
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
 - [ ] AI "story mode": a short paragraph per chapter (AI-picked backgrounds moved into M10c)
