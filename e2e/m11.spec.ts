@@ -271,6 +271,12 @@ test.describe("M11 dev fixtures at 375 px", () => {
     ["dev-publish live", "/dev-publish?state=live", "publish-live-fixture"],
     ["dev-upgrade paid", "/dev-upgrade?state=paid"],
     ["dev-upgrade polling", "/dev-upgrade?state=polling"],
+    // M23 T6: the viewer's non-book screens (password / expired / unavailable / not-found).
+    ["dev-viewer password", "/dev-viewer?state=password"],
+    ["dev-viewer expired", "/dev-viewer?state=expired"],
+    ["dev-viewer expired owner", "/dev-viewer?state=expiredOwner&payments=1"],
+    ["dev-viewer unavailable", "/dev-viewer?state=unavailable"],
+    ["dev-viewer not-found", "/dev-viewer?state=notFound"],
   ];
   for (const [name, url, shot] of FIXTURES) {
     test(`${name} (${url})`, async ({ page }) => {
