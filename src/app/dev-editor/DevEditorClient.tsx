@@ -6,23 +6,22 @@
 import { Eraser, PanelBottom, Type } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { EditorShell } from "@/components/editor/EditorShell";
-import { EDITOR_TOOLS } from "@/components/editor/tools/registry";
 import type { EditorTool } from "@/components/editor/tools/types";
 import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
-import { replacePhoto, setCover } from "@/lib/book/edit-ops";
-import type { BookFormat } from "@/lib/book/types";
-import type { DevSample } from "@/lib/book/dev-sample";
-import {
-  devEditorData,
-  devTransport,
-  withDevBackgroundPhotos,
-  withDevLightVeilPage,
-  withDevSampleBook,
-  type DevAiMode,
-  type DevSaveMode,
-} from "@/lib/editor/dev-fixture";
-import { withDevPagesData } from "@/lib/editor/dev-pages-fixture";
-import { withDevEditorState, type DevEditorState } from "./dev-states";
+import type { BookDoc } from "@/lib/book/types";
+import type { AiSummary } from "@/lib/editor/ai-summary";
+import { devTransport, type DevSaveMode } from "@/lib/editor/dev-fixture";
+import type { EditorShellData } from "@/lib/editor/types";
+import type { DevEditorState } from "./dev-states";
+
+// Demo edits inlined (not @/lib/book/edit-ops): a dev-route import of an editor module keeps webpack
+// from concatenating it into the editor's first-load chunk (M22 size trim). Dev-only, minimal.
+function devClearSlot(d: BookDoc, pageIdx: number, slotIdx: number): BookDoc {
+  const page = d.pages[pageIdx];
+  if (!page?.slots[slotIdx] || page.slots[slotIdx].photoId === null) return d;
+  const slots = page.slots.map((sl, i) => (i === slotIdx ? { photoId: null, crop: { x: 0.5, y: 0.5, zoom: 1 } } : sl));
+  return { ...d, pages: d.pages.map((p, i) => (i === pageIdx ? { ...p, slots } : p)) };
+}
 
 const DEV_TOOLS: EditorTool[] = [
   {
@@ -33,7 +32,7 @@ const DEV_TOOLS: EditorTool[] = [
     order: 10,
     run: ({ state, actions }) => {
       const sel = state.selection;
-      if (sel?.kind === "slot") actions.edit((d) => replacePhoto(d, sel.pageIdx, sel.slotIdx, null));
+      if (sel?.kind === "slot") actions.edit((d) => devClearSlot(d, sel.pageIdx, sel.slotIdx));
     },
   },
   {
@@ -42,7 +41,7 @@ const DEV_TOOLS: EditorTool[] = [
     icon: Type,
     scopes: "always",
     order: 70,
-    run: ({ actions }) => actions.edit((d) => setCover(d, { title: `${d.cover.title}!` })),
+    run: ({ actions }) => actions.edit((d) => ({ ...d, cover: { ...d.cover, title: `${d.cover.title}!` } })),
   },
   {
     id: "dev-panel",
@@ -59,46 +58,27 @@ const DEV_TOOLS: EditorTool[] = [
   },
 ];
 
-/** Real registered tools + the demo tools. */
-const TOOLS: EditorTool[] = [...EDITOR_TOOLS, ...DEV_TOOLS];
+// Real registered tools + these demo tools (EditorShell's extraTools: this file must not import the
+// tool registry or @/lib/editor/ai-summary — see ./dev-states.ts).
 
 export function DevEditorClient({
   mode,
-  ai = "off",
-  pages = null,
-  published = false,
-  paid = false,
-  format = "A5_PORTRAIT",
+  data,
+  summary = null,
   paymentsEnabled = false,
   bg = false,
-  lightVeil = false,
-  sample = null,
   state = null,
 }: {
   mode: DevSaveMode;
-  ai?: DevAiMode;
-  pages?: number | null;
-  published?: boolean;
-  paid?: boolean;
-  format?: BookFormat;
+  /** Fixture data + AI summary, built on the server page (devEditorFixture in ./dev-states.ts). */
+  data: EditorShellData;
+  summary?: AiSummary | null;
   paymentsEnabled?: boolean;
   /** `?bg=1`: uuid background photos + the real save validator in the stub transport (M10a A8). */
   bg?: boolean;
-  /** `?bg=1&bgveil=light50`: page 1 has a photo background under a white 50 % veil (M10b A4). */
-  lightVeil?: boolean;
-  /** `?sample=modern-portrait|modern-landscape` (M10c: also geometric-|scrapbook-portrait|landscape, `-ar` for Arabic): modern sample book with spreads (M10b A15). */
-  sample?: DevSample | null;
   /** `?state=` named screenshot state (./dev-states.ts); the save mode is already adjusted by the page. */
   state?: DevEditorState | null;
 }) {
-  const [{ data, summary }] = useState(() => {
-    const raw = sample ? withDevSampleBook(devEditorData(mode, ai), sample) : withDevPagesData(devEditorData(mode, ai), pages);
-    const withBg = bg ? withDevBackgroundPhotos(raw) : raw;
-    const fixture = bg && lightVeil ? withDevLightVeilPage(withBg) : withBg;
-    const base = sample || format === fixture.doc.format ? fixture : { ...fixture, doc: { ...fixture.doc, format } };
-    const d = paid ? { ...base, book: { ...base.book, isPaid: true, maxPages: 100 } } : base;
-    return withDevEditorState(published ? { ...d, publishedRev: d.docRev } : d, state);
-  });
   const [transport] = useState(() =>
     devTransport(
       mode,
@@ -120,7 +100,7 @@ export function DevEditorClient({
   }, [state]);
   return (
     <>
-      <EditorShell data={data} transport={transport} tools={TOOLS} backHref="/dev-editor" paymentsEnabled={paymentsEnabled} aiSummary={summary} />
+      <EditorShell data={data} transport={transport} extraTools={DEV_TOOLS} backHref="/dev-editor" paymentsEnabled={paymentsEnabled} aiSummary={summary} />
       <Suspense fallback={null}>
         <UpgradeCancelledNotice floating />
       </Suspense>

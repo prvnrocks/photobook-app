@@ -22,7 +22,7 @@ import { DEV_AI_MODES, DEV_SAVE_MODES, type DevAiMode, type DevSaveMode } from "
 import { parseDevPages } from "@/lib/editor/dev-pages-fixture";
 import { isPaymentsEnabled } from "@/lib/stripe";
 import { DevEditorClient } from "./DevEditorClient";
-import { devStateSaveMode, parseDevEditorState } from "./dev-states";
+import { devEditorFixture, devStateSaveMode, parseDevEditorState } from "./dev-states";
 
 export const dynamic = "force-dynamic";
 
@@ -39,5 +39,18 @@ export default async function DevEditorPage({
   const state = parseDevEditorState(params.state);
   const mode = devStateSaveMode(state, (DEV_SAVE_MODES as readonly string[]).includes(String(q)) ? (q as DevSaveMode) : "ok");
   const ai = (DEV_AI_MODES as readonly string[]).includes(String(params.ai)) ? (params.ai as DevAiMode) : "off";
-  return <DevEditorClient mode={mode} ai={ai} pages={parseDevPages(params.pages)} published={params.published === "1"} paid={params.paid === "1"} format={parseDevFormat(params.format)} paymentsEnabled={isPaymentsEnabled()} bg={params.bg === "1"} lightVeil={params.bgveil === "light50"} sample={parseDevSample(params.sample)} state={state} />;
+  const bg = params.bg === "1";
+  const { data, summary } = devEditorFixture({
+    mode,
+    ai,
+    pages: parseDevPages(params.pages),
+    published: params.published === "1",
+    paid: params.paid === "1",
+    format: parseDevFormat(params.format),
+    bg,
+    lightVeil: params.bgveil === "light50",
+    sample: parseDevSample(params.sample),
+    state,
+  });
+  return <DevEditorClient mode={mode} data={data} summary={summary} paymentsEnabled={isPaymentsEnabled()} bg={bg} state={state} />;
 }

@@ -1,7 +1,20 @@
 // Named fixture states for /dev-editor screenshots (M22 T7): `?state=<name>` on top of the other
 // query params. Dev-only route (404 in production). Pure: no React, no server modules.
+// Imported by the dev page (a server component) only, never by DevEditorClient: a client import of
+// @/lib/editor/ai-summary (or the tool registry) from outside the editor's module graph stops webpack
+// concatenating it into the editor's first-load chunk (M22 size trim).
 
-import type { DevSaveMode } from "@/lib/editor/dev-fixture";
+import type { BookFormat } from "@/lib/book/types";
+import type { DevSample } from "@/lib/book/dev-sample";
+import {
+  devEditorData,
+  withDevBackgroundPhotos,
+  withDevLightVeilPage,
+  withDevSampleBook,
+  type DevAiMode,
+  type DevSaveMode,
+} from "@/lib/editor/dev-fixture";
+import { withDevPagesData } from "@/lib/editor/dev-pages-fixture";
 import { aiSummary, type AiSummary } from "@/lib/editor/ai-summary";
 import type { EditorShellData } from "@/lib/editor/types";
 
@@ -43,4 +56,30 @@ export function withDevEditorState(data: EditorShellData, state: DevEditorState 
     default:
       return { data, summary: null };
   }
+}
+
+export type DevEditorFixtureOptions = {
+  mode: DevSaveMode;
+  ai: DevAiMode;
+  pages: number | null;
+  published: boolean;
+  paid: boolean;
+  format: BookFormat;
+  /** `?bg=1`: uuid background photos (M10a A8). */
+  bg: boolean;
+  /** `?bg=1&bgveil=light50`: page 1 has a photo background under a white 50 % veil (M10b A4). */
+  lightVeil: boolean;
+  /** `?sample=…` modern sample book with spreads (M10b A15 / M10c). */
+  sample: DevSample | null;
+  state: DevEditorState | null;
+};
+
+/** The dev editor's fixture data + AI summary for the query options (built on the server page). */
+export function devEditorFixture(o: DevEditorFixtureOptions): { data: EditorShellData; summary: AiSummary | null } {
+  const raw = o.sample ? withDevSampleBook(devEditorData(o.mode, o.ai), o.sample) : withDevPagesData(devEditorData(o.mode, o.ai), o.pages);
+  const withBg = o.bg ? withDevBackgroundPhotos(raw) : raw;
+  const fixture = o.bg && o.lightVeil ? withDevLightVeilPage(withBg) : withBg;
+  const base = o.sample || o.format === fixture.doc.format ? fixture : { ...fixture, doc: { ...fixture.doc, format: o.format } };
+  const d = o.paid ? { ...base, book: { ...base.book, isPaid: true, maxPages: 100 } } : base;
+  return withDevEditorState(o.published ? { ...d, publishedRev: d.docRev } : d, o.state);
 }

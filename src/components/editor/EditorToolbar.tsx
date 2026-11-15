@@ -21,7 +21,7 @@ import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react"
 import { coachSeen, EDITOR_COACH_TEXT, markCoachSeen, subscribeCoach } from "@/lib/editor/coach";
 import { EDIT_ERROR_COPY } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
-import { ED_PANEL_HEADING, ED_PILL, ED_PILL_ACTIVE, ED_PILL_BAR, ED_SHEET } from "./editor-classes";
+import { ED_CLOSE_BTN, ED_PANEL_HEADING, ED_PILL, ED_PILL_ACTIVE, ED_PILL_BAR, ED_SHEET } from "./editor-classes";
 import { useEditor, type EditorContextValue } from "./editor-context";
 import { MoreSheet } from "./MoreSheet";
 import { splitTools } from "./tools/registry";
@@ -64,7 +64,7 @@ export function CoachLineView({ onDismiss }: { onDismiss(): void }) {
         type="button"
         onClick={onDismiss}
         aria-label="Dismiss tip"
-        className={STRIP_CLOSE}
+        className={ED_CLOSE_BTN}
         data-testid="editor-coach-dismiss"
       >
         <X className="size-4" aria-hidden="true" />
@@ -85,10 +85,6 @@ const CARD_STRIP =
 /** The toolbar block: a column on phones; ≥ md one centred row (card strips · pill bar). */
 const TOOLBAR_ROW =
   "shrink-0 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] ps-[max(0.5rem,env(safe-area-inset-left))] pe-[max(0.5rem,env(safe-area-inset-right))] md:flex md:flex-wrap md:items-center md:justify-center md:gap-x-3 md:gap-y-2";
-
-/** 44 px round dismiss button inside a card strip. */
-const STRIP_CLOSE =
-  "flex size-11 shrink-0 items-center justify-center rounded-full text-[#0e3b2e] outline-none hover:bg-[#e6efe9] focus-visible:ring-2 focus-visible:ring-[#0e3b2e] transition-colors motion-reduce:transition-none";
 
 /**
  * Pill overrides (merged over ED_PILL / ED_PILL_ACTIVE by cn — tailwind-merge, so these win):
@@ -362,7 +358,7 @@ export function EditorPanelHost({ tool }: { tool: EditorTool | null }) {
             type="button"
             onClick={ctx.closeTool}
             aria-label="Close"
-            className="flex size-11 shrink-0 items-center justify-center rounded-full text-[#0e3b2e] outline-none transition-colors hover:bg-[#e6efe9] focus-visible:ring-2 focus-visible:ring-[#0e3b2e] motion-reduce:transition-none"
+            className={ED_CLOSE_BTN}
             data-testid="editor-panel-close"
           >
             <X className="size-5" aria-hidden="true" />

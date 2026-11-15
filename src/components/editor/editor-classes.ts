@@ -103,6 +103,10 @@ export const ED_PILL_ACTIVE =
 export const ED_SHEET =
   "rounded-t-3xl border-t border-[#e9dfca] bg-card px-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-18px_40px_-24px_rgb(14_59_46/0.45)] before:mx-auto before:mt-2 before:mb-3 before:block before:h-1.5 before:w-10 before:rounded-full before:bg-[#cfc4ad] before:content-['']";
 
+/** Round 44 px close / dismiss button on white (sheets, panel, coach card): emerald 12.47:1. */
+export const ED_CLOSE_BTN =
+  "flex size-11 shrink-0 items-center justify-center rounded-full text-[#0e3b2e] outline-none transition-colors hover:bg-[#e6efe9] focus-visible:ring-2 focus-visible:ring-[#0e3b2e] motion-reduce:transition-none";
+
 /** Small caps heading inside a card / sheet / panel (accent-text #7a5f0e on white 6.07:1). */
 export const ED_PANEL_EYEBROW = "text-[0.7rem] font-semibold tracking-[0.24em] text-accent-text uppercase";
 

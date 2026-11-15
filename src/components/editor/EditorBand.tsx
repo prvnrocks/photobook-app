@@ -1,7 +1,7 @@
 // Editor band (M22 T3, D-074): the emerald leather header of the editor, in the wizard / share-page
 // language (WizardBand, ShareBand).
 //   phones: one compact row (h-14 = 56 px ≤ 64 px): back · title + save chip · undo · redo · gold Share
-//   ≥ lg:   a taller band: "EDITING" eyebrow over a foil hairline, title, save chip, page-count chip
+//   ≥ lg:   a taller band: "EDITING" ("VIEWING" when read-only) eyebrow over a foil hairline, title, save chip, page-count chip
 //           "N / M pages", undo/redo, Share (with its note).
 // Hook-free and import-light (no cn/buttonVariants/next/link): the back link, save status and Share
 // button arrive as nodes from EditorShell. User text (the title) sits in an inner <span dir="auto">
@@ -38,6 +38,8 @@ type EditorBandProps = {
   share: ReactNode;
   /** Pages in the doc (spread halves count) and the book's page limit; the chip hides when unknown. */
   pages?: { count: number; max: number | null | undefined };
+  /** Read-only (save banner says editing is paused): the ≥ lg eyebrow reads "Viewing", not "Editing". */
+  readOnly?: boolean;
 };
 
 /** "N / M pages", or null when the limit is unknown. Pure, exported for tests. */
@@ -46,7 +48,7 @@ export function bandPageCountLabel(count: number, max: number | null | undefined
   return `${count} / ${max} pages`;
 }
 
-export function EditorBand({ back, title, saveStatus, undo, redo, share, pages }: EditorBandProps) {
+export function EditorBand({ back, title, saveStatus, undo, redo, share, pages, readOnly }: EditorBandProps) {
   const pageLabel = pages ? bandPageCountLabel(pages.count, pages.max) : null;
   return (
     <header className={ED_BAND} data-testid="editor-band">
@@ -56,7 +58,7 @@ export function EditorBand({ back, title, saveStatus, undo, redo, share, pages }
         {back}
         <div className={ED_BAND_TITLE_WRAP}>
           <p className={ED_BAND_EYEBROW}>
-            <span>Editing</span>
+            <span data-testid="editor-band-eyebrow">{readOnly ? "Viewing" : "Editing"}</span>
             <span aria-hidden="true" className={ED_BAND_EYEBROW_RULE} />
           </p>
           <div className="flex min-w-0 flex-col items-start gap-0.5 lg:flex-row lg:items-center lg:gap-3">

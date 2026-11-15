@@ -9,7 +9,7 @@ import { FileDown, FileText } from "lucide-react";
 import { selectionKind } from "@/lib/editor/store";
 import { PdfDownload, type PdfLook } from "@/components/publish/PdfDownload";
 import { ED_CTA_EMERALD } from "../editor-classes";
-import { TOOL_SECONDARY } from "./tool-classes";
+import { TOOL_SECONDARY, TOOL_WELL_SURFACE } from "./tool-classes";
 import type { EditorPanelProps, EditorTool } from "./types";
 
 export const PDF_TOOL_ID = "pdf";
@@ -20,7 +20,7 @@ export const PDF_TOOL_ID = "pdf";
 const PDF_EDITOR_LOOK: PdfLook = {
   primary: `${ED_CTA_EMERALD} w-full py-2 whitespace-normal sm:w-auto sm:self-start`,
   outline: `${TOOL_SECONDARY} w-full sm:w-auto sm:self-start`,
-  well: "rounded-2xl border border-[#e9dfca] bg-[#faf6ee]",
+  well: TOOL_WELL_SURFACE,
 };
 const ICON_CHIP =
   "flex size-10 shrink-0 items-center justify-center rounded-full bg-[#e6efe9] text-[#0e3b2e] ring-1 ring-[#0e3b2e]/10";

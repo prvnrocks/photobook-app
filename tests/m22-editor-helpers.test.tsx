@@ -3,9 +3,9 @@
 // Plus N4: EditorShell renders the stage boxes `bare` (the host paints the cream stage).
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { devStateSaveMode, parseDevEditorState, withDevEditorState } from "@/app/dev-editor/dev-states";
+import { devEditorFixture, devStateSaveMode, parseDevEditorState, withDevEditorState } from "@/app/dev-editor/dev-states";
 import { ED_STAGE, ED_STAGE_BARE } from "@/components/editor/editor-classes";
-import { bandPageCountLabel } from "@/components/editor/EditorBand";
+import { bandPageCountLabel, EditorBand } from "@/components/editor/EditorBand";
 import { EditorShell } from "@/components/editor/EditorShell";
 import { pageInAttr, pageInFadeItem } from "@/components/editor/PageCarousel";
 import { saveChipTone } from "@/components/editor/SaveStatus";
@@ -128,5 +128,35 @@ describe("EditorShell stage boxes render bare (N4)", () => {
       expect(tag).not.toContain("bg-[radial-gradient");
     }
     expect(ED_STAGE).toContain("bg-[radial-gradient");
+  });
+});
+
+describe("EditorBand eyebrow (≥ lg) follows read-only", () => {
+  const band = (readOnly?: boolean) =>
+    renderToStaticMarkup(
+      <EditorBand back={null} title="T" saveStatus={null} undo={{ onClick() {}, disabled: true }} redo={{ onClick() {}, disabled: true }} share={null} readOnly={readOnly} />,
+    ).match(/data-testid="editor-band-eyebrow">([^<]*)</)?.[1];
+  it("says Editing normally and Viewing when editing is paused", () => {
+    expect(band()).toBe("Editing");
+    expect(band(false)).toBe("Editing");
+    expect(band(true)).toBe("Viewing");
+  });
+  it("EditorShell passes read-only through (readonly save mode → Viewing)", () => {
+    const html = renderToStaticMarkup(<EditorShell data={devEditorData("readonly")} transport={devTransport("readonly")} />);
+    expect(html).toMatch(/data-testid="editor-band-eyebrow">Viewing</);
+  });
+});
+
+describe("devEditorFixture (built on the dev page, M22 size trim)", () => {
+  const base = { mode: "ok", ai: "off", pages: null, published: false, paid: false, format: "A5_PORTRAIT", bg: false, lightVeil: false, sample: null, state: null } as const;
+  it("matches the plain fixture, and applies paid / published / state", () => {
+    expect(devEditorFixture(base).data).toEqual(devEditorData("ok", "off"));
+    expect(devEditorFixture(base).summary).toBeNull();
+    const paid = devEditorFixture({ ...base, paid: true }).data.book;
+    expect(paid.isPaid).toBe(true);
+    expect(paid.maxPages).toBe(100);
+    const pub = devEditorFixture({ ...base, published: true }).data;
+    expect(pub.publishedRev).toBe(pub.docRev);
+    expect(devEditorFixture({ ...base, state: "aiSummary" }).summary).not.toBeNull();
   });
 });

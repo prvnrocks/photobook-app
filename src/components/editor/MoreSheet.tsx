@@ -14,7 +14,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef, type KeyboardEvent } from "react";
 import { nextRadioIndex, trapFocusIndex } from "@/lib/editor/roving";
 import { cn } from "@/lib/utils";
-import { ED_PANEL_HEADING, ED_SHEET } from "./editor-classes";
+import { ED_CLOSE_BTN, ED_PANEL_HEADING, ED_SHEET } from "./editor-classes";
 import type { EditorContextValue } from "./editor-context";
 import type { EditorTool } from "./tools/types";
 
@@ -108,7 +108,7 @@ export function MoreSheet({ id, tools, ctx, onClose, onPick }: MoreSheetProps) {
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="flex size-11 shrink-0 items-center justify-center rounded-full text-[#0e3b2e] outline-none transition-colors hover:bg-[#e6efe9] focus-visible:ring-2 focus-visible:ring-[#0e3b2e] motion-reduce:transition-none"
+            className={ED_CLOSE_BTN}
             data-testid="editor-more-close"
           >
             <X className="size-5" aria-hidden="true" />

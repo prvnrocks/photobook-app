@@ -241,6 +241,9 @@ Plan: `.agentos/runs/m13.md`, D-070.
 ## Milestone 21 — Share page redesign (2026-11-15)
 - [x] /books/[id]/publish in the emerald My-books/wizard style (D-073): band with title + status chip + 3-step bar, sticky book preview, "Your edits aren't live yet" → Update link, WhatsApp/copy/native share, Free vs Paid AED 39, locked PDF on free, privacy, danger zone, phone sticky bar, publish celebration. Report: `.agentos/runs/m21.md`. Deployed 2026-11-15.
 
+## Milestone 22 — Editor in the emerald style (2026-11-15)
+- [x] Restyle-only editor redesign (D-074): compact emerald band (title, save chip, page count ≥lg, gold Share), cream stage with framed page, thumbnail-card strip, floating pill toolbar, card panels (side panel ≥lg, sheets on phones), emerald tool panels, editor-shaped loading skeleton; BookPage/layouts/goldens untouched; first load +2.67 kB. Report: `.agentos/runs/m22.md`.
+
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
 - [ ] AI "story mode": a short paragraph per chapter (AI-picked backgrounds moved into M10c)

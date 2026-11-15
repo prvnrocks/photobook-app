@@ -50,6 +50,12 @@ export type EditorShellProps = {
   transport?: EditorTransport;
   /** Override the tool registry (dev fixture / tests). Defaults to EDITOR_TOOLS. */
   tools?: readonly EditorTool[];
+  /**
+   * Tools added after EDITOR_TOOLS (dev fixture's demo tools; ignored when `tools` is given). Lets
+   * the dev route skip importing the registry, which would stop webpack concatenating it into the
+   * editor's first-load chunk (M22 size trim). Pass a stable array.
+   */
+  extraTools?: readonly EditorTool[];
   /** Back link target (default /dashboard). */
   backHref?: string;
   /** Header "Share" (M13 T9): bound shareBookAction. Absent → Share saves, then goes to backHref. */
@@ -70,7 +76,7 @@ function isTypingTarget(t: EventTarget | null): boolean {
   return t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT";
 }
 
-export function EditorShell({ data, transport: transportProp, tools: toolsProp, backHref = "/dashboard", share, paymentsEnabled = false, layout, aiSummary = null }: EditorShellProps) {
+export function EditorShell({ data, transport: transportProp, tools: toolsProp, extraTools, backHref = "/dashboard", share, paymentsEnabled = false, layout, aiSummary = null }: EditorShellProps) {
   // null until the screen width is known (server render + hydration) — see the render below.
   const spreadMode = useSpreadMode(layout);
   const spread = spreadMode === true;
@@ -131,7 +137,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
     [data.book, paymentsEnabled, data.aiMode, state, actions, photos, autosave.status, autosave.flush, autosave.settle, rewrites, setRewrites, aiBlocked, aiPath, spread, activeTool, openTool, closeTool],
   );
 
-  const registry = toolsProp ?? EDITOR_TOOLS;
+  const registry = useMemo(() => toolsProp ?? (extraTools ? [...EDITOR_TOOLS, ...extraTools] : EDITOR_TOOLS), [toolsProp, extraTools]);
   const shown = useMemo(() => visibleTools(registry, ctx), [registry, ctx]);
   const active = shown.find((t) => t.id === activeTool) ?? null;
 
@@ -202,6 +208,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
           undo={{ onClick: actions.undo, disabled: !canUndo(state) }}
           redo={{ onClick: actions.redo, disabled: !canRedo(state) }}
           pages={{ count: pageCount, max: data.book.maxPages }}
+          readOnly={state.readOnly}
           share={
             <EditorShareButton
               bookId={data.book.id}

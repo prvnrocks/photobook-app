@@ -155,3 +155,6 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (M21) Render hook-free cards on the server and pass them to client islands as slots; keep server/dev-only class recipes in their own module (shared recipe modules ship every export to the client).
 - (M21) payments/launch-smoke live specs need a server started with a dummy STRIPE_SECRET_KEY and a shared random STRIPE_WEBHOOK_SECRET, or they silently skip.
 - (M21) Parallel milestones: use a git worktree (symlink node_modules/.env.local, which then show as untracked — commit with explicit paths only).
+- (M22) A client import of an editor module from another route (even a dev page) stops webpack merging it into the editor chunk (~1.3 kB gz) — build dev fixtures on the server page and pass data as props.
+- (M22) Measure first-load with an exact gzip sum of the route's chunks from app-build-manifest.json (Next rounds to whole kB). Never put a translate animation on an ancestor of the crop box or dnd grids; any element with a Tailwind ring/shadow is blanked while a box-shadow keyframe runs (use outline).
+- (M22) cx doesn't merge conflicting utilities: idle/active recipes must be full alternatives; to hide a recipe element below a breakpoint wrap it in `hidden lg:block`.
