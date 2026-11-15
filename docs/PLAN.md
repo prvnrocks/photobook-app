@@ -238,6 +238,9 @@ Plan: `.agentos/runs/m13.md`, D-070.
 ## Milestone 20 — Wizard UX upgrade (2026-11-15)
 - [x] One continuous 7-step wizard (D-072): My-books emerald band + big stepper, live book preview, per-step animations (CSS only), caption-language control removed (title script decides), photos/sorting/review in place on /books/new (no page jump), animated upload, real-photo sorting, new Review step with Generate album → editor; fresh /upload|/build links redirect into the wizard. Report: `.agentos/runs/m20.md`. Deployed 2026-11-15. M20b fix (AI off: upload → Sorting → Review, no editor jump; upload screen upload-only): `.agentos/runs/m20b.md`. M20c: generated books never reopen Review (books.album_confirmed_at, migration 2000): `.agentos/runs/m20c.md`.
 
+## Milestone 21 — Share page redesign (2026-11-15)
+- [x] /books/[id]/publish in the emerald My-books/wizard style (D-073): band with title + status chip + 3-step bar, sticky book preview, "Your edits aren't live yet" → Update link, WhatsApp/copy/native share, Free vs Paid AED 39, locked PDF on free, privacy, danger zone, phone sticky bar, publish celebration. Report: `.agentos/runs/m21.md`.
+
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
 - [ ] AI "story mode": a short paragraph per chapter (AI-picked backgrounds moved into M10c)

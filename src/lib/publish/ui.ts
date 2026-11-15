@@ -159,7 +159,7 @@ export const SHARE_COPY = {
   expiredBody: "You can still edit your book. Upgrading makes the link permanent.",
   linkHeading: "Your link",
   linkNote:
-    "Send the link to family and friends. Anyone with the link can see it; later edits stay private until you tap Share again.",
+    "Send the link to family and friends. Anyone with the link can see it; later edits stay private until you update the link.",
   linkLabel: "Book link",
   whatsapp: "Send on WhatsApp",
   copy: "Copy",

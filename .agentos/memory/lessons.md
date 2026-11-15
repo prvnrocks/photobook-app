@@ -151,3 +151,7 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (M20) Mock useRouter with one stable object in jsdom tests (a new object per render restarts run loops until OOM). Never run `npx prettier --write` (no repo config).
 - (M20b) Always run the wizard e2e with AI_MODE=off too (prod has no key): a rule run finishes inside the POST, which replay-only tests can't catch.
 - (M20c) Soft-nav Back can restore a route's loading.tsx from the router cache and never fetch — put client escape hatches in loading.tsx too, not only in the page component.
+- (M21) A sticky bar's trigger must use the bar's measured height as the observer margin, and e2e must wait for its slide-in before checking position.
+- (M21) Render hook-free cards on the server and pass them to client islands as slots; keep server/dev-only class recipes in their own module (shared recipe modules ship every export to the client).
+- (M21) payments/launch-smoke live specs need a server started with a dummy STRIPE_SECRET_KEY and a shared random STRIPE_WEBHOOK_SECRET, or they silently skip.
+- (M21) Parallel milestones: use a git worktree (symlink node_modules/.env.local, which then show as untracked — commit with explicit paths only).
