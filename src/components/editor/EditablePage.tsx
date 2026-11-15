@@ -230,7 +230,7 @@ export function EditablePage({ page, priority }: { page: EditorPosition; priorit
       onClick={onBackground}
       className={cn(
         "relative w-full shadow-md ring-1 ring-black/5",
-        coverTextSelected && "[&_[data-cover-text]]:outline-4 [&_[data-cover-text]]:outline-solid [&_[data-cover-text]]:outline-primary [&_[data-cover-text]]:-outline-offset-4",
+        coverTextSelected && "[&_[data-cover-text]]:outline-4 [&_[data-cover-text]]:outline-solid [&_[data-cover-text]]:outline-[#0e3b2e] [&_[data-cover-text]]:-outline-offset-4",
         passThroughText && !readOnly && "[&_[data-text-panel]]:pointer-events-none",
       )}
       data-testid="editor-page"
@@ -274,14 +274,21 @@ interface SlotOverlayProps {
  * slot's clip-path, so an SVG outline of the polygon is drawn (the slot's clip hides the outer half
  * of the stroke; non-scaling stroke keeps it 4 px wide on any page size).
  */
+/**
+ * M22 (D-074): the selected ring is an emerald inset *outline* (follows the inherited border-radius
+ * like the ring did) so box-shadow stays free for ed-select-glow's one-off pulse — an animated
+ * box-shadow would otherwise blank a box-shadow ring for its duration. Opacity/box-shadow only.
+ */
+const SELECTED_RING = "outline-4 outline-solid outline-[#0e3b2e] -outline-offset-4 ed-select-glow";
+
 function overlayClass(outline: SlotOutline, selected: boolean, dropTarget = false) {
   return cn(
     "group absolute inset-0 block cursor-pointer outline-none [-webkit-touch-callout:none]",
-    outline.kind === "box" && "focus-visible:ring-4 focus-visible:ring-primary/60 focus-visible:ring-inset",
-    selected && "bg-primary/10",
-    selected && outline.kind === "box" && "ring-4 ring-primary ring-inset",
-    dropTarget && "bg-primary/20",
-    dropTarget && outline.kind === "box" && "ring-4 ring-primary/80 ring-inset",
+    outline.kind === "box" && "focus-visible:ring-4 focus-visible:ring-[#0e3b2e]/60 focus-visible:ring-inset",
+    selected && "bg-[#0e3b2e]/10",
+    selected && outline.kind === "box" && SELECTED_RING,
+    dropTarget && "bg-[#0e3b2e]/20",
+    dropTarget && outline.kind === "box" && "ring-4 ring-[#0e3b2e]/80 ring-inset",
   );
 }
 
@@ -294,7 +301,7 @@ function PolygonOutline({ outline, selected, dropTarget }: { outline: SlotOutlin
       viewBox="0 0 100 100"
       preserveAspectRatio="none"
       className={cn(
-        "pointer-events-none absolute inset-0 block size-full overflow-visible text-primary",
+        "pointer-events-none absolute inset-0 block size-full overflow-visible text-[#0e3b2e]",
         selected || dropTarget ? "opacity-100" : "opacity-0 group-focus-visible:opacity-60",
       )}
       data-testid="slot-outline"
@@ -415,8 +422,8 @@ function CaptionTarget({
       aria-pressed={selected}
       aria-label={caption ? undefined : "Add a caption"}
       className={cn(
-        "flex h-full w-full cursor-pointer flex-col justify-center rounded-sm outline-none focus-visible:ring-4 focus-visible:ring-primary/60",
-        selected ? "ring-4 ring-primary ring-inset" : "hover:bg-black/5",
+        "flex h-full w-full cursor-pointer flex-col justify-center rounded-sm outline-none focus-visible:ring-4 focus-visible:ring-[#0e3b2e]/60",
+        selected ? SELECTED_RING : "hover:bg-black/5",
       )}
       data-testid="caption-target"
       data-selected={selected ? "true" : undefined}

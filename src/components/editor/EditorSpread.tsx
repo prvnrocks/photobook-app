@@ -14,13 +14,24 @@
 import { pageAspectStyle } from "@/lib/book/format-style";
 import { spreadStartOf } from "@/lib/book/spreads";
 import { spreadAspectRatio, type EditorSpread } from "@/lib/editor/spreads";
-import { cn } from "@/lib/utils";
+import { cx } from "@/lib/cx";
 import { useEditor } from "./editor-context";
+import { ED_PAGE_FRAME } from "./editor-classes";
 import { EditablePage } from "./EditablePage";
 
 /** Stacked page edges + soft drop shadow under the open book. */
 export const BOOK_SHADOW =
   "-3px 3px 0 -1px #fafaf9, -3px 3px 0 0 rgba(0,0,0,0.08), 3px 3px 0 -1px #fafaf9, 3px 3px 0 0 rgba(0,0,0,0.08), 0 12px 32px rgba(0,0,0,0.18)";
+
+/**
+ * The editor stage's open book (M22 T4): the same stacked page edges, with the drop shadow tinted
+ * emerald like ED_PAGE_FRAME. BOOK_SHADOW above stays as is (SpreadPreviewSheet uses it).
+ */
+export const EDITOR_SPREAD_SHADOW =
+  "-3px 3px 0 -1px #fdfaf3, -3px 3px 0 0 rgba(14,59,46,0.1), 3px 3px 0 -1px #fdfaf3, 3px 3px 0 0 rgba(14,59,46,0.1), 0 28px 50px -30px rgba(14,59,46,0.55), 0 2px 8px -2px rgba(14,59,46,0.12)";
+
+/** Active page / spread outline: solid emerald (#0e3b2e, 12.47:1 on white — clear on any page). */
+const ACTIVE_OUTLINE = "outline-2 outline-[#0e3b2e] outline-solid";
 
 /** Gutter shading: darkest at the fold, fading out over ~4 % of the spread each side. */
 export const FOLD_GRADIENT =
@@ -38,11 +49,13 @@ export function EditorSpreadView({ spread, near, isCurrent }: { spread: EditorSp
     const aspectStyle = pageAspectStyle(format);
     return (
       <div className="flex aspect-[148/210] h-full max-w-full items-center" style={aspectStyle} data-testid="editor-spread" data-kind="cover">
-        {near ? (
-          <EditablePage page="cover" priority={isCurrent} />
-        ) : (
-          <div className="aspect-[148/210] w-full bg-neutral-100" style={aspectStyle} />
-        )}
+        <div className={cx(ED_PAGE_FRAME, "w-full")}>
+          {near ? (
+            <EditablePage page="cover" priority={isCurrent} />
+          ) : (
+            <div className="aspect-[148/210] w-full bg-[#fbf8f2]" style={aspectStyle} />
+          )}
+        </div>
       </div>
     );
   }
@@ -51,8 +64,8 @@ export function EditorSpreadView({ spread, near, isCurrent }: { spread: EditorSp
     // Height-bound open book: as tall as the slide allows, fitted to width (landscape books are wide).
     <div className="flex h-full max-w-full items-center" style={{ aspectRatio: spreadAspectRatio(format) }}>
       <div
-        className={cn("relative grid w-full grid-cols-2 bg-white", spreadActive && "outline-2 outline-offset-2 outline-primary/60 outline-solid")}
-        style={{ boxShadow: BOOK_SHADOW }}
+        className={cx("relative grid w-full grid-cols-2 bg-white", spreadActive && `${ACTIVE_OUTLINE} outline-offset-2`)}
+        style={{ boxShadow: EDITOR_SPREAD_SHADOW }}
         data-testid="editor-spread"
         data-kind="pages"
         data-spread-layout={joined ? "true" : undefined}
@@ -88,7 +101,7 @@ function SpreadSide({
   const { state, actions } = useEditor();
   if (pageIdx === null) {
     // Odd last page: the right-hand page stays blank (the flipbook adds a blank filler there).
-    return <div aria-hidden="true" className="bg-neutral-50" data-testid="spread-blank" data-side={side} />;
+    return <div aria-hidden="true" className="bg-[#fbf8f2]" data-testid="spread-blank" data-side={side} />;
   }
   const active = joinedActive || (isCurrent && state.page === pageIdx);
   return (
@@ -97,7 +110,7 @@ function SpreadSide({
       onClickCapture={() => {
         if (state.page !== pageIdx) actions.goTo(pageIdx);
       }}
-      className={cn("relative", active && !joinedActive && "z-[1] outline-2 outline-primary/60 outline-solid")}
+      className={cx("relative", active && !joinedActive && `z-[1] ${ACTIVE_OUTLINE}`)}
       data-testid="spread-page"
       data-side={side}
       data-page-idx={pageIdx}
@@ -107,7 +120,7 @@ function SpreadSide({
       {near ? (
         <EditablePage page={pageIdx} priority={isCurrent} />
       ) : (
-        <div className="aspect-[148/210] w-full bg-neutral-100" style={pageAspectStyle(state.doc.format)} />
+        <div className="aspect-[148/210] w-full bg-[#fbf8f2]" style={pageAspectStyle(state.doc.format)} />
       )}
     </div>
   );

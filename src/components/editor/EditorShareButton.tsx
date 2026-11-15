@@ -17,6 +17,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { track } from "@/lib/analytics/client";
+import { cx } from "@/lib/cx";
 import type { FreeLinkState } from "@/lib/publish/free-link";
 import {
   doneStepAfterSave,
@@ -27,6 +28,7 @@ import {
   type DoneStep,
   type ShareResult,
 } from "@/lib/editor/done";
+import { ED_CTA_GOLD } from "./editor-classes";
 import type { SaveState } from "./useAutosave";
 
 export type EditorShareButtonProps = {
@@ -114,18 +116,19 @@ export function EditorShareButton({ bookId, settle, share, fallbackHref, isPaid,
         aria-busy={busy}
         aria-describedby={descId}
         title={linkKind === "expired" ? "Opens sharing" : "Publishes your book and opens sharing"}
-        className="flex h-11 min-w-16 shrink-0 items-center justify-center rounded-lg bg-accent-strong px-3 text-accent-strong-foreground shadow-card outline-none hover:bg-accent-strong/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:opacity-70"
+        // The screen's one gold action (M22, D-074) on the leather band.
+        className={cx(ED_CTA_GOLD, "min-w-16")}
         data-testid="editor-done"
         data-changes={hasChanges ? "true" : "false"}
         data-link={linkKind}
       >
         <span className="flex flex-col items-start leading-tight">
-          <span className="flex items-center gap-1 text-sm font-semibold">
+          <span className="flex items-center gap-1">
             {busy ? <Loader2 className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
             Share
           </span>
           <span
-            className="whitespace-nowrap text-[11px] font-medium text-accent-strong-foreground/85"
+            className="font-sans text-[11px] font-medium whitespace-nowrap lg:text-xs"
             data-testid={showsChanges ? "editor-publish-changes" : "editor-share-note"}
           >
             {subtitle}
@@ -135,10 +138,10 @@ export function EditorShareButton({ bookId, settle, share, fallbackHref, isPaid,
       <span id={descId} className="sr-only">
         {shareDescription(linkArgs)}
       </span>
-      <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 top-16 z-50 flex justify-center px-4">
+      <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 top-16 z-50 flex justify-center px-4 lg:top-28">
         {error ? (
           <p
-            className="pointer-events-auto max-w-sm rounded-xl bg-primary px-4 py-3 text-sm text-primary-foreground shadow-lift"
+            className="pointer-events-auto max-w-sm rounded-2xl border border-[#e3c766]/30 bg-[#0e3b2e] px-4 py-3 text-sm text-[#f2e8d8] shadow-lift"
             data-testid="editor-done-error"
           >
             {error.message}
@@ -147,7 +150,7 @@ export function EditorShareButton({ bookId, settle, share, fallbackHref, isPaid,
                 {" "}
                 <Link
                   href={error.link.href}
-                  className="inline-flex min-h-11 items-center font-semibold underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground"
+                  className="inline-flex min-h-11 items-center font-semibold text-[#e3c766] underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-[#f2e8d8]"
                   data-testid="editor-done-error-link"
                 >
                   {error.link.label}

@@ -10,8 +10,24 @@ import { useEffect, useRef } from "react";
 import { BookPage } from "@/components/book/BookPage";
 import { editorSpreads } from "@/lib/editor/spreads";
 import { itemToPosition, positionToItem, type EditorPosition } from "@/lib/editor/store";
+import { cx } from "@/lib/cx";
 import { cn } from "@/lib/utils";
 import { useEditor } from "./editor-context";
+import { ED_STAGE_LABEL, ED_THUMB, ED_THUMB_ACTIVE } from "./editor-classes";
+
+// M22 T4: thumbnail cards on a cream strip. ED_THUMB / ED_THUMB_ACTIVE are alternatives (never both);
+// the current page gets the emerald ring + glow (box-shadow only) and a bold emerald label.
+// Width comes from the caller (EditorShell: w-44 spread / w-36 single, same as its placeholder).
+const STRIP = "min-h-0 overflow-y-auto border-r border-[#e5dccb] bg-[#f4ede0]";
+/** Current page label: emerald #0e3b2e on the strip 10.9:1. */
+const LABEL_ACTIVE = "text-xs font-bold text-[#0e3b2e]";
+/**
+ * Thumbnail card: the recipe's rounded-xl is too round at thumbnail size, so cn (tailwind-merge)
+ * swaps it for rounded-md; a spread pair's inner corners stay square so the pair reads as one book.
+ */
+const thumbClass = (active: boolean, side?: "left" | "right") =>
+  cn(active ? ED_THUMB_ACTIVE : ED_THUMB, "w-full rounded-md", side === "left" && "rounded-e-none", side === "right" && "rounded-s-none");
+const labelClass = (active: boolean) => cx("mt-1.5 block text-center", active ? LABEL_ACTIVE : ED_STAGE_LABEL);
 
 export function PageStrip({ className }: { className?: string }) {
   const { state, actions, photos, book, spread } = useEditor();
@@ -25,7 +41,7 @@ export function PageStrip({ className }: { className?: string }) {
 
   const count = state.doc.pages.length + 1;
 
-  const thumb = (item: number) => {
+  const thumb = (item: number, side?: "left" | "right") => {
     const active = item === current;
     const pos: EditorPosition = itemToPosition(item);
     return (
@@ -35,34 +51,31 @@ export function PageStrip({ className }: { className?: string }) {
           onClick={() => actions.goTo(pos)}
           aria-current={active ? "page" : undefined}
           aria-label={item === 0 ? "Cover" : `Page ${item}`}
-          className={cn(
-            "block w-full rounded-sm outline-none ring-offset-2 ring-offset-muted focus-visible:ring-2 focus-visible:ring-ring",
-            active ? "ring-2 ring-primary" : "ring-1 ring-border hover:ring-input",
-          )}
+          className={thumbClass(active, side)}
         >
           <BookPage doc={state.doc} page={pos} mode="view" photos={photos.thumbs} captionLang={book.captionLang} />
         </button>
-        <span className={cn("mt-1 block text-center text-xs", active ? "font-semibold text-foreground" : "text-muted-foreground")}>{item === 0 ? "Cover" : item}</span>
+        <span className={labelClass(active)}>{item === 0 ? "Cover" : item}</span>
       </div>
     );
   };
 
   if (spread) {
     return (
-      <nav aria-label="Pages" className={cn("min-h-0 overflow-y-auto border-r border-border bg-muted/40", className)} data-testid="page-strip" data-mode="spread">
+      <nav aria-label="Pages" className={cx(STRIP, className)} data-testid="page-strip" data-mode="spread">
         <ol ref={listRef} className="flex flex-col gap-4 p-3">
           {editorSpreads(state.doc).map((sp, i) => (
             <li
               key={sp.kind === "cover" ? "cover" : state.doc.pages[sp.left ?? 0]?.id ?? i}
-              className={cn("flex gap-0.5", sp.kind === "cover" && "mx-auto w-1/2")}
+              className={cx("flex gap-0.5", sp.kind === "cover" && "mx-auto w-1/2")}
               data-testid="strip-spread"
             >
               {sp.kind === "cover" ? (
                 thumb(0)
               ) : (
                 <>
-                  {sp.left !== null ? thumb(sp.left + 1) : <div className="flex-1" />}
-                  {sp.right !== null ? thumb(sp.right + 1) : <div className="flex-1" />}
+                  {sp.left !== null ? thumb(sp.left + 1, "left") : <div className="flex-1" />}
+                  {sp.right !== null ? thumb(sp.right + 1, "right") : <div className="flex-1" />}
                 </>
               )}
             </li>
@@ -73,7 +86,7 @@ export function PageStrip({ className }: { className?: string }) {
   }
 
   return (
-    <nav aria-label="Pages" className={cn("min-h-0 overflow-y-auto border-r border-border bg-muted/40", className)} data-testid="page-strip">
+    <nav aria-label="Pages" className={cx(STRIP, className)} data-testid="page-strip">
       <ol ref={listRef} className="flex flex-col gap-3 p-3">
         {Array.from({ length: count }, (_, item) => {
           const active = item === current;
@@ -84,14 +97,11 @@ export function PageStrip({ className }: { className?: string }) {
                 onClick={() => actions.goTo(itemToPosition(item))}
                 aria-current={active ? "page" : undefined}
                 aria-label={item === 0 ? "Cover" : `Page ${item}`}
-                className={cn(
-                  "block w-full rounded-sm outline-none ring-offset-2 ring-offset-muted focus-visible:ring-2 focus-visible:ring-ring",
-                  active ? "ring-2 ring-primary" : "ring-1 ring-border hover:ring-input",
-                )}
+                className={thumbClass(active)}
               >
                 <BookPage doc={state.doc} page={itemToPosition(item)} mode="view" photos={photos.thumbs} captionLang={book.captionLang} />
               </button>
-              <span className={cn("mt-1 block text-center text-xs", active ? "font-semibold text-foreground" : "text-muted-foreground")}>{item === 0 ? "Cover" : item}</span>
+              <span className={labelClass(active)}>{item === 0 ? "Cover" : item}</span>
             </li>
           );
         })}

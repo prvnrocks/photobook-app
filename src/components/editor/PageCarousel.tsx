@@ -28,16 +28,31 @@ import {
   stepSpread,
 } from "@/lib/editor/spreads";
 import { itemToPosition, positionToItem } from "@/lib/editor/store";
-import { cn } from "@/lib/utils";
+import { cx } from "@/lib/cx";
 import { useEditor } from "./editor-context";
+import { ED_PAGE_FRAME, ED_STAGE } from "./editor-classes";
 import { EditablePage } from "./EditablePage";
 import { EditorSpreadView } from "./EditorSpread";
 import { SpreadPreviewSheet } from "./SpreadPreviewSheet";
 
 const WINDOW = 2;
-/** Prev / next: 44 px round, visible focus ring (M11 tokens). */
+// Stage chrome (M22 T4, D-074). The nav row is shared with SpreadCarouselPlaceholder so the hydrated
+// stage never shifts: 48 px row, one white emerald pill holding prev · counter · next (ring, not
+// border, so the pill stays exactly 44 px), "Two pages" as its own pill at the end.
+// Colours: emerald #0e3b2e on white 12.47:1. No transforms (see editor-classes.ts).
+/** Counter row under the stage (real carousel + placeholder). */
+const NAV_ROW = "relative flex h-12 shrink-0 items-center justify-center px-1";
+/** The white pill around prev · counter · next. */
+const NAV_PILL =
+  "flex h-11 items-center rounded-full bg-white shadow-[0_8px_20px_-14px_rgb(14_59_46/0.6)] ring-1 ring-[#e5dccb]";
+/** Prev / next inside the pill: 44 px round, emerald icon, visible focus ring. */
 const NAV_BTN =
-  "flex size-11 items-center justify-center rounded-full text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30 disabled:hover:bg-transparent";
+  "flex size-11 shrink-0 items-center justify-center rounded-full text-[#0e3b2e] transition-colors outline-none hover:bg-[#e6efe9] focus-visible:ring-2 focus-visible:ring-[#0e3b2e] focus-visible:ring-inset disabled:opacity-30 disabled:hover:bg-transparent motion-reduce:transition-none";
+/** Page counter text between the arrows (status, not a button). */
+const NAV_COUNTER = "min-w-24 px-1 text-center text-sm font-semibold whitespace-nowrap text-[#0e3b2e] tabular-nums";
+/** "Two pages" (phones / single mode): a white pill, icon over label, 44 px tall. */
+const SPREAD_BTN =
+  "absolute right-1 flex h-11 min-w-11 flex-col items-center justify-center gap-0.5 rounded-2xl bg-white px-1.5 text-[11px] leading-none font-semibold text-[#0e3b2e] shadow-[0_8px_20px_-14px_rgb(14_59_46/0.6)] ring-1 ring-[#e5dccb] transition-colors outline-none hover:bg-[#e6efe9] focus-visible:ring-2 focus-visible:ring-[#0e3b2e] disabled:opacity-30 disabled:hover:bg-white motion-reduce:transition-none";
 /** Spread mode: spreads (two pages each) within this many of the current one render pages. */
 const SPREAD_WINDOW = 1;
 
@@ -159,15 +174,23 @@ export function PageCarousel() {
   const next = () => (spread ? actions.goTo(stepSpread(state.page, 1, pageCount)) : actions.next());
   const label = spread ? spreadCounterLabel(current, pageCount) : pageCounterLabel(current, count - 1);
 
+  // Page-in fade (opacity only, ed-page-in) on the item a jump lands on (strip tap, undo elsewhere):
+  // the scroll is instant there, so the page would otherwise just pop. Steps of one (swipe, prev/next)
+  // slide in visibly and don't fade (fading a page that is already on screen flickers).
+  // "Adjust state while rendering" pattern — no effect, no extra render pass.
+  const [lastCurrent, setLastCurrent] = useState(current);
+  const [fadeItem, setFadeItem] = useState<number | null>(null);
+  if (lastCurrent !== current) {
+    setLastCurrent(current);
+    setFadeItem(Math.abs(lastCurrent - current) > 1 ? current : null);
+  }
+  const pageIn = (item: number) => (item === current && item === fadeItem ? "true" : undefined);
+
   return (
-    <section className="flex min-h-0 flex-1 flex-col" aria-roledescription="carousel" aria-label="Book pages">
+    <section className={cx(ED_STAGE, "flex flex-1 flex-col")} aria-roledescription="carousel" aria-label="Book pages">
       <div
         ref={ref}
-        className={cn(
-          "flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-          // A desk under the open book.
-          spread && "bg-muted",
-        )}
+        className="flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         data-testid="page-carousel"
         data-mode={spread ? "spread" : "single"}
       >
@@ -175,13 +198,17 @@ export function PageCarousel() {
           ? spreads.map((sp, item) => (
               <div
                 key={item}
-                className="flex h-full w-full shrink-0 snap-center snap-always items-center justify-center px-6 py-4"
+                className={cx(
+                  "flex h-full w-full shrink-0 snap-center snap-always items-center justify-center px-6 py-4",
+                  pageIn(item) && "ed-page-in",
+                )}
                 aria-roledescription="slide"
                 aria-label={spreadAriaLabel(item, pageCount)}
                 aria-hidden={item !== current}
                 inert={item !== current ? true : undefined}
                 data-testid="carousel-item"
                 data-spread={item}
+                data-page-in={pageIn(item)}
               >
                 <EditorSpreadView spread={sp} near={Math.abs(item - current) <= SPREAD_WINDOW} isCurrent={item === current} />
               </div>
@@ -192,49 +219,59 @@ export function PageCarousel() {
           return (
             <div
               key={item === 0 ? "cover" : state.doc.pages[item - 1].id}
-              className="flex h-full w-full shrink-0 snap-center snap-always items-center justify-center px-4 py-3"
+              className={cx(
+                "flex h-full w-full shrink-0 snap-center snap-always items-center justify-center px-4 py-3",
+                pageIn(item) && "ed-page-in",
+              )}
               aria-roledescription="slide"
               aria-label={item === 0 ? "Cover" : `Page ${item} of ${count - 1}`}
               aria-hidden={item !== current}
               inert={item !== current ? true : undefined}
               data-testid="carousel-item"
+              data-page-in={pageIn(item)}
             >
               {/* Height-bound page box (doc.format): as tall as the space allows, never wider than the screen. */}
               <div className="flex aspect-[148/210] h-full max-w-full items-center" style={aspectStyle}>
-                {near ? (
-                  <EditablePage page={position} priority={item === current} />
-                ) : (
-                  <div className="aspect-[148/210] w-full bg-muted" style={aspectStyle} />
-                )}
+                {/* Frame = shadow + hairline only, hugging the page (the aspect box above is unchanged). */}
+                <div className={cx(ED_PAGE_FRAME, "w-full")}>
+                  {near ? (
+                    <EditablePage page={position} priority={item === current} />
+                  ) : (
+                    <div className="aspect-[148/210] w-full bg-[#fbf8f2]" style={aspectStyle} />
+                  )}
+                </div>
               </div>
             </div>
           );
         })}
       </div>
-      <div className="relative flex shrink-0 items-center justify-center gap-2 pb-1">
-        <button
-          type="button"
-          onClick={prev}
-          disabled={current === 0}
-          aria-label={spread ? "Previous pages" : "Previous page"}
-          className={NAV_BTN}
-          data-testid="carousel-prev"
-        >
-          <ChevronLeft className="size-5" aria-hidden="true" />
-        </button>
-        <span className="min-w-24 text-center text-sm tabular-nums text-muted-foreground" aria-live="polite" data-testid="page-counter">
-          {label}
-        </span>
-        <button
-          type="button"
-          onClick={next}
-          disabled={current >= count - 1}
-          aria-label={spread ? "Next pages" : "Next page"}
-          className={NAV_BTN}
-          data-testid="carousel-next"
-        >
-          <ChevronRight className="size-5" aria-hidden="true" />
-        </button>
+      {/* Single mode: extra end padding nudges the pill off the "Two pages" pill (clear at 360 px). */}
+      <div className={cx(NAV_ROW, !spread && "pe-10")}>
+        <div className={NAV_PILL}>
+          <button
+            type="button"
+            onClick={prev}
+            disabled={current === 0}
+            aria-label={spread ? "Previous pages" : "Previous page"}
+            className={NAV_BTN}
+            data-testid="carousel-prev"
+          >
+            <ChevronLeft className="size-5" aria-hidden="true" />
+          </button>
+          <span className={NAV_COUNTER} aria-live="polite" data-testid="page-counter">
+            {label}
+          </span>
+          <button
+            type="button"
+            onClick={next}
+            disabled={current >= count - 1}
+            aria-label={spread ? "Next pages" : "Next page"}
+            className={NAV_BTN}
+            data-testid="carousel-next"
+          >
+            <ChevronRight className="size-5" aria-hidden="true" />
+          </button>
+        </div>
         {spread ? null : (
           <button
             ref={spreadButton}
@@ -242,7 +279,7 @@ export function PageCarousel() {
             onClick={() => setPreview(true)}
             disabled={pageCount === 0}
             aria-label="See facing pages"
-            className="absolute right-1 flex h-11 min-w-11 flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 text-[11px] leading-none font-medium text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"
+            className={SPREAD_BTN}
             data-testid="view-spread"
           >
             <BookOpen className="size-4" aria-hidden="true" />
@@ -268,12 +305,21 @@ export function SpreadCarouselPlaceholder({ className }: { className?: string })
   const current = spreadOfPosition(state.page);
   const aspect = current === 0 ? pageAspectStyle(state.doc.format) : { aspectRatio: spreadAspectRatio(state.doc.format) };
   return (
-    <div className={cn("min-h-0 flex-1 flex-col", className)} aria-hidden="true" data-testid="spread-placeholder">
-      <div className="flex min-h-0 flex-1 items-center justify-center bg-muted px-6 py-4">
-        <div className={cn("h-full max-w-full bg-card", current === 0 && "aspect-[148/210]")} style={aspect} />
+    <div className={cx(ED_STAGE, "flex-1 flex-col", className)} aria-hidden="true" data-testid="spread-placeholder">
+      <div className="flex min-h-0 flex-1 items-center justify-center px-6 py-4">
+        <div className={cx(ED_PAGE_FRAME, "h-full max-w-full", current === 0 && "aspect-[148/210]")} style={aspect} />
       </div>
-      <div className="flex h-11 shrink-0 items-center justify-center pb-1 text-sm tabular-nums text-muted-foreground">
-        {spreadCounterLabel(current, pageCount)}
+      {/* Same row + pill as the live carousel (arrows drawn, not buttons). */}
+      <div className={NAV_ROW}>
+        <div className={NAV_PILL}>
+          <span className={cx("flex size-11 items-center justify-center text-[#0e3b2e]", current === 0 && "opacity-30")}>
+            <ChevronLeft className="size-5" />
+          </span>
+          <span className={NAV_COUNTER}>{spreadCounterLabel(current, pageCount)}</span>
+          <span className="flex size-11 items-center justify-center text-[#0e3b2e]">
+            <ChevronRight className="size-5" />
+          </span>
+        </div>
       </div>
     </div>
   );

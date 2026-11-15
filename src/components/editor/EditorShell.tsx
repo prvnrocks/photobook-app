@@ -1,7 +1,8 @@
 "use client";
 
 // Editor shell (M5 Task 8): full-height, mobile-first layout
-//   header (back · title + save status · undo/redo)
+//   emerald band (EditorBand, M22: back · title + save chip · undo/redo · gold Share; ≥ lg eyebrow +
+//   page-count chip)
 //   save banner (read-only / conflict / rejected / signed out)
 //   "AI kept X of Y · See left out" chip → review screen (M13 T7, D-070 (3)), or — for a rule
 //   album that never got an AI build — the persistent "Make it with AI" chip (src/lib/editor/ai-path.ts)
@@ -10,7 +11,7 @@
 // State: useEditorStore (doc + undo/redo + position + selection); autosave: useAutosave;
 // photo URLs heal themselves via usePhotoUrls.
 
-import { ArrowLeft, Redo2, Undo2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { displayBookTitle } from "@/lib/book/display-title";
@@ -24,6 +25,9 @@ import type { ShareResult } from "@/lib/editor/done";
 import type { EditorShellData } from "@/lib/editor/types";
 import { hasUnpublishedChanges } from "@/lib/publish/ui";
 import { AiSummaryChip } from "./AiSummaryChip";
+import { ED_BAND_ICON_BTN } from "./editor-classes";
+import { EditorBand } from "./EditorBand";
+import "./editor-motion.css";
 import { EditorContext, type EditorContextValue } from "./editor-context";
 import { EditorShareButton } from "./EditorShareButton";
 import { MakeWithAiChip } from "./MakeWithAiChip";
@@ -60,10 +64,6 @@ export type EditorShellProps = {
    */
   aiSummary?: AiSummary | null;
 };
-
-/** Header icon buttons: 44 px, visible focus ring (M11 tokens). */
-const HEADER_ICON_BTN =
-  "flex size-11 shrink-0 items-center justify-center rounded-lg text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30 disabled:hover:bg-transparent";
 
 function isTypingTarget(t: EventTarget | null): boolean {
   if (!(t instanceof HTMLElement)) return false;
@@ -190,55 +190,31 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
   return (
     <EditorContext.Provider value={ctx}>
       <div ref={rootRef} className="flex h-dvh flex-col overflow-hidden bg-background" data-testid="editor-shell" data-readonly={state.readOnly ? "true" : "false"}>
-        <header className="flex h-14 shrink-0 items-center gap-1 border-b border-border bg-card px-1">
-          <Link
-            href={backHref}
-            aria-label="Back to my books"
-            className={HEADER_ICON_BTN}
-            data-testid="editor-back"
-          >
-            <ArrowLeft className="size-5" aria-hidden="true" />
-          </Link>
-          <div className="flex min-w-0 flex-1 flex-col leading-tight">
-            {/* Block stays start-aligned for every script (status line under it); only the text
-                gets dir="auto", so an Arabic title reads RTL without jumping to the far side. */}
-            <h1 className="truncate text-start font-display text-base font-semibold" data-testid="editor-title">
-              <span dir="auto">{title}</span>
-            </h1>
-            {/* Unpublished edits show on the Share button ("Publish changes", M13 T9). */}
-            <SaveStatus status={autosave.status} />
-          </div>
-          <button
-            type="button"
-            onClick={actions.undo}
-            disabled={!canUndo(state)}
-            aria-label="Undo"
-            className={HEADER_ICON_BTN}
-            data-testid="editor-undo"
-          >
-            <Undo2 className="size-5" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={actions.redo}
-            disabled={!canRedo(state)}
-            aria-label="Redo"
-            className={HEADER_ICON_BTN}
-            data-testid="editor-redo"
-          >
-            <Redo2 className="size-5" aria-hidden="true" />
-          </button>
-          <EditorShareButton
-            bookId={data.book.id}
-            settle={autosave.settle}
-            share={share}
-            fallbackHref={backHref}
-            isPaid={data.book.isPaid}
-            hasChanges={unpublished}
-            freeLink={data.freeLink}
-            maxPages={data.book.maxPages}
-          />
-        </header>
+        <EditorBand
+          back={
+            <Link href={backHref} aria-label="Back to my books" className={ED_BAND_ICON_BTN} data-testid="editor-back">
+              <ArrowLeft className="size-5" aria-hidden="true" />
+            </Link>
+          }
+          title={title}
+          // Unpublished edits show on the Share button ("Publish changes", M13 T9).
+          saveStatus={<SaveStatus status={autosave.status} />}
+          undo={{ onClick: actions.undo, disabled: !canUndo(state) }}
+          redo={{ onClick: actions.redo, disabled: !canRedo(state) }}
+          pages={{ count: pageCount, max: data.book.maxPages }}
+          share={
+            <EditorShareButton
+              bookId={data.book.id}
+              settle={autosave.settle}
+              share={share}
+              fallbackHref={backHref}
+              isPaid={data.book.isPaid}
+              hasChanges={unpublished}
+              freeLink={data.freeLink}
+              maxPages={data.book.maxPages}
+            />
+          }
+        />
 
         <SaveBanner status={autosave.status} bookId={data.book.id} />
         {aiPath.makeWithAi ? (

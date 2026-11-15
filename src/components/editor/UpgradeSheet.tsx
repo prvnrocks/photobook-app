@@ -9,12 +9,16 @@
 //   The tool stays visible while it is open, whatever the selection.
 // - Or embed the body directly: <UpgradeSheet reason="rewrites" ctx={ctx} />.
 // Paid status comes from the server (books.is_paid via the editor loader) — never set client-side.
+// M22 T5 (D-074): card styling in the share page's language — serif heading, ivory perks card, the
+// Checkout button emerald solid (one gold per screen = Share). Hex/tokens only: no palette class
+// names (tests assert none).
 
 import { Check, Gem } from "lucide-react";
 import { LIMITS } from "@/lib/ai/limits";
 import { selectionKind } from "@/lib/editor/store";
 import { UpgradeButton } from "@/components/upgrade/UpgradeButton";
 import { UPGRADE } from "@/lib/pricing";
+import { ED_CTA_EMERALD, ED_PANEL_HEADING } from "./editor-classes";
 import type { EditorContextValue } from "./editor-context";
 import type { EditorTool } from "./tools/types";
 
@@ -51,15 +55,15 @@ export function UpgradeSheet({ reason = "general", ctx }: { reason?: UpgradeReas
         </p>
       ) : null}
       <div className="flex items-start gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-strong/15 text-accent-text">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#f6efdc] text-accent-text ring-1 ring-[#e9dfca]">
           <Gem className="size-5" aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <p className="type-h2">Upgrade this book</p>
+          <p className={ED_PANEL_HEADING}>Upgrade this book</p>
           <p className="text-sm text-muted-foreground">One-time payment, just for this book.</p>
         </div>
       </div>
-      <ul className="flex flex-col gap-2 rounded-xl border border-border bg-secondary/50 p-3 text-sm">
+      <ul className="flex flex-col gap-2.5 rounded-2xl border border-[#e9dfca] bg-[#faf6ee] p-4 text-sm font-medium text-[#0e3b2e]">
         {[`Up to ${LIMITS.paid.maxPages} pages`, "No watermark", "PDF download", "Permanent link"].map((item) => (
           <li key={item} className="flex items-center gap-2">
             <Check className="size-4 shrink-0 text-success" aria-hidden="true" />
@@ -67,7 +71,7 @@ export function UpgradeSheet({ reason = "general", ctx }: { reason?: UpgradeReas
           </li>
         ))}
       </ul>
-      <p className="font-display text-2xl font-semibold" data-testid="upgrade-price">
+      <p className="font-display text-2xl font-semibold text-[#0e3b2e]" data-testid="upgrade-price">
         {UPGRADE_PRICE_LABEL}
       </p>
       {ctx.book.isPaid ? (
@@ -82,6 +86,7 @@ export function UpgradeSheet({ reason = "general", ctx }: { reason?: UpgradeReas
           paymentsEnabled={ctx.paymentsEnabled === true}
           onBeforeStart={ctx.save?.flush}
           testId="upgrade-button"
+          className={`${ED_CTA_EMERALD} w-full text-center whitespace-normal`}
         />
       )}
     </div>

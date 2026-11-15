@@ -9,6 +9,10 @@
 // M11 T13: app tokens; the active tool is filled navy with a terracotta marker (M17: deep emerald with a gold marker) (aria-pressed); a
 // one-time coach line sits in the toolbar (in flow, never over the page); panels get a grab handle
 // and a serif title.
+// M22 T5 (D-074): emerald style — the row is a floating white pill bar (ED_PILL_BAR) of emerald
+// segmented pills (ED_PILL / ED_PILL_ACTIVE, merged with cn so phone overrides win), the active tool
+// is an emerald fill with a small gold marker; the coach line and error strip are cards; panels are
+// card sheets on phones and a side card ≥ lg. Motion: ed-sheet-rise on the sheet container only.
 
 import { Ellipsis, Lightbulb, X } from "lucide-react";
 import Link from "next/link";
@@ -16,6 +20,7 @@ import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react"
 import { coachSeen, EDITOR_COACH_TEXT, markCoachSeen, subscribeCoach } from "@/lib/editor/coach";
 import { EDIT_ERROR_COPY } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
+import { ED_PANEL_HEADING, ED_PILL, ED_PILL_ACTIVE, ED_PILL_BAR, ED_SHEET } from "./editor-classes";
 import { useEditor, type EditorContextValue } from "./editor-context";
 import { MoreSheet } from "./MoreSheet";
 import { splitTools } from "./tools/registry";
@@ -49,14 +54,16 @@ export function EditorCoachLine({ show }: { show: boolean }) {
 /** Presentational coach line (exported for render tests). */
 export function CoachLineView({ onDismiss }: { onDismiss(): void }) {
   return (
-    <div className="flex items-center gap-2 border-b border-border bg-secondary/60 ps-4 pe-1" data-testid="editor-coach">
-      <Lightbulb className="size-4 shrink-0 text-accent-text" aria-hidden="true" />
-      <p className="type-small min-w-0 flex-1 py-1.5 text-secondary-foreground">{EDITOR_COACH_TEXT}</p>
+    <div className={cn(CARD_STRIP, "border-[#e9dfca] bg-card")} data-testid="editor-coach">
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#f6efdc]" aria-hidden="true">
+        <Lightbulb className="size-4 text-accent-text" />
+      </span>
+      <p className="type-small min-w-0 flex-1 py-1.5 text-[#0e3b2e]">{EDITOR_COACH_TEXT}</p>
       <button
         type="button"
         onClick={onDismiss}
         aria-label="Dismiss tip"
-        className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        className={STRIP_CLOSE}
         data-testid="editor-coach-dismiss"
       >
         <X className="size-4" aria-hidden="true" />
@@ -65,22 +72,38 @@ export function CoachLineView({ onDismiss }: { onDismiss(): void }) {
   );
 }
 
-const TOOL_BUTTON = cn(
-  // Up to 4 equal buttons share the row: ≥ 44 px tall and wide, never wider than 10 rem on desktop.
-  "relative flex min-h-14 min-w-11 max-w-40 flex-1 basis-0 flex-col items-center justify-center gap-1 rounded-lg px-1",
-  // < 360 px (e.g. 320): one size smaller + tight tracking so "Background" still fits a quarter row.
-  "text-xs leading-tight font-medium max-[359px]:text-[11px] max-[359px]:tracking-tight",
-  "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-card disabled:opacity-40",
+/** Coach line / error strip: a small floating card above the pill bar (in flow, never over the page). */
+const CARD_STRIP =
+  "mx-auto mb-2 flex w-full max-w-md items-center gap-2 rounded-2xl border ps-3 pe-1 shadow-[0_10px_24px_-18px_rgb(14_59_46/0.5)]";
+
+/** 44 px round dismiss button inside a card strip. */
+const STRIP_CLOSE =
+  "flex size-11 shrink-0 items-center justify-center rounded-full text-[#0e3b2e] outline-none hover:bg-[#e6efe9] focus-visible:ring-2 focus-visible:ring-[#0e3b2e] transition-colors motion-reduce:transition-none";
+
+/**
+ * Pill overrides (merged over ED_PILL / ED_PILL_ACTIVE by cn — tailwind-merge, so these win):
+ * phones (< sm): up to 4 equal pills share the bar, icon over label, 56 px tall — < 360 px (e.g.
+ * 320) one size smaller + tight tracking so "Background" still fits a quarter row. sm+: icon beside
+ * the label, content width, 44 px.
+ */
+const TOOL_PILL = cn(
+  "relative min-h-14 min-w-11 max-w-40 flex-1 basis-0 flex-col gap-0.5 rounded-[1.25rem] px-1",
+  "text-xs leading-tight max-[359px]:px-0.5 max-[359px]:text-[11px] max-[359px]:tracking-tight",
+  "sm:min-h-11 sm:max-w-none sm:flex-none sm:basis-auto sm:flex-row sm:gap-2 sm:rounded-full sm:px-4 sm:text-sm",
 );
+
+const pillClass = (active: boolean, extra?: string) => cn(active ? ED_PILL_ACTIVE : ED_PILL, TOOL_PILL, extra);
 
 function ToolButtonFace({ tool, active }: { tool: Pick<EditorTool, "icon" | "label">; active: boolean }) {
   const Icon = tool.icon;
   return (
     <>
-      <Icon className="size-6" aria-hidden="true" />
+      <Icon className="size-6 shrink-0 sm:size-5" aria-hidden="true" />
       <span className="max-w-full truncate">{tool.label}</span>
-      {/* Not colour alone: the open tool also gets a gold bar (5.16:1 on deep emerald). */}
-      {active ? <span aria-hidden="true" className="absolute inset-x-3 bottom-0.5 h-0.5 rounded-full bg-accent-strong" /> : null}
+      {/* Not colour alone: the open tool also gets a small gold marker (pale gold on emerald). */}
+      {active ? (
+        <span aria-hidden="true" className="absolute inset-x-0 bottom-1 mx-auto h-1 w-4 rounded-full bg-[#e3c766]" />
+      ) : null}
     </>
   );
 }
@@ -178,36 +201,41 @@ export function EditorToolbar({ tools }: { tools: EditorTool[] }) {
   const shownCount = primary.length + (hasMore ? 1 : 0);
 
   return (
-    <div className="shrink-0 border-t border-border bg-card pb-[env(safe-area-inset-bottom)]" data-testid="editor-toolbar">
+    <div
+      className="shrink-0 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] ps-[max(0.5rem,env(safe-area-inset-left))] pe-[max(0.5rem,env(safe-area-inset-right))]"
+      data-testid="editor-toolbar"
+    >
       {state.error ? (
         <div
           role="alert"
-          className="flex items-center gap-2 border-b border-destructive-border bg-destructive-soft ps-4 pe-1 py-1 text-sm text-destructive"
+          className={cn(CARD_STRIP, "border-destructive-border bg-destructive-soft py-0.5 text-sm text-destructive")}
           data-testid="editor-error"
         >
-          <p className="flex-1">{EDIT_ERROR_COPY[state.error]}</p>
+          <p className="min-w-0 flex-1">{EDIT_ERROR_COPY[state.error]}</p>
           <button
             type="button"
             onClick={actions.dismissError}
             aria-label="Dismiss"
-            className="flex size-11 shrink-0 items-center justify-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full text-destructive outline-none hover:bg-white/60 focus-visible:ring-2 focus-visible:ring-destructive"
           >
             <X className="size-4" aria-hidden="true" />
           </button>
         </div>
       ) : null}
       <EditorCoachLine show={coachApplies(ctx, tools.length)} />
-      <div className="relative mx-auto max-w-3xl">
+      <div className="relative mx-auto w-full max-w-md sm:w-fit sm:max-w-full">
         <div
           ref={rowRef}
           role="group"
           aria-label="Editing tools"
-          className="flex min-h-16 items-stretch justify-center gap-1 px-2 py-1"
+          // overflow-visible (merged over the bar's overflow-x-auto): the row never scrolls sideways —
+          // ≤ 4 pills always fit, down to 320 px.
+          className={cn(ED_PILL_BAR, "w-full items-stretch justify-center gap-0.5 overflow-visible rounded-[1.75rem] sm:gap-1 sm:rounded-full")}
           data-testid="editor-toolbar-row"
           data-count={shownCount}
         >
           {shownCount === 0 ? (
-            <p className="flex flex-1 items-center justify-center px-2 text-center text-sm text-muted-foreground" data-testid="toolbar-hint">
+            <p className="flex min-h-11 flex-1 items-center justify-center px-3 text-center text-sm text-[#56625a]" data-testid="toolbar-hint">
               {toolbarHint(ctx)}
             </p>
           ) : (
@@ -220,7 +248,7 @@ export function EditorToolbar({ tools }: { tools: EditorTool[] }) {
                     <Link
                       key={t.id}
                       href={t.href(ctx)}
-                      className={cn(TOOL_BUTTON, "text-foreground hover:bg-muted")}
+                      className={pillClass(false)}
                       data-testid={`editor-tool-${t.id}`}
                     >
                       <ToolButtonFace tool={t} active={false} />
@@ -234,7 +262,7 @@ export function EditorToolbar({ tools }: { tools: EditorTool[] }) {
                     onClick={() => onTool(t)}
                     disabled={disabled}
                     aria-pressed={t.Panel ? active : undefined}
-                    className={cn(TOOL_BUTTON, active ? "bg-primary text-primary-foreground shadow-card" : "text-foreground hover:bg-muted")}
+                    className={pillClass(active)}
                     data-active={active ? "true" : undefined}
                     data-testid={`editor-tool-${t.id}`}
                   >
@@ -250,7 +278,7 @@ export function EditorToolbar({ tools }: { tools: EditorTool[] }) {
                   aria-haspopup="dialog"
                   aria-expanded={moreOpen}
                   aria-controls={moreOpen ? moreId : undefined}
-                  className={cn(TOOL_BUTTON, moreActive || moreOpen ? "bg-muted text-foreground" : "text-foreground hover:bg-muted")}
+                  className={pillClass(false, moreActive || moreOpen ? "bg-[#e6efe9]" : undefined)}
                   data-active={moreActive ? "true" : undefined}
                   data-testid="editor-more"
                 >
@@ -294,18 +322,21 @@ export function EditorPanelHost({ tool }: { tool: EditorTool | null }) {
           aria-label="Close panel"
           tabIndex={-1}
           onClick={ctx.closeTool}
-          className="fixed inset-0 z-30 bg-primary/25 lg:hidden"
+          className="fixed inset-0 z-30 bg-[#0e3b2e]/35 lg:hidden"
         />
       )}
       <aside
         role="dialog"
         aria-label={title}
         className={cn(
-          docked
-            ? "relative flex max-h-[42dvh] shrink-0 flex-col rounded-t-2xl border-t border-border bg-card shadow-[0_-6px_18px_-8px_rgb(30_42_71/0.18)]"
-            : "fixed inset-x-0 bottom-0 z-40 flex max-h-[70dvh] flex-col rounded-t-2xl border-t border-border bg-card shadow-lift",
-          "pb-[env(safe-area-inset-bottom)]",
-          "lg:static lg:z-auto lg:max-h-none lg:w-80 lg:shrink-0 lg:rounded-none lg:border-t-0 lg:border-l lg:pb-0 lg:shadow-none",
+          // Phones: a card sheet (ED_SHEET; its ::before handle is replaced by the testid'd handle
+          // below, and the inner rows own their padding).
+          ED_SHEET,
+          "ed-sheet-rise flex flex-col px-0 pb-[env(safe-area-inset-bottom)] before:hidden",
+          docked ? "relative max-h-[42dvh] shrink-0" : "fixed inset-x-0 bottom-0 z-40 max-h-[70dvh]",
+          // ≥ lg: the side card panel beside the stage (mirrors ED_SIDE_PANEL, lg-prefixed so the
+          // phone sheet above stays one element: lg:w-80 xl:w-96, own scroll, card shadow).
+          "lg:static lg:z-auto lg:my-3 lg:me-3 lg:max-h-none lg:w-80 lg:shrink-0 lg:rounded-3xl lg:border lg:border-[#e9dfca] lg:pb-0 lg:shadow-[0_18px_40px_-28px_rgb(14_59_46/0.45)] xl:w-96",
         )}
         data-testid={`editor-panel-${tool.id}`}
         data-editor-panel=""
@@ -313,21 +344,21 @@ export function EditorPanelHost({ tool }: { tool: EditorTool | null }) {
       >
         {/* Grab handle: shows this is a sheet (phones only; the desktop side panel has none). */}
         <div aria-hidden="true" className="flex shrink-0 justify-center pt-2 lg:hidden" data-testid="editor-panel-handle">
-          <span className="h-1 w-10 rounded-full bg-input/40" />
+          <span className="h-1.5 w-10 rounded-full bg-[#cfc4ad]" />
         </div>
-        <div className="flex shrink-0 items-center gap-2 border-b border-border ps-4 pe-2">
-          <h2 className="type-h2 min-w-0 flex-1 truncate py-2 lg:py-3">{title}</h2>
+        <div className="flex shrink-0 items-center gap-2 border-b border-[#efe7d6] ps-4 pe-2 lg:ps-5 lg:pe-3 lg:pt-2">
+          <h2 className={cn(ED_PANEL_HEADING, "min-w-0 flex-1 truncate py-2 lg:py-3 lg:text-xl")}>{title}</h2>
           <button
             type="button"
             onClick={ctx.closeTool}
             aria-label="Close"
-            className="flex size-11 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full text-[#0e3b2e] outline-none transition-colors hover:bg-[#e6efe9] focus-visible:ring-2 focus-visible:ring-[#0e3b2e] motion-reduce:transition-none"
             data-testid="editor-panel-close"
           >
             <X className="size-5" aria-hidden="true" />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-5">
           <Panel ctx={ctx} close={ctx.closeTool} />
         </div>
       </aside>

@@ -1,10 +1,13 @@
 "use client";
 
-// Autosave status: a one-line label in the header + a banner for states that need the user.
+// Autosave status: a chip on the editor band (M22 T3: ED_CHIP tones on the leather, a breathing dot
+// while saving — static under reduced motion) + a cream card under the band for states that need
+// the user. Labels (saveStatusLabel) are unchanged (D-074: keep today's wording).
 
 import Link from "next/link";
+import { cx } from "@/lib/cx";
 import { invalidSaveCopy } from "@/lib/editor/autosave";
-import { cn } from "@/lib/utils";
+import { ED_CHIP_DOT, ED_CHIP_TONE, ED_CTA_EMERALD, type EdChipTone } from "./editor-classes";
 import type { SaveState } from "./useAutosave";
 
 /** Header label for a save state. Pure, exported for tests. */
@@ -35,19 +38,42 @@ export function saveStatusLabel(s: SaveState): string {
 
 const reload = () => window.location.reload();
 
-const BANNER_BUTTON =
-  "inline-flex min-h-11 items-center self-start rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-warning-soft";
+/** Banner actions: the emerald solid CTA (one gold per screen = Share). */
+const BANNER_BUTTON = cx(ED_CTA_EMERALD, "self-start");
+
+/**
+ * Save chip shape: like ED_CHIP but compact on phones (24 px, so title + chip fit the 56 px row),
+ * ED_CHIP size from lg. It's a status, not a button — the 44 px rule applies to Reload only.
+ */
+const SAVE_CHIP =
+  "inline-flex h-6 max-w-full min-w-0 items-center gap-1.5 rounded-full border px-2 text-[11px] leading-none font-semibold whitespace-nowrap lg:h-8 lg:px-2.5 lg:text-sm";
+
+export function saveChipTone(s: SaveState): EdChipTone {
+  switch (s.kind) {
+    case "idle":
+    case "saved":
+      return "saved";
+    case "pending":
+    case "saving":
+      return "saving";
+    default:
+      return "warn";
+  }
+}
 
 export function SaveStatus({ status }: { status: SaveState }) {
-  const warn = status.kind !== "idle" && status.kind !== "saved" && status.kind !== "pending" && status.kind !== "saving";
+  const tone = saveChipTone(status);
   return (
-    <span className="flex min-w-0 items-center gap-1 text-xs" aria-live="polite" data-testid="save-status" data-state={status.kind}>
-      <span className={cn("truncate", warn ? "font-medium text-warning" : "text-muted-foreground")}>{saveStatusLabel(status)}</span>
+    <span className="flex min-w-0 items-center gap-2" aria-live="polite" data-testid="save-status" data-state={status.kind}>
+      <span className={cx(SAVE_CHIP, ED_CHIP_TONE[tone])} data-tone={tone}>
+        <span aria-hidden="true" className={cx(ED_CHIP_DOT[tone], tone === "saving" && "ed-save-pulse")} />
+        <span className="truncate">{saveStatusLabel(status)}</span>
+      </span>
       {status.kind === "conflict" ? (
         <button
           type="button"
           onClick={reload}
-          className="relative shrink-0 rounded font-medium text-primary underline underline-offset-2 outline-none before:absolute before:-inset-3 before:content-[''] focus-visible:ring-2 focus-visible:ring-ring"
+          className="relative shrink-0 rounded text-xs font-semibold text-[#e3c766] underline underline-offset-2 outline-none before:absolute before:-inset-x-3 before:-inset-y-[14px] before:content-[''] focus-visible:ring-2 focus-visible:ring-[#f2e8d8] lg:text-sm"
           data-testid="save-status-reload"
         >
           Reload
@@ -57,7 +83,7 @@ export function SaveStatus({ status }: { status: SaveState }) {
   );
 }
 
-/** Banner under the header for states the user should act on (or know about). */
+/** Cream card under the band for states the user should act on (or know about). */
 export function SaveBanner({ status, bookId }: { status: SaveState; bookId: string }) {
   let body: React.ReactNode = null;
   switch (status.kind) {
@@ -107,7 +133,7 @@ export function SaveBanner({ status, bookId }: { status: SaveState; bookId: stri
   return (
     <div
       role="status"
-      className="flex shrink-0 flex-col gap-2 border-b border-warning-border bg-warning-soft px-4 py-2.5 text-sm text-foreground"
+      className="mx-2 mt-2 flex shrink-0 flex-col gap-2 rounded-2xl border border-[#e9dfca] border-s-4 border-s-[#c9a227] bg-card px-4 py-3 text-sm text-foreground shadow-[0_14px_32px_-24px_rgb(14_59_46/0.5)] sm:mx-4 lg:mx-8"
       data-testid={`save-banner-${status.kind}`}
     >
       {body}
