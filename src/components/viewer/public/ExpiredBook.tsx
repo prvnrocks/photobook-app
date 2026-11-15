@@ -1,20 +1,12 @@
-// /b/[slug] when a free link has expired (D-002, D-039). Everyone sees the expiry + "Create your
-// own"; the signed-in owner also sees "Upgrade to bring it back — AED 39" (M7 T6: live Stripe
-// Checkout, disabled + "Payments unavailable" without Stripe keys), the "Payment cancelled" notice
-// after a cancelled Checkout, and a link back to the editor. No title or cover for anyone (D-040).
-// The book id reaches client props only in the owner branch (like the editor link).
-// M23 T5: one gold per screen — owner: Upgrade (gold) + "Open in editor" (emerald outline);
-// visitor: "Create your own" (gold). Plain <a> links (no next/link on /b).
+// /b/[slug] when a free link has expired (D-002, D-039). ExpiredBookScreen with the live owner
+// islands: the "Payment cancelled" notice after a cancelled Checkout and "Upgrade to bring it
+// back — AED 39" (M7 T6: live Stripe Checkout, disabled + "Payments unavailable" without Stripe
+// keys). The book id reaches client props only in the owner branch (like the editor link).
 
-import { Clock } from "lucide-react";
 import { Suspense } from "react";
 import { UpgradeButton } from "@/components/upgrade/UpgradeButton";
 import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
-import { VW_CTA_EMERALD_OUTLINE, VW_CTA_GOLD } from "@/components/viewer/viewer-classes";
-import { cx } from "@/lib/cx";
-import { UPGRADE } from "@/lib/pricing";
-import { CREATE_YOURS_HREF } from "@/lib/viewer/share";
-import { ViewerMessage } from "./ViewerMessage";
+import { EXPIRED_UPGRADE_CLASS, EXPIRED_UPGRADE_LABEL, ExpiredBookScreen } from "./ExpiredBookScreen";
 
 export type ExpiredBookUpgrade = {
   bookId: string;
@@ -35,46 +27,31 @@ export function ExpiredBook({
   upgrade?: ExpiredBookUpgrade | null;
 }) {
   return (
-    <ViewerMessage
-      eyebrow="Link expired"
-      title="This photobook has expired"
-      icon={<Clock className="size-6" />}
-      description={
-        isOwner
-          ? "Free links stay open for 30 days. Your book is still safe in your account — upgrade it to bring the link back for good."
-          : "The link to this book is no longer active. You can make a photobook of your own in a few minutes."
+    <ExpiredBookScreen
+      isOwner={isOwner}
+      editorHref={editorHref}
+      ownerUpgrade={
+        isOwner ? (
+          <>
+            <Suspense fallback={null}>
+              <UpgradeCancelledNotice />
+            </Suspense>
+            {upgrade ? (
+              <UpgradeButton
+                bookId={upgrade.bookId}
+                returnTo={upgrade.returnTo}
+                // Only free links expire.
+                isPaid={false}
+                paymentsEnabled={upgrade.paymentsEnabled}
+                variant="viewer"
+                className={EXPIRED_UPGRADE_CLASS}
+                label={EXPIRED_UPGRADE_LABEL}
+                testId="expired-upgrade"
+              />
+            ) : null}
+          </>
+        ) : null
       }
-      testId="expired-book"
-    >
-      {isOwner ? (
-        <>
-          <Suspense fallback={null}>
-            <UpgradeCancelledNotice />
-          </Suspense>
-          {upgrade ? (
-            <UpgradeButton
-              bookId={upgrade.bookId}
-              returnTo={upgrade.returnTo}
-              // Only free links expire.
-              isPaid={false}
-              paymentsEnabled={upgrade.paymentsEnabled}
-              variant="viewer"
-              className={cx(VW_CTA_GOLD, "w-full py-2 text-balance")}
-              label={`Upgrade to bring it back — ${UPGRADE.label}`}
-              testId="expired-upgrade"
-            />
-          ) : null}
-          {editorHref ? (
-            <a href={editorHref} className={cx(VW_CTA_EMERALD_OUTLINE, "w-full")} data-testid="expired-open-editor">
-              Open in editor
-            </a>
-          ) : null}
-        </>
-      ) : (
-        <a href={CREATE_YOURS_HREF} className={cx(VW_CTA_GOLD, "w-full")} data-testid="expired-create">
-          Create your own
-        </a>
-      )}
-    </ViewerMessage>
+    />
   );
 }

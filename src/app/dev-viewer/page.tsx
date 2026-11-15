@@ -4,19 +4,28 @@
 // `?sample=modern-portrait|modern-landscape` (M10c: also geometric-|scrapbook-portrait|landscape, `-ar` for Arabic) (M10b A13) shows a modern sample book instead (spreads, text panels,
 // sliced cover; src/lib/book/dev-sample.ts); `pages`/`bg`/`format` are ignored then.
 // `?state=password|expired|expiredOwner|unavailable|notFound` (M23 T6) shows a non-book screen instead
-// (`&payments=1` enables the owner's Upgrade button — tapping it runs the real action and fails, no
-// such book). Rendered here on the server page: the client island never imports viewer/app modules
-// (lesson M22 — a cross-route client import changes the /b chunks).
+// (`&payments=1` shows the owner's Upgrade button enabled instead of "Payments unavailable").
+// These previews are STATIC: rendered on this server page from the same server-only screens /b uses
+// (PasswordGateScreen, ExpiredBookScreen, BookUnavailable, BookNotFoundScreen) with no client islands
+// — the form doesn't submit and the Upgrade button is a stand-in. Never import /b's client modules
+// (PasswordGate, ExpiredBook → UpgradeButton…) here or in the client island: a cross-route client
+// reference changes /b's chunk splitting (lesson M22).
 // 404s in production builds (incl. Vercel previews, which run NODE_ENV=production).
 
 import type { Viewport } from "next";
 import { notFound } from "next/navigation";
 import { parseDevFormat } from "@/lib/book/dev-preview";
 import { parseDevSample } from "@/lib/book/dev-sample";
-import BookNotFound from "@/app/b/[slug]/not-found";
+import { Gem } from "lucide-react";
+import { BookNotFoundScreen } from "@/components/viewer/public/BookNotFoundScreen";
 import { BookUnavailable } from "@/components/viewer/public/BookUnavailable";
-import { ExpiredBook } from "@/components/viewer/public/ExpiredBook";
-import { PasswordGate } from "@/components/viewer/public/PasswordGate";
+import {
+  EXPIRED_UPGRADE_CLASS,
+  EXPIRED_UPGRADE_LABEL,
+  ExpiredBookScreen,
+} from "@/components/viewer/public/ExpiredBookScreen";
+import { PasswordGateScreen } from "@/components/viewer/public/PasswordGateScreen";
+import { PAYMENTS_UNAVAILABLE_HINT } from "@/lib/upgrade/ui";
 import { devViewerBackground, devViewerPageCount } from "@/lib/viewer/dev-fixture";
 import { DevViewerClient } from "./DevViewerClient";
 
@@ -31,24 +40,51 @@ function parseDevState(v: string | string[] | undefined): DevState | null {
   return typeof v === "string" && (DEV_STATES as readonly string[]).includes(v) ? (v as DevState) : null;
 }
 
+/**
+ * Static stand-in for ExpiredBook's UpgradeButton (same wrapper / testids / classes / hint markup),
+ * so this page references no client module. Not wired: tapping does nothing.
+ */
+function DevUpgradeStandIn({ paymentsEnabled }: { paymentsEnabled: boolean }) {
+  const hintId = "expired-upgrade-unavailable";
+  return (
+    <div className="flex w-full min-w-0 flex-col gap-2" data-testid="expired-upgrade-wrap" data-payments={paymentsEnabled ? "on" : "off"}>
+      <button
+        type="button"
+        disabled={!paymentsEnabled}
+        aria-describedby={paymentsEnabled ? undefined : hintId}
+        className={EXPIRED_UPGRADE_CLASS}
+        data-testid="expired-upgrade"
+      >
+        <Gem className="size-4 shrink-0" aria-hidden="true" />
+        <span className="min-w-0">{EXPIRED_UPGRADE_LABEL}</span>
+      </button>
+      {paymentsEnabled ? null : (
+        <p id={hintId} className="type-small text-center text-muted-foreground" data-testid={hintId}>
+          {PAYMENTS_UNAVAILABLE_HINT}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function DevStateScreen({ state, paymentsEnabled }: { state: DevState; paymentsEnabled: boolean }) {
   switch (state) {
     case "password":
-      return <PasswordGate slug="dev-viewer" />;
+      return <PasswordGateScreen />;
     case "expired":
-      return <ExpiredBook isOwner={false} />;
+      return <ExpiredBookScreen isOwner={false} />;
     case "expiredOwner":
       return (
-        <ExpiredBook
+        <ExpiredBookScreen
           isOwner
           editorHref="/dev-editor"
-          upgrade={{ bookId: "dev-book", returnTo: "/dev-viewer?state=expiredOwner", paymentsEnabled }}
+          ownerUpgrade={<DevUpgradeStandIn paymentsEnabled={paymentsEnabled} />}
         />
       );
     case "unavailable":
       return <BookUnavailable />;
     case "notFound":
-      return <BookNotFound />;
+      return <BookNotFoundScreen />;
   }
 }
 

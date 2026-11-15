@@ -5,7 +5,14 @@
 import { chapterLabel, labelFontStyle, type ViewerChapter } from "@/lib/viewer/chapters";
 import { isMainlyArabic } from "@/lib/review/ui";
 
-export function ChapterLabel({ chapter, className }: { chapter: ViewerChapter | null; className?: string }) {
+export function ChapterLabel({
+  chapter,
+  className,
+}: {
+  chapter: ViewerChapter | null;
+  /** Replaces (does not extend) the default "truncate text-xs text-muted-foreground" look. */
+  className?: string;
+}) {
   const text = chapterLabel(chapter);
   const arabic = chapter ? isMainlyArabic(chapter.title) : false;
   return (

@@ -51,6 +51,11 @@ describe("viewer-classes contrast", () => {
     expect(contrastRatio(p.fg, p.bg)).toBeGreaterThanOrEqual(p.min);
   });
 
+  it.each(VWD.VW_NONTEXT_PAIRS.map((p) => [p.name, p] as const))("non-text %s ≥ 3:1", (_name, p) => {
+    expect(p.min).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(p.fg, p.bg)).toBeGreaterThanOrEqual(p.min);
+  });
+
   it("class strings use the hexes their contrast pairs claim", () => {
     expect(VW.VW_BAND).toContain("home-leather");
     expect(VW.VW_BAND).toContain("text-[#f2e8d8]");
@@ -63,11 +68,23 @@ describe("viewer-classes contrast", () => {
     expect(VW.VW_NAV_PILL).toContain("bg-white");
     expect(VW.VW_NAV_BTN).toContain("text-[#0e3b2e]");
     expect(VW.VW_COUNTER_PILL).toContain("text-[#0e3b2e]");
-    expect(VW.VW_CHAPTER_PILL).toContain("bg-[#e6efe9]");
     expect(VW.VW_SHEET).toContain("bg-[#faf5ec]");
     expect(VW.VW_CTA_GOLD).toContain("text-[#1b1b1d]");
-    expect(VW.VW_CTA_EMERALD).toContain("bg-[#0e3b2e]");
-    expect(VW.VW_CTA_EMERALD).toContain("text-white");
+    expect(VW.VW_END_SHARE_EMERALD).toBe("bg-[#0e3b2e] text-white hover:bg-[#145240]");
+    expect(VW.VW_TOAST).toContain("bg-[#0e3b2e]");
+    expect(VW.VW_TOAST).toContain("text-white");
+    expect(VW.VW_MESSAGE_SEAL).toContain("bg-[#0e3b2e]");
+    expect(VW.VW_MESSAGE_SEAL).toContain("text-[#e3c766]");
+    expect(VW.VW_MESSAGE_BRAND_LINK).toContain("text-[#f2e8d8]");
+    expect(VW.VW_FIELD_LABEL).toContain("text-[#1b1b1d]");
+    expect(VW.VW_INPUT).toContain("bg-white");
+    expect(VW.VW_INPUT).toContain("text-[#1b1b1d]");
+    expect(VW.VW_INPUT).toContain("border-[#8c8270]");
+    expect(VW.VW_INPUT).toContain("aria-invalid:border-[#b42318]");
+    expect(VW.VW_FIELD_ERROR).toContain("text-[#b42318]");
+    expect(VW.VW_SKELETON_PAGE).toContain("bg-[#faf5ec]");
+    expect(VW.VW_SHELL_BG).toBe(`bg-[${VWD.VW_STAGE_EDGE}]`);
+    expect(VW.VW_NAV_BAR).toContain(`bg-[${VWD.VW_STAGE_EDGE}]`);
     expect(VW.VW_CTA_EMERALD_OUTLINE).toContain("text-[#0e3b2e]");
     expect(VW.VW_CTA_WHATSAPP).toContain("bg-[#0F7A40]");
     expect(VW.VW_CTA_WHATSAPP).toContain("text-white");
@@ -75,7 +92,6 @@ describe("viewer-classes contrast", () => {
     expect(VW.VW_MESSAGE_SCREEN).toContain("home-leather");
     expect(VW.VW_MESSAGE_CARD).toContain("bg-[#faf5ec]");
     expect(VW.VW_MESSAGE_EYEBROW).toContain("text-[#7a5f0e]");
-    expect(VW.VW_STAGE_LABEL).toContain("text-[#56625a]");
   });
 });
 
@@ -88,9 +104,31 @@ describe("viewer-classes recipes", () => {
     expect(recipesCode).not.toMatch(/["']use client["']/);
   });
 
-  it("only gold: VW_CTA_GOLD is the one recipe with home-foil-fill", () => {
+  it("only gold: every home-foil-fill recipe is VW_CTA_GOLD_LOOK or composed from it", () => {
     const gold = recipes.filter(([, v]) => v.includes("home-foil-fill")).map(([k]) => k);
-    expect(gold).toEqual(["VW_CTA_GOLD"]);
+    expect(gold.sort()).toEqual(["VW_CTA_GOLD", "VW_CTA_GOLD_END_LANDSCAPE", "VW_CTA_GOLD_END_PORTRAIT", "VW_CTA_GOLD_LOOK"]);
+    for (const k of gold) {
+      const v = VW[k as keyof typeof VW] as string;
+      expect(v === VW.VW_CTA_GOLD_LOOK || v.startsWith(`${VW.VW_CTA_GOLD_LOOK} `), k).toBe(true);
+    }
+  });
+
+  it("gold variants are full alternatives: no utility group twice (no conflicting pairs)", () => {
+    // Size / spacing / gap / disabled live only in the variants; the look has none of them.
+    for (const c of classes(VW.VW_CTA_GOLD_LOOK)) expect(c, c).not.toMatch(/^(px|py|p|gap|text-\[?\d|text-(xs|sm|base|lg)|disabled:)/);
+    const group = (c: string) => c.replace(/-\[[^\]]*\]$|-[^-]+$/, "");
+    for (const k of ["VW_CTA_GOLD", "VW_CTA_GOLD_END_PORTRAIT", "VW_CTA_GOLD_END_LANDSCAPE"] as const) {
+      const sized = classes(VW[k]).filter((c) => /^(px|py|gap)-|^text-(\[\d|xs|sm|base|lg)/.test(c));
+      expect(new Set(sized.map(group)).size, `${k}: ${sized.join(" ")}`).toBe(sized.length);
+    }
+    expect(VW.VW_CTA_GOLD_END_PORTRAIT).toContain("text-[4.4cqw]");
+    expect(VW.VW_CTA_GOLD_END_LANDSCAPE).toContain("text-[3.2cqw]");
+  });
+
+  it("VW_NAV_BAR pads its top only; the caller adds one bottom padding", () => {
+    expect(classes(VW.VW_NAV_BAR)).toContain("pt-1.5");
+    expect(VW.VW_NAV_BAR).not.toMatch(/(^|\s)(py|pb|p)-/);
+    expect(VW.VW_NAV_BAR_PB_SAFE).toBe("pb-[max(0.375rem,env(safe-area-inset-bottom))]");
   });
 
   it("no recipe uses a transform/translate/scale/rotate utility", () => {
@@ -131,11 +169,15 @@ describe("viewer-classes recipes", () => {
   });
 
   it("title / subline are one-line, not letter-spaced (Arabic joining)", () => {
-    for (const v of [VW.VW_TITLE, VW.VW_SUBLINE, VW.VW_CHAPTER_PILL]) {
+    for (const v of [VW.VW_TITLE, VW.VW_SUBLINE]) {
       expect(v).toContain("truncate");
       expect(v).not.toMatch(/tracking-\[0\.\d|tracking-(wide|wider|widest)|uppercase/);
     }
     expect(VW.VW_TITLE).toContain("font-display");
+  });
+
+  it("dead recipes stay removed", () => {
+    for (const name of ["VW_STAGE_LABEL", "VW_CHAPTER_PILL", "VW_CARD", "VW_CTA_EMERALD"]) expect(Object.keys(VW), name).not.toContain(name);
   });
 
   it("tappable recipes are 44 px and transitions respect reduced motion", () => {
@@ -148,10 +190,12 @@ describe("viewer-classes recipes", () => {
       "VW_LIST_ROW",
       "VW_LIST_ROW_ACTIVE",
       "VW_CTA_GOLD",
-      "VW_CTA_EMERALD",
+      "VW_CTA_GOLD_END_PORTRAIT",
+      "VW_CTA_GOLD_END_LANDSCAPE",
       "VW_CTA_EMERALD_OUTLINE",
       "VW_CTA_WHATSAPP",
       "VW_FOOTER_LINK",
+      "VW_MESSAGE_BRAND_LINK",
     ] as const;
     for (const name of tappable) expect(VW[name], name).toMatch(/(^|\s)(min-h-11|size-11)(\s|$)/);
     for (const [name, v] of recipes) {
@@ -174,7 +218,7 @@ describe("viewer recipe module boundaries", () => {
   });
 
   it("viewer-classes does not export test data", () => {
-    for (const name of ["VW_CONTRAST_PAIRS", "VW_LEATHER_LIGHTEST", "VW_FOIL_DARKEST", "VW_STAGE_EDGE"]) {
+    for (const name of ["VW_CONTRAST_PAIRS", "VW_NONTEXT_PAIRS", "VW_LEATHER_LIGHTEST", "VW_FOIL_DARKEST", "VW_STAGE_EDGE"]) {
       expect(Object.keys(VW), name).not.toContain(name);
     }
   });

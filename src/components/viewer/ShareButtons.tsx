@@ -12,7 +12,7 @@ import { Check, Link2, MessageCircle, Share2 } from "lucide-react";
 import { cx } from "@/lib/cx";
 import { whatsappShareUrl } from "@/lib/viewer/share";
 import { nativeShare, useCanNativeShare, useCopyFeedback } from "./share-actions";
-import { VW_CTA_EMERALD_OUTLINE, VW_CTA_WHATSAPP } from "./viewer-classes";
+import { VW_CTA_EMERALD_OUTLINE, VW_CTA_WHATSAPP, VW_TOAST } from "./viewer-classes";
 
 export type ShareButtonsProps = {
   /** Absolute book URL (https://…/b/<slug>). */
@@ -26,8 +26,8 @@ export type ShareButtonsProps = {
   className?: string;
 };
 
-/** Class for a secondary share action passed via `secondary` (same look as Copy link). */
-export const SHARE_SECONDARY_CLASS = cx(VW_CTA_EMERALD_OUTLINE, "min-w-[9rem] flex-1 basis-0 whitespace-nowrap");
+/** Stacked secondary actions (Copy link, More options): emerald outline pills, two per row. */
+const SHARE_SECONDARY_CLASS = cx(VW_CTA_EMERALD_OUTLINE, "min-w-[9rem] flex-1 basis-0 whitespace-nowrap");
 
 export function ShareButtons({ url, title, layout = "stack", secondary, className }: ShareButtonsProps) {
   const canShare = useCanNativeShare();
@@ -67,7 +67,7 @@ export function ShareButtons({ url, title, layout = "stack", secondary, classNam
       </div>
       <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[60] flex justify-center px-gutter">
         {toast ? (
-          <span role="status" className="rounded-full bg-[#0e3b2e] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_14px_32px_-16px_rgb(14_59_46/0.8)]" data-testid="share-toast">
+          <span role="status" className={VW_TOAST} data-testid="share-toast">
             {toast.ok ? "Link copied" : "Couldn't copy the link"}
           </span>
         ) : null}

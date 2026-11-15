@@ -80,7 +80,11 @@ describe("viewer message screens (M23 T5)", () => {
   });
 
   it("ViewerMessage and PasswordGate stay small: no next/link, EmptyState, cn or button variants", () => {
-    for (const f of ["src/components/viewer/public/ViewerMessage.tsx", "src/components/viewer/public/PasswordGate.tsx"]) {
+    for (const f of [
+      "src/components/viewer/public/ViewerMessage.tsx",
+      "src/components/viewer/public/PasswordGate.tsx",
+      "src/components/viewer/public/PasswordGateScreen.tsx",
+    ]) {
       const s = src(f);
       expect(s, f).not.toMatch(/from "next\/link"/);
       const imports = s.match(/^import[^;]*;/gm)?.join("\n") ?? "";
@@ -91,7 +95,9 @@ describe("viewer message screens (M23 T5)", () => {
   it("no next/link in any message screen", () => {
     for (const f of [
       "src/components/viewer/public/ExpiredBook.tsx",
+      "src/components/viewer/public/ExpiredBookScreen.tsx",
       "src/components/viewer/public/BookUnavailable.tsx",
+      "src/components/viewer/public/BookNotFoundScreen.tsx",
       "src/app/b/[slug]/not-found.tsx",
     ]) {
       expect(src(f), f).not.toMatch(/from "next\/link"/);
@@ -131,6 +137,36 @@ describe("dev-viewer ?state= (M23 T6)", () => {
   it("404s in production", async () => {
     vi.stubEnv("NODE_ENV", "production");
     await expect(render({ state: "password" })).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("expiredOwner stand-in mirrors UpgradeButton's markup (gold, testids, disabled + hint when off)", async () => {
+    const off = await render({ state: "expiredOwner" });
+    expect(off).toMatch(/<button type="button" disabled=""[^>]*aria-describedby="expired-upgrade-unavailable"[^>]*home-foil-fill[^>]*data-testid="expired-upgrade">/);
+    expect(off).toContain('data-testid="expired-upgrade-wrap" data-payments="off"');
+    expect(off).toContain("Upgrade to bring it back — AED 39");
+    expect(golds(off)).toBe(1);
+    const on = await render({ state: "expiredOwner", payments: "1" });
+    expect(on).toContain('data-payments="on"');
+    expect(on).not.toMatch(/disabled=""[^>]*data-testid="expired-upgrade"/);
+  });
+
+  it("password preview is the shared PasswordGateScreen (same form testids, one gold)", async () => {
+    const html = await render({ state: "password" });
+    for (const id of ["password-gate", "password-input", "password-submit"]) expect(html).toContain(`data-testid="${id}"`);
+    expect(golds(html)).toBe(1);
+  });
+
+  it("the server page references no client module /b uses (chunk splitting, lesson M22)", () => {
+    const s = src("src/app/dev-viewer/page.tsx");
+    const imports = s.match(/^import[^;]*;/gm)?.join("\n") ?? "";
+    expect(imports).not.toMatch(/PasswordGate"|ExpiredBook"|UpgradeButton|UpgradeCancelledNotice|PublicViewer|@\/app\/b\//);
+    // Every viewer/public module it does import is a server module without client imports.
+    for (const m of imports.matchAll(/"@\/components\/viewer\/public\/(\w+)"/g)) {
+      const f = `src/components/viewer/public/${m[1]}.tsx`;
+      const body = src(f);
+      expect(body, f).not.toMatch(/^\s*["']use client["']/m);
+      expect(body, f).not.toMatch(/from "@\/components\/upgrade\/|from "\.\/(PasswordGate|ExpiredBook|PublicViewer)"/);
+    }
   });
 
   it("the client island imports no viewer/public or app route modules", () => {

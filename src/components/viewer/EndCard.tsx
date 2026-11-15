@@ -15,6 +15,7 @@ import type { BookFormat } from "@/lib/book/types";
 import { APP_NAME, MADE_WITH } from "@/lib/brand";
 import { END_CARD_HEADING, type EndCardModel } from "@/lib/viewer/end-card";
 import { CREATE_YOURS_HREF } from "@/lib/viewer/share";
+import { VW_CTA_GOLD_END_LANDSCAPE, VW_CTA_GOLD_END_PORTRAIT, VW_END_SHARE_EMERALD } from "./viewer-classes";
 
 export type EndCardProps = {
   isPaid: boolean;
@@ -50,7 +51,7 @@ function PaidEnd({ model, onReplay, onShare }: Omit<EndCardProps, "isPaid" | "fo
   const muted = dark ? "text-white/70" : "text-neutral-500";
   const rule = dark ? "bg-white/40" : "bg-neutral-900/25";
   const outline = dark ? "border border-white/60 text-white" : "border border-neutral-900/30 text-neutral-900";
-  const solid = dark ? "bg-white text-neutral-900" : "bg-[#0e3b2e] text-white hover:bg-[#145240]";
+  const solid = dark ? "bg-white text-neutral-900" : VW_END_SHARE_EMERALD;
   return (
     <div
       className={`absolute inset-0 flex flex-col items-center px-[10cqw] pt-[10cqw] pb-[6cqw] text-center ${ink}`}
@@ -101,7 +102,8 @@ function PaidEnd({ model, onReplay, onShare }: Omit<EndCardProps, "isPaid" | "fo
   );
 }
 
-// Free end card recipes (cqw versions of VW_MESSAGE_EYEBROW / _HEADING / _BODY / VW_CTA_GOLD). The
+// Free end card recipes (cqw versions of VW_MESSAGE_EYEBROW / _HEADING / _BODY; the gold action is
+// VW_CTA_GOLD_END_PORTRAIT / _LANDSCAPE, composed from VW_CTA_GOLD_LOOK). The
 // landscape page is only 148/210 as tall, so it gets a complete compact set (full alternatives: cx
 // doesn't merge conflicting utilities) — the portrait sizes would overflow it.
 const FREE = {
@@ -111,7 +113,7 @@ const FREE = {
     eyebrow: "text-[3.2cqw] font-semibold tracking-[0.24em] text-[#7a5f0e] uppercase",
     heading: "font-display text-[8cqw] leading-tight font-semibold text-[#0e3b2e]",
     body: "text-[4.2cqw] leading-relaxed text-[#4a4740]",
-    cta: "mt-[2cqw] px-[7cqw] py-[3cqw] text-[4.4cqw]",
+    cta: `mt-[2cqw] ${VW_CTA_GOLD_END_PORTRAIT}`,
   },
   landscape: {
     frame: "absolute inset-0 flex items-center justify-center bg-[#ede4d2] p-[4cqw]",
@@ -119,13 +121,9 @@ const FREE = {
     eyebrow: "text-[2.4cqw] font-semibold tracking-[0.24em] text-[#7a5f0e] uppercase",
     heading: "font-display text-[5.6cqw] leading-tight font-semibold text-[#0e3b2e]",
     body: "max-w-[60cqw] text-[3cqw] leading-snug text-[#4a4740]",
-    cta: "mt-[1cqw] px-[6cqw] py-[2cqw] text-[3.2cqw]",
+    cta: `mt-[1cqw] ${VW_CTA_GOLD_END_LANDSCAPE}`,
   },
 } as const;
-/** The gold action's look (VW_CTA_GOLD); size classes come from FREE[shape].cta. Text only inside. */
-const FREE_CTA =
-  "home-foil-fill inline-flex min-h-11 items-center justify-center rounded-full font-brand font-semibold text-[#1b1b1d] shadow-[0_10px_22px_-14px_rgb(0_0_0/0.7),inset_0_1px_0_rgb(255_255_255/0.4)] transition-[filter] outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-[#0e3b2e] focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf5ec] active:brightness-95 motion-reduce:transition-none";
-
 function FreeEnd({ landscape }: { landscape: boolean }) {
   const r = landscape ? FREE.landscape : FREE.portrait;
   return (
@@ -135,7 +133,7 @@ function FreeEnd({ landscape }: { landscape: boolean }) {
         <p className={r.eyebrow}>{MADE_WITH}</p>
         <h2 className={r.heading}>Make your own photobook</h2>
         <p className={r.body}>Upload your photos and {APP_NAME} lays them out for you in minutes.</p>
-        <a href={CREATE_YOURS_HREF} data-testid="end-card-cta" className={`${FREE_CTA} ${r.cta}`}>
+        <a href={CREATE_YOURS_HREF} data-testid="end-card-cta" className={r.cta}>
           Create yours
         </a>
       </div>

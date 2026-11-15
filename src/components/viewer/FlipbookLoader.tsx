@@ -9,6 +9,7 @@ import { createContext, useContext } from "react";
 import { pageAspectStyle } from "@/lib/book/format-style";
 import type { BookFormat } from "@/lib/book/types";
 import type { FlipbookProps } from "./Flipbook";
+import { VW_SKELETON_PAGE } from "./viewer-classes";
 
 export type { FlipbookApi, FlipbookProps, FlipbookReadyInfo } from "./Flipbook";
 
@@ -23,7 +24,7 @@ const LoaderFormat = createContext<BookFormat | null | undefined>(undefined);
 export function FlipbookSkeleton({ format }: { format?: BookFormat | null }) {
   return (
     <div className="flex h-full w-full items-center justify-center" data-testid="flipbook-loading">
-      <div className="aspect-[148/210] h-full max-h-full max-w-full vw-skeleton-pulse rounded-sm bg-[#faf5ec] ring-1 ring-[#e9dfca]" style={pageAspectStyle(format)} />
+      <div className={`aspect-[148/210] h-full max-h-full max-w-full vw-skeleton-pulse ${VW_SKELETON_PAGE}`} style={pageAspectStyle(format)} />
     </div>
   );
 }

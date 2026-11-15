@@ -17,7 +17,9 @@
 //   ViewerShell keeps p-2 sm:p-4). The book's "shadow" is the pool gradient painted here, never a
 //   box-shadow on the book box (page-flip shows one half of a spread alone).
 // - One gold per screen: VW_CTA_GOLD (free end "Create yours", expired Upgrade / "Create your own",
-//   password "Open photobook", not-found create link). Every other primary is VW_CTA_EMERALD.
+//   password "Open photobook", not-found create link) and its cqw size variants on the free end
+//   card, all composed from VW_CTA_GOLD_LOOK. Every other action is emerald (outline, toast, the paid
+//   end card's Share) or the WhatsApp green.
 // - Alternating recipes are complete strings: use one OR the other, never both (cx doesn't merge
 //   conflicting utilities).
 // - User text (title, chapter) keeps dir="auto" on the element / an inner span and labelFontStyle;
@@ -71,13 +73,11 @@ export const VW_BAND_TEXT_BTN =
  * The cream stage (viewer-stage) — paint only. Two background layers: a soft emerald ground-shadow
  * "pool" under the book (low, wide ellipse) over the editor's cream radial vignette. No padding,
  * border or transform here (ViewerShell keeps `relative min-h-0 flex-1 p-2 sm:p-4`). No text sits on
- * the pool; stage text (VW_STAGE_LABEL) is checked against the vignette's darkest edge #ebe2d0.
+ * the stage.
  */
 export const VW_STAGE =
   "bg-[#f4ede0] bg-[radial-gradient(ellipse_44%_7%_at_50%_93%,rgb(14_59_46/0.2)_0%,rgb(14_59_46/0.08)_55%,transparent_100%),radial-gradient(ellipse_75%_65%_at_50%_42%,#fdfaf3_0%,#f4ede0_62%,#ebe2d0_100%)]";
 
-/** Small muted text on the stage (hints, empty states): #56625a ≥ 4.96:1 on the stage edge. */
-export const VW_STAGE_LABEL = "text-xs font-medium text-[#56625a]";
 
 /**
  * Pseudo-fullscreen "Show controls" button floating over the stage (absolute; caller places it with
@@ -89,13 +89,16 @@ export const VW_FLOAT_BTN =
 // ---- Navigation (bottom bar) ---------------------------------------------------------------------
 
 /**
- * The bottom bar row holding the nav pill (and Contents / Share where the layout puts them).
- * Solid #ebe2d0 (the stage vignette's edge colour, so stage and bar read as one surface). Safe-area
- * left/right; the caller adds the bottom inset
- * when no footer follows (paid / pseudo-fullscreen).
+ * The bottom bar row holding the nav pill. Solid #ebe2d0 (the stage vignette's edge colour, so stage
+ * and bar read as one surface). Safe-area left/right and pt-1.5 only: the caller adds exactly one
+ * bottom padding — pb-1.5 when the footer follows, VW_NAV_BAR_PB_SAFE when it is the last row
+ * (paid / pseudo-fullscreen).
  */
 export const VW_NAV_BAR =
-  "flex shrink-0 items-center justify-center gap-2 bg-[#ebe2d0] py-1.5 ps-[max(0.5rem,env(safe-area-inset-left))] pe-[max(0.5rem,env(safe-area-inset-right))]";
+  "flex shrink-0 items-center justify-center gap-2 bg-[#ebe2d0] pt-1.5 ps-[max(0.5rem,env(safe-area-inset-left))] pe-[max(0.5rem,env(safe-area-inset-right))]";
+
+/** VW_NAV_BAR's bottom padding when it is the last row: 6 px or the bottom safe-area inset. */
+export const VW_NAV_BAR_PB_SAFE = "pb-[max(0.375rem,env(safe-area-inset-bottom))]";
 
 /**
  * White pill holding prev / counter / next: exactly 44 px tall (its buttons are size-11). Hairline
@@ -115,19 +118,12 @@ export const VW_NAV_BTN =
 export const VW_COUNTER_PILL =
   "min-w-[4.5rem] px-1 text-center text-sm font-semibold whitespace-nowrap text-[#0e3b2e] tabular-nums";
 
-/**
- * Chapter chip on a light surface (contents current marker, desktop stage label). Not a button —
- * for a tappable chip wrap it in a 44 px target. Emerald on mint 10.62:1. Holds user text: put
- * dir="auto" on an inner span; no letter-spacing.
- */
-export const VW_CHAPTER_PILL =
-  "inline-flex h-7 max-w-full min-w-0 items-center truncate rounded-full bg-[#e6efe9] px-3 text-xs font-semibold text-[#0e3b2e]";
 
 // ---- Cards and sheets -----------------------------------------------------------------------------
 
-/** White card on cream / ivory (share options group, message details). */
-export const VW_CARD =
-  "rounded-2xl bg-white text-[#1b1b1d] ring-1 ring-[#e9dfca] shadow-[0_14px_32px_-22px_rgb(14_59_46/0.5)]";
+
+/** The viewer shell's root fill behind every row (the stage edge / nav bar colour). No text on it. */
+export const VW_SHELL_BG = "bg-[#ebe2d0]";
 
 /** Sheet backdrop (the full-screen close button behind the panel). */
 export const VW_SHEET_BACKDROP = "absolute inset-0 bg-[#0e3b2e]/45";
@@ -166,15 +162,29 @@ export const VW_MUTED = "text-sm text-[#4a4740]";
 // ---- Calls to action -----------------------------------------------------------------------------
 
 /**
- * The screen's ONE gold action (on a light surface): foil fill, ink 6.44:1 on its darkest stop.
- * 44 px. Emerald focus ring (gold is fill-only on light). No press transform.
+ * The gold look shared by every gold action: foil fill, ink 6.44:1 on its darkest stop, shadow, the
+ * emerald focus ring on ivory (gold is fill-only on light), 44 px min. No press transform. No size,
+ * gap or disabled state — use one of the composed recipes below, never this alone or two together.
  */
-export const VW_CTA_GOLD =
-  "home-foil-fill inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 font-brand text-sm font-semibold text-[#1b1b1d] shadow-[0_10px_22px_-14px_rgb(0_0_0/0.7),inset_0_1px_0_rgb(255_255_255/0.4)] transition-[filter] outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-[#0e3b2e] focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf5ec] active:brightness-95 disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none";
+export const VW_CTA_GOLD_LOOK =
+  "home-foil-fill inline-flex min-h-11 items-center justify-center rounded-full font-brand font-semibold text-[#1b1b1d] shadow-[0_10px_22px_-14px_rgb(0_0_0/0.7),inset_0_1px_0_rgb(255_255_255/0.4)] transition-[filter] outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-[#0e3b2e] focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf5ec] active:brightness-95 motion-reduce:transition-none";
 
-/** Emerald solid action: white on #0e3b2e 12.47:1, 44 px. */
-export const VW_CTA_EMERALD =
-  "inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-[#0e3b2e] px-5 text-sm font-semibold text-white shadow-[0_10px_22px_-14px_rgb(14_59_46/0.9)] transition-colors outline-none hover:bg-[#145240] focus-visible:ring-2 focus-visible:ring-[#0e3b2e] focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf5ec] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none";
+/** The screen's ONE gold action on a message screen / form: VW_CTA_GOLD_LOOK at 14 px text, 20 px sides. */
+export const VW_CTA_GOLD = `${VW_CTA_GOLD_LOOK} gap-2 px-5 text-sm disabled:cursor-not-allowed disabled:opacity-60`;
+
+/** The free end card's gold "Create yours" on an A5 portrait page (cqw of the page). Text only inside. */
+export const VW_CTA_GOLD_END_PORTRAIT = `${VW_CTA_GOLD_LOOK} px-[7cqw] py-[3cqw] text-[4.4cqw]`;
+
+/** The same on an A5 landscape page (compact cqw set). Use instead of (not with) the portrait one. */
+export const VW_CTA_GOLD_END_LANDSCAPE = `${VW_CTA_GOLD_LOOK} px-[6cqw] py-[2cqw] text-[3.2cqw]`;
+
+/** The paid end card's Share on a light page background: white on emerald 12.47:1 (hover #145240 10.4:1). */
+export const VW_END_SHARE_EMERALD = "bg-[#0e3b2e] text-white hover:bg-[#145240]";
+
+/** "Link copied" toast (fixed, over any surface): white on solid emerald 12.47:1. Not tappable. */
+export const VW_TOAST =
+  "rounded-full bg-[#0e3b2e] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_14px_32px_-16px_rgb(14_59_46/0.8)]";
+
 
 /** Emerald outline action on ivory / white: emerald 11.48:1 on ivory, 44 px (2 px border inside the 44). */
 export const VW_CTA_EMERALD_OUTLINE =
@@ -218,6 +228,35 @@ export const VW_MESSAGE_HEADING = "font-display text-2xl leading-tight font-semi
 
 /** Card body text: ink-soft 8.53:1 on ivory. */
 export const VW_MESSAGE_BODY = "text-sm leading-relaxed text-[#4a4740]";
+
+/** Emerald seal holding a message screen's state icon (pale gold on emerald 7.50:1). Decorative span. */
+export const VW_MESSAGE_SEAL =
+  "mx-auto flex size-14 items-center justify-center rounded-full bg-[#0e3b2e] text-[#e3c766] shadow-[0_10px_22px_-14px_rgb(14_59_46/0.9),inset_0_0_0_1px_rgb(227_199_102/0.35)]";
+
+/** The brand link under the card, on the leather: cream 7.19:1 on its lightest point, 44 px, gold focus ring. */
+export const VW_MESSAGE_BRAND_LINK =
+  "inline-flex min-h-11 items-center rounded-full px-3 font-display text-base font-semibold text-[#f2e8d8] outline-none hover:underline focus-visible:ring-2 focus-visible:ring-[#e3c766] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0e3b2e]";
+
+/** Form label on the cream card: ink 15.84:1 on ivory. */
+export const VW_FIELD_LABEL = "text-sm font-semibold text-[#1b1b1d]";
+
+/**
+ * Text field on the cream card: white, ink text, #8c8270 hairline 3.49:1 (non-text ≥ 3), emerald
+ * focus ring, red border when aria-invalid. 44 px.
+ */
+export const VW_INPUT =
+  "h-11 w-full rounded-xl border border-[#8c8270] bg-white px-3 text-base text-[#1b1b1d] outline-none transition-[box-shadow,border-color] focus-visible:border-[#0e3b2e] focus-visible:ring-2 focus-visible:ring-[#0e3b2e]/35 aria-invalid:border-[#b42318] motion-reduce:transition-none";
+
+/** Field error text on the cream card: #b42318 on ivory. */
+export const VW_FIELD_ERROR = "text-sm font-medium text-[#b42318]";
+
+// ---- Loader --------------------------------------------------------------------------------------
+
+/**
+ * The flipbook skeleton page: ivory with a hairline on the cream stage (decorative, no text). The
+ * caller adds sizing and vw-skeleton-pulse (opacity only).
+ */
+export const VW_SKELETON_PAGE = "rounded-sm bg-[#faf5ec] ring-1 ring-[#e9dfca]";
 
 // ---- Contents rows (M23 T3) ----------------------------------------------------------------------
 

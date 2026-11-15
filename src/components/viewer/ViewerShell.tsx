@@ -36,10 +36,12 @@ import {
   VW_BAND_TEXT_BTN,
   VW_FLOAT_BTN,
   VW_NAV_BAR,
+  VW_NAV_BAR_PB_SAFE,
   VW_NAV_BTN,
   VW_NAV_PILL,
   VW_STAGE,
   VW_SUBLINE,
+  VW_SHELL_BG,
   VW_TITLE,
   VW_TITLE_WRAP,
 } from "./viewer-classes";
@@ -169,7 +171,7 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
   const navBar = (
     <nav
       aria-label="Book navigation"
-      className={cx(VW_NAV_BAR, isPaid || pseudo ? "pb-[max(0.375rem,env(safe-area-inset-bottom))]" : null)}
+      className={cx(VW_NAV_BAR, isPaid || pseudo ? VW_NAV_BAR_PB_SAFE : "pb-1.5")}
       data-testid="viewer-bottom-bar"
     >
       <div className={VW_NAV_PILL}>
@@ -187,7 +189,7 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
   return (
     <div
       ref={rootRef}
-      className={`flex h-dvh w-full flex-col overflow-hidden bg-[#ebe2d0] ${pseudo ? "fixed inset-0 z-40" : "relative"}`}
+      className={cx("flex h-dvh w-full flex-col overflow-hidden", VW_SHELL_BG, pseudo ? "fixed inset-0 z-40" : "relative")}
       data-testid="viewer-shell"
       data-paid={String(isPaid)}
       data-fullscreen={fs.mode}
