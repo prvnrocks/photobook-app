@@ -78,6 +78,7 @@ function makeDb(initial: {
     doc_rev: 0,
     format: "A5_PORTRAIT",
     design_style: "classic",
+    album_confirmed_at: null,
     updated_at: "2026-11-08T10:00:00.000001+00:00",
   };
   const photos = initial.photos.map((p) => ({ ...p }));

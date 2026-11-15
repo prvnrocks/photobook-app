@@ -207,3 +207,4 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - Tests: npm test 7539; live e2e green except upload-auth Mapbox (pre-existing); m13-first-run 5 taps, editor 64 s / 40 photos. Reviewer APPROVED. /books/new 178 kB.
 - Open: generated book can reopen Review (needs per-book confirmed marker + migration); Mapbox token.
 - 2026-11-15 M20b: prod (AI off) jumped to editor after upload — fixed: every mode goes Sorting → Review; upload screen upload-only. Tested AI off + replay. Lesson: always e2e AI_MODE=off too.
+- 2026-11-15 M20c: books.album_confirmed_at (migration 2000, applied to prod) — generated books always open the editor; Back-from-editor hint + loading escape. Tested AI off + replay. NEEDS-HUMAN: iPhone Safari Back.

@@ -13,6 +13,7 @@ import { BookFormatSchema, DEFAULT_DESIGN_STYLE, DesignStyleSchema, parseBookDoc
 import { stripPhotoFromDoc, type StripPhotoDims } from "@/lib/book/strip-photos";
 import { hasAiPhotoBackground, pruneAiBackgrounds } from "@/lib/design/background-suggest";
 import { listPhotoDims, listPlaceablePhotos, PHOTOS_BUCKET, REVIEW_URL_TTL_SECONDS } from "@/lib/db/photos";
+import { albumConfirmedOf } from "@/lib/books/wizard-gate";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Json, Tables } from "@/lib/supabase/database.types";
@@ -45,6 +46,8 @@ export type BookListItem = Pick<
   photo_count: number;
   /** doc.meta.userEdited === true (read as a JSON path, the doc itself is not loaded). */
   user_edited: boolean;
+  /** books.album_confirmed_at is set (migration 2000, M20c) — the card never opens the wizard. */
+  album_confirmed: boolean;
   /** books.format (migration 1900, D-063); an unknown value reads as the column default. */
   format: BookFormat;
   /** books.design_style (migration 1900, D-063); an unknown value reads as the column default. */
@@ -87,6 +90,13 @@ export type MyBook = Pick<
    */
   format: string | null;
   design_style: string | null;
+  /**
+   * books.album_confirmed_at (migration 2000, M20c): set once by "Generate album"
+   * (confirmAlbumAction → markAlbumConfirmed). Non-null = the book never shows the wizard again
+   * (resolveWizardStep → "editor"). Server-only column (2000 column guard). No pre-2000 fallback:
+   * migration 2000 must be applied before this code.
+   */
+  album_confirmed_at: string | null;
 };
 
 export type CreateBookInput = {
@@ -140,7 +150,7 @@ export async function listMyBooks(): Promise<BookListItem[]> {
 // No pre-1900 retry for format / design_style: like published_doc (pre-1000), the list assumes
 // the migration is applied everywhere (M10b is deployed).
 const BOOK_LIST_COLUMNS =
-  "id, title, updated_at, page_count, published_at, is_paid, ai_status, slug, expires_at, draft_warning_sent_at, format, design_style, user_edited:doc->meta->userEdited, generator:doc->meta->>generator, cover_title:doc->cover->>title, live:published_doc->version, cover_photo:doc->cover->>photoId, first_photo:doc->pages->0->slots->0->>photoId, photos(count)";
+  "id, title, updated_at, page_count, published_at, is_paid, ai_status, slug, expires_at, draft_warning_sent_at, format, design_style, album_confirmed_at, user_edited:doc->meta->userEdited, generator:doc->meta->>generator, cover_title:doc->cover->>title, live:published_doc->version, cover_photo:doc->cover->>photoId, first_photo:doc->pages->0->slots->0->>photoId, photos(count)";
 
 /** Same lifetime as the other thumb-only list (review grid). */
 export const COVER_THUMB_TTL_SECONDS = REVIEW_URL_TTL_SECONDS;
@@ -150,8 +160,9 @@ const COVER_ID_CHUNK = 100;
 
 type BookListRow = Omit<
   BookListItem,
-  "photo_count" | "user_edited" | "published" | "format" | "designStyle" | "coverThumbUrl" | "displayTitle"
+  "photo_count" | "user_edited" | "album_confirmed" | "published" | "format" | "designStyle" | "coverThumbUrl" | "displayTitle"
 > & {
+  album_confirmed_at?: unknown;
   /** doc->meta->>generator / doc->cover->>title (text or null) — only for displayTitle. */
   generator?: unknown;
   cover_title?: unknown;
@@ -246,6 +257,7 @@ function toBookListItem(row: BookListRow, coverThumbUrl: string | null): BookLis
     published: row.live !== null && row.live !== undefined,
     photo_count: typeof count === "number" && Number.isFinite(count) ? count : 0,
     user_edited: row.user_edited === true,
+    album_confirmed: albumConfirmedOf(row.album_confirmed_at),
     format: format.success ? format.data : DEFAULT_FORMAT,
     designStyle: designStyle.success ? designStyle.data : DEFAULT_DESIGN_STYLE,
     coverThumbUrl,
@@ -399,7 +411,7 @@ export async function getMyBook(id: string): Promise<MyBook | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("books")
-    .select(`${MY_BOOK_COLUMNS}, doc_rev, format, design_style`)
+    .select(`${MY_BOOK_COLUMNS}, doc_rev, format, design_style, album_confirmed_at`)
     .eq("id", id)
     .maybeSingle();
 
@@ -410,7 +422,41 @@ export async function getMyBook(id: string): Promise<MyBook | null> {
 
   const legacy = await supabase.from("books").select(MY_BOOK_COLUMNS).eq("id", id).maybeSingle();
   if (legacy.error) throw new BooksQueryError("load book", legacy.error.code);
-  return legacy.data ? { ...legacy.data, doc_rev: null, format: null, design_style: null } : null;
+  // album_confirmed_at is not an optional column (2000 is applied before this code): only reached
+  // in the pre-0900 / pre-1900 window, where 2000 can't be applied either.
+  return legacy.data ? { ...legacy.data, doc_rev: null, format: null, design_style: null, album_confirmed_at: null } : null;
+}
+
+export type MarkAlbumConfirmedResult = "marked" | "already" | "not_found";
+
+/**
+ * "Generate album" (M20c): records books.album_confirmed_at = now() once — one UPDATE … WHERE id
+ * AND user_id = ownerId AND album_confirmed_at IS NULL (an earlier confirm keeps its time). The
+ * column is server-only (2000 column guard), so the write uses the admin client; callers MUST
+ * have loaded the book with getMyBook (RLS = ownership) first — the owner filter keeps the admin
+ * write scoped. 0 rows → a follow-up owner read tells "already" from "not_found".
+ */
+export async function markAlbumConfirmed(bookId: string, ownerId: string): Promise<MarkAlbumConfirmedResult> {
+  if (!isUuid(bookId) || !isUuid(ownerId)) return "not_found";
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("books")
+    .update({ album_confirmed_at: new Date().toISOString() })
+    .eq("id", bookId)
+    .eq("user_id", ownerId)
+    .is("album_confirmed_at", null)
+    .select("id");
+  if (error) throw new BooksQueryError("confirm album", error.code);
+  if (data.length === 1) return "marked";
+
+  const { data: existing, error: readError } = await admin
+    .from("books")
+    .select("id")
+    .eq("id", bookId)
+    .eq("user_id", ownerId)
+    .maybeSingle();
+  if (readError) throw new BooksQueryError("confirm album", readError.code);
+  return existing ? "already" : "not_found";
 }
 
 /** Columns of not-yet-applied migrations that readers tolerate (0900 doc_rev, 1900 format/style). */

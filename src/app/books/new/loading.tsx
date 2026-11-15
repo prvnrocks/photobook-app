@@ -5,6 +5,7 @@
 import { Skeleton } from "@/components/app/Skeleton";
 import { LIBRARY_CONTAINER } from "@/components/dashboard/library-classes";
 import { AppHeaderPlaceholder } from "@/components/layout/AppHeader";
+import { LoadingEscape } from "./LoadingEscape";
 
 export default function Loading() {
   return (
@@ -13,6 +14,7 @@ export default function Loading() {
       <main className="flex w-full flex-1 flex-col">
         <div role="status" aria-live="polite" className="flex w-full flex-1 flex-col" data-testid="page-skeleton">
           <span className="sr-only">Loading…</span>
+          <LoadingEscape />
           <div className="home-leather relative overflow-hidden">
             <div className={`${LIBRARY_CONTAINER} pt-5 pb-4 sm:pt-8 sm:pb-7 lg:pt-9 lg:pb-8`}>
               <div className="h-3 w-24 rounded-full bg-white/15" />

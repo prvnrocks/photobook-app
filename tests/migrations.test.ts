@@ -2747,10 +2747,9 @@ describe("migrations: Milestone 10b design columns (1900, D-063)", () => {
   };
   const raw = m ? readFileSync(join(MIGRATIONS_DIR, name), "utf8") : "";
 
-  it("exists right after 1800, is the latest migration, additive only, migration-first header", () => {
+  it("exists right after 1800, additive only, migration-first header", () => {
     expect(m, `${name} missing`).toBeDefined();
     expect(files.indexOf(name)).toBe(files.indexOf("20261114001800_warning_confirm.sql") + 1);
-    expect(files.at(-1)).toBe(name);
     expect(sql).not.toMatch(/\bdrop\b/);
     expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
     expect(sql).not.toMatch(/\bcreate\s+(policy|table|trigger)\b/);
@@ -2779,9 +2778,8 @@ describe("migrations: Milestone 10b design columns (1900, D-063)", () => {
     expect(flat).toContain(`check (design_style in (${styles.map((x) => `'${x}'`).join(", ")}))`);
   });
 
-  it("protect_book_columns (latest = 1900) keeps every 1800 assignment; format / design_style insert-only", () => {
+  it("protect_book_columns (1900, superseded by 2000) keeps every 1800 assignment; format / design_style insert-only", () => {
     const f = fn("private.protect_book_columns")!;
-    expect(latestFunction("private.protect_book_columns")!.body).toBe(f.body);
     expect(f.header).not.toMatch(/security\s+definer/);
     expect(f.header).toMatch(/set\s+search_path\s*=\s*''/);
     const body = ws(f.body);
@@ -2823,18 +2821,76 @@ describe("migrations: Milestone 10b design columns (1900, D-063)", () => {
     expect(flat).toContain("when x.doc -> 'style' ->> 'designstyle' in ('classic', 'modern', 'geometric', 'scrapbook')");
   });
 
-  it("rls_check.sql covers 1900 and counts 175 checks", () => {
+  it("rls_check.sql covers 1900 (175 checks then; 2000 → 176)", () => {
     const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
     expect(rls).toContain(name);
     for (const tag of ["design backfill", "design insert", "design update", "photo color"]) {
       expect(rls).toContain(`RLS FAIL [${tag}]`);
     }
-    expect(rls).toContain("RLS OK — all 175 checks passed");
   });
 
   it("database.types.ts: books.format / design_style + photos.color (hand-edited)", () => {
     const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
     expect(types).toMatch(/books: \{\s*Row: \{[\s\S]*?design_style: string\n[\s\S]*?format: string\n[\s\S]*?\}\s*Insert: \{[\s\S]*?design_style\?: string[\s\S]*?format\?: string/);
     expect(types).toMatch(/photos: \{\s*Row: \{[\s\S]*?color: string \| null[\s\S]*?\}\s*Insert:/);
+  });
+});
+
+describe("migrations: Milestone 20c album confirmed marker (2000, D-072)", () => {
+  const name = "20261115002000_album_confirmed.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const ws = (s: string) => s.replace(/\s+/g, " ");
+  const flat = ws(sql);
+  const fns = matchesAll(/create\s+(?:or\s+replace\s+)?function\s+([\w.]+)\s*\(([\s\S]*?)\bas\s+\$\$([\s\S]*?)\$\$/, sql).map(
+    (x) => ({ name: x[1], header: x[2], body: x[3] }),
+  );
+  const fn = (n: string) => fns.find((x) => x.name === n);
+  const raw = m ? readFileSync(join(MIGRATIONS_DIR, name), "utf8") : "";
+
+  it("exists right after 1900, is the latest migration, additive only, migration-first header", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files.indexOf(name)).toBe(files.indexOf("20261115001900_design.sql") + 1);
+    expect(files.at(-1)).toBe(name);
+    expect(sql).not.toMatch(/\bdrop\b/);
+    expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
+    expect(sql).not.toMatch(/\bcreate\s+(policy|table|trigger)\b/);
+    expect(sql).not.toMatch(/\b(grant|revoke)\s+[a-z_\s,()]+\s+on\s+(?:table\s+)?(public|private)\./);
+    expect(sql).not.toMatch(/security\s+definer/);
+    expect(sql).not.toMatch(/\bupdate\s+public\./); // no backfill
+    expect(fns.map((f) => f.name)).toEqual(["private.protect_book_columns"]);
+    expect(raw).toContain("apply BEFORE the M20c code");
+  });
+
+  it("adds books.album_confirmed_at (nullable timestamptz, no default)", () => {
+    expect(flat).toContain("alter table public.books add column album_confirmed_at timestamptz;");
+  });
+
+  it("protect_book_columns (latest = 2000) keeps every 1900 assignment; album_confirmed_at server-only", () => {
+    const f = fn("private.protect_book_columns")!;
+    expect(latestFunction("private.protect_book_columns")!.body).toBe(f.body);
+    expect(f.header).not.toMatch(/security\s+definer/);
+    expect(f.header).toMatch(/set\s+search_path\s*=\s*''/);
+    const body = ws(f.body);
+    expect(body).toContain("if current_user in ('postgres', 'service_role', 'supabase_admin') then return new; end if;");
+    const defs = functions.filter((x) => x.name === "private.protect_book_columns");
+    const prev = ws(defs[defs.findIndex((x) => x.body === f.body) - 1]!.body);
+    for (const a of prev.match(/new\.\w+ := [^;]+;/g)!) expect(body, a).toContain(a);
+    const [ins, upd] = body.split("elsif tg_op = 'update' then");
+    expect(ins).toContain("new.album_confirmed_at := null;");
+    expect(upd).toContain("new.album_confirmed_at := old.album_confirmed_at;");
+    expect(flat).toContain("revoke all on function private.protect_book_columns() from public, anon, authenticated;");
+  });
+
+  it("rls_check.sql covers 2000 and counts 176 checks", () => {
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain(name);
+    expect(rls).toContain("RLS FAIL [album confirmed]");
+    expect(rls).toContain("RLS OK — all 176 checks passed");
+  });
+
+  it("database.types.ts: books.album_confirmed_at (hand-edited)", () => {
+    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
+    expect(types).toMatch(/books: \{\s*Row: \{[\s\S]*?album_confirmed_at: string \| null\n[\s\S]*?\}\s*Insert: \{[\s\S]*?album_confirmed_at\?: string \| null[\s\S]*?\}\s*Update: \{[\s\S]*?album_confirmed_at\?: string \| null/);
   });
 });

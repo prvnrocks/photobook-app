@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { buildRuleDraft, type DraftPhotoRow } from "@/lib/book/rule-draft";
-import { resolveWizardStep, type WizardGateInput } from "@/lib/books/wizard-gate";
+import { albumConfirmedOf, resolveWizardStep, type WizardGateInput } from "@/lib/books/wizard-gate";
 
 vi.mock("server-only", () => ({}));
 
@@ -148,6 +148,7 @@ const FRESH: WizardGateInput = {
   readError: false,
   detailsLock: null,
   docOrigin: { generator: "none", userEdited: false },
+  albumConfirmed: false,
 };
 const g = (patch: Partial<WizardGateInput>) => resolveWizardStep({ ...FRESH, ...patch });
 
@@ -205,6 +206,32 @@ describe("resolveWizardStep (G2 + G3)", () => {
     }
     // detailsLock "user_edited" alone is enough
     expect(g({ requested: 3, detailsLock: "user_edited" })).toBe("editor");
+  });
+
+  it("M20c: album confirmed → editor for every requested step (1–7, clamped too), whatever the run / doc", () => {
+    const states: Partial<WizardGateInput>[] = [
+      {},
+      { docOrigin: { generator: "rule", userEdited: false } },
+      { hasRun: true, detailsLock: "ai_started", docOrigin: { generator: "ai", userEdited: false } },
+      { hasRun: true, detailsLock: "ai_started", docOrigin: { generator: "rule", userEdited: false }, aiOn: false },
+      { hasRun: true, active: true, activeTrigger: "build", detailsLock: "ai_started" },
+      { hasRun: true, active: true, activeTrigger: "rebuild", detailsLock: "ai_started" },
+      { readError: true },
+      { readError: true, detailsLock: "ai_started" },
+      { detailsLock: "ai_started", docOrigin: { generator: "ai", userEdited: false } },
+    ];
+    for (const st of states) {
+      for (const requested of [1, 2, 3, 4, 5, 6, 7, 0, 99]) {
+        expect(g({ ...st, requested, albumConfirmed: true }), JSON.stringify({ st, requested })).toBe("editor");
+      }
+    }
+    // the unconfirmed answers are unchanged (e.g. finished run → 7)
+    expect(g({ requested: 7, hasRun: true, detailsLock: "ai_started", docOrigin: { generator: "ai", userEdited: false } })).toBe(7);
+  });
+
+  it("M20c: albumConfirmedOf — only a non-empty timestamp string counts", () => {
+    expect(albumConfirmedOf("2026-11-15T10:00:00Z")).toBe(true);
+    for (const v of [null, undefined, "", 0, 1, true, {}]) expect(albumConfirmedOf(v)).toBe(false);
   });
 
   it("details locked (AI album, run row gone) + requested ≤5 → 7", () => {
@@ -421,6 +448,21 @@ describe("loadWizardStep — step 7 (review page parity)", () => {
   it("a run-exists read error doesn't bounce a loaded review to step 6", async () => {
     mocks.hasAnyRunForBook.mockRejectedValue(new Error("x"));
     expect(await loadWizardStep(BOOK_ID, 7)).toMatchObject({ resolved: 7 });
+  });
+
+  it("M20c: loaders pass album_confirmed_at to the gate — confirmed → resolved editor on 5, 6 and 7", async () => {
+    mocks.hasAnyRunForBook.mockResolvedValue(true);
+    mocks.getMyBook.mockResolvedValue(book({ doc: ruleDraft(), album_confirmed_at: "2026-11-15T11:00:00.000Z" }));
+    for (const step of [5, 6, 7] as const) {
+      expect(await loadWizardStep(BOOK_ID, step), `step ${step}`).toMatchObject({ resolved: "editor" });
+    }
+    // same book unconfirmed → Review as before
+    mocks.getMyBook.mockResolvedValue(book({ doc: ruleDraft(), album_confirmed_at: null }));
+    expect(await loadWizardStep(BOOK_ID, 7)).toMatchObject({ resolved: 7 });
+    // a fresh confirmed book (no run) still never shows the wizard
+    mocks.hasAnyRunForBook.mockResolvedValue(false);
+    mocks.getMyBook.mockResolvedValue(book({ album_confirmed_at: "2026-11-15T11:00:00.000Z" }));
+    expect(await loadWizardStep(BOOK_ID, 5)).toMatchObject({ resolved: "editor" });
   });
 
   it("user-edited album: userEdited true, resolved editor", async () => {

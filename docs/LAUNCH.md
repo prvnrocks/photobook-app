@@ -172,8 +172,12 @@ Preview origin (e.g. the branch alias of a `staging` branch) that is also in the
       `photos.color`, and backfills format / style from each book's doc without touching doc, doc_rev or
       updated_at. The M10a code never names the new columns, so it keeps working after 1900; the M10b code
       inserts / reads them and fails without it. Rolling the code back to M10a later needs no DB change.
+- [ ] **M20c: push `20261115002000_album_confirmed.sql` BEFORE deploying the M20c code** (migration first, then code).
+      It adds server-only `books.album_confirmed_at` (set once by "Generate album"; the owner can neither set
+      nor clear it). The M20c code selects it in `getMyBook` with no fallback, so M20c code without 2000 fails
+      on every book page / action; older code never names it and keeps working after 2000.
 - [ ] Supabase → SQL Editor → paste the whole of `supabase/tests/rls_check.sql` → Run. Expected: an error panel
-      starting with **`RLS OK — all 175 checks passed`** (173 before 1900) (raised on purpose; it rolls everything back). Anything
+      starting with **`RLS OK — all 176 checks passed`** (175 before 2000, 173 before 1900) (raised on purpose; it rolls everything back). Anything
       else (`RLS FAIL [...]`, permission denied) is a blocker.
 - [ ] Verify `private.auth_user_email` works (the warning emails depend on it; needs `postgres` to read
       `auth.users`):

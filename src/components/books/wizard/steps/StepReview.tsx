@@ -26,6 +26,7 @@ import {
   type ReactNode,
 } from "react";
 import { confirmAlbumAction, togglePhotoAction, updateAlbumAction } from "@/app/books/[id]/review/actions";
+import { forgetAlbumConfirmed, rememberAlbumConfirmed } from "@/lib/books/wizard-confirmed";
 import { Notice, type NoticeTone } from "@/components/app/Notice";
 import { ReviewGrid } from "@/components/review/ReviewGrid";
 import { WizardHeadline } from "@/components/wizard/WizardHeadline";
@@ -235,11 +236,14 @@ export function StepReview({ data: initial, headlineId, onConfirm, confirming = 
         if (result?.ok) syncedKey.current = key;
         setPhase("opening");
       }
+      // M20c: Back from the editor restores this tree from Next's cache — the wizard leaves it.
+      rememberAlbumConfirmed(bookId);
       try {
         await confirmAlbumAction(bookId);
       } catch (err) {
         // The redirect to the editor (or to sign in) is thrown on purpose: let Next follow it.
         unstable_rethrow(err);
+        forgetAlbumConfirmed(bookId);
         setError(OPEN_FAILED_MESSAGE);
         setPhase("idle");
         return;

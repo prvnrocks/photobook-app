@@ -28,7 +28,7 @@ import {
   loadReviewState,
   uploadExisting,
 } from "./step-data";
-import { resolveWizardStep, type WizardGateInput, type WizardTarget } from "./wizard-gate";
+import { albumConfirmedOf, resolveWizardStep, type WizardGateInput, type WizardTarget } from "./wizard-gate";
 
 /** Steps whose data comes from the server (1–4 are the client form). */
 export const WIZARD_DATA_STEPS = [5, 6, 7] as const;
@@ -149,6 +149,7 @@ function gate(
     readError: runs.readError,
     detailsLock: detailsLockReason({ hasRun: runs.hasRun || runs.active !== null, doc: book.doc }),
     docOrigin: { generator, userEdited: albumEditedByUser(book.doc) },
+    albumConfirmed: albumConfirmedOf(book.album_confirmed_at),
     aiOn,
   };
   return resolveWizardStep(input);

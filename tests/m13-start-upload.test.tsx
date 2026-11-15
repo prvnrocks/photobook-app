@@ -197,8 +197,9 @@ describe("UploadSummary next step + Uploader", () => {
     expect(page).toContain("const title = displayBookTitle(book.title, book.doc);");
     expect(page).toContain("title={title}");
     expect(page).not.toContain("Untitled book");
-    // M20 T9: a fresh book (isWizardUpload) is redirected into wizard step 5 before any rendering.
-    expect(page).toMatch(/uploadEntryRedirect\(\{\s*bookId: book\.id,\s*firstRun,\s*detailsLock: detailsLockReason\(\{ hasRun, doc: book\.doc \}\),\s*\}\);\s*if \(wizardHref\) redirect\(wizardHref\);/);
+    // M20 T9: a fresh book (isWizardUpload) is redirected into wizard step 5 before any rendering
+    // (M20c: never a confirmed book).
+    expect(page).toMatch(/uploadEntryRedirect\(\{\s*bookId: book\.id,\s*firstRun,\s*detailsLock: detailsLockReason\(\{ hasRun, doc: book\.doc \}\),\s*albumConfirmed: albumConfirmedOf\(book\.album_confirmed_at\),\s*\}\);\s*if \(wizardHref\) redirect\(wizardHref\);/);
     expect(page).toContain('const firstRun: FirstRunState = active ? "active" : hasRun ? "done" : "none";');
   });
 });

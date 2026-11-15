@@ -44,7 +44,7 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: async () => fake.client 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => fake.admin }));
 vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: async () => fake.state.user }));
 
-const { saveDocIfRev, getMyBook, writeDocIfEmpty, BooksQueryError, listMyBooks, getMyBookTitle } = await import("@/lib/db/books");
+const { saveDocIfRev, getMyBook, writeDocIfEmpty, BooksQueryError, listMyBooks, getMyBookTitle, markAlbumConfirmed } = await import("@/lib/db/books");
 
 const B = "22222222-2222-4222-8222-222222222222";
 const U = "33333333-3333-4333-8333-333333333333";
@@ -184,7 +184,7 @@ describe("getMyBook (deploy-order tolerant)", () => {
       { data: null, error: { code: "42703", message: "column books.doc_rev does not exist" } },
       { data: { id: B, doc: {} }, error: null },
     );
-    expect(await getMyBook(B)).toEqual({ id: B, doc: {}, doc_rev: null, format: null, design_style: null });
+    expect(await getMyBook(B)).toEqual({ id: B, doc: {}, doc_rev: null, format: null, design_style: null, album_confirmed_at: null });
     expect(fake.state.chains).toHaveLength(2);
     expect(String(fake.state.chains[1].calls[0][1])).not.toMatch(/doc_rev/);
   });
@@ -199,7 +199,7 @@ describe("getMyBook (deploy-order tolerant)", () => {
       { data: null, error: { code: "42703", message: "column books.design_style does not exist" } },
       { data: { id: B, doc: {} }, error: null },
     );
-    expect(await getMyBook(B)).toEqual({ id: B, doc: {}, doc_rev: null, format: null, design_style: null });
+    expect(await getMyBook(B)).toEqual({ id: B, doc: {}, doc_rev: null, format: null, design_style: null, album_confirmed_at: null });
     expect(String(fake.state.chains[1].calls[0][1])).not.toMatch(/doc_rev|format|design_style/);
   });
 
@@ -215,6 +215,17 @@ describe("getMyBook (deploy-order tolerant)", () => {
     // A missing-column code without a message naming doc_rev is not the deploy window either.
     fake.state.results.push({ data: null, error: { code: "PGRST204" } });
     await expect(getMyBook(B)).rejects.toBeInstanceOf(BooksQueryError);
+  });
+
+  it("M20c: selects album_confirmed_at; a missing column (2000 not applied) is NOT tolerated", async () => {
+    fake.state.results.push({ data: { id: B, album_confirmed_at: TS }, error: null });
+    expect(await getMyBook(B)).toEqual({ id: B, album_confirmed_at: TS });
+    expect(String(fake.state.chains[0].calls[0][1])).toMatch(/\balbum_confirmed_at\b/);
+
+    fake.state.chains = [];
+    fake.state.results.push({ data: null, error: { code: "42703", message: "column books.album_confirmed_at does not exist" } });
+    await expect(getMyBook(B)).rejects.toBeInstanceOf(BooksQueryError);
+    expect(fake.state.chains).toHaveLength(1); // no legacy retry
   });
 
   it("signed out / malformed id → null without a query", async () => {
@@ -283,5 +294,62 @@ describe("listMyBooks publish fields (M6 T8)", () => {
     fake.state.results.push({ data: null, error: null });
     await expect(getMyBookTitle(B)).resolves.toBeNull();
     await expect(getMyBookTitle("nope")).resolves.toBeNull();
+  });
+});
+
+describe("markAlbumConfirmed (M20c)", () => {
+  it("one admin UPDATE scoped to the owner, only while album_confirmed_at is null → marked", async () => {
+    fake.state.results.push({ data: [{ id: B }], error: null });
+    await expect(markAlbumConfirmed(B, U)).resolves.toBe("marked");
+    expect(fake.state.chains).toHaveLength(1);
+    const [c] = fake.state.chains;
+    expect(c).toMatchObject({ client: "admin", table: "books", op: "update" });
+    const payload = c.payload as Record<string, unknown>;
+    expect(Object.keys(payload)).toEqual(["album_confirmed_at"]);
+    expect(Number.isNaN(Date.parse(String(payload.album_confirmed_at)))).toBe(false);
+    expect(c.calls).toEqual([
+      ["eq", "id", B],
+      ["eq", "user_id", U],
+      ["is", "album_confirmed_at", null],
+      ["select", "id"],
+    ]);
+  });
+
+  it("0 rows → owner read tells already (kept the first time) from not_found", async () => {
+    fake.state.results.push({ data: [], error: null }, { data: { id: B }, error: null });
+    await expect(markAlbumConfirmed(B, U)).resolves.toBe("already");
+    expect(fake.state.chains[1]).toMatchObject({ client: "admin", op: "select" });
+    expect(fake.state.chains[1].calls).toEqual([
+      ["select", "id"],
+      ["eq", "id", B],
+      ["eq", "user_id", U],
+      ["maybeSingle"],
+    ]);
+
+    fake.state.chains = [];
+    fake.state.results.push({ data: [], error: null }, { data: null, error: null });
+    await expect(markAlbumConfirmed(B, U)).resolves.toBe("not_found");
+  });
+
+  it("malformed ids → not_found without a query; DB errors throw BooksQueryError", async () => {
+    await expect(markAlbumConfirmed("nope", U)).resolves.toBe("not_found");
+    await expect(markAlbumConfirmed(B, "nope")).resolves.toBe("not_found");
+    expect(fake.state.chains).toHaveLength(0);
+    fake.state.results.push({ data: null, error: { code: "57014" } });
+    await expect(markAlbumConfirmed(B, U)).rejects.toBeInstanceOf(BooksQueryError);
+  });
+});
+
+describe("listMyBooks album_confirmed (M20c)", () => {
+  it("selects album_confirmed_at and maps it to a boolean (absent / null → false)", async () => {
+    const base = { id: B, title: "T", updated_at: TS, page_count: 0, published_at: null, is_paid: false, ai_status: "idle", slug: null, expires_at: null, photos: [{ count: 0 }] };
+    fake.state.results.push({
+      data: [{ ...base, album_confirmed_at: TS }, { ...base, id: "x", album_confirmed_at: null }, { ...base, id: "y" }],
+      error: null,
+    });
+    const books = await listMyBooks();
+    expect(books.map((b) => b.album_confirmed)).toEqual([true, false, false]);
+    expect(books[0]).not.toHaveProperty("album_confirmed_at");
+    expect(String(fake.state.chains[0].calls.find((c) => c[0] === "select")?.[1])).toMatch(/\balbum_confirmed_at\b/);
   });
 });

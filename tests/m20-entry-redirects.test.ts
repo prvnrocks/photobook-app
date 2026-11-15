@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { devPreviewDoc } from "@/lib/book/dev-preview";
 import { docOrigin } from "@/lib/book/replaceable";
+import { parseBookDoc } from "@/lib/book/schema";
 import { detailsLockReason } from "@/lib/book/setup";
 import {
   buildEntryRedirect,
@@ -16,6 +17,7 @@ import {
   type WizardTarget,
 } from "@/lib/books/wizard-routes";
 import { bookCardHref } from "@/lib/dashboard/card-target";
+import { editorRedirect } from "@/lib/editor/page-data";
 import { albumEditedByUser } from "@/lib/review/ui";
 import type { FirstRunState } from "@/lib/upload/auto-build-client";
 
@@ -38,6 +40,10 @@ type World = {
   runExists: boolean;
   activeReadOk: boolean;
   runReadOk: boolean;
+  /** books.album_confirmed_at is set (M20c: "Generate album" ran). */
+  confirmed: boolean;
+  /** Upload-finished photos (the editor's empty-album redirect). */
+  photos: number;
 };
 
 const world = (w: Partial<World> = {}): World => ({
@@ -47,6 +53,8 @@ const world = (w: Partial<World> = {}): World => ({
   runExists: false,
   activeReadOk: true,
   runReadOk: true,
+  confirmed: false,
+  photos: 3,
   ...w,
 });
 
@@ -67,6 +75,7 @@ function buildInput(w: World, q: { trigger?: "build" | "rebuild"; auto?: boolean
     activeReadOk: w.activeReadOk,
     active,
     runExists,
+    albumConfirmed: w.confirmed,
   };
 }
 
@@ -75,7 +84,12 @@ function uploadTarget(w: World): string | null {
   const hasRun = w.runReadOk ? w.runExists || w.active !== null : false;
   const active = w.activeReadOk ? w.active : null;
   const firstRun: FirstRunState = active ? "active" : hasRun ? "done" : "none";
-  return uploadEntryRedirect({ bookId: BOOK, firstRun, detailsLock: detailsLockReason({ hasRun, doc: w.doc }) });
+  return uploadEntryRedirect({
+    bookId: BOOK,
+    firstRun,
+    detailsLock: detailsLockReason({ hasRun, doc: w.doc }),
+    albumConfirmed: w.confirmed,
+  });
 }
 
 /** /books/new?book=&step=5|6|7 hard load: the gate as loadWizardStep computes it (wizard-data.ts). */
@@ -91,8 +105,29 @@ function wizardGate(w: World, step: 5 | 6 | 7): WizardTarget {
     readError: step === 7 ? false : !w.activeReadOk || !w.runReadOk,
     detailsLock: detailsLockReason({ hasRun, doc: w.doc }),
     docOrigin: { generator: docOrigin(w.doc).generator, userEdited: albumEditedByUser(w.doc) },
+    albumConfirmed: w.confirmed,
     aiOn: w.aiOn,
   });
+}
+
+/**
+ * /books/[id]/edit (M20c: modelled, so confirmed worlds prove editor ↔ wizard never loops): the
+ * editor's own redirect (editorRedirect) — a running build → /build, an empty album → upload / build
+ * (wizard hrefs only for a never-built, unconfirmed book). The editor's reads: the active run as
+ * stored (its read throws instead of guessing), hasBuildRun read error → true.
+ */
+function editorTarget(w: World): string | null {
+  const isEmpty = typeof w.doc === "object" && w.doc !== null && Object.keys(w.doc).length === 0;
+  const docError = isEmpty ? ("empty" as const) : parseBookDoc(w.doc).ok ? null : ("invalid" as const);
+  return editorRedirect({
+    book: { id: BOOK } as never,
+    activeBuildRunId: w.active ? "run" : null,
+    docError,
+    photos: Array.from({ length: w.photos }, () => ({}) as never),
+    hasBuildRun: w.runReadOk ? w.runExists || w.active !== null : true,
+    aiMode: w.aiOn ? "live" : "off",
+    albumConfirmed: w.confirmed,
+  } as Parameters<typeof editorRedirect>[0]);
 }
 
 type Screen =
@@ -101,15 +136,29 @@ type Screen =
   | { kind: "classic-upload" }
   | { kind: "editor" };
 
-/** Follows server redirects from a URL until a page renders. Throws on a loop (or > 6 hops). */
-function follow(w: World, start: string): { screen: Screen; hops: string[] } {
+/**
+ * Follows server redirects from a URL until a page renders. Throws on a loop (or > 6 hops).
+ * `editor`: model the editor's own redirect (default: confirmed worlds only — the pre-M20c
+ * assertions treat the editor as terminal).
+ */
+function follow(
+  w: World,
+  start: string,
+  opts: { editor?: boolean } = {},
+): { screen: Screen; hops: string[] } {
+  const modelEditor = opts.editor ?? w.confirmed;
   const hops: string[] = [];
   let url = start;
   for (let i = 0; i < 6; i++) {
     if (hops.includes(url)) throw new Error(`redirect loop: ${[...hops, url].join(" → ")}`);
     hops.push(url);
     const u = new URL(url, "https://x.test");
-    if (u.pathname === `/books/${BOOK}/edit`) return { screen: { kind: "editor" }, hops };
+    if (u.pathname === `/books/${BOOK}/edit`) {
+      const to = modelEditor ? editorTarget(w) : null;
+      if (!to) return { screen: { kind: "editor" }, hops };
+      url = to;
+      continue;
+    }
     if (u.pathname === `/books/${BOOK}/upload`) {
       const to = uploadTarget(w);
       if (!to) return { screen: { kind: "classic-upload" }, hops };
@@ -124,6 +173,11 @@ function follow(w: World, start: string): { screen: Screen; hops: string[] } {
       continue;
     }
     if (u.pathname === "/books/new") {
+      // M20c: the page sends a confirmed book to the editor for any step (1–7) before the gate.
+      if (w.confirmed) {
+        url = `/books/${BOOK}/edit`;
+        continue;
+      }
       const step = Number(u.searchParams.get("step")) as 5 | 6 | 7;
       const target = wizardGate(w, step);
       if (target === "editor") url = `/books/${BOOK}/edit`;
@@ -264,7 +318,7 @@ describe("no redirect loops between /books/new and /books/[id]/build", () => {
           for (const activeReadOk of [true, false])
             for (const runReadOk of [true, false]) {
               if (active && !runExists) continue; // an active run is a run
-              worlds.push({ doc, aiOn, active, runExists, activeReadOk, runReadOk });
+              worlds.push(world({ doc, aiOn, active, runExists, activeReadOk, runReadOk }));
             }
 
   const starts = [
@@ -369,5 +423,132 @@ describe("other entry points (one hop)", () => {
     expect(bookCardHref({ ...card, page_count: 12, photo_count: 5, ai_status: "done" })).toBe(`/books/${BOOK}/edit`);
     // a fresh draft's dashboard link renders the wizard without any redirect
     expect(follow(world(), bookCardHref(card)).hops).toHaveLength(1);
+  });
+});
+
+// --- M20c: confirmed album ("Generate album" ran) ------------------------------------------------------
+
+describe("M20c: a confirmed book never lands in the wizard", () => {
+  const confirmedWorlds: World[] = [];
+  for (const doc of Object.values(DOCS))
+    for (const aiOn of [true, false])
+      for (const active of [null, { trigger: "build" as const }, { trigger: "rebuild" as const }])
+        for (const runExists of [false, true])
+          for (const activeReadOk of [true, false])
+            for (const runReadOk of [true, false])
+              for (const photos of [0, 3]) {
+                if (active && !runExists) continue;
+                confirmedWorlds.push({ doc, aiOn, active, runExists, activeReadOk, runReadOk, confirmed: true, photos });
+              }
+
+  const wizardStarts = [1, 2, 3, 4, 5, 6, 7].map((n) => `/books/new?book=${BOOK}&step=${n}`);
+  const starts = [
+    ...wizardStarts,
+    `/books/new?book=${BOOK}&step=6&auto=1`,
+    `/books/${BOOK}/edit`,
+    `/books/${BOOK}/build`,
+    `/books/${BOOK}/build?auto=1`,
+    `/books/${BOOK}/build?trigger=rebuild`,
+    `/books/${BOOK}/build?trigger=rebuild&auto=1`,
+    `/books/${BOOK}/upload`,
+  ];
+
+  it("the gate answers 'editor' for every requested step 1–7, whatever the run / doc state", () => {
+    for (const w of confirmedWorlds) {
+      for (const requested of [1, 2, 3, 4, 5, 6, 7, 0, 9]) {
+        const target = resolveWizardStep({
+          requested,
+          hasRun: w.runExists,
+          active: w.active !== null,
+          activeTrigger: w.active?.trigger ?? null,
+          readError: !w.activeReadOk || !w.runReadOk,
+          detailsLock: detailsLockReason({ hasRun: w.runExists, doc: w.doc }),
+          docOrigin: { generator: docOrigin(w.doc).generator, userEdited: albumEditedByUser(w.doc) },
+          albumConfirmed: true,
+          aiOn: w.aiOn,
+        });
+        expect(target).toBe("editor");
+      }
+      for (const step of [5, 6, 7] as const) expect(wizardGate(w, step)).toBe("editor");
+    }
+  });
+
+  it(`every confirmed world × entry URL settles without a loop and never renders the wizard (${confirmedWorlds.length} worlds)`, () => {
+    for (const w of confirmedWorlds) {
+      for (const start of starts) {
+        const label = `${start} in ${JSON.stringify({ ...w, doc: docOrigin(w.doc) })}`;
+        const { screen, hops } = follow(w, start);
+        expect(screen.kind, label).not.toBe("wizard");
+        // never redirected INTO the wizard (only a start URL may be a wizard URL)
+        expect(hops.slice(1).some((h) => h.startsWith("/books/new")), label).toBe(false);
+        expect(hops.length, label).toBeLessThanOrEqual(4);
+      }
+    }
+  });
+
+  it("a generated book: wizard URLs (and Back into one) → the editor in one redirect", () => {
+    const generated = world({ doc: ai, runExists: true, confirmed: true });
+    for (const start of wizardStarts) {
+      expect(follow(generated, start)).toEqual({ screen: { kind: "editor" }, hops: [start, `/books/${BOOK}/edit`] });
+    }
+    const ruleGenerated = world({ doc: rule, aiOn: false, runExists: true, confirmed: true });
+    expect(follow(ruleGenerated, `/books/new?book=${BOOK}&step=7`).screen).toEqual({ kind: "editor" });
+    // ?auto=1 after the run ended → editor (was: wizard Review)
+    expect(follow(generated, `/books/${BOOK}/build?auto=1`)).toEqual({
+      screen: { kind: "editor" },
+      hops: [`/books/${BOOK}/build?auto=1`, `/books/${BOOK}/edit`],
+    });
+  });
+
+  it("classic rebuild / add-more-photos paths are unchanged for confirmed books", () => {
+    const generated = world({ doc: ai, runExists: true, confirmed: true });
+    // Try AI again
+    expect(follow(generated, `/books/${BOOK}/build?trigger=rebuild`)).toEqual({
+      screen: { kind: "classic-build" },
+      hops: [`/books/${BOOK}/build?trigger=rebuild`],
+    });
+    // a running rebuild opened from the editor / dashboard → classic progress
+    const rebuilding = world({ doc: ai, runExists: true, active: { trigger: "rebuild" }, confirmed: true });
+    expect(follow(rebuilding, `/books/${BOOK}/edit`).screen).toEqual({ kind: "classic-build" });
+    expect(follow(rebuilding, `/books/new?book=${BOOK}&step=6`).screen).toEqual({ kind: "classic-build" });
+    // add more photos
+    expect(follow(generated, `/books/${BOOK}/upload`)).toEqual({ screen: { kind: "classic-upload" }, hops: [`/books/${BOOK}/upload`] });
+    // even a confirmed book that somehow has no run row and an unlocked setup keeps the classic upload
+    expect(uploadTarget(world({ confirmed: true }))).toBeNull();
+  });
+
+  it("an empty confirmed album goes to the classic pages from the editor, never the wizard", () => {
+    expect(follow(world({ confirmed: true, photos: 0 }), `/books/${BOOK}/edit`)).toEqual({
+      screen: { kind: "classic-upload" },
+      hops: [`/books/${BOOK}/edit`, `/books/${BOOK}/upload`],
+    });
+    expect(follow(world({ confirmed: true, photos: 3 }), `/books/${BOOK}/edit`)).toEqual({
+      screen: { kind: "classic-build" },
+      hops: [`/books/${BOOK}/edit`, `/books/${BOOK}/build`],
+    });
+  });
+
+  it("unconfirmed worlds with the editor modelled still never loop", () => {
+    for (const doc of Object.values(DOCS))
+      for (const active of [null, { trigger: "build" as const }, { trigger: "rebuild" as const }])
+        for (const runExists of [false, true])
+          for (const runReadOk of [true, false])
+            for (const photos of [0, 3]) {
+              if (active && !runExists) continue;
+              const w = world({ doc, active, runExists, runReadOk, photos });
+              for (const start of starts.filter((s) => !/step=[1-4]$/.test(s))) {
+                expect(() => follow(w, start, { editor: true })).not.toThrow();
+              }
+            }
+  });
+
+  it("dashboard Open → the editor for a confirmed book (running build keeps /build)", () => {
+    const card = { id: BOOK, page_count: 0, photo_count: 0, ai_status: "idle", user_edited: false, album_confirmed: true };
+    expect(bookCardHref(card)).toBe(`/books/${BOOK}/edit`);
+    expect(bookCardHref({ ...card, photo_count: 5 })).toBe(`/books/${BOOK}/edit`);
+    expect(bookCardHref({ ...card, page_count: 12, photo_count: 5, ai_status: "done" })).toBe(`/books/${BOOK}/edit`);
+    expect(bookCardHref({ ...card, photo_count: 5, ai_status: "planning" })).toBe(`/books/${BOOK}/build`);
+    // unconfirmed fresh drafts keep their wizard links
+    expect(bookCardHref({ ...card, album_confirmed: false })).toBe(wizardStepHref(BOOK, 5));
   });
 });

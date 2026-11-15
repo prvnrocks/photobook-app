@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   getMyBook: vi.fn(),
   getBookForRun: vi.fn(),
   writeDocIfReplaceable: vi.fn(),
+  markAlbumConfirmed: vi.fn(),
   getUserMemoryAdmin: vi.fn(),
   upsertUserMemory: vi.fn(),
   deleteOwnMemory: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock("@/lib/db/books", () => ({
   getMyBook: mocks.getMyBook,
   getBookForRun: mocks.getBookForRun,
   writeDocIfReplaceable: mocks.writeDocIfReplaceable,
+  markAlbumConfirmed: mocks.markAlbumConfirmed,
 }));
 vi.mock("@/lib/db/memory", () => ({
   getUserMemoryAdmin: mocks.getUserMemoryAdmin,
@@ -101,7 +103,8 @@ let logs: ReturnType<typeof vi.spyOn>[] = [];
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.user = { id: USER };
-  mocks.getMyBook.mockResolvedValue({ id: BOOK });
+  mocks.getMyBook.mockResolvedValue({ id: BOOK, album_confirmed_at: null });
+  mocks.markAlbumConfirmed.mockResolvedValue("marked");
   mocks.getBookForRun.mockResolvedValue(runBook());
   mocks.getUserMemoryAdmin.mockResolvedValue(null);
   mocks.upsertUserMemory.mockResolvedValue(undefined);
@@ -218,6 +221,47 @@ describe("confirmAlbumAction", () => {
     await expectRedirect(confirmAlbumAction(BOOK), "/dashboard");
     expect(mocks.upsertUserMemory).not.toHaveBeenCalled();
     expect(loggedText()).not.toContain(SECRET);
+  });
+
+  it("M20c: marks the album confirmed once for the session user, before the editor redirect", async () => {
+    const order: string[] = [];
+    mocks.markAlbumConfirmed.mockImplementation(async () => {
+      order.push("mark");
+      return "marked";
+    });
+    mocks.upsertUserMemory.mockImplementation(async () => {
+      order.push("memory");
+    });
+    await expectRedirect(confirmAlbumAction(BOOK), `/books/${BOOK}/edit`);
+    expect(mocks.markAlbumConfirmed).toHaveBeenCalledTimes(1);
+    expect(mocks.markAlbumConfirmed).toHaveBeenCalledWith(BOOK, USER);
+    expect(order).toEqual(["mark", "memory"]);
+  });
+
+  it("M20c: an already-confirmed book is not written again", async () => {
+    mocks.getMyBook.mockResolvedValue({ id: BOOK, album_confirmed_at: "2026-11-15T08:00:00.000Z" });
+    await expectRedirect(confirmAlbumAction(BOOK), `/books/${BOOK}/edit`);
+    expect(mocks.markAlbumConfirmed).not.toHaveBeenCalled();
+    expect(mocks.upsertUserMemory).toHaveBeenCalledTimes(1);
+  });
+
+  it("M20c: signed out / foreign book / invalid id → never marked", async () => {
+    mocks.getMyBook.mockResolvedValue(null);
+    await expectRedirect(confirmAlbumAction(BOOK), "/dashboard");
+    await expectRedirect(confirmAlbumAction("not-a-uuid"), "/dashboard");
+    mocks.user = null;
+    await expectRedirect(confirmAlbumAction(BOOK), `/login?next=${encodeURIComponent(`/books/${BOOK}/review`)}`);
+    expect(mocks.markAlbumConfirmed).not.toHaveBeenCalled();
+  });
+
+  it("M20c: a failed mark never blocks the user — logs a code only, memory + redirect still happen", async () => {
+    mocks.markAlbumConfirmed.mockRejectedValue(Object.assign(new Error(SECRET), { code: "57014" }));
+    await expectRedirect(confirmAlbumAction(BOOK), `/books/${BOOK}/edit`);
+    expect(mocks.upsertUserMemory).toHaveBeenCalledTimes(1);
+    const text = loggedText();
+    expect(text).toContain("mark failed (57014)");
+    expect(text).not.toContain(SECRET);
+    expect(text).not.toContain(BOOK);
   });
 
   it("success logs nothing", async () => {

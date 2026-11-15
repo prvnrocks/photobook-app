@@ -37,12 +37,18 @@ export function wizardStepHref(bookId: string, step: WizardEntryStep, opts: { au
   return `/books/new?book=${encodeURIComponent(bookId)}&step=${step}${opts.auto ? "&auto=1" : ""}`;
 }
 
-/** /books/[id]/upload: a fresh wizard book → step 5 inside the wizard; null = classic upload screen. */
+/**
+ * /books/[id]/upload: a fresh wizard book → step 5 inside the wizard; null = classic upload screen.
+ * A confirmed book (M20c: "Generate album" ran) always keeps the classic screen ("add more photos").
+ */
 export function uploadEntryRedirect(input: {
   bookId: string;
   firstRun: FirstRunState;
   detailsLock: SetupLockReason | null;
+  /** books.album_confirmed_at is set. */
+  albumConfirmed: boolean;
 }): string | null {
+  if (input.albumConfirmed) return null;
   return isWizardUpload(input.firstRun, input.detailsLock) ? wizardStepHref(input.bookId, 5) : null;
 }
 
@@ -67,6 +73,8 @@ export type BuildEntryInput = {
   active: { trigger: "build" | "rebuild" } | null;
   /** hasAnyRunForBook — null when that read failed. */
   runExists: boolean | null;
+  /** books.album_confirmed_at is set (M20c): the gate answers "editor" → never the wizard. */
+  albumConfirmed: boolean;
 };
 
 /** Where /books/[id]/build goes: a wizard step URL, the editor, or render the classic screen. */
@@ -82,6 +90,7 @@ export type BuildEntryTarget = { kind: "wizard"; href: string } | { kind: "edito
  *  3. not a fresh first build (isWizardBuild: AI-made / edited album) → classic.
  *  4. the gate for step 6 (same inputs as loadWizardStep(6)) answers 6 → wizard step 6 (&auto=1 kept);
  *     any other answer (7 / editor / classic) → classic, exactly as before M20.
+ * M20c: a confirmed book makes the gate answer "editor" → 2. the editor, 4. classic — never the wizard.
  *
  * No loop with /books/new: its gate answers "classic" (→ /books/<id>/build, no query) only for a
  * running rebuild — rule 1 here — and for the same reads rule 4 only redirects when the gate answers
@@ -100,6 +109,7 @@ export function buildEntryRedirect(input: BuildEntryInput): BuildEntryTarget {
     readError: !input.activeReadOk || input.runExists === null,
     detailsLock: input.detailsLock,
     docOrigin: { generator: docOrigin(input.doc).generator, userEdited: input.userEdited },
+    albumConfirmed: input.albumConfirmed,
     aiOn: input.aiOn,
   });
   if (finishedAuto) {
@@ -115,6 +125,7 @@ export function buildEntryRedirect(input: BuildEntryInput): BuildEntryTarget {
  * (client islands import it from there — this module pulls in docOrigin / zod).
  */
 export {
+  albumConfirmedOf,
   resolveWizardStep,
   type WizardDetailsLock,
   type WizardGateInput,

@@ -10,6 +10,7 @@
 //              step (e.g. 5 asked, the build is running → 6, finished → 7) → rendered directly.
 //     N = 1–4: while the details can still change (D-070 rules) → steps 1–4; once locked → where the
 //              gate sends the book (6 / 7 / editor / classic build).
+//     Any N: a confirmed book (books.album_confirmed_at, "Generate album" ran — M20c) → the editor.
 
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -24,7 +25,7 @@ import { OCCASIONS, type Occasion } from "@/lib/book/options";
 import { docOrigin } from "@/lib/book/replaceable";
 import { designLockReason, detailsLockReason } from "@/lib/book/setup";
 import { loadWizardStep, type WizardDataStep, type WizardStepData } from "@/lib/books/wizard-data";
-import { resolveWizardStep, type WizardTarget } from "@/lib/books/wizard-gate";
+import { albumConfirmedOf, resolveWizardStep, type WizardTarget } from "@/lib/books/wizard-gate";
 import { parseStep, type WizardDraft, type WizardStep } from "@/lib/books/wizard-steps";
 import { getActiveRunForBook, hasAnyRunForBook } from "@/lib/db/agent-runs";
 import { getMyBook, type MyBook } from "@/lib/db/books";
@@ -93,6 +94,8 @@ export default async function NewBookPage({ searchParams }: { searchParams: Sear
   if (bookParam !== undefined) {
     const book = isUuid(bookParam) ? await getMyBook(bookParam) : null;
     if (!book) notFound();
+    // M20c: "Generate album" ran → this book never shows the wizard again (any step, 1–7).
+    if (albumConfirmedOf(book.album_confirmed_at)) redirect(editorHref(book.id));
 
     let designLock: ReturnType<typeof designLockReason> = null;
     if (requested >= 5) {
@@ -119,6 +122,7 @@ export default async function NewBookPage({ searchParams }: { searchParams: Sear
           readError: !active.ok,
           detailsLock,
           docOrigin: { generator: docOrigin(book.doc).generator, userEdited: albumEditedByUser(book.doc) },
+          albumConfirmed: false, // confirmed books left above
           aiOn: resolveAiMode() !== "off",
         });
         const step = stepOrRedirect(book.id, target);

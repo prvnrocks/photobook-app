@@ -10,7 +10,7 @@ import { displayBookTitle } from "@/lib/book/display-title";
 import { OCCASION_LABELS, OCCASIONS, type Occasion } from "@/lib/book/options";
 import { detailsLockReason } from "@/lib/book/setup";
 import { docHasContent, uploadExisting } from "@/lib/books/step-data";
-import { uploadEntryRedirect } from "@/lib/books/wizard-routes";
+import { albumConfirmedOf, uploadEntryRedirect } from "@/lib/books/wizard-routes";
 import { getActiveRunForBook, hasAnyRunForBook } from "@/lib/db/agent-runs";
 import { getMyBook } from "@/lib/db/books";
 import { listUploadState } from "@/lib/db/photos";
@@ -52,6 +52,7 @@ export default async function UploadPage({ params }: { params: Promise<{ id: str
     bookId: book.id,
     firstRun,
     detailsLock: detailsLockReason({ hasRun, doc: book.doc }),
+    albumConfirmed: albumConfirmedOf(book.album_confirmed_at),
   });
   if (wizardHref) redirect(wizardHref);
   const title = displayBookTitle(book.title, book.doc);

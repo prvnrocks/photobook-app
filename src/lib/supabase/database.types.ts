@@ -195,6 +195,7 @@ export type Database = {
       books: {
         Row: {
           ai_status: string
+          album_confirmed_at: string | null
           caption_lang: string
           created_at: string
           design_style: string
@@ -224,6 +225,7 @@ export type Database = {
         }
         Insert: {
           ai_status?: string
+          album_confirmed_at?: string | null
           caption_lang?: string
           created_at?: string
           design_style?: string
@@ -253,6 +255,7 @@ export type Database = {
         }
         Update: {
           ai_status?: string
+          album_confirmed_at?: string | null
           caption_lang?: string
           created_at?: string
           design_style?: string

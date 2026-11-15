@@ -19,6 +19,7 @@ import { PHOTOS_BUCKET } from "@/lib/db/photos";
 import type { CaptionLang, Occasion, Tone } from "@/lib/book/options";
 import { parseBookDoc } from "@/lib/book/schema";
 import type { BookDoc } from "@/lib/book/types";
+import { albumConfirmedOf } from "@/lib/books/wizard-gate";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/uuid";
 
@@ -97,6 +98,11 @@ export type EditorData = {
    * with AI" chip; the review screen still decides what's allowed).
    */
   hasBuildRun: boolean;
+  /**
+   * books.album_confirmed_at is set (M20c: "Generate album" ran). editorRedirect then never sends
+   * the book into the wizard (classic upload / build pages instead).
+   */
+  albumConfirmed: boolean;
   /** Upload-finished photos (kept + dropped), oldest first. */
   photos: EditorPhoto[];
 };
@@ -290,6 +296,7 @@ export async function getEditorData(bookId: string): Promise<EditorData | null> 
     rewritesLeft: Math.max(0, cap - rewritesUsed),
     activeBuildRunId,
     hasBuildRun,
+    albumConfirmed: albumConfirmedOf(book.album_confirmed_at),
     photos,
   };
 }

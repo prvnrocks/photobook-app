@@ -54,7 +54,10 @@
 --      and 20261115001900_design.sql (books.format / books.design_style:
 --      owner may set them on insert, enum checks, never on update; server-only
 --      photos.color with a #RRGGBB check; backfill from doc matches the live
---      data).
+--      data)
+--      and 20261115002000_album_confirmed.sql (server-only
+--      books.album_confirmed_at: forced null on insert, owner can neither set
+--      nor clear it, service role can).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -63,7 +66,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 175 checks passed
+--       RLS OK — all 176 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -230,6 +233,7 @@ declare
   dg_ord      uuid;
   ds_b        uuid;
   ds_p        uuid;
+  ac_b        uuid;
   r          record;
   a2_created timestamptz;
   n          integer;
@@ -3623,6 +3627,51 @@ begin
     exception when check_violation then null;
     end;
   end loop;
+  checks := checks + 1;
+
+  -- ===========================================================================
+  -- 2000 album confirmed: books.album_confirmed_at server-only (M20c)
+  -- ===========================================================================
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  insert into public.books (user_id, title, album_confirmed_at)
+  values (uid_a, 'RLS album confirmed', now())
+  returning id, album_confirmed_at into r;
+  ac_b := r.id;
+  if r.album_confirmed_at is not null then
+    raise exception 'RLS FAIL [album confirmed]: owner set album_confirmed_at on insert';
+  end if;
+  update public.books set album_confirmed_at = now(), title = 'RLS album confirmed edited' where id = ac_b;
+  reset role;
+  if not exists (select 1 from public.books where id = ac_b and album_confirmed_at is null
+                   and title = 'RLS album confirmed edited') then
+    raise exception 'RLS FAIL [album confirmed]: owner set album_confirmed_at (or title edit lost)';
+  end if;
+  -- service role (confirmAlbumAction) sets it
+  set local role service_role;
+  update public.books set album_confirmed_at = now() where id = ac_b and album_confirmed_at is null;
+  get diagnostics n = row_count;
+  reset role;
+  if n <> 1 or not exists (select 1 from public.books where id = ac_b and album_confirmed_at is not null) then
+    raise exception 'RLS FAIL [album confirmed]: service role could not set album_confirmed_at';
+  end if;
+  -- the owner cannot clear it; B cannot touch A's book
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  update public.books set album_confirmed_at = null where id = ac_b;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_b, 'role', 'authenticated')::text, true);
+  update public.books set album_confirmed_at = null where id = ac_b;
+  get diagnostics n = row_count;
+  reset role;
+  if n <> 0 then
+    raise exception 'RLS FAIL [album confirmed]: B updated A''s book';
+  end if;
+  if not exists (select 1 from public.books where id = ac_b and album_confirmed_at is not null) then
+    raise exception 'RLS FAIL [album confirmed]: owner cleared album_confirmed_at';
+  end if;
   checks := checks + 1;
 
   -- ---------------------------------------------------------------------------
