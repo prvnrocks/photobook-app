@@ -1,0 +1,130 @@
+/* Share page motion (M21 T2). Owned by the share components — not globals.css. Imported by
+   SharePreview (rendered by the share page's first-load tree), so it ships with the first CSS chunk
+   (lesson M20: CSS imported only by a lazy chunk adds webpack's CSS loader to every route).
+   Plain CSS (no Tailwind directives). Every animation and transform lives under
+   (prefers-reduced-motion: no-preference); outside it the classes are static (final state):
+   the cover rests, the celebration burst is hidden, the copy feedback is a still ring. */
+
+/* ---- Preview: slow float of the cover --------------------------------------------------------- */
+.share-float {
+  will-change: auto;
+}
+
+/* ---- Publish celebration: foil confetti burst --------------------------------------------------- */
+/* Triggered by data-celebrate="on" on any ancestor (SharePreview sets it on its root). Each piece is
+   an <i> with --a (angle) and --d (distance) set inline; colours alternate foil gold / emerald light /
+   cream. Hidden unless motion is allowed. */
+.share-burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+  display: none;
+}
+.share-burst > i {
+  position: absolute;
+  top: 45%;
+  left: 50%;
+  width: 7px;
+  height: 11px;
+  margin: -5px 0 0 -3px;
+  border-radius: 1.5px;
+  background: linear-gradient(115deg, #c9a227, #ddc163 45%, #bf9a23);
+  opacity: 0;
+}
+.share-burst > i:nth-child(3n + 2) {
+  background: #7fd6a6;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+}
+.share-burst > i:nth-child(3n) {
+  background: #f2e8d8;
+  height: 8px;
+}
+
+/* ---- Copy feedback: the copied control gets a ring (static) / one pulse (animated) -------------- */
+.share-copy-pulse {
+  position: relative;
+}
+.share-copy-pulse[data-copied]::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 2px rgb(127 214 166 / 0.85);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .share-float {
+    animation: share-float 6.5s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  [data-celebrate="on"] .share-burst {
+    display: block;
+  }
+  [data-celebrate="on"] .share-burst > i {
+    animation: share-burst 1.25s cubic-bezier(0.16, 0.84, 0.3, 1) both;
+    animation-delay: calc(var(--i, 0) * 18ms);
+  }
+  /* The cover gives one small hop as the burst fires. */
+  [data-celebrate="on"] .share-cover-hop {
+    animation: share-hop 0.7s cubic-bezier(0.3, 1.4, 0.5, 1) both;
+  }
+
+  .share-copy-pulse[data-copied]::after {
+    animation: share-copy-pulse 0.9s ease-out both;
+  }
+}
+
+@keyframes share-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-0.4deg);
+  }
+  50% {
+    transform: translateY(-7px) rotate(0.4deg);
+  }
+}
+
+@keyframes share-burst {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--a, 0deg)) translateY(0) scale(0.4);
+  }
+  12% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--a, 0deg)) translateY(calc(var(--d, 120px) * -1)) rotate(260deg) scale(1);
+  }
+}
+
+@keyframes share-hop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.045) translateY(-4px);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes share-copy-pulse {
+  0% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgb(127 214 166 / 0.85);
+  }
+  100% {
+    opacity: 0;
+    box-shadow: 0 0 0 10px rgb(127 214 166 / 0);
+  }
+}

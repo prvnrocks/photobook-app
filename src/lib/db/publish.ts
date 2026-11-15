@@ -7,6 +7,9 @@ import "server-only";
 //
 // Errors carry codes only (PublishQueryError) — never doc text, titles or password material.
 
+import { BookFormatSchema, DEFAULT_DESIGN_STYLE, DesignStyleSchema } from "@/lib/book/schema";
+import { DEFAULT_FORMAT } from "@/lib/book/format";
+import type { BookFormat, DesignStyle } from "@/lib/book/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/lib/supabase/database.types";
 import { isUuid } from "@/lib/uuid";
@@ -31,6 +34,10 @@ export type PublishRow = {
   doc_rev: number;
   max_pages: number;
   is_paid: boolean;
+  /** books.format (D-063); an unknown value reads as the column default (share preview, M21). */
+  format: BookFormat;
+  /** books.design_style (D-063); an unknown value reads as the column default (share preview, M21). */
+  design_style: DesignStyle;
   slug: string | null;
   published_at: string | null;
   expires_at: string | null;
@@ -42,9 +49,11 @@ export type PublishRow = {
 };
 
 const PUBLISH_COLUMNS =
-  "id, title, caption_lang, doc, doc_rev, max_pages, is_paid, slug, published_at, expires_at, published_rev, last_published_at, live_version:published_doc->version, password_hash";
+  "id, title, caption_lang, doc, doc_rev, max_pages, is_paid, format, design_style, slug, published_at, expires_at, published_rev, last_published_at, live_version:published_doc->version, password_hash";
 
-type RawPublishRow = Omit<PublishRow, "live" | "hasPassword"> & {
+type RawPublishRow = Omit<PublishRow, "live" | "hasPassword" | "format" | "design_style"> & {
+  format: unknown;
+  design_style: unknown;
   live_version: unknown;
   password_hash: string | null;
 };
@@ -69,6 +78,8 @@ export async function getPublishRow(bookId: string, ownerId: string): Promise<Pu
     doc_rev: raw.doc_rev,
     max_pages: raw.max_pages,
     is_paid: raw.is_paid,
+    format: BookFormatSchema.safeParse(raw.format).data ?? DEFAULT_FORMAT,
+    design_style: DesignStyleSchema.safeParse(raw.design_style).data ?? DEFAULT_DESIGN_STYLE,
     slug: raw.slug,
     published_at: raw.published_at,
     expires_at: raw.expires_at,

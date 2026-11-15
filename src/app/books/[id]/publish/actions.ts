@@ -10,7 +10,9 @@ import { AUTH_UNAVAILABLE, getActionUser } from "@/lib/auth/action-user";
 import { getSiteUrl } from "@/lib/auth/redirect";
 import { validateBookDoc } from "@/lib/book/schema";
 import { stripUnusableAiPhotoBackgrounds } from "@/lib/design/background-suggest";
+import type { BookFormat, DesignStyle } from "@/lib/book/types";
 import { getMyBook } from "@/lib/db/books";
+import { getCoverThumbUrl } from "@/lib/db/cover-thumb";
 import { listPlaceablePhotos } from "@/lib/db/photos";
 import {
   getPublishRow,
@@ -79,7 +81,17 @@ export type PublishState = {
   canPublishReason: PublishBlockReason | null;
 };
 
-export type GetPublishStateResult = { ok: true; state: PublishState } | { ok: false; error: "signed_out" | "not_found" | "failed" };
+/** Share-page preview (M21): what the book card shows. Never makes the page fail. */
+export type PublishPreview = {
+  /** Signed 512px thumb of the cover photo (else first slot photo); null = none / signing failed. */
+  coverThumbUrl: string | null;
+  format: BookFormat;
+  designStyle: DesignStyle;
+};
+
+export type GetPublishStateResult =
+  | { ok: true; state: PublishState; preview: PublishPreview }
+  | { ok: false; error: "signed_out" | "not_found" | "failed" };
 
 type Owner = { userId: string; bookId: string };
 
@@ -369,7 +381,13 @@ export async function getPublishState(bookId: string): Promise<GetPublishStateRe
   try {
     const row = await getPublishRow(owner.bookId, owner.userId);
     if (!row) return { ok: false, error: "not_found" };
-    return { ok: true, state: toState(row, new Date()) };
+    // getCoverThumbUrl never throws; the guard keeps a signing problem from failing the page.
+    const coverThumbUrl = await getCoverThumbUrl(owner.bookId, row.doc).catch(() => null);
+    return {
+      ok: true,
+      state: toState(row, new Date()),
+      preview: { coverThumbUrl, format: row.format, designStyle: row.design_style },
+    };
   } catch (err) {
     console.error(`[publish-state] failed (${errorCodeOf(err)})`);
     return { ok: false, error: "failed" };
