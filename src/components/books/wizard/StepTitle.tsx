@@ -24,7 +24,7 @@ const INPUT_CLASS =
   "h-14 w-full min-w-0 rounded-2xl border border-input bg-card px-5 text-lg shadow-card outline-none placeholder:text-muted-foreground/70 focus-visible:border-success focus-visible:ring-4 focus-visible:ring-success/20 aria-invalid:border-destructive sm:h-16 sm:text-xl";
 
 const CHIP_CLASS =
-  "ws-chip inline-flex min-h-11 items-center rounded-full border border-success/35 bg-card px-4 text-sm font-medium text-primary shadow-card outline-none hover:border-success hover:bg-success-soft aria-pressed:border-success aria-pressed:bg-success-soft focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+  "ws-chip inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-full border border-success/35 bg-card px-4 text-sm font-medium text-primary shadow-card outline-none hover:border-success hover:bg-success-soft aria-pressed:border-success aria-pressed:bg-success-soft focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 export type StepTitleProps = {
   title: string;
@@ -45,7 +45,7 @@ export function StepTitle({ title, onTitleChange, headlineId, error }: StepTitle
   const ink = Math.min(length / INK_FULL_AT, 1);
 
   return (
-    <div className="mx-auto flex w-full max-w-[36rem] flex-col items-center gap-6">
+    <div className="mx-auto flex w-full max-w-[36rem] flex-col items-center gap-4 sm:gap-6">
       <WizardHeadline id={headlineId} focusable>
         {wizardHeadline(1)}
       </WizardHeadline>
@@ -97,11 +97,18 @@ export function StepTitle({ title, onTitleChange, headlineId, error }: StepTitle
           </p>
         ) : null}
       </div>
+      {/* Phones: the ideas stay one swipeable row right under the field, so they're above the sticky
+          Continue bar on the first screen (M20 polish); ≥ sm they wrap. */}
       <div className="flex w-full min-w-0 flex-col gap-2" data-testid="title-suggestions">
         <p className="text-sm text-muted-foreground" id="wizard-title-ideas">
           Need an idea?
         </p>
-        <div className="flex flex-wrap gap-2" role="group" aria-labelledby="wizard-title-ideas">
+        <div
+          className="ws-chip-row relative -mx-gutter flex gap-2 overflow-x-auto px-gutter py-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
+          role="group"
+          aria-labelledby="wizard-title-ideas"
+          data-testid="title-suggestions-row"
+        >
           {TITLE_SUGGESTIONS.map((s, i) => (
             <button
               key={s}

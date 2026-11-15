@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   countOrientations,
   hasArabicScript,
+  hasLatinScript,
   orientationOf,
   preferredLanguage,
   suggestCaptionLang,
@@ -91,14 +92,32 @@ describe("suggestCaptionLang", () => {
     expect(suggestCaptionLang("ar-AE", "en")).toBe("en");
   });
 
-  it("D-072: an Arabic-script title wins over memory and locale; a Latin title is no signal", () => {
+  it("D-072 (refined): the title's script decides first — Arabic → ar, Latin → en — over memory and locale", () => {
     expect(suggestCaptionLang("en-US", "en", "عيد مبارك")).toBe("ar");
-    expect(suggestCaptionLang("en-US", "en", "Trip to العين 2026")).toBe("ar");
-    expect(suggestCaptionLang("en-US", "ar", "Our trip")).toBe("ar");
-    expect(suggestCaptionLang("ar-AE", null, "Our trip")).toBe("ar");
+    expect(suggestCaptionLang("en-US", "en", "Trip to العين 2026")).toBe("ar"); // mixed: Arabic wins
+    // A Latin title beats a remembered "ar" (Memory Keeper runs on every Generate) and an Arabic locale.
+    expect(suggestCaptionLang("en-US", "ar", "Our trip")).toBe("en");
+    expect(suggestCaptionLang("ar-AE", null, "Our trip")).toBe("en");
+    expect(suggestCaptionLang("ar-AE", "ar", "Café Ünïcode")).toBe("en");
     expect(suggestCaptionLang("en-US", null, "Our trip")).toBe("en");
+  });
+
+  it("an empty title or one without Arabic / Latin letters falls through to memory → locale → en", () => {
     expect(suggestCaptionLang("en-US", null, null)).toBe("en");
     expect(suggestCaptionLang("en-US", null, "")).toBe("en");
+    expect(suggestCaptionLang("en-US", "ar", "")).toBe("ar");
+    expect(suggestCaptionLang("en-US", "ar", "2026 🎉")).toBe("ar");
+    expect(suggestCaptionLang("ar-AE", null, "٢٠٢٦")).toBe("ar"); // Arabic-Indic digits only
+    expect(suggestCaptionLang("ar-AE", "en", "שלום")).toBe("en"); // Hebrew → memory
+    expect(suggestCaptionLang("ar-AE", null, "   ")).toBe("ar");
+  });
+
+  it("hasLatinScript: needs a Latin letter", () => {
+    expect(hasLatinScript("Hello")).toBe(true);
+    expect(hasLatinScript("é")).toBe(true);
+    expect(hasLatinScript("2026 — !")).toBe(false);
+    expect(hasLatinScript("مرحبا")).toBe(false);
+    expect(hasLatinScript(null)).toBe(false);
   });
 
   it("hasArabicScript: needs an Arabic letter (digits / punctuation / diacritics alone don't count)", () => {

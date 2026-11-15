@@ -35,10 +35,63 @@
   transform: none;
 }
 
+/* ---- Stepper: clickable vs locked done steps (M20 polish) ---------------------------------------- */
+/* Clickable: on hover devices a cream ring around the gold circle and an underlined name; keyboard
+   focus has the button's focus ring. Locked: no hover change; a small lock badge appears on hover. */
+.wz-lock-badge {
+  position: absolute;
+  inset-inline-end: -4px;
+  bottom: -4px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #0e3b2e;
+  color: #f2e8d8;
+  box-shadow: 0 0 0 1.5px #c9a227;
+  opacity: 0;
+}
+.wz-lock-badge svg {
+  width: 10px;
+  height: 10px;
+}
+@media (hover: hover) and (pointer: fine) and (width >= 40rem) {
+  .wz-lock-badge {
+    display: flex;
+  }
+  .wz-node-locked:hover .wz-lock-badge {
+    opacity: 1;
+  }
+  .wz-node-button:hover .wz-node[data-state="done"] {
+    box-shadow:
+      0 0 0 3px #0e3b2e,
+      0 0 0 5px rgb(242 232 216 / 0.85);
+  }
+  .wz-node-button:hover .wz-node-name {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    text-decoration-thickness: 1.5px;
+  }
+}
+
 /* ---- Choice cards ------------------------------------------------------------------------------- */
 @media (hover: hover) and (pointer: fine) {
   .wz-choice:hover {
     box-shadow: 0 4px 10px -6px rgb(14 59 46 / 0.18), 0 14px 32px -14px rgb(14 59 46 / 0.3);
+  }
+}
+
+/* ---- Phone sticky action bars ------------------------------------------------------------------- */
+/* Keyboard focus / scrollIntoView keep cards clear of the sticky bar (WizardNav ≈ 73 px, the step-7
+   Generate bar ≈ 110 px), safe-area aware. */
+@media (width < 40rem) {
+  html:has([data-testid="wizard-nav"][data-sticky]) {
+    scroll-padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
+  }
+  html:has([data-testid="review-generate-bar"]) {
+    scroll-padding-bottom: calc(7.25rem + env(safe-area-inset-bottom));
   }
 }
 
@@ -65,6 +118,9 @@
   }
   .wz-node-button:hover .wz-node[data-state="done"] {
     transform: scale(1.06);
+  }
+  .wz-lock-badge {
+    transition: opacity 180ms ease;
   }
 
   .wz-choice {
@@ -112,6 +168,27 @@
   }
   :root:has([data-step-dir="back"])::view-transition-new(wizard-step) {
     animation-name: wz-step-in-back;
+  }
+  /* M20 polish: the step box may change width (6 → 7 drops the preview aside and the column grows
+     from ~664 to ~1200 px at 1280). Keep each snapshot at its own size, pinned to the column start,
+     instead of stretching it to the morphing box — together with the start-aligned headlines of
+     steps 5–7 (WizardHeadline align="start-lg") nothing jumps sideways. */
+  ::view-transition-old(wizard-step),
+  ::view-transition-new(wizard-step) {
+    inline-size: auto;
+    block-size: auto;
+  }
+
+  /* The preview aside (≥ lg) is its own transition group: between steps 1–6 it morphs in place; on
+     6 → 7 (old snapshot only) it slides out and fades instead of vanishing; 7 → 6 slides it back. */
+  .wz-aside {
+    view-transition-name: wizard-aside;
+  }
+  ::view-transition-old(wizard-aside):only-child {
+    animation: wz-aside-out 280ms cubic-bezier(0.4, 0, 1, 1) both;
+  }
+  ::view-transition-new(wizard-aside):only-child {
+    animation: wz-aside-in 380ms 80ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 }
 
@@ -198,5 +275,17 @@
   to {
     opacity: 0;
     transform: translateX(20px);
+  }
+}
+@keyframes wz-aside-out {
+  to {
+    opacity: 0;
+    transform: translateX(32px);
+  }
+}
+@keyframes wz-aside-in {
+  from {
+    opacity: 0;
+    transform: translateX(32px);
   }
 }

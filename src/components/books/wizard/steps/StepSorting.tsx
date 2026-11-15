@@ -79,7 +79,7 @@ export function StepSorting({ data, headlineId, onDone, onStopped, onResumed }: 
 
   return (
     <div className="flex w-full min-w-0 flex-col" data-testid="wizard-step-sorting">
-      <WizardHeadline id={headlineId} focusable>
+      <WizardHeadline id={headlineId} focusable align="start-lg">
         {wizardHeadline(6)}
       </WizardHeadline>
       <div className="mt-4 flex min-w-0 flex-col sm:mt-6">

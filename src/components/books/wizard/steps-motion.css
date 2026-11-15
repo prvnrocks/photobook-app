@@ -281,12 +281,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 3.5rem;
-  height: 3.5rem;
+  width: 3rem;
+  height: 3rem;
   border-radius: 9999px;
   background: #e6f2ec;
   color: #1f6f54;
   box-shadow: inset 0 0 0 1px rgb(31 111 84 / 0.18);
+}
+@media (width >= 40rem) {
+  .ws-occ-icon {
+    width: 3.5rem;
+    height: 3.5rem;
+  }
 }
 .wz-choice:has(input:checked) .ws-occ-icon {
   background: #1f6f54;
@@ -351,7 +357,8 @@
 /* ================================ Step 4 — Style ================================================= */
 /* Two pages side by side; static = open spread. Motion: closed (one page) until hover / selected. */
 .ws-spread-box {
-  --h: 7rem;
+  /* 375 px: low enough that both card rows clear the sticky Continue bar on the first screen. */
+  --h: 5.5rem;
   --ratio: 1.4455; /* two card pages: 2 × 36.5 / 50.5 */
   display: flex;
   align-items: center;
@@ -393,9 +400,45 @@
   transform: scaleX(-1);
 }
 
+/* Step 1 ideas: one swipeable row on phones (StepTitle) — no visible scrollbar. */
+.ws-chip-row {
+  scrollbar-width: none;
+}
+.ws-chip-row::-webkit-scrollbar {
+  display: none;
+}
+
+/* Phone mini preview: once the book opens on step 4 it stands on a soft sage stage (like the desktop
+   "Live preview" panel) so the cream spread doesn't melt into the cream page. */
+.wbp-frame[data-size="sm"] {
+  position: relative;
+  isolation: isolate;
+}
+.wbp-frame[data-size="sm"]::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline: max(0px, calc(50% - 10rem));
+  z-index: -1;
+  border-radius: 1.5rem;
+  border: 1px solid rgb(31 111 84 / 0.16);
+  background: radial-gradient(120% 110% at 50% 30%, #e8f2ea 0%, #cde2d4 55%, #b0cfbc 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.7),
+    0 10px 24px -18px rgb(14 59 46 / 0.45);
+  opacity: 0;
+  pointer-events: none;
+}
+.wbp-frame[data-size="sm"][data-open="true"]::before {
+  opacity: 1;
+}
+
 /* ================================ Motion ========================================================= */
 @media (prefers-reduced-motion: no-preference) {
   /* --- preview --- */
+  .wbp-frame[data-size="sm"]::before {
+    transition: opacity 360ms ease;
+  }
   .wbp {
     transition: font-size 300ms cubic-bezier(0.22, 1, 0.36, 1);
   }

@@ -148,7 +148,8 @@ export async function createBookAction(
     : [null, ""];
 
   let id: string;
-  // D-072: an Arabic-script title wins over memory and Accept-Language.
+  // D-072 (refined): the title's script decides first (Arabic → ar, Latin → en), then memory, then
+  // Accept-Language.
   const lang = captionLang ?? suggestCaptionLang(acceptLanguage, memory?.language, title);
   const bookFormat = format ?? DEFAULT_FORM_FORMAT;
   const bookStyle = designStyle ?? defaultStyleFor(occasion);
@@ -240,8 +241,9 @@ const pickEnum = <T extends string>(v: string | null, values: readonly T[], fall
  * be rebuilt is refused ("failed"). Write = admin + owner filter + updated_at lock; one retry on a
  * conflict. Enums / title limits are validated like createBookAction (invalid → fieldErrors).
  * An occasion change without a `tone` re-derives the tone (remembered tone, else occasion default).
- * A title change without a `captionLang` re-derives the caption language (D-072: Arabic-script
- * title → "ar", else remembered language, else Accept-Language) — only while details are unlocked.
+ * A title change without a `captionLang` re-derives the caption language (D-072 refined: Arabic
+ * letters → "ar", Latin letters → "en", else remembered language, else Accept-Language) — only while
+ * details are unlocked.
  */
 export async function updateBookSetupAction(
   bookId: string,
@@ -312,7 +314,8 @@ export async function updateBookSetupAction(
       }
 
       // M20 (D-072): the wizard has no caption-language control — a new title without an explicit
-      // captionLang re-derives it (Arabic-script title wins, else memory, else Accept-Language).
+      // captionLang re-derives it (title script first: Arabic → ar, Latin → en; else memory, else
+      // Accept-Language).
       // Reached only while details are unlocked (the lock check above returned otherwise).
       if (changed.includes("title") && wanted.captionLang === undefined) {
         if (memory === undefined) memory = await getOwnMemoryView().catch(() => null);

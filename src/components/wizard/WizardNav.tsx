@@ -6,6 +6,9 @@
 // into a muted outlined pill (not a faded gold one).
 // Phones: a sticky action bar at the screen bottom (cream, hairline, safe-area padding) that stays in
 // reach while the step scrolls; ≥ sm: an inline row. `sticky={false}` keeps it inline everywhere.
+// The bar is the last thing in its step, so at the end of the scroll nothing is under it; while it
+// floats, a soft top shadow says "more below" and wizard-motion.css sets scroll-padding-bottom so
+// focus / scrollIntoView never park a card under it.
 
 import type { ReactNode } from "react";
 import { cx as join } from "@/lib/cx";
@@ -22,8 +25,8 @@ export const WIZARD_BACK_CLASS = join(
 
 /** The phone sticky bar (≥ sm: static, no chrome). The gutter bleed matches LIBRARY_CONTAINER's px-gutter. */
 const STICKY_BAR = join(
-  "sticky bottom-0 z-20 -mx-gutter border-t border-border/80 bg-background/95 px-gutter pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/85",
-  "sm:static sm:mx-0 sm:border-t-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:pb-0 sm:backdrop-blur-none sm:supports-[backdrop-filter]:bg-transparent",
+  "sticky bottom-0 z-20 -mx-gutter border-t border-border/80 bg-background/95 px-gutter pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-12px_20px_-18px_rgb(14_59_46/0.45)] backdrop-blur supports-[backdrop-filter]:bg-background/85",
+  "sm:static sm:mx-0 sm:border-t-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:pb-0 sm:shadow-none sm:backdrop-blur-none sm:supports-[backdrop-filter]:bg-transparent",
 );
 
 /** Gold pill Continue (same fill as the M18 gold "New book"). */

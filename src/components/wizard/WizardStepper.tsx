@@ -8,12 +8,16 @@
 // One <ol> serves both sizes (responsive classes), inside <nav aria-label>; the current item carries
 // aria-current="step". Done steps become 44 px buttons only when onStepClick is given AND
 // canGoTo(step) allows them (the flow decides — e.g. steps 1–4 lock once photos are picked).
+// M20 polish: a clickable done step looks interactive (tooltip "Go back to Title", hover ring + name
+// underline on hover devices, focus ring); a locked done step (canGoTo says no) is a plain item with
+// "locked" for screen readers, a "… is locked now" tooltip and, on hover devices, a small lock badge —
+// no hover lift. wizard-motion.css: .wz-node-button / .wz-node-locked.
 // Contrast on the leather's lightest point (#1f5443): cream #f2e8d8 7.19, pale gold #e3c766 5.25,
 // sage label #b9c2b6 4.76 (text ≥ 4.5); sage ring #9fb3a6 3.93, foil gold #c9a227 3.61 (graphics ≥ 3);
 // ink check on gold 6.44; emerald icon on cream 10.28.
 // Hook-free, no cn/next/link: usable from the server shell and inside first-load client islands.
 
-import { BookOpenCheck, Check, Heart, Images, Palette, PenLine, Ratio, Sparkles, type LucideIcon } from "lucide-react";
+import { BookOpenCheck, Check, Heart, Images, Lock, Palette, PenLine, Ratio, Sparkles, type LucideIcon } from "lucide-react";
 import { cx } from "@/lib/cx";
 import {
   WIZARD_STEP_COUNT,
@@ -110,8 +114,17 @@ export function WizardStepper({ step, onStepClick, canGoTo, className }: WizardS
         <ol className="relative flex w-full min-w-0 items-start" data-testid="wizard-stepper-list">
           {WIZARD_STEP_NUMBERS.map((n) => {
             const state = stepStateOf(n, step);
-            const clickable = state === "done" && !!onStepClick && !!canGoTo && canGoTo(n);
-            return <StepItem key={n} n={n} state={state} onClick={clickable ? () => onStepClick!(n) : undefined} />;
+            const navigable = state === "done" && !!onStepClick && !!canGoTo;
+            const clickable = navigable && canGoTo(n);
+            return (
+              <StepItem
+                key={n}
+                n={n}
+                state={state}
+                locked={navigable && !clickable}
+                onClick={clickable ? () => onStepClick!(n) : undefined}
+              />
+            );
           })}
         </ol>
       </div>
@@ -119,7 +132,17 @@ export function WizardStepper({ step, onStepClick, canGoTo, className }: WizardS
   );
 }
 
-function StepItem({ n, state, onClick }: { n: WizardStep; state: WizardStepState; onClick?: () => void }) {
+function StepItem({
+  n,
+  state,
+  locked,
+  onClick,
+}: {
+  n: WizardStep;
+  state: WizardStepState;
+  locked: boolean;
+  onClick?: () => void;
+}) {
   const Icon = ICONS[wizardStepIcon(n)];
   const name = wizardStepName(n);
   const inner = (
@@ -135,12 +158,18 @@ function StepItem({ n, state, onClick }: { n: WizardStep; state: WizardStepState
           ) : (
             <Icon aria-hidden="true" strokeWidth={2} className="hidden size-5 sm:block" />
           )}
+          {locked ? (
+            <span aria-hidden="true" className="wz-lock-badge" data-testid="wizard-step-lock">
+              <Lock strokeWidth={2.5} />
+            </span>
+          ) : null}
         </span>
       </span>
-      <span className={cx("sr-only text-sm leading-tight sm:not-sr-only sm:mt-2 sm:block sm:text-center", NAME[state])}>
+      <span className={cx("wz-node-name sr-only text-sm leading-tight sm:not-sr-only sm:mt-2 sm:block sm:text-center", NAME[state])}>
         {name}
         <span className="sr-only">
           {", "}step {n}, {STATE_SR[state]}
+          {locked ? ", locked" : ""}
         </span>
       </span>
     </>
@@ -156,13 +185,20 @@ function StepItem({ n, state, onClick }: { n: WizardStep; state: WizardStepState
         <button
           type="button"
           onClick={onClick}
+          title={`Go back to ${name}`}
           className="wz-node-button flex min-h-11 min-w-11 cursor-pointer flex-col items-center rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-[#f2e8d8] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0e3b2e]"
           data-testid={`wizard-step-${n}-button`}
         >
           {inner}
         </button>
       ) : (
-        <span className="flex min-h-11 min-w-11 flex-col items-center">{inner}</span>
+        <span
+          className={cx("flex min-h-11 min-w-11 flex-col items-center", locked && "wz-node-locked cursor-default")}
+          title={locked ? `${name} is locked now` : undefined}
+          data-locked={locked ? "" : undefined}
+        >
+          {inner}
+        </span>
       )}
     </li>
   );

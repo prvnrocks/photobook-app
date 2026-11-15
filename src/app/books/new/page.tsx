@@ -138,7 +138,7 @@ export default async function NewBookPage({ searchParams }: { searchParams: Sear
     mode = { kind: "edit", bookId: book.id, draft, designLock };
   } else {
     // No book yet: steps 1–4 only. No caption-language question (D-072): createBookAction derives it
-    // (Arabic-script title → memory → Accept-Language → en).
+    // (title script: Arabic → ar, Latin → en; else memory → Accept-Language → en).
     mode = { kind: "create" };
     initialStep = Math.min(requested, 4) as WizardStep;
   }

@@ -144,3 +144,8 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (M19) Next app router: replaceState on the current entry can redraw the cached old tree on Back; have the client detect the mismatch (create mode + ?book=) and reload.
 - (M19) Never run `next build` while a `next dev` e2e suite runs (33 false timeouts); specs reading .next manifests run from the scratch copy's own e2e dir; signed-out runs overwrite committed docs/design screenshots — git checkout them after.
 - (M19) Keep zod-schema libs (docOrigin etc.) out of first-load client islands; put pure helpers in the light module and re-export.
+- (M20) A server action that calls revalidatePath re-renders the current route at its current URL — a pushState wizard must not key on URL-derived props; give per-tap actions a {revalidate:false} option when the page discards the re-render.
+- (M20) Redirecting server actions called outside a <form>: run in startTransition and unstable_rethrow(err) in the catch, or the redirect is swallowed.
+- (M20) CSS imported only by a lazy chunk adds webpack's CSS loader (~0.6 kB) to every route — import it from the first-load island.
+- (M20) On routes with loading.tsx, redirect() streams as 200 + meta refresh; e2e redirect asserts must parse HTML. Next's router can rewrite the URL after popstate — re-assert the wizard URL briefly after popstate.
+- (M20) Mock useRouter with one stable object in jsdom tests (a new object per render restarts run loops until OOM). Never run `npx prettier --write` (no repo config).

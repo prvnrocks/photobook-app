@@ -181,6 +181,24 @@ function historyState(): WizardHistoryState & Record<string, unknown> {
   return s && typeof s === "object" ? (s as WizardHistoryState & Record<string, unknown>) : {};
 }
 
+/** Does the address bar show `state`'s step (and book)? A missing ?step on create counts as step 1. */
+export function urlShowsFlow(href: string, state: FlowState): boolean {
+  const u = new URL(href, "http://x");
+  const book = u.searchParams.get("book");
+  const step = parseFlowStep(u.searchParams.get("step")) ?? (state.mode.kind === "create" && book === null ? 1 : null);
+  if (step !== state.step) return false;
+  return state.mode.kind === "edit" ? book === state.mode.bookId : book === null;
+}
+
+/**
+ * Follow-up ticks after a popstate at which the wizard re-checks the address bar (M20 polish, bug 6):
+ * Next's app router handles the same popstate and, once its restore render commits, may write the
+ * entry's URL back over the wizard's corrective replaceState (step 7 shown at ?step=5). Re-asserting
+ * in a microtask, the next frame and two short timeouts makes the wizard's URL win; each tick only
+ * acts while the flow is unchanged and no newer popstate happened.
+ */
+export const POPSTATE_REASSERT_MS = [0, 60, 250] as const;
+
 function readStored(): WizardDraft | null {
   try {
     return parseWizardDraft(window.sessionStorage.getItem(WIZARD_DRAFT_STORAGE_KEY));
@@ -251,6 +269,8 @@ export function NewBookWizard({ initialStep, mode, dashboardBack, initialData }:
   );
   const [saving, startSaving] = useTransition();
   const [leaving, setLeaving] = useState(false);
+  /** A reload / navigation away was started from a popstate (no URL re-assert after it). */
+  const leavingRef = useRef(false);
   /**
    * Create submit in flight or succeeded (M20 review): createBookAction resolves a frame before the
    * success effect moves to step 5, so a second tap / Enter on the still-mounted create form would make
@@ -412,8 +432,43 @@ export function NewBookWizard({ initialStep, mode, dashboardBack, initialData }:
   }, [runStarted]);
 
   // Browser back / forward → the flow (guardrails decide; refused → the URL shows the current step).
+  // After applying, the URL the flow wants is re-asserted on a few follow-up ticks (see
+  // POPSTATE_REASSERT_MS), keeping history.state (Next's router data) and only our keys updated.
   useEffect(() => {
+    let popToken = 0;
+    const timers = new Set<ReturnType<typeof setTimeout>>();
+    let raf = 0;
+    function reassert(token: number, expected: FlowState) {
+      if (token !== popToken || flowRef.current !== expected) return; // a newer pop / step change won
+      if (window.location.pathname !== "/books/new") return; // a real navigation away: never pull it back
+      if (urlShowsFlow(window.location.href, expected)) return;
+      const hs = historyState();
+      const keepPrev = hs.wizardStep === expected.step ? hs.wizardPrev : undefined;
+      window.history.replaceState({ ...hs, wizardStep: expected.step, wizardPrev: keepPrev }, "", urlFor(expected));
+    }
+    function scheduleReassert() {
+      const token = ++popToken;
+      const expected = flowRef.current;
+      queueMicrotask(() => reassert(token, expected));
+      if (typeof requestAnimationFrame === "function") {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(() => reassert(token, expected));
+      }
+      for (const ms of POPSTATE_REASSERT_MS) {
+        const t = setTimeout(() => {
+          timers.delete(t);
+          reassert(token, expected);
+        }, ms);
+        timers.add(t);
+      }
+    }
     function onPop() {
+      popToken++; // cancels the follow-ups of an earlier pop
+      handlePop();
+      // A reload / navigation is leaving the page: nothing to keep.
+      if (!leavingRef.current) scheduleReassert();
+    }
+    function handlePop() {
       const url = readUrl();
       const prev = flowRef.current;
       let stepParam: unknown = url.step;
@@ -424,6 +479,7 @@ export function NewBookWizard({ initialStep, mode, dashboardBack, initialData }:
         if (allowed !== parsed) stepParam = String(allowed);
       }
       const res = transition(prev, { type: "popstate", step: stepParam, bookId: url.book });
+      if (res.effect.kind === "reload" || res.effect.kind === "navigate") leavingRef.current = true;
       if (stepParam !== url.step && res.effect.kind === "none") {
         apply(prev, { ...res, effect: { kind: "replace", url: urlFor(res.state) } });
         return;
@@ -431,7 +487,13 @@ export function NewBookWizard({ initialStep, mode, dashboardBack, initialData }:
       apply(prev, res);
     }
     window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      popToken++;
+      for (const t of timers) clearTimeout(t);
+      timers.clear();
+      if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(raf);
+    };
   }, [apply]);
 
   // Mirror the new-book draft (create mode only).

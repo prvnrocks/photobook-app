@@ -208,6 +208,7 @@ export function StepReview({ data: initial, headlineId, onConfirm, confirming = 
   const canGenerate = !data.building && total > 0 && kept > 0;
   const ctaLabel = data.userEdited ? EDITED_ALBUM_COPY.button : "Generate album";
   const workingLabel = phase === "applying" ? "Adding your changes…" : "Opening your book…";
+  const barPhase: Phase = confirming && phase === "idle" ? "opening" : phase;
 
   const generate = () => {
     if (working || !canGenerate) return;
@@ -250,10 +251,10 @@ export function StepReview({ data: initial, headlineId, onConfirm, confirming = 
   return (
     <div ref={rootRef} className="rv-root flex w-full min-w-0 flex-col gap-6 sm:gap-8" data-testid="wizard-step-review">
       <div className="flex flex-col gap-2">
-        <WizardHeadline id={headlineId} focusable>
+        <WizardHeadline id={headlineId} focusable align="start-lg">
           {wizardHeadline(7)}
         </WizardHeadline>
-        <p className="mx-auto max-w-[34rem] text-center type-small text-muted-foreground">
+        <p className="mx-auto max-w-[34rem] text-center type-small text-muted-foreground lg:mx-0 lg:text-start">
           Check what goes in, then generate your album. You can change everything later in the editor.
         </p>
       </div>
@@ -358,6 +359,26 @@ export function StepReview({ data: initial, headlineId, onConfirm, confirming = 
                   ) : null}
                 </ol>
               ) : null}
+
+              {/* ≥ lg: the Generate bar sits inline at the end of the step (it would float over this
+                  card as a sticky bar), so the summary carries a compact Generate of its own. */}
+              <div className="hidden lg:block" data-testid="review-summary-generate">
+                <GenerateButton
+                  label={ctaLabel}
+                  workingLabel={workingLabel}
+                  phase={barPhase}
+                  disabled={!canGenerate}
+                  onGenerate={generate}
+                  size="compact"
+                  testId="wizard-generate-summary"
+                />
+                {/* The bar's alert announces the error; this visible copy is for a click up here. */}
+                {error ? (
+                  <p className="mt-2 text-sm text-foreground" data-testid="review-summary-generate-error">
+                    {error}
+                  </p>
+                ) : null}
+              </div>
             </div>
           </div>
         </section>
@@ -418,7 +439,7 @@ export function StepReview({ data: initial, headlineId, onConfirm, confirming = 
             onToggle={(photo, keep) => flyTile(rootRef.current, photo, keep)}
             title="Your photos"
             gridClassName="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10"
-            toastClassName="bottom-[calc(7rem+env(safe-area-inset-bottom))] sm:bottom-32"
+            toastClassName="bottom-[calc(7rem+env(safe-area-inset-bottom))] sm:bottom-32 lg:bottom-8"
           />
         )}
       </div>
@@ -426,7 +447,7 @@ export function StepReview({ data: initial, headlineId, onConfirm, confirming = 
       <GenerateBar
         label={ctaLabel}
         workingLabel={workingLabel}
-        phase={confirming && phase === "idle" ? "opening" : phase}
+        phase={barPhase}
         disabled={!canGenerate}
         hint={
           data.building
@@ -523,6 +544,9 @@ function GenerateBar({
       className={cx(
         "sticky bottom-0 z-20 -mx-gutter border-t border-border/80 bg-background/95 px-gutter pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/85",
         "sm:bottom-4 sm:mx-0 sm:rounded-[1.5rem] sm:border sm:px-5 sm:py-4 sm:shadow-lift",
+        // ≥ lg: inline at the end of the step (a sticky card would cover the summary and captions on
+        // the first screen); the summary card has its own compact Generate meanwhile.
+        "lg:static lg:shadow-card",
       )}
       data-testid="review-generate-bar"
     >
@@ -543,39 +567,76 @@ function GenerateBar({
         <p className="order-2 min-w-0 text-center text-xs text-muted-foreground sm:order-1 sm:flex-1 sm:text-start sm:text-sm" data-testid="review-generate-hint">
           {hint}
         </p>
-        <button
-          type="button"
-          onClick={onGenerate}
-          disabled={disabled || busy}
-          aria-busy={busy || undefined}
-          data-phase={phase}
-          className={cx(
-            "rv-cta relative order-1 inline-flex min-h-14 w-full min-w-0 items-center justify-center gap-2.5 overflow-hidden rounded-full border border-transparent bg-accent-strong px-8 text-lg font-semibold text-accent-strong-foreground shadow-lift outline-none sm:order-2 sm:w-auto sm:min-w-[16rem]",
-            "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-            "disabled:cursor-not-allowed disabled:not-aria-busy:border-input disabled:not-aria-busy:bg-muted disabled:not-aria-busy:text-muted-foreground disabled:not-aria-busy:shadow-none",
-            "aria-busy:cursor-progress",
-          )}
-          data-testid="wizard-generate"
-        >
-          {busy ? (
-            <>
-              <span className="rv-flip relative inline-block size-5" aria-hidden="true">
-                <span className="rv-flip-page absolute inset-y-0 start-1/2 w-1/2 rounded-e-sm bg-accent-strong-foreground/80" />
-                <span className="absolute inset-0 rounded-sm border-2 border-accent-strong-foreground/80" />
-              </span>
-              <span>{workingLabel}</span>
-            </>
-          ) : (
-            <>
-              <Sparkles className="rv-cta-icon size-5" aria-hidden="true" />
-              <span>{label}</span>
-            </>
-          )}
-        </button>
+        <GenerateButton
+          label={label}
+          workingLabel={workingLabel}
+          phase={phase}
+          disabled={disabled}
+          onGenerate={onGenerate}
+          testId="wizard-generate"
+        />
       </div>
       <span className="sr-only" role="status" aria-live="polite">
         {busy ? workingLabel : ""}
       </span>
     </div>
+  );
+}
+
+const GENERATE_BUTTON_SIZE = {
+  bar: "min-h-14 w-full px-8 text-lg sm:w-auto sm:min-w-[16rem] order-1 sm:order-2",
+  compact: "min-h-12 px-6 text-base",
+} as const;
+
+/** The gold Generate album pill (the bar's and, ≥ lg, the summary card's compact one). */
+function GenerateButton({
+  label,
+  workingLabel,
+  phase,
+  disabled,
+  onGenerate,
+  size = "bar",
+  testId,
+}: {
+  label: string;
+  workingLabel: string;
+  phase: Phase;
+  disabled: boolean;
+  onGenerate: () => void;
+  size?: keyof typeof GENERATE_BUTTON_SIZE;
+  testId: string;
+}) {
+  const busy = phase !== "idle";
+  return (
+    <button
+      type="button"
+      onClick={onGenerate}
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
+      data-phase={phase}
+      className={cx(
+        "rv-cta relative inline-flex min-w-0 items-center justify-center gap-2.5 overflow-hidden rounded-full border border-transparent bg-accent-strong font-semibold text-accent-strong-foreground shadow-lift outline-none",
+        GENERATE_BUTTON_SIZE[size],
+        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        "disabled:cursor-not-allowed disabled:not-aria-busy:border-input disabled:not-aria-busy:bg-muted disabled:not-aria-busy:text-muted-foreground disabled:not-aria-busy:shadow-none",
+        "aria-busy:cursor-progress",
+      )}
+      data-testid={testId}
+    >
+      {busy ? (
+        <>
+          <span className="rv-flip relative inline-block size-5" aria-hidden="true">
+            <span className="rv-flip-page absolute inset-y-0 start-1/2 w-1/2 rounded-e-sm bg-accent-strong-foreground/80" />
+            <span className="absolute inset-0 rounded-sm border-2 border-accent-strong-foreground/80" />
+          </span>
+          <span>{workingLabel}</span>
+        </>
+      ) : (
+        <>
+          <Sparkles className="rv-cta-icon size-5" aria-hidden="true" />
+          <span>{label}</span>
+        </>
+      )}
+    </button>
   );
 }

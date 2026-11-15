@@ -3,8 +3,8 @@
 // The draft book is created before the user answers anything; these helpers pick the defaults the
 // setup card shows (the user can change every one of them until the first AI build starts):
 //   - suggestFormat: page shape from the photos' orientation counts;
-//   - suggestCaptionLang: caption language from an Arabic-script title, else the user's memory,
-//     else the device locale (D-072);
+//   - suggestCaptionLang: caption language from the title's script (Arabic → ar, Latin → en), else
+//     the user's memory, else the device locale (D-072, refined M20 polish);
 //   - toneForOccasion: the feel for an occasion (a remembered tone wins, D-032).
 // Nothing here reads photo content — only counts and a locale string.
 
@@ -78,12 +78,22 @@ export function hasArabicScript(text: string | null | undefined): boolean {
   return typeof text === "string" && ARABIC_LETTER.test(text);
 }
 
+const LATIN_LETTER = /\p{Script=Latin}/u;
+
+/** True when `text` contains at least one Latin letter (digits / punctuation / emoji don't count). */
+export function hasLatinScript(text: string | null | undefined): boolean {
+  return typeof text === "string" && LATIN_LETTER.test(text);
+}
+
 /**
- * Caption language for a book (D-072 order): a `title` with Arabic letters → "ar"; else the
- * remembered language (user memory, D-032); otherwise the device's preferred language — `locale`
+ * Caption language for a book (D-072, refined in M20 polish): the title's script decides first, in
+ * both directions — a `title` with Arabic letters → "ar"; a title with Latin letters (and no Arabic)
+ * → "en", so a remembered "ar" (Memory Keeper runs on every Generate) never turns an English-titled
+ * book Arabic. Only an empty title or one in another script (digits, emoji, Hebrew…) falls through
+ * to the remembered language (user memory, D-032), then the device's preferred language — `locale`
  * is an Accept-Language header ("ar-AE,ar;q=0.9,en;q=0.8") or a single tag ("ar-AE", "ar_AE",
  * navigator.language). Arabic ("ar" primary subtag, any region) as the most preferred language →
- * "ar"; anything else, empty or unparsable → "en". A Latin title is no signal (falls through).
+ * "ar"; anything else, empty or unparsable → "en".
  */
 export function suggestCaptionLang(
   locale: string | null | undefined,
@@ -91,6 +101,7 @@ export function suggestCaptionLang(
   title?: string | null,
 ): CaptionLang {
   if (hasArabicScript(title)) return "ar";
+  if (hasLatinScript(title)) return "en";
   if (isCaptionLang(memory)) return memory;
   const primary = preferredLanguage(locale);
   return primary === "ar" ? "ar" : "en";

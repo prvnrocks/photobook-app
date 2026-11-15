@@ -27,7 +27,7 @@ export type StepStyleProps = {
 export function StepStyle({ designStyle, format, onStyle, headlineId, locked = false, error }: StepStyleProps) {
   const options = locked ? [designStyle] : FORM_DESIGN_STYLES;
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4 sm:gap-6">
       <div className="flex flex-col gap-2">
         <WizardHeadline id={headlineId} focusable>
           {wizardHeadline(4)}

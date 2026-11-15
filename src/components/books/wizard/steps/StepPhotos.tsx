@@ -26,11 +26,11 @@ export type StepPhotosProps = {
 
 export function StepPhotos({ data, headlineId, onBack, onPhotosPicked, onAdvance, onBuildNow }: StepPhotosProps) {
   return (
-    <div className="mx-auto flex w-full max-w-[40rem] min-w-0 flex-col" data-testid="wizard-step-photos">
-      <WizardHeadline id={headlineId} focusable>
+    <div className="mx-auto flex w-full max-w-[40rem] min-w-0 flex-col lg:mx-0" data-testid="wizard-step-photos">
+      <WizardHeadline id={headlineId} focusable align="start-lg">
         {wizardHeadline(5)}
       </WizardHeadline>
-      <p className="mt-2 text-center type-small text-muted-foreground">
+      <p className="mt-2 text-center type-small text-muted-foreground lg:text-start">
         <span dir="auto" className="break-words" data-testid="upload-book-title">
           {data.title}
         </span>

@@ -50,7 +50,7 @@ export function WizardBody({ children, aside, wide = false, asideBelowLg = "stac
         </div>
         {aside ? (
           <aside
-            className={cx("min-w-0 lg:sticky lg:top-6 lg:self-start", asideBelowLg === "hide" && "hidden lg:block")}
+            className={cx("wz-aside min-w-0 lg:sticky lg:top-6 lg:self-start", asideBelowLg === "hide" && "hidden lg:block")}
             aria-label="Book preview"
             data-testid="wizard-aside"
           >

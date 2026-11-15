@@ -221,13 +221,13 @@ describe("new book wizard — steps and URL", () => {
     expect($<HTMLButtonElement>("wizard-continue").disabled).toBe(true);
   });
 
-  it("step 2: six occasion cards (2 cols, 3 from sm), Continue disabled until one is picked, no language switch (D-072)", async () => {
+  it("step 2: six occasion cards (3 cols), Continue disabled until one is picked, no language switch (D-072)", async () => {
     await mount("/books/new");
     await click($("wizard-continue"));
     for (const id of ["wedding", "travel", "baby", "graduation", "family", "other"]) {
       expect($(`occasion-${id}`)).toBeTruthy();
     }
-    expect($("occasion-grid").className).toContain("grid-cols-2 gap-3 sm:grid-cols-3");
+    expect($("occasion-grid").className).toContain("grid-cols-3"); // M20 polish: 3 columns at 375 too
     expect($<HTMLButtonElement>("wizard-continue").disabled).toBe(true);
     // The caption-language control is gone: the server picks the language.
     for (const id of ["lang-en", "lang-ar", "caption-lang"]) expect($(id)).toBeNull();

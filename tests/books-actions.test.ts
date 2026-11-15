@@ -177,17 +177,24 @@ describe("createBookAction", () => {
     expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ title: "رحلتنا إلى العين", captionLang: "ar" });
   });
 
-  it("D-072: a mixed title with any Arabic letter → ar; a Latin title is no signal", async () => {
+  it("D-072 (refined): a mixed title with any Arabic letter → ar; a Latin title → en over memory / Accept-Language", async () => {
     await run({ title: "Eid 2026 عيد", occasion: "family" });
     expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ captionLang: "ar" });
     mocks.createBook.mockClear();
+    // Memory Keeper remembered "ar" from an earlier book: an English title still gets English captions.
     mocks.getOwnMemoryView.mockResolvedValue({ language: "ar" });
+    mocks.acceptLanguage = "ar-AE,ar;q=0.9";
     await run({ title: "Our trip", occasion: "travel" });
+    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ captionLang: "en" });
+    mocks.createBook.mockClear();
+    // No title → memory decides.
+    await run({ title: "", occasion: "travel" });
     expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ captionLang: "ar" });
     mocks.createBook.mockClear();
+    // No title, no memory → Accept-Language.
     mocks.getOwnMemoryView.mockResolvedValue({});
     mocks.acceptLanguage = "en-GB";
-    await run({ title: "Our trip", occasion: "travel" });
+    await run({ title: "", occasion: "travel" });
     expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ captionLang: "en" });
   });
 

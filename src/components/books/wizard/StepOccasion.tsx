@@ -1,7 +1,8 @@
 // Wizard step 2 "What's this book for?" (M19 T3, D-071; M20 T4, D-072): six occasion tiles with big
-// icons in emerald circles (2 columns at 375 px, 3 from sm). They rise in one after another; the
+// icons in emerald circles (3 columns everywhere — M20 polish: at 375 px all six fit above the
+// sticky Continue bar on the first screen; the icon circle is a little smaller below sm). They rise in one after another; the
 // chosen tile glows emerald and its icon does a small wiggle (steps-motion.css). The caption language
-// is no longer asked: the server picks it (Arabic-script title → memory → browser → English, D-072).
+// is no longer asked: the server picks it (title script: Arabic → ar, Latin → en; else memory → browser, D-072).
 // Radio names are prefixed "wizard-" so only the step-4 hidden inputs reach the create action.
 
 import { Baby, Ellipsis, Gem, GraduationCap, Plane, Users, type LucideIcon } from "lucide-react";
@@ -39,7 +40,7 @@ export function StepOccasion({ occasion, onOccasion, headlineId, error }: StepOc
       </div>
       <fieldset className="ws-occ min-w-0" aria-describedby={error ? "wizard-occasion-error" : undefined}>
         <legend className="sr-only">Occasion</legend>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4" data-testid="occasion-grid">
+        <div className="grid grid-cols-3 gap-2.5 sm:gap-4" data-testid="occasion-grid">
           {OCCASIONS.map((id, i) => {
             const Icon = OCCASION_ICONS[id];
             return (

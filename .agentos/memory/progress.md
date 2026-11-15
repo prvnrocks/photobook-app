@@ -201,3 +201,8 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - New book is a 6-step wizard (D-071) in emerald/gold: title → occasion (+ English/Arabic captions) → shape → style → photos → sorting → editor. Tone automatic (memory else occasion default; follows occasion on edit). Back from step 5 edits the draft; double browser Back can't duplicate a book (wizard keyed by mode).
 - Tests: npm test 7307; m19-wizard e2e 7/1skip live + analytics 8/8; m13-first-run 3/3; batch green except upload-auth Mapbox places (pre-existing env). Reviewer APPROVED.
 - Open: Mapbox token; HEIC upload thumbnails grey on Chrome (cosmetic).
+
+## 2026-11-15 — Milestone 20 (Wizard UX upgrade) — done, awaiting deploy OK
+- Continuous 7-step wizard (Title, Purpose, Shape, Style, Photos, Sorting, Review) in the My-books emerald style; no page loads step 1→7; Review step + Generate album → editor. D-072 (+ refinement: title script decides caption language).
+- Tests: npm test 7539; live e2e green except upload-auth Mapbox (pre-existing); m13-first-run 5 taps, editor 64 s / 40 photos. Reviewer APPROVED. /books/new 178 kB.
+- Open: generated book can reopen Review (needs per-book confirmed marker + migration); Mapbox token.

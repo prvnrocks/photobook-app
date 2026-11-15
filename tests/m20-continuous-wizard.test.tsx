@@ -404,6 +404,46 @@ describe("popstate guards via the flow", () => {
     expect(url()).toBe(`/books/new?book=${BOOK}&step=6`);
   });
 
+  it("bug 6: a router rewriting the URL after popstate → the wizard re-asserts its own (history.state kept)", async () => {
+    window.history.replaceState(null, "", `/books/new?book=${BOOK}&step=5`);
+    window.history.pushState({ wizardStep: 6, wizardPrev: 5 }, "", `/books/new?book=${BOOK}&step=6`);
+    await mount(`/books/new?book=${BOOK}&step=6`, { initialStep: 6, mode: edit(), initialData: step6() as never });
+    // Stand-in for Next's app router: handles the same popstate after the wizard (registered later)
+    // and writes the entry's URL + its own router state back — once synchronously, once a bit later
+    // (its restore render committing).
+    const stale = `/books/new?book=${BOOK}&step=5`;
+    const router = () => {
+      window.history.replaceState({ ...(window.history.state ?? {}), __NA: true, tree: "restored" }, "", stale);
+      setTimeout(() => window.history.replaceState({ ...(window.history.state ?? {}), __NA: true }, "", stale), 30);
+    };
+    window.addEventListener("popstate", router);
+    try {
+      await historyBack();
+      await settle(300);
+    } finally {
+      window.removeEventListener("popstate", router);
+    }
+    expect(shownStep()).toBe("6");
+    expect(url()).toBe(`/books/new?book=${BOOK}&step=6`);
+    // Next's router data survives; only the wizard's keys changed.
+    expect(window.history.state).toMatchObject({ __NA: true, tree: "restored", wizardStep: 6 });
+  });
+
+  it("bug 6: the re-assert never pulls back a navigation away from /books/new, nor fights a newer step change", async () => {
+    window.history.replaceState(null, "", `/books/new?book=${BOOK}&step=5`);
+    window.history.pushState({ wizardStep: 6, wizardPrev: 5 }, "", `/books/new?book=${BOOK}&step=6`);
+    await mount(`/books/new?book=${BOOK}&step=6`, { initialStep: 6, mode: edit(), initialData: step6() as never });
+    const away = () => window.history.replaceState(window.history.state, "", "/dashboard");
+    window.addEventListener("popstate", away);
+    try {
+      await historyBack();
+      await settle(300);
+    } finally {
+      window.removeEventListener("popstate", away);
+    }
+    expect(url()).toBe("/dashboard");
+  });
+
   it("an entry naming another book → reload", async () => {
     window.history.replaceState(null, "", `/books/new?book=${OTHER}&step=4`);
     window.history.pushState(null, "", `/books/new?book=${BOOK}&step=5`);

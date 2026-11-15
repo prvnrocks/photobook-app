@@ -285,21 +285,30 @@ describe("updateBookSetupAction — caption language follows the title (M20, D-0
     expect(mocks.writeBookSetup.mock.calls[0][2]).toEqual({ title: "عيد مبارك" });
   });
 
-  it("a Latin title re-derives from memory, then Accept-Language", async () => {
+  it("a Latin title → en, whatever memory and Accept-Language say (D-072 refined)", async () => {
     mocks.getMyBook.mockResolvedValue(book({ title: "عيد", caption_lang: "ar" }));
+    mocks.memory = { language: "ar" };
+    mocks.acceptLanguage = "ar-AE,ar;q=0.9";
     const r = await updateBookSetupAction(BOOK_ID, { title: "Eid" });
     expect(r).toMatchObject({ ok: true, setup: { title: "Eid", captionLang: "en" } });
     expect(mocks.writeBookSetup.mock.calls[0][2]).toEqual({ title: "Eid", caption_lang: "en" });
+  });
+
+  it("a cleared title re-derives from memory, then Accept-Language", async () => {
+    mocks.getMyBook.mockResolvedValue(book({ title: "Eid", caption_lang: "en" }));
+    mocks.memory = { language: "ar" };
+    expect(await updateBookSetupAction(BOOK_ID, { title: null })).toMatchObject({ ok: true, setup: { title: null, captionLang: "ar" } });
+    expect(mocks.writeBookSetup.mock.calls[0][2]).toEqual({ title: null, caption_lang: "ar" });
 
     mocks.writeBookSetup.mockClear();
+    mocks.memory = null;
     mocks.acceptLanguage = "ar-AE,ar;q=0.9";
-    expect(await updateBookSetupAction(BOOK_ID, { title: "Eid" })).toMatchObject({ ok: true, setup: { captionLang: "ar" } });
-    expect(mocks.writeBookSetup.mock.calls[0][2]).toEqual({ title: "Eid" });
+    expect(await updateBookSetupAction(BOOK_ID, { title: null })).toMatchObject({ ok: true, setup: { captionLang: "ar" } });
 
     mocks.writeBookSetup.mockClear();
-    mocks.acceptLanguage = "ar-AE";
-    mocks.memory = { language: "en" };
-    expect(await updateBookSetupAction(BOOK_ID, { title: "Eid" })).toMatchObject({ ok: true, setup: { captionLang: "en" } });
+    mocks.acceptLanguage = "en-US";
+    expect(await updateBookSetupAction(BOOK_ID, { title: null })).toMatchObject({ ok: true, setup: { captionLang: "en" } });
+    expect(mocks.writeBookSetup.mock.calls[0][2]).toEqual({ title: null });
   });
 
   it("no title change → caption language untouched (no memory read needed)", async () => {
