@@ -128,3 +128,36 @@
     box-shadow: 0 0 0 10px rgb(127 214 166 / 0);
   }
 }
+
+/* ---- Share page (M21 T5) ------------------------------------------------------------------------ */
+/* The responsive preview floats only as the large tile (lg+); the phone row stays still. */
+@media (prefers-reduced-motion: no-preference) and (min-width: 64rem) {
+  .share-float-lg {
+    animation: share-float 6.5s ease-in-out infinite;
+    will-change: transform;
+  }
+}
+
+/* Phone sticky action bar: slides up when its card's button leaves the screen (data-visible).
+   Static under reduced motion (it just appears). Hidden from lg (the aside layout has room). */
+.share-bar {
+  transform: translateY(110%);
+  visibility: hidden;
+}
+.share-bar[data-visible="true"] {
+  transform: none;
+  visibility: visible;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .share-bar {
+    transition:
+      transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1),
+      visibility 0.28s;
+  }
+}
+/* Keep focused / scrolled-to controls clear of the bar (scrollIntoView, Tab, find-in-page). */
+@media (max-width: 63.999rem) {
+  html:has([data-share-bar]) {
+    scroll-padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+  }
+}

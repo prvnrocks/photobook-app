@@ -14,6 +14,11 @@ export const DEV_PUBLISH_STATES = [
   "password",
   "expired",
   "unpublished",
+  // M21 share page fixture names (dev-publish screenshots): live with ≤ 7 days left, paid + live,
+  // and a blocked draft (page limit).
+  "expiring",
+  "paid",
+  "blocked",
 ] as const;
 export type DevPublishStateName = (typeof DEV_PUBLISH_STATES)[number];
 
@@ -48,7 +53,10 @@ const live: PublishState = {
   lastPublishedAt: PUBLISHED,
 };
 
-export function devPublishState(name: DevPublishStateName): PublishState {
+const DAY_MS = 86_400_000;
+
+/** `now` only matters for "expiring" (expires 3 days from now). */
+export function devPublishState(name: DevPublishStateName, now: Date = new Date()): PublishState {
   switch (name) {
     case "draft":
       return base;
@@ -72,6 +80,12 @@ export function devPublishState(name: DevPublishStateName): PublishState {
       return { ...live, expiresAt: "2026-11-01T08:00:00.000Z", expired: true, canPublishReason: "expired" };
     case "unpublished":
       return { ...base, slug: SLUG, url: DEV_PUBLISH_URL, expiresAt: EXPIRES, publishedAt: PUBLISHED, lastPublishedAt: PUBLISHED };
+    case "expiring":
+      return { ...live, expiresAt: new Date(now.getTime() + 3 * DAY_MS).toISOString() };
+    case "paid":
+      return { ...live, isPaid: true, expiresAt: null, maxPages: 100, pageCount: 32 };
+    case "blocked":
+      return { ...base, pageCount: 24, canPublishReason: "page_limit" };
   }
 }
 

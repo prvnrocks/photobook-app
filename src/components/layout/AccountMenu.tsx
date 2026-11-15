@@ -7,7 +7,7 @@
 
 import { ChevronDown } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { cn } from "@/lib/utils";
+import { cx } from "@/lib/cx";
 
 /** First visible letter of the name/email, upper-cased; "?" when unknown. */
 export function accountInitial(displayName: string | null | undefined): string {
@@ -69,7 +69,7 @@ export function AccountMenu({
         </span>
         <ChevronDown
           aria-hidden="true"
-          className={cn("size-4 text-muted-foreground transition-transform motion-reduce:transition-none", open && "rotate-180")}
+          className={cx("size-4 text-muted-foreground transition-transform motion-reduce:transition-none", open && "rotate-180")}
         />
       </button>
       <div

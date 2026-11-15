@@ -1,34 +1,38 @@
 "use client";
 
-// Publish / share screen body (M6 T8, D-039 / D-040; split in M21 T3). Orchestration only: holds
-// the action state, calls the bound publish actions and places the cards — every card renders from
-// the server's PublishState (getPublishState); after every successful action the page refreshes so
-// the state always comes from the server. Copy lives in src/lib/publish/ui.ts.
-//   message slot → [preview tile] → PrimaryActionCard (draft / changes / pending / live / expired)
-//   → ShareLinkCard (while live) → plan card (free) → PDF (paid) → password → stop sharing.
-// Celebration (publish success or ?shared=): data-celebrate on the panel, the live card and the
-// preview tile; nothing moves under reduced motion (share-motion.css).
+// Publish / share screen body (M6 T8, D-039 / D-040; split in M21 T3, laid out in M21 T5).
+// Orchestration only: holds the action state, calls the bound publish actions and places the cards —
+// every card renders from the server's PublishState (getPublishState); after every successful action
+// the page refreshes so the state always comes from the server. Copy lives in src/lib/publish/ui.ts.
+//
+// Layout (SHARE_COLUMNS): from lg two columns — a sticky aside with the preview slot and the cards;
+// below lg the preview (compact row) on top, then the cards, plus a sticky bottom bar.
+//   message slot → PrimaryActionCard (draft / changes / pending / live / expired) → ShareLinkCard
+//   (while live) → plan slot (not when expired free) → PDF slot → password → DangerZone (published).
+// The preview / plan / PDF slots only change with server state, so the page renders them on the
+// server (share-slots.tsx) — their markup stays out of this client bundle.
+// Phone sticky bar: Publish (draft) / Update link (changes) / Send on WhatsApp (live), shown once
+// that card's own button has left the screen; none when expired, blocked or pending.
+// Celebration (publish success or ?shared=): data-celebrate on the panel root fires the preview's
+// burst (CSS ancestor selector) and the live card's badge hop; nothing moves under reduced motion.
 //
 // <PublishPanel> wires next/navigation; <PublishPanelView> takes `refresh` so it renders without
 // an app router (unit tests, dev fixture). No cn/buttonVariants/next/link here (lesson 2026-11-14).
 
-import { ExternalLink, FileText } from "lucide-react";
+import { Loader2, MessageCircle, Send } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { PublishBookResult, PublishState, SetBookPasswordResult, UnpublishBookResult } from "@/app/books/[id]/publish/actions";
 import { Notice } from "@/components/app/Notice";
 import { useRefreshTransition } from "@/components/app/use-refresh-transition";
 import { UpgradeButtonView } from "@/components/upgrade/UpgradeButton";
-import type { PdfTransport } from "@/lib/pdf/ui";
-import type { PublishCompare } from "@/lib/publish/compare";
 import { shareStatus } from "@/lib/publish/status";
 import { LIVE_TEXT, SHARE_COPY } from "@/lib/publish/ui";
+import { whatsappShareUrl } from "@/lib/viewer/share";
+import { DangerZone } from "./DangerZone";
 import { PasswordField } from "./PasswordField";
-import { PdfDownloadView } from "./PdfDownload";
-import { PlanCompareCard } from "./PlanCompareCard";
-import { PrimaryActionCard, primaryActionKind } from "./PrimaryActionCard";
-import { SHARE_CTA_EMERALD, SHARE_OPEN_LINK } from "./share-classes";
+import { PrimaryActionCard, primaryActionKind, type PrimaryActionKind } from "./PrimaryActionCard";
+import { SHARE_BAR_SPACER, SHARE_COLUMNS, SHARE_CTA_GOLD, SHARE_CTA_WHATSAPP, SHARE_UPGRADE_CLASS } from "./share-classes";
 import { ShareLinkCard } from "./ShareLinkCard";
-import { SharePreview, type SharePreviewData } from "./SharePreview";
-import { UnpublishSection } from "./UnpublishSection";
 import { usePublishPanel, type PanelMessage } from "./use-publish-panel";
 import "./share-motion.css";
 
@@ -46,20 +50,19 @@ export type PublishPanelProps = {
   actions: PublishActions;
   /** isPaymentsEnabled() from the server page (Stripe keys configured). */
   paymentsEnabled: boolean;
-  /** Free vs upgraded card data, built on the server with publishCompare() (src/lib/publish/compare.ts). */
-  compare: PublishCompare;
   /** The editor's Share just published (`?shared=`, M13 T9): shown once as the success message. */
   shared?: "live" | "changes" | null;
   /**
-   * getPublishState().preview (M21): when given, the panel shows the SharePreview tile first (it
-   * carries "Open flipbook" and the celebration burst). Omitted → no tile; the link card carries
-   * "Open book" and the live card bursts.
+   * Book preview (shareSlots().preview: <SharePreview responsive>). It carries the page's one
+   * "Open flipbook" (publish-open) while live and the celebration burst. Given → two columns from
+   * lg. Omitted (unit tests only) → one column, no open link, no burst.
    */
-  preview?: SharePreviewData | null;
+  preview?: ReactNode;
+  /** shareSlots().plan: PlanCard (free compare + Upgrade, or the paid thank-you). Hidden on an expired free link. */
+  plan?: ReactNode;
+  /** shareSlots().pdf: PdfCard (paid download or the locked free card). */
+  pdf?: ReactNode;
 };
-
-// Old-style cards for the PDF section until T4 restyles it.
-const CARD = "flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 shadow-card sm:p-5";
 
 export function PublishPanel(props: PublishPanelProps) {
   // Not startTransition(router.refresh): that can stay pending forever under publish/loading.tsx.
@@ -75,20 +78,37 @@ export function liveHeading(message: { text: string } | null): string {
   return message?.text === LIVE_TEXT ? "Share your link" : LIVE_TEXT;
 }
 
+export type ShareBarAction = "publish" | "update" | "whatsapp";
+
+/** What the phone sticky bar offers for a card variant; null = no bar (expired / pending / blocked / no link). */
+export function shareBarAction(kind: PrimaryActionKind, blocked: boolean, hasUrl: boolean): ShareBarAction | null {
+  if (kind === "draft") return blocked ? null : "publish";
+  if (kind === "changes") return blocked ? null : "update";
+  if (kind === "live") return hasUrl ? "whatsapp" : null;
+  return null;
+}
+
+/** The card control the bar stands in for: the bar shows once that control is off screen. */
+const BAR_TARGET: Record<ShareBarAction, string> = {
+  publish: "publish-button",
+  update: "publish-changes-button",
+  whatsapp: "share-whatsapp",
+};
+
 export function PublishPanelView({
   bookId,
   title,
   state,
   actions,
   paymentsEnabled,
-  compare,
   shared = null,
   preview = null,
+  plan = null,
+  pdf = null,
   refresh,
   refreshing = false,
   now,
   wait,
-  pdfTransport,
 }: PublishPanelProps & {
   refresh: () => void;
   refreshing?: boolean;
@@ -96,104 +116,159 @@ export function PublishPanelView({
   now?: Date;
   /** Conflict retry delay (tests). */
   wait?: (ms: number) => Promise<void>;
-  /** PDF API transport (dev fixture); defaults to same-origin fetch. */
-  pdfTransport?: PdfTransport;
 }) {
   const { busy, message, celebrate, publishedOn, confirmUnpublish, setConfirmUnpublish, onPublish, onUnpublish, onPasswordChanged } =
     usePublishPanel({ state, actions, shared, refresh, wait });
   const locked = busy !== null || refreshing;
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const status = shareStatus(state, now ?? new Date());
   const expired = status.kind === "expired";
   const live = state.published && !expired;
   const kind = primaryActionKind(status, !state.published && publishedOn === state);
   const celebrating = celebrate && kind === "live";
-  const openHref = `/b/${state.slug}`;
-  const upgrade = (variant: "primary" | "outline") => (
-    <UpgradeButtonView
-      bookId={bookId}
-      returnTo={`/books/${bookId}/publish`}
-      isPaid={state.isPaid}
-      paymentsEnabled={paymentsEnabled}
-      variant={variant}
-      testId="publish-upgrade"
-      refresh={refresh}
-    />
-  );
+  const bar = shareBarAction(kind, state.canPublishReason !== null, live && !!state.url);
+  const barVisible = useOffscreen(rootRef, bar ? BAR_TARGET[bar] : null);
 
   return (
     <div
-      className="flex flex-col gap-stack"
+      ref={rootRef}
+      className={preview ? SHARE_COLUMNS : undefined}
       data-testid="publish-panel"
       data-state={expired ? "expired" : live ? "published" : "unpublished"}
       data-celebrate={celebrating ? "on" : undefined}
     >
-      {/* Same position in every branch so the message survives router.refresh(). */}
-      <div aria-live="polite" data-testid="publish-message-slot">
-        {message ? <PanelNotice message={message} bookId={bookId} /> : null}
+      {preview ? (
+        <aside aria-label="Your book" className="mb-4 sm:mb-stack lg:sticky lg:top-8 lg:mb-0" data-testid="publish-aside">
+          {preview}
+        </aside>
+      ) : null}
+
+      <div className="min-w-0">
+        {/* Same position in every branch so the message survives router.refresh(). */}
+        <div aria-live="polite" data-testid="publish-message-slot" className="[&:not(:empty)]:mb-4 sm:[&:not(:empty)]:mb-stack">
+          {message ? <PanelNotice message={message} bookId={bookId} /> : null}
+        </div>
+
+        <div className="flex flex-col gap-4 sm:gap-stack">
+          <PrimaryActionCard
+            key={kind}
+            kind={kind}
+            state={state}
+            liveHeading={liveHeading(message)}
+            busy={busy === "publish"}
+            locked={locked}
+            onPublish={onPublish}
+            upgrade={
+              <UpgradeButtonView
+                bookId={bookId}
+                returnTo={`/books/${bookId}/publish`}
+                isPaid={state.isPaid}
+                paymentsEnabled={paymentsEnabled}
+                className={SHARE_UPGRADE_CLASS}
+                testId="publish-upgrade"
+                refresh={refresh}
+              />
+            }
+            celebrate={celebrating}
+            now={now}
+          />
+
+          {live && state.url ? (
+            <ShareLinkCard url={state.url} title={title} />
+          ) : null}
+
+          {expired && !state.isPaid ? null : plan}
+
+          {pdf}
+
+          {!expired ? <PasswordField hasPassword={state.hasPassword} setPassword={actions.setPassword} onChanged={onPasswordChanged} disabled={locked} /> : null}
+
+          {state.published ? (
+            <DangerZone
+              isPaid={state.isPaid}
+              confirming={confirmUnpublish}
+              onConfirmChange={setConfirmUnpublish}
+              onUnpublish={onUnpublish}
+              busy={busy === "unpublish"}
+              locked={locked}
+            />
+          ) : null}
+        </div>
       </div>
 
-      {preview ? (
-        <SharePreview
-          preview={preview}
-          title={title}
-          pageCount={state.pageCount}
-          celebrate={celebrating}
-          open={live && state.slug ? <OpenLink href={openHref} className={SHARE_OPEN_LINK} label={SHARE_COPY.openFlipbook} /> : undefined}
-        />
-      ) : null}
-
-      <PrimaryActionCard
-        key={kind}
-        kind={kind}
-        state={state}
-        liveHeading={liveHeading(message)}
-        busy={busy === "publish"}
-        locked={locked}
-        onPublish={onPublish}
-        upgrade={upgrade("primary")}
-        celebrate={celebrating}
-        burst={!preview}
-        now={now}
-      />
-
-      {live && state.url ? (
-        <ShareLinkCard
-          url={state.url}
-          title={title}
-          open={preview ? undefined : <OpenLink href={openHref} className={SHARE_CTA_EMERALD} label={SHARE_COPY.openBook} />}
-        />
-      ) : null}
-
-      {!state.isPaid && !expired ? <PlanCompareCard compare={compare}>{upgrade("outline")}</PlanCompareCard> : null}
-
-      {state.isPaid ? (
-        <PdfSection bookId={bookId} paymentsEnabled={paymentsEnabled} refresh={refresh} transport={pdfTransport} />
-      ) : null}
-
-      {!expired ? <PasswordField hasPassword={state.hasPassword} setPassword={actions.setPassword} onChanged={onPasswordChanged} disabled={locked} /> : null}
-
-      {state.published ? (
-        <UnpublishSection
-          isPaid={state.isPaid}
-          confirming={confirmUnpublish}
-          onConfirmChange={setConfirmUnpublish}
-          onUnpublish={onUnpublish}
-          busy={busy === "unpublish"}
-          locked={locked}
-        />
+      {bar ? (
+        <>
+          <div aria-hidden="true" className={SHARE_BAR_SPACER} data-testid="publish-bar-spacer" />
+          <ShareBar
+            action={bar}
+            visible={barVisible}
+            busy={busy === "publish"}
+            locked={locked}
+            onPublish={onPublish}
+            whatsappHref={bar === "whatsapp" && state.url ? whatsappShareUrl(title, state.url) : null}
+          />
+        </>
       ) : null}
     </div>
   );
 }
 
-/** The live book in a new tab (testid publish-open): a plain <a> — the viewer is its own app. */
-function OpenLink({ href, className, label }: { href: string; className: string; label: string }) {
+/**
+ * True once the element with `testId` inside the panel is off screen (or under the bar). Starts
+ * false (no bar flash on load); without IntersectionObserver the bar just shows.
+ */
+function useOffscreen(root: RefObject<HTMLElement | null>, testId: string | null): boolean {
+  const [off, setOff] = useState(false);
+  useEffect(() => {
+    const el = testId ? root.current?.querySelector(`[data-testid="${testId}"]`) : null;
+    if (!el) return setOff(false);
+    if (typeof IntersectionObserver === "undefined") return setOff(true);
+    const io = new IntersectionObserver(([e]) => setOff(!e.isIntersecting), { rootMargin: "0px 0px -96px 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [root, testId]);
+  return off;
+}
+
+/** Phone-only fixed bar (hidden from lg). Own testids — the card buttons keep theirs. */
+function ShareBar({
+  action,
+  visible,
+  busy,
+  locked,
+  onPublish,
+  whatsappHref,
+}: {
+  action: ShareBarAction;
+  visible: boolean;
+  busy: boolean;
+  locked: boolean;
+  onPublish: () => void;
+  whatsappHref: string | null;
+}) {
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className={className} data-testid="publish-open">
-      <ExternalLink className="size-4" aria-hidden="true" />
-      {label}
-    </a>
+    <div
+      className="share-bar fixed inset-x-0 bottom-0 z-40 border-t border-[#e2d7c1] bg-[#faf6ee]/95 px-gutter pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-12px_28px_-20px_rgb(14_59_46/0.5)] backdrop-blur lg:hidden"
+      data-share-bar=""
+      data-testid="publish-sticky-bar"
+      data-action={action}
+      data-visible={visible ? "true" : "false"}
+    >
+      <div className="mx-auto w-full max-w-md">
+        {whatsappHref ? (
+          <a href={whatsappHref} target="_blank" rel="noopener noreferrer" className={SHARE_CTA_WHATSAPP} data-testid="publish-bar-whatsapp">
+            <MessageCircle className="size-5" aria-hidden="true" />
+            {SHARE_COPY.whatsapp}
+          </a>
+        ) : (
+          <button type="button" onClick={onPublish} disabled={locked} className={`${SHARE_CTA_GOLD} w-full`} data-testid="publish-bar-button">
+            {busy ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Send className="size-4" aria-hidden="true" />}
+            {action === "update" ? SHARE_COPY.updateLink : SHARE_COPY.publish}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -213,30 +288,5 @@ function PanelNotice({ message, bookId }: { message: PanelMessage; bookId: strin
         ) : null}
       </p>
     </Notice>
-  );
-}
-
-/** Paid books: the PDF download (old card look until T4's PdfCard). Never rendered for free books. */
-function PdfSection(props: { bookId: string; paymentsEnabled: boolean; refresh: () => void; transport?: PdfTransport }) {
-  return (
-    <section id="pdf" className={CARD} data-testid="publish-pdf">
-      <div className="flex items-start gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-primary">
-          <FileText className="size-4" aria-hidden="true" />
-        </span>
-        <div className="min-w-0">
-          <h2 className="type-h2 text-foreground">PDF</h2>
-          <p className="type-small mt-0.5 text-muted-foreground">Download your book as a print-ready PDF.</p>
-        </div>
-      </div>
-      <PdfDownloadView
-        bookId={props.bookId}
-        isPaid
-        paymentsEnabled={props.paymentsEnabled}
-        returnTo={`/books/${props.bookId}/publish`}
-        refresh={props.refresh}
-        transport={props.transport}
-      />
-    </section>
   );
 }

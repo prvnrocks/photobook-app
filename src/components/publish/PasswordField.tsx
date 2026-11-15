@@ -2,12 +2,23 @@
 
 // Optional book password (D-040): set / change / remove. 4–64 characters; the server validates
 // again and hashes (scrypt). The password itself is never kept after submit, logged or shown.
+// M21 T4: the share page's "Privacy" card (ivory card, emerald pills); behaviour + testids unchanged.
 
 import { Eye, EyeOff, KeyRound, Loader2 } from "lucide-react";
 import { useId, useState } from "react";
 import type { SetBookPasswordResult } from "@/app/books/[id]/publish/actions";
-import { BTN } from "@/components/app/button-classes";
 import { PASSWORD_MAX, passwordErrorCopy, passwordLengthError } from "@/lib/publish/ui";
+import {
+  SHARE_CARD,
+  SHARE_CARD_HEADING,
+  SHARE_CTA_DANGER_QUIET,
+  SHARE_CTA_EMERALD,
+  SHARE_CTA_EMERALD_SOLID,
+  SHARE_EYEBROW,
+  SHARE_ICON_BUTTON,
+  SHARE_ICON_CHIP,
+  SHARE_INPUT,
+} from "./share-classes";
 
 export type PasswordFieldProps = {
   hasPassword: boolean;
@@ -18,10 +29,10 @@ export type PasswordFieldProps = {
   disabled?: boolean;
 };
 
-// Shared Button looks (M11, D-067): 44 px targets with a visible focus ring (precomputed, see BTN).
-const PRIMARY = BTN.touchPrimary;
-const OUTLINE = BTN.touchOutlineCard;
-const DANGER = BTN.touchOutlineDanger;
+// Share page pills (share-classes.ts): 44 px targets with a visible focus ring.
+const PRIMARY = SHARE_CTA_EMERALD_SOLID;
+const OUTLINE = SHARE_CTA_EMERALD;
+const DANGER = SHARE_CTA_DANGER_QUIET;
 
 export function PasswordField({ hasPassword, setPassword, onChanged, disabled = false }: PasswordFieldProps) {
   const [editing, setEditing] = useState(false);
@@ -68,13 +79,14 @@ export function PasswordField({ hasPassword, setPassword, onChanged, disabled = 
   };
 
   return (
-    <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 shadow-card sm:p-5" data-testid="password-section">
+    <section className={`${SHARE_CARD} flex flex-col gap-4`} data-testid="password-section">
       <div className="flex items-start gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-primary">
+        <span className={SHARE_ICON_CHIP}>
           <KeyRound className="size-4" aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <h2 className="type-h2 text-foreground">Password</h2>
+          <p className={SHARE_EYEBROW}>Privacy</p>
+          <h2 className={`${SHARE_CARD_HEADING} mt-1`}>Password</h2>
           <p className="type-small mt-0.5 text-muted-foreground" data-testid="password-status">
             {hasPassword ? "On — people need the password to open your book." : "Off — anyone with the link can open your book."}
           </p>
@@ -102,14 +114,14 @@ export function PasswordField({ hasPassword, setPassword, onChanged, disabled = 
               maxLength={PASSWORD_MAX * 2}
               aria-invalid={error ? true : undefined}
               aria-describedby={error ? errorId : undefined}
-              className="h-11 min-w-0 flex-1 rounded-lg border border-input bg-card px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 aria-invalid:border-destructive"
+              className={SHARE_INPUT}
               data-testid="password-input"
             />
             <button
               type="button"
               onClick={() => setShow((s) => !s)}
               aria-label={show ? "Hide password" : "Show password"}
-              className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-input bg-card outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className={SHARE_ICON_BUTTON}
             >
               {show ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
             </button>

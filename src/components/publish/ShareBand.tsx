@@ -6,14 +6,14 @@
 // Hook-free, no cn/buttonVariants/next/link (links arrive as props): usable from the server page and
 // inside first-load client islands. Foil rules at the sides and foot, as on the books screen.
 // Contrast on the leather's lightest point #1f5443: cream 7.19, cream-muted #d7cdb9 5.53, pale gold
-// #e3c766 5.25; chip tones in share-classes.ts (all ≥ 7.4 on their chip, ≥ 5.5 on the leather).
+// #e3c766 5.25; chip tones in share-page-classes.ts (all ≥ 7.4 on their chip, ≥ 5.5 on the leather).
 
 import type { ReactNode } from "react";
 import { Check } from "lucide-react";
 import { cx } from "@/lib/cx";
 import { FLOW_STEPS } from "@/lib/app/flow-steps";
 import { LIBRARY_CONTAINER } from "@/components/dashboard/library-classes";
-import { SHARE_CHIP_BASE, SHARE_CHIP_DOT, SHARE_CHIP_TONE, type ShareChipKind } from "./share-classes";
+import { SHARE_CHIP_BASE, SHARE_CHIP_DOT, SHARE_CHIP_TONE, type ShareChipKind } from "./share-page-classes";
 
 export const SHARE_TITLE_FALLBACK = "Your book";
 
@@ -30,7 +30,7 @@ export type ShareBandProps = {
   chip?: ShareChip | null;
   /**
    * The "Back to editor" link, rendered by the page (next/link) with data-testid="publish-back" and
-   * className SHARE_BACK_LINK from share-classes.ts.
+   * className SHARE_BACK_LINK from share-page-classes.ts.
    */
   back?: ReactNode;
   /** Small caps line above the title. */
@@ -57,7 +57,7 @@ export function ShareBand({ title, chip, back, eyebrow = "Share", titleAs = "h1"
           <span>{eyebrow}</span>
           <span aria-hidden="true" className="home-foil-h block h-px w-10 sm:w-14" />
         </p>
-        <div className="mt-1.5 flex min-w-0 flex-col items-start gap-2 sm:mt-2 sm:flex-row sm:items-center sm:gap-4">
+        <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 sm:mt-2 sm:gap-x-4">
           <Title
             className={cx(
               "max-w-full min-w-0 truncate font-display text-[1.6rem] leading-[1.2] font-semibold tracking-[-0.01em] sm:text-[2.2rem] lg:text-[2.6rem]",

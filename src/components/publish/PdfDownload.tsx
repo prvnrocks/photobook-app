@@ -8,6 +8,9 @@
 //
 // <PdfDownload> wires next/navigation (refresh for the upgrade fallback); <PdfDownloadView> is
 // router-free (PublishPanelView, unit tests, dev fixtures). Paid status comes from the server.
+// `look` (M21 T4): class strings for the share page's emerald pills and ivory progress well
+// (PDF_SHARE_LOOK, passed in by the server slot so this module — shared with the editor — imports
+// no share-page recipes); omitted → the app Button look (editor sheet).
 
 import { Circle, CircleCheck, CircleDot, Download, FileDown, Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -42,11 +45,14 @@ export type PdfDownloadProps = {
   returnTo: string;
   /** Awaited before the export starts (editor: settle pending saves). */
   onBeforeStart?: () => unknown;
+  /** Button / progress classes (share page: PDF_SHARE_LOOK from share-classes.ts); omitted → app look. */
+  look?: PdfLook;
 };
 
+export type PdfLook = { primary: string; outline: string; well: string };
+
 // Shared Button looks (M11, D-067), precomputed (BTN) so the publish route ships no cn/ui-button.
-const PRIMARY = BTN.ctaPrimaryWrap;
-const OUTLINE = BTN.ctaOutlineCard;
+const APP_LOOK: PdfLook = { primary: BTN.ctaPrimaryWrap, outline: BTN.ctaOutlineCard, well: "rounded-xl border border-border bg-background" };
 
 export function PdfDownload(props: PdfDownloadProps) {
   // Not a bare router.refresh(): it can stay pending forever under edit/loading.tsx.
@@ -60,6 +66,7 @@ export function PdfDownloadView({
   paymentsEnabled = false,
   returnTo,
   onBeforeStart,
+  look = APP_LOOK,
   refresh = noop,
   initialState,
   transport = fetchPdfTransport,
@@ -122,6 +129,7 @@ export function PdfDownloadView({
     );
   }
 
+  const cls = look;
   const busy = isPdfBusy(state);
   const copy = pdfStatusCopy(state);
   const isError = state.kind === "error";
@@ -135,7 +143,7 @@ export function PdfDownloadView({
           onClick={() => void controller.current?.start()}
           disabled={busy}
           aria-busy={busy || undefined}
-          className={PRIMARY}
+          className={cls.primary}
           data-testid="pdf-download"
         >
           {busy ? <Loader2 className="size-4 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <FileDown className="size-4 shrink-0" aria-hidden="true" />}
@@ -149,7 +157,7 @@ export function PdfDownloadView({
         aria-live={isError && !notPaid ? "assertive" : "polite"}
         data-testid="pdf-status" data-state={state.kind} data-code={state.kind === "error" ? state.code : undefined}>
         {copy && busy ? (
-          <PdfProgress state={state} copy={copy} />
+          <PdfProgress state={state} copy={copy} well={cls.well} />
         ) : copy ? (
           <Notice live={false} tone={isError ? (notPaid ? "info" : "error") : state.kind === "ready" ? "success" : "info"}>
             <span data-testid="pdf-status-text">{copy}</span>
@@ -171,7 +179,7 @@ export function PdfDownloadView({
       </div>
 
       {state.kind === "ready" ? (
-        <a href={state.url} download={state.filename} rel="noopener noreferrer" className={OUTLINE} data-testid="pdf-download-again">
+        <a href={state.url} download={state.filename} rel="noopener noreferrer" className={cls.outline} data-testid="pdf-download-again">
           <Download className="size-4 shrink-0" aria-hidden="true" />
           {PDF_DOWNLOAD_AGAIN_LABEL}
         </a>
@@ -193,11 +201,11 @@ export function PdfDownloadView({
 }
 
 /** Busy export: spinner + copy + the real-state checklist (src/lib/pdf/progress.ts). */
-function PdfProgress({ state, copy }: { state: PdfUiState; copy: string }) {
+function PdfProgress({ state, copy, well }: { state: PdfUiState; copy: string; well: string }) {
   const steps = pdfProgressSteps(state);
   const paused = state.kind === "preparing" && state.paused;
   return (
-    <div className="type-small rounded-xl border border-border bg-background p-4" data-testid="pdf-progress">
+    <div className={`type-small p-4 ${well}`} data-testid="pdf-progress">
       <p className="flex items-start gap-2 font-medium text-foreground">
         <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-accent-text motion-reduce:animate-none" aria-hidden="true" />
         <span className="min-w-0" data-testid="pdf-status-text">

@@ -16,7 +16,8 @@ import { PdfPanel, pdfDownloadTool, PDF_TOOL_ID } from "@/components/editor/tool
 import { EDITOR_TOOLS, visibleTools } from "@/components/editor/tools/registry";
 import { UPGRADE_TOOL_ID } from "@/components/editor/UpgradeSheet";
 import { PdfDownloadView } from "@/components/publish/PdfDownload";
-import { PublishPanelView, type PublishActions } from "@/components/publish/PublishPanel";
+import { type PublishActions } from "@/components/publish/PublishPanel";
+import { SharePanel } from "./helpers/share-panel";
 import { devEditorData } from "@/lib/editor/dev-fixture";
 import { initEditorState, type EditorSelection } from "@/lib/editor/store";
 import { PDF_PAUSED_COPY, PDF_STEP_LABELS, pdfProgressSteps } from "@/lib/pdf/progress";
@@ -163,7 +164,7 @@ describe("PublishPanel PDF section", () => {
   };
   const panel = (name: DevPublishStateName) =>
     renderToStaticMarkup(
-      <PublishPanelView bookId={BOOK} title="T" state={devPublishState(name)} actions={actions} paymentsEnabled compare={publishCompare()} refresh={() => {}} />,
+      <SharePanel bookId={BOOK} title="T" state={devPublishState(name)} actions={actions} paymentsEnabled compare={publishCompare()} refresh={() => {}} />,
     );
 
   it.each(["draft-paid", "live-paid"] as const)("%s: PDF section with Download PDF", (name) => {

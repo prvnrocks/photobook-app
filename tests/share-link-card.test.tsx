@@ -17,7 +17,6 @@ const { ShareButtons } = await import("@/components/viewer/ShareButtons");
 const { PublishPanelView } = await import("@/components/publish/PublishPanel");
 const { COPY_FEEDBACK_MS } = await import("@/components/viewer/share-actions");
 const { devPublishState, DEV_PUBLISH_URL } = await import("@/lib/publish/dev-fixture");
-const { publishCompare } = await import("@/lib/publish/compare");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -136,7 +135,6 @@ describe("publish success celebrates", () => {
       title: "Sara & Omar",
       actions: { publish, unpublish: vi.fn(), setPassword: vi.fn() },
       paymentsEnabled: true,
-      compare: publishCompare(),
       now: new Date("2026-11-10T10:00:00.000Z"),
     };
     const refresh = vi.fn();
@@ -152,7 +150,7 @@ describe("publish success celebrates", () => {
     expect(q("publish-live-card")!.getAttribute("data-celebrate")).toBe("on");
     expect(q("publish-live-heading")!.textContent).toBe("Share your link");
     expect(q("publish-message")!.textContent).toBe("Your book is live");
-    expect(q("share-burst")).not.toBeNull();
+    expect(q("share-burst")).toBeNull(); // M21 T5: the burst fires in the page's preview slot, not the card
   });
 
   it("a failed publish doesn't celebrate", async () => {
@@ -164,7 +162,6 @@ describe("publish success celebrates", () => {
         state={devPublishState("changes")}
         actions={{ publish, unpublish: vi.fn(), setPassword: vi.fn() }}
         paymentsEnabled
-        compare={publishCompare()}
         refresh={() => {}}
         now={new Date("2026-11-10T10:00:00.000Z")}
       />,

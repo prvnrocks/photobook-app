@@ -5,8 +5,8 @@
 //   the link card).
 // - pending: "Getting your link ready…" between a first publish and the refreshed live state.
 // - live (live / expiring / paid): calm "Your book is live" + the link lifetime; on `celebrate`
-//   (just published, or ?shared=) the badge hops and — when the page shows no preview tile —
-//   the foil burst fires here. Reduced motion → static (share-motion.css).
+//   (just published, or ?shared=) the badge hops (the foil burst fires in the page's preview —
+//   M21 T5). Reduced motion → static (share-motion.css).
 // - expired: republish/upgrade copy + the upgrade button the panel passes in.
 // Hook-free, no cn/buttonVariants/next/link. Paid copy reads only state.isPaid (server state).
 // Copy lives in src/lib/publish/ui.ts.
@@ -28,7 +28,6 @@ import {
   SHARE_COPY,
 } from "@/lib/publish/ui";
 import { SHARE_BADGE, SHARE_CARD, SHARE_CTA_GOLD } from "./share-classes";
-import { ShareBurst } from "./ShareBurst";
 
 export type PrimaryActionKind = "draft" | "pending" | "changes" | "live" | "expired";
 
@@ -52,10 +51,8 @@ export type PrimaryActionCardProps = {
   onPublish: () => void;
   /** Expired card's upgrade button (UpgradeButtonView, testid publish-upgrade). */
   upgrade?: ReactNode;
-  /** Fire the publish celebration (live card). */
+  /** Fire the publish celebration (live card: the badge hop). */
   celebrate?: boolean;
-  /** Draw the burst in this card (false when a SharePreview tile celebrates instead). */
-  burst?: boolean;
   /** Clock for date labels (tests). */
   now?: Date;
 };
@@ -64,7 +61,7 @@ const SPIN = "size-4 animate-spin motion-reduce:animate-none";
 const CARD = cx(SHARE_CARD, "flex flex-col gap-4");
 /** SHARE_CARD's shape in the warning tone (written out: cx can't override SHARE_CARD's colours). */
 const CARD_WARN =
-  "flex flex-col gap-4 rounded-[1.75rem] border border-warning-border bg-warning-soft p-5 shadow-[0_18px_40px_-28px_rgb(14_59_46/0.45)] sm:p-7";
+  "flex flex-col gap-4 rounded-[1.75rem] border border-warning-border bg-warning-soft p-4 shadow-[0_18px_40px_-28px_rgb(14_59_46/0.45)] sm:p-7";
 const HEADING = "font-display text-xl leading-tight font-semibold text-[#0e3b2e] sm:text-2xl";
 const BODY = "type-small text-muted-foreground";
 const CTA = cx(SHARE_CTA_GOLD, "w-full sm:w-auto sm:self-start");
@@ -138,7 +135,7 @@ export function PrimaryActionCard(props: PrimaryActionCardProps) {
         data-testid="publish-live-card"
         data-celebrate={props.celebrate ? "on" : undefined}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-start gap-3">
           <span className={cx(SHARE_BADGE, "share-cover-hop home-foil-fill text-[#1b1b1d]")} aria-hidden="true">
             <Check strokeWidth={3} className="size-5" />
           </span>
@@ -147,17 +144,16 @@ export function PrimaryActionCard(props: PrimaryActionCardProps) {
               {props.liveHeading}
             </h2>
             <p className={cx(BODY, "mt-0.5")}>{SHARE_COPY.liveBody}</p>
+            {expiry ? (
+              <span
+                className="mt-2 inline-block rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground"
+                data-testid="publish-expiry"
+              >
+                {expiry}
+              </span>
+            ) : null}
           </div>
         </div>
-        {expiry ? (
-          <span
-            className="self-start rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground"
-            data-testid="publish-expiry"
-          >
-            {expiry}
-          </span>
-        ) : null}
-        {props.celebrate && props.burst ? <ShareBurst /> : null}
       </section>
     );
   }

@@ -17,7 +17,7 @@ import {
   UPGRADE_CANCELLED_VALUE,
 } from "@/lib/upgrade/ui";
 
-export function UpgradeCancelledNotice({ floating = false }: { floating?: boolean }) {
+export function UpgradeCancelledNotice({ floating = false, className }: { floating?: boolean; className?: string }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const cancelled = searchParams.get(UPGRADE_CANCELLED_PARAM) === UPGRADE_CANCELLED_VALUE;
@@ -35,7 +35,7 @@ export function UpgradeCancelledNotice({ floating = false }: { floating?: boolea
   const box = (
     <div
       role="status"
-      className="type-small flex w-full min-w-0 items-center gap-3 rounded-xl border border-warning-border bg-warning-soft py-1 ps-4 pe-1 text-foreground shadow-card"
+      className={`type-small flex w-full min-w-0 items-center gap-3 rounded-2xl border border-warning-border bg-warning-soft py-1 ps-4 pe-1 text-foreground shadow-[0_12px_28px_-22px_rgb(14_59_46/0.5)]${className ? ` ${className}` : ""}`}
       data-testid="upgrade-cancelled"
     >
       <TriangleAlert className="size-5 shrink-0 text-warning" aria-hidden="true" />
@@ -43,7 +43,7 @@ export function UpgradeCancelledNotice({ floating = false }: { floating?: boolea
       <button
         type="button"
         onClick={() => setShow(false)}
-        className="flex size-11 shrink-0 items-center justify-center rounded-lg text-foreground/80 outline-none hover:bg-warning-border/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex size-11 shrink-0 items-center justify-center rounded-full text-foreground/80 outline-none hover:bg-warning-border/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
         aria-label="Dismiss"
         data-testid="upgrade-cancelled-dismiss"
       >

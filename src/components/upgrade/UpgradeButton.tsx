@@ -34,6 +34,8 @@ export type UpgradeButtonProps = {
   testId?: string;
   /** Called on tap before the action runs (editor: flush pending saves). */
   onBeforeStart?: () => void;
+  /** Replaces the variant's button classes (share page: the gold pill). Must keep a 44 px target + focus ring. */
+  className?: string;
 };
 
 // Shared Button looks (M11, D-067): 44 px touch / 48 px cta, token colours, visible focus ring.
@@ -62,6 +64,7 @@ export function UpgradeButtonView({
   label = UPGRADE_BUTTON_LABEL,
   testId = "upgrade-button",
   onBeforeStart,
+  className,
   refresh,
   start = startUpgradeCheckout,
   navigate = defaultNavigate,
@@ -116,10 +119,10 @@ export function UpgradeButtonView({
         disabled={!paymentsEnabled || busy}
         aria-busy={busy || undefined}
         aria-describedby={paymentsEnabled ? undefined : hintId}
-        className={VARIANTS[variant]}
+        className={className ?? VARIANTS[variant]}
         data-testid={testId}
       >
-        {busy ? <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden="true" /> : <Gem className="size-4 shrink-0" aria-hidden="true" />}
+        {busy ? <Loader2 className="size-4 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Gem className="size-4 shrink-0" aria-hidden="true" />}
         <span className="min-w-0">{label}</span>
       </button>
       {!paymentsEnabled ? (

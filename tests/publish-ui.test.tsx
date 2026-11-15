@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { BookList } from "@/components/dashboard/BookList";
 import { EditorShell } from "@/components/editor/EditorShell";
 import { PasswordField } from "@/components/publish/PasswordField";
-import { PublishPanelView, type PublishActions } from "@/components/publish/PublishPanel";
+import { type PublishActions } from "@/components/publish/PublishPanel";
+import { SharePanel } from "./helpers/share-panel";
 import { bookPublishChip, bookShareHref } from "@/lib/dashboard/publish-chip";
 import type { BookListItem } from "@/lib/db/books";
 import { devEditorData, devTransport } from "@/lib/editor/dev-fixture";
@@ -42,7 +43,7 @@ const actions: PublishActions = {
 
 function panel(name: DevPublishStateName, paymentsEnabled = true): string {
   return renderToStaticMarkup(
-    <PublishPanelView
+    <SharePanel
       bookId={BOOK}
       title="Sara & Omar"
       state={devPublishState(name)}
@@ -161,7 +162,7 @@ describe("hasUnpublishedChanges", () => {
 describe("PublishPanelView after the editor's Share (M13 T9)", () => {
   const shared = (name: DevPublishStateName, flag: "live" | "changes" | null) =>
     renderToStaticMarkup(
-      <PublishPanelView
+      <SharePanel
         bookId={BOOK}
         title="Sara & Omar"
         state={devPublishState(name)}
@@ -171,6 +172,7 @@ describe("PublishPanelView after the editor's Share (M13 T9)", () => {
         refresh={() => {}}
         now={NOW}
         shared={flag}
+        preview={null}
       />,
     );
 
@@ -192,22 +194,21 @@ describe("PublishPanelView after the editor's Share (M13 T9)", () => {
     expect(shared("live", "changes")).toMatch(/data-testid="publish-live-heading">.*Your book is live<\/h2>/);
   });
 
-  it("?shared= celebrates: data-celebrate on the panel + live card, burst in the card (no preview tile)", () => {
+  it("?shared= celebrates: data-celebrate on the panel + live card (badge hop); the burst lives only in the preview (M21 T5)", () => {
     for (const flag of ["live", "changes"] as const) {
       const html = shared("live", flag);
       expect(html).toMatch(/data-testid="publish-panel" data-state="published" data-celebrate="on"/);
       const card = html.match(/<section[^>]*data-testid="publish-live-card"[^>]*>/)?.[0] ?? "";
       expect(card).toContain('data-celebrate="on"');
-      expect(has(html, "share-burst")).toBe(true);
+      expect(has(html, "share-burst")).toBe(false); // no preview passed → no burst anywhere
     }
     const calm = shared("live", null);
     expect(calm).not.toContain("data-celebrate");
-    expect(has(calm, "share-burst")).toBe(false);
   });
 
-  it("with a preview tile: the tile celebrates and carries Open flipbook (one publish-open, no card burst)", () => {
+  it("with a preview (M21 T5 slot): the panel root celebrates the preview's burst; it carries Open flipbook (one publish-open, no card burst)", () => {
     const html = renderToStaticMarkup(
-      <PublishPanelView
+      <SharePanel
         bookId={BOOK}
         title="سارة وعمر"
         state={devPublishState("live")}
@@ -220,9 +221,11 @@ describe("PublishPanelView after the editor's Share (M13 T9)", () => {
         preview={{ coverThumbUrl: null, format: "A5_PORTRAIT", designStyle: "classic" }}
       />,
     );
+    expect(html).toMatch(/<div class="[^"]*lg:grid[^"]*" data-testid="publish-panel" data-state="published" data-celebrate="on"/);
     const tile = html.match(/<figure[^>]*data-testid="share-preview"[^>]*>/)?.[0] ?? "";
-    expect(tile).toContain('data-celebrate="on"');
+    expect(tile).toContain('data-variant="responsive"');
     expect(html.match(/data-testid="share-burst"/g)?.length).toBe(1);
+    expect(html.indexOf('data-testid="share-burst"')).toBeLessThan(html.indexOf('data-testid="publish-live-card"'));
     expect(html.match(/data-testid="publish-open"/g)?.length).toBe(1);
     expect(html).toMatch(/<a href="\/b\/sara-and-omar-wedding-7Hq2xYp9Kd" target="_blank" rel="noopener noreferrer"[^>]*data-testid="publish-open"/);
     expect(html).toContain("Open flipbook");
@@ -334,7 +337,7 @@ describe("PublishPanelView states", () => {
 
   it("changes on a paid book: same card, chip stays paid-only via state.isPaid (no free notice)", () => {
     const html = renderToStaticMarkup(
-      <PublishPanelView
+      <SharePanel
         bookId={BOOK}
         title="Sara & Omar"
         state={{ ...devPublishState("live-paid"), hasChanges: true }}
@@ -351,7 +354,7 @@ describe("PublishPanelView states", () => {
 
   it("changes card blocked: reason + disabled Update link", () => {
     const html = renderToStaticMarkup(
-      <PublishPanelView
+      <SharePanel
         bookId={BOOK}
         title="Sara & Omar"
         state={{ ...devPublishState("changes"), canPublishReason: "page_limit", pageCount: 24 }}
@@ -395,7 +398,7 @@ describe("PublishPanelView states", () => {
     expect(has(html, "unpublish-section")).toBe(false);
   });
 
-  it("live: Send on WhatsApp is the big WhatsApp-green cta; then the link field + Copy, then Open book", () => {
+  it("live: Send on WhatsApp is the big WhatsApp-green cta; then the link field + Copy; Open flipbook in the preview", () => {
     const html = panel("live");
     expect(html).toContain("Send on WhatsApp");
     // User decision 2026-11-11: WhatsApp green (white text ≥ 4.5:1), not the terracotta accent.
@@ -404,9 +407,13 @@ describe("PublishPanelView states", () => {
     expect(wa).toContain("h-12");
     expect(wa).toContain("focus-visible:ring-2");
     expect(html.match(/class="[^"]*\bbg-accent-strong\b/g)?.length ?? 0).toBe(0);
-    const order = ["share-whatsapp", "publish-url", "share-copy", "publish-open"].map((id) => html.indexOf(`data-testid="${id}"`));
+    const order = ["share-whatsapp", "publish-url", "share-copy"].map((id) => html.indexOf(`data-testid="${id}"`));
     expect(order.every((i) => i > 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // M21 T5: the one "Open flipbook" lives in the preview (aside, before the cards), not the link card.
+    expect(html.match(/data-testid="publish-open"/g)?.length).toBe(1);
+    expect(html.indexOf('data-testid="publish-open"')).toBeLessThan(html.indexOf('data-testid="publish-live"'));
+    expect(html.indexOf('data-testid="publish-open"')).toBeGreaterThan(html.indexOf('data-testid="share-preview"'));
     // Copy: emerald pill with the copy-pulse hook, accessible name "Copy link", no feedback yet.
     const copy = html.match(/<button[^>]*data-testid="share-copy"[^>]*>[\s\S]*?<\/button>/)?.[0] ?? "";
     expect(copy).toContain("share-copy-pulse");
@@ -435,7 +442,9 @@ describe("PublishPanelView states", () => {
     }
     expect(html).toContain(`${UPGRADE.label} · ${c.priceNote}`);
     // Source never hard-codes the limits.
-    const src = readFileSync("src/components/publish/PublishPanel.tsx", "utf8") + readFileSync("src/lib/publish/compare.ts", "utf8");
+    const src = ["src/components/publish/PublishPanel.tsx", "src/components/publish/PlanCard.tsx", "src/components/publish/PdfCard.tsx", "src/components/publish/share-slots.tsx", "src/lib/publish/compare.ts"]
+      .map((f) => readFileSync(f, "utf8"))
+      .join("\n");
     expect(src).not.toMatch(/\b(20|100|30) (pages|days)\b|AED 39/);
   });
 
@@ -519,16 +528,30 @@ describe("editor header: Publish changes folded into Share (M13 T9)", () => {
   });
 });
 
-describe("PublishHeader on the shared PageHeader (M11 review)", () => {
-  it("keeps publish-back / publish-title testids, step 3 of 3 and an Arabic-safe title line", async () => {
-    const { PublishHeader } = await import("@/components/publish/PublishHeader");
-    const html = renderToStaticMarkup(<PublishHeader bookId="b1" title="سارة وعمر" />);
-    expect(html).toContain('data-testid="page-header"');
-    expect(html).toMatch(/<a data-testid="publish-back"[^>]*href="\/books\/b1\/edit"/);
-    expect(html).toContain("Back to editor");
-    expect(html).toContain("Step 3 of 3: Share");
-    expect(html).toMatch(/<p dir="auto" class="type-small[^"]*" data-testid="publish-title">سارة وعمر<\/p>/);
-    expect(html).not.toContain("type-eyebrow");
-    expect(html).toMatch(/<h1[^>]*>Share your book<\/h1>/);
+describe("share page shell (M21 T5; replaces PublishHeader)", () => {
+  it("band: publish-back → editor, the title as the h1 in dir=auto (publish-title), status chip; plain library header", async () => {
+    const { ShareBand } = await import("@/components/publish/ShareBand");
+    const { SHARE_BACK_LINK } = await import("@/components/publish/share-page-classes");
+    const html = renderToStaticMarkup(
+      <ShareBand
+        title="سارة وعمر"
+        chip={{ text: "Draft", kind: "draft" }}
+        back={
+          <a href="/books/b1/edit" className={SHARE_BACK_LINK} data-testid="publish-back">
+            Back to editor
+          </a>
+        }
+      />,
+    );
+    expect(html).toMatch(/<a href="\/books\/b1\/edit"[^>]*data-testid="publish-back"/);
+    expect(html).toMatch(/<h1[^>]*><span dir="auto" data-testid="publish-title">سارة وعمر<\/span><\/h1>/);
+    expect(html).toContain('data-testid="publish-status-chip"');
+    const page = readFileSync("src/app/books/[id]/publish/page.tsx", "utf8");
+    expect(page).toContain('<AppHeader displayName={displayName} variant="plain" width="library" />');
+    expect(page).toMatch(/href=\{`\/books\/\$\{id\}\/edit`\} className=\{SHARE_BACK_LINK\} data-testid="publish-back"/);
+    expect(page).toContain('<h2 className="sr-only">Share your book</h2>');
+    expect(page).toContain("shareChipKind(status)");
+    expect(page).toContain("preview={slots.preview}");
+    expect(page).not.toMatch(/console\.(log|info|warn|error)/);
   });
 });

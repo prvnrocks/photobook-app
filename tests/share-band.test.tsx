@@ -8,18 +8,17 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { contrastRatio } from "@/lib/app/palette";
 import { ShareBand, ShareProgress, ShareStatusChip, SHARE_TITLE_FALLBACK } from "@/components/publish/ShareBand";
+import { SHARE_CTA_EMERALD, SHARE_CTA_GOLD } from "@/components/publish/share-classes";
 import {
   SHARE_BACK_LINK,
   SHARE_CHIP_DOT,
   SHARE_CHIP_KINDS,
   SHARE_CHIP_TONE,
   SHARE_CHIP_TONES,
-  SHARE_CTA_EMERALD,
-  SHARE_CTA_GOLD,
   SHARE_LEATHER_LIGHTEST,
   SHARE_OPEN_LINK,
   shareChipKind,
-} from "@/components/publish/share-classes";
+} from "@/components/publish/share-page-classes";
 
 const tagOf = (html: string, id: string) => html.match(new RegExp(`<[^>]*data-testid="${id}"[^>]*>`))?.[0] ?? "";
 
@@ -181,7 +180,7 @@ describe("share class recipes", () => {
   });
 
   it("new share components use no cn / buttonVariants / next/link / hooks", () => {
-    for (const f of ["ShareBand.tsx", "SharePreview.tsx", "share-classes.ts"]) {
+    for (const f of ["ShareBand.tsx", "SharePreview.tsx", "share-classes.ts", "share-page-classes.ts", "PlanCard.tsx", "PdfCard.tsx", "share-slots.tsx"]) {
       const src = readFileSync(join(process.cwd(), "src/components/publish", f), "utf8");
       expect(src).not.toMatch(/from "@\/lib\/utils"|\bcn\(/);
       expect(src).not.toMatch(/\bbuttonVariants\(|from "[^"]*button-variants"/);

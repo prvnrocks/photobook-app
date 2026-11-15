@@ -13,7 +13,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }))
 
 const { BookList } = await import("@/components/dashboard/BookList");
 const { BookCardMenuView, DeleteBookConfirmContent } = await import("@/components/dashboard/BookCardMenu");
-const { PublishPanelView } = await import("@/components/publish/PublishPanel");
+const { SharePanel } = await import("./helpers/share-panel");
 const { EmailRemindersToggleView } = await import("@/components/settings/EmailRemindersToggle");
 const { DeleteAccountView } = await import("@/components/settings/DeleteAccount");
 const { AccountDeletedNotice } = await import("@/components/settings/AccountDeletedNotice");
@@ -170,7 +170,7 @@ describe("dashboard: BookList + delete menu", () => {
 describe("publish screen: expired free book shows its deletion date", () => {
   const render = (state: ReturnType<typeof devPublishState>) =>
     renderToStaticMarkup(
-      <PublishPanelView
+      <SharePanel
         bookId={BOOK}
         title="Trip"
         state={state}

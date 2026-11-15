@@ -1,10 +1,13 @@
-// Share page preview tile (M21 T2): the book's cover as a hard-cover book (BookCover size "shelf")
+// Share page preview tile (M21 T2): the book's cover as a hard-cover book (BookCover size "shelf";
+// since T5 the server-renderable BookCoverStatic, so the page ships no cover JS)
 // standing on the My books ivory stage (LIBRARY_STAGE), floating slowly; the title on the cover
 // (user text → dir="auto"), page count + shape under it, and the "Open flipbook" link the page passes
 // in (testid publish-open). Portrait and landscape books keep their own shape (BookCover's A5 boxes);
 // no cover photo → BookCover's shelf placeholder (cream linen / emerald cloth).
 // `compact` is the phone row (small cover beside title + meta + link) for tight spots like a sticky
-// summary; the default tile already scales to 375 px.
+// summary; the default tile already scales to 375 px. `responsive` (M21 T5, the share page) is ONE
+// element that is the compact row below lg and the tile from lg (CSS only), so the page has exactly
+// one "Open flipbook" link at every width (no hidden duplicate for tests or screen readers).
 // Celebration: celebrate → data-celebrate="on" fires a CSS foil-confetti burst + a cover hop once
 // (share-motion.css; nothing moves under prefers-reduced-motion). Re-trigger by re-keying the tile.
 // Hook-free, no cn/buttonVariants/next/link (link as prop). The stage clips the burst, so nothing can
@@ -13,7 +16,7 @@
 import type { ReactNode } from "react";
 import type { BookFormat, DesignStyle } from "@/lib/book/types";
 import { cx } from "@/lib/cx";
-import { BookCover } from "@/components/dashboard/BookCover";
+import { BookCoverStatic as BookCover } from "@/components/dashboard/book-cover-art";
 import { LIBRARY_STAGE } from "@/components/dashboard/library-classes";
 import { ShareBurst } from "./ShareBurst";
 import { SHARE_TITLE_FALLBACK } from "./ShareBand";
@@ -36,6 +39,8 @@ export type SharePreviewProps = {
   open?: ReactNode;
   /** Phone row layout: small cover beside the text. */
   compact?: boolean;
+  /** Compact row below lg, tile from lg (one element; wins over `compact`). */
+  responsive?: boolean;
   /** Fire the publish celebration (once per mount). */
   celebrate?: boolean;
   className?: string;
@@ -56,10 +61,66 @@ const PLATE_INSET: Record<BookFormat, string> = {
   A5_LANDSCAPE: "inset-x-[13%]",
 };
 
-export function SharePreview({ preview, title, pageCount, open, compact = false, celebrate = false, className }: SharePreviewProps) {
+export function SharePreview({
+  preview,
+  title,
+  pageCount,
+  open,
+  compact = false,
+  responsive = false,
+  celebrate = false,
+  className,
+}: SharePreviewProps) {
   const t = (title ?? "").trim() || SHARE_TITLE_FALLBACK;
   const { coverThumbUrl, format, designStyle } = preview;
   const meta = `${pageCountLabel(pageCount)} · ${formatLabel(format)}`;
+
+  if (responsive) {
+    return (
+      <figure
+        className={cx("relative flex min-w-0 items-center gap-4 lg:flex-col lg:items-stretch lg:gap-0", className)}
+        data-testid="share-preview"
+        data-variant="responsive"
+        data-format={format}
+        data-celebrate={celebrate ? "on" : undefined}
+      >
+        <div
+          className={cx(
+            LIBRARY_STAGE,
+            "relative isolate flex w-20 shrink-0 justify-center overflow-hidden rounded-2xl border border-[#e9dfca] px-1.5 py-2.5 lg:w-auto lg:rounded-[1.75rem] lg:px-8 lg:pt-10 lg:pb-12",
+          )}
+        >
+          <div className="share-float-lg w-full lg:max-w-[19rem]">
+            <div className="share-cover-hop relative flex w-full justify-center">
+              <BookCover url={coverThumbUrl} format={format} designStyle={designStyle} size="shelf" />
+              <span
+                aria-hidden="true"
+                className={cx(
+                  "pointer-events-none absolute bottom-[9%] hidden rounded-[3px] border-t border-[#c9a227]/70 bg-[#0e3b2e]/85 px-2 py-1 text-center font-display text-base leading-tight font-semibold text-[#f2e8d8] shadow-[0_4px_10px_-6px_rgb(0_0_0/0.6)] lg:block",
+                  PLATE_INSET[format] ?? PLATE_INSET.A5_PORTRAIT,
+                )}
+                data-testid="share-preview-cover-title"
+              >
+                <span dir="auto" className="line-clamp-2 break-words">
+                  {t}
+                </span>
+              </span>
+            </div>
+          </div>
+          <ShareBurst />
+        </div>
+        <figcaption className="flex min-w-0 flex-1 flex-col items-start lg:min-h-11 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between lg:gap-x-3 lg:gap-y-1 lg:px-1 lg:pt-2">
+          <span className="block w-full truncate font-display text-base font-semibold text-[#0e3b2e] lg:sr-only" data-testid="share-preview-title">
+            <span dir="auto">{t}</span>
+          </span>
+          <span className="text-sm text-muted-foreground" data-testid="share-preview-meta">
+            {meta}
+          </span>
+          {open ? <span className="-ms-3 mt-0.5 flex lg:ms-0 lg:-me-3 lg:mt-0">{open}</span> : null}
+        </figcaption>
+      </figure>
+    );
+  }
 
   if (compact) {
     return (

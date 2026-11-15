@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { SharePreview, formatLabel, pageCountLabel, type SharePreviewData } from "@/components/publish/SharePreview";
-import { SHARE_OPEN_LINK } from "@/components/publish/share-classes";
+import { SHARE_OPEN_LINK } from "@/components/publish/share-page-classes";
 import { LIBRARY_STAGE } from "@/components/dashboard/library-classes";
 
 const portrait: SharePreviewData = { coverThumbUrl: "https://example.test/thumb.jpg", format: "A5_PORTRAIT", designStyle: "modern" };
