@@ -11,8 +11,10 @@
 //   (while live) → plan slot (not when expired free) → PDF slot → password → DangerZone (published).
 // The preview / plan / PDF slots only change with server state, so the page renders them on the
 // server (share-slots.tsx) — their markup stays out of this client bundle.
-// Phone sticky bar: Publish (draft) / Update link (changes) / Send on WhatsApp (live), shown once
-// that card's own button has left the screen; none when expired, blocked or pending.
+// Phone sticky bar: Publish (draft) / Update link (changes) / Send on WhatsApp (live), shown only
+// while that card's own button is not visible above the bar (scrolled off the top, or wholly in /
+// below the strip the bar covers, measured from the bar's real height) — never both at once; none
+// when expired, blocked or pending.
 // Celebration (publish success or ?shared=): data-celebrate on the panel root fires the preview's
 // burst (CSS ancestor selector) and the live card's badge hop; nothing moves under reduced motion.
 //
@@ -88,7 +90,7 @@ export function shareBarAction(kind: PrimaryActionKind, blocked: boolean, hasUrl
   return null;
 }
 
-/** The card control the bar stands in for: the bar shows once that control is off screen. */
+/** The card control the bar stands in for: the bar shows only while that control is not visible above it. */
 const BAR_TARGET: Record<ShareBarAction, string> = {
   publish: "publish-button",
   update: "publish-changes-button",
@@ -215,20 +217,42 @@ export function PublishPanelView({
 }
 
 /**
- * True once the element with `testId` inside the panel is off screen (or under the bar). Starts
- * false (no bar flash on load); without IntersectionObserver the bar just shows.
+ * True while the card control with `testId` is not visible above the sticky bar: scrolled above the
+ * viewport top, or wholly inside / below the strip the bar covers. The strip is the bar's real height
+ * (offsetHeight of [data-share-bar], safe area included; 0 from lg where the bar is display:none),
+ * re-measured when the bar resizes — so the bar never shows while any part of the card control is on
+ * screen above it (M21 fix: a fixed 96 px margin left two WhatsApp buttons visible at 375).
+ * Starts false (no bar flash on load); without IntersectionObserver the bar just shows.
  */
 function useOffscreen(root: RefObject<HTMLElement | null>, testId: string | null): boolean {
   const [off, setOff] = useState(false);
+  const [barHeight, setBarHeight] = useState(0);
+
+  useEffect(() => {
+    const bar = testId ? root.current?.querySelector<HTMLElement>("[data-share-bar]") : null;
+    if (!bar) return;
+    const measure = () => setBarHeight(Math.ceil(bar.offsetHeight));
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(bar);
+    return () => ro.disconnect();
+  }, [root, testId]);
+
   useEffect(() => {
     const el = testId ? root.current?.querySelector(`[data-testid="${testId}"]`) : null;
     if (!el) return setOff(false);
     if (typeof IntersectionObserver === "undefined") return setOff(true);
-    const io = new IntersectionObserver(([e]) => setOff(!e.isIntersecting), { rootMargin: "0px 0px -96px 0px" });
+    const io = new IntersectionObserver(([e]) => setOff(!e.isIntersecting), { rootMargin: shareBarRootMargin(barHeight) });
     io.observe(el);
     return () => io.disconnect();
-  }, [root, testId]);
+  }, [root, testId, barHeight]);
   return off;
+}
+
+/** IntersectionObserver rootMargin for the visible area above a sticky bar `barHeight` px tall. */
+export function shareBarRootMargin(barHeight: number): string {
+  return `0px 0px -${Math.max(0, Math.ceil(barHeight))}px 0px`;
 }
 
 /** Phone-only fixed bar (hidden from lg). Own testids — the card buttons keep theirs. */

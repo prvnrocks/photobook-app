@@ -91,24 +91,28 @@ test("landed from the editor's Share (M13 T9; M21): 'Your book is live', a Whats
   await expect(wa).toHaveAttribute("href", /^https:\/\/wa\.me\/\?text=/);
   const box = (await wa.boundingBox())!;
   expect(box.height).toBeGreaterThanOrEqual(44);
-  // M21: band + preview row + message + live card push the card's WhatsApp button down. Whenever it
-  // is off screen the phone sticky bar stands in for it (same wa.me link) — one of the two must be
-  // tappable without scrolling.
-  // The bar counts the bottom 96 px as "under the bar" (PublishPanel useOffscreen rootMargin).
-  const cardClear = box.y + box.height <= VIEWPORT.height - 96;
+  // M21: band + preview row + message + live card push the card's WhatsApp button down. The phone
+  // sticky bar stands in for it (same wa.me link) only while no part of the card button is visible
+  // above the bar's top edge (PublishPanel useOffscreen: rootMargin = the bar's real offsetHeight) —
+  // never two WhatsApp buttons at once, and one of the two is tappable without scrolling.
   const bar = page.getByTestId("publish-sticky-bar");
   await expect(bar).toHaveAttribute("data-action", "whatsapp");
-  console.log(`[landed-375] share-whatsapp bottom=${Math.round(box.y + box.height)} viewport=${VIEWPORT.height} clearOfBar=${cardClear}`);
-  if (cardClear) {
+  const barHeight = await bar.evaluate((el) => (el as HTMLElement).offsetHeight);
+  const cardShowing = box.y < VIEWPORT.height - barHeight;
+  console.log(`[landed-375] share-whatsapp top=${Math.round(box.y)} viewport=${VIEWPORT.height} bar=${barHeight} cardShowing=${cardShowing}`);
+  if (cardShowing) {
+    // Card WhatsApp visible on screen and the bar hidden.
+    await expect(wa).toBeInViewport();
     await expect(bar).toHaveAttribute("data-visible", "false");
+    await expect(page.getByTestId("publish-bar-whatsapp")).toBeHidden();
   } else {
     await expect(bar).toHaveAttribute("data-visible", "true");
     const barWa = page.getByTestId("publish-bar-whatsapp");
     await expect(barWa).toBeVisible();
     await expect(barWa).toHaveAttribute("href", (await wa.getAttribute("href"))!);
-    const b = (await barWa.boundingBox())!;
-    expect(b.height).toBeGreaterThanOrEqual(44);
-    expect(b.y + b.height, "sticky WhatsApp is visible without scrolling").toBeLessThanOrEqual(VIEWPORT.height);
+    // The bar slides up (0.28 s) — wait for it to sit fully on screen.
+    await expect(barWa, "sticky WhatsApp is visible without scrolling").toBeInViewport({ ratio: 1 });
+    expect((await barWa.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   }
   const y = async (id: string) => (await page.getByTestId(id).boundingBox())!.y;
   expect(await y("share-whatsapp")).toBeLessThan(await y("share-copy"));

@@ -20,7 +20,7 @@ const { SharePanel } = await import("./helpers/share-panel");
 const { PlanCard } = await import("@/components/publish/PlanCard");
 const { PdfCard } = await import("@/components/publish/PdfCard");
 const { DangerZone } = await import("@/components/publish/DangerZone");
-const { shareBarAction } = await import("@/components/publish/PublishPanel");
+const { shareBarAction, shareBarRootMargin } = await import("@/components/publish/PublishPanel");
 const { publishCompare } = await import("@/lib/publish/compare");
 const { devPublishState, DEV_PUBLISH_URL } = await import("@/lib/publish/dev-fixture");
 type PublishState = import("@/app/books/[id]/publish/actions").PublishState;
@@ -70,8 +70,8 @@ afterEach(() => {
 });
 
 describe("PlanCard", () => {
-  it("free: compare (testids kept, #upgrade), Paid column with price, the gold Upgrade", () => {
-    const out = html(devPublishState("draft"));
+  it("free: compare (testids kept, #upgrade), Paid column with price, the gold Upgrade (live: Upgrade is the primary)", () => {
+    const out = html(devPublishState("live"));
     const card = tag(out, "publish-free-notice");
     expect(card).toContain('id="upgrade"');
     expect(has(out, "publish-compare")).toBe(true);
@@ -83,6 +83,28 @@ describe("PlanCard", () => {
     expect(upgrade).toMatch(/\bmin-h-12\b/);
     expect(upgrade).toContain("focus-visible:ring-2");
     expect(has(out, "publish-plan-paid")).toBe(false);
+  });
+
+  it.each(["draft", "unpublished", "changes"] as const)(
+    "%s: Publish / Update link is the gold primary, so the plan card's Upgrade is the emerald secondary",
+    (name) => {
+      const out = html(devPublishState(name));
+      const upgrade = tag(out, "publish-upgrade");
+      expect(upgrade).not.toContain("home-foil-fill");
+      expect(upgrade).toContain("border-[#0e3b2e]/30");
+      expect(upgrade).toMatch(/\bmin-h-12\b/);
+      expect(upgrade).toContain("focus-visible:ring-2");
+      expect(tag(out, "publish-free-notice")).toContain('id="upgrade"');
+      // One gold control in the cards (the sticky bar repeats the same action, hidden until needed).
+      const gold = (out.match(/<(button|a)[^>]*home-foil-fill[^>]*>/g) ?? []).filter((t) => !t.includes("publish-bar-button"));
+      expect(gold).toHaveLength(1);
+    },
+  );
+
+  it("blocked draft (over the free page limit) / expiring free link: Upgrade stays gold", () => {
+    for (const state of [{ ...devPublishState("draft"), canPublishReason: "page_limit" as const, pageCount: 24 }, devPublishState("expiring", NOW)]) {
+      expect(tag(html(state), "publish-upgrade")).toContain("home-foil-fill");
+    }
   });
 
   it("paid: 'Paid · permanent' thank-you with the paid rows; no compare, no upgrade", () => {
@@ -215,12 +237,14 @@ describe("phone sticky bar", () => {
     expect(has(out, "publish-bar-spacer")).toBe(false);
   });
 
-  it("shows once the card button is off screen; tapping Publish runs the same publish action", async () => {
+  it("shows only while the card button is not visible above the bar; tapping Publish runs the same publish action", async () => {
     let cb: IntersectionObserverCallback = () => {};
     const observed: Element[] = [];
+    const margins: (string | undefined)[] = [];
     class IO {
-      constructor(c: IntersectionObserverCallback) {
+      constructor(c: IntersectionObserverCallback, o?: IntersectionObserverInit) {
         cb = c;
+        margins.push(o?.rootMargin);
       }
       observe(el: Element) {
         observed.push(el);
@@ -245,9 +269,63 @@ describe("phone sticky bar", () => {
     expect(q("publish-sticky-bar")!.getAttribute("data-visible")).toBe("false");
     act(() => cb([{ isIntersecting: false } as IntersectionObserverEntry], {} as IntersectionObserver));
     expect(q("publish-sticky-bar")!.getAttribute("data-visible")).toBe("true");
+    act(() => cb([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver));
+    expect(q("publish-sticky-bar")!.getAttribute("data-visible")).toBe("false");
+    // jsdom has no layout: bar height 0 → the whole viewport counts.
+    expect(margins.at(-1)).toBe("0px 0px -0px 0px");
+    act(() => cb([{ isIntersecting: false } as IntersectionObserverEntry], {} as IntersectionObserver));
     await act(async () => q("publish-bar-button")!.click());
     expect(publish).toHaveBeenCalledTimes(1);
-    act(() => cb([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver));
+  });
+
+  it.each([
+    ["live", "share-whatsapp"],
+    ["changes", "publish-changes-button"],
+  ] as const)("%s: the observed region ends at the bar's real top edge (measured offsetHeight, not a fixed 96 px)", (name, target) => {
+    const margins: (string | undefined)[] = [];
+    const observed: Element[] = [];
+    const cbs: IntersectionObserverCallback[] = [];
+    class IO {
+      constructor(c: IntersectionObserverCallback, o?: IntersectionObserverInit) {
+        cbs.push(c);
+        margins.push(o?.rootMargin);
+      }
+      observe(el: Element) {
+        observed.push(el);
+      }
+      disconnect() {}
+    }
+    vi.stubGlobal("IntersectionObserver", IO);
+    // The bar is 73 px tall (12 + 48 + 12 + 1 px border) on a phone.
+    const spy = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.hasAttribute("data-share-bar") ? 72.5 : 0;
+    });
+    try {
+      mount(
+        <SharePanel bookId={BOOK} title="Sara" state={devPublishState(name)} actions={actions()} paymentsEnabled compare={publishCompare()} refresh={() => {}} now={NOW} />,
+      );
+      expect(margins.at(-1)).toBe("0px 0px -73px 0px");
+      expect(observed.at(-1)?.getAttribute("data-testid")).toBe(target);
+      const bar = q("publish-sticky-bar")!;
+      const fire = (isIntersecting: boolean) => act(() => cbs.at(-1)!([{ isIntersecting } as IntersectionObserverEntry], {} as IntersectionObserver));
+      // Any part of the card control above the bar's top edge → bar hidden (never two at once).
+      fire(true);
+      expect(bar.getAttribute("data-visible")).toBe("false");
+      // Scrolled above the viewport top, or wholly behind the bar → bar shown.
+      fire(false);
+      expect(bar.getAttribute("data-visible")).toBe("true");
+      fire(true);
+      expect(bar.getAttribute("data-visible")).toBe("false");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("shareBarRootMargin: bottom inset = the bar's height, rounded up, never negative", () => {
+    expect(shareBarRootMargin(73)).toBe("0px 0px -73px 0px");
+    expect(shareBarRootMargin(72.2)).toBe("0px 0px -73px 0px");
+    expect(shareBarRootMargin(0)).toBe("0px 0px -0px 0px");
+    expect(shareBarRootMargin(-5)).toBe("0px 0px -0px 0px");
   });
 });
 

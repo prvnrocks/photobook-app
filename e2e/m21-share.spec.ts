@@ -210,16 +210,19 @@ async function shot(p: Page, name: string) {
   await style.evaluate((el) => (el as Element).remove());
 }
 
-/** Sticky phone bar: hidden while the card control is on screen, shown (right action) once it scrolls off, and at the very end it never covers the last card. */
+/** Sticky phone bar: hidden while any part of the card control shows above the bar, shown (right action) once it scrolls off, and at the very end it never covers the last card. */
 async function checkStickyBar(p: Page, action: "publish" | "update" | "whatsapp", target: string, label: string) {
   const bar = p.getByTestId("publish-sticky-bar");
   await expect(bar).toHaveAttribute("data-action", action);
   await p.evaluate(() => window.scrollTo(0, 0));
   const t = (await p.getByTestId(target).boundingBox())!;
   const vh = p.viewportSize()!.height;
-  const targetOnScreen = t.y + t.height <= vh - 96;
-  console.log(`[bar ${label}] target bottom=${Math.round(t.y + t.height)} vh=${vh} onScreenAtTop=${targetOnScreen}`);
-  if (targetOnScreen) await expect(bar).toHaveAttribute("data-visible", "false");
+  // The bar stands in only while no part of the card control shows above its top edge (rootMargin =
+  // the bar's real offsetHeight) — never both at once.
+  const barHeight = await bar.evaluate((el) => (el as HTMLElement).offsetHeight);
+  const targetOnScreen = t.y < vh - barHeight;
+  console.log(`[bar ${label}] target top=${Math.round(t.y)} vh=${vh} bar=${barHeight} onScreenAtTop=${targetOnScreen}`);
+  await expect(bar).toHaveAttribute("data-visible", targetOnScreen ? "false" : "true");
   // Scroll the card control off the top → the bar slides in.
   await p.evaluate((id) => {
     const el = document.querySelector(`[data-testid="${id}"]`)!;

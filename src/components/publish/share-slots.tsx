@@ -13,12 +13,12 @@ import type { PublishPreview, PublishState } from "@/app/books/[id]/publish/acti
 import { UpgradeButton, UpgradeButtonView } from "@/components/upgrade/UpgradeButton";
 import type { PdfTransport } from "@/lib/pdf/ui";
 import type { PublishCompare } from "@/lib/publish/compare";
-import { shareStatus } from "@/lib/publish/status";
+import { shareStatus, type ShareStatusKind } from "@/lib/publish/status";
 import { SHARE_COPY } from "@/lib/publish/ui";
 import { PdfCard } from "./PdfCard";
 import { PdfDownload, PdfDownloadView } from "./PdfDownload";
 import { PlanCard } from "./PlanCard";
-import { PDF_SHARE_LOOK, SHARE_UPGRADE_CLASS } from "./share-classes";
+import { PDF_SHARE_LOOK, SHARE_UPGRADE_CLASS, SHARE_UPGRADE_SECONDARY_CLASS } from "./share-classes";
 import { SHARE_OPEN_LINK } from "./share-page-classes";
 import { SharePreview } from "./SharePreview";
 
@@ -43,7 +43,8 @@ export type ShareSlotsInput = {
 export function shareSlots(input: ShareSlotsInput): ShareSlots {
   const { bookId, title, state, preview, compare, paymentsEnabled, refresh, pdfTransport } = input;
   const returnTo = `/books/${bookId}/publish`;
-  const live = state.published && state.slug !== null && shareStatus(state, input.now ?? new Date()).kind !== "expired";
+  const status = shareStatus(state, input.now ?? new Date());
+  const live = state.published && state.slug !== null && status.kind !== "expired";
 
   const upgradeProps = {
     bookId,
@@ -51,7 +52,7 @@ export function shareSlots(input: ShareSlotsInput): ShareSlots {
     isPaid: state.isPaid,
     paymentsEnabled,
     testId: "publish-upgrade",
-    className: SHARE_UPGRADE_CLASS,
+    className: upgradeClass(status.kind, state.canPublishReason !== null),
   };
   const upgrade = refresh ? <UpgradeButtonView {...upgradeProps} refresh={refresh} /> : <UpgradeButton {...upgradeProps} />;
 
@@ -77,6 +78,16 @@ export function shareSlots(input: ShareSlotsInput): ShareSlots {
     plan: <PlanCard compare={compare} isPaid={state.isPaid} upgrade={state.isPaid ? null : upgrade} />,
     pdf: <PdfCard isPaid={state.isPaid} download={download} />,
   };
+}
+
+/**
+ * One gold call to action per screen: while the page's primary is Publish / Update link (draft or
+ * changes, not blocked) the plan card's Upgrade is the emerald secondary; otherwise (live free book,
+ * blocked publish — e.g. over the free page limit, where upgrading is the fix) it stays gold.
+ */
+export function upgradeClass(kind: ShareStatusKind, blocked: boolean): string {
+  const publishIsPrimary = (kind === "draft" || kind === "changes") && !blocked;
+  return publishIsPrimary ? SHARE_UPGRADE_SECONDARY_CLASS : SHARE_UPGRADE_CLASS;
 }
 
 /** The live book in a new tab (testid publish-open): a plain <a> — the viewer is its own app. */

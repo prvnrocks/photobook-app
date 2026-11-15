@@ -335,6 +335,15 @@ describe("PublishPanelView states", () => {
     expect(has(html, "publish-url")).toBe(true);
   });
 
+  it("changes on a free link (M21 fix): the link lifetime badge (publish-expiry) sits in the changes card", () => {
+    const html = panel("changes");
+    expect(html).toContain('data-testid="publish-expiry">Link expires 12 Dec<');
+    expect(html.match(/data-testid="publish-expiry"/g)?.length).toBe(1);
+    const at = (id: string) => html.indexOf(`data-testid="${id}"`);
+    expect(at("publish-expiry")).toBeGreaterThan(at("publish-changes"));
+    expect(at("publish-expiry")).toBeLessThan(at("publish-changes-button"));
+  });
+
   it("changes on a paid book: same card, chip stays paid-only via state.isPaid (no free notice)", () => {
     const html = renderToStaticMarkup(
       <SharePanel
@@ -350,6 +359,8 @@ describe("PublishPanelView states", () => {
     );
     expect(has(html, "publish-changes-button")).toBe(true);
     expect(has(html, "publish-free-notice")).toBe(false);
+    // Paid: no lifetime badge in the changes card (the status chip says Paid · permanent).
+    expect(has(html, "publish-expiry")).toBe(false);
   });
 
   it("changes card blocked: reason + disabled Update link", () => {

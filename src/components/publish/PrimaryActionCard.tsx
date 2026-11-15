@@ -1,8 +1,9 @@
 // Share page primary action card (M21 T3): the one thing to do next, from shareStatus() (+ the
 // panel's "pending" while a first publish waits for the refresh).
 // - draft: "Ready to share?" + the gold Publish CTA (blocked notice when canPublishReason).
-// - changes: "Your edits aren't live yet" + last published date + gold "Update link" (shown above
-//   the link card).
+// - changes: "Your edits aren't live yet" + last published date + the free link's lifetime badge
+//   ("Link expires 15 Dec", testid publish-expiry; paid → none, the chip says Paid · permanent) +
+//   gold "Update link" (shown above the link card).
 // - pending: "Getting your link ready…" between a first publish and the refreshed live state.
 // - live (live / expiring / paid): calm "Your book is live" + the link lifetime; on `celebrate`
 //   (just published, or ?shared=) the badge hops (the foil burst fires in the page's preview —
@@ -107,6 +108,7 @@ export function PrimaryActionCard(props: PrimaryActionCardProps) {
 
   if (kind === "changes") {
     const last = lastPublishedLabel(state.lastPublishedAt, now);
+    const expiry = state.isPaid ? null : expiryLabel({ isPaid: false, expiresAt: state.expiresAt, expired: state.expired, now });
     return (
       <section className={CARD} data-testid="publish-changes">
         <div>
@@ -117,6 +119,7 @@ export function PrimaryActionCard(props: PrimaryActionCardProps) {
               {last}
             </p>
           ) : null}
+          {expiry ? <ExpiryBadge text={expiry} /> : null}
         </div>
         {blockNotice}
         <button type="button" onClick={onPublish} disabled={locked || blocked !== null} className={CTA} data-testid="publish-changes-button">
@@ -144,14 +147,7 @@ export function PrimaryActionCard(props: PrimaryActionCardProps) {
               {props.liveHeading}
             </h2>
             <p className={cx(BODY, "mt-0.5")}>{SHARE_COPY.liveBody}</p>
-            {expiry ? (
-              <span
-                className="mt-2 inline-block rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground"
-                data-testid="publish-expiry"
-              >
-                {expiry}
-              </span>
-            ) : null}
+            {expiry ? <ExpiryBadge text={expiry} /> : null}
           </div>
         </div>
       </section>
@@ -171,6 +167,15 @@ export function PrimaryActionCard(props: PrimaryActionCardProps) {
       </button>
       {state.publishedAt ? <p className="text-xs text-muted-foreground">{sameLinkNote(state.isPaid)}</p> : null}
     </section>
+  );
+}
+
+/** The link lifetime pill (live + changes cards); testid publish-expiry (e2e payments / publish). */
+function ExpiryBadge({ text }: { text: string }) {
+  return (
+    <span className="mt-2 inline-block rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground" data-testid="publish-expiry">
+      {text}
+    </span>
   );
 }
 
