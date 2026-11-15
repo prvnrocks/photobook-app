@@ -206,3 +206,4 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - Continuous 7-step wizard (Title, Purpose, Shape, Style, Photos, Sorting, Review) in the My-books emerald style; no page loads step 1→7; Review step + Generate album → editor. D-072 (+ refinement: title script decides caption language).
 - Tests: npm test 7539; live e2e green except upload-auth Mapbox (pre-existing); m13-first-run 5 taps, editor 64 s / 40 photos. Reviewer APPROVED. /books/new 178 kB.
 - Open: generated book can reopen Review (needs per-book confirmed marker + migration); Mapbox token.
+- 2026-11-15 M20b: prod (AI off) jumped to editor after upload — fixed: every mode goes Sorting → Review; upload screen upload-only. Tested AI off + replay. Lesson: always e2e AI_MODE=off too.

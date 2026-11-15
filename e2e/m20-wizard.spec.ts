@@ -33,6 +33,11 @@
  *   g. (E2E_ANALYTICS=1, server built with NEXT_PUBLIC_POSTHOG_KEY=phc_e2e_fake +
  *      NEXT_PUBLIC_POSTHOG_HOST=https://ph.e2e.invalid, intercepted) book_created exactly once for a
  *      wizard create, not again after step-5 Back + save.
+ *   i. (M20b, only when the server runs AI_MODE=off — probed via the wizard API's aiOn; prod-like) step 5
+ *      upload only (no sorting / auto-start text) → step 6 rule checklist (data-sort-phase progresses,
+ *      ≥ 2.7 s) → step 7 ai_off banner → toggle → refresh stays 7 → Generate → editor (soft); 0
+ *      document navigations 5 → 7; exactly 1 agent run (mode rule); fresh /build → wizard step 6;
+ *      ?trigger=rebuild stays classic.
  *   z. audit summary (no horizontal scroll, ≥ 44 px targets, one h1, visible focus, AA contrast incl.
  *      the leather band measured against its lightest point).
  * Screenshots: docs/design/m20-step{1..7}-{375,1280}.png (dir override: M20_SHOT_DIR).
@@ -49,6 +54,8 @@ import {
   cardRadio,
   createBookViaWizard,
   expectWizardStep,
+  generateAlbum,
+  waitForReview,
   waitForWizardHydrated,
   walkWizardToStyle,
   wizardContinue,
@@ -1073,6 +1080,194 @@ test.describe("m20 wizard (live)", () => {
     await page.waitForURL(wizardStepUrl(id, "7"), { timeout: 420_000 });
     await page.unrouteAll({ behavior: "ignoreErrors" });
     expect((await runsOf(id)).length).toBe(1);
+  });
+
+  test("i. AI off (prod-like): step 5 upload only → step 6 rule sorting → step 7 ai_off review → Generate → editor; 1 rule run", async ({ browser }) => {
+    // M20b. Runs only against a server in AI_MODE=off (probed via the wizard API's aiOn; E2E_AI_MODE
+    // set to anything else skips before creating a book).
+    test.skip(!!process.env.E2E_AI_MODE && process.env.E2E_AI_MODE !== "off", "server is not AI_MODE=off");
+    test.setTimeout(600_000);
+    const { context, page, nav } = await newContext(browser, PHONE, { analytics: ANALYTICS });
+    // With E2E_ANALYTICS=1 (fake PostHog build): ai_build_done must fire exactly once, mode "rules".
+    const events: { event: string; properties: Record<string, unknown> }[] = [];
+    if (ANALYTICS) {
+      await context.addInitScript(() => {
+        Object.defineProperty(Navigator.prototype, "webdriver", { get: () => false });
+        Object.defineProperty(Navigator.prototype, "userAgentData", { get: () => undefined });
+      });
+      await context.route(`${PH_HOST}/**`, async (route) => {
+        try {
+          for (const e of decodeBody(route.request())) {
+            const ev = e as { event?: unknown; properties?: Record<string, unknown> };
+            if (ev && typeof ev.event === "string") events.push({ event: ev.event, properties: ev.properties ?? {} });
+          }
+        } catch {
+          /* undecodable batch */
+        }
+        await route.fulfill({ status: 200, contentType: "application/json", body: '{"status":1}' });
+      });
+      await context.route(/posthog\.com/, (r) => r.abort());
+    }
+    try {
+      const id = await createBookViaWizard(page, { title: "Rule album", occasion: "family", format: "A5_PORTRAIT" });
+      bookIds.add(id);
+      const probe = await page.context().request.get(`/api/books/${id}/wizard?step=5`);
+      expect(probe.status()).toBe(200);
+      const aiOn = ((await probe.json()) as { aiOn?: boolean }).aiOn;
+      test.skip(aiOn !== false, "server has AI on (run with AI_MODE=off)");
+
+      // Same document from here to the editor; record what the DOM ever shows (step 5 never shows
+      // sorting / auto-start text; step 6 phases + rule rows; timing of 6 → 7).
+      const mark = await markDocument(page);
+      nav.reset();
+      await page.evaluate(() => {
+        type Rec = {
+          sortingNext: boolean;
+          autoStarting: boolean;
+          photosSortingText: string[];
+          doneHint: string | null;
+          phases: string[];
+          rules: string[];
+          labels: string[];
+          barDone: string[];
+          t6: number | null;
+          t7: number | null;
+        };
+        const rec: Rec = {
+          sortingNext: false,
+          autoStarting: false,
+          photosSortingText: [],
+          doneHint: null,
+          phases: [],
+          rules: [],
+          labels: [],
+          barDone: [],
+          t6: null,
+          t7: null,
+        };
+        (window as unknown as { __m20bRec: Rec }).__m20bRec = rec;
+        const q = (s: string) => document.querySelector(s);
+        const pushNew = (arr: string[], v: string | null | undefined) => {
+          if (v != null && arr[arr.length - 1] !== v) arr.push(v);
+        };
+        const check = () => {
+          if (q('[data-testid="upload-sorting-next"]')) rec.sortingNext = true;
+          if (q('[data-testid="upload-auto-starting"]')) rec.autoStarting = true;
+          const photos = q('[data-testid="wizard-step-photos"]');
+          const txt = photos?.textContent ?? "";
+          for (const re of [/sorting/i, /starting your book/i, /making your book/i]) {
+            const m = re.exec(txt);
+            if (!m) continue;
+            const snip = txt.slice(Math.max(0, m.index - 60), m.index + 40).replace(/\s+/g, " ");
+            if (!rec.photosSortingText.includes(snip)) rec.photosSortingText.push(snip);
+          }
+          const hint = q('[data-testid="upload-done-hint"]');
+          if (hint) rec.doneHint = (hint.textContent ?? "").trim();
+          if (rec.t6 === null && q('[data-testid="wizard-step-sorting"]')) rec.t6 = performance.now();
+          if (rec.t7 === null && q('[data-testid="wizard-step-review"]')) rec.t7 = performance.now();
+          const bp = q('[data-testid="build-progress"][data-variant="wizard"]');
+          if (bp) {
+            pushNew(rec.phases, bp.getAttribute("data-sort-phase"));
+            pushNew(rec.rules, bp.getAttribute("data-rules") ?? "none");
+            pushNew(rec.barDone, q('[data-testid="build-sort-bar"]')?.getAttribute("data-done"));
+            for (const li of Array.from(bp.querySelectorAll('[data-testid^="build-step-"]'))) {
+              const t = (li.textContent ?? "").trim();
+              if (t && !rec.labels.includes(t)) rec.labels.push(t);
+            }
+          }
+        };
+        new MutationObserver(check).observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
+        check();
+      });
+
+      await pickPhotos(page, 6, 900);
+      await expect(page.getByTestId("upload-settled")).toBeVisible({ timeout: 180_000 });
+      await expect(page.getByTestId("upload-done-hint")).toBeVisible();
+      await page.waitForURL(wizardStepUrl(id, "6"), { timeout: 60_000 });
+      await expectWizardStep(page, 6, 30_000);
+      await expect(page.getByTestId("build-progress")).toHaveAttribute("data-rules", "true");
+      await waitForReview(page, id, 120_000);
+      await expect(page.getByTestId("review-banner-ai_off")).toBeVisible();
+
+      type Rec = { sortingNext: boolean; autoStarting: boolean; photosSortingText: string[]; doneHint: string | null; phases: string[]; rules: string[]; labels: string[]; barDone: string[]; t6: number | null; t7: number | null };
+      const rec = await page.evaluate(() => (window as unknown as { __m20bRec: Rec }).__m20bRec);
+      const sortingMs = rec.t6 !== null && rec.t7 !== null ? Math.round(rec.t7 - rec.t6) : null;
+      console.log(`[i] rec ${JSON.stringify({ ...rec, t6: undefined, t7: undefined, sortingMs })}`);
+      expect(rec.sortingNext, "upload-sorting-next never shown").toBe(false);
+      expect(rec.autoStarting, "upload-auto-starting never shown").toBe(false);
+      expect(rec.photosSortingText, "step 5 never shows sorting / starting text").toEqual([]);
+      expect(rec.doneHint).toBeTruthy();
+      expect(rec.rules).toEqual(["true"]);
+      expect(rec.phases.length, `phases progressed: ${rec.phases.join("→")}`).toBeGreaterThanOrEqual(3);
+      expect(rec.phases[rec.phases.length - 1]).toBe("ready");
+      for (const label of ["Leaving out duplicates and very blurry photos", "Grouping your photos by date and place", "Laying out your pages"]) {
+        expect(rec.labels.some((l) => l.includes(label)), `rule row "${label}"`).toBe(true);
+      }
+      expect(rec.labels.some((l) => /Finding places and moments|Checking for duplicates/.test(l)), "no AI wording").toBe(false);
+      expect(sortingMs ?? 0, "step 6 shown ≥ 2.7 s").toBeGreaterThanOrEqual(2_700);
+
+      // 0 document navigations step 5 → 7; same wizard nodes.
+      expect(nav.docs).toEqual([]);
+      expect(await docState(page)).toMatchObject({ doc: mark.doc, timeOrigin: mark.timeOrigin, navEntries: 1, band: true, stepper: true, wizard: true });
+
+      // Toggle one photo (persisted).
+      const tile = page.getByTestId("review-panel").getByTestId("review-tile").first();
+      const photoId = (await tile.getAttribute("data-photo-id")) ?? "";
+      const before = (await tile.getAttribute("data-state")) ?? "";
+      const want = before === "kept" ? "dropped" : "kept";
+      await tile.click();
+      await expect
+        .poll(async () => (await admin.from("photos").select("status, user_override").eq("id", photoId).single()).data, { timeout: 30_000 })
+        .toEqual({ status: want, user_override: true });
+      await expect(page.locator(`[data-testid="review-tile"][data-photo-id="${photoId}"]`)).toHaveAttribute("data-state", want);
+
+      // Refresh on step 7 stays on 7 (no 2nd run), the toggle is kept.
+      await page.reload();
+      await expectWizardStep(page, 7, 60_000);
+      expect(new URL(page.url()).searchParams.get("step")).toBe("7");
+      await expect(page.getByTestId("review-banner-ai_off")).toBeVisible({ timeout: 30_000 });
+      await page.getByTestId(`review-tab-${want}`).first().click(); // the tile lives in its tab after a reload
+      await expect(page.locator(`[data-testid="review-tile"][data-photo-id="${photoId}"]`)).toHaveAttribute("data-state", want);
+      const reloaded = await page.evaluate(() => performance.timeOrigin);
+      nav.reset();
+
+      // Generate → editor (soft navigation from the hard-loaded step 7).
+      await generateAlbum(page, id);
+      expect(nav.docs).toEqual([]);
+      expect(await page.evaluate(() => performance.timeOrigin)).toBe(reloaded);
+
+      if (ANALYTICS) {
+        await page.waitForTimeout(5_000); // posthog batches
+        const done = events.filter((e) => e.event === "ai_build_done");
+        console.log(`[i] ai_build_done ${JSON.stringify(done.map((e) => ({ mode: e.properties.mode, outcome: e.properties.outcome, auto: e.properties.auto })))}`);
+        expect(done).toHaveLength(1);
+        expect(done[0].properties).toMatchObject({ mode: "rules", outcome: "ok" });
+      }
+
+      const { data: runs, error } = await admin.from("agent_runs").select("id, mode, state, trigger").eq("book_id", id);
+      if (error) throw new Error(`agent_runs select failed (${error.code})`);
+      for (const r of runs ?? []) runIds.add((r as { id: string }).id);
+      console.log(`[i] runs ${JSON.stringify((runs ?? []).map((r) => `${r.mode}:${r.trigger}:${r.state}`))}`);
+      expect(runs ?? []).toHaveLength(1);
+      expect(runs?.[0]).toMatchObject({ mode: "rule", trigger: "build", state: "done" });
+
+      // Entry redirects with AI off: a fresh book's /build → the wizard (not classic); ?trigger=rebuild
+      // of the built book stays classic. HTTP only (a browser visit would start a run).
+      const req = page.context().request;
+      const fresh = await createBookViaWizard(page, { title: "Fresh off", occasion: "travel", format: "A5_PORTRAIT" });
+      bookIds.add(fresh);
+      const freshBuild = await redirectOf(req, `/books/${fresh}/build`);
+      console.log(`[i] /books/:fresh/build → ${String(freshBuild.to).replace(fresh, ":id")} (${freshBuild.status})`);
+      expect(freshBuild.to ?? "").toMatch(new RegExp(`^/books/new\\?book=${fresh}&step=6`));
+      const rb = await redirectOf(req, `/books/${id}/build?trigger=rebuild`);
+      expect(rb).toMatchObject({ status: 200, to: null });
+      expect(await req.get(`/books/${id}/build?trigger=rebuild`).then((r) => r.text())).not.toContain('data-testid="new-book-wizard"');
+      const freshRuns = await admin.from("agent_runs").select("id", { count: "exact", head: true }).eq("book_id", fresh);
+      expect(freshRuns.count ?? 0).toBe(0);
+      expect((await admin.from("agent_runs").select("id", { count: "exact", head: true }).eq("book_id", id)).count).toBe(1);
+    } finally {
+      await context.close();
+    }
   });
 
   test("g. analytics: book_created fires once for a wizard create, not again after step-5 Back + save", async ({ browser }) => {

@@ -1588,6 +1588,11 @@ test("e. AI off: upload → sorting → review → editor, rule album, ai_off ba
   }
 
   // Rule-mode POST /api/ai/runs is limited to 1 per 10 s per book → immediately 429 'rate'.
+  // M20b: the first run is now > 10 s old here (step 6 plays ≥ 2.7 s, then Review → Generate →
+  // editor → review), so open a fresh window with one rule rebuild first, then the next POST is 429.
+  const opener = await postRun(bookC, "rebuild");
+  console.log(`[e] window-opening rebuild status=${opener.status}`);
+  expect(opener.status).toBe(201);
   const limited = await postRun(bookC, "rebuild");
   console.log(`[e] immediate rebuild status=${limited.status} limit=${String(limited.body.limit)}`);
   expect(limited.status).toBe(429);
@@ -1606,8 +1611,9 @@ test("e. AI off: upload → sorting → review → editor, rule album, ai_off ba
   await expect(page.getByTestId("rebuild-error")).toHaveCount(0);
   expect(new URL(page.url()).pathname).toBe(`/books/${bookC}/review`);
   const runs2 = await runsFor(bookC);
-  expect(runs2.length).toBe(2);
+  expect(runs2.length).toBe(3);
   expect(runs2[1]).toMatchObject({ mode: "rule", trigger: "rebuild", state: "done" });
-  expect(metaOf((await bookRow(bookC)).doc).runId).toBe(runs2[1].id);
+  expect(runs2[2]).toMatchObject({ mode: "rule", trigger: "rebuild", state: "done" });
+  expect(metaOf((await bookRow(bookC)).doc).runId).toBe(runs2[2].id);
   await expect(page.getByTestId("review-header")).toHaveText(`${kept} of ${rows.length} in your book`);
 });
