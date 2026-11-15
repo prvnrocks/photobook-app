@@ -209,5 +209,5 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 - 2026-11-15 M20b: prod (AI off) jumped to editor after upload — fixed: every mode goes Sorting → Review; upload screen upload-only. Tested AI off + replay. Lesson: always e2e AI_MODE=off too.
 - 2026-11-15 M20c: books.album_confirmed_at (migration 2000, applied to prod) — generated books always open the editor; Back-from-editor hint + loading escape. Tested AI off + replay. NEEDS-HUMAN: iPhone Safari Back.
 
-## 2026-11-15 — Milestone 21 (Share page redesign) — done, awaiting deploy OK
+## 2026-11-15 — Milestone 21 (Share page redesign) — done + deployed
 - Share page in the emerald style (D-073); tested live AI off + replay; reviewer APPROVED; /books/[id]/publish 219 kB (+2 kB).
