@@ -212,5 +212,5 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 ## 2026-11-15 — Milestone 21 (Share page redesign) — done + deployed
 - Share page in the emerald style (D-073); tested live AI off + replay; reviewer APPROVED; /books/[id]/publish 219 kB (+2 kB).
 
-## 2026-11-15 — Milestone 22 (Editor in the emerald style) — done, awaiting deploy OK
+## 2026-11-15 — Milestone 22 (Editor in the emerald style) — done + deployed
 - Restyle-only editor redesign (D-074); tested AI off + replay + signed-out; reviewer APPROVED; /books/[id]/edit +2.67 kB gz.
