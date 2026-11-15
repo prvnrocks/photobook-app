@@ -6,6 +6,8 @@
 
 import { useCallback, useEffect, useState, type RefObject } from "react";
 import { Maximize, Minimize } from "lucide-react";
+import { cx } from "@/lib/cx";
+import { VW_ICON_BTN } from "./viewer-classes";
 
 export type FullscreenMode = "off" | "native" | "pseudo";
 
@@ -93,7 +95,7 @@ export function FullscreenButton({ active, onToggle, className }: { active: bool
       onClick={onToggle}
       aria-label={active ? "Exit fullscreen" : "Fullscreen"}
       aria-pressed={active}
-      className={`flex size-11 shrink-0 items-center justify-center rounded-full text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring ${className ?? ""}`}
+      className={cx(VW_ICON_BTN, className)}
       data-testid="fullscreen-button"
     >
       {active ? <Minimize className="size-5" aria-hidden /> : <Maximize className="size-5" aria-hidden />}

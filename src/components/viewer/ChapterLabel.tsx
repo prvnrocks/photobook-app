@@ -1,5 +1,6 @@
 // Current chapter "title · dateLabel" (D-040: chapter headings live in viewer chrome only).
 // dir="auto" for Arabic titles, rendered in Cairo when the title is mainly Arabic.
+// `className` replaces the default look (the viewer band passes VW_SUBLINE: pale gold on leather).
 
 import { chapterLabel, labelFontStyle, type ViewerChapter } from "@/lib/viewer/chapters";
 import { isMainlyArabic } from "@/lib/review/ui";
@@ -12,7 +13,7 @@ export function ChapterLabel({ chapter, className }: { chapter: ViewerChapter | 
       dir="auto"
       lang={arabic ? "ar" : undefined}
       style={labelFontStyle(chapter?.title ?? "")}
-      className={`truncate text-xs text-muted-foreground ${className ?? ""}`}
+      className={className ?? "truncate text-xs text-muted-foreground"}
       data-testid="chapter-label"
       data-chapter-id={chapter?.id ?? ""}
     >

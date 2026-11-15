@@ -1,19 +1,16 @@
-// Free books only (D-040): small bar under the viewer "Made with Photobook — create yours".
+// Free books only (D-040): thin leather strip under the viewer "Made with Photobook — create yours"
+// (M23: VW_FOOTER). The caller adds the bottom safe-area inset (it is the last row).
 
 import { MADE_WITH, APP_TAGLINE } from "@/lib/brand";
+import { cx } from "@/lib/cx";
 import { CREATE_YOURS_HREF } from "@/lib/viewer/share";
+import { VW_FOOTER, VW_FOOTER_LINK, VW_FOOTER_STRONG } from "./viewer-classes";
 
 export function MadeWithFooter({ className }: { className?: string }) {
   return (
-    <div
-      className={`shrink-0 border-t border-primary bg-primary px-[max(0.75rem,env(safe-area-inset-left))] text-center text-xs text-primary-foreground/85 ${className ?? ""}`}
-      data-testid="made-with-footer"
-    >
-      <a
-        href={CREATE_YOURS_HREF}
-        className="inline-flex min-h-11 items-center gap-1 rounded py-1 outline-none hover:text-primary-foreground focus-visible:ring-2 focus-visible:ring-primary-foreground"
-      >
-        {MADE_WITH} — <span className="font-semibold text-primary-foreground underline underline-offset-2">{APP_TAGLINE}</span>
+    <div className={cx(VW_FOOTER, className)} data-testid="made-with-footer">
+      <a href={CREATE_YOURS_HREF} className={VW_FOOTER_LINK}>
+        {MADE_WITH} — <span className={VW_FOOTER_STRONG}>{APP_TAGLINE}</span>
       </a>
     </div>
   );

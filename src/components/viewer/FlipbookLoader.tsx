@@ -15,11 +15,15 @@ export type { FlipbookApi, FlipbookProps, FlipbookReadyInfo } from "./Flipbook";
 // next/dynamic's loading component gets no props: the skeleton reads the book format from here.
 const LoaderFormat = createContext<BookFormat | null | undefined>(undefined);
 
-/** Placeholder page in the book's shape (A5 portrait class; inline aspect-ratio for other formats). */
+/**
+ * Placeholder page in the book's shape (A5 portrait class; inline aspect-ratio for other formats).
+ * Ivory page on the cream stage; vw-skeleton-pulse (viewer-motion.css) breathes its opacity only and
+ * is static under prefers-reduced-motion.
+ */
 export function FlipbookSkeleton({ format }: { format?: BookFormat | null }) {
   return (
     <div className="flex h-full w-full items-center justify-center" data-testid="flipbook-loading">
-      <div className="aspect-[148/210] h-full max-h-full max-w-full animate-pulse rounded-sm bg-neutral-200" style={pageAspectStyle(format)} />
+      <div className="aspect-[148/210] h-full max-h-full max-w-full vw-skeleton-pulse rounded-sm bg-[#faf5ec] ring-1 ring-[#e9dfca]" style={pageAspectStyle(format)} />
     </div>
   );
 }

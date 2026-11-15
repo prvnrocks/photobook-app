@@ -125,10 +125,11 @@ describe("public viewer state screens (T17)", () => {
     ["not-found", renderToStaticMarkup(<BookNotFound />), "We couldn&#x27;t find this photobook"],
   ];
   for (const [name, html, title] of screens) {
-    it(`${name}: serif EmptyState title on paper, no raw neutral colours`, () => {
+    // M23 T5 (D-075): leather screen + cream card replaced the M11 paper EmptyState.
+    it(`${name}: serif h1 on the cream message card, no raw neutral colours`, () => {
       expect(html).toContain(title);
-      expect(html).toMatch(/<h1 dir="auto" class="type-h2/);
-      expect(html).toContain("bg-background");
+      expect(html).toMatch(/<h1 dir="auto" class="font-display/);
+      expect(html).toContain("home-leather");
       expect(html).not.toMatch(/neutral-\d|red-\d|amber-\d/);
     });
   }

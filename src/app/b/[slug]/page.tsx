@@ -27,7 +27,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#f2ece0",
+  themeColor: "#0e3b2e",
 };
 
 type Params = { params: Promise<{ slug: string }> };

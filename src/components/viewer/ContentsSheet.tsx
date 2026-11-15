@@ -1,10 +1,14 @@
 "use client";
 
 // Contents: chapters in reading order with their date; tap jumps to the chapter's first page.
+// M23 T3: chapter card rows on the ivory sheet — the current chapter is the mint/emerald row
+// (aria-current), each row ends in a "p. N" chip. Title and date are user text: dir="auto" on the
+// inner spans, labelFontStyle (Cairo chain) on the title, no letter-spacing.
 
 import { chapterStarts, labelFontStyle, type ChapterStart, type ViewerChapter } from "@/lib/viewer/chapters";
 import { isMainlyArabic } from "@/lib/review/ui";
 import { ViewerSheet } from "./ViewerSheet";
+import { VW_LIST_ROW, VW_LIST_ROW_ACTIVE, VW_LIST_ROW_META, VW_MUTED, VW_PAGE_CHIP, VW_PAGE_CHIP_ACTIVE } from "./viewer-classes";
 
 export function ContentsSheet({
   open,
@@ -24,9 +28,9 @@ export function ContentsSheet({
   return (
     <ViewerSheet open={open} onClose={onClose} title="Contents" testId="contents-sheet">
       {starts.length === 0 ? (
-        <p className="px-4 py-6 text-sm text-muted-foreground">This book has no chapters.</p>
+        <p className={`px-5 py-6 ${VW_MUTED}`}>This book has no chapters.</p>
       ) : (
-        <ol className="divide-y divide-border">
+        <ol className="flex flex-col gap-1 p-2 sm:p-3">
           {starts.map((s) => {
             const arabic = isMainlyArabic(s.chapter.title);
             const active = s.chapter.id === currentChapterId;
@@ -34,7 +38,7 @@ export function ContentsSheet({
               <li key={s.chapter.id}>
                 <button
                   type="button"
-                  className={`relative flex min-h-12 w-full items-center gap-3 px-4 py-3 text-start outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${active ? "bg-secondary" : ""}`}
+                  className={active ? VW_LIST_ROW_ACTIVE : VW_LIST_ROW}
                   aria-current={active ? "true" : undefined}
                   data-testid="contents-item"
                   data-chapter-id={s.chapter.id}
@@ -45,17 +49,17 @@ export function ContentsSheet({
                       dir="auto"
                       lang={arabic ? "ar" : undefined}
                       style={labelFontStyle(s.chapter.title)}
-                      className={`block truncate text-sm text-foreground ${active ? "font-semibold" : "font-medium"}`}
+                      className={`block truncate ${active ? "font-semibold" : "font-medium"}`}
                     >
                       {s.chapter.title}
                     </span>
                     {s.chapter.dateLabel ? (
-                      <span dir="auto" className="block truncate text-xs text-muted-foreground">
+                      <span dir="auto" className={VW_LIST_ROW_META}>
                         {s.chapter.dateLabel}
                       </span>
                     ) : null}
                   </span>
-                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">p. {s.firstPageIdx + 1}</span>
+                  <span className={active ? VW_PAGE_CHIP_ACTIVE : VW_PAGE_CHIP}>p. {s.firstPageIdx + 1}</span>
                 </button>
               </li>
             );

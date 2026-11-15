@@ -3,15 +3,18 @@
 // Checkout, disabled + "Payments unavailable" without Stripe keys), the "Payment cancelled" notice
 // after a cancelled Checkout, and a link back to the editor. No title or cover for anyone (D-040).
 // The book id reaches client props only in the owner branch (like the editor link).
+// M23 T5: one gold per screen — owner: Upgrade (gold) + "Open in editor" (emerald outline);
+// visitor: "Create your own" (gold). Plain <a> links (no next/link on /b).
 
 import { Clock } from "lucide-react";
-import Link from "next/link";
 import { Suspense } from "react";
 import { UpgradeButton } from "@/components/upgrade/UpgradeButton";
 import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
+import { VW_CTA_EMERALD_OUTLINE, VW_CTA_GOLD } from "@/components/viewer/viewer-classes";
+import { cx } from "@/lib/cx";
 import { UPGRADE } from "@/lib/pricing";
 import { CREATE_YOURS_HREF } from "@/lib/viewer/share";
-import { VIEWER_PRIMARY_LINK, VIEWER_SECONDARY_LINK, ViewerMessage, ViewerMessageIcon } from "./ViewerMessage";
+import { ViewerMessage } from "./ViewerMessage";
 
 export type ExpiredBookUpgrade = {
   bookId: string;
@@ -33,12 +36,9 @@ export function ExpiredBook({
 }) {
   return (
     <ViewerMessage
+      eyebrow="Link expired"
       title="This photobook has expired"
-      art={
-        <ViewerMessageIcon>
-          <Clock className="size-6" />
-        </ViewerMessageIcon>
-      }
+      icon={<Clock className="size-6" />}
       description={
         isOwner
           ? "Free links stay open for 30 days. Your book is still safe in your account — upgrade it to bring the link back for good."
@@ -59,20 +59,21 @@ export function ExpiredBook({
               isPaid={false}
               paymentsEnabled={upgrade.paymentsEnabled}
               variant="viewer"
+              className={cx(VW_CTA_GOLD, "w-full py-2 text-balance")}
               label={`Upgrade to bring it back — ${UPGRADE.label}`}
               testId="expired-upgrade"
             />
           ) : null}
           {editorHref ? (
-            <Link href={editorHref} className={VIEWER_SECONDARY_LINK} data-testid="expired-open-editor">
+            <a href={editorHref} className={cx(VW_CTA_EMERALD_OUTLINE, "w-full")} data-testid="expired-open-editor">
               Open in editor
-            </Link>
+            </a>
           ) : null}
         </>
       ) : (
-        <Link href={CREATE_YOURS_HREF} className={VIEWER_PRIMARY_LINK} data-testid="expired-create">
+        <a href={CREATE_YOURS_HREF} className={cx(VW_CTA_GOLD, "w-full")} data-testid="expired-create">
           Create your own
-        </Link>
+        </a>
       )}
     </ViewerMessage>
   );

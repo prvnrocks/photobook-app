@@ -218,3 +218,16 @@ export const VW_MESSAGE_HEADING = "font-display text-2xl leading-tight font-semi
 
 /** Card body text: ink-soft 8.53:1 on ivory. */
 export const VW_MESSAGE_BODY = "text-sm leading-relaxed text-[#4a4740]";
+
+// ---- Contents rows (M23 T3) ----------------------------------------------------------------------
+
+/** Secondary line in a contents row (chapter date — user text, dir="auto"): ink-soft #4a4740, 7.6:1 on mint, 8.53:1 on ivory. */
+export const VW_LIST_ROW_META = "block truncate text-xs font-normal text-[#4a4740]";
+
+/** "p. N" chip at a contents row's end (idle row): ink-soft on white 9.6:1, hairline ring. Not tappable (the row is). */
+export const VW_PAGE_CHIP =
+  "inline-flex h-6 shrink-0 items-center rounded-full bg-white px-2 text-xs font-medium whitespace-nowrap text-[#4a4740] tabular-nums ring-1 ring-[#e9dfca]";
+
+/** "p. N" chip on the current (mint) row: emerald on white 12.47:1. Use instead of (not with) VW_PAGE_CHIP. */
+export const VW_PAGE_CHIP_ACTIVE =
+  "inline-flex h-6 shrink-0 items-center rounded-full bg-white px-2 text-xs font-semibold whitespace-nowrap text-[#0e3b2e] tabular-nums ring-1 ring-[#0e3b2e]/25";

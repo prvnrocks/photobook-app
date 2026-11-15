@@ -1,18 +1,24 @@
 "use client";
 
-// Public viewer chrome around the flipbook (D-040): top bar (title, chapter label, fullscreen),
-// the book stage, bottom bar (prev / counter / next, Contents, Share), free-book footer,
-// watermark over pages and an end card as the last page. Full-height column (h-dvh) that
-// respects safe-area insets; works at 375 px. Renders from the render doc (publicDocToRenderDoc).
+// Public viewer chrome around the flipbook (D-040, M23 emerald style D-075): a slim 52 px leather
+// band (title, chapter line, Contents / Share / Fullscreen), the cream book stage with a ground-shadow
+// pool under the book, a bottom bar with the white prev / counter / next pill, and the free-book
+// leather footer; watermark over pages and an end card as the last page. Full-height column (h-dvh)
+// that respects safe-area insets; works at 320 / 375 px. Renders from the render doc
+// (publicDocToRenderDoc). Chrome heights never change while reading (the stage keeps its size, so
+// page-flip never re-measures); nothing translates or scales the stage or the flipbook.
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Ellipsis, List, Share2 } from "lucide-react";
 import type { RenderPhotos } from "@/components/book/BookPage";
 import { Watermark } from "@/components/book/Watermark";
 import type { BookDoc } from "@/lib/book/types";
-import { chapterForPage, labelFontStyle } from "@/lib/viewer/chapters";
+import { cx } from "@/lib/cx";
+import { chapterForPage, chapterLabel, labelFontStyle } from "@/lib/viewer/chapters";
 import { endCardModel } from "@/lib/viewer/end-card";
+import { pageRatio } from "@/lib/viewer/fit";
 import { firstVisiblePageIdx, flipLayout } from "@/lib/viewer/pages";
+import { poolSide, stagePoolStyle, type StageMetrics } from "@/lib/viewer/stage-pool";
 import { visiblePages } from "@/lib/viewer/window";
 import { ChapterLabel } from "./ChapterLabel";
 import { ContentsSheet } from "./ContentsSheet";
@@ -23,6 +29,20 @@ import { MadeWithFooter } from "./MadeWithFooter";
 import { PageCounter } from "./PageCounter";
 import { ShareButtons } from "./ShareButtons";
 import { ViewerSheet } from "./ViewerSheet";
+import {
+  VW_BAND,
+  VW_BAND_ROW,
+  VW_BAND_RULE,
+  VW_BAND_TEXT_BTN,
+  VW_FLOAT_BTN,
+  VW_NAV_BAR,
+  VW_NAV_BTN,
+  VW_NAV_PILL,
+  VW_STAGE,
+  VW_SUBLINE,
+  VW_TITLE,
+  VW_TITLE_WRAP,
+} from "./viewer-classes";
 
 export type ViewerShellProps = {
   /** Render doc (publicDocToRenderDoc of the published snapshot). */
@@ -39,12 +59,37 @@ export type ViewerShellProps = {
   shareTitle: string;
 };
 
-const ICON_BTN =
-  "flex size-11 shrink-0 items-center justify-center rounded-full text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30 disabled:hover:bg-transparent";
+/** Stage padding box + padding (for placing the pool under the book). Paint input only. */
+function useStageMetrics(el: HTMLElement | null): StageMetrics | null {
+  const [m, setM] = useState<StageMetrics | null>(null);
+  useEffect(() => {
+    if (!el) return;
+    const measure = () => {
+      const cs = getComputedStyle(el);
+      const next: StageMetrics = {
+        width: el.clientWidth,
+        height: el.clientHeight,
+        padTop: parseFloat(cs.paddingTop) || 0,
+        padRight: parseFloat(cs.paddingRight) || 0,
+        padBottom: parseFloat(cs.paddingBottom) || 0,
+        padLeft: parseFloat(cs.paddingLeft) || 0,
+      };
+      setM((p) =>
+        p && (Object.keys(next) as (keyof StageMetrics)[]).every((k) => p[k] === next[k]) ? p : next,
+      );
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [el]);
+  return m;
+}
 
 export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl, shareTitle }: ViewerShellProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const api = useRef<FlipbookApi | null>(null);
+  const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null);
   const [current, setCurrent] = useState(0);
   const [spread, setSpread] = useState(false);
   const [sheet, setSheet] = useState<"contents" | "share" | null>(null);
@@ -59,6 +104,15 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
   const visible = visiblePages(current, layout.count, spread);
   const atStart = current <= 0;
   const atEnd = visible.includes(layout.count - 1);
+
+  // The stage's ground-shadow pool (VW_STAGE layer 1) under the visible book; paint only.
+  const metrics = useStageMetrics(stageEl);
+  const side = poolSide(spread, visible);
+  const ratio = useMemo(() => pageRatio(doc.format), [doc.format]);
+  const poolStyle = useMemo(
+    () => (metrics ? (stagePoolStyle(metrics, spread, ratio, side) ?? undefined) : undefined),
+    [metrics, spread, ratio, side],
+  );
 
   // Stable nodes: Flipbook puts them in context; new identities re-render every page.
   // Paid end card (D-054): snapshot title in the cover font on the page background; Replay flips
@@ -81,36 +135,70 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
     void fs.toggle();
   }, [fs]);
 
-  const bar = "border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/85";
-  const overlayTop = pseudo ? "absolute inset-x-0 top-0 z-20 shadow-sm" : "";
-  const overlayBottom = pseudo ? "absolute inset-x-0 bottom-0 z-20 shadow-sm" : "";
+  // Pseudo-fullscreen: the bars float over the stage (wrapper, so the recipes' own position classes
+  // never conflict) and fade in when the reader asks for them.
+  const overlay = (edge: "top" | "bottom", node: ReactNode) =>
+    pseudo ? <div className={cx("vw-chrome-fade absolute inset-x-0 z-20", edge === "top" ? "top-0" : "bottom-0")}>{node}</div> : node;
+
+  const band = (
+    <header className={VW_BAND} data-testid="viewer-top-bar">
+      <div className={VW_BAND_ROW}>
+        <div className={VW_TITLE_WRAP}>
+          <h1 dir="auto" style={labelFontStyle(title)} className={cx(VW_TITLE, "text-left")} data-testid="viewer-title">
+            {title}
+          </h1>
+          {/* Both lines stay left-aligned in the LTR chrome (an Arabic chapter under an English title
+              would otherwise drift right); dir="auto" still orders each line's own text. No chapter
+              (cover / end): the line hides so the title centres; the band stays 52 px. */}
+          <ChapterLabel chapter={chapter} className={cx(VW_SUBLINE, "text-left", chapterLabel(chapter) ? null : "hidden")} />
+        </div>
+        <button type="button" onClick={() => setSheet("contents")} className={VW_BAND_TEXT_BTN} data-testid="contents-button">
+          <List className="size-5" aria-hidden />
+          <span className="sr-only sm:not-sr-only">Contents</span>
+        </button>
+        <button type="button" onClick={() => setSheet("share")} className={VW_BAND_TEXT_BTN} data-testid="share-button">
+          <Share2 className="size-5" aria-hidden />
+          <span className="sr-only sm:not-sr-only">Share</span>
+        </button>
+        <FullscreenButton active={fs.mode !== "off"} onToggle={toggleFullscreen} />
+      </div>
+      <span className={VW_BAND_RULE} aria-hidden />
+    </header>
+  );
+
+  const navBar = (
+    <nav
+      aria-label="Book navigation"
+      className={cx(VW_NAV_BAR, isPaid || pseudo ? "pb-[max(0.375rem,env(safe-area-inset-bottom))]" : null)}
+      data-testid="viewer-bottom-bar"
+    >
+      <div className={VW_NAV_PILL}>
+        <button type="button" onClick={() => api.current?.prev()} disabled={atStart} aria-label="Previous page" className={VW_NAV_BTN} data-testid="prev-page">
+          <ChevronLeft className="size-6" aria-hidden />
+        </button>
+        <PageCounter layout={layout} current={current} spread={spread} />
+        <button type="button" onClick={() => api.current?.next()} disabled={atEnd} aria-label="Next page" className={VW_NAV_BTN} data-testid="next-page">
+          <ChevronRight className="size-6" aria-hidden />
+        </button>
+      </div>
+    </nav>
+  );
 
   return (
     <div
       ref={rootRef}
-      className={`flex h-dvh w-full flex-col overflow-hidden bg-muted ${pseudo ? "fixed inset-0 z-40" : "relative"}`}
+      className={`flex h-dvh w-full flex-col overflow-hidden bg-[#ebe2d0] ${pseudo ? "fixed inset-0 z-40" : "relative"}`}
       data-testid="viewer-shell"
       data-paid={String(isPaid)}
       data-fullscreen={fs.mode}
       data-chrome={chromeHidden ? "hidden" : "shown"}
     >
-      {chromeHidden ? null : (
-        <header
-          className={`flex shrink-0 items-center gap-2 border-b pt-[env(safe-area-inset-top)] pr-[max(0.5rem,env(safe-area-inset-right))] pl-[max(0.75rem,env(safe-area-inset-left))] ${bar} ${overlayTop}`}
-          data-testid="viewer-top-bar"
-        >
-          <div className="min-w-0 flex-1 py-1.5">
-            <h1 dir="auto" style={labelFontStyle(title)} className="truncate font-display text-base font-semibold text-foreground" data-testid="viewer-title">
-              {title}
-            </h1>
-            <ChapterLabel chapter={chapter} />
-          </div>
-          <FullscreenButton active={fs.mode !== "off"} onToggle={toggleFullscreen} />
-        </header>
-      )}
+      {chromeHidden ? null : overlay("top", band)}
 
       <div
-        className="relative min-h-0 flex-1 p-2 sm:p-4"
+        ref={setStageEl}
+        className={cx("relative min-h-0 flex-1 p-2 sm:p-4", VW_STAGE)}
+        style={poolStyle}
         data-testid="viewer-stage"
         onClick={(e) => {
           // Tapping the empty stage around the book toggles the controls in pseudo-fullscreen.
@@ -132,7 +220,7 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
             type="button"
             onClick={() => setChromeShown(true)}
             aria-label="Show controls"
-            className="absolute top-[max(0.5rem,env(safe-area-inset-top))] right-[max(0.5rem,env(safe-area-inset-right))] z-20 flex size-11 items-center justify-center rounded-full bg-primary/70 text-primary-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className={cx(VW_FLOAT_BTN, "vw-chrome-fade absolute top-[max(0.5rem,env(safe-area-inset-top))] right-[max(0.5rem,env(safe-area-inset-right))] z-20")}
             data-testid="show-controls"
           >
             <Ellipsis className="size-5" aria-hidden />
@@ -140,31 +228,7 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
         ) : null}
       </div>
 
-      {chromeHidden ? null : (
-        <nav
-          aria-label="Book navigation"
-          className={`flex shrink-0 items-center justify-between gap-1 border-t pr-[max(0.5rem,env(safe-area-inset-right))] pl-[max(0.5rem,env(safe-area-inset-left))] ${isPaid || pseudo ? "pb-[env(safe-area-inset-bottom)]" : ""} ${bar} ${overlayBottom}`}
-          data-testid="viewer-bottom-bar"
-        >
-          <button type="button" onClick={() => setSheet("contents")} className={`${ICON_BTN} w-auto gap-1.5 px-2.5 text-sm`} data-testid="contents-button">
-            <List className="size-5" aria-hidden />
-            <span className="max-[359px]:sr-only">Contents</span>
-          </button>
-          <div className="flex items-center">
-            <button type="button" onClick={() => api.current?.prev()} disabled={atStart} aria-label="Previous page" className={ICON_BTN} data-testid="prev-page">
-              <ChevronLeft className="size-6" aria-hidden />
-            </button>
-            <PageCounter layout={layout} current={current} spread={spread} />
-            <button type="button" onClick={() => api.current?.next()} disabled={atEnd} aria-label="Next page" className={ICON_BTN} data-testid="next-page">
-              <ChevronRight className="size-6" aria-hidden />
-            </button>
-          </div>
-          <button type="button" onClick={() => setSheet("share")} className={`${ICON_BTN} w-auto gap-1.5 px-2.5 text-sm`} data-testid="share-button">
-            <Share2 className="size-5" aria-hidden />
-            <span className="max-[359px]:sr-only">Share</span>
-          </button>
-        </nav>
-      )}
+      {chromeHidden ? null : overlay("bottom", navBar)}
 
       {isPaid || pseudo ? null : <MadeWithFooter className="pb-[env(safe-area-inset-bottom)]" />}
 
@@ -186,4 +250,3 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
     </div>
   );
 }
-
