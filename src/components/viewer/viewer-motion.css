@@ -1,0 +1,74 @@
+/* Viewer motion (M23 T1, D-075). Owned by the viewer — not globals.css. Imported by the server
+   layouts of /b/[slug] and /dev-viewer, so it ships with the route's first-load CSS (lesson M20:
+   CSS imported only by a lazy chunk adds webpack's CSS loader to every route). Plain CSS, every
+   class prefixed vw-.
+
+   Rules:
+   - Everything animated lives under (prefers-reduced-motion: no-preference). Outside it the classes
+     do nothing: the element simply shows in its final state.
+   - vw-chrome-fade, vw-card-in and vw-skeleton-pulse animate opacity only. They may sit on the band,
+     the bottom bar, the end card (inside page-flip pages) or the loader.
+   - vw-sheet-rise is the only one that translates, and only on ViewerSheet's panel (a fixed sibling
+     of the stage). Never on viewer-stage, the flipbook or anything inside them: page-flip maps touch
+     coordinates through the stage's bounding box. */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Band / bottom bar / show-controls appearing (e.g. pseudo-fullscreen controls toggled on). */
+  .vw-chrome-fade {
+    animation: vw-chrome-fade 180ms ease-out both;
+  }
+
+  @keyframes vw-chrome-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* ViewerSheet's panel arriving: rise + fade. ViewerSheet only. */
+  .vw-sheet-rise {
+    animation: vw-sheet-rise 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  @keyframes vw-sheet-rise {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* A card (end card content, message card) fading in. */
+  .vw-card-in {
+    animation: vw-card-in 240ms ease-out both;
+  }
+
+  @keyframes vw-card-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* Loader skeleton breathing. */
+  .vw-skeleton-pulse {
+    animation: vw-skeleton-pulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes vw-skeleton-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.55;
+    }
+  }
+}
