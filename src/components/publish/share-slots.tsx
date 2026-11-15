@@ -55,7 +55,7 @@ export function shareSlots(input: ShareSlotsInput): ShareSlots {
   };
   const upgrade = refresh ? <UpgradeButtonView {...upgradeProps} refresh={refresh} /> : <UpgradeButton {...upgradeProps} />;
 
-  const pdfProps = { bookId, isPaid: true, paymentsEnabled, returnTo, look: PDF_SHARE_LOOK };
+  const pdfProps = { bookId, isPaid: state.isPaid, paymentsEnabled, returnTo, look: PDF_SHARE_LOOK };
   const download = state.isPaid ? (
     refresh ? (
       <PdfDownloadView {...pdfProps} refresh={refresh} transport={pdfTransport} />

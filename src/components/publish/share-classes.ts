@@ -75,7 +75,7 @@ export const SHARE_COLUMNS = "lg:grid lg:grid-cols-[minmax(0,21rem)_minmax(0,1fr
 export const SHARE_BAR_SPACER = "h-[calc(5.5rem+env(safe-area-inset-bottom))] lg:hidden";
 
 /** The gold Upgrade pill: SHARE_CTA_GOLD with phone padding px-5 so "Upgrade this book — AED 39" fits one line at 375. */
-export const SHARE_UPGRADE_CLASS = `${SHARE_CTA_GOLD.replace(" px-7 ", " px-5 ")} w-full py-2 text-center whitespace-normal sm:w-auto sm:self-start`;
+export const SHARE_UPGRADE_CLASS = "home-foil-fill inline-flex min-h-12 items-center justify-center gap-2.5 rounded-full px-5 font-brand text-base font-semibold text-[#1b1b1d] shadow-[0_14px_28px_-16px_rgb(14_59_46/0.8),inset_0_1px_0_rgb(255_255_255/0.4)] transition-[filter,transform] outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-[#0e3b2e] focus-visible:ring-offset-[3px] focus-visible:ring-offset-[#f2e8d8] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none sm:min-h-14 sm:px-9 sm:text-lg w-full py-2 text-center whitespace-normal sm:w-auto sm:self-start";
 
 /** PdfDownload's share-page look (passed as a prop by share-slots, so the editor's PDF tool ships none of this). */
 export const PDF_SHARE_LOOK = {

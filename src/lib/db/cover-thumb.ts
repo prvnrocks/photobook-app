@@ -1,6 +1,6 @@
 import "server-only";
-// One signed cover thumb for a single book (M21 share preview). Same picture rule as the
-// dashboard cards: doc.cover.photoId, else the first slot photo in the doc. RLS client throughout
+// One signed cover thumb for a single book (M21 share preview): doc.cover.photoId, else the
+// first photo slot on any page (the dashboard card only looks at page 1's first slot). RLS client throughout
 // (photos_select_own + storage owner policies) — the photo must exist, be ready, belong to this
 // book and have a thumb. Best effort: any problem → null, never a throw (the page must render
 // without a picture rather than fail). No logging (nothing here is worth a line, and ids / paths
