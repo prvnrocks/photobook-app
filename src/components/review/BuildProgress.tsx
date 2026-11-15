@@ -50,6 +50,11 @@ export type BuildProgressProps = {
   aiOn?: boolean;
   /** "wizard" = creation wizard step 6 (M19, D-071): `preview` is the photo fan. Default "default". */
   variant?: "default" | "wizard";
+  /**
+   * M20 T6: the run finished (AI done, or a rule run done at start) — called instead of replacing the
+   * URL with the editor, so the /books/new wizard can move to step 7 in place. Default: the editor.
+   */
+  onDone?: () => void;
 };
 
 /** Wizard helper line (exported for tests). */
@@ -115,6 +120,7 @@ export function BuildProgress({
   preview,
   aiOn = true,
   variant = "default",
+  onDone,
 }: BuildProgressProps) {
   const router = useRouter();
   const editorHref = `/books/${bookId}/edit`;
@@ -153,9 +159,14 @@ export function BuildProgress({
     [mountedAt, auto],
   );
 
+  const onDoneRef = useRef(onDone);
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  });
   const goToEditor = useCallback(() => {
     setStatus({ kind: "leaving" });
-    router.replace(editorHref);
+    if (onDoneRef.current) onDoneRef.current();
+    else router.replace(editorHref);
   }, [router, editorHref]);
 
   const run = useCallback(

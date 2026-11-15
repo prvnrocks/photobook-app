@@ -1,27 +1,34 @@
 "use client";
-// Book creation wizard steps 1–4 on /books/new (M19 T3/T4/T8, D-071).
-//   - The step lives in the URL (?step=1..4). Continue / Back change it with window.history.pushState
-//     (no router.push: the route is force-dynamic with a loading.tsx — no server round trip per step);
-//     popstate drives the step, so browser back / forward work. Step label + progress render here.
-//   - New book: the draft is mirrored to sessionStorage (WIZARD_DRAFT_STORAGE_KEY) so a refresh keeps
-//     the choices; entering a step whose earlier answers are missing goes to the first missing step
-//     (a visit with no stored draft starts at step 1). A restored draft shows a "Start over" button
-//     (clears it, back to step 1). The stored draft is only cleared once the create succeeds.
-//     Step-4 Continue submits hidden fields to createBookAction (tone is picked by the server). It
-//     returns the new id: the current history
-//     entry is replaced with the edit URL (/books/new?book=<id>&step=4) and we push
-//     /books/<id>/upload (= step 5), so browser Back re-opens THIS book, never an empty wizard
-//     (M19 BUG-2: duplicate drafts). If the router restores the cached create-mode page for that
-//     entry, the mount sees ?book= in create mode and reloads it from the server (edit mode, or the
-//     editor when the details are locked).
-//   - Edit (T8, ?book=<id>): prefilled from the book (sessionStorage unused); step-4 Continue saves
-//     with updateBookSetupAction and goes to /books/<id>/upload.
-//   - M20 T4: a live book preview (WizardBookPreview) follows the draft — the aside on ≥ lg
-//     (WizardPreviewAside, kept mounted across steps so it animates), a compact mini above each
-//     step's headline on phones. No caption-language question (D-072): the server derives it.
+// The book creation wizard on /books/new — one continuous 7-step wizard (M19 D-071, M20 D-072):
+// 1 title → 2 purpose → 3 shape → 4 style → 5 photos → 6 sorting → 7 review → editor.
+//   - The band, stepper, aside and this component stay mounted from step 1 to step 7; steps change in
+//     place (document.startViewTransition via runViewTransition, CSS fallback — wizard-motion.css
+//     contract: data-step-anim / data-step-dir on the keyed step container). The only real
+//     navigation is the final move to the editor (window.location.assign).
+//   - Every step change goes through the pure flow model (src/lib/books/wizard-flow.ts): transition()
+//     returns the next state + an effect, applied here exactly as T3 specified: "push" (replaceCurrent
+//     first, then history.pushState; preferHistoryBack → history.back() when the previous entry is
+//     that step), "replace", "reload", "navigate". popstate feeds `popstate` actions, so browser
+//     back / forward follow the same guardrails (G2: photos picked → steps 1–4 locked; run → ≤5
+//     locked; done → 6 locked). Never router.push / router.refresh here (G1).
+//   - Steps 1–4: the draft (title, occasion, shape, style). New book: mirrored to sessionStorage so a
+//     refresh keeps it; entering a step whose earlier answers are missing goes to the first missing
+//     one; a restored draft offers "Start over". Step-4 Continue submits createBookAction (it returns
+//     the id + step-5 data) → `created` → step 5 in place; the step-4 history entry becomes the edit
+//     URL so browser Back re-opens THIS book (M19 BUG-2). book_created is sent from here (the
+//     one-shot ?_ev flash on the action's `next`; no navigation carries it any more).
+//     Edit mode (?book=<id>, or after the create): prefilled; Continue saves with
+//     updateBookSetupAction → `created` → step 5.
+//   - Steps 5–7: WizardDataSteps (one code-split chunk, prefetched on idle from step 3 — G5) loads
+//     GET /api/books/<id>/wizard?step=N unless the data is here already (createBookAction's step 5,
+//     the server props on a hard load) and renders StepPhotos / StepSorting / StepReview.
+//   - Mode guard (replaces the M19 BUG-3 key-by-mode): the page keys this component by a constant, so
+//     a server re-render after a server action (revalidatePath re-renders the current URL, now an
+//     edit URL) can't remount it mid-flow. If the server sends a different book (or a fresh create
+//     wizard via a link) than the one the flow holds, the page is reloaded instead — no answers ever
+//     carry over into another book.
 // First-load island: no cn / buttonVariants / next/link (the step-1 Back link comes from the server).
 
-import { useRouter } from "next/navigation";
 import { useActionState, useCallback, useEffect, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { createBookAction, updateBookSetupAction } from "@/app/books/actions";
 import { initialNewBookFormState, type NewBookField, type NewBookFormState } from "@/app/books/form-state";
@@ -30,35 +37,54 @@ import { WizardNav } from "@/components/wizard/WizardNav";
 import { WizardBand } from "@/components/wizard/WizardBand";
 import { WizardBody } from "@/components/wizard/WizardBody";
 import type { BookSetupField, BookSetupPatch, SetupLockReason, UpdateBookSetupResult } from "@/lib/book/setup";
+import type { WizardDataStepNumber, WizardStepData } from "@/lib/books/wizard-client";
+import {
+  canGoTo as flowCanGoTo,
+  FLOW_FORM_LAST_STEP,
+  initFlowState,
+  parseFlowStep,
+  transition,
+  urlFor,
+  type FlowAction,
+  type FlowResult,
+  type FlowState,
+  type FlowStep,
+} from "@/lib/books/wizard-flow";
 import {
   EMPTY_WIZARD_DRAFT,
   firstMissingStep,
   isAcceptableWizardTitle,
-  parseFormStep,
   parseWizardDraft,
   serializeWizardDraft,
   WIZARD_DRAFT_STORAGE_KEY,
-  wizardBackHref,
   type WizardDraft,
   type WizardFormStep,
 } from "@/lib/books/wizard-steps";
 import { effectiveStyle } from "@/lib/design/defaults";
+import { canUseViewTransition, runViewTransition, type StepDirection } from "@/lib/ui/view-transition";
 import { StepOccasion } from "./wizard/StepOccasion";
 import { StepShape } from "./wizard/StepShape";
 import { StepStyle } from "./wizard/StepStyle";
 import { StepTitle } from "./wizard/StepTitle";
 import { WizardBookPreview, WizardPreviewAside } from "./wizard/WizardBookPreview";
+import { LazyWizardDataSteps, prefetchWizardSteps } from "./wizard/steps/lazy-steps";
+// The step-5 upload stage's CSS rides in this route's stylesheet, not in the lazy steps chunk: an async
+// chunk with CSS adds webpack's CSS-chunk loader to the runtime every route ships (+0.6 kB gzip).
+import "@/components/upload/upload-motion.css";
+import type { WizardStepDataMap } from "./wizard/steps/WizardDataSteps";
 
 export type NewBookWizardMode =
   | { kind: "create" }
   | { kind: "edit"; bookId: string; draft: WizardDraft; designLock: SetupLockReason | null };
 
 export type NewBookWizardProps = {
-  /** ?step= as the server parsed it. */
-  initialStep: WizardFormStep;
+  /** The step the server resolved (create: 1–4; edit: 1–7 after the gate). */
+  initialStep: FlowStep;
   mode: NewBookWizardMode;
   /** Step-1 Back: a server-rendered <Link> to /dashboard. */
   dashboardBack: ReactNode;
+  /** Hard load of step 5–7: the server's loadWizardStep data for initialStep. */
+  initialData?: WizardStepData | null;
 };
 
 /** The step that asks for each field (server errors jump there). Tone has no step → the last one. */
@@ -84,6 +110,7 @@ const EDIT_ERRORS: Record<Extract<UpdateBookSetupResult, { ok: false }>["error"]
 };
 
 type StepError = { step: WizardFormStep; message: string; field?: NewBookField };
+type StepAnim = { kind: "vt" | "css"; dir: StepDirection };
 
 /** First (lowest-step) field error → where to show it. */
 function errorFromFields(
@@ -119,20 +146,35 @@ export const wizardWindow = {
   reload(href: string) {
     window.location.replace(href);
   },
+  assign(href: string) {
+    window.location.assign(href);
+  },
 };
 
-function urlForStep(step: WizardFormStep): string {
-  const u = new URL(window.location.href);
-  u.searchParams.set("step", String(step));
-  return `${u.pathname}${u.search}${u.hash}`;
+/** The flow state for the server's answer (hard load / first render). */
+export function initialFlow(mode: NewBookWizardMode, step: FlowStep, data?: WizardStepData | null): FlowState {
+  if (mode.kind === "create") return initFlowState({ step });
+  const dataStep = data && data.bookId === mode.bookId ? data.step : null;
+  return initFlowState({
+    bookId: mode.bookId,
+    step,
+    runStarted: step === 6 || dataStep === 6,
+    done: step === 7 || dataStep === 7,
+  });
 }
 
-function readStepFromUrl(): WizardFormStep {
-  return parseFormStep(new URL(window.location.href).searchParams.get("step"));
+function readUrl(): { step: string | null; book: string | null } {
+  const u = new URL(window.location.href);
+  return { step: u.searchParams.get("step"), book: u.searchParams.get("book") };
 }
 
 /** Our own keys in history.state (Next merges its router state into the same object). */
 type WizardHistoryState = { wizardStep?: number; wizardPrev?: number };
+
+function historyState(): WizardHistoryState & Record<string, unknown> {
+  const s: unknown = window.history.state;
+  return s && typeof s === "object" ? (s as WizardHistoryState & Record<string, unknown>) : {};
+}
 
 function readStored(): WizardDraft | null {
   try {
@@ -151,21 +193,52 @@ function writeStored(draft: WizardDraft | null) {
   }
 }
 
-export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizardProps) {
+/**
+ * book_created (M9 T14): the server decided it — the one-shot ?_ev flash on the action's `next`, only
+ * with analytics on. Both analytics modules load lazily (not in the first load).
+ */
+function trackCreated(next: string | undefined) {
+  if (!next || !next.includes("_ev=")) return;
+  let search = "";
+  try {
+    search = new URL(next, window.location.origin).search;
+  } catch {
+    return;
+  }
+  void Promise.all([import("@/lib/analytics/flash"), import("@/lib/analytics/client")])
+    .then(([flash, client]) => {
+      const ev = flash.flashEvent(search);
+      if (ev) client.trackEvent(ev);
+    })
+    .catch(() => {});
+}
+
+function loginHref(): string {
+  return `/login?next=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`;
+}
+
+export function NewBookWizard({ initialStep, mode, dashboardBack, initialData }: NewBookWizardProps) {
   const edit = mode.kind === "edit" ? mode : null;
-  const router = useRouter();
   const [draft, setDraft] = useState<WizardDraft>(() => edit?.draft ?? EMPTY_WIZARD_DRAFT);
-  const [step, setStep] = useState<WizardFormStep>(initialStep);
+  const [flow, setFlow] = useState<FlowState>(() => initialFlow(mode, initialStep, initialData));
+  const flowRef = useRef(flow);
+  const [stepData, setStepData] = useState<WizardStepDataMap>(() =>
+    initialData && edit && initialData.bookId === edit.bookId ? { [initialData.step]: initialData } : {},
+  );
   const [stepError, setStepError] = useState<StepError | null>(null);
-  /** Direction of the last step change (null until the first change: no enter animation on load). */
-  const [stepDir, setStepDir] = useState<"forward" | "back" | null>(null);
+  /** The last step change's animation (null until the first change: no enter animation on load). */
+  const [anim, setAnim] = useState<StepAnim | null>(null);
+  const panelRef = useRef<HTMLElement | null>(null);
+  const setPanel = useCallback((el: HTMLElement | null) => {
+    panelRef.current = el;
+  }, []);
   const draftRef = useRef(draft);
   draftRef.current = draft;
-  const stepRef = useRef(step);
-  stepRef.current = step;
   /** The user changed something (create): only then is the draft mirrored to sessionStorage. */
   const dirtyRef = useRef(false);
   const focusOnStepRef = useRef(false);
+  /** Step 6 data: the run is the automatic first build (ai_build_done { auto }). */
+  const autoRef = useRef(false);
 
   const [state, formAction, creating] = useActionState<NewBookFormState, FormData>(
     createBookAction,
@@ -176,96 +249,205 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
   /** Create mode: steps 1–4 came back from sessionStorage (offer "Start over"). */
   const [restored, setRestored] = useState(false);
   // Create mode remounted on a created book's entry (see isCreatedBookEntry): render nothing but a
-  // pending shell while the mount effect reloads. Always false on the server and on hydration (the
-  // server renders ?book= in edit mode), so no mismatch.
+  // pending shell while the mount effect reloads. Always false on the server and on hydration.
   const [reopening] = useState(
     () => mode.kind === "create" && typeof window !== "undefined" && isCreatedBookEntry(window.location.href),
   );
 
+  const step = flow.step;
+  const editingBookId = flow.mode.kind === "edit" ? flow.mode.bookId : null;
   const style = effectiveStyle(draft.designStyle, draft.occasion);
-  const designLocked = edit?.designLock != null;
+  const designLocked = edit?.designLock != null && edit.bookId === editingBookId;
 
-  /** Show a step: push (Continue / Back / error jump) or replace (redirects). */
-  const showStep = useCallback((next: WizardFormStep, how: "push" | "replace") => {
-    const from = stepRef.current;
-    const data: WizardHistoryState = { wizardStep: next, wizardPrev: how === "push" ? from : undefined };
-    if (how === "push") window.history.pushState(data, "", urlForStep(next));
-    else window.history.replaceState({ ...(window.history.state ?? {}), ...data }, "", urlForStep(next));
-    if (next !== from) {
-      focusOnStepRef.current = true;
-      setStepDir(next < from ? "back" : "forward");
+  /** Renders a new flow state; a step change runs as a view transition (CSS fallback). */
+  const showFlow = useCallback((prev: FlowState, next: FlowState) => {
+    if (prev.step === next.step) {
+      setFlow(next);
+      return;
     }
-    setStep(next);
+    const dir: StepDirection = next.step < prev.step ? "back" : "forward";
+    const kind = canUseViewTransition() ? "vt" : "css";
+    focusOnStepRef.current = true;
+    // The old snapshot must carry the step's view-transition-name (wizard-motion.css: [data-step-anim]).
+    if (kind === "vt" && panelRef.current) panelRef.current.setAttribute("data-step-anim", "vt");
+    runViewTransition(() => {
+      setAnim({ kind, dir });
+      setFlow(next);
+    });
   }, []);
 
-  // Mount: restore the stored draft (create) and bounce a step whose earlier answers are missing.
+  /** Applies a transition result: history effect first (URL before render), then the new state. */
+  const apply = useCallback(
+    (prev: FlowState, res: FlowResult) => {
+      const next = res.state;
+      flowRef.current = next;
+      const e = res.effect;
+      if (e.kind === "push") {
+        const hs = historyState();
+        if (e.preferHistoryBack && hs.wizardPrev === next.step && hs.wizardStep === prev.step) {
+          window.history.back(); // the popstate that follows finds the state already there
+        } else {
+          if (e.replaceCurrent) {
+            window.history.replaceState({ ...hs, wizardStep: prev.step, wizardPrev: undefined }, "", e.replaceCurrent);
+          }
+          const data: WizardHistoryState = { wizardStep: next.step, wizardPrev: prev.step };
+          window.history.pushState(data, "", e.url);
+        }
+      } else if (e.kind === "replace") {
+        window.history.replaceState({ ...historyState(), wizardStep: next.step, wizardPrev: undefined }, "", e.url);
+      } else if (e.kind === "reload") {
+        wizardWindow.reload(window.location.href);
+        return;
+      } else if (e.kind === "navigate") {
+        setLeaving(true);
+        wizardWindow.assign(e.href);
+      }
+      if (next !== prev) showFlow(prev, next);
+    },
+    [showFlow],
+  );
+
+  const dispatch = useCallback(
+    (action: FlowAction): FlowResult => {
+      const prev = flowRef.current;
+      const res = transition(prev, action);
+      apply(prev, res);
+      return res;
+    },
+    [apply],
+  );
+
+  /** Leave the wizard (editor / classic build) — the one kind of real navigation. */
+  const leave = useCallback((href: string) => {
+    setLeaving(true);
+    wizardWindow.assign(href);
+  }, []);
+
+  // Mount: restore the stored draft (create), bounce a step whose earlier answers are missing, and
+  // make the URL match the step the server resolved (edit).
   useEffect(() => {
     if (reopening) {
       wizardWindow.reload(window.location.href);
       return;
     }
+    if (mode.kind === "edit") {
+      const cur = flowRef.current;
+      const url = readUrl();
+      if (parseFlowStep(url.step) !== cur.step || url.book !== mode.bookId) {
+        window.history.replaceState({ ...historyState(), wizardStep: cur.step, wizardPrev: undefined }, "", urlFor(cur));
+      }
+      return;
+    }
     let current = draftRef.current;
     let fresh = false;
-    if (mode.kind === "create") {
-      const stored = readStored();
-      if (stored) {
-        current = { ...stored, captionLang: stored.captionLang ?? null };
-        setDraft(current);
-        setRestored(true);
-      } else {
-        fresh = true;
-      }
+    const stored = readStored();
+    if (stored) {
+      current = { ...stored, captionLang: stored.captionLang ?? null };
+      setDraft(current);
+      setRestored(true);
+    } else {
+      fresh = true;
     }
-    const target = allowedStep(readStepFromUrl(), current, fresh);
-    if (target !== stepRef.current || target !== readStepFromUrl()) showStep(target, "replace");
-    // mode is fixed for the page's lifetime
+    const urlStep = parseFlowStep(readUrl().step);
+    const asked = (urlStep === null ? 1 : Math.min(urlStep, FLOW_FORM_LAST_STEP)) as WizardFormStep;
+    const target = allowedStep(asked, current, fresh);
+    const reach = fresh ? target : Math.max(target, firstMissingStep(current) ?? FLOW_FORM_LAST_STEP);
+    const next: FlowState = { ...initFlowState({ step: target }), maxStep: reach as FlowStep };
+    const prev = flowRef.current;
+    flowRef.current = next;
+    if (String(target) !== readUrl().step) {
+      window.history.replaceState({ ...historyState(), wizardStep: target, wizardPrev: undefined }, "", urlFor(next));
+    }
+    showFlow(prev, next);
+    // mode is fixed for the page's lifetime (mode guard below)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Browser back / forward.
+  // Mode guard: the server sent another book / a fresh create wizard than the flow holds → reload.
+  const propKey = mode.kind === "edit" ? `edit:${mode.bookId}` : "create";
+  const propKeyRef = useRef(propKey);
+  useEffect(() => {
+    if (propKeyRef.current === propKey) return;
+    propKeyRef.current = propKey;
+    const fm = flowRef.current.mode;
+    if (mode.kind === "edit") {
+      if (fm.kind === "edit" && fm.bookId === mode.bookId) return;
+    } else if (fm.kind === "create" || readUrl().book !== null) {
+      // A cached create tree restored for an old step 1–3 entry: the popstate flow already showed it
+      // as this book's edit URL.
+      return;
+    }
+    wizardWindow.reload(window.location.href);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propKey]);
+
+  // Browser back / forward → the flow (guardrails decide; refused → the URL shows the current step).
   useEffect(() => {
     function onPop() {
-      const urlStep = readStepFromUrl();
-      const target = allowedStep(urlStep, draftRef.current, false);
-      if (target !== urlStep) window.history.replaceState(window.history.state, "", urlForStep(target));
-      if (target !== stepRef.current) {
-        focusOnStepRef.current = true;
-        setStepDir(target < stepRef.current ? "back" : "forward");
+      const url = readUrl();
+      const prev = flowRef.current;
+      let stepParam: unknown = url.step;
+      // Create mode: never past the first missing answer of the draft.
+      const parsed = parseFlowStep(url.step);
+      if (prev.mode.kind === "create" && parsed !== null && parsed <= FLOW_FORM_LAST_STEP) {
+        const allowed = allowedStep(parsed as WizardFormStep, draftRef.current, false);
+        if (allowed !== parsed) stepParam = String(allowed);
       }
-      setStep(target);
+      const res = transition(prev, { type: "popstate", step: stepParam, bookId: url.book });
+      if (stepParam !== url.step && res.effect.kind === "none") {
+        apply(prev, { ...res, effect: { kind: "replace", url: urlFor(res.state) } });
+        return;
+      }
+      apply(prev, res);
     }
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, []);
+  }, [apply]);
 
-  // Mirror the new-book draft (never in edit mode).
+  // Mirror the new-book draft (create mode only).
   useEffect(() => {
-    if (mode.kind === "create" && dirtyRef.current) writeStored(draft);
-  }, [draft, mode.kind]);
+    if (flow.mode.kind === "create" && dirtyRef.current) writeStored(draft);
+  }, [draft, flow.mode.kind]);
 
-  // Move focus to the new step's headline after a step change (keyboard / screen readers).
+  // G5: warm the step 5–7 chunks on idle once the user is two steps in.
+  const warm = step >= 3;
+  useEffect(() => {
+    if (!warm) return;
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(() => prefetchWizardSteps(), { timeout: 3000 });
+      return () => w.cancelIdleCallback?.(id);
+    }
+    const t = setTimeout(() => prefetchWizardSteps(), 500);
+    return () => clearTimeout(t);
+  }, [warm]);
+
+  // Move focus to the new step's headline after a step change (keyboard / screen readers); steps 5–7
+  // render it once their chunk / data is in.
   useEffect(() => {
     if (!focusOnStepRef.current) return;
+    const h = document.getElementById(HEADLINE_ID);
+    if (!h) return;
     focusOnStepRef.current = false;
-    document.getElementById(HEADLINE_ID)?.focus();
-  }, [step]);
+    h.focus();
+  }, [step, stepData]);
 
-  // createBookAction succeeded: point this history entry at the new book's edit URL, then go to step 5.
+  // createBookAction succeeded: step 5 in place (the step-4 entry becomes the edit URL — flow effect).
   const createdRef = useRef<NewBookFormState | null>(null);
   useEffect(() => {
-    if (!state.ok || !state.bookId || !state.next || createdRef.current === state) return;
+    if (!state.ok || !state.bookId || createdRef.current === state) return;
     createdRef.current = state; // once per result, whatever re-runs the effect
-    setLeaving(true);
     // Only now is the stored draft done with (a failed or thrown action must not lose steps 1–4).
     writeStored(null);
     setRestored(false);
-    window.history.replaceState(
-      { ...(window.history.state ?? {}), wizardStep: 4, wizardPrev: undefined },
-      "",
-      wizardBackHref(state.bookId),
-    );
-    router.push(state.next);
-  }, [state, router]);
+    trackCreated(state.next);
+    const bookId = state.bookId;
+    setStepData(state.step5 && state.step5.bookId === bookId ? { 5: state.step5 } : {});
+    dispatch({ type: "created", bookId });
+  }, [state, dispatch]);
 
   // createBookAction failed: keep the draft, jump to the failed step.
   useEffect(() => {
@@ -273,8 +455,8 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
     writeStored(draftRef.current);
     const err = errorFromFields(state.fieldErrors, state.error ?? "We couldn't create your book. Please try again.");
     setStepError(err);
-    if (err.step !== stepRef.current) showStep(err.step, "push");
-  }, [state, showStep]);
+    if (err.step !== flowRef.current.step) dispatch({ type: "goTo", step: err.step });
+  }, [state, dispatch]);
 
   function update(patch: Partial<WizardDraft>) {
     dirtyRef.current = true;
@@ -282,12 +464,8 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
   }
 
   function goBack() {
-    if (step === 1) return;
-    const prev = (step - 1) as WizardFormStep;
-    const hs = (window.history.state ?? {}) as WizardHistoryState;
-    // Came here with Continue from the previous step → a real history back keeps the stack tidy.
-    if (hs.wizardPrev === prev && hs.wizardStep === step) window.history.back();
-    else showStep(prev, "replace");
+    setStepError(null);
+    dispatch({ type: "back" });
   }
 
   function saveEdit(bookId: string) {
@@ -311,39 +489,38 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
         res = { ok: false, error: "failed" };
       }
       if (res.ok) {
-        setLeaving(true);
-        router.push(`/books/${bookId}/upload`);
+        setStepData({}); // the setup changed: step 5 reloads its data
+        dispatch({ type: "created", bookId });
         return;
       }
       if (res.error === "unauthenticated") {
-        window.location.assign(`/login?next=${encodeURIComponent(urlForStep(4))}`);
+        leave(loginHref());
         return;
       }
       if (res.error === "locked") {
-        // The details locked meanwhile (an AI build started): the editor is the way forward.
-        setLeaving(true);
-        router.push(`/books/${bookId}/edit`);
+        // The details locked meanwhile (an AI build started): the server gate picks the step.
+        leave(`/books/new?book=${encodeURIComponent(bookId)}&step=5`);
         return;
       }
       const err = res.fieldErrors
         ? errorFromFields(res.fieldErrors as Partial<Record<BookSetupField, string>>, EDIT_ERRORS[res.error])
         : { step: 4 as WizardFormStep, message: EDIT_ERRORS[res.error] };
       setStepError(err);
-      if (err.step !== stepRef.current) showStep(err.step, "push");
+      if (err.step !== flowRef.current.step) dispatch({ type: "goTo", step: err.step });
     });
   }
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
-    if (step < 4) {
+    if (step < FLOW_FORM_LAST_STEP) {
       e.preventDefault();
       if (!canContinue) return;
       setStepError(null);
-      showStep((step + 1) as WizardFormStep, "push");
+      dispatch({ type: "continue" });
       return;
     }
-    if (edit) {
+    if (editingBookId) {
       e.preventDefault();
-      saveEdit(edit.bookId);
+      saveEdit(editingBookId);
       return;
     }
     // Create: the form action runs next. The stored draft stays until it succeeds (success effect).
@@ -357,32 +534,38 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
     setRestored(false);
     setStepError(null);
     setDraft(EMPTY_WIZARD_DRAFT);
-    showStep(1, "replace");
+    const prev = flowRef.current;
+    const next = initFlowState({ step: 1 });
+    flowRef.current = next;
+    window.history.replaceState({ ...historyState(), wizardStep: 1, wizardPrev: undefined }, "", urlFor(next));
+    showFlow(prev, next);
   }
 
-  const pending = creating || saving || leaving || state.ok;
+  const pending = creating || saving || leaving;
+  const formStep = (step <= FLOW_FORM_LAST_STEP ? step : FLOW_FORM_LAST_STEP) as WizardFormStep;
   const canContinue =
-    step === 1
+    formStep === 1
       ? isAcceptableWizardTitle(draft.title)
-      : step === 2
+      : formStep === 2
         ? draft.occasion !== null
-        : step === 3
+        : formStep === 3
           ? draft.format !== null
           : draft.occasion !== null && draft.format !== null;
   const errorHere = stepError && stepError.step === step ? stepError : null;
-  // Live preview (M20 T4): the style tints / opens the book on step 4 (or once picked).
+  // Live preview (M20 T4): the style tints / opens the book from step 4 on; steps 5–7 keep it open.
   const previewProps = {
     title: draft.title,
     occasion: draft.occasion,
     format: draft.format,
-    designStyle: step === 4 ? style : draft.designStyle,
-    open: step === 4,
+    designStyle: step >= 4 ? style : draft.designStyle,
+    open: step >= 4,
     typing: step === 1,
   };
-  const miniPreview = (
-    <WizardBookPreview {...previewProps} size={step === 1 ? "md" : "sm"} className="mb-4 lg:hidden" />
-  );
   const fieldError = (f: NewBookField) => (errorHere?.field === f ? errorHere.message : undefined);
+  const animAttrs = {
+    "data-step-anim": anim?.kind,
+    "data-step-dir": anim?.dir,
+  };
 
   if (reopening) {
     return (
@@ -395,101 +578,128 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
   }
 
   return (
-    <div className="flex w-full min-w-0 flex-1 flex-col" data-testid="new-book-wizard" data-step={step} data-mode={mode.kind}>
+    <div className="flex w-full min-w-0 flex-1 flex-col" data-testid="new-book-wizard" data-step={step} data-mode={flow.mode.kind}>
       <WizardBand
         step={step}
         title={draft.title}
-        canGoTo={(n) => n < step && !pending}
+        canGoTo={(n) => !pending && flowCanGoTo(flow, n)}
         onStepClick={(n) => {
           setStepError(null);
-          showStep(n as WizardFormStep, "push");
+          dispatch({ type: "goTo", step: n });
         }}
       />
       <WizardBody wide aside={<WizardPreviewAside {...previewProps} />} asideBelowLg="hide">
-      {/* Phones / tablets: the mini preview stays mounted above the (keyed) step form, so it animates
-          between steps (shrinks after step 1, morphs on a shape change, opens on step 4). */}
-      {miniPreview}
-      <form
-        key={step}
-        action={step === 4 && !edit ? formAction : undefined}
-        onSubmit={onSubmit}
-        noValidate
-        className="flex w-full min-w-0 flex-col gap-8"
-        data-testid="new-book-form"
-        data-step-anim={stepDir ? "css" : undefined}
-        data-step-dir={stepDir ?? undefined}
-      >
-        {errorHere ? (
-          <Notice tone="error" data-testid="new-book-error">
-            <span data-testid="new-book-error-message">{errorHere.message}</span>
-          </Notice>
+        {/* Phones / tablets: the mini preview stays mounted above the (keyed) step form on steps 1–4,
+            so it animates between steps (shrinks after step 1, morphs on a shape change, opens on 4). */}
+        {step <= FLOW_FORM_LAST_STEP ? (
+          <WizardBookPreview {...previewProps} size={step === 1 ? "md" : "sm"} className="mb-4 lg:hidden" />
         ) : null}
+        {step <= FLOW_FORM_LAST_STEP ? (
+          <form
+            key={step}
+            ref={setPanel}
+            action={step === FLOW_FORM_LAST_STEP && !editingBookId ? formAction : undefined}
+            onSubmit={onSubmit}
+            noValidate
+            className="flex w-full min-w-0 flex-col gap-8"
+            data-testid="new-book-form"
+            {...animAttrs}
+          >
+            {errorHere ? (
+              <Notice tone="error" data-testid="new-book-error">
+                <span data-testid="new-book-error-message">{errorHere.message}</span>
+              </Notice>
+            ) : null}
 
-        {step === 1 ? (
-          <StepTitle
-            title={draft.title}
-            onTitleChange={(title) => update({ title })}
-            headlineId={HEADLINE_ID}
-            error={fieldError("title")}
-          />
-        ) : step === 2 ? (
-          <StepOccasion
-            occasion={draft.occasion}
-            onOccasion={(occasion) => update({ occasion })}
-            headlineId={HEADLINE_ID}
-            error={fieldError("occasion") ?? fieldError("captionLang")}
-          />
-        ) : step === 3 ? (
-          <StepShape
-            format={draft.format}
-            onFormat={(format) => update({ format })}
-            headlineId={HEADLINE_ID}
-            locked={designLocked}
-            error={fieldError("format")}
-            title={draft.title}
-            occasion={draft.occasion}
-          />
+            {step === 1 ? (
+              <StepTitle
+                title={draft.title}
+                onTitleChange={(title) => update({ title })}
+                headlineId={HEADLINE_ID}
+                error={fieldError("title")}
+              />
+            ) : step === 2 ? (
+              <StepOccasion
+                occasion={draft.occasion}
+                onOccasion={(occasion) => update({ occasion })}
+                headlineId={HEADLINE_ID}
+                error={fieldError("occasion") ?? fieldError("captionLang")}
+              />
+            ) : step === 3 ? (
+              <StepShape
+                format={draft.format}
+                onFormat={(format) => update({ format })}
+                headlineId={HEADLINE_ID}
+                locked={designLocked}
+                error={fieldError("format")}
+                title={draft.title}
+                occasion={draft.occasion}
+              />
+            ) : (
+              <StepStyle
+                designStyle={style}
+                format={draft.format ?? "A5_PORTRAIT"}
+                onStyle={(designStyle) => update({ designStyle })}
+                headlineId={HEADLINE_ID}
+                locked={designLocked}
+                error={fieldError("designStyle") ?? fieldError("tone")}
+              />
+            )}
+
+            {step === FLOW_FORM_LAST_STEP && !editingBookId ? (
+              <>
+                <input type="hidden" name="title" value={draft.title} />
+                <input type="hidden" name="occasion" value={draft.occasion ?? ""} />
+                <input type="hidden" name="format" value={draft.format ?? ""} />
+                <input type="hidden" name="designStyle" value={style} />
+              </>
+            ) : null}
+
+            <WizardNav
+              back={step === 1 ? dashboardBack : undefined}
+              onBack={step === 1 ? undefined : goBack}
+              continueLabel="Continue"
+              pendingLabel={step === FLOW_FORM_LAST_STEP ? (editingBookId ? "Saving…" : "Creating your book…") : undefined}
+              pending={step === FLOW_FORM_LAST_STEP && pending}
+              disabled={!canContinue || pending}
+              continueTestId={step === FLOW_FORM_LAST_STEP ? (editingBookId ? "wizard-save" : "create-book") : "wizard-continue"}
+              className="mx-auto max-w-[36rem]"
+            />
+          </form>
         ) : (
-          <StepStyle
-            designStyle={style}
-            format={draft.format ?? "A5_PORTRAIT"}
-            onStyle={(designStyle) => update({ designStyle })}
-            headlineId={HEADLINE_ID}
-            locked={designLocked}
-            error={fieldError("designStyle") ?? fieldError("tone")}
-          />
+          <div
+            key={step}
+            ref={setPanel}
+            className="flex w-full min-w-0 flex-col"
+            data-testid="wizard-step-panel"
+            data-panel-step={step}
+            {...animAttrs}
+          >
+            {editingBookId ? (
+              <LazyWizardDataSteps
+                step={step as WizardDataStepNumber}
+                bookId={editingBookId}
+                stepData={stepData}
+                setStepData={setStepData}
+                dispatch={dispatch}
+                leave={leave}
+                leaving={leaving}
+                autoRef={autoRef}
+                headlineId={HEADLINE_ID}
+              />
+            ) : null}
+          </div>
         )}
-
-        {step === 4 && !edit ? (
-          <>
-            <input type="hidden" name="title" value={draft.title} />
-            <input type="hidden" name="occasion" value={draft.occasion ?? ""} />
-            <input type="hidden" name="format" value={draft.format ?? ""} />
-            <input type="hidden" name="designStyle" value={style} />
-          </>
+        {restored && flow.mode.kind === "create" && !pending && step <= FLOW_FORM_LAST_STEP ? (
+          <button
+            type="button"
+            onClick={startOver}
+            className="text-muted-foreground hover:text-foreground focus-visible:ring-ring focus-visible:ring-offset-background mx-auto mt-4 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full px-4 text-sm font-medium underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-offset-2"
+            data-testid="wizard-start-over"
+          >
+            Start over
+          </button>
         ) : null}
-
-        <WizardNav
-          back={step === 1 ? dashboardBack : undefined}
-          onBack={step === 1 ? undefined : goBack}
-          continueLabel="Continue"
-          pendingLabel={step === 4 ? (edit ? "Saving…" : "Creating your book…") : undefined}
-          pending={step === 4 && pending}
-          disabled={!canContinue || pending}
-          continueTestId={step === 4 ? (edit ? "wizard-save" : "create-book") : "wizard-continue"}
-          className="mx-auto max-w-[36rem]"
-        />
-      </form>
-      {restored && !edit && !pending ? (
-        <button
-          type="button"
-          onClick={startOver}
-          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring focus-visible:ring-offset-background mx-auto mt-4 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full px-4 text-sm font-medium underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-offset-2"
-          data-testid="wizard-start-over"
-        >
-          Start over
-        </button>
-      ) : null}
       </WizardBody>
     </div>
   );

@@ -113,7 +113,7 @@ describe("Uploader (step 5)", () => {
     for (const gone of ["SetupCard", "useBookSetup", "setupCtl", "takePendingFiles", "hasPendingFiles", "pending-files", "setup-ui"]) {
       expect(u).not.toContain(gone);
     }
-    expect(u).toContain("{wizard && props.back && !picked && !busy ? (");
+    expect(u).toContain("{wizard && (props.onBack || props.back) && !picked && !busy ? (");
     expect(u).toContain("setPicked(true);");
     expect(existsSync(join(process.cwd(), "src/components/upload/SetupCard.tsx"))).toBe(false);
     expect(existsSync(join(process.cwd(), "src/components/upload/use-book-setup.ts"))).toBe(false);

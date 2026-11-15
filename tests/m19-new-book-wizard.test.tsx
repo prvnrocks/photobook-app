@@ -42,7 +42,20 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: async () => mocks.user }));
 vi.mock("@/lib/db/books", () => ({ getMyBook: async () => mocks.book }));
-vi.mock("@/lib/db/agent-runs", () => ({ hasAnyRunForBook: async () => mocks.hasRun }));
+vi.mock("@/lib/db/agent-runs", () => ({
+  hasAnyRunForBook: async () => mocks.hasRun,
+  getActiveRunForBook: async () => null,
+}));
+// M20 T6: steps 5–7 load through the lazy WizardDataSteps chunk; plain step stubs here (tests/m20-continuous-wizard.test.tsx covers them).
+vi.mock("@/components/books/wizard/steps/StepPhotos", () => ({
+  StepPhotos: ({ data, headlineId }: { data: { bookId: string }; headlineId: string }) => (
+    <div data-testid="stub-step-photos" data-book={data.bookId}>
+      <h1 id={headlineId} tabIndex={-1}>Add your photos</h1>
+    </div>
+  ),
+}));
+vi.mock("@/components/books/wizard/steps/StepSorting", () => ({ StepSorting: () => <div data-testid="stub-step-sorting" /> }));
+vi.mock("@/components/books/wizard/steps/StepReview", () => ({ StepReview: () => <div data-testid="stub-step-review" /> }));
 vi.mock("@/lib/db/memory", () => ({ getOwnMemoryView: async () => mocks.memory }));
 vi.mock("@/lib/db/profiles", () => ({ getMyProfile: async () => null }));
 
@@ -473,24 +486,34 @@ describe("new book wizard — shape, style and submit", () => {
     expect(stored()?.occasion).toBe("family");
   });
 
-  it("success: the history entry becomes the book's edit URL, then step 5 is pushed (M19 BUG-2)", async () => {
+  it("success: step 5 in place — the step-4 entry becomes the book's edit URL, step 5 is pushed (M19 BUG-2, M20 T6)", async () => {
     mocks.createBookAction.mockResolvedValue({
       ok: true,
       bookId: BOOK,
       next: `/books/${BOOK}/upload?_ev=book_created`,
+      step5: { step: 5, bookId: BOOK, title: "T", resolved: 5, firstRun: "none" },
     });
     store({ title: "T", occasion: "family", format: "A5_PORTRAIT" });
     await mount("/books/new?step=4");
     const before = window.history.length;
+    const band = $("wizard-band");
     await click($("create-book"));
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledTimes(1));
-    expect(mocks.push).toHaveBeenCalledWith(`/books/${BOOK}/upload?_ev=book_created`);
-    // Replaced, not pushed: browser Back from step 5 lands on /books/new?book=<id>&step=4.
-    expect(window.location.pathname + window.location.search).toBe(`/books/new?book=${BOOK}&step=4`);
-    expect(window.history.length).toBe(before);
+    await waitFor(() => expect(shownStep()).toBe("5"));
+    await waitFor(() => expect($("stub-step-photos")).toBeTruthy());
+    // No router navigation: the same wizard (and band) shows step 5 from the action's step-5 data.
+    expect(mocks.push).not.toHaveBeenCalled();
+    expect($("wizard-band")).toBe(band);
+    expect($("stub-step-photos").getAttribute("data-book")).toBe(BOOK);
+    expect(window.location.pathname + window.location.search).toBe(`/books/new?book=${BOOK}&step=5`);
+    expect(window.history.length).toBe(before + 1);
     expect(stored()).toBeNull();
-    expect($<HTMLButtonElement>("create-book").disabled).toBe(true);
-    expect($("create-book").textContent).toContain("Creating your book…");
+    // Browser Back from step 5 lands on this book's step 4 (edit mode), never an empty create wizard.
+    await historyBack();
+    expect(shownStep()).toBe("4");
+    expect(window.location.pathname + window.location.search).toBe(`/books/new?book=${BOOK}&step=4`);
+    expect($("new-book-wizard").getAttribute("data-mode")).toBe("edit");
+    expect($("wizard-save")).toBeTruthy();
+    expect(mocks.createBookAction).toHaveBeenCalledTimes(1);
   });
 
   it("create mode remounted on a created book's entry (browser Back) reloads it — never an empty wizard", async () => {
@@ -554,9 +577,11 @@ describe("new book wizard — edit mode (T8)", () => {
     designStyle: "classic",
   };
 
-  it("prefills from the book and ignores sessionStorage; Continue saves and goes to the upload step", async () => {
+  it("prefills from the book and ignores sessionStorage; Continue saves and shows step 5 in place", async () => {
     store({ title: "Other draft", occasion: "baby", format: "A5_LANDSCAPE", designStyle: "scrapbook" });
     mocks.updateBookSetupAction.mockResolvedValue({ ok: true, setup: {}, relaidOut: false });
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ step: 5, bookId: BOOK, title: "", resolved: 5, firstRun: "none" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
     await mount(`/books/new?book=${BOOK}&step=4`, { kind: "edit", bookId: BOOK, draft: editDraft, designLock: null });
     expect(shownStep()).toBe("4");
     expect(radio("style-classic").checked).toBe(true);
@@ -572,7 +597,12 @@ describe("new book wizard — edit mode (T8)", () => {
       format: "A5_LANDSCAPE",
       designStyle: "classic",
     });
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith(`/books/${BOOK}/upload`));
+    await waitFor(() => expect($("stub-step-photos")).toBeTruthy());
+    expect(shownStep()).toBe("5");
+    expect(urlStep()).toBe("5");
+    expect(fetchMock).toHaveBeenCalledWith(`/api/books/${BOOK}/wizard?step=5`, expect.objectContaining({ method: "GET" }));
+    expect(mocks.push).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
     // edit mode never writes the new-book draft
     expect(stored()?.title).toBe("Other draft");
   });
@@ -669,10 +699,16 @@ describe("/books/new server page", () => {
     });
   });
 
-  it("edit: details locked (an AI run exists) → the editor", async () => {
+  it("edit: details locked (a finished AI run) → the gate's step (7 Review), not steps 1–4", async () => {
     mocks.book = { id: BOOK, title: "T", occasion: "other", caption_lang: "en", doc: {}, format: "A5_PORTRAIT", design_style: "modern" };
     mocks.hasRun = true;
-    await expect(run({ book: BOOK, step: "2" })).rejects.toThrow(`REDIRECT:/books/${BOOK}/edit`);
+    await expect(run({ book: BOOK, step: "2" })).rejects.toThrow(`REDIRECT:/books/new?book=${BOOK}&step=7`);
+  });
+
+  it("create: steps 5–7 without a book clamp to the form", async () => {
+    const props = wizardProps(await run({ step: "6" }));
+    expect(props.mode).toEqual({ kind: "create" });
+    expect(props.initialStep).toBe(4);
   });
 });
 

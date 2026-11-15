@@ -35,6 +35,8 @@ type UploadSummaryProps = {
   next: SummaryNext;
   /** resolveAiMode() !== "off" from the page (D-024): false → neutral copy. Default true. */
   aiOn?: boolean;
+  /** M20 T6 (wizard): "Make my book now" is a button calling this instead of a link to the build page. */
+  onBuild?: () => void;
 };
 
 /** "Starting your book…" detail line (exported for tests). */
@@ -47,7 +49,7 @@ const readIsIos = () =>
   isIosDevice(navigator.userAgent, navigator.platform ?? "", navigator.maxTouchPoints ?? 0);
 const serverIsIos = () => false;
 
-export function UploadSummary({ bookId, summary, finalize, onAddMore, next, aiOn = true }: UploadSummaryProps) {
+export function UploadSummary({ bookId, summary, finalize, onAddMore, next, aiOn = true, onBuild }: UploadSummaryProps) {
   const isIos = useSyncExternalStore(noSubscribe, readIsIos, serverIsIos);
   const showGpsHint = isIos && finalize !== null && finalize.photos > 0 && finalize.withGps === 0;
   const skipped = skippedLines(summary.skippedBy);
@@ -138,6 +140,15 @@ export function UploadSummary({ bookId, summary, finalize, onAddMore, next, aiOn
             description={startingCopy(aiOn)}
             data-testid="upload-auto-starting"
           />
+        ) : next.kind === "build" && onBuild ? (
+          <button
+            type="button"
+            onClick={onBuild}
+            className={cn(buttonVariants({ variant: "accent", size: "cta" }))}
+            data-testid="build-album"
+          >
+            Make my book now
+          </button>
         ) : next.kind === "build" ? (
           <Link
             href={`/books/${bookId}/build`}

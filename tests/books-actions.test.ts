@@ -95,7 +95,25 @@ describe("createBookAction", () => {
 
   it("success returns the new id + next instead of redirecting (M19 BUG-2)", async () => {
     const state = await createBookAction(initialNewBookFormState, form(valid));
-    expect(state).toEqual({ ok: true, bookId: BOOK_ID, next: `/books/${BOOK_ID}/upload` });
+    expect(state).toMatchObject({ ok: true, bookId: BOOK_ID, next: `/books/${BOOK_ID}/upload` });
+    // M20 T6: the wizard's step-5 data for the new book (shown in place, no extra request).
+    expect(state.step5).toMatchObject({
+      step: 5,
+      bookId: BOOK_ID,
+      title: "Our trip",
+      rawTitle: "Our trip",
+      occasion: "travel",
+      captionLang: "en",
+      isPaid: false,
+      resolved: 5,
+      userId: "11111111-1111-4111-8111-111111111111",
+      existing: [],
+      readyCount: 0,
+      pendingCount: 0,
+      hasDoc: false,
+      firstRun: "none",
+    });
+    expect(state.step5?.maxUpload).toBeGreaterThan(0);
     expect(mocks.createBook).toHaveBeenCalledTimes(1);
   });
 

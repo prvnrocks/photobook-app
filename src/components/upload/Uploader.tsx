@@ -13,6 +13,12 @@
 // variant "wizard" (step 5 of a fresh book) = the wizard.png card: big pick area, then the progress
 // card with the last three thumbnails, Pause/Resume and "Keep this tab open…"; `back` (a
 // server-rendered link to step 4) shows only until the first photo is picked.
+// M20 T6 (D-072): inside the one continuous /books/new wizard the wizard variant never navigates:
+// `onAdvance` gets the auto-start answer instead of router.push (the wizard maps it with
+// wizard-flow's autoStart action → step 6 / 7 / editor), `onBack` / `onBuildNow` replace the Back and
+// "Make my book now" links, `onPhotosPicked` locks steps 1–4. The upload stage (UploadStage) stays
+// mounted while finalizing and starting (`settled`), and the wizard moves on only after both the
+// success burst (onSettled) and the auto-start answer. The classic screen is unchanged.
 import { ImagePlus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -37,6 +43,7 @@ import { limitCopy } from "@/lib/runs/stage-copy";
 import {
   AUTO_BUILD_MIN_PHOTOS,
   autoStartNext,
+  type AutoStartOutcome,
   buildHref,
   editorHref,
   NOT_READY_RETRY_MS,
@@ -59,7 +66,10 @@ import type {
 } from "@/lib/upload/queue";
 import { plural } from "@/lib/upload/summary-text";
 import { cn } from "@/lib/utils";
+import { WIZARD_BACK_CLASS } from "@/components/wizard/WizardNav";
 import { UploadProgress } from "./UploadProgress";
+import { UploadPickArt } from "./UploadStage";
+import { SETTLE_MS, UPLOAD_PICK_WIZARD_CLASS } from "./upload-stage-model";
 import { UploadSummary, type SummaryNext } from "./UploadSummary";
 import { UploadThumbs, useThumbStrip } from "./UploadThumbs";
 import { useWakeLock, useWarnOnLeave } from "./use-keep-awake";
@@ -85,6 +95,21 @@ export type UploaderProps = {
   variant?: "default" | "wizard";
   /** Wizard only: server-rendered Back link (to step 4), shown until the first photo is picked. */
   back?: ReactNode;
+  /**
+   * Wizard only (M20 T6): Back as a button (wins over `back`), shown until the first photo is picked
+   * — the /books/new wizard changes step in place.
+   */
+  onBack?: () => void;
+  /** Wizard only (M20 T6): the first photos of this visit were picked (the wizard locks steps 1–4). */
+  onPhotosPicked?: () => void;
+  /**
+   * Wizard only (M20 T6): replaces router.push after the automatic first build answered with a
+   * "move on" outcome (started / already_running / not_first / user_edited). Called once, after the
+   * upload stage's success burst. Fallback outcomes (not_ready twice, limit, error…) stay here.
+   */
+  onAdvance?: (outcome: AutoStartOutcome) => void;
+  /** Wizard only (M20 T6): "Make my book now" calls this instead of linking to the build page. */
+  onBuildNow?: () => void;
 };
 
 /** Wizard helper lines under the card (exported for tests). */
@@ -126,6 +151,16 @@ export function Uploader(props: UploaderProps) {
   const autoBusyRef = useRef(false);
   /** Photos were picked on this visit (hides the wizard Back link so an upload can't be lost). */
   const [picked, setPicked] = useState(false);
+  // M20 T6: the wizard moves on after the auto-start answer AND the stage's success burst.
+  const onAdvanceRef = useRef(props.onAdvance);
+  useEffect(() => {
+    onAdvanceRef.current = props.onAdvance;
+  });
+  const advanceRef = useRef<AutoStartOutcome | null>(null);
+  const advancedRef = useRef(false);
+  const burstDoneRef = useRef(false);
+  /** Last queue progress (null = the stage never showed, so there's no burst to wait for). */
+  const progressRef = useRef<QueueProgress | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<UploadQueue | null>(null);
@@ -221,7 +256,10 @@ export function Uploader(props: UploaderProps) {
 
   function onEvent(e: QueueEvent) {
     thumbs.onQueueEvent(e);
-    if (e.type === "progress") setProgress(e);
+    if (e.type === "progress") {
+      progressRef.current = e;
+      setProgress(e);
+    }
     else if (e.type === "limit") {
       setLimitNotice((prev) => ({ limit: e.limit, skipped: (prev?.skipped ?? 0) + e.skipped }));
     }
@@ -319,7 +357,8 @@ export function Uploader(props: UploaderProps) {
               auto: true,
             });
           }
-          router.push(next.href);
+          if (wizard && onAdvanceRef.current) queueAdvance(outcome);
+          else router.push(next.href);
           return; // stay "starting" until the next screen replaces this one
         }
         setAuto({ kind: "fallback", limit: next.limit });
@@ -330,6 +369,32 @@ export function Uploader(props: UploaderProps) {
       setAuto({ kind: "fallback" });
       autoBusyRef.current = false;
     }
+  }
+
+  /** Hands the auto-start answer to the wizard once the success burst has played (or can't). */
+  function tryAdvance() {
+    const outcome = advanceRef.current;
+    const onAdvance = onAdvanceRef.current;
+    if (!outcome || !onAdvance || advancedRef.current || unmountedRef.current) return;
+    if (!burstDoneRef.current && progressRef.current !== null) return;
+    advancedRef.current = true;
+    onAdvance(outcome);
+  }
+
+  function queueAdvance(outcome: AutoStartOutcome) {
+    advanceRef.current = outcome;
+    advancedRef.current = false;
+    tryAdvance();
+    // Safety net: the burst normally ends within SETTLE_MS; never strand the user on a lost callback.
+    setTimeout(() => {
+      burstDoneRef.current = true;
+      tryAdvance();
+    }, SETTLE_MS + 1000);
+  }
+
+  function onStageSettled() {
+    burstDoneRef.current = true;
+    tryAdvance();
   }
 
   async function retryFinalize() {
@@ -374,6 +439,9 @@ export function Uploader(props: UploaderProps) {
       return;
     }
     setPicksIgnored(false);
+    burstDoneRef.current = false;
+    advanceRef.current = null;
+    if (!picked) props.onPhotosPicked?.();
     setPicked(true);
     setLoadFailed(false);
     setRemoveError(null);
@@ -492,6 +560,9 @@ export function Uploader(props: UploaderProps) {
               note: auto.kind === "fallback" && auto.limit ? limitCopy(auto.limit, isPaid, props.dailyCap) : fewNote,
             };
   const showIdleNext = showPicker && readyCount > 0 && pending === 0;
+  // Wizard: the upload stage stays up through finalize and the auto start (no summary flash).
+  const stageShown =
+    wizard && progress !== null && (uploading || phase === "finalizing" || (phase === "done" && starting));
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-4">
@@ -545,19 +616,30 @@ export function Uploader(props: UploaderProps) {
             onDrop={onDrop}
             aria-describedby={capacityId}
             data-drag={dragOver ? "over" : undefined}
-            className={`group flex ${wizard ? "min-h-56" : "min-h-40"} w-full flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-input bg-card px-6 py-8 text-center shadow-card transition-colors outline-none hover:border-accent-strong hover:bg-secondary/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[drag=over]:border-accent-strong data-[drag=over]:bg-secondary`}
+            className={
+              wizard
+                ? UPLOAD_PICK_WIZARD_CLASS
+                : "group flex min-h-40 w-full flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-input bg-card px-6 py-8 text-center shadow-card transition-colors outline-none hover:border-accent-strong hover:bg-secondary/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[drag=over]:border-accent-strong data-[drag=over]:bg-secondary"
+            }
             data-testid="upload-pick"
           >
-            <span
-              aria-hidden="true"
-              className="flex size-14 items-center justify-center rounded-full bg-accent-strong text-accent-strong-foreground shadow-card"
-            >
-              <ImagePlus className="size-7" />
-            </span>
-            <span className="type-h2 text-foreground">Choose photos</span>
-            <span className="type-small text-muted-foreground">
-              Select as many as you like at once. iPhone photos (HEIC) work too.
-            </span>
+            {wizard ? (
+              // M20 T5: open book with a dashed "drop photos here" page + the big "Choose photos" pill.
+              <UploadPickArt />
+            ) : (
+              <>
+                <span
+                  aria-hidden="true"
+                  className="flex size-14 items-center justify-center rounded-full bg-accent-strong text-accent-strong-foreground shadow-card"
+                >
+                  <ImagePlus className="size-7" />
+                </span>
+                <span className="type-h2 text-foreground">Choose photos</span>
+                <span className="type-small text-muted-foreground">
+                  Select as many as you like at once. iPhone photos (HEIC) work too.
+                </span>
+              </>
+            )}
           </button>
           <p
             id={capacityId}
@@ -569,14 +651,29 @@ export function Uploader(props: UploaderProps) {
         </div>
       ) : null}
 
-      {wizard && props.back && !picked && !busy ? (
+      {wizard && (props.onBack || props.back) && !picked && !busy ? (
         <div className="flex justify-center" data-testid="upload-wizard-back">
-          {props.back}
+          {props.onBack ? (
+            <button type="button" onClick={props.onBack} className={WIZARD_BACK_CLASS} data-testid="wizard-back">
+              Back
+            </button>
+          ) : (
+            props.back
+          )}
         </div>
       ) : null}
 
       {showIdleNext ? (
-        firstRun === "none" ? (
+        firstRun === "none" && props.onBuildNow ? (
+          <button
+            type="button"
+            onClick={props.onBuildNow}
+            className={cn(buttonVariants({ variant: "accent", size: "cta" }))}
+            data-testid="build-album"
+          >
+            Make my book now
+          </button>
+        ) : firstRun === "none" ? (
           <Link
             href={buildHref(bookId, false)}
             className={cn(buttonVariants({ variant: "accent", size: "cta" }))}
@@ -616,19 +713,25 @@ export function Uploader(props: UploaderProps) {
         </Notice>
       ) : null}
 
-      {uploading && progress ? (
+      {stageShown && progress ? (
+        // Wizard: the stage stays mounted from the first photo until the wizard moves on — settled
+        // (closed book + burst + "Sorting next…") while finalizing and starting the build.
         <UploadProgress
           progress={progress}
           paused={paused}
           onTogglePause={togglePause}
-          variant={wizard ? "wizard" : "default"}
-          thumbs={wizard ? <UploadThumbs items={thumbs.items} /> : undefined}
+          variant="wizard"
+          thumbs={<UploadThumbs items={thumbs.items} />}
+          settled={uploading ? undefined : true}
+          onSettled={onStageSettled}
         />
+      ) : uploading && progress ? (
+        <UploadProgress progress={progress} paused={paused} onTogglePause={togglePause} variant="default" />
       ) : uploading ? (
         <LoadingState label="Getting ready…" data-testid="upload-preparing" />
       ) : null}
 
-      {phase === "finalizing" ? (
+      {phase === "finalizing" && !stageShown ? (
         <LoadingState
           label="Finding places and duplicates…"
           className="rounded-2xl border border-border bg-card p-4 shadow-card"
@@ -685,7 +788,7 @@ export function Uploader(props: UploaderProps) {
         </Notice>
       ) : null}
 
-      {summary && !fatal && (phase === "done" || phase === "finalize_error") ? (
+      {summary && !fatal && (phase === "done" || phase === "finalize_error") && !stageShown ? (
         <UploadSummary
           bookId={bookId}
           summary={summary}
@@ -693,6 +796,7 @@ export function Uploader(props: UploaderProps) {
           onAddMore={openPicker}
           next={summaryNext}
           aiOn={aiOn}
+          onBuild={wizard ? props.onBuildNow : undefined}
         />
       ) : null}
 

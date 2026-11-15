@@ -30,6 +30,7 @@ import {
 } from "@/lib/book/setup";
 import { deleteBookCompletely } from "@/lib/cleanup/delete-book";
 import type { DeleteBookActionResult } from "@/lib/dashboard/delete-book";
+import { freshBookStep5Data } from "@/lib/books/wizard-bootstrap";
 import { hasAnyRunForBook } from "@/lib/db/agent-runs";
 import {
   createBook,
@@ -103,8 +104,9 @@ const FIELDS: readonly NewBookField[] = ["title", "occasion", "tone", "captionLa
  * language (D-072): a title with Arabic letters → "ar", else the remembered language, else the
  * request's Accept-Language ("ar" first → "ar", else "en")),
  * `format` + `designStyle` (D-063, fixed at creation; absent → portrait / the occasion's default
- * style, D-068). On success returns { ok, bookId, next } (next = /books/<id>/upload, plus
- * ?_ev=book_created when analytics is on; the wizard navigates there — M19 BUG-2); signed out →
+ * style, D-068). On success returns { ok, bookId, next, step5 } (next = /books/<id>/upload, plus
+ * ?_ev=book_created when analytics is on; step5 = the wizard's step-5 data for the new book, shown
+ * in place — M20 T6); signed out →
  * redirects to /login?next=/books/new.
  */
 export async function createBookAction(
@@ -145,15 +147,18 @@ export async function createBookAction(
     : [null, ""];
 
   let id: string;
+  // D-072: an Arabic-script title wins over memory and Accept-Language.
+  const lang = captionLang ?? suggestCaptionLang(acceptLanguage, memory?.language, title);
+  const bookFormat = format ?? DEFAULT_FORM_FORMAT;
+  const bookStyle = designStyle ?? defaultStyleFor(occasion);
   try {
     ({ id } = await createBook({
       title,
       occasion,
       tone: tone ?? toneForOccasion(occasion, memory?.tone),
-      // D-072: an Arabic-script title wins over memory and Accept-Language.
-      captionLang: captionLang ?? suggestCaptionLang(acceptLanguage, memory?.language, title),
-      format: format ?? DEFAULT_FORM_FORMAT,
-      designStyle: designStyle ?? defaultStyleFor(occasion),
+      captionLang: lang,
+      format: bookFormat,
+      designStyle: bookStyle,
     }));
   } catch (err) {
     console.error("[books] create failed:", err instanceof Error ? err.message : "unknown");
@@ -163,9 +168,25 @@ export async function createBookAction(
   revalidatePath("/dashboard");
   // M19 BUG-2: return instead of redirecting, so the wizard can first point its own history entry at
   // the edit URL (/books/new?book=<id>&step=4) — browser Back from step 5 then re-opens this book
-  // instead of an empty create wizard (duplicate drafts). The client navigates to `next`.
-  // analytics (M9 T14): one-shot ?_ev=book_created only when PostHog is configured.
-  return { ok: true, bookId: id, next: withAnalyticsFlash(`/books/${id}/upload`, "book_created") };
+  // instead of an empty create wizard (duplicate drafts).
+  // M20 T6 (D-072): the wizard stays on /books/new and shows step 5 in place from `step5` (no page
+  // load, no extra request); `next` is only the fallback place. analytics (M9 T14): the one-shot
+  // ?_ev=book_created rides on `next` only when PostHog is configured — the wizard reads it from
+  // there and sends book_created itself (no navigation carries it any more).
+  return {
+    ok: true,
+    bookId: id,
+    next: withAnalyticsFlash(`/books/${id}/upload`, "book_created"),
+    step5: freshBookStep5Data({
+      bookId: id,
+      userId: user.id,
+      title,
+      occasion,
+      format: bookFormat,
+      designStyle: bookStyle,
+      captionLang: lang,
+    }),
+  };
 }
 
 /** Accept-Language of the current request ("" when unavailable). */
