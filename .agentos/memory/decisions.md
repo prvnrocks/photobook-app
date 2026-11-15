@@ -246,3 +246,8 @@ Decision: New book form offers Modern (default for every occasion via DEFAULT_ST
 - Decision: /books/[id]/publish in the My-books/wizard emerald language — ShareBand (title, status chip Draft/Live/Expires in N days/Expired/Paid · permanent, 3-step mini bar Photos ✓ · Your book ✓ · Share), sticky book preview, PrimaryActionCard (Publish / "Your edits aren't live yet" → Update link / live celebration), ShareLinkCard (WhatsApp, copy feedback, native share), PlanCard (Free vs Paid AED 39; Upgrade is gold only when it's the primary action), PdfCard (paid download / free locked, never calls the PDF API), Privacy, DangerZone, phone sticky bar shown only when its card button is out of view. Keeps D-070 (editor Share publishes first). No QR.
 - Why: user request 2026-11-15 ("update the share page after album edit; redesign following dashboard and wizard").
 - Alternatives rejected: Share opens page without publishing (amends D-070, +1 tap); QR code (+5 kB); 8th wizard step.
+
+## D-074 — M22 editor in the emerald style (2026-11-15)
+- Decision: restyle-only editor redesign: compact one-row emerald band on phones (title dir=auto, save chip with today's wording, undo/redo, gold Share), full band ≥lg (EDITING eyebrow, page-count chip N / max), no AppHeader; floating emerald pill toolbar; cream stage with page frame shadow (BookPage untouched); thumbnail-card page strip; card panels (≥lg side panel, phone sheets); opacity/shadow-only motion. Make with AI CTA emerald (one gold per screen = Share).
+- Why: user request 2026-11-15 ("redesign the editor page in the same emerald style").
+- Alternatives rejected: full band on phones (−60px page height); AppHeader in editor; shortened save labels.

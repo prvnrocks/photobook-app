@@ -1,0 +1,73 @@
+/* Editor motion (M22 T2, D-074). Owned by the editor — not globals.css. EditorShell imports it (T3),
+   so it ships with the editor's first-load CSS (lesson M20: CSS imported only by a lazy chunk adds
+   webpack's CSS loader to every route). Plain CSS, every class prefixed ed-.
+
+   Rules:
+   - Everything animated lives under (prefers-reduced-motion: no-preference). Outside it the classes
+     do nothing: the element simply shows in its final state.
+   - ed-page-in, ed-select-glow and ed-save-pulse animate opacity / box-shadow only. They may sit on
+     the page carousel, EditablePage ancestors or the crop box, whose geometry
+     (getBoundingClientRect, dnd-kit hit-testing) must never move.
+   - ed-sheet-rise is the only one that translates, and only on a sheet container (never on a page,
+     carousel or crop ancestor). */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* A page (or spread) appearing on the stage after navigation: a short fade. */
+  .ed-page-in {
+    animation: ed-page-in 180ms ease-out both;
+  }
+
+  @keyframes ed-page-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* A slot / thumbnail just selected: one emerald glow pulse, then rest. */
+  .ed-select-glow {
+    animation: ed-select-glow 650ms ease-out 1;
+  }
+
+  @keyframes ed-select-glow {
+    0% {
+      box-shadow: 0 0 0 0 rgb(14 59 46 / 0.45);
+    }
+    100% {
+      box-shadow: 0 0 0 10px rgb(14 59 46 / 0);
+    }
+  }
+
+  /* The save-status dot while saving: a soft breathing fade. */
+  .ed-save-pulse {
+    animation: ed-save-pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes ed-save-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  /* A phone bottom sheet arriving: rise + fade. Sheet container only. */
+  .ed-sheet-rise {
+    animation: ed-sheet-rise 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  @keyframes ed-sheet-rise {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
