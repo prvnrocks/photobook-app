@@ -4,7 +4,8 @@
 // from GET /api/books/<id>/wizard?step=N when the wizard doesn't hold it yet (createBookAction's
 // step-5 data and hard-load server props arrive pre-filled), follows the server gate when the book
 // has moved on (another tab: 5 → 6 / 7, editor, classic build), and renders StepPhotos /
-// StepSorting / StepReview wired to the flow. Never navigates itself except through `leave`
+// StepSorting / StepReview wired to the flow (T7: step 6 hands over prefetched step-7 data and
+// reports stop states as buildStopped). Never navigates itself except through `leave`
 // (editor / classic build / login).
 
 import { useEffect, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
@@ -119,7 +120,18 @@ export function WizardDataSteps({
     );
   }
   if (step === 6 && s6) {
-    return <StepSorting data={s6} headlineId={headlineId} onDone={() => dispatch({ type: "buildDone" })} />;
+    return (
+      <StepSorting
+        data={s6}
+        headlineId={headlineId}
+        onDone={(s7data) => {
+          // M20 T7: step 7's data prefetched during the "ready" moment → step 7 opens without a fetch.
+          if (s7data && s7data.step === 7 && s7data.bookId === bookId) setStepData((d) => ({ ...d, 7: s7data }));
+          dispatch({ type: "buildDone" });
+        }}
+        onStopped={(reason) => dispatch({ type: "buildStopped", reason })}
+      />
+    );
   }
   if (step === 7 && s7) {
     return <StepReview data={s7} headlineId={headlineId} onConfirm={() => dispatch({ type: "confirm" })} confirming={leaving} />;

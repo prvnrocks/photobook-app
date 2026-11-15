@@ -133,9 +133,12 @@ describe("quick actions", () => {
     expect(lib.quickActions(paid, { paymentsEnabled: true })[2].href).toBe(`/books/${paid.id}/publish#pdf`);
   });
 
-  it("no album yet: only Open (to upload / build)", () => {
-    expect(lib.quickActions(empty, { paymentsEnabled: true })).toEqual([{ kind: "open", href: `/books/${empty.id}/upload`, label: "Open" }]);
+  it("no album yet: only Open (into the wizard's photos / sorting step, M20 T9)", () => {
+    expect(lib.quickActions(empty, { paymentsEnabled: true })).toEqual([
+      { kind: "open", href: `/books/new?book=${empty.id}&step=5`, label: "Open" },
+    ]);
     expect(kinds({ ...empty, photo_count: 4 })).toEqual(["open"]);
+    expect(lib.quickActions({ ...empty, photo_count: 4 }, { paymentsEnabled: true })[0].href).toBe(`/books/new?book=${empty.id}&step=6`);
   });
 
   it("Open follows card-target (running AI → build)", () => {

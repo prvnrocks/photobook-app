@@ -104,17 +104,19 @@ describe("BuildProgress (T7)", () => {
     expect(s).toContain("router.replace(editorHref)");
     expect(s).not.toMatch(/\/review`/);
     expect(s).not.toContain("build-to-review");
-    expect(count(s, 'data-testid="build-to-editor"')).toBe(3);
+    // 3 classic notices + 1 wizard stop card (M20 T7).
+    expect(count(s, 'data-testid="build-to-editor"')).toBe(4);
     expect(s).toMatch(/track\("ai_build_done", \{ mode, outcome, ms_bucket: msBucket\(Date\.now\(\) - mountedAt\), auto \}\)/);
   });
 
-  it("build page: ?auto=1 passes auto, a finished auto run opens the editor, draft from books.doc", () => {
+  it("build page: ?auto=1 passes auto, a finished auto run opens Review / the editor, draft from books.doc", () => {
     const s = src("src/app/books/[id]/build/page.tsx");
     expect(s).toContain('const auto = query.auto === "1";');
     // Review fix: redirect only on a confirmed "no run"; a read error renders BuildProgress.
-    expect(s).toContain("if (auto && activeRead.ok && !active) redirect(`/books/${book.id}/edit`);");
+    // M20 T9: the decision lives in buildEntryRedirect (tests/m20-entry-redirects.test.ts).
+    expect(s).toContain("activeReadOk: activeRead.ok,");
+    expect(s).toContain("if (entry.kind === \"editor\") redirect(`/books/${book.id}/edit`);");
     expect(s).not.toContain("getActiveRunForBook(book.id).catch(() => null)");
-    // M19 T7: shared props object for the classic and wizard screens.
     expect(s).toMatch(/const progressProps = \{[\s\S]*auto,\n    aiOn,\n  \} as const;/);
     expect(s).toContain("<BuildProgress {...progressProps} preview={preview} />");
     // Only the preview's photos are loaded + signed.

@@ -8,7 +8,11 @@
 // M19 T7 (D-071): variant "wizard" = step 6 "Sorting your photos" (first build): `preview` is the
 // photo fan, then a three-row checklist (wizardChecklist — only states the server reported) and
 // "Keep this tab open…". Run loop, redirect and every stop state are the same as the classic screen.
-import { Check, Circle, LoaderCircle } from "lucide-react";
+// M20 T7 (D-072): the wizard variant sets data-sort-phase (wizardSortPhase) so <PhotoFan> moves with
+// the run, draws a 3-segment bar (rows done, never time), a calm "still sorting" hint after
+// WIZARD_SLOW_HINT_MS, "Your book is ready to review" when it finishes with onDone, and calm stop
+// cards that report the stop through onStop. The default (classic) variant is unchanged.
+import { BookOpen, Check, Circle, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
@@ -28,7 +32,14 @@ import {
 } from "@/lib/runs/client";
 import { abortableSleep, DriveWaker, driveRun, startWithRetry, type RetryCause } from "@/lib/runs/drive";
 import { limitCopy, newerSnapshot, stageCopy, type ProgressSnapshot } from "@/lib/runs/stage-copy";
-import { buildChecklist, wizardChecklist, type ChecklistStepState } from "@/lib/runs/build-checklist";
+import {
+  buildChecklist,
+  wizardChecklist,
+  wizardRowsDone,
+  wizardSortPhase,
+  type ChecklistStepState,
+} from "@/lib/runs/build-checklist";
+import type { BuildStopReason } from "@/lib/books/wizard-flow";
 import { cn } from "@/lib/utils";
 
 export type BuildProgressProps = {
@@ -55,7 +66,15 @@ export type BuildProgressProps = {
    * URL with the editor, so the /books/new wizard can move to step 7 in place. Default: the editor.
    */
   onDone?: () => void;
+  /** M20 T7: a stop state was reached (wizard reports it to the flow as buildStopped). */
+  onStop?: (reason: BuildStopReason) => void;
 };
+
+/** Wizard: a calm hint once sorting has taken this long (exported for tests). Copy only — not progress. */
+export const WIZARD_SLOW_HINT_MS = 20_000;
+export const WIZARD_SLOW_HINT_COPY = "Still sorting — big albums take a minute.";
+/** Wizard, finished with onDone: the short "ready" moment before step 7. */
+export const WIZARD_READY_COPY = "Your book is ready to review";
 
 /** Wizard helper line (exported for tests). */
 export const WIZARD_BUILD_KEEP_OPEN_COPY = "Keep this tab open while we sort your photos.";
@@ -101,6 +120,32 @@ const RETRY_COPY: Record<RetryCause, string> = {
   server: "Taking longer than usual — retrying…",
 };
 
+/** Stop state → the wizard flow's reason (BuildStopReason). */
+export const STOP_REASON: Record<StopError | "user_edited" | "limit", BuildStopReason> = {
+  signed_out: "signed_out",
+  not_found: "not_found",
+  unavailable: "unavailable",
+  server_unavailable: "unavailable",
+  run_failed: "failed",
+  user_edited: "user_edited",
+  limit: "limit",
+};
+
+function stopReasonOf(status: Status): BuildStopReason | null {
+  if (status.kind === "error") return STOP_REASON[status.error];
+  if (status.kind === "user_edited" || status.kind === "limit") return STOP_REASON[status.kind];
+  return null;
+}
+
+/** Wizard stop cards: a calm title (no alarm), one short line. */
+const WIZARD_STOP_TITLE: Record<StopError, string> = {
+  signed_out: "Please sign in again",
+  not_found: "We couldn't find this book",
+  unavailable: "We lost the connection",
+  server_unavailable: "This is taking longer than usual",
+  run_failed: "Your book is ready to finish by hand",
+};
+
 /** Error states the screen recovers from by itself when the user comes back. */
 const RESUMABLE: ReadonlySet<StopError> = new Set(["unavailable", "server_unavailable"]);
 
@@ -121,6 +166,7 @@ export function BuildProgress({
   aiOn = true,
   variant = "default",
   onDone,
+  onStop,
 }: BuildProgressProps) {
   const router = useRouter();
   const editorHref = `/books/${bookId}/edit`;
@@ -168,6 +214,16 @@ export function BuildProgress({
     if (onDoneRef.current) onDoneRef.current();
     else router.replace(editorHref);
   }, [router, editorHref]);
+
+  // M20 T7: report stop states (once per status change) — the wizard dispatches buildStopped.
+  const onStopRef = useRef(onStop);
+  useEffect(() => {
+    onStopRef.current = onStop;
+  });
+  useEffect(() => {
+    const reason = stopReasonOf(status);
+    if (reason) onStopRef.current?.(reason);
+  }, [status]);
 
   const run = useCallback(
     async (signal: AbortSignal) => {
@@ -306,6 +362,14 @@ export function BuildProgress({
     };
   }, [waker, begin]);
 
+  // Wizard: a calm hint after a while (copy only; the checklist still moves on run states alone).
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (variant !== "wizard" || !running) return;
+    const t = setTimeout(() => setSlow(true), WIZARD_SLOW_HINT_MS);
+    return () => clearTimeout(t);
+  }, [variant, running]);
+
   const copy = stageCopy(snap.state, snap.progress);
   const liveText = running
     ? status.retrying
@@ -313,6 +377,10 @@ export function BuildProgress({
       : [copy.text, copy.detail].filter(Boolean).join(" ")
     : "";
   const announced = useThrottledValue(liveText, LIVE_THROTTLE_MS);
+
+  if (variant === "wizard" && status.kind !== "running" && status.kind !== "leaving") {
+    return <WizardStopCard status={status} editorHref={editorHref} loginHref={loginHref} onRetry={begin} isPaid={isPaid} dailyCap={dailyCap} />;
+  }
 
   if (status.kind === "user_edited") {
     return (
@@ -384,67 +452,94 @@ export function BuildProgress({
   const leaving = status.kind === "leaving";
   if (variant === "wizard") {
     const rows = wizardChecklist(snap.state, leaving);
+    const phase = wizardSortPhase(snap.state, leaving);
+    const ready = leaving && !!onDone;
     return (
       <section
-        className="flex min-w-0 flex-col gap-5"
+        className="grid min-w-0 grid-cols-1 items-center gap-5 sm:gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(15rem,1fr)] lg:gap-8"
         data-testid="build-progress"
         data-variant="wizard"
         data-state={snap.state}
+        data-sort-phase={phase}
         aria-label="Sorting your photos"
       >
-        {preview}
-        {/* Stages the server has reported — never a timer (src/lib/runs/build-checklist.ts). */}
-        <ol className="flex flex-col gap-2" aria-label="Build steps" data-testid="build-checklist">
-          {rows.map((s) => (
-            <li
-              key={s.id}
-              className={cn(
-                "flex min-h-12 min-w-0 items-center gap-3 rounded-xl border px-4 py-2.5",
-                s.state === "current" ? "border-accent-strong/40 bg-secondary" : "border-border bg-card",
-              )}
-              data-testid={`build-step-${s.id}`}
-              data-state={s.state}
-              aria-current={s.state === "current" ? "step" : undefined}
-            >
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "flex size-7 shrink-0 items-center justify-center rounded-full",
-                  s.state === "done" && "bg-primary text-primary-foreground",
-                  s.state === "current" && "text-accent-text",
-                  s.state === "todo" && "text-input",
-                )}
-              >
-                {s.state === "done" ? (
-                  <Check className="size-4" />
-                ) : s.state === "current" ? (
-                  <LoaderCircle className="size-6 animate-spin motion-reduce:animate-none" />
-                ) : (
-                  <Circle className="size-6" />
-                )}
+        <div className="min-w-0">{preview}</div>
+        <div className="flex min-w-0 flex-col gap-4">
+          {/* Rows done out of three — never a timer. The current segment shimmers. */}
+          <div className="grid grid-cols-3 gap-1.5" aria-hidden="true" data-testid="build-sort-bar" data-done={wizardRowsDone(rows)}>
+            {rows.map((s) => (
+              <span key={s.id} className="so-seg relative block h-1.5 overflow-hidden rounded-full bg-muted" data-state={s.state}>
+                <span className="so-seg-fill absolute inset-0 rounded-full bg-primary" />
+                <span className="so-seg-shimmer absolute inset-0" />
               </span>
-              <span
+            ))}
+          </div>
+          {/* Stages the server has reported — never a timer (src/lib/runs/build-checklist.ts). */}
+          <ol className="flex flex-col gap-2" aria-label="Build steps" data-testid="build-checklist">
+            {rows.map((s) => (
+              <li
+                key={s.id}
                 className={cn(
-                  "type-small min-w-0 flex-1 break-words",
-                  s.state === "todo" ? "text-muted-foreground" : "font-medium text-foreground",
+                  "so-row flex min-h-12 min-w-0 items-center gap-3 rounded-xl border px-4 py-2.5",
+                  s.state === "current" ? "border-accent-strong/40 bg-secondary" : "border-border bg-card",
                 )}
+                data-testid={`build-step-${s.id}`}
+                data-state={s.state}
+                aria-current={s.state === "current" ? "step" : undefined}
               >
-                {s.label}
-                <span className="sr-only"> ({STEP_STATE_SR[s.state]})</span>
-              </span>
-            </li>
-          ))}
-        </ol>
-        {status.kind === "running" && status.retrying ? (
-          <p className="type-small text-center text-warning" data-testid="build-reconnecting" data-cause={status.retrying}>
-            {RETRY_COPY[status.retrying]}
-          </p>
-        ) : null}
-        <p className="type-small text-center text-muted-foreground" data-testid="build-keep-open">
-          {leaving ? buildNoteCopy(true, aiOn) : WIZARD_BUILD_KEEP_OPEN_COPY}
-        </p>
+                <span aria-hidden="true" className="so-row-shimmer" />
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "flex size-7 shrink-0 items-center justify-center rounded-full",
+                    s.state === "done" && "so-check bg-primary text-primary-foreground",
+                    s.state === "current" && "text-accent-text",
+                    s.state === "todo" && "text-input",
+                  )}
+                  // A new key per state remounts the icon, so the check pops once when a row is done.
+                  key={s.state}
+                >
+                  {s.state === "done" ? (
+                    <Check className="size-4" strokeWidth={3} />
+                  ) : s.state === "current" ? (
+                    <LoaderCircle className="size-6 animate-spin motion-reduce:animate-none" />
+                  ) : (
+                    <Circle className="size-6" />
+                  )}
+                </span>
+                <span
+                  className={cn(
+                    "type-small min-w-0 flex-1 break-words",
+                    s.state === "todo" ? "text-muted-foreground" : "font-medium text-foreground",
+                  )}
+                >
+                  {s.label}
+                  <span className="sr-only"> ({STEP_STATE_SR[s.state]})</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+          {status.kind === "running" && status.retrying ? (
+            <p className="type-small text-center text-warning lg:text-left" data-testid="build-reconnecting" data-cause={status.retrying}>
+              {RETRY_COPY[status.retrying]}
+            </p>
+          ) : slow && running ? (
+            <p className="so-hint type-small text-center text-muted-foreground lg:text-left" data-testid="build-slow-hint">
+              {WIZARD_SLOW_HINT_COPY}
+            </p>
+          ) : null}
+          {ready ? (
+            <p className="so-ready-line type-h3 text-center font-semibold text-foreground lg:text-left" data-testid="build-ready">
+              {WIZARD_READY_COPY}
+            </p>
+          ) : (
+            <p className="type-small text-center text-muted-foreground lg:text-left" data-testid="build-keep-open">
+              {leaving ? buildNoteCopy(true, aiOn) : WIZARD_BUILD_KEEP_OPEN_COPY}
+            </p>
+          )}
+        </div>
         <p className="sr-only" role="status" aria-live="polite">
-          {announced}
+          {ready ? WIZARD_READY_COPY : announced}
         </p>
       </section>
     );
@@ -554,6 +649,81 @@ export function BuildProgress({
       <p className="sr-only" role="status" aria-live="polite">
         {announced}
       </p>
+    </section>
+  );
+}
+
+/** Wizard step 6 stop states (M20 T7): one calm card — same choices as the classic notices. */
+function WizardStopCard({
+  status,
+  editorHref,
+  loginHref,
+  onRetry,
+  isPaid,
+  dailyCap,
+}: {
+  status: Exclude<Status, { kind: "running" } | { kind: "leaving" }>;
+  editorHref: string;
+  loginHref: string;
+  onRetry: () => void;
+  isPaid: boolean;
+  dailyCap: number;
+}) {
+  const error = status.kind === "error" ? status.error : null;
+  const testId = status.kind === "error" ? "build-error" : status.kind === "limit" ? "build-limit" : "build-user-edited";
+  const title =
+    status.kind === "limit"
+      ? limitCopy(status.limit, isPaid, dailyCap)
+      : status.kind === "user_edited"
+        ? "You've edited this book, so we won't replace it."
+        : WIZARD_STOP_TITLE[status.error];
+  const body =
+    status.kind === "error"
+      ? ERROR_COPY[status.error]
+      : status.kind === "limit"
+        ? "Your draft book is ready to look at and change."
+        : "Your changes are safe — carry on in the editor.";
+  const canRetry = status.kind === "error" && status.error !== "signed_out";
+  return (
+    <section
+      className="so-stop mx-auto flex w-full max-w-[34rem] min-w-0 flex-col items-center gap-4 rounded-2xl border border-border bg-card px-5 py-6 text-center shadow-card sm:px-8 sm:py-8"
+      data-testid={testId}
+      data-variant="wizard"
+      data-error={error ?? undefined}
+      data-limit={status.kind === "limit" ? status.limit : undefined}
+      role="status"
+    >
+      <span aria-hidden="true" className="flex size-14 items-center justify-center rounded-full bg-secondary text-primary">
+        <BookOpen className="size-7" strokeWidth={1.75} />
+      </span>
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <h2 className="type-h3 break-words text-foreground" data-testid="build-stop-title">
+          {title}
+        </h2>
+        {body !== title ? <p className="type-small break-words text-muted-foreground">{body}</p> : null}
+      </div>
+      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-center">
+        {error === "signed_out" ? (
+          <Link href={loginHref} className={cn(buttonVariants({ size: "cta" }))} data-testid="build-sign-in">
+            Sign in
+          </Link>
+        ) : (
+          <>
+            {canRetry ? (
+              <Button type="button" size="cta" onClick={onRetry} data-testid="build-retry">
+                Try again
+              </Button>
+            ) : null}
+            <Link
+              href={editorHref}
+              className={cn(buttonVariants({ variant: canRetry ? "outline" : "default", size: "cta" }))}
+              data-testid="build-to-editor"
+            >
+              Open my book
+            </Link>
+          </>
+        )}
+      </div>
     </section>
   );
 }

@@ -7,6 +7,11 @@
 //    (= the upload page's "Continue" and editorRedirect in src/lib/editor/page-data.ts).
 // 3. Book built (AI or rule album, edited or not) → editor (M13, D-070: build goes straight to the
 //    editor; review stays reachable from the editor's "AI kept X of Y" chip).
+// M20 T9 (D-072): the href of a fresh draft goes straight into the wizard (one hop instead of the
+// upload/build page's redirect): "upload" → /books/new?book=<id>&step=5, "build" with no run going
+// → step 6 (the wizard's gate moves it on: finished run → 7, AI off → the classic build page).
+// A running build/rebuild keeps /books/<id>/build: only that page can tell a rebuild (classic) from
+// a first build (it redirects the latter into the wizard).
 
 export const RUNNING_AI_STATUSES = ["analyzing", "planning", "captioning"] as const;
 
@@ -28,6 +33,14 @@ export function bookCardStep(b: Omit<BookCardState, "id">): BookCardStep {
   return "edit";
 }
 
+/** Same URL as wizardStepHref in src/lib/books/wizard-routes.ts (kept here: this module stays dependency-free). */
+const wizardHref = (id: string, step: 5 | 6) => `/books/new?book=${encodeURIComponent(id)}&step=${step}`;
+
 export function bookCardHref(b: BookCardState): string {
-  return `/books/${b.id}/${bookCardStep(b)}`;
+  const step = bookCardStep(b);
+  if (step === "upload") return wizardHref(b.id, 5);
+  if (step === "build" && !(RUNNING_AI_STATUSES as readonly string[]).includes(b.ai_status ?? "")) {
+    return wizardHref(b.id, 6);
+  }
+  return `/books/${b.id}/${step}`;
 }

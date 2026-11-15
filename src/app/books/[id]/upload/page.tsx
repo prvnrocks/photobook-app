@@ -1,12 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import type { ReactNode } from "react";
 import { PageHeader } from "@/components/app/PageHeader";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Uploader, type UploaderProps } from "@/components/upload/Uploader";
-import { WIZARD_BACK_CLASS } from "@/components/wizard/WizardNav";
-import { WizardHeadline, WizardShell } from "@/components/wizard/WizardShell";
 import { resolveAiMode } from "@/lib/ai/client";
 import { limitsFor } from "@/lib/ai/limits";
 import { getCurrentUser } from "@/lib/auth/current-user";
@@ -14,8 +10,7 @@ import { displayBookTitle } from "@/lib/book/display-title";
 import { OCCASION_LABELS, OCCASIONS, type Occasion } from "@/lib/book/options";
 import { detailsLockReason } from "@/lib/book/setup";
 import { docHasContent, uploadExisting } from "@/lib/books/step-data";
-import { isWizardUpload, wizardBackHref } from "@/lib/books/wizard-routes";
-import { wizardHeadline } from "@/lib/books/wizard-steps";
+import { uploadEntryRedirect } from "@/lib/books/wizard-routes";
 import { getActiveRunForBook, hasAnyRunForBook } from "@/lib/db/agent-runs";
 import { getMyBook } from "@/lib/db/books";
 import { listUploadState } from "@/lib/db/photos";
@@ -25,6 +20,10 @@ import type { FirstRunState } from "@/lib/upload/auto-build-client";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "Add photos" };
+
+// Classic "Add photos" screen for a built / edited book. M20 T9 (D-072): a fresh book (no AI run yet,
+// setup still editable — isWizardUpload) opens wizard step 5 inside /books/new instead; the wizard
+// never sends a book back here, so the redirect can't loop.
 
 function isOccasion(v: string | null): v is Occasion {
   return v !== null && (OCCASIONS as readonly string[]).includes(v);
@@ -49,7 +48,12 @@ export default async function UploadPage({ params }: { params: Promise<{ id: str
   const displayName = profile?.name ?? profile?.email ?? user.email ?? null;
 
   const firstRun: FirstRunState = active ? "active" : hasRun ? "done" : "none";
-  const wizard = isWizardUpload(firstRun, detailsLockReason({ hasRun, doc: book.doc }));
+  const wizardHref = uploadEntryRedirect({
+    bookId: book.id,
+    firstRun,
+    detailsLock: detailsLockReason({ hasRun, doc: book.doc }),
+  });
+  if (wizardHref) redirect(wizardHref);
   const title = displayBookTitle(book.title, book.doc);
 
   const uploaderProps: UploaderProps = {
@@ -65,28 +69,6 @@ export default async function UploadPage({ params }: { params: Promise<{ id: str
     dailyCap: limitsFor(book.is_paid).maxLiveBuildsPerUserPerDay,
     aiOn: resolveAiMode() !== "off",
   };
-
-  if (wizard) {
-    // Server-rendered Back (lesson: no next/link inside the client island).
-    const back: ReactNode = (
-      <Link href={wizardBackHref(book.id)} className={WIZARD_BACK_CLASS} data-testid="wizard-back">
-        Back
-      </Link>
-    );
-    return (
-      <WizardShell step={5} displayName={displayName}>
-        <WizardHeadline>{wizardHeadline(5)}</WizardHeadline>
-        <p className="mt-2 text-center type-small text-muted-foreground">
-          <span dir="auto" className="break-words" data-testid="upload-book-title">
-            {title}
-          </span>
-        </p>
-        <div className="mt-6 flex min-w-0 flex-col">
-          <Uploader {...uploaderProps} variant="wizard" back={back} />
-        </div>
-      </WizardShell>
-    );
-  }
 
   return (
     <>

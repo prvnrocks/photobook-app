@@ -3,11 +3,12 @@
 // Keep / drop review grid (M3). Kept | Dropped tabs; tapping a tile toggles it optimistically
 // through the `toggle` server action (user_override = true, so the AI never changes it again).
 // Tiles the user toggled stay where they are until the tab changes, so nothing jumps under a tap.
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { useRefreshTransition } from "@/components/app/use-refresh-transition";
 import { PhotoTile } from "@/components/review/PhotoTile";
 import {
   REVIEW_EMPTY_TAB_COPY,
+  REVIEW_MOVED_COPY,
   REVIEW_TAB_LABELS,
   applyUserChoice,
   countKept,
@@ -32,7 +33,24 @@ type ReviewGridProps = {
   onPhotosChange?: (photos: ReviewTilePhoto[]) => void;
   /** Bottom offset classes for the toast (keeps it above the review ActionBar). */
   toastClassName?: string;
+  /**
+   * Re-fetches fresh photos (new signed thumb URLs) instead of router.refresh — the /books/new
+   * wizard (M20 T8, G1: no router.refresh there) re-loads its step-7 data. Default: router refresh.
+   */
+  refresh?: () => void;
+  /** Wizard motion hooks (M20 T8): data-motion on the grid, per-tile index, keyed tab counts. */
+  motion?: boolean;
+  /** Called on each optimistic toggle (before the server answers), e.g. to animate the tile. */
+  onToggle?: (photo: ReviewTilePhoto, keep: boolean) => void;
+  /** After a saved toggle, a toast with Undo (M20 T8). Default off (classic review unchanged). */
+  undo?: boolean;
+  /** Replaces the "AI kept X of Y" heading text (the wizard shows its own counter). */
+  title?: ReactNode;
+  /** Classes for the photo list (default 3 columns, 4 from sm). */
+  gridClassName?: string;
 };
+
+type GridToast = { text: string; undoId?: string };
 
 type Choice = Pick<ReviewTilePhoto, "status" | "dropReason" | "userOverride">;
 
@@ -41,15 +59,28 @@ const TOAST_MS = 4000;
 /** Signed thumb URLs expire after 10 min; re-sign (router.refresh) at most this often. */
 const RESIGN_MIN_GAP_MS = 60_000;
 
-export function ReviewGrid({ photos, aiUsed, toggle, onPhotosChange, toastClassName = "bottom-4" }: ReviewGridProps) {
+export function ReviewGrid({
+  photos,
+  aiUsed,
+  toggle,
+  onPhotosChange,
+  toastClassName = "bottom-4",
+  refresh: refreshOverride,
+  motion = false,
+  onToggle,
+  undo = false,
+  title,
+  gridClassName = "grid grid-cols-3 gap-2 sm:grid-cols-4",
+}: ReviewGridProps) {
   // Re-sign refresh: a bare router.refresh() can stay pending forever under the review loading.tsx,
   // so the new thumb URLs would never arrive (src/lib/app/refresh-nudge.ts).
-  const [, refresh] = useRefreshTransition();
+  const [, routerRefresh] = useRefreshTransition();
+  const refresh = refreshOverride ?? routerRefresh;
   const [overrides, setOverrides] = useState<Map<string, Choice>>(() => new Map());
   const [pending, setPending] = useState<Set<string>>(() => new Set());
   const [tab, setTab] = useState<ReviewTab>("kept");
   const [pinned, setPinned] = useState<Set<string>>(() => new Set());
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<GridToast | null>(null);
   const lastResign = useRef(0);
   const tabRefs = useRef<Record<ReviewTab, HTMLButtonElement | null>>({ kept: null, dropped: null });
 
@@ -78,11 +109,12 @@ export function ReviewGrid({ photos, aiUsed, toggle, onPhotosChange, toastClassN
   }, [toast]);
 
   const onTileTap = useCallback(
-    async (photo: ReviewTilePhoto) => {
+    async (photo: ReviewTilePhoto, fromUndo = false) => {
       if (pending.has(photo.id)) return;
       const keep = !isKept(photo);
       const before = overrides.get(photo.id);
       const next = applyUserChoice(photo, keep);
+      onToggle?.(photo, keep);
 
       setOverrides((m) => new Map(m).set(photo.id, { status: next.status, dropReason: next.dropReason, userOverride: true }));
       setPinned((s) => new Set(s).add(photo.id));
@@ -107,11 +139,20 @@ export function ReviewGrid({ photos, aiUsed, toggle, onPhotosChange, toastClassN
           else n.delete(photo.id);
           return n;
         });
-        setToast(result.error);
+        setToast({ text: result.error });
+      } else if (undo) {
+        setToast(fromUndo ? null : { text: REVIEW_MOVED_COPY[keep ? "kept" : "dropped"], undoId: photo.id });
       }
     },
-    [overrides, pending, toggle],
+    [overrides, pending, toggle, onToggle, undo],
   );
+
+  const onUndo = () => {
+    const id = toast?.undoId;
+    const photo = id ? merged.find((p) => p.id === id) : undefined;
+    setToast(null);
+    if (photo) void onTileTap(photo, true);
+  };
 
   const onThumbError = useCallback(() => {
     const now = Date.now();
@@ -136,10 +177,15 @@ export function ReviewGrid({ photos, aiUsed, toggle, onPhotosChange, toastClassN
   };
 
   return (
-    <section className="flex min-w-0 flex-col gap-4" aria-labelledby="review-heading" data-testid="review-grid">
+    <section
+      className="flex min-w-0 flex-col gap-4"
+      aria-labelledby="review-heading"
+      data-testid="review-grid"
+      data-motion={motion ? "" : undefined}
+    >
       <div>
         <h2 id="review-heading" className="type-h2 text-foreground" data-testid="review-header" aria-live="polite">
-          {headerCopy({ aiUsed, kept, total: merged.length })}
+          {title ?? headerCopy({ aiUsed, kept, total: merged.length })}
         </h2>
         <p className="type-small mt-1 text-muted-foreground">
           Tap a photo to keep it or take it out. Your choices are never changed by AI.
@@ -170,7 +216,11 @@ export function ReviewGrid({ photos, aiUsed, toggle, onPhotosChange, toastClassN
               )}
             >
               {REVIEW_TAB_LABELS[t]}{" "}
-              <span className="tabular-nums" data-testid={`review-count-${t}`}>
+              <span
+                key={motion ? `${t}-${t === "kept" ? kept : dropped}` : t}
+                className={cn("tabular-nums", motion && "rv-count")}
+                data-testid={`review-count-${t}`}
+              >
                 ({t === "kept" ? kept : dropped})
               </span>
             </button>
@@ -184,9 +234,14 @@ export function ReviewGrid({ photos, aiUsed, toggle, onPhotosChange, toastClassN
             {REVIEW_EMPTY_TAB_COPY[tab]}
           </p>
         ) : (
-          <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-            {shown.map((p) => (
-              <li key={p.id} className="min-w-0">
+          <ul className={gridClassName}>
+            {shown.map((p, i) => (
+              <li
+                key={p.id}
+                className="min-w-0"
+                style={motion ? ({ "--rv-i": Math.min(i, 24) } as CSSProperties) : undefined}
+                data-toggled={motion && pinned.has(p.id) ? "" : undefined}
+              >
                 <PhotoTile
                   photo={p}
                   index={indexOf.get(p.id) ?? 0}
@@ -209,12 +264,27 @@ export function ReviewGrid({ photos, aiUsed, toggle, onPhotosChange, toastClassN
           toastClassName,
         )}
       >
-        {toast ? (
+        {toast?.undoId ? (
+          <p
+            className="type-small pointer-events-auto flex max-w-sm items-center gap-3 rounded-xl bg-primary py-1.5 ps-4 pe-1.5 text-primary-foreground shadow-lift"
+            data-testid="review-undo-toast"
+          >
+            <span className="min-w-0 flex-1">{toast.text}</span>
+            <button
+              type="button"
+              onClick={onUndo}
+              className="min-h-11 min-w-11 shrink-0 rounded-lg px-3 font-semibold underline underline-offset-4 outline-none hover:bg-primary-foreground/10 focus-visible:ring-2 focus-visible:ring-primary-foreground"
+              data-testid="review-undo"
+            >
+              Undo
+            </button>
+          </p>
+        ) : toast ? (
           <p
             className="type-small pointer-events-auto max-w-sm rounded-xl bg-primary px-4 py-3 text-primary-foreground shadow-lift"
             data-testid="review-toast"
           >
-            {toast}
+            {toast.text}
           </p>
         ) : null}
       </div>

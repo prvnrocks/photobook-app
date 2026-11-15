@@ -52,6 +52,8 @@ type ReviewBodyProps = {
   captions?: ReactNode;
   /** Shown instead of the grid when the book has no photos. */
   empty: ReactNode;
+  /** Re-fetch override instead of router.refresh (M20 T8: the /books/new wizard re-loads its data). */
+  refresh?: () => void;
 };
 
 const TOAST_MS = 4000;
@@ -72,6 +74,7 @@ export function ReviewBody({
   confirm,
   captions,
   empty,
+  refresh: refreshOverride,
 }: ReviewBodyProps) {
   const [current, setCurrent] = useState<ReviewTilePhoto[]>(photos);
   /** id → status at the last successful update: still-unsynced ids the relayout couldn't place. */
@@ -79,7 +82,9 @@ export function ReviewBody({
   const [pending, setPending] = useState(false);
   // Not a plain startTransition(router.refresh): that can stay pending forever under the review
   // loading.tsx (src/lib/app/refresh-nudge.ts), which would leave "Update album" disabled.
-  const [refreshing, refresh] = useRefreshTransition();
+  const [routerRefreshing, routerRefresh] = useRefreshTransition();
+  const refresh = refreshOverride ?? routerRefresh;
+  const refreshing = refreshOverride ? false : routerRefreshing;
   const [error, setError] = useState<Extract<UpdateAlbumOutcome, { kind: "error" }> | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -151,7 +156,14 @@ export function ReviewBody({
       {photos.length === 0 ? (
         empty
       ) : (
-        <ReviewGrid photos={photos} aiUsed={aiUsed} toggle={toggle} onPhotosChange={setCurrent} toastClassName={toastBottom} />
+        <ReviewGrid
+          photos={photos}
+          aiUsed={aiUsed}
+          toggle={toggle}
+          onPhotosChange={setCurrent}
+          toastClassName={toastBottom}
+          refresh={refreshOverride}
+        />
       )}
 
       {captions}

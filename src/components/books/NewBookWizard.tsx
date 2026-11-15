@@ -71,6 +71,8 @@ import { LazyWizardDataSteps, prefetchWizardSteps } from "./wizard/steps/lazy-st
 // The step-5 upload stage's CSS rides in this route's stylesheet, not in the lazy steps chunk: an async
 // chunk with CSS adds webpack's CSS-chunk loader to the runtime every route ships (+0.6 kB gzip).
 import "@/components/upload/upload-motion.css";
+import "./wizard/steps/sorting-motion.css";
+import "./wizard/steps/review-motion.css";
 import type { WizardStepDataMap } from "./wizard/steps/WizardDataSteps";
 
 export type NewBookWizardMode =

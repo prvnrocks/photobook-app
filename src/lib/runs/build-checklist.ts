@@ -94,3 +94,24 @@ export function wizardChecklist(state: RunState, finished = false): WizardCheckl
     return { id: s.id, label: s.label, state: st };
   });
 }
+
+// --- M20 T7 (D-072): the sorting step's photo animation phase ----------------------------------
+// Same truth rule: the photos only move on to the next phase when the server reported the run
+// state that the matching checklist row covers. fan = sifting (queued / curating, or failed),
+// sort = shuffling into moments (storytelling), piles = moments laid out while the book is
+// prepared (captioning … validating), ready = the client saw the run finish.
+
+export type WizardSortPhase = "fan" | "sort" | "piles" | "ready";
+
+export function wizardSortPhase(state: RunState, finished = false): WizardSortPhase {
+  if (finished || state === "done") return "ready";
+  const current = wizardChecklist(state).find((r) => r.state === "current")?.id;
+  if (current === "book") return "piles";
+  if (current === "moments") return "sort";
+  return "fan";
+}
+
+/** Rows done (0–3) for the segmented bar — counts rows, never time. */
+export function wizardRowsDone(rows: readonly WizardChecklistStep[]): number {
+  return rows.filter((r) => r.state === "done").length;
+}

@@ -64,23 +64,27 @@ describe("wizard chrome choice", () => {
     expect(isWizardBuild({ trigger: "build", aiOn: true, doc: { pages: "nope" } })).toBe(false);
   });
 
-  it("upload page: WizardShell step 5 for a fresh book, classic header otherwise; server-rendered Back", () => {
+  // M20 T9 (D-072): the pages no longer wear wizard chrome — fresh books are redirected into
+  // /books/new?book=<id>&step=5|6 (decision table: tests/m20-entry-redirects.test.ts).
+  it("upload page: fresh book → redirect into wizard step 5; classic screen otherwise (no wizard chrome)", () => {
     const page = src("src/app/books/[id]/upload/page.tsx");
-    expect(page).toContain("isWizardUpload(firstRun, detailsLockReason({ hasRun, doc: book.doc }))");
-    expect(page).toMatch(/<WizardShell step=\{5\}[\s\S]*<WizardHeadline>\{wizardHeadline\(5\)\}<\/WizardHeadline>/);
-    expect(page).toMatch(/<Link href=\{wizardBackHref\(book\.id\)\} className=\{WIZARD_BACK_CLASS\} data-testid="wizard-back">/);
-    expect(page).toContain('<Uploader {...uploaderProps} variant="wizard" back={back} />');
+    expect(page).toContain("detailsLock: detailsLockReason({ hasRun, doc: book.doc }),");
+    expect(page).toContain("if (wizardHref) redirect(wizardHref);");
+    expect(page).not.toContain("WizardShell");
+    expect(page).not.toContain('variant="wizard"');
     expect(page).toContain("<AppHeader displayName={displayName} />");
     expect(page).toContain("<Uploader {...uploaderProps} />");
   });
 
-  it("build page: WizardShell step 6 + photo fan for the first build, classic screen otherwise", () => {
+  it("build page: first build → redirect into wizard step 6; classic screen otherwise (no wizard chrome)", () => {
     const page = src("src/app/books/[id]/build/page.tsx");
-    expect(page).toContain("if (isWizardBuild({ trigger, aiOn, doc: book.doc })) {");
-    expect(page).toMatch(/<WizardShell step=\{6\}[\s\S]*<WizardHeadline>\{wizardHeadline\(6\)\}<\/WizardHeadline>/);
-    expect(page).toContain('<BuildProgress {...progressProps} variant="wizard" preview={<PhotoFan urls={urls} />} />');
-    // The auto redirect still runs before either screen.
-    expect(page.indexOf("if (auto && activeRead.ok && !active) redirect(")).toBeLessThan(page.indexOf("isWizardBuild({"));
+    expect(page).toContain("const entry = buildEntryRedirect({");
+    expect(page).toContain("if (entry.kind === \"wizard\") redirect(entry.href);");
+    expect(page).not.toContain("WizardShell");
+    expect(page).not.toContain("PhotoFan");
+    expect(page).toContain("<BuildProgress {...progressProps} preview={preview} />");
+    // The redirects run before the classic screen renders.
+    expect(page.indexOf("redirect(entry.href)")).toBeLessThan(page.indexOf("<BuildProgress"));
   });
 });
 
@@ -409,7 +413,7 @@ describe("BuildProgress wizard variant", () => {
     expect(html).toMatch(/data-testid="build-progress"[^>]*data-variant="wizard"|data-variant="wizard"[^>]*data-testid="build-progress"/);
     expect(html.indexOf("build-photo-fan")).toBeLessThan(html.indexOf('data-testid="build-checklist"'));
     for (const id of ["sift", "moments", "book"]) expect(html).toContain(`data-testid="build-step-${id}"`);
-    expect(html.match(/data-state="todo"/g)).toHaveLength(3); // queued
+    expect(html.match(/<li [^>]*data-state="todo"/g)).toHaveLength(3); // queued (M20: + 3 bar segments)
     expect(html).toContain(WIZARD_BUILD_KEEP_OPEN_COPY);
     expect(html).not.toContain("build-bar");
     expect(html).not.toContain("build-ai-note");
@@ -425,16 +429,16 @@ describe("BuildProgress wizard variant", () => {
 });
 
 describe("PhotoFan", () => {
-  it("three tilted cards; placeholders for missing photos; motion only when allowed", () => {
+  it("three photo cards on top + three backing cards; placeholders for missing photos; decorative", () => {
+    // M20 T7: poses per phase live in CSS custom properties; motion in sorting-motion.css
+    // (tests/m20-sorting-step.test.tsx checks the reduced-motion fallback).
     const html = renderToStaticMarkup(<PhotoFan urls={["https://x/1.jpg", "https://x/2.jpg"]} />);
     expect(html.match(/data-testid="build-photo-fan-item"/g)).toHaveLength(3);
+    expect(html.match(/data-testid="build-photo-fan-back"/g)).toHaveLength(3);
     expect(html.match(/<img /g)).toHaveLength(2);
-    expect(html).toContain("-rotate-6");
-    expect(html).toContain("rotate-6");
+    expect(html).toContain("--so-fan:translate(-64%,6%) rotate(-9deg)");
     expect(html).toContain('aria-hidden="true"');
-    const anim = html.match(/class="[^"]*animate-in[^"]*"/g) ?? [];
-    expect(anim.length).toBeGreaterThan(0);
-    for (const c of anim) expect(c).not.toMatch(/(^|\s|")animate-in/); // only motion-safe:animate-in
+    expect(html).toContain('data-count="2"');
     expect(renderToStaticMarkup(<PhotoFan urls={[]} />).match(/<img /g)).toBeNull();
   });
 

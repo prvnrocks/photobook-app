@@ -31,6 +31,7 @@ import {
 import { deleteBookCompletely } from "@/lib/cleanup/delete-book";
 import type { DeleteBookActionResult } from "@/lib/dashboard/delete-book";
 import { freshBookStep5Data } from "@/lib/books/wizard-bootstrap";
+import { wizardStepHref } from "@/lib/books/wizard-routes";
 import { hasAnyRunForBook } from "@/lib/db/agent-runs";
 import {
   createBook,
@@ -104,7 +105,7 @@ const FIELDS: readonly NewBookField[] = ["title", "occasion", "tone", "captionLa
  * language (D-072): a title with Arabic letters → "ar", else the remembered language, else the
  * request's Accept-Language ("ar" first → "ar", else "en")),
  * `format` + `designStyle` (D-063, fixed at creation; absent → portrait / the occasion's default
- * style, D-068). On success returns { ok, bookId, next, step5 } (next = /books/<id>/upload, plus
+ * style, D-068). On success returns { ok, bookId, next, step5 } (next = /books/new?book=<id>&step=5, plus
  * ?_ev=book_created when analytics is on; step5 = the wizard's step-5 data for the new book, shown
  * in place — M20 T6); signed out →
  * redirects to /login?next=/books/new.
@@ -176,7 +177,7 @@ export async function createBookAction(
   return {
     ok: true,
     bookId: id,
-    next: withAnalyticsFlash(`/books/${id}/upload`, "book_created"),
+    next: withAnalyticsFlash(wizardStepHref(id, 5), "book_created"),
     step5: freshBookStep5Data({
       bookId: id,
       userId: user.id,

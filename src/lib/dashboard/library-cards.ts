@@ -2,7 +2,7 @@
 // server-safe) but imports the publish rules, so only server components use it — the client island
 // gets the computed status via LibraryEntry (./library.ts).
 
-import { bookCardStep, type BookCardState } from "@/lib/dashboard/card-target";
+import { bookCardHref, bookCardStep, type BookCardState } from "@/lib/dashboard/card-target";
 import type { LibraryStatus } from "@/lib/dashboard/library";
 import { isExpired } from "@/lib/publish/rules";
 
@@ -53,7 +53,7 @@ export interface QuickActionInput extends BookCardState, LibraryStatusInput {}
 
 /**
  * The card's quick actions (links only; the Options menu is added by the card):
- * - Open → the step the book is at (card-target).
+ * - Open → the step the book is at (card-target; fresh drafts → the wizard, M20 T9).
  * - Share → live/expired books' share screen; for a built draft the same screen is the publish
  *   entry (D-070: Share = publish), with its own testid ("book-publish").
  * - Upgrade (free, built, payments on) → the publish screen's upgrade card; PDF (paid, built) →
@@ -62,7 +62,7 @@ export interface QuickActionInput extends BookCardState, LibraryStatusInput {}
 export function quickActions(b: QuickActionInput, opts: { paymentsEnabled: boolean }): QuickAction[] {
   const step = bookCardStep(b);
   const publish = `/books/${b.id}/publish`;
-  const out: QuickAction[] = [{ kind: "open", href: `/books/${b.id}/${step}`, label: "Open" }];
+  const out: QuickAction[] = [{ kind: "open", href: bookCardHref(b), label: "Open" }];
   if (b.published) out.push({ kind: "share", href: publish, label: "Share" });
   else if (step === "edit") out.push({ kind: "publish", href: publish, label: "Share" });
   if (step === "edit" || b.published) {
