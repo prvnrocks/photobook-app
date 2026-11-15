@@ -150,3 +150,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (M20) On routes with loading.tsx, redirect() streams as 200 + meta refresh; e2e redirect asserts must parse HTML. Next's router can rewrite the URL after popstate — re-assert the wizard URL briefly after popstate.
 - (M20) Mock useRouter with one stable object in jsdom tests (a new object per render restarts run loops until OOM). Never run `npx prettier --write` (no repo config).
 - (M20b) Always run the wizard e2e with AI_MODE=off too (prod has no key): a rule run finishes inside the POST, which replay-only tests can't catch.
+- (M20c) Soft-nav Back can restore a route's loading.tsx from the router cache and never fetch — put client escape hatches in loading.tsx too, not only in the page component.
