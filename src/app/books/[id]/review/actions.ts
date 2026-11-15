@@ -18,6 +18,7 @@ import { getActiveRunForBook } from "@/lib/db/agent-runs";
 import {
   getBookForRun,
   getMyBook,
+  markAlbumConfirmed,
   pruneUnkeptAiBackgrounds,
   writeDocIfReplaceable,
   type BookForRun,
@@ -157,7 +158,9 @@ export async function updateAlbumAction(bookId: string, options?: ReviewActionOp
 
 /**
  * Review "Continue" (form action, D-032): the user accepts the album. Ownership is checked under
- * RLS; then — best effort — the Memory Keeper learns tone / caption language / caption length
+ * RLS; then the book is marked confirmed (books.album_confirmed_at, set once — M20c: a confirmed
+ * book never reopens the wizard's Review; best effort: a failed write is logged with its code and
+ * never blocks the user); then — best effort — the Memory Keeper learns tone / caption language / caption length
  * from this book and saves it. Memory failures never block the user: they are logged with an
  * error code only (never prefs, captions or ids) and the user still lands in the editor
  * (/books/[id]/edit, M5 Task 12 — the editor itself redirects to build/upload when needed).
@@ -179,6 +182,14 @@ export async function confirmAlbumAction(bookId: string): Promise<void> {
     console.error(`[review] confirm album: load failed (${errorCodeOf(err)})`);
   }
   if (!mine) redirect("/dashboard");
+
+  if (!mine.album_confirmed_at) {
+    try {
+      await markAlbumConfirmed(mine.id, user.id);
+    } catch (err) {
+      console.error(`[review] confirm album: mark failed (${errorCodeOf(err)})`);
+    }
+  }
 
   await learnFromBook(user.id, mine.id, "review");
   revalidatePath("/dashboard");

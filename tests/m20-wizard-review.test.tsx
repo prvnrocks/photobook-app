@@ -41,6 +41,7 @@ import { needsAlbumUpdate, reviewCaptionPicks, reviewChapters, updateStepOutcome
 import { ReviewGrid } from "@/components/review/ReviewGrid";
 import type { WizardStep7Data } from "@/lib/books/wizard-client";
 import type { ReviewTilePhoto } from "@/lib/review/ui";
+import { wasAlbumConfirmedHere } from "@/lib/books/wizard-confirmed";
 
 const BOOK = "11111111-1111-4111-8111-111111111111";
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -223,6 +224,28 @@ describe("step 7 review — Generate album", () => {
     expect(mocks.confirm).toHaveBeenCalledWith(BOOK);
     expect(mocks.update.mock.invocationCallOrder[0]).toBeLessThan(mocks.confirm.mock.invocationCallOrder[0]);
     expect(onConfirm).toHaveBeenCalledTimes(1); // confirm returned without redirecting → wizard navigates
+  });
+
+  it("M20c: remembers the confirm in this tab before the action (Back from the editor leaves the wizard)", async () => {
+    window.sessionStorage.clear();
+    let seenDuringAction: boolean | null = null;
+    mocks.confirm.mockImplementationOnce(async () => {
+      seenDuringAction = wasAlbumConfirmedHere(BOOK);
+    });
+    const onConfirm = render(step7());
+    await click($("wizard-generate"));
+    expect(seenDuringAction).toBe(true);
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(wasAlbumConfirmedHere(BOOK)).toBe(true); // a successful confirm keeps it
+  });
+
+  it("M20c: a failed confirm (no redirect) forgets the marker", async () => {
+    window.sessionStorage.clear();
+    mocks.confirm.mockRejectedValueOnce(new Error("auth timeout"));
+    render(step7());
+    await click($("wizard-generate"));
+    expect($("review-generate-error")).not.toBeNull();
+    expect(wasAlbumConfirmedHere(BOOK)).toBe(false);
   });
 
   it("without changes → confirm only", async () => {

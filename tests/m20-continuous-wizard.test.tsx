@@ -135,6 +135,9 @@ const BOOK = "22222222-2222-4222-8222-222222222222";
 const OTHER = "44444444-4444-4444-8444-444444444444";
 
 const { NewBookWizard, wizardWindow } = await import("@/components/books/NewBookWizard");
+const { WIZARD_CONFIRMED_STORAGE_KEY, rememberAlbumConfirmed, forgetAlbumConfirmed, wasAlbumConfirmedHere } = await import(
+  "@/lib/books/wizard-confirmed"
+);
 const { Uploader } = await import("@/components/upload/Uploader");
 const { HANDOVER_GRACE_MS } = await import("@/components/upload/upload-stage-model");
 const { WIZARD_DRAFT_STORAGE_KEY, serializeWizardDraft, EMPTY_WIZARD_DRAFT } = await import("@/lib/books/wizard-steps");
@@ -782,5 +785,83 @@ describe("Uploader wizard: advance after burst + auto-start answer", () => {
     });
     await pick(5);
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith(`/books/${BOOK}/build?auto=1`));
+  });
+});
+
+// --- M20c: a confirmed (generated) book never shows the wizard ------------------------------------------
+
+describe("M20c: confirmed book → leave for the editor with replace", () => {
+  let replace: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    replace = vi.spyOn(wizardWindow, "replace").mockImplementation(() => {});
+  });
+  afterEach(() => replace.mockRestore());
+
+  it("Back from the editor restores the cached Review tree → replace to the editor, nothing rendered or fetched", async () => {
+    rememberAlbumConfirmed(BOOK);
+    await mount(`/books/new?book=${BOOK}&step=7`, { initialStep: 7, mode: edit(), initialData: step7() as never });
+    expect(replace).toHaveBeenCalledTimes(1);
+    expect(replace).toHaveBeenCalledWith(`/books/${BOOK}/edit`);
+    expect(assign).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+    expect(wizardFetches()).toEqual([]);
+  });
+
+  it("an older wizard entry of the same book (step 5 / 4) leaves too; another book's marker doesn't", async () => {
+    rememberAlbumConfirmed(BOOK);
+    await mount(`/books/new?book=${BOOK}&step=5`, { initialStep: 5, mode: edit(), initialData: step5() as never });
+    expect(replace).toHaveBeenCalledWith(`/books/${BOOK}/edit`);
+    act(() => root.unmount());
+    root = createRoot(container);
+    replace.mockClear();
+    await mount(`/books/new?book=${BOOK}&step=4`, { initialStep: 4, mode: edit() });
+    expect(replace).toHaveBeenCalledWith(`/books/${BOOK}/edit`);
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    replace.mockClear();
+    await mount(`/books/new?book=${OTHER}&step=7`, { initialStep: 7, mode: edit(OTHER), initialData: step7({ bookId: OTHER }) as never });
+    expect(replace).not.toHaveBeenCalled();
+    expect($("stub-review")).toBeTruthy();
+  });
+
+  it("server props answering 'editor' → replace (not assign)", async () => {
+    await mount(`/books/new?book=${BOOK}&step=7`, {
+      initialStep: 7,
+      mode: edit(),
+      initialData: step7({ resolved: "editor" }) as never,
+    });
+    expect(replace).toHaveBeenCalledWith(`/books/${BOOK}/edit`);
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it("a fetched step whose gate answers 'editor' → replace (no history loop)", async () => {
+    served["5"] = step5({ resolved: "editor" });
+    mocks.updateBookSetupAction.mockResolvedValue({ ok: true, setup: {}, relaidOut: false });
+    await mount(`/books/new?book=${BOOK}&step=4`, { initialStep: 4, mode: edit() });
+    await click($("wizard-save"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(`/books/${BOOK}/edit`));
+    expect(assign).not.toHaveBeenCalledWith(`/books/${BOOK}/edit`);
+  });
+
+  it("unconfirmed book: Review renders as before", async () => {
+    await mount(`/books/new?book=${BOOK}&step=7`, { initialStep: 7, mode: edit(), initialData: step7() as never });
+    expect(replace).not.toHaveBeenCalled();
+    expect($("stub-review")).toBeTruthy();
+  });
+
+  it("the marker helpers: ids only, forget removes, junk storage is ignored", () => {
+    rememberAlbumConfirmed(BOOK);
+    rememberAlbumConfirmed(BOOK);
+    expect(JSON.parse(window.sessionStorage.getItem(WIZARD_CONFIRMED_STORAGE_KEY)!)).toEqual([BOOK]);
+    expect(wasAlbumConfirmedHere(BOOK)).toBe(true);
+    expect(wasAlbumConfirmedHere(OTHER)).toBe(false);
+    forgetAlbumConfirmed(BOOK);
+    expect(wasAlbumConfirmedHere(BOOK)).toBe(false);
+    expect(window.sessionStorage.getItem(WIZARD_CONFIRMED_STORAGE_KEY)).toBeNull();
+    window.sessionStorage.setItem(WIZARD_CONFIRMED_STORAGE_KEY, "{not json");
+    expect(wasAlbumConfirmedHere(BOOK)).toBe(false);
+    window.sessionStorage.setItem(WIZARD_CONFIRMED_STORAGE_KEY, JSON.stringify({ a: 1 }));
+    expect(wasAlbumConfirmedHere(BOOK)).toBe(false);
   });
 });

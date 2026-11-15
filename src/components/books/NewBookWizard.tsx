@@ -42,6 +42,7 @@ import type { WizardDataStepNumber, WizardStepData } from "@/lib/books/wizard-cl
 import {
   canGoTo as flowCanGoTo,
   FLOW_FORM_LAST_STEP,
+  flowEditorHref,
   initFlowState,
   parseFlowStep,
   transition,
@@ -61,6 +62,7 @@ import {
   type WizardDraft,
   type WizardFormStep,
 } from "@/lib/books/wizard-steps";
+import { wasAlbumConfirmedHere } from "@/lib/books/wizard-confirmed";
 import { effectiveStyle } from "@/lib/design/defaults";
 import { canUseViewTransition, runViewTransition, type StepDirection } from "@/lib/ui/view-transition";
 import type { AutoStartOutcome } from "@/lib/upload/auto-build-client";
@@ -154,6 +156,10 @@ export const wizardWindow = {
   },
   assign(href: string) {
     window.location.assign(href);
+  },
+  /** Leaves with location.replace: the current (dead) wizard entry leaves the history (M20c). */
+  replace(href: string) {
+    window.location.replace(href);
   },
 };
 
@@ -354,9 +360,10 @@ export function NewBookWizard({ initialStep, mode, dashboardBack, initialData }:
   );
 
   /** Leave the wizard (editor / classic build) — the one kind of real navigation. */
-  const leave = useCallback((href: string) => {
+  const leave = useCallback((href: string, opts?: { replace?: boolean }) => {
     setLeaving(true);
-    wizardWindow.assign(href);
+    if (opts?.replace) wizardWindow.replace(href);
+    else wizardWindow.assign(href);
   }, []);
 
   // Mount: restore the stored draft (create), bounce a step whose earlier answers are missing, and
@@ -367,6 +374,15 @@ export function NewBookWizard({ initialStep, mode, dashboardBack, initialData }:
       return;
     }
     if (mode.kind === "edit") {
+      // M20c: a generated book never shows the wizard. Hard loads redirect on the server; this
+      // catches the cached tree browser Back restores after "Generate album" (soft navigation) and
+      // an "editor" answer in the props — leave with replace, so Back doesn't land here again.
+      if (wasAlbumConfirmedHere(mode.bookId) || (initialData?.bookId === mode.bookId && initialData.resolved === "editor")) {
+        leavingRef.current = true;
+        setLeaving(true);
+        wizardWindow.replace(flowEditorHref(mode.bookId));
+        return;
+      }
       const cur = flowRef.current;
       const url = readUrl();
       if (parseFlowStep(url.step) !== cur.step || url.book !== mode.bookId) {

@@ -15,7 +15,7 @@ import { getMyBook } from "@/lib/db/books";
 import { listReviewPhotos } from "@/lib/db/photos";
 import { getMyProfile } from "@/lib/db/profiles";
 import { draftDoc } from "@/lib/books/step-data";
-import { buildEntryRedirect } from "@/lib/books/wizard-routes";
+import { albumConfirmedOf, buildEntryRedirect } from "@/lib/books/wizard-routes";
 import { albumEditedByUser } from "@/lib/review/ui";
 import { draftPreviewItems, draftPreviewPhotoIds, draftPreviewPhotos } from "@/lib/runs/draft-preview";
 
@@ -80,6 +80,7 @@ export default async function BuildPage({
     activeReadOk: activeRead.ok,
     active: active ? { trigger: active.trigger === "rebuild" ? "rebuild" : "build" } : null,
     runExists,
+    albumConfirmed: albumConfirmedOf(book.album_confirmed_at),
   });
   if (entry.kind === "editor") redirect(`/books/${book.id}/edit`);
   if (entry.kind === "wizard") redirect(entry.href);

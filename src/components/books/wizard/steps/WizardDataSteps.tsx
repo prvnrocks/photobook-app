@@ -6,7 +6,7 @@
 // has moved on (another tab: 5 → 6 / 7, editor, classic build), and renders StepPhotos /
 // StepSorting / StepReview wired to the flow (T7: step 6 hands over prefetched step-7 data and
 // reports stop states as buildStopped). Never navigates itself except through `leave`
-// (editor / classic build / login).
+// (editor / classic build / login; the gate's "editor" replaces the wizard entry — M20c).
 // M20b: step 5 hands the auto-start answer (resolved or still pending) to step 6 through
 // `handoverRef`; while it's held, step 6 never skips to 7 on the gate's "finished" answer — a rule
 // build (AI off) that finished inside the POST still plays its sorting checklist, then Review.
@@ -30,8 +30,8 @@ export type WizardDataStepsProps = {
   setStepData: Dispatch<SetStateAction<WizardStepDataMap>>;
   /** Flow actions (wizard-flow transition + effects, applied by NewBookWizard). */
   dispatch: (action: FlowAction) => unknown;
-  /** Leave the wizard (full navigation). */
-  leave: (href: string) => void;
+  /** Leave the wizard (full navigation; `replace` drops the current history entry). */
+  leave: (href: string, opts?: { replace?: boolean }) => void;
   /** The wizard is leaving for the editor. */
   leaving: boolean;
   /** Step 6 data with ?auto=1 when the auto start began the run (ai_build_done { auto }). */
@@ -79,7 +79,9 @@ export function WizardDataSteps({
         return;
       }
       const r = res.data.resolved;
-      if (r === "editor") return leave(flowEditorHref(bookId));
+      // M20c: replace — this wizard entry is dead for the book (user-edited or confirmed), so Back
+      // from the editor must not land here again (no history loop).
+      if (r === "editor") return leave(flowEditorHref(bookId), { replace: true });
       if (r === "classic") return leave(`/books/${bookId}/build`);
       // M20b: step 6 holding step 5's answer plays that run through (the gate may already say 7).
       const handedOver = step === 6 && handoverRef.current !== null;

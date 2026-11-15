@@ -54,6 +54,7 @@ const book: BookListItem = {
   published: true,
   photo_count: 30,
   user_edited: false,
+  album_confirmed: false,
   format: "A5_PORTRAIT",
   designStyle: "classic",
   coverThumbUrl: "https://example.supabase.co/storage/v1/object/sign/photos/u/b/p/thumb.jpg?token=t",

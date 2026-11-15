@@ -152,6 +152,13 @@ describe("editor page data", () => {
     expect(editorRedirect({ ...base, photos: [photo] })).toBe("/books/new?book=b1&step=6");
     expect(editorRedirect({ ...base, photos: [photo], aiMode: "replay" })).toBe("/books/new?book=b1&step=6");
   });
+  it("M20c: a confirmed album never goes into the wizard (classic pages; a doc opens the editor)", () => {
+    expect(editorRedirect({ ...base, albumConfirmed: true })).toBe("/books/b1/upload");
+    expect(editorRedirect({ ...base, albumConfirmed: true, photos: [photo] })).toBe("/books/b1/build");
+    expect(editorRedirect({ ...base, albumConfirmed: true, docError: null })).toBeNull();
+    expect(editorRedirect({ ...base, albumConfirmed: true, activeBuildRunId: "r" })).toBe("/books/b1/build");
+    expect(editorRedirect({ ...base, albumConfirmed: false })).toBe("/books/new?book=b1&step=5");
+  });
   it("built before → classic upload or build pages; M20b: AI off fresh books go into the wizard too", () => {
     expect(editorRedirect({ ...base, hasBuildRun: true })).toBe("/books/b1/upload");
     expect(editorRedirect({ ...base, hasBuildRun: true, photos: [photo] })).toBe("/books/b1/build");
@@ -165,7 +172,7 @@ describe("editor page data", () => {
 
   it("maps loader data to serializable shell props (null for no doc)", () => {
     const fx = devEditorData("ok");
-    const data: EditorData = { ...fx, docError: null, activeBuildRunId: null, expiresAt: null, hasBuildRun: true };
+    const data: EditorData = { ...fx, docError: null, activeBuildRunId: null, expiresAt: null, hasBuildRun: true, albumConfirmed: false };
     const out = toEditorShellData(data);
     // + the free-link state (never published) and the AI entry points (M13 review fixes).
     expect(out).toEqual({ ...fx, freeLink: { kind: "unpublished" }, aiPath: out!.aiPath });

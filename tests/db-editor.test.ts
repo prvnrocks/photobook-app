@@ -259,6 +259,15 @@ describe("getEditorData", () => {
     expect(runChain.calls).toContainEqual(["not", "state", "in", "(done,failed)"]);
   });
 
+  it("M20c: albumConfirmed from books.album_confirmed_at (null / absent → false)", async () => {
+    fake.state.book = bookRow({ album_confirmed_at: "2026-11-15T10:00:00Z" });
+    expect((await getEditorData(B))!.albumConfirmed).toBe(true);
+    fake.state.book = bookRow({ album_confirmed_at: null });
+    expect((await getEditorData(B))!.albumConfirmed).toBe(false);
+    fake.state.book = bookRow();
+    expect((await getEditorData(B))!.albumConfirmed).toBe(false);
+  });
+
   it("doc_rev null (0900 not applied) → canSave false; number → canSave true", async () => {
     fake.state.book = bookRow({ doc_rev: null });
     let d = await getEditorData(B);

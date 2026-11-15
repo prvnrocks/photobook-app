@@ -39,11 +39,21 @@ export type WizardGateInput = {
    */
   docOrigin: { generator: "ai" | "rule" | "none"; userEdited: boolean };
   /**
+   * books.album_confirmed_at is set (M20c, migration 2000): the user pressed "Generate album" — the
+   * book never shows the wizard again, whatever step is asked (→ "editor").
+   */
+  albumConfirmed: boolean;
+  /**
    * resolveAiMode() !== "off". Informational since M20b: AI off no longer changes the answer (a first
    * rule build shows step 6 / 7 like an AI build; only a running rebuild is "classic").
    */
   aiOn?: boolean;
 };
+
+/** books.album_confirmed_at → WizardGateInput.albumConfirmed (a non-empty timestamp string = confirmed). */
+export function albumConfirmedOf(albumConfirmedAt: unknown): boolean {
+  return typeof albumConfirmedAt === "string" && albumConfirmedAt.length > 0;
+}
 
 function clampStep(n: number): WizardRequestStep {
   if (!Number.isFinite(n)) return 1;
@@ -53,6 +63,10 @@ function clampStep(n: number): WizardRequestStep {
 /**
  * G3 + G2 decision table (first match wins):
  *  1. user-edited album                         → "editor" (the wizard never shows an edited book)
+ *  1b. album confirmed ("Generate album" ran)   → "editor" for every requested step (M20c) — also
+ *                                                 over an active run: the editor's own redirect
+ *                                                 sends a running build / rebuild to /books/[id]/build
+ *                                                 (classic for a rebuild), never back here
  *  2. active run                                → 6 ("classic" for a rebuild) — resume, never
  *                                                 start a 2nd run (AI off too, M20b)
  *  3. run read error                            → requested ≤5 with details unlocked: requested
@@ -71,6 +85,7 @@ export function resolveWizardStep(input: WizardGateInput): WizardTarget {
   const buildScreen: WizardTarget = 6;
 
   if (input.docOrigin.userEdited || input.detailsLock === "user_edited") return "editor";
+  if (input.albumConfirmed) return "editor";
   if (input.active) return input.activeTrigger === "rebuild" ? "classic" : buildScreen;
   if (input.readError) return requested <= 5 && input.detailsLock === null ? requested : buildScreen;
   if (input.hasRun) return 7;

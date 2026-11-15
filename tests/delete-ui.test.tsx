@@ -41,6 +41,7 @@ const base: BookListItem = {
   published: false,
   photo_count: 30,
   user_edited: true,
+  album_confirmed: false,
   format: "A5_PORTRAIT",
   designStyle: "classic",
   coverThumbUrl: null,
