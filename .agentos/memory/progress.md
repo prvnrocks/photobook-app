@@ -197,7 +197,7 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 ## 2026-11-14 — Milestone 18 (Books screen) — done + deployed
 - Interactive library grid; Ecommerce 9 (React Bits Pro) not used — no licence key; built in-house in the same pattern.
 
-## 2026-11-15 — Milestone 19 (Book creation wizard) — done, awaiting deploy OK
+## 2026-11-15 — Milestone 19 (Book creation wizard) — done + deployed
 - New book is a 6-step wizard (D-071) in emerald/gold: title → occasion (+ English/Arabic captions) → shape → style → photos → sorting → editor. Tone automatic (memory else occasion default; follows occasion on edit). Back from step 5 edits the draft; double browser Back can't duplicate a book (wizard keyed by mode).
 - Tests: npm test 7307; m19-wizard e2e 7/1skip live + analytics 8/8; m13-first-run 3/3; batch green except upload-auth Mapbox places (pre-existing env). Reviewer APPROVED.
 - Open: Mapbox token; HEIC upload thumbnails grey on Chrome (cosmetic).
