@@ -27,7 +27,7 @@ export const BOOK_SHADOW =
  * The editor stage's open book (M22 T4): the same stacked page edges, with the drop shadow tinted
  * emerald like ED_PAGE_FRAME. BOOK_SHADOW above stays as is (SpreadPreviewSheet uses it).
  */
-export const EDITOR_SPREAD_SHADOW =
+const EDITOR_SPREAD_SHADOW =
   "-3px 3px 0 -1px #fdfaf3, -3px 3px 0 0 rgba(14,59,46,0.1), 3px 3px 0 -1px #fdfaf3, 3px 3px 0 0 rgba(14,59,46,0.1), 0 28px 50px -30px rgba(14,59,46,0.55), 0 2px 8px -2px rgba(14,59,46,0.12)";
 
 /** Active page / spread outline: solid emerald (#0e3b2e, 12.47:1 on white — clear on any page). */

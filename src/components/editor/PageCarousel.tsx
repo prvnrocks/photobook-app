@@ -30,7 +30,7 @@ import {
 import { itemToPosition, positionToItem } from "@/lib/editor/store";
 import { cx } from "@/lib/cx";
 import { useEditor } from "./editor-context";
-import { ED_PAGE_FRAME, ED_STAGE } from "./editor-classes";
+import { ED_PAGE_FRAME, ED_STAGE, ED_STAGE_BARE } from "./editor-classes";
 import { EditablePage } from "./EditablePage";
 import { EditorSpreadView } from "./EditorSpread";
 import { SpreadPreviewSheet } from "./SpreadPreviewSheet";
@@ -61,7 +61,31 @@ export function pageCounterLabel(item: number, pageCount: number): string {
   return item <= 0 ? `Cover · ${pageCount} ${pageCount === 1 ? "page" : "pages"}` : `${item} / ${pageCount}`;
 }
 
-export function PageCarousel() {
+/**
+ * Page-in rule (M22 T4): which item fades in (ed-page-in) after the current item moves from `from` to
+ * `to` — the landing item on a jump of more than one (strip tap, undo elsewhere: the scroll is instant
+ * there, so the page would otherwise just pop), null for steps of one (swipe, prev/next slide in
+ * visibly; fading a page already on screen flickers) or no move. Exported for tests.
+ */
+export function pageInFadeItem(from: number, to: number): number | null {
+  return Math.abs(from - to) > 1 ? to : null;
+}
+
+/** data-page-in value for `item`: "true" only on the current item when it is the fade target. */
+export function pageInAttr(item: number, current: number, fadeItem: number | null): "true" | undefined {
+  return item === current && item === fadeItem ? "true" : undefined;
+}
+
+/** Stage box classes: ED_STAGE, or `bare` (no background) when the host paints the stage surface. */
+function stageClass(bare: boolean | undefined): string {
+  return bare ? ED_STAGE_BARE : ED_STAGE;
+}
+
+/**
+ * `bare`: the host (EditorShell's <main>, ED_STAGE_HOST) already paints the cream stage, so the
+ * carousel box drops its own background (same geometry, testids and markup).
+ */
+export function PageCarousel({ bare }: { bare?: boolean } = {}) {
   const { state, actions, spread = false } = useEditor();
   const ref = useRef<HTMLDivElement>(null);
   const pageCount = state.doc.pages.length;
@@ -182,12 +206,12 @@ export function PageCarousel() {
   const [fadeItem, setFadeItem] = useState<number | null>(null);
   if (lastCurrent !== current) {
     setLastCurrent(current);
-    setFadeItem(Math.abs(lastCurrent - current) > 1 ? current : null);
+    setFadeItem(pageInFadeItem(lastCurrent, current));
   }
-  const pageIn = (item: number) => (item === current && item === fadeItem ? "true" : undefined);
+  const pageIn = (item: number) => pageInAttr(item, current, fadeItem);
 
   return (
-    <section className={cx(ED_STAGE, "flex flex-1 flex-col")} aria-roledescription="carousel" aria-label="Book pages">
+    <section className={cx(stageClass(bare), "flex flex-1 flex-col")} aria-roledescription="carousel" aria-label="Book pages">
       <div
         ref={ref}
         className="flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -297,15 +321,15 @@ export function PageCarousel() {
  * md+ stand-in for the spread carousel while the screen width isn't known yet (server render +
  * hydration, N7): same box as the real thing — desk, the current spread (or the cover alone) at
  * its aspect ratio, counter row — so switching to the live carousel doesn't move anything.
- * EditorShell shows it with `hidden md:flex`; phones never see it.
+ * EditorShell shows it with `hidden md:flex`; phones never see it. `bare` as on PageCarousel.
  */
-export function SpreadCarouselPlaceholder({ className }: { className?: string }) {
+export function SpreadCarouselPlaceholder({ className, bare }: { className?: string; bare?: boolean }) {
   const { state } = useEditor();
   const pageCount = state.doc.pages.length;
   const current = spreadOfPosition(state.page);
   const aspect = current === 0 ? pageAspectStyle(state.doc.format) : { aspectRatio: spreadAspectRatio(state.doc.format) };
   return (
-    <div className={cx(ED_STAGE, "flex-1 flex-col", className)} aria-hidden="true" data-testid="spread-placeholder">
+    <div className={cx(stageClass(bare), "flex-1 flex-col", className)} aria-hidden="true" data-testid="spread-placeholder">
       <div className="flex min-h-0 flex-1 items-center justify-center px-6 py-4">
         <div className={cx(ED_PAGE_FRAME, "h-full max-w-full", current === 0 && "aspect-[148/210]")} style={aspect} />
       </div>

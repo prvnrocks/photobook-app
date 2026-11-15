@@ -5,12 +5,13 @@ import type { DevSaveMode } from "@/lib/editor/dev-fixture";
 import { aiSummary, type AiSummary } from "@/lib/editor/ai-summary";
 import type { EditorShellData } from "@/lib/editor/types";
 
-export const DEV_EDITOR_STATES = ["readOnly", "conflict", "makeWithAi", "aiSummary", "linkExpired", "paid"] as const;
+const DEV_EDITOR_STATES = ["readOnly", "conflict", "makeWithAi", "aiSummary", "linkExpired", "paid"] as const;
 
 export type DevEditorState = (typeof DEV_EDITOR_STATES)[number];
 
 export function parseDevEditorState(v: unknown): DevEditorState | null {
-  return (DEV_EDITOR_STATES as readonly string[]).includes(String(v)) ? (v as DevEditorState) : null;
+  // Strings only: String(["paid"]) is "paid", which would hand an array back as a state.
+  return typeof v === "string" && (DEV_EDITOR_STATES as readonly string[]).includes(v) ? (v as DevEditorState) : null;
 }
 
 /** Save mode a state needs (readOnly → no saving; conflict → the stub save answers 409), else the given one. */

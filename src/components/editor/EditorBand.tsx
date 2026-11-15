@@ -23,9 +23,9 @@ import {
   ED_CHIP_TONE,
 } from "./editor-classes";
 
-export type EditorBandHistory = { onClick: () => void; disabled: boolean };
+type EditorBandHistory = { onClick: () => void; disabled: boolean };
 
-export type EditorBandProps = {
+type EditorBandProps = {
   /** The back link (next/link from EditorShell; data-testid="editor-back", className ED_BAND_ICON_BTN). */
   back: ReactNode;
   /** Display title (user text). */
@@ -41,13 +41,13 @@ export type EditorBandProps = {
 };
 
 /** "N / M pages", or null when the limit is unknown. Pure, exported for tests. */
-export function pageCountLabel(count: number, max: number | null | undefined): string | null {
+export function bandPageCountLabel(count: number, max: number | null | undefined): string | null {
   if (typeof max !== "number" || !Number.isFinite(max) || max <= 0) return null;
   return `${count} / ${max} pages`;
 }
 
 export function EditorBand({ back, title, saveStatus, undo, redo, share, pages }: EditorBandProps) {
-  const pageLabel = pages ? pageCountLabel(pages.count, pages.max) : null;
+  const pageLabel = pages ? bandPageCountLabel(pages.count, pages.max) : null;
   return (
     <header className={ED_BAND} data-testid="editor-band">
       <span aria-hidden="true" className="home-foil-v pointer-events-none absolute inset-y-0 start-3 -z-10 hidden w-px opacity-70 lg:block" />

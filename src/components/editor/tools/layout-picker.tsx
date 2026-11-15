@@ -30,7 +30,7 @@ import { cx } from "@/lib/cx";
 import { ED_CTA_EMERALD, ED_CTA_QUIET, ED_PANEL_EYEBROW, ED_PANEL_HEADING } from "../editor-classes";
 import type { EditorContextValue } from "../editor-context";
 import { showEditorToast } from "../EditorToast";
-import { CHECK_BADGE, TOOL_TILE, TOOL_TILE_ACTIVE } from "./tool-tile-classes";
+import { CHECK_BADGE, TOOL_TILE, TOOL_TILE_ACTIVE } from "./tool-classes";
 import type { EditorPanelProps, EditorTool } from "./types";
 
 /** Index of the page the Layout tool works on (selected slot/caption's page, else the shown page). */

@@ -53,7 +53,7 @@ import { cx } from "@/lib/cx";
 import { ED_CTA_QUIET, ED_PANEL_EYEBROW } from "../editor-classes";
 import { showEditorToast } from "../EditorToast";
 import { onRadioGroupKeyDown, onRadioGroupKeyDownFocusOnly } from "../radio-group-keys";
-import { CHECK_BADGE, SEG, SEG_ACTIVE, SEG_GROUP, TOOL_PHOTO_TILE, TOOL_PHOTO_TILE_ACTIVE, TOOL_TILE, TOOL_TILE_ACTIVE } from "./tool-tile-classes";
+import { CHECK_BADGE, SEG, SEG_ACTIVE, SEG_GROUP, TOOL_PHOTO_TILE, TOOL_PHOTO_TILE_ACTIVE, TOOL_TILE, TOOL_TILE_ACTIVE } from "./tool-classes";
 import type { EditorPanelProps, EditorTool } from "./types";
 
 /** Background type tab (underline), idle / selected — alternatives, never both. */

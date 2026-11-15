@@ -4,6 +4,9 @@
 // ORIGINAL size, layout slot and zoom. Never blocks anything; tap shows why.
 // Rendered by EditablePage inside each slot overlay (edit mode only).
 // M22 T6a (D-074): warm gold warning dot with an emerald focus outline; message on an emerald card.
+// Focus (M22 review N5): a 2 px emerald outline drawn just inside the button (it sits in the slot's
+// clipped corner) with a 2 px white band inside it (inset shadow), so it reads over bright and dark
+// photos alike.
 
 import { TriangleAlert } from "lucide-react";
 import { useEffect, useState, type MouseEvent } from "react";
@@ -56,7 +59,7 @@ export function LowResBadge({ page, slotIdx }: { page: EditorPosition; slotIdx: 
         onClick={toggle}
         aria-label={`Low resolution: ${LOW_RES_MESSAGE}`}
         aria-expanded={open}
-        className="absolute top-0 left-0 z-10 flex size-11 items-center justify-center rounded-full outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white"
+        className="absolute top-0 left-0 z-10 flex size-11 items-center justify-center rounded-full outline-none focus-visible:shadow-[inset_0_0_0_4px_#fff] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#0e3b2e]"
         data-testid="low-res-badge"
       >
         <span className="flex size-7 items-center justify-center rounded-full bg-[#f3c969] text-[#2f2a14] shadow-[0_4px_10px_-4px_rgb(14_59_46/0.7)] ring-2 ring-white">

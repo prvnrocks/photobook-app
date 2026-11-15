@@ -12,7 +12,8 @@
 // M22 T5 (D-074): emerald style — the row is a floating white pill bar (ED_PILL_BAR) of emerald
 // segmented pills (ED_PILL / ED_PILL_ACTIVE, merged with cn so phone overrides win), the active tool
 // is an emerald fill with a small gold marker; the coach line and error strip are cards; panels are
-// card sheets on phones and a side card ≥ lg. Motion: ed-sheet-rise on the sheet container only.
+// card sheets on phones and a side card ≥ lg. Motion: the panel host only fades in (ed-panel-in,
+// opacity) — it is an ancestor of the crop box and the pages dnd-kit grid, so it never translates.
 
 import { Ellipsis, Lightbulb, X } from "lucide-react";
 import Link from "next/link";
@@ -338,9 +339,12 @@ export function EditorPanelHost({ tool }: { tool: EditorTool | null }) {
           // Phones: a card sheet (ED_SHEET; its ::before handle is replaced by the testid'd handle
           // below, and the inner rows own their padding).
           ED_SHEET,
-          "ed-sheet-rise flex flex-col px-0 pb-[env(safe-area-inset-bottom)] before:hidden",
+          // Opacity-only entrance: this host contains the crop box (getBoundingClientRect) and the
+          // pages dnd-kit grid, so no translating animation here (ed-sheet-rise is for MoreSheet,
+          // SpreadPreviewSheet and UpgradeSheet only).
+          "ed-panel-in flex flex-col px-0 pb-[env(safe-area-inset-bottom)] before:hidden",
           docked ? "relative max-h-[42dvh] shrink-0" : "fixed inset-x-0 bottom-0 z-40 max-h-[70dvh]",
-          // ≥ lg: the side card panel beside the stage (mirrors ED_SIDE_PANEL, lg-prefixed so the
+          // ≥ lg: the side card panel beside the stage (lg-prefixed so the
           // phone sheet above stays one element: lg:w-80 xl:w-96, own scroll, card shadow).
           "lg:static lg:z-auto lg:my-3 lg:me-3 lg:max-h-none lg:w-80 lg:shrink-0 lg:rounded-3xl lg:border lg:border-[#e9dfca] lg:pb-0 lg:shadow-[0_18px_40px_-28px_rgb(14_59_46/0.45)] xl:w-96",
         )}

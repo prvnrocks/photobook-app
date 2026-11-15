@@ -6,20 +6,15 @@
 //
 // Rules baked into these strings (M22 guardrails):
 // - 44 px targets (min-h-11 / size-11) for everything tappable.
-// - Text contrast ≥ 4.5:1: ED_CONTRAST_PAIRS lists every pair, tests/m22-editor-classes.test.ts
-//   recomputes them. On the leather the worst case is its lightest point #1f5443.
+// - Text contrast ≥ 4.5:1: ED_CONTRAST_PAIRS (editor-classes.data.ts — test data, never imported by
+//   app code) lists every pair, tests/m22-editor-classes.test.ts recomputes them. On the leather the
+//   worst case is its lightest point #1f5443.
 // - Motion: only opacity / box-shadow / colour transitions, each with motion-reduce:transition-none.
 //   No transform anywhere (no active:translate-y-px either) — the page carousel, EditablePage
 //   ancestors and the crop box rely on getBoundingClientRect and dnd-kit hit-testing.
 // - One gold per screen: ED_CTA_GOLD is for Share only; every other primary is ED_CTA_EMERALD.
 // - Alternating recipes (ED_PILL / ED_PILL_ACTIVE, ED_THUMB / ED_THUMB_ACTIVE) are complete strings:
 //   use one OR the other, never both (cx doesn't merge conflicting utilities).
-
-// ---- Colour data (mirrors the literal hexes in the class strings below) --------------------------
-
-/** Emerald leather base (globals.css home-leather) and its lightest point (glow over the base). */
-export const ED_LEATHER = "#0e3b2e";
-export const ED_LEATHER_LIGHTEST = "#1f5443";
 
 // ---- Band (leather header) ---------------------------------------------------------------------
 
@@ -65,26 +60,11 @@ export const ED_BAND_ICON_BTN =
 
 export type EdChipTone = "saved" | "saving" | "warn";
 
-export const ED_CHIP_TONES_LIST: readonly EdChipTone[] = ["saved", "saving", "warn"];
-
-/**
- * Chip colours as data (tests check contrast). Each chip has a solid background; the text also clears
- * 4.5:1 on the leather's lightest point should the background ever be dropped.
- *   saved  #9ee6bd on #0f3a2d 8.72  (on #1f5443 6.03)
- *   saving #d7cdb9 on #143f33 7.45  (on #1f5443 5.53)
- *   warn   #f3c969 on #2f2a14 9.14  (on #1f5443 5.55)
- */
-export const ED_CHIP_COLORS: Record<EdChipTone, { text: string; bg: string; dot: string }> = {
-  saved: { text: "#9ee6bd", bg: "#0f3a2d", dot: "#7fd6a6" },
-  saving: { text: "#d7cdb9", bg: "#143f33", dot: "#9fb3a6" },
-  warn: { text: "#f3c969", bg: "#2f2a14", dot: "#f3c969" },
-};
-
 /** Chip shape (status, never a button): one line, 32 px, truncates. Combine with ED_CHIP_TONE[tone]. */
 export const ED_CHIP =
   "inline-flex h-8 max-w-full min-w-0 items-center gap-1.5 rounded-full border px-2.5 text-xs leading-none font-semibold whitespace-nowrap sm:text-sm";
 
-/** Per-tone colours (literal classes so Tailwind sees them); hexes mirror ED_CHIP_COLORS. */
+/** Per-tone colours (literal classes so Tailwind sees them); hexes mirror ED_CHIP_COLORS (editor-classes.data.ts). */
 export const ED_CHIP_TONE: Record<EdChipTone, string> = {
   saved: "border-[#7fd6a6]/50 bg-[#0f3a2d] text-[#9ee6bd]",
   saving: "border-[#9fb3a6]/45 bg-[#143f33] text-[#d7cdb9]",
@@ -112,23 +92,16 @@ export const ED_PILL =
 export const ED_PILL_ACTIVE =
   "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-[#0e3b2e] px-3.5 text-sm font-semibold text-[#f2e8d8] shadow-[0_6px_14px_-8px_rgb(14_59_46/0.9)] transition-[background-color,color,box-shadow] outline-none hover:bg-[#145240] focus-visible:ring-2 focus-visible:ring-[#0e3b2e] focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none";
 
-// ---- Cards, sheets, side panel -------------------------------------------------------------------
-
-/** Ivory/white card (tool panels, notices) — the share card at editor density. */
-export const ED_CARD =
-  "rounded-3xl border border-[#e9dfca] bg-card p-4 shadow-[0_18px_40px_-28px_rgb(14_59_46/0.45)] sm:p-5";
+// ---- Sheets, panel headings ----------------------------------------------------------------------
 
 /**
  * Phone bottom sheet surface: rounded-t-3xl, a drag handle drawn by ::before (first block in the
  * sheet — keep the sheet a block or flex-col), bottom safe-area padding. Positioning (fixed inset-x-0
- * bottom-0, z-index) stays with the sheet component. Add ed-sheet-rise to animate it in.
+ * bottom-0, z-index) stays with the sheet component. Add ed-sheet-rise to animate a plain sheet in (MoreSheet,
+ * SpreadPreviewSheet) — the tool panel host uses ed-panel-in (opacity only; crop/dnd inside).
  */
 export const ED_SHEET =
   "rounded-t-3xl border-t border-[#e9dfca] bg-card px-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-18px_40px_-24px_rgb(14_59_46/0.45)] before:mx-auto before:mt-2 before:mb-3 before:block before:h-1.5 before:w-10 before:rounded-full before:bg-[#cfc4ad] before:content-['']";
-
-/** ≥ lg tool panel beside the stage: a card column 20 rem (24 rem from xl), scrolls on its own. */
-export const ED_SIDE_PANEL =
-  "flex min-h-0 flex-col overflow-y-auto rounded-3xl border border-[#e9dfca] bg-card p-5 shadow-[0_18px_40px_-28px_rgb(14_59_46/0.45)] lg:w-80 lg:shrink-0 xl:w-96";
 
 /** Small caps heading inside a card / sheet / panel (accent-text #7a5f0e on white 6.07:1). */
 export const ED_PANEL_EYEBROW = "text-[0.7rem] font-semibold tracking-[0.24em] text-accent-text uppercase";
@@ -146,13 +119,19 @@ export const ED_STAGE =
   "relative min-h-0 bg-[#f4ede0] bg-[radial-gradient(ellipse_75%_65%_at_50%_42%,#fdfaf3_0%,#f4ede0_62%,#ebe2d0_100%)]";
 
 /**
+ * Stage box without its own background (M22 review N4): PageCarousel / SpreadCarouselPlaceholder with
+ * `bare`, when the host (ED_STAGE_HOST) paints the stage. Same geometry as ED_STAGE.
+ */
+export const ED_STAGE_BARE = "relative min-h-0";
+
+/**
  * The stage column (EditorShell's <main>: stage + floating toolbar) as ONE cream surface (M22 T7):
- * the column paints the ED_STAGE gradient and the stage boxes inside it (the carousel <section> and
- * the md+ spread placeholder — main's only aria-hidden child — both ED_STAGE) turn transparent, so there's no colour step between the
- * stage and the strip under the toolbar. ED_STAGE itself stays for stand-alone stages (spread preview).
+ * the column paints the ED_STAGE gradient and the stage boxes inside it are rendered `bare`
+ * (ED_STAGE_BARE), so there's no colour step between the stage and the strip under the toolbar.
+ * ED_STAGE itself stays for stand-alone stages (spread preview).
  */
 export const ED_STAGE_HOST =
-  "bg-[#f4ede0] bg-[radial-gradient(ellipse_75%_65%_at_50%_42%,#fdfaf3_0%,#f4ede0_62%,#ebe2d0_100%)] [&_section[aria-roledescription=carousel]]:bg-transparent [&_section[aria-roledescription=carousel]]:bg-none [&>[aria-hidden=true]]:bg-transparent [&>[aria-hidden=true]]:bg-none";
+  "bg-[#f4ede0] bg-[radial-gradient(ellipse_75%_65%_at_50%_42%,#fdfaf3_0%,#f4ede0_62%,#ebe2d0_100%)]";
 
 /** Page strip column surface (EditorShell's width placeholder matches PageStrip's own STRIP colours). */
 export const ED_STRIP_SURFACE = "border-r border-[#e5dccb] bg-[#f4ede0]";
@@ -197,31 +176,3 @@ export const ED_CTA_QUIET =
 /** Quiet destructive action (Remove photo, Delete page): #b42318 6.10:1 on #faf6ee, 44 px. */
 export const ED_DANGER_QUIET =
   "inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold text-destructive transition-colors outline-none hover:bg-destructive-soft focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none";
-
-// ---- Contrast pairs (tests/m22-editor-classes.test.ts recomputes each ≥ min) ---------------------
-
-export type EdContrastPair = { name: string; fg: string; bg: string; min: number };
-
-export const ED_CONTRAST_PAIRS: readonly EdContrastPair[] = [
-  { name: "band title cream on leather lightest", fg: "#f2e8d8", bg: ED_LEATHER_LIGHTEST, min: 4.5 },
-  { name: "band muted cream on leather lightest", fg: "#d7cdb9", bg: ED_LEATHER_LIGHTEST, min: 4.5 },
-  { name: "band eyebrow pale gold on leather lightest", fg: "#e3c766", bg: ED_LEATHER_LIGHTEST, min: 4.5 },
-  { name: "band icon button cream on leather lightest", fg: "#f2e8d8", bg: ED_LEATHER_LIGHTEST, min: 4.5 },
-  ...ED_CHIP_TONES_LIST.flatMap((tone) => [
-    { name: `chip ${tone} text on chip`, fg: ED_CHIP_COLORS[tone].text, bg: ED_CHIP_COLORS[tone].bg, min: 4.5 },
-    { name: `chip ${tone} text on leather lightest`, fg: ED_CHIP_COLORS[tone].text, bg: ED_LEATHER_LIGHTEST, min: 4.5 },
-  ]),
-  { name: "pill idle emerald on white", fg: "#0e3b2e", bg: "#ffffff", min: 4.5 },
-  { name: "pill idle emerald on hover", fg: "#0e3b2e", bg: "#e6efe9", min: 4.5 },
-  { name: "pill active cream on emerald", fg: "#f2e8d8", bg: "#0e3b2e", min: 4.5 },
-  { name: "pill active cream on hover emerald", fg: "#f2e8d8", bg: "#145240", min: 4.5 },
-  { name: "share gold ink on foil darkest stop", fg: "#1b1b1d", bg: "#bf9a23", min: 4.5 },
-  { name: "emerald CTA white on emerald", fg: "#ffffff", bg: "#0e3b2e", min: 4.5 },
-  { name: "emerald CTA white on hover", fg: "#ffffff", bg: "#145240", min: 4.5 },
-  { name: "quiet CTA emerald on ivory", fg: "#0e3b2e", bg: "#faf6ee", min: 4.5 },
-  { name: "danger quiet on white", fg: "#b42318", bg: "#ffffff", min: 4.5 },
-  { name: "danger quiet on ivory", fg: "#b42318", bg: "#faf6ee", min: 4.5 },
-  { name: "panel eyebrow accent-text on white", fg: "#7a5f0e", bg: "#ffffff", min: 4.5 },
-  { name: "stage label muted on stage edge", fg: "#56625a", bg: "#ebe2d0", min: 4.5 },
-  { name: "stage label muted on stage base", fg: "#56625a", bg: "#f4ede0", min: 4.5 },
-];

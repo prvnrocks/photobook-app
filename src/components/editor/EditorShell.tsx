@@ -234,19 +234,19 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
           ) : (
             <PageStrip className={spread ? "hidden w-44 shrink-0 lg:block" : "hidden w-36 shrink-0 lg:block"} />
           )}
-          {/* One cream surface for stage + toolbar (ED_STAGE_HOST): no colour step under the toolbar. */}
+          {/* One cream surface for stage + toolbar (ED_STAGE_HOST; the stage boxes render `bare`): no colour step under the toolbar. */}
           <main className={cn("flex min-h-0 min-w-0 flex-1 flex-col", ED_STAGE_HOST)}>
             {/* Remount on mode change: item indexes mean pages in one mode and spreads in the other.
                 Width unknown (SSR/hydration): phones get the real single-page carousel, md+ a
                 spread-shaped placeholder — no single → spread flash on desktop (N7). */}
             {spread ? (
-              <PageCarousel key="spread" />
+              <PageCarousel key="spread" bare />
             ) : (
               <div className={cn("flex min-h-0 flex-1 flex-col", spreadMode === null && "md:hidden")} data-testid="single-carousel-wrap">
-                <PageCarousel key="single" />
+                <PageCarousel key="single" bare />
               </div>
             )}
-            {spreadMode === null ? <SpreadCarouselPlaceholder className="hidden md:flex" /> : null}
+            {spreadMode === null ? <SpreadCarouselPlaceholder className="hidden md:flex" bare /> : null}
             <EditorToolbar tools={shown} />
           </main>
           <EditorPanelHost tool={active} />

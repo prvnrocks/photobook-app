@@ -15,7 +15,7 @@ import { chapterLabel, splitNotice } from "@/lib/editor/pages";
 import { cx } from "@/lib/cx";
 import { ED_DANGER_QUIET, ED_PANEL_EYEBROW } from "../editor-classes";
 import { showEditorToast } from "../EditorToast";
-import { TOOL_SECONDARY, TOOL_WELL } from "./tool-classes";
+import { TOOL_SECONDARY, TOOL_WELL_SURFACE } from "./tool-classes";
 import type { EditorPanelProps, EditorTool } from "./types";
 
 // M22 T6b (D-074): chapter rows in one white card, quiet danger delete, confirm as an ivory card
@@ -100,7 +100,7 @@ export function PageMenu({ ctx, close }: EditorPanelProps) {
 
   if (confirmDelete) {
     return (
-      <div role="alertdialog" aria-labelledby="page-menu-confirm-title" className={cx(TOOL_WELL, "flex flex-col gap-3 p-4")} data-testid="page-menu-confirm">
+      <div role="alertdialog" aria-labelledby="page-menu-confirm-title" className={cx(TOOL_WELL_SURFACE, "flex flex-col gap-3 p-4")} data-testid="page-menu-confirm">
         <h3 id="page-menu-confirm-title" className="font-display text-base leading-tight font-semibold text-[#0e3b2e]">
           Delete this two-page layout?
         </h3>

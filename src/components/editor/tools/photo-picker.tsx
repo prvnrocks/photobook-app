@@ -16,7 +16,7 @@ import type { EditorShellPhoto } from "@/lib/editor/types";
 import { cx } from "@/lib/cx";
 import { ED_DANGER_QUIET } from "../editor-classes";
 import type { EditorContextValue } from "../editor-context";
-import { CHECK_BADGE, SEG, SEG_ACTIVE, SEG_GROUP, TOOL_PHOTO_TILE, TOOL_PHOTO_TILE_ACTIVE } from "./tool-tile-classes";
+import { CHECK_BADGE, SEG, SEG_ACTIVE, SEG_GROUP, TOOL_PHOTO_TILE, TOOL_PHOTO_TILE_ACTIVE } from "./tool-classes";
 import type { EditorPanelProps, EditorTool } from "./types";
 
 type Target = { kind: "slot"; pageIdx: number; slotIdx: number; current: string | null } | { kind: "cover"; current: string | null };

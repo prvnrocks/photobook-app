@@ -2,7 +2,8 @@
 // emerald actions (no gold — there's nothing to share). Server component, no hooks.
 import { BookX } from "lucide-react";
 import Link from "next/link";
-import { ED_CARD, ED_CTA_EMERALD, ED_CTA_QUIET, ED_PANEL_EYEBROW, ED_PANEL_HEADING, ED_STAGE } from "@/components/editor/editor-classes";
+import { ED_CTA_EMERALD, ED_CTA_QUIET, ED_PANEL_EYEBROW, ED_PANEL_HEADING, ED_STAGE } from "@/components/editor/editor-classes";
+import { ED_CARD } from "@/components/editor/editor-server-classes";
 import { cn } from "@/lib/utils";
 
 export function EditorInvalid({ bookId }: { bookId: string }) {
