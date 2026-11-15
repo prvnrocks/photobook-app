@@ -6,10 +6,11 @@
 // slug/URL. Classes come from BTN (precomputed buttonVariants + cn) — this file ships on the public
 // viewer, so it must not import ui/button or cn (~14 kB gzip).
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Check, Link2, MessageCircle, Share2 } from "lucide-react";
 import { BTN } from "@/components/app/button-classes";
 import { whatsappShareUrl } from "@/lib/viewer/share";
+import { nativeShare, useCanNativeShare, useCopyFeedback } from "./share-actions";
 
 export type ShareButtonsProps = {
   /** Absolute book URL (https://…/b/<slug>). */
@@ -23,61 +24,13 @@ export type ShareButtonsProps = {
   className?: string;
 };
 
-async function copyText(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    // Permission denied / insecure context: try the legacy path below.
-  }
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.setAttribute("readonly", "");
-    ta.className = "fixed -left-[9999px] top-0 opacity-0";
-    document.body.appendChild(ta);
-    ta.select();
-    const ok = document.execCommand("copy");
-    ta.remove();
-    return ok;
-  } catch {
-    return false;
-  }
-}
-
 /** Class for a secondary share action passed via `secondary` (same look as Copy link). */
 export const SHARE_SECONDARY_CLASS = BTN.shareSecondary;
 
 export function ShareButtons({ url, title, layout = "stack", secondary, className }: ShareButtonsProps) {
-  const [canShare, setCanShare] = useState(false);
-  const [toast, setToast] = useState<{ ok: boolean } | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    // Feature-detect after mount so server and client markup match.
-    const id = requestAnimationFrame(() => setCanShare(typeof navigator.share === "function"));
-    return () => {
-      cancelAnimationFrame(id);
-      if (timer.current) clearTimeout(timer.current);
-    };
-  }, []);
-
-  const onCopy = async () => {
-    const ok = await copyText(url);
-    setToast({ ok });
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setToast(null), 2200);
-  };
-
-  const onNativeShare = async () => {
-    try {
-      await navigator.share({ title, url });
-    } catch {
-      // User cancelled (AbortError) or share failed: nothing to do.
-    }
-  };
+  const canShare = useCanNativeShare();
+  const { copied: toast, copy: onCopy } = useCopyFeedback(url);
+  const onNativeShare = () => nativeShare(title, url);
 
   const stack = layout === "stack";
   // Secondary actions share a row on a phone (two per line, wrapping) and never overflow 375 px.

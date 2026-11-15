@@ -10,11 +10,12 @@
 // Hook-free, no cn/buttonVariants/next/link (link as prop). The stage clips the burst, so nothing can
 // widen the page at 375 px.
 
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { BookFormat, DesignStyle } from "@/lib/book/types";
 import { cx } from "@/lib/cx";
 import { BookCover } from "@/components/dashboard/BookCover";
 import { LIBRARY_STAGE } from "@/components/dashboard/library-classes";
+import { ShareBurst } from "./ShareBurst";
 import { SHARE_TITLE_FALLBACK } from "./ShareBand";
 import "./share-motion.css";
 
@@ -55,12 +56,6 @@ const PLATE_INSET: Record<BookFormat, string> = {
   A5_LANDSCAPE: "inset-x-[13%]",
 };
 
-/** Confetti pieces: angle spread round the circle, distances varied so the burst isn't a ring. */
-const BURST = Array.from({ length: 16 }, (_, i) => ({
-  a: Math.round((i * 360) / 16 + (i % 2 ? 9 : -6)),
-  d: 90 + ((i * 37) % 70),
-}));
-
 export function SharePreview({ preview, title, pageCount, open, compact = false, celebrate = false, className }: SharePreviewProps) {
   const t = (title ?? "").trim() || SHARE_TITLE_FALLBACK;
   const { coverThumbUrl, format, designStyle } = preview;
@@ -79,7 +74,7 @@ export function SharePreview({ preview, title, pageCount, open, compact = false,
           <div className="share-cover-hop flex w-full justify-center">
             <BookCover url={coverThumbUrl} format={format} designStyle={designStyle} size="shelf" />
           </div>
-          <Burst />
+          <ShareBurst />
         </div>
         <figcaption className="flex min-w-0 flex-1 flex-col items-start">
           <span className="block w-full truncate font-display text-base font-semibold text-[#0e3b2e]" data-testid="share-preview-title">
@@ -126,7 +121,7 @@ export function SharePreview({ preview, title, pageCount, open, compact = false,
             </span>
           </div>
         </div>
-        <Burst />
+        <ShareBurst />
       </div>
       <figcaption className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1 pt-2">
         <span className="text-sm text-muted-foreground" data-testid="share-preview-meta">
@@ -135,15 +130,5 @@ export function SharePreview({ preview, title, pageCount, open, compact = false,
         {open ? <span className="-me-3 flex">{open}</span> : null}
       </figcaption>
     </figure>
-  );
-}
-
-function Burst() {
-  return (
-    <span aria-hidden="true" className="share-burst" data-testid="share-burst">
-      {BURST.map((p, i) => (
-        <i key={i} style={{ "--a": `${p.a}deg`, "--d": `${p.d}px`, "--i": i } as CSSProperties} />
-      ))}
-    </span>
   );
 }

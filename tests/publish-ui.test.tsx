@@ -192,6 +192,49 @@ describe("PublishPanelView after the editor's Share (M13 T9)", () => {
     expect(shared("live", "changes")).toMatch(/data-testid="publish-live-heading">.*Your book is live<\/h2>/);
   });
 
+  it("?shared= celebrates: data-celebrate on the panel + live card, burst in the card (no preview tile)", () => {
+    for (const flag of ["live", "changes"] as const) {
+      const html = shared("live", flag);
+      expect(html).toMatch(/data-testid="publish-panel" data-state="published" data-celebrate="on"/);
+      const card = html.match(/<section[^>]*data-testid="publish-live-card"[^>]*>/)?.[0] ?? "";
+      expect(card).toContain('data-celebrate="on"');
+      expect(has(html, "share-burst")).toBe(true);
+    }
+    const calm = shared("live", null);
+    expect(calm).not.toContain("data-celebrate");
+    expect(has(calm, "share-burst")).toBe(false);
+  });
+
+  it("with a preview tile: the tile celebrates and carries Open flipbook (one publish-open, no card burst)", () => {
+    const html = renderToStaticMarkup(
+      <PublishPanelView
+        bookId={BOOK}
+        title="سارة وعمر"
+        state={devPublishState("live")}
+        actions={actions}
+        paymentsEnabled
+        compare={publishCompare()}
+        refresh={() => {}}
+        now={NOW}
+        shared="live"
+        preview={{ coverThumbUrl: null, format: "A5_PORTRAIT", designStyle: "classic" }}
+      />,
+    );
+    const tile = html.match(/<figure[^>]*data-testid="share-preview"[^>]*>/)?.[0] ?? "";
+    expect(tile).toContain('data-celebrate="on"');
+    expect(html.match(/data-testid="share-burst"/g)?.length).toBe(1);
+    expect(html.match(/data-testid="publish-open"/g)?.length).toBe(1);
+    expect(html).toMatch(/<a href="\/b\/sara-and-omar-wedding-7Hq2xYp9Kd" target="_blank" rel="noopener noreferrer"[^>]*data-testid="publish-open"/);
+    expect(html).toContain("Open flipbook");
+    expect(html).toMatch(/<span dir="auto"[^>]*>سارة وعمر<\/span>/);
+    expect(html.indexOf('data-testid="share-preview"')).toBeLessThan(html.indexOf('data-testid="publish-live-card"'));
+  });
+
+  it("draft / expired never celebrate, even with ?shared=", () => {
+    expect(shared("draft", "live")).not.toContain('data-celebrate="on"');
+    expect(shared("expired", "live")).not.toContain('data-celebrate="on"');
+  });
+
   it("live free: WhatsApp leads, then Copy, then the free vs paid card + Upgrade; copy says the link is public", () => {
     const html = shared("live", "live");
     const at = (id: string) => html.indexOf(`data-testid="${id}"`);
@@ -274,10 +317,58 @@ describe("PublishPanelView states", () => {
     expect(has(html, "publish-free-notice")).toBe(false);
   });
 
-  it("published with changes: Publish changes button", () => {
+  it("published with changes (M21): 'Your edits aren't live yet' + last published + gold Update link, above the link card", () => {
     const html = panel("changes");
     expect(has(html, "publish-changes")).toBe(true);
-    expect(html).toContain("Publish changes");
+    expect(html).toContain("Your edits aren&#x27;t live yet");
+    expect(html).toContain('data-testid="publish-last-published">Last published 12 Nov<');
+    expect(html).toMatch(/<button type="button" class="[^"]*home-foil-fill[^"]*" data-testid="publish-changes-button"><svg[^>]*>.*<\/svg>Update link<\/button>/);
+    // The changes card replaces the calm live card and sits above the link card.
+    expect(has(html, "publish-live-card")).toBe(false);
+    const at = (id: string) => html.indexOf(`data-testid="${id}"`);
+    expect(at("publish-changes")).toBeGreaterThan(-1);
+    expect(at("publish-changes")).toBeLessThan(at("publish-live"));
+    expect(at("publish-changes-button")).toBeLessThan(at("share-whatsapp"));
+    expect(has(html, "publish-url")).toBe(true);
+  });
+
+  it("changes on a paid book: same card, chip stays paid-only via state.isPaid (no free notice)", () => {
+    const html = renderToStaticMarkup(
+      <PublishPanelView
+        bookId={BOOK}
+        title="Sara & Omar"
+        state={{ ...devPublishState("live-paid"), hasChanges: true }}
+        actions={actions}
+        paymentsEnabled
+        compare={publishCompare()}
+        refresh={() => {}}
+        now={NOW}
+      />,
+    );
+    expect(has(html, "publish-changes-button")).toBe(true);
+    expect(has(html, "publish-free-notice")).toBe(false);
+  });
+
+  it("changes card blocked: reason + disabled Update link", () => {
+    const html = renderToStaticMarkup(
+      <PublishPanelView
+        bookId={BOOK}
+        title="Sara & Omar"
+        state={{ ...devPublishState("changes"), canPublishReason: "page_limit", pageCount: 24 }}
+        actions={actions}
+        paymentsEnabled
+        compare={publishCompare()}
+        refresh={() => {}}
+        now={NOW}
+      />,
+    );
+    expect(html).toContain(`data-testid="publish-blocked">${blockReasonCopy("page_limit", 20)}</p>`);
+    expect(html).toMatch(/<button type="button" disabled=""[^>]*data-testid="publish-changes-button"/);
+  });
+
+  it("draft: Publish is the gold CTA", () => {
+    const html = panel("draft");
+    expect(html).toMatch(/<button type="button" class="[^"]*home-foil-fill[^"]*" data-testid="publish-button"/);
   });
 
   it("password on: change + remove", () => {
@@ -304,19 +395,26 @@ describe("PublishPanelView states", () => {
     expect(has(html, "unpublish-section")).toBe(false);
   });
 
-  it("live: Send on WhatsApp is the WhatsApp-green cta; Copy link and Open book are secondary, before the link field", () => {
+  it("live: Send on WhatsApp is the big WhatsApp-green cta; then the link field + Copy, then Open book", () => {
     const html = panel("live");
     expect(html).toContain("Send on WhatsApp");
-    // User decision 2026-11-11: WhatsApp green (white text ≥ 4.5:1), not the terracotta accent —
-    // and no other accent was added, so the live screen has none (one accent per screen at most).
+    // User decision 2026-11-11: WhatsApp green (white text ≥ 4.5:1), not the terracotta accent.
     const wa = html.match(/<a[^>]*data-testid="share-whatsapp"[^>]*>/)?.[0] ?? "";
     expect(wa).toContain("bg-[#0F7A40] text-white");
     expect(wa).toContain("h-12");
     expect(wa).toContain("focus-visible:ring-2");
     expect(html.match(/class="[^"]*\bbg-accent-strong\b/g)?.length ?? 0).toBe(0);
-    const order = ["share-whatsapp", "share-copy", "publish-open", "publish-url"].map((id) => html.indexOf(`data-testid="${id}"`));
+    const order = ["share-whatsapp", "publish-url", "share-copy", "publish-open"].map((id) => html.indexOf(`data-testid="${id}"`));
     expect(order.every((i) => i > 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // Copy: emerald pill with the copy-pulse hook, accessible name "Copy link", no feedback yet.
+    const copy = html.match(/<button[^>]*data-testid="share-copy"[^>]*>[\s\S]*?<\/button>/)?.[0] ?? "";
+    expect(copy).toContain("share-copy-pulse");
+    expect(copy).not.toContain("data-copied");
+    expect(copy).toMatch(/Copy<span class="sr-only"> link<\/span>/);
+    // The calm live card sits above the link card; no native share before mount (feature-detected).
+    expect(html.indexOf('data-testid="publish-live-card"')).toBeLessThan(html.indexOf('data-testid="publish-live"'));
+    expect(has(html, "share-native")).toBe(false);
     // Unpublish lives in the quiet bottom section, after password.
     expect(html.indexOf('data-testid="unpublish-section"')).toBeGreaterThan(html.indexOf('data-testid="password-section"'));
   });

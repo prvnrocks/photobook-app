@@ -139,3 +139,52 @@ export async function publishWithRetry<R extends { ok: boolean; error?: string }
   await wait(CONFLICT_RETRY_MS);
   return publish();
 }
+
+// ---- Share page cards (M21 T3): PrimaryActionCard + ShareLinkCard copy -------------------------
+
+/** "Your book is live" — the success message after a first publish and the live card heading. */
+export const LIVE_TEXT = "Your book is live";
+export const CHANGES_PUBLISHED_TEXT = "Changes published";
+export const UNPUBLISHED_TEXT = "Unpublished — the link no longer works";
+
+export const SHARE_COPY = {
+  draftHeading: "Ready to share?",
+  draftBody: "Publishing creates a link you can send on WhatsApp. Later edits stay private until you publish them.",
+  publish: "Publish",
+  pending: "Getting your link ready…",
+  liveBody: "It opens as a flipbook on any phone — no app needed.",
+  changesHeading: "Your edits aren't live yet",
+  changesBody: "People with the link still see the version you last published.",
+  updateLink: "Update link",
+  expiredBody: "You can still edit your book. Upgrading makes the link permanent.",
+  linkHeading: "Your link",
+  linkNote:
+    "Send the link to family and friends. Anyone with the link can see it; later edits stay private until you tap Share again.",
+  linkLabel: "Book link",
+  whatsapp: "Send on WhatsApp",
+  copy: "Copy",
+  copied: "Copied",
+  copiedStatus: "Link copied",
+  copyFailed: "Couldn't copy the link — select it above and copy it",
+  nativeShare: "More options",
+  openBook: "Open book",
+  openFlipbook: "Open flipbook",
+  signIn: "Sign in",
+} as const;
+
+/** Under the draft Publish button once the book was published before (unpublished since). */
+export function sameLinkNote(isPaid: boolean): string {
+  return `Your book keeps the same link${isPaid ? "" : " and expiry date"}.`;
+}
+
+/** "Last published 12 Nov" for the changes card; null when unknown / unparsable. */
+export function lastPublishedLabel(iso: string | null, now?: Date): string | null {
+  if (!iso) return null;
+  const date = formatShortDate(iso, now);
+  return date ? `Last published ${date}` : null;
+}
+
+/** Expired card: "Deleting 3 Dec. Upgrade to keep it." (deletesOnLabel text in, sentence out). */
+export function deletesOnSentence(deletesOn: string): string {
+  return `${deletesOn}. Upgrade to keep it.`;
+}

@@ -87,3 +87,18 @@ export function shareChipKind(status: { kind: string; chip: string }): ShareChip
   }
   return (SHARE_CHIP_KINDS as readonly string[]).includes(status.kind) ? (status.kind as ShareChipKind) : "draft";
 }
+
+/**
+ * "Send on WhatsApp" on the share link card (M21 T3): WhatsApp's own deep green, the same
+ * #0F7A40 the viewer uses (white text 5.41:1; #128C4A would be only 4.31:1), as a pill that matches
+ * the gold CTA's shape. 48 px on phones, 56 px from sm.
+ */
+export const SHARE_CTA_WHATSAPP =
+  "inline-flex h-12 w-full items-center justify-center gap-2.5 rounded-full bg-[#0F7A40] text-white px-6 text-base font-semibold shadow-[0_14px_28px_-16px_rgb(14_59_46/0.8)] transition-colors outline-none hover:bg-[#0B6635] focus-visible:ring-2 focus-visible:ring-[#0e3b2e] focus-visible:ring-offset-[3px] focus-visible:ring-offset-card motion-reduce:transition-none sm:h-14 sm:text-lg";
+
+/** Read-only link field on the share link card (ltr URL, 44 px, monospace, ivory well). */
+export const SHARE_LINK_FIELD =
+  "h-11 w-full min-w-0 flex-1 truncate rounded-full border border-[#e9dfca] bg-[#faf6ee] px-4 font-mono text-sm text-foreground outline-none focus-visible:border-[#0e3b2e] focus-visible:ring-2 focus-visible:ring-[#0e3b2e]/40";
+
+/** Round status badge on the primary card (foil check when live — hops on the celebration). */
+export const SHARE_BADGE = "flex size-11 shrink-0 items-center justify-center rounded-full";
