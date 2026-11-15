@@ -236,7 +236,7 @@ Plan: `.agentos/runs/m13.md`, D-070.
 - [x] 6-step full-page wizard (D-071): /books/new Title → What's it for (+ caption language) → Page shape → Book style; book created on step-4 Continue; step 5 Add your photos and step 6 Sorting your photos in wizard chrome; then editor. Browser back/refresh safe; step-5 Back re-opens steps 1–4 until the AI build; Start over for restored drafts; photos-first StartPicker and SetupCard retired. Report: `.agentos/runs/m19.md`. Deployed 2026-11-15.
 
 ## Milestone 20 — Wizard UX upgrade (2026-11-15)
-- [x] One continuous 7-step wizard (D-072): My-books emerald band + big stepper, live book preview, per-step animations (CSS only), caption-language control removed (title script decides), photos/sorting/review in place on /books/new (no page jump), animated upload, real-photo sorting, new Review step with Generate album → editor; fresh /upload|/build links redirect into the wizard. Report: `.agentos/runs/m20.md`.
+- [x] One continuous 7-step wizard (D-072): My-books emerald band + big stepper, live book preview, per-step animations (CSS only), caption-language control removed (title script decides), photos/sorting/review in place on /books/new (no page jump), animated upload, real-photo sorting, new Review step with Generate album → editor; fresh /upload|/build links redirect into the wizard. Report: `.agentos/runs/m20.md`. Deployed 2026-11-15.
 
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
