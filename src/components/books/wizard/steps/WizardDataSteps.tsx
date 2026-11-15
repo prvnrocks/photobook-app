@@ -130,6 +130,7 @@ export function WizardDataSteps({
           dispatch({ type: "buildDone" });
         }}
         onStopped={(reason) => dispatch({ type: "buildStopped", reason })}
+        onResumed={() => dispatch({ type: "buildResumed" })}
       />
     );
   }

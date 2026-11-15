@@ -442,10 +442,12 @@ describe("PhotoFan", () => {
     expect(renderToStaticMarkup(<PhotoFan urls={[]} />).match(/<img /g)).toBeNull();
   });
 
-  it("fanPhotoUrls: draft order, skips unsigned, max 3", () => {
+  it("fanPhotoUrls: draft order, skips unsigned, max FAN_PHOTOS (6)", () => {
     const ph = (id: string, url: string | null) => ({ id, thumbUrl: url, width: 1, height: 1 });
-    const photos = [ph("a", "u-a"), ph("b", null), ph("c", "u-c"), ph("d", "u-d"), ph("e", "u-e")];
-    expect(fanPhotoUrls(["d", "b", "a", "c", "e"], photos)).toEqual(["u-d", "u-a", "u-c"]);
+    const photos = [ph("a", "u-a"), ph("b", null), ph("c", "u-c"), ph("d", "u-d"), ph("e", "u-e"), ph("f", "u-f"), ph("g", "u-g"), ph("h", "u-h")];
+    expect(fanPhotoUrls(["d", "b", "a", "c", "e"], photos)).toEqual(["u-d", "u-a", "u-c", "u-e"]);
+    expect(fanPhotoUrls(["h", "g", "f", "e", "d", "c", "b", "a"], photos)).toEqual(["u-h", "u-g", "u-f", "u-e", "u-d", "u-c"]);
+    expect(fanPhotoUrls(["d", "b", "a", "c", "e"], photos, 3)).toEqual(["u-d", "u-a", "u-c"]);
     expect(fanPhotoUrls(["b"], photos)).toEqual([]);
     expect(fanPhotoUrls([], [])).toEqual([]);
   });

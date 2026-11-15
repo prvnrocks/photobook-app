@@ -1,7 +1,8 @@
 // The wizard's cream content area under the band (M20 T2, D-072): the books screen's desktop width
 // (LIBRARY_CONTAINER, max-w-library) with a two-column grid on ≥ lg — `main` (the step's choices) and
 // an optional `aside` (the live book preview) — single column below lg (or aside hidden, asideBelowLg). Without an
-// aside the step column is centred (40rem card grids with `wide`, 28rem forms otherwise).
+// aside the step column is centred (52rem card grids with `wide`, 28rem forms otherwise; wide="full"
+// = the whole library width, M20 step 7 Review).
 // A minimum height keeps the footer from jumping between short and tall steps; overflow-x is clipped
 // so the step slide-in never adds horizontal scroll at 375 px.
 // Client-safe and hook-free: used by WizardShell and by client wizards that draw their own band.
@@ -14,8 +15,11 @@ export type WizardBodyProps = {
   children: ReactNode;
   /** Right column on ≥ lg (stacks under the step below lg). */
   aside?: ReactNode;
-  /** Without an aside: 52rem column for card grids; default 28rem for forms. */
-  wide?: boolean;
+  /**
+   * Without an aside: 52rem column for card grids; "full" = the whole library width (M20 step 7
+   * Review); default 28rem for forms.
+   */
+  wide?: boolean | "full";
   /**
    * Below lg: "stack" (default) puts the aside under the step; "hide" drops it (the step draws its
    * own compact version, e.g. the /books/new mini book preview — M20 T4).
@@ -39,7 +43,7 @@ export function WizardBody({ children, aside, wide = false, asideBelowLg = "stac
         )}
       >
         <div
-          className={cx("flex w-full min-w-0 flex-col", aside ? "" : wide ? "max-w-[52rem]" : "max-w-[28rem]")}
+          className={cx("flex w-full min-w-0 flex-col", aside || wide === "full" ? "" : wide ? "max-w-[52rem]" : "max-w-[28rem]")}
           data-testid="wizard-content"
         >
           {children}

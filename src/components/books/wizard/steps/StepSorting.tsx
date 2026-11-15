@@ -33,6 +33,8 @@ export type StepSortingProps = {
   onDone: (step7?: WizardStep7Data) => void;
   /** A stop state (failed / limit / user_edited / …) → the wizard dispatches buildStopped. */
   onStopped?: (reason: BuildStopReason) => void;
+  /** Running again after a stop ("Try again") → the wizard dispatches buildResumed. */
+  onResumed?: () => void;
 };
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -43,7 +45,7 @@ function prefersReducedMotion(): boolean {
     : false;
 }
 
-export function StepSorting({ data, headlineId, onDone, onStopped }: StepSortingProps) {
+export function StepSorting({ data, headlineId, onDone, onStopped, onResumed }: StepSortingProps) {
   const bookId = data.bookId;
   const finishingRef = useRef(false);
   const aliveRef = useRef(true);
@@ -93,6 +95,7 @@ export function StepSorting({ data, headlineId, onDone, onStopped }: StepSorting
           preview={<PhotoFan urls={data.fanUrls} />}
           onDone={finish}
           onStop={onStopped}
+          onResume={onResumed}
         />
       </div>
     </div>

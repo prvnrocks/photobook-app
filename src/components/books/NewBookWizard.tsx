@@ -1,7 +1,8 @@
 "use client";
 // The book creation wizard on /books/new — one continuous 7-step wizard (M19 D-071, M20 D-072):
 // 1 title → 2 purpose → 3 shape → 4 style → 5 photos → 6 sorting → 7 review → editor.
-//   - The band, stepper, aside and this component stay mounted from step 1 to step 7; steps change in
+//   - The band, stepper, aside (steps 1–6; Review drops it for full width) and this component stay
+//     mounted from step 1 to step 7; steps change in
 //     place (document.startViewTransition via runViewTransition, CSS fallback — wizard-motion.css
 //     contract: data-step-anim / data-step-dir on the keyed step container). The only real
 //     navigation is the final move to the editor (window.location.assign).
@@ -590,7 +591,14 @@ export function NewBookWizard({ initialStep, mode, dashboardBack, initialData }:
           dispatch({ type: "goTo", step: n });
         }}
       />
-      <WizardBody wide aside={<WizardPreviewAside {...previewProps} />} asideBelowLg="hide">
+      {/* Step 7 (Review) drops the preview aside and uses the full library width (summary + captions
+          side by side on ≥ xl, a wide photo grid). The content column stays the same element, so the
+          step panel isn't remounted. */}
+      <WizardBody
+        wide={step === 7 ? "full" : true}
+        aside={step === 7 ? undefined : <WizardPreviewAside {...previewProps} />}
+        asideBelowLg="hide"
+      >
         {/* Phones / tablets: the mini preview stays mounted above the (keyed) step form on steps 1–4,
             so it animates between steps (shrinks after step 1, morphs on a shape change, opens on 4). */}
         {step <= FLOW_FORM_LAST_STEP ? (

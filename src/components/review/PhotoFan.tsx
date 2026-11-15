@@ -13,7 +13,7 @@
 import { Check, ImageIcon } from "lucide-react";
 import type { CSSProperties } from "react";
 
-/** Photo cards on top of the piles (FAN_PHOTOS signed thumbs today). */
+/** Photo cards on top of the piles (the wizard passes up to FAN_PHOTOS = 6 thumbs; 3–5 back them). */
 export const FAN_CARD_PHOTOS = 3;
 /** Cards drawn in total: photo cards + backing cards (extra photos if given, otherwise paper). */
 export const FAN_CARD_TOTAL = 6;

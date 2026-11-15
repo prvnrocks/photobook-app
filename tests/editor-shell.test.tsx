@@ -141,14 +141,26 @@ describe("toolbar registry", () => {
 
 describe("editor page data", () => {
   const book = { id: "b1" } as EditorData["book"];
-  it("redirects to build while a run is active, and for an empty doc", () => {
-    expect(editorRedirect({ book, activeBuildRunId: "r", docError: null, photos: [] })).toBe("/books/b1/build");
-    expect(editorRedirect({ book, activeBuildRunId: null, docError: "empty", photos: [] })).toBe("/books/b1/upload");
-    expect(
-      editorRedirect({ book, activeBuildRunId: null, docError: "empty", photos: [{} as EditorData["photos"][number]] }),
-    ).toBe("/books/b1/build");
-    expect(editorRedirect({ book, activeBuildRunId: null, docError: "invalid", photos: [] })).toBeNull();
-    expect(editorRedirect({ book, activeBuildRunId: null, docError: null, photos: [] })).toBeNull();
+  const photo = {} as EditorData["photos"][number];
+  const base = { book, activeBuildRunId: null, docError: "empty" as const, photos: [], hasBuildRun: false, aiMode: "live" as const };
+  it("redirects to build while a run is active (first build or rebuild — /build decides)", () => {
+    expect(editorRedirect({ ...base, activeBuildRunId: "r", docError: null })).toBe("/books/b1/build");
+    expect(editorRedirect({ ...base, activeBuildRunId: "r", photos: [photo] })).toBe("/books/b1/build");
+  });
+  it("fresh book with no album → straight into the wizard (one hop)", () => {
+    expect(editorRedirect(base)).toBe("/books/new?book=b1&step=5");
+    expect(editorRedirect({ ...base, photos: [photo] })).toBe("/books/new?book=b1&step=6");
+    expect(editorRedirect({ ...base, photos: [photo], aiMode: "replay" })).toBe("/books/new?book=b1&step=6");
+  });
+  it("built before / AI off → classic upload or build pages", () => {
+    expect(editorRedirect({ ...base, hasBuildRun: true })).toBe("/books/b1/upload");
+    expect(editorRedirect({ ...base, hasBuildRun: true, photos: [photo] })).toBe("/books/b1/build");
+    expect(editorRedirect({ ...base, aiMode: "off" })).toBe("/books/new?book=b1&step=5");
+    expect(editorRedirect({ ...base, aiMode: "off", photos: [photo] })).toBe("/books/b1/build");
+  });
+  it("a doc (valid or invalid) opens the editor", () => {
+    expect(editorRedirect({ ...base, docError: "invalid" })).toBeNull();
+    expect(editorRedirect({ ...base, docError: null })).toBeNull();
   });
 
   it("maps loader data to serializable shell props (null for no doc)", () => {

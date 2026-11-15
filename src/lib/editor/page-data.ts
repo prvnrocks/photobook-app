@@ -4,21 +4,27 @@
 import type { EditorData } from "@/lib/db/editor";
 import { freeLinkState } from "@/lib/publish/free-link";
 import { albumEditedByUser } from "@/lib/review/ui";
+import { wizardStepHref } from "@/lib/books/wizard-routes";
 import { editorAiPath } from "./ai-path";
 import type { EditorShellData } from "./types";
 
 /**
  * Where the editor must send the user instead of opening:
- * - an AI build/rebuild is running → its progress page;
- * - no album yet → upload (no photos) or build (photos uploaded; same as the upload page's
- *   "Continue" in UploadSummary).
+ * - an AI build/rebuild is running → its progress page (only /build can tell a rebuild, which stays
+ *   classic, from a first build, which it redirects into the wizard — same as the dashboard card);
+ * - no album yet and never built (fresh book, M20 D-072) → straight into the wizard, one hop:
+ *   no photos → step 5, photos uploaded + AI on → step 6 (the wizard's gate moves it on);
+ * - no album yet otherwise (a build ran before, or AI off) → the classic upload / build pages.
  * null = open the editor (or the invalid-doc state).
  */
-export function editorRedirect(data: Pick<EditorData, "book" | "activeBuildRunId" | "docError" | "photos">): string | null {
+export function editorRedirect(
+  data: Pick<EditorData, "book" | "activeBuildRunId" | "docError" | "photos" | "hasBuildRun" | "aiMode">,
+): string | null {
   const id = data.book.id;
   if (data.activeBuildRunId) return `/books/${id}/build`;
-  if (data.docError === "empty") return data.photos.length === 0 ? `/books/${id}/upload` : `/books/${id}/build`;
-  return null;
+  if (data.docError !== "empty") return null;
+  if (data.photos.length === 0) return data.hasBuildRun ? `/books/${id}/upload` : wizardStepHref(id, 5);
+  return data.hasBuildRun || data.aiMode === "off" ? `/books/${id}/build` : wizardStepHref(id, 6);
 }
 
 /**

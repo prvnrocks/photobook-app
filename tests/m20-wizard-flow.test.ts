@@ -351,6 +351,20 @@ describe("steps 6–7", () => {
     expect(run(uploading(), { type: "buildStopped", reason: "failed" }).stop).toBeNull();
   });
 
+  it("buildResumed (Try again) clears the stop flag on step 6 only", () => {
+    const stopped = run(sorting(), { type: "buildStopped", reason: "failed" });
+    const resumed = transition(stopped, { type: "buildResumed" });
+    expect(resumed.state).toMatchObject({ step: 6, stop: null });
+    expect(resumed.effect).toEqual({ kind: "none" });
+    // A later stop is recorded again.
+    expect(run(resumed.state, { type: "buildStopped", reason: "unavailable" }).stop).toBe("unavailable");
+    // No stop → same state object; other steps untouched.
+    const s6 = sorting();
+    expect(transition(s6, { type: "buildResumed" }).state).toBe(s6);
+    const r7 = reviewing();
+    expect(transition(r7, { type: "buildResumed" }).state).toBe(r7);
+  });
+
   it("continue on 6 does nothing; on 7 asks to confirm", () => {
     expect(transition(sorting(), { type: "continue" })).toMatchObject({ effect: { kind: "none" } });
     expect(transition(sorting(), { type: "continue" }).intent).toBeUndefined();

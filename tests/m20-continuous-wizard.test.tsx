@@ -351,6 +351,8 @@ describe("auto-start outcome → step 6 / 7 / editor", () => {
     expect(url()).toBe(`/books/new?book=${BOOK}&step=6`);
     expect(window.history.state).toMatchObject({ wizardStep: 6, wizardPrev: 5 }); // pushed
     const len = window.history.length;
+    const content = $("wizard-content");
+    expect($("wizard-aside")).toBeTruthy(); // sorting keeps the live preview aside
     expect(wizardFetches()).toEqual([`/api/books/${BOOK}/wizard?step=6&auto=1`]);
     expect($("stub-sorting").getAttribute("data-auto")).toBe("true");
 
@@ -359,6 +361,10 @@ describe("auto-start outcome → step 6 / 7 / editor", () => {
     expect(shownStep()).toBe("7");
     expect(url()).toBe(`/books/new?book=${BOOK}&step=7`);
     expect(window.history.length).toBe(len); // sorting replaced
+    // Review drops the aside and takes the full library width — same content column node.
+    expect($("wizard-aside")).toBeNull();
+    expect($("wizard-content")).toBe(content);
+    expect($("wizard-content").className).not.toContain("max-w-");
     expect($("stub-review").getAttribute("data-kept")).toBe("9");
     expect(assign).not.toHaveBeenCalled();
 

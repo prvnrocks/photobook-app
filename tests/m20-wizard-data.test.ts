@@ -336,8 +336,8 @@ describe("loadWizardStep — step 6 (build page parity)", () => {
     const d = await loadWizardStep(BOOK_ID, 6, { auto: true });
     expect(Object.keys(d!).sort()).toEqual([...BASE_KEYS, "activeRunId", "readError", "trigger", "dailyCap", "auto", "fanUrls"].sort());
     expect(d).toMatchObject({ step: 6, activeRunId: RUN_ID, readError: false, trigger: "build", auto: true, resolved: 6 });
-    expect((d as { fanUrls: string[] }).fanUrls).toHaveLength(3);
-    // Only the draft's first photos are loaded + signed (FAN_PHOTOS * 2 at most).
+    expect((d as { fanUrls: string[] }).fanUrls).toHaveLength(6);
+    // Only the draft's first photos are loaded + signed (FAN_PHOTOS = 6 at most).
     const ids = mocks.listReviewPhotos.mock.calls[0][1] as string[];
     expect(ids.length).toBeLessThanOrEqual(6);
   });

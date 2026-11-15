@@ -267,8 +267,11 @@ describe("stop states → calm card + buildStopped", () => {
     expect(dispatch).toHaveBeenCalledWith({ type: "buildStopped", reason: "failed" });
     expect(mocks.track).toHaveBeenCalledWith("ai_build_done", expect.objectContaining({ mode: "ai", outcome: "failed", auto: true }));
     mocks.startRun.mockImplementation(never);
+    expect(dispatch).not.toHaveBeenCalledWith({ type: "buildResumed" });
     act(() => ($("build-retry") as HTMLButtonElement).click());
     expect($("build-progress")).not.toBeNull();
+    // The flow's stop flag is cleared once (wizard-flow buildResumed).
+    expect(dispatch.mock.calls.filter(([a]) => a.type === "buildResumed")).toHaveLength(1);
   });
 
   it("every classic stop maps to a flow reason", () => {

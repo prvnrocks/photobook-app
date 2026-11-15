@@ -287,6 +287,8 @@ describe("WizardBody", () => {
     expect(tagOf(renderToStaticMarkup(<WizardBody wide>x</WizardBody>), "wizard-content")).toContain("max-w-[52rem]");
     expect(tagOf(renderToStaticMarkup(<WizardBody>x</WizardBody>), "wizard-content")).toContain("max-w-[28rem]");
     expect(renderToStaticMarkup(<WizardBody>x</WizardBody>)).not.toContain("<aside");
+    // wide="full" (step 7 Review): the whole library width.
+    expect(tagOf(renderToStaticMarkup(<WizardBody wide="full">x</WizardBody>), "wizard-content")).not.toContain("max-w-");
   });
 
   it("two columns on ≥ lg with an aside; clipped horizontally", () => {

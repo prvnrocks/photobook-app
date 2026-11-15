@@ -68,6 +68,8 @@ export type BuildProgressProps = {
   onDone?: () => void;
   /** M20 T7: a stop state was reached (wizard reports it to the flow as buildStopped). */
   onStop?: (reason: BuildStopReason) => void;
+  /** M20: running again after a reported stop ("Try again" / auto-resume) → wizard dispatches buildResumed. */
+  onResume?: () => void;
 };
 
 /** Wizard: a calm hint once sorting has taken this long (exported for tests). Copy only — not progress. */
@@ -167,6 +169,7 @@ export function BuildProgress({
   variant = "default",
   onDone,
   onStop,
+  onResume,
 }: BuildProgressProps) {
   const router = useRouter();
   const editorHref = `/books/${bookId}/edit`;
@@ -216,13 +219,23 @@ export function BuildProgress({
   }, [router, editorHref]);
 
   // M20 T7: report stop states (once per status change) — the wizard dispatches buildStopped.
+  // A run that starts again after a reported stop ("Try again", back online) reports onResume once.
   const onStopRef = useRef(onStop);
+  const onResumeRef = useRef(onResume);
   useEffect(() => {
     onStopRef.current = onStop;
+    onResumeRef.current = onResume;
   });
+  const stoppedRef = useRef(false);
   useEffect(() => {
     const reason = stopReasonOf(status);
-    if (reason) onStopRef.current?.(reason);
+    if (reason) {
+      stoppedRef.current = true;
+      onStopRef.current?.(reason);
+    } else if (status.kind === "running" && stoppedRef.current) {
+      stoppedRef.current = false;
+      onResumeRef.current?.();
+    }
   }, [status]);
 
   const run = useCallback(

@@ -71,6 +71,8 @@ export type FlowAction =
   | { type: "runStarted" }
   | { type: "buildDone" }
   | { type: "buildStopped"; reason: BuildStopReason }
+  /** Step 6: the build runs again after a stop ("Try again" / auto-resume) → clears the stop flag. */
+  | { type: "buildResumed" }
   /** confirmAlbumAction succeeded on step 7. */
   | { type: "confirm" };
 
@@ -308,6 +310,11 @@ export function transition(state: FlowState, action: FlowAction): FlowResult {
     case "buildStopped": {
       if (state.step !== 6) return { state, effect: NONE };
       return { state: { ...state, stop: action.reason }, effect: NONE };
+    }
+
+    case "buildResumed": {
+      if (state.step !== 6 || state.stop === null) return { state, effect: NONE };
+      return { state: { ...state, stop: null }, effect: NONE };
     }
 
     case "confirm": {

@@ -65,12 +65,13 @@ export function draftDoc(raw: unknown): BookDoc | null {
 }
 
 /**
- * Photo fan of the wizard build step: the draft's first photos (cover first) as signed 512 px
- * thumbs. A few spares are signed in case some aren't. No draft / a read error → [].
+ * Photo fan of the wizard build step: the draft's first FAN_PHOTOS photos (cover first) as signed
+ * 512 px thumbs — at most FAN_PHOTOS are read + signed (unsigned ones become paper cards). No draft /
+ * a read error → [].
  */
 export async function loadFanUrls(bookId: string, doc: BookDoc | null): Promise<string[]> {
   if (!doc) return [];
-  const wanted = draftPreviewPhotoIds(doc, draftPreviewItems(doc)).slice(0, FAN_PHOTOS * 2);
+  const wanted = draftPreviewPhotoIds(doc, draftPreviewItems(doc)).slice(0, FAN_PHOTOS);
   const photos = await listReviewPhotos(bookId, wanted).catch(() => null);
   return photos ? fanPhotoUrls(wanted, photos) : [];
 }

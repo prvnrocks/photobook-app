@@ -276,118 +276,125 @@ export function StepReview({ data: initial, headlineId, onConfirm, confirming = 
         </Notice>
       ) : null}
 
-      {/* Hero: the cover as a book + the summary. */}
-      <section
-        className="rv-hero relative overflow-hidden rounded-[1.75rem] border border-border/70 bg-[radial-gradient(120%_85%_at_30%_10%,#fdfaf3_0%,#f3ecdd_60%,#e9dfca_100%)] p-5 shadow-card sm:p-7"
-        aria-labelledby="review-summary-heading"
-        data-testid="review-summary"
+      {/* Summary + caption cards: stacked below xl, side by side on ≥ xl (step 7 has the full
+          library width — no preview aside). */}
+      <div
+        className={cx("grid min-w-0 grid-cols-1 gap-6 sm:gap-8", picks.length > 0 && "xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] xl:items-start")}
+        data-testid="review-top"
       >
-        <div className="grid min-w-0 grid-cols-1 items-center gap-6 sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)] sm:gap-8 xl:grid-cols-[minmax(0,13rem)_minmax(0,1fr)]">
-          <ReviewCover thumb={cover} title={data.title} portrait={portrait} captionLang={data.captionLang} />
+        {/* Hero: the cover as a book + the summary. */}
+        <section
+          className="rv-hero relative overflow-hidden rounded-[1.75rem] border border-border/70 bg-[radial-gradient(120%_85%_at_30%_10%,#fdfaf3_0%,#f3ecdd_60%,#e9dfca_100%)] p-5 shadow-card sm:p-7"
+          aria-labelledby="review-summary-heading"
+          data-testid="review-summary"
+        >
+          <div className="grid min-w-0 grid-cols-1 items-center gap-6 sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)] sm:gap-8 xl:grid-cols-[minmax(0,13rem)_minmax(0,1fr)]">
+            <ReviewCover thumb={cover} title={data.title} portrait={portrait} captionLang={data.captionLang} />
 
-          <div className="flex min-w-0 flex-col gap-4">
-            <div className="min-w-0">
-              <p className="text-[0.7rem] font-semibold tracking-[0.24em] text-accent-text uppercase">
-                {data.aiUsed ? "Your AI draft" : "Your draft"}
-              </p>
-              <h2 id="review-summary-heading" className="mt-2 font-display text-[1.75rem] leading-tight text-heading sm:text-[2.1rem]">
-                <span aria-hidden="true" className="rv-counter" data-testid="review-kept-visual">
-                  {data.aiUsed ? "AI kept " : ""}
-                  <span className="rv-num tabular-nums text-success">{shownKept}</span>
-                  {` of ${total} photos`}
-                  {data.aiUsed ? "" : " in your book"}
-                </span>
-                <span className="sr-only" data-testid="review-kept">
-                  {heroCountCopy(data.aiUsed, kept, total)}
-                </span>
-              </h2>
-              <p className="mt-2 type-small text-muted-foreground" data-testid="review-subline">
-                {heroSubline(data.aiUsed)}
-              </p>
-            </div>
+            <div className="flex min-w-0 flex-col gap-4">
+              <div className="min-w-0">
+                <p className="text-[0.7rem] font-semibold tracking-[0.24em] text-accent-text uppercase">
+                  {data.aiUsed ? "Your AI draft" : "Your draft"}
+                </p>
+                <h2 id="review-summary-heading" className="mt-2 font-display text-[1.75rem] leading-tight text-heading sm:text-[2.1rem]">
+                  <span aria-hidden="true" className="rv-counter" data-testid="review-kept-visual">
+                    {data.aiUsed ? "AI kept " : ""}
+                    <span className="rv-num tabular-nums text-success">{shownKept}</span>
+                    {` of ${total} photos`}
+                    {data.aiUsed ? "" : " in your book"}
+                  </span>
+                  <span className="sr-only" data-testid="review-kept">
+                    {heroCountCopy(data.aiUsed, kept, total)}
+                  </span>
+                </h2>
+                <p className="mt-2 type-small text-muted-foreground" data-testid="review-subline">
+                  {heroSubline(data.aiUsed)}
+                </p>
+              </div>
 
-            {pages > 0 || chapters.length > 0 ? (
-              <ul className="flex flex-wrap gap-2" aria-label="Album at a glance" data-testid="review-stats">
-                {pages > 0 ? <Stat>{pagesCopy(pages)}</Stat> : null}
-                {chapters.length > 0 ? <Stat>{chapters.length === 1 ? "1 moment" : `${chapters.length} moments`}</Stat> : null}
-                {picks.length > 0 ? <Stat>Captions written</Stat> : null}
-              </ul>
-            ) : null}
+              {pages > 0 || chapters.length > 0 ? (
+                <ul className="flex flex-wrap gap-2" aria-label="Album at a glance" data-testid="review-stats">
+                  {pages > 0 ? <Stat>{pagesCopy(pages)}</Stat> : null}
+                  {chapters.length > 0 ? <Stat>{chapters.length === 1 ? "1 moment" : `${chapters.length} moments`}</Stat> : null}
+                  {picks.length > 0 ? <Stat>Captions written</Stat> : null}
+                </ul>
+              ) : null}
 
-            {chapters.length > 0 ? (
-              <ol className="rv-stagger flex min-w-0 flex-col gap-1.5" aria-label="Moments in your book" data-testid="review-chapters">
-                {chapters.slice(0, CHAPTERS_SHOWN).map((c, i) => (
-                  <li
-                    key={i}
-                    style={{ "--rv-d": i } as CSSProperties}
-                    className="flex min-w-0 items-baseline gap-3 rounded-xl bg-card/70 px-3 py-2"
-                    data-testid="review-chapter"
-                  >
-                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground tabular-nums" aria-hidden="true">
-                      {i + 1}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      {c.title ? (
-                        <span dir="auto" className={cx("block break-words font-medium text-foreground", data.captionLang === "ar" && "font-arabic")}>
-                          {c.title}
-                        </span>
-                      ) : null}
-                      <span className="block text-xs text-muted-foreground">
-                        {c.dateLabel ? <span dir="auto">{c.dateLabel}</span> : null}
-                        {c.dateLabel && c.pages > 0 ? " · " : null}
-                        {c.pages > 0 ? pagesCopy(c.pages) : null}
+              {chapters.length > 0 ? (
+                <ol className="rv-stagger flex min-w-0 flex-col gap-1.5" aria-label="Moments in your book" data-testid="review-chapters">
+                  {chapters.slice(0, CHAPTERS_SHOWN).map((c, i) => (
+                    <li
+                      key={i}
+                      style={{ "--rv-d": i } as CSSProperties}
+                      className="flex min-w-0 items-baseline gap-3 rounded-xl bg-card/70 px-3 py-2"
+                      data-testid="review-chapter"
+                    >
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground tabular-nums" aria-hidden="true">
+                        {i + 1}
                       </span>
-                    </span>
-                  </li>
-                ))}
-                {chapters.length > CHAPTERS_SHOWN ? (
-                  <li style={{ "--rv-d": CHAPTERS_SHOWN } as CSSProperties} className="px-3 text-xs text-muted-foreground">
-                    and {chapters.length - CHAPTERS_SHOWN} more
-                  </li>
-                ) : null}
-              </ol>
-            ) : null}
-          </div>
-        </div>
-      </section>
-
-      {picks.length > 0 ? (
-        <section className="flex min-w-0 flex-col gap-3" aria-labelledby="review-captions-heading" data-testid="review-captions">
-          <h2 id="review-captions-heading" className="type-h2 text-heading">
-            A taste of the captions
-          </h2>
-          <ul className="rv-stagger grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
-            {picks.map((p, i) => (
-              <li
-                key={i}
-                style={{ "--rv-d": i + 2 } as CSSProperties}
-                className="relative flex min-w-0 flex-col gap-2 rounded-2xl border border-border/70 bg-card p-4 shadow-card"
-                data-testid="review-caption"
-              >
-                <span aria-hidden="true" className="font-display text-3xl leading-none text-accent-strong">
-                  “
-                </span>
-                <p
-                  dir="auto"
-                  lang={p.lang}
-                  className={cx("break-words text-base text-foreground", p.arabicFont ? "font-arabic" : "font-display italic")}
-                  data-testid="review-caption-text"
-                >
-                  {p.text}
-                </p>
-                <p className="mt-auto flex min-w-0 flex-col text-xs text-muted-foreground">
-                  {p.chapter ? (
-                    <span dir="auto" className={cx("truncate font-medium text-foreground/80", p.arabicFont && "font-arabic")}>
-                      {p.chapter}
-                    </span>
+                      <span className="min-w-0 flex-1">
+                        {c.title ? (
+                          <span dir="auto" className={cx("block break-words font-medium text-foreground", data.captionLang === "ar" && "font-arabic")}>
+                            {c.title}
+                          </span>
+                        ) : null}
+                        <span className="block text-xs text-muted-foreground">
+                          {c.dateLabel ? <span dir="auto">{c.dateLabel}</span> : null}
+                          {c.dateLabel && c.pages > 0 ? " · " : null}
+                          {c.pages > 0 ? pagesCopy(c.pages) : null}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                  {chapters.length > CHAPTERS_SHOWN ? (
+                    <li style={{ "--rv-d": CHAPTERS_SHOWN } as CSSProperties} className="px-3 text-xs text-muted-foreground">
+                      and {chapters.length - CHAPTERS_SHOWN} more
+                    </li>
                   ) : null}
-                  <span>{captionSourceLabel(p.source)}</span>
-                </p>
-              </li>
-            ))}
-          </ul>
+                </ol>
+              ) : null}
+            </div>
+          </div>
         </section>
-      ) : null}
+
+        {picks.length > 0 ? (
+          <section className="flex min-w-0 flex-col gap-3" aria-labelledby="review-captions-heading" data-testid="review-captions">
+            <h2 id="review-captions-heading" className="type-h2 text-heading">
+              A taste of the captions
+            </h2>
+            <ul className="rv-stagger grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3 xl:grid-cols-1">
+              {picks.map((p, i) => (
+                <li
+                  key={i}
+                  style={{ "--rv-d": i + 2 } as CSSProperties}
+                  className="relative flex min-w-0 flex-col gap-2 rounded-2xl border border-border/70 bg-card p-4 shadow-card"
+                  data-testid="review-caption"
+                >
+                  <span aria-hidden="true" className="font-display text-3xl leading-none text-accent-strong">
+                    “
+                  </span>
+                  <p
+                    dir="auto"
+                    lang={p.lang}
+                    className={cx("break-words text-base text-foreground", p.arabicFont ? "font-arabic" : "font-display italic")}
+                    data-testid="review-caption-text"
+                  >
+                    {p.text}
+                  </p>
+                  <p className="mt-auto flex min-w-0 flex-col text-xs text-muted-foreground">
+                    {p.chapter ? (
+                      <span dir="auto" className={cx("truncate font-medium text-foreground/80", p.arabicFont && "font-arabic")}>
+                        {p.chapter}
+                      </span>
+                    ) : null}
+                    <span>{captionSourceLabel(p.source)}</span>
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+      </div>
 
       <div inert={working} className={cx("min-w-0 rounded-[1.75rem] border border-border/70 bg-card p-4 shadow-card sm:p-6", working && "opacity-70")}>
         {data.photos.length === 0 ? (
@@ -405,7 +412,7 @@ export function StepReview({ data: initial, headlineId, onConfirm, confirming = 
             undo
             onToggle={(photo, keep) => flyTile(rootRef.current, photo, keep)}
             title="Your photos"
-            gridClassName="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5 2xl:grid-cols-6"
+            gridClassName="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10"
             toastClassName="bottom-[calc(7rem+env(safe-area-inset-bottom))] sm:bottom-32"
           />
         )}

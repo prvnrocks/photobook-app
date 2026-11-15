@@ -55,8 +55,11 @@ export function draftPreviewPhotos(wanted: readonly string[], photos: readonly D
   return out;
 }
 
-/** Photos on the wizard's "Sorting your photos" fan (M19 T7, D-071). */
-export const FAN_PHOTOS = 3;
+/**
+ * Photos on the wizard's "Sorting your photos" fan (M19 T7, D-071; M20: all 6 PhotoFan cards are
+ * real photos). Also the cap on thumbs read + signed for it. Wizard step 6 only (loadFanUrls).
+ */
+export const FAN_PHOTOS = 6;
 
 /**
  * Up to `n` signed thumb URLs for the fan, in the draft's order (cover photo first), skipping
