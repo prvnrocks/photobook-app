@@ -5,7 +5,8 @@
 //                                  the client (sessionStorage mirror).
 //   /books/new?book=<id>&step=N  — an existing draft (edit mode), prefilled from the book.
 //     N = 5–7: loadWizardStep + its gate (resolveWizardStep, G2/G3) pick the step and its data:
-//              user-edited → the editor; running rebuild / AI off → the classic build page; another
+//              user-edited → the editor; running rebuild → the classic build page (AI off runs
+//              steps 6–7 like AI, M20b); another
 //              step (e.g. 5 asked, the build is running → 6, finished → 7) → rendered directly.
 //     N = 1–4: while the details can still change (D-070 rules) → steps 1–4; once locked → where the
 //              gate sends the book (6 / 7 / editor / classic build).

@@ -20,11 +20,13 @@ export type StepPhotosProps = {
   onPhotosPicked: () => void;
   /** The automatic first build answered with a "move on" outcome (after the success burst). */
   onAdvance: (outcome: AutoStartOutcome) => void;
+  /** M20b: the success burst ended before the answer → step 6 now, with the pending answer. */
+  onAdvancePending: (answer: Promise<AutoStartOutcome>) => void;
   /** Fallback "Make my book now" → step 6, where the build starts. */
   onBuildNow: () => void;
 };
 
-export function StepPhotos({ data, headlineId, onBack, onPhotosPicked, onAdvance, onBuildNow }: StepPhotosProps) {
+export function StepPhotos({ data, headlineId, onBack, onPhotosPicked, onAdvance, onAdvancePending, onBuildNow }: StepPhotosProps) {
   return (
     <div className="mx-auto flex w-full max-w-[40rem] min-w-0 flex-col lg:mx-0" data-testid="wizard-step-photos">
       <WizardHeadline id={headlineId} focusable align="start-lg">
@@ -52,6 +54,7 @@ export function StepPhotos({ data, headlineId, onBack, onPhotosPicked, onAdvance
           onBack={onBack}
           onPhotosPicked={onPhotosPicked}
           onAdvance={onAdvance}
+          onAdvancePending={onAdvancePending}
           onBuildNow={onBuildNow}
         />
       </div>

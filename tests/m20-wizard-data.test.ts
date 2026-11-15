@@ -169,9 +169,9 @@ describe("resolveWizardStep (G2 + G3)", () => {
     expect(g({ requested: 7, docOrigin: { generator: "rule", userEdited: false } })).toBe(6);
   });
 
-  it("no run + AI off: requested ≥6 → classic build screen; ≤5 unchanged", () => {
-    expect(g({ requested: 6, aiOn: false })).toBe("classic");
-    expect(g({ requested: 7, aiOn: false })).toBe("classic");
+  it("M20b: no run + AI off: requested ≥6 → 6 (the first rule build runs in the wizard); ≤5 unchanged", () => {
+    expect(g({ requested: 6, aiOn: false })).toBe(6);
+    expect(g({ requested: 7, aiOn: false })).toBe(6);
     expect(g({ requested: 3, aiOn: false })).toBe(3);
   });
 
@@ -182,9 +182,11 @@ describe("resolveWizardStep (G2 + G3)", () => {
     }
   });
 
-  it("active rebuild or AI off → classic build screen", () => {
+  it("active rebuild → classic build screen; M20b: an active AI-off first build → 6, a finished one → 7", () => {
     expect(g({ requested: 6, hasRun: true, active: true, activeTrigger: "rebuild", detailsLock: "ai_started" })).toBe("classic");
-    expect(g({ requested: 6, hasRun: true, active: true, aiOn: false, detailsLock: "ai_started" })).toBe("classic");
+    expect(g({ requested: 6, hasRun: true, active: true, aiOn: false, detailsLock: "ai_started" })).toBe(6);
+    expect(g({ requested: 6, hasRun: true, aiOn: false, detailsLock: "ai_started" })).toBe(7);
+    expect(g({ requested: 7, hasRun: true, aiOn: false, detailsLock: "ai_started" })).toBe(7);
   });
 
   it("finished run, not user-edited → 7 for every requested step", () => {
@@ -217,7 +219,7 @@ describe("resolveWizardStep (G2 + G3)", () => {
     expect(g({ requested: 6, readError: true })).toBe(6);
     expect(g({ requested: 7, readError: true })).toBe(6);
     expect(g({ requested: 4, readError: true, detailsLock: "ai_started" })).toBe(6);
-    expect(g({ requested: 7, readError: true, aiOn: false })).toBe("classic");
+    expect(g({ requested: 7, readError: true, aiOn: false })).toBe(6); // M20b: AI off too
     // a known active run still wins over a partial read error
     expect(g({ requested: 2, readError: true, active: true, hasRun: true })).toBe(6);
   });

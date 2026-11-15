@@ -12,6 +12,12 @@ export const STAGE_MAX_THUMBS = 12;
 export const STALL_MS = 20_000;
 /** Success burst length before onSettled fires (0 when the user prefers reduced motion). */
 export const SETTLE_MS = 1400;
+/**
+ * M20b: how long the auto-start request may run before the wizard hands it over still pending (the
+ * stage then moves to step 6 and step 6 follows the answer). A quick answer — a live / replay run
+ * created, or a limit / error fallback that keeps "Make my book now" on step 5 — lands within this.
+ */
+export const HANDOVER_GRACE_MS = 1000;
 
 /** Stage box aspect = width / height. */
 const STAGE_ASPECT = 5 / 4;

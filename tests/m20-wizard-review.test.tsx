@@ -158,7 +158,7 @@ describe("step 7 review — summary", () => {
   it("AI off: honest wording and the ai_off banner; Arabic book uses the Arabic font for chapters", () => {
     render(step7({ aiUsed: false, banner: "ai_off", captionLang: "ar" }));
     expect($("review-kept")?.textContent).toBe("3 of 5 photos in your book");
-    expect($("review-subline")?.textContent).toContain("simple rules and laid them out by date");
+    expect($("review-subline")?.textContent).toContain("We sorted these by date and place");
     expect($("review-banner-ai_off")?.textContent).toContain("AI isn't switched on yet");
     expect($$("review-chapter")[0].querySelector("[dir=auto]")?.className).toContain("font-arabic");
     expect(container.textContent).not.toContain("AI kept");

@@ -5,7 +5,7 @@
 // screen's next step. Pure apart from fetch; no React, no server imports — unit-tested in node.
 // Only the book id travels; nothing about photos is sent or logged.
 
-import type { RunLimit, RunMode, RunState } from "@/lib/runs/client";
+import type { RunLimit, RunMode, RunState, StartOutcome } from "@/lib/runs/client";
 import { isUuid } from "@/lib/uuid";
 
 /** Mirrors AUTO_BUILD_MIN_READY_PHOTOS (server); below it the client doesn't ask. */
@@ -91,6 +91,56 @@ export async function requestAutoBuild(
   if (res.status === 429) return { kind: "limit", limit: oneOf(LIMITS, body?.limit) ? body.limit : "daily_builds" };
   if (res.status === 401) return { kind: "signed_out" };
   return { kind: "error" };
+}
+
+/**
+ * requestAutoBuild plus the one not_ready retry (after NOT_READY_RETRY_MS), as ONE promise that never
+ * rejects and doesn't depend on the upload screen staying mounted (M20b): the wizard hands it to
+ * step 6 when the upload success moment ends before the answer arrives. The final answer is "after
+ * the retry" for autoStartNext (`retried: true`) — a second not_ready means the fallback.
+ */
+export async function requestAutoBuildSettled(
+  bookId: string,
+  opts: { fetchImpl?: FetchLike; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<AutoStartOutcome> {
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  try {
+    const first = await requestAutoBuild(bookId, { fetchImpl: opts.fetchImpl });
+    if (first.kind !== "not_ready") return first;
+    await sleep(NOT_READY_RETRY_MS);
+    return await requestAutoBuild(bookId, { fetchImpl: opts.fetchImpl });
+  } catch {
+    return { kind: "error" };
+  }
+}
+
+/**
+ * How wizard step 6 starts from a handed-over auto-start answer (M20b), instead of POSTing itself:
+ * the run's start outcome (started / already_running / user_edited / limit / signed_out), or
+ *   "finished" — the first run already exists and isn't running (not_first): go on to Review;
+ *   "restart"  — no run came of it (not_ready twice, error, already_running without an id): step 6
+ *                starts the build itself, exactly like the "Make my book now" fallback.
+ */
+export type HandoverStart = StartOutcome | { kind: "finished" } | { kind: "restart" };
+
+export function handoverStart(outcome: AutoStartOutcome): HandoverStart {
+  switch (outcome.kind) {
+    case "started":
+      return { kind: "started", runId: outcome.runId, mode: outcome.mode, state: outcome.state };
+    case "already_running":
+      return outcome.runId ? { kind: "already_running", runId: outcome.runId } : { kind: "restart" };
+    case "user_edited":
+      return { kind: "user_edited" };
+    case "limit":
+      return { kind: "limit", limit: outcome.limit };
+    case "signed_out":
+      return { kind: "signed_out" };
+    case "not_first":
+      return { kind: "finished" };
+    case "not_ready":
+    case "error":
+      return { kind: "restart" };
+  }
 }
 
 /** Where the book stood when the upload screen loaded. */

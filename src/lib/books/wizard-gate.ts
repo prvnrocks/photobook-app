@@ -9,7 +9,8 @@ export type WizardRequestStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 /**
  * Where to go: a wizard step, the editor (user-edited album), or "classic" — the non-wizard build
- * screen (/books/[id]/build): a running rebuild, or a build with AI switched off (isWizardBuild).
+ * screen (/books/[id]/build): only a running rebuild. M20b: a first build with AI switched off (the
+ * rule build) runs in the wizard too — steps 6 Sorting and 7 Review in every AI mode.
  */
 export type WizardTarget = WizardRequestStep | "editor" | "classic";
 
@@ -37,7 +38,10 @@ export type WizardGateInput = {
    * a user caption or a user background; an unparsable doc counts as edited).
    */
   docOrigin: { generator: "ai" | "rule" | "none"; userEdited: boolean };
-  /** resolveAiMode() !== "off". Default true. AI off → the classic build screen, never step 6. */
+  /**
+   * resolveAiMode() !== "off". Informational since M20b: AI off no longer changes the answer (a first
+   * rule build shows step 6 / 7 like an AI build; only a running rebuild is "classic").
+   */
   aiOn?: boolean;
 };
 
@@ -49,8 +53,8 @@ function clampStep(n: number): WizardRequestStep {
 /**
  * G3 + G2 decision table (first match wins):
  *  1. user-edited album                         → "editor" (the wizard never shows an edited book)
- *  2. active run                                → 6 ("classic" for a rebuild or AI off) — resume,
- *                                                 never start a 2nd run
+ *  2. active run                                → 6 ("classic" for a rebuild) — resume, never
+ *                                                 start a 2nd run (AI off too, M20b)
  *  3. run read error                            → requested ≤5 with details unlocked: requested
  *                                                 (the upload page's "unknown = no run");
  *                                                 otherwise 6 (today's build-page POST path)
@@ -58,13 +62,13 @@ function clampStep(n: number): WizardRequestStep {
  *  5. no run but details locked (an AI album whose run row is gone) → 7
  *  6. no run, requested ≤5                      → requested (steps 1–5 still editable)
  *  7. no run, requested ≥6                      → 6 (may start the first build via the existing
- *                                                 auto-build / build POST path; "classic" when AI off)
+ *                                                 auto-build / build POST path; a rule run when AI off)
  * Steps 1–4 locking once a photo is picked (G2 first half) is client state — wizard-flow.ts.
  */
 export function resolveWizardStep(input: WizardGateInput): WizardTarget {
   const requested = clampStep(input.requested);
-  const aiOn = input.aiOn !== false;
-  const buildScreen: WizardTarget = aiOn ? 6 : "classic";
+  // M20b: the sorting step for every first build, AI on or off (only rebuilds stay classic).
+  const buildScreen: WizardTarget = 6;
 
   if (input.docOrigin.userEdited || input.detailsLock === "user_edited") return "editor";
   if (input.active) return input.activeTrigger === "rebuild" ? "classic" : buildScreen;

@@ -489,11 +489,13 @@ function armAutoGate() {
 async function uploadAndWaitSummary(files: FileSpec[], expected: number) {
   armAutoGate();
   await page.getByTestId("upload-input").setInputFiles(files);
-  // M20 (D-072): in the wizard the upload stage stays up through finalize and the (held) auto start —
-  // settled ("All photos are in" + "Sorting next…"), no summary flash. Count the ready rows instead.
+  // M20 (D-072): in the wizard the upload stage stays up through finalize — settled ("All photos are
+  // in"), no summary flash. M20b: after the success burst the wizard moves on to step 6 even while
+  // the auto start is held (the upload screen never shows sorting); step 6 follows the held answer.
   await expect(page.getByTestId("upload-settled")).toBeVisible({ timeout: 180_000 });
-  await expect(page.getByTestId("upload-sorting-next")).toBeVisible();
   await expect(page.getByTestId("finalize-error")).toHaveCount(0);
+  await page.waitForURL(/\/books\/new\?book=[0-9a-f-]{36}&step=6$/, { timeout: 60_000 });
+  await expect(page.getByTestId("wizard-step-sorting")).toBeVisible();
   const bookId = new URL(page.url()).searchParams.get("book") ?? "";
   await expect
     .poll(async () => (await photoRows(bookId)).filter((r) => r.upload_state === "ready").length, { timeout: 60_000 })
@@ -1542,14 +1544,15 @@ test("d. refusal scenario: rule album, failed/partial banner, Try AI again", asy
   );
 });
 
-test("e. AI off: Build my album → straight to review, rule album, ai_off banner, Try AI disabled", async () => {
+test("e. AI off: upload → sorting → review → editor, rule album, ai_off banner, Try AI disabled", async () => {
   test.skip(!OFF_URL, "set E2E_OFF_URL (server with AI_MODE=off)");
   const bookC = await createBookAt(OFF_URL);
   // 5 photos: the automatic first build needs ≥ 5 ready (M13 T4), below that the fallback shows.
   const files = [fixture("screenshot.png", "image/png"), ...synth.slice(2, 6)];
   await uploadAndWaitSummary(files, files.length);
-  releaseAuto(); // AI off: the rule run finishes inside the auto POST → straight to the editor
-  await editorThenReview(60_000);
+  // M20b: AI off → the rule run finishes inside the auto POST → step 6 plays the rule rows → step 7
+  // Review → Generate album → editor (no editor jump any more).
+  await buildToReview();
 
   await expect(page.getByTestId("review-banner-ai_off")).toBeVisible();
   await expect(page.getByTestId("try-ai-disabled")).toBeVisible();

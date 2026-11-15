@@ -44,6 +44,7 @@ vi.mock("@/components/books/wizard/steps/StepPhotos", () => ({
     onBack: Cb;
     onPhotosPicked: Cb;
     onAdvance: (o: unknown) => void;
+    onAdvancePending: (p: Promise<unknown>) => void;
     onBuildNow: Cb;
   }) => (
     <div data-testid="stub-photos" data-book={p.data.bookId}>
@@ -58,12 +59,23 @@ vi.mock("@/components/books/wizard/steps/StepPhotos", () => ({
       />
       <button type="button" data-testid="stub-not-first" onClick={() => p.onAdvance({ kind: "not_first" })} />
       <button type="button" data-testid="stub-user-edited" onClick={() => p.onAdvance({ kind: "user_edited" })} />
+      <button
+        type="button"
+        data-testid="stub-rule-done"
+        onClick={() => p.onAdvance({ kind: "started", runId: RUN, mode: "rule", state: "done" })}
+      />
+      <button type="button" data-testid="stub-pending" onClick={() => p.onAdvancePending(new Promise(() => {}))} />
     </div>
   ),
 }));
 vi.mock("@/components/books/wizard/steps/StepSorting", () => ({
-  StepSorting: (p: { data: { activeRunId: string | null; auto: boolean }; onDone: Cb }) => (
-    <div data-testid="stub-sorting" data-run={p.data.activeRunId ?? ""} data-auto={String(p.data.auto)}>
+  StepSorting: (p: { data: { activeRunId: string | null; auto: boolean }; onDone: Cb; handover?: Promise<unknown> | null }) => (
+    <div
+      data-testid="stub-sorting"
+      data-run={p.data.activeRunId ?? ""}
+      data-auto={String(p.data.auto)}
+      data-handover={p.handover ? "yes" : "no"}
+    >
       <button type="button" data-testid="stub-done" onClick={p.onDone} />
     </div>
   ),
@@ -124,6 +136,7 @@ const OTHER = "44444444-4444-4444-8444-444444444444";
 
 const { NewBookWizard, wizardWindow } = await import("@/components/books/NewBookWizard");
 const { Uploader } = await import("@/components/upload/Uploader");
+const { HANDOVER_GRACE_MS } = await import("@/components/upload/upload-stage-model");
 const { WIZARD_DRAFT_STORAGE_KEY, serializeWizardDraft, EMPTY_WIZARD_DRAFT } = await import("@/lib/books/wizard-steps");
 type Props = import("@/components/books/NewBookWizard").NewBookWizardProps;
 type WizardDraft = import("@/lib/books/wizard-steps").WizardDraft;
@@ -511,6 +524,47 @@ describe("auto-start outcome → step 6 / 7 / editor", () => {
   });
 });
 
+describe("M20b: every first build goes through step 6 (AI off / rule runs included)", () => {
+  it("a rule run done inside the POST → step 6 with the hand-over (never the editor), then 7", async () => {
+    // The gate already says 7 (the run finished) — step 6 must still play it through.
+    served["6"] = step6({ activeRunId: null, resolved: 7, aiOn: false });
+    await mount(`/books/new?book=${BOOK}&step=5`, { initialStep: 5, mode: edit(), initialData: step5({ aiOn: false }) as never });
+    await click($("stub-pick"));
+    await click($("stub-rule-done"));
+    await waitFor(() => expect($("stub-sorting")).toBeTruthy());
+    expect(shownStep()).toBe("6");
+    expect(url()).toBe(`/books/new?book=${BOOK}&step=6`);
+    expect($("stub-sorting").getAttribute("data-handover")).toBe("yes");
+    expect(assign).not.toHaveBeenCalled(); // no editor jump
+    expect($("stub-review")).toBeNull();
+    await click($("stub-done"));
+    await waitFor(() => expect($("stub-review")).toBeTruthy());
+    expect(url()).toBe(`/books/new?book=${BOOK}&step=7`);
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it("answer still pending after the success moment → step 6 at once, step 5 locked", async () => {
+    await mount(`/books/new?book=${BOOK}&step=5`, { initialStep: 5, mode: edit(), initialData: step5() as never });
+    await click($("stub-pick"));
+    await click($("stub-pending"));
+    await waitFor(() => expect($("stub-sorting")).toBeTruthy());
+    expect(url()).toBe(`/books/new?book=${BOOK}&step=6`);
+    expect($("stub-sorting").getAttribute("data-handover")).toBe("yes");
+    expect(wizardFetches().some((u) => u.includes("step=6") && u.includes("auto=1"))).toBe(true);
+    await historyBack();
+    expect(shownStep()).toBe("6"); // step 5 can't come back while the run starts
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it("without a hand-over, step 6 data the gate moved on (finished run) still follows the gate → 7", async () => {
+    served["6"] = step6({ activeRunId: null, resolved: 7 });
+    await mount(`/books/new?book=${BOOK}&step=5`, { initialStep: 5, mode: edit(), initialData: step5() as never });
+    await click($("stub-build-now"));
+    await waitFor(() => expect($("stub-review")).toBeTruthy());
+    expect(url()).toBe(`/books/new?book=${BOOK}&step=7`);
+  });
+});
+
 describe("step data and the server", () => {
   it("step data the gate moved on (5 asked, run finished → 7) follows the gate", async () => {
     served["5"] = step5({ resolved: 7 });
@@ -631,6 +685,95 @@ describe("Uploader wizard: advance after burst + auto-start answer", () => {
     });
     await settle(30);
     expect(onAdvance).toHaveBeenCalledWith({ kind: "already_running", runId: RUN });
+  });
+
+  it("M20b: burst first, answer pending → onAdvancePending(the request) right after the burst; the stage never says sorting", async () => {
+    const onAdvance = vi.fn();
+    const onAdvancePending = vi.fn();
+    let release: (r: Response) => void = () => {};
+    fetchMock.mockImplementation(async (u: string) =>
+      u === "/api/ai/runs" ? new Promise<Response>((r) => (release = r)) : new Response("{}", { status: 404 }),
+    );
+    await act(async () => {
+      root.render(<Uploader {...uploaderProps} variant="wizard" onAdvance={onAdvance} onAdvancePending={onAdvancePending} />);
+    });
+    await pick(6);
+    await waitFor(() => expect(fetchMock.mock.calls.some((c) => String(c[0]) === "/api/ai/runs")).toBe(true));
+    // upload only: no "Starting your book…" bar, no sorting copy anywhere on step 5
+    expect($("upload-auto-starting")).toBeNull();
+    expect($("upload-summary")).toBeNull();
+    expect(container.textContent ?? "").not.toMatch(/sort|starting your book/i);
+    expect(onAdvancePending).not.toHaveBeenCalled(); // waits for the success burst
+    await click($("stub-settle"));
+    // …and gives a quick answer HANDOVER_GRACE_MS (from the request) to land before handing over
+    expect(onAdvancePending).not.toHaveBeenCalled();
+    await settle(HANDOVER_GRACE_MS + 50);
+    expect(onAdvancePending).toHaveBeenCalledTimes(1);
+    expect(container.textContent ?? "").not.toMatch(/sort|starting your book/i);
+    expect(onAdvance).not.toHaveBeenCalled();
+    const handed = onAdvancePending.mock.calls[0][0] as Promise<unknown>;
+    // the handed promise is the request itself: it resolves with the server's answer
+    await act(async () => {
+      release(new Response(JSON.stringify({ runId: RUN, mode: "rule", state: "done" }), { status: 201 }));
+      await tick(30);
+    });
+    await expect(handed).resolves.toEqual({ kind: "started", runId: RUN, mode: "rule", state: "done" });
+    await settle(30);
+    expect(onAdvance).not.toHaveBeenCalled(); // handed over once, never twice
+    expect(mocks.push).not.toHaveBeenCalled();
+    // step 6 reports ai_build_done for the rule run — not the upload screen
+    expect(mocks.track).not.toHaveBeenCalledWith("ai_build_done", expect.anything());
+  });
+
+  it("M20b: a rule run done before the burst ends → onAdvance(answer) after the burst, no rules tracking here", async () => {
+    const onAdvance = vi.fn();
+    fetchMock.mockImplementation(async (u: string) =>
+      u === "/api/ai/runs"
+        ? new Response(JSON.stringify({ runId: RUN, mode: "rule", state: "done" }), { status: 201 })
+        : new Response("{}", { status: 404 }),
+    );
+    await act(async () => {
+      root.render(<Uploader {...uploaderProps} variant="wizard" aiOn={false} onAdvance={onAdvance} onAdvancePending={vi.fn()} />);
+    });
+    await pick(5);
+    await settle(60);
+    expect(onAdvance).not.toHaveBeenCalled();
+    await click($("stub-settle"));
+    expect(onAdvance).toHaveBeenCalledWith({ kind: "started", runId: RUN, mode: "rule", state: "done" });
+    expect(mocks.track).not.toHaveBeenCalledWith("ai_build_done", expect.anything());
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it("M20b: a fallback answer before the burst ends stays on step 5 (Make my book now), nothing handed over", async () => {
+    const onAdvance = vi.fn();
+    const onAdvancePending = vi.fn();
+    fetchMock.mockImplementation(async (u: string) =>
+      u === "/api/ai/runs"
+        ? new Response(JSON.stringify({ error: "limit", limit: "daily_builds" }), { status: 429 })
+        : new Response("{}", { status: 404 }),
+    );
+    await act(async () => {
+      root.render(<Uploader {...uploaderProps} variant="wizard" onAdvance={onAdvance} onAdvancePending={onAdvancePending} onBuildNow={vi.fn()} />);
+    });
+    await pick(5);
+    await settle(60);
+    await waitFor(() => expect($("build-album")).toBeTruthy());
+    expect(onAdvance).not.toHaveBeenCalled();
+    expect(onAdvancePending).not.toHaveBeenCalled();
+  });
+
+  it("classic Uploader: a rule run done inside the POST → editor + ai_build_done rules (unchanged)", async () => {
+    fetchMock.mockImplementation(async (u: string) =>
+      u === "/api/ai/runs"
+        ? new Response(JSON.stringify({ runId: RUN, mode: "rule", state: "done" }), { status: 201 })
+        : new Response("{}", { status: 404 }),
+    );
+    await act(async () => {
+      root.render(<Uploader {...uploaderProps} />);
+    });
+    await pick(5);
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith(`/books/${BOOK}/edit`));
+    expect(mocks.track).toHaveBeenCalledWith("ai_build_done", expect.objectContaining({ mode: "rules", outcome: "ok", auto: true }));
   });
 
   it("classic Uploader unchanged: router.push to the build screen", async () => {

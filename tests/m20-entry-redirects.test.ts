@@ -1,6 +1,6 @@
 // M20 T9 (D-072): entry points into the continuous wizard. /books/[id]/upload and /books/[id]/build
 // redirect fresh books into /books/new?book=<id>&step=5|6|7 and keep the classic screens for built,
-// edited, rebuilding and AI-off books; createBookAction's `next` and the dashboard's fresh-draft
+// edited and rebuilding books (M20b: AI off goes through the wizard's steps 6–7 too); createBookAction's `next` and the dashboard's fresh-draft
 // links point straight into the wizard. Pure decision helpers (src/lib/books/wizard-routes.ts) plus a
 // small route simulator proving the build page and the /books/new gate never redirect in a loop.
 import { describe, expect, it } from "vitest";
@@ -54,8 +54,8 @@ const world = (w: Partial<World> = {}): World => ({
 function buildInput(w: World, q: { trigger?: "build" | "rebuild"; auto?: boolean } = {}): BuildEntryInput {
   const trigger = q.trigger ?? "build";
   const active = w.activeReadOk ? w.active : null;
-  // The page only reads hasAnyRunForBook for trigger=build with AI on (null otherwise / on error).
-  const runExists = trigger === "build" && w.aiOn && w.runReadOk ? w.runExists || w.active !== null : null;
+  // The page reads hasAnyRunForBook for trigger=build, AI on or off (M20b; null otherwise / on error).
+  const runExists = trigger === "build" && w.runReadOk ? w.runExists || w.active !== null : null;
   return {
     bookId: BOOK,
     trigger,
@@ -168,7 +168,7 @@ describe("/books/[id]/upload entry", () => {
     expect(uploadTarget(world({ doc: edited, runExists: true }))).toBeNull();
   });
 
-  it("AI off: a fresh book still uses the wizard's photo step (only the build step goes classic)", () => {
+  it("AI off: a fresh book uses the wizard's photo step", () => {
     expect(uploadTarget(world({ aiOn: false }))).toBe(wizardStepHref(BOOK, 5));
   });
 });
@@ -225,12 +225,23 @@ describe("/books/[id]/build entry", () => {
     }
   });
 
-  it("AI off → classic, never the wizard", () => {
-    for (const doc of Object.values(DOCS)) {
-      expect(go(world({ doc, aiOn: false }))).toEqual({ kind: "classic" });
-      expect(go(world({ doc, aiOn: false, active: { trigger: "build" }, runExists: true }))).toEqual({ kind: "classic" });
+  it("M20b: AI off behaves like AI on — a fresh first (rule) build → wizard step 6, finished → 7", () => {
+    for (const doc of [empty, rule]) {
+      expect(go(world({ doc, aiOn: false }))).toEqual({ kind: "wizard", href: wizardStepHref(BOOK, 6) });
+      expect(go(world({ doc, aiOn: false, active: { trigger: "build" }, runExists: true }), { auto: true })).toEqual({
+        kind: "wizard",
+        href: wizardStepHref(BOOK, 6, { auto: true }),
+      });
     }
-    expect(go(world({ doc: rule, aiOn: false, runExists: true }), { auto: true })).toEqual({ kind: "editor" });
+    // the rule build already finished inside the POST → Review, not the editor
+    expect(go(world({ doc: rule, aiOn: false, runExists: true }), { auto: true })).toEqual({
+      kind: "wizard",
+      href: wizardStepHref(BOOK, 7),
+    });
+    // built / edited / rebuilding books stay classic with AI off too
+    expect(go(world({ doc: rule, aiOn: false, runExists: true }))).toEqual({ kind: "classic" });
+    expect(go(world({ doc: edited, aiOn: false }))).toEqual({ kind: "classic" });
+    expect(go(world({ doc: rule, aiOn: false }), { trigger: "rebuild" })).toEqual({ kind: "classic" });
   });
 
   it("user-edited album → classic (no ?auto) / editor (?auto)", () => {
@@ -277,7 +288,7 @@ describe("no redirect loops between /books/new and /books/[id]/build", () => {
     }
   });
 
-  it("gate 'classic' (running rebuild / AI off) → /build renders classic, no bounce back", () => {
+  it("gate 'classic' (running rebuild only) → /build renders classic, no bounce back", () => {
     const rebuilding = world({ doc: rule, runExists: true, active: { trigger: "rebuild" } });
     expect(wizardGate(rebuilding, 6)).toBe("classic");
     expect(follow(rebuilding, `/books/new?book=${BOOK}&step=6`)).toEqual({
@@ -285,10 +296,31 @@ describe("no redirect loops between /books/new and /books/[id]/build", () => {
       hops: [`/books/new?book=${BOOK}&step=6`, `/books/${BOOK}/build`],
     });
 
+    // M20b: AI off is no longer "classic" — the first rule build renders wizard step 6 directly
     const aiOff = world({ doc: rule, aiOn: false });
-    expect(wizardGate(aiOff, 6)).toBe("classic");
-    expect(follow(aiOff, `/books/new?book=${BOOK}&step=6`).screen).toEqual({ kind: "classic-build" });
-    expect(follow(aiOff, `/books/${BOOK}/build`).hops).toHaveLength(1);
+    expect(wizardGate(aiOff, 6)).toBe(6);
+    expect(follow(aiOff, `/books/new?book=${BOOK}&step=6`)).toEqual({
+      screen: { kind: "wizard", step: 6 },
+      hops: [`/books/new?book=${BOOK}&step=6`],
+    });
+    expect(follow(aiOff, `/books/${BOOK}/build`)).toEqual({
+      screen: { kind: "wizard", step: 6 },
+      hops: [`/books/${BOOK}/build`, `/books/new?book=${BOOK}&step=6`],
+    });
+    // a running AI-off first build: step 6 resumes it; a finished one: step 7
+    const aiOffRunning = world({ doc: rule, aiOn: false, active: { trigger: "build" }, runExists: true });
+    expect(follow(aiOffRunning, `/books/new?book=${BOOK}&step=6`).screen).toEqual({ kind: "wizard", step: 6 });
+    const aiOffDone = world({ doc: rule, aiOn: false, runExists: true });
+    expect(follow(aiOffDone, `/books/new?book=${BOOK}&step=6`).screen).toEqual({ kind: "wizard", step: 7 });
+    expect(follow(aiOffDone, `/books/new?book=${BOOK}&step=7`).hops).toHaveLength(1);
+  });
+
+  it("M20b: no world ever answers 'classic' on /books/new except a running rebuild", () => {
+    for (const w of worlds) {
+      for (const step of [5, 6, 7] as const) {
+        if (wizardGate(w, step) === "classic") expect(w.activeReadOk && w.active?.trigger).toBe("rebuild");
+      }
+    }
   });
 
   it("build → wizard lands on a rendered wizard step (never bounced back to /build)", () => {

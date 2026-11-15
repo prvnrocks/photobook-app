@@ -65,6 +65,11 @@ export type FlowAction =
   | { type: "uploadsSettled" }
   /** The answer of POST /api/ai/runs { auto: true } (requestAutoBuild). */
   | { type: "autoStart"; outcome: AutoStartOutcome; retried: boolean; activeAtLoad: boolean }
+  /**
+   * M20b: the upload success moment ended while the auto-start answer was still on its way → step 6
+   * now (step 5 never shows sorting); step 6 receives the pending answer and follows it there.
+   */
+  | { type: "autoStartPending" }
   /** Fallback "Make my book now" on step 5 → step 6, where BuildProgress starts the run (G3). */
   | { type: "buildRequested" }
   /** BuildProgress has a run (started or resumed). */
@@ -81,7 +86,7 @@ export type FlowEffect =
   | { kind: "push"; url: string; replaceCurrent?: string; preferHistoryBack?: boolean }
   | { kind: "replace"; url: string }
   | { kind: "reload" }
-  | { kind: "navigate"; target: "editor"; href: string; rules?: { outcome: "ok" | "failed" } };
+  | { kind: "navigate"; target: "editor"; href: string };
 
 export type FlowIntent =
   /** Step-4 Continue: create the book (create mode) or save its setup (edit mode), then dispatch created. */
@@ -282,6 +287,13 @@ export function transition(state: FlowState, action: FlowAction): FlowResult {
     case "autoStart":
       return autoStart(state, action);
 
+    case "autoStartPending": {
+      if (state.step !== 5 || state.mode.kind !== "edit" || state.runStarted) return { state, effect: NONE };
+      // Same lock as buildRequested: step 6 owns the (pending) run now, step 5 can't come back.
+      const next = moveTo({ ...state, runStarted: true, photosPicked: true }, 6);
+      return { state: next, effect: { kind: "push", url: urlFor(next) } };
+    }
+
     case "buildRequested": {
       if (state.step !== 5 || state.mode.kind !== "edit") return { state, effect: NONE };
       // Step 6 always starts or resumes a run (G3), so step 5 locks now: Back / the stepper can't
@@ -334,9 +346,11 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
 
 /**
  * The auto-start answer on step 5 → the wizard's next place (mirrors autoStartNext in
- * auto-build-client, with wizard targets): a run → step 6; the first run already finished → step 7;
- * a rule run finished inside the POST / the user edited → editor; not_ready → retry once, then the
- * fallback; limit / signed out / error → stay on 5 with the fallback.
+ * auto-build-client, with wizard targets): a run → step 6 — in every AI mode, including a rule run
+ * (AI off) that already finished inside the POST: step 6 plays its sorting checklist through, then
+ * step 7 Review (M20b; the editor jump is gone); the first run already finished elsewhere → step 7;
+ * the user edited → editor (the only editor exit); not_ready → retry once, then the fallback;
+ * limit / signed out / error → stay on 5 with the fallback.
  */
 function autoStart(
   state: FlowState,
@@ -348,9 +362,9 @@ function autoStart(
     const next = moveTo({ ...state, runStarted: true, photosPicked: true }, 6);
     return { state: next, effect: { kind: "push", url: urlFor(next) } };
   };
-  const toEditor = (rules?: { outcome: "ok" | "failed" }): FlowResult => ({
+  const toEditor = (): FlowResult => ({
     state,
-    effect: { kind: "navigate", target: "editor", href: flowEditorHref(bookId), ...(rules ? { rules } : {}) },
+    effect: { kind: "navigate", target: "editor", href: flowEditorHref(bookId) },
   });
   const fallback = (limit?: RunLimit): FlowResult => ({
     state: { ...state, autoStartError: limit ? { kind: "fallback", limit } : { kind: "fallback" } },
@@ -359,10 +373,6 @@ function autoStart(
   const { outcome } = action;
   switch (outcome.kind) {
     case "started":
-      if (outcome.mode === "rule" && (outcome.state === "done" || outcome.state === "failed")) {
-        return toEditor({ outcome: outcome.state === "done" ? "ok" : "failed" });
-      }
-      return toSorting();
     case "already_running":
       return toSorting();
     case "not_first": {

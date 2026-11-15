@@ -45,7 +45,7 @@ vi.mock("@/components/books/wizard/steps/StepPhotos", () => ({ StepPhotos: () =>
 vi.mock("@/components/books/wizard/steps/StepReview", () => ({ StepReview: () => null }));
 
 const { wizardChecklist, wizardSortPhase, wizardRowsDone } = await import("@/lib/runs/build-checklist");
-const { BuildProgress, STOP_REASON, WIZARD_READY_COPY, WIZARD_SLOW_HINT_COPY, WIZARD_SLOW_HINT_MS } = await import(
+const { BuildProgress, RULE_REPLAY_MS, STOP_REASON, WIZARD_READY_COPY, WIZARD_SLOW_HINT_COPY, WIZARD_SLOW_HINT_MS } = await import(
   "@/components/review/BuildProgress"
 );
 const { StepSorting, READY_MS, READY_MS_REDUCED } = await import("@/components/books/wizard/steps/StepSorting");
@@ -140,6 +140,7 @@ function renderSteps(stepData: WizardStepDataMap = { 6: STEP6 }) {
         leave={vi.fn()}
         leaving={false}
         autoRef={{ current: true }}
+        handoverRef={{ current: null }}
         headlineId="wizard-headline"
       />,
     ),
@@ -319,15 +320,19 @@ describe("finished → ready moment → step 7 (with prefetched data)", () => {
     expect(updates).toHaveLength(0);
   });
 
-  it("rule run done at start → also the ready moment, then buildDone", async () => {
+  it("rule run done at start → rule rows play through (M20b), then the ready moment, then buildDone", async () => {
     mocks.startRun.mockResolvedValue({ kind: "started", runId: RUN, mode: "rule", state: "done" });
     mocks.fetchWizardStep.mockResolvedValue({ ok: false, error: "failed" });
     const { dispatch } = renderSteps({ 6: { ...STEP6, activeRunId: null } as Step6 });
     await flush();
-    expect($("build-ready")).not.toBeNull();
+    expect($("build-ready")).toBeNull(); // replaying the rule rows first
+    expect($("build-progress")!.getAttribute("data-rules")).toBe("true");
     expect(mocks.track).toHaveBeenCalledWith("ai_build_done", expect.objectContaining({ mode: "rules", outcome: "ok" }));
+    await flush(RULE_REPLAY_MS + 100);
+    expect($("build-ready")).not.toBeNull();
     await flush(READY_MS + 200);
     expect(dispatch).toHaveBeenCalledWith({ type: "buildDone" });
+    expect(mocks.track).toHaveBeenCalledTimes(1);
   });
 
   it("reduced motion: shorter ready moment", async () => {

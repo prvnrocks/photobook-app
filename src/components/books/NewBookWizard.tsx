@@ -63,6 +63,7 @@ import {
 } from "@/lib/books/wizard-steps";
 import { effectiveStyle } from "@/lib/design/defaults";
 import { canUseViewTransition, runViewTransition, type StepDirection } from "@/lib/ui/view-transition";
+import type { AutoStartOutcome } from "@/lib/upload/auto-build-client";
 import { StepOccasion } from "./wizard/StepOccasion";
 import { StepShape } from "./wizard/StepShape";
 import { StepStyle } from "./wizard/StepStyle";
@@ -262,6 +263,8 @@ export function NewBookWizard({ initialStep, mode, dashboardBack, initialData }:
   const focusOnStepRef = useRef(false);
   /** Step 6 data: the run is the automatic first build (ai_build_done { auto }). */
   const autoRef = useRef(false);
+  /** M20b: step 5's auto-start answer (resolved or pending), followed by step 6. */
+  const handoverRef = useRef<Promise<AutoStartOutcome> | null>(null);
 
   const [state, formAction, creating] = useActionState<NewBookFormState, FormData>(
     createBookAction,
@@ -795,6 +798,7 @@ export function NewBookWizard({ initialStep, mode, dashboardBack, initialData }:
                 leave={leave}
                 leaving={leaving}
                 autoRef={autoRef}
+                handoverRef={handoverRef}
                 headlineId={HEADLINE_ID}
               />
             ) : null}

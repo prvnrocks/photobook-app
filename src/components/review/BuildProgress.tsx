@@ -13,6 +13,11 @@
 // the run, draws a 3-segment bar (rows done, never time), a calm "still sorting" hint after
 // WIZARD_SLOW_HINT_MS, "Your book is ready to review" when it finishes with onDone, and calm stop
 // cards that report the stop through onStop. The default (classic) variant is unchanged.
+// M20b: AI off runs here too (rule build). `handover` = the auto-start answer step 5 already asked
+// for (maybe still on its way) — used instead of a POST, so one upload starts one run. A rule run
+// that finished inside its request plays the three rule rows through (RULE_REPLAY_MS minimum from
+// mount; reduced motion: at once) before "Your book is ready to review". ai_build_done { rules } is
+// reported here for the wizard (the upload screen reports it only on the classic screen).
 import { BookOpen, Check, Circle, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -36,11 +41,13 @@ import { limitCopy, newerSnapshot, stageCopy, type ProgressSnapshot } from "@/li
 import {
   buildChecklist,
   wizardChecklist,
+  wizardPhaseOfRows,
+  wizardReplayChecklist,
   wizardRowsDone,
-  wizardSortPhase,
   type ChecklistStepState,
 } from "@/lib/runs/build-checklist";
 import type { BuildStopReason } from "@/lib/books/wizard-flow";
+import type { HandoverStart } from "@/lib/upload/auto-build-client";
 import { cn } from "@/lib/utils";
 
 export type BuildProgressProps = {
@@ -71,7 +78,18 @@ export type BuildProgressProps = {
   onStop?: (reason: BuildStopReason) => void;
   /** M20: running again after a reported stop ("Try again" / auto-resume) → wizard dispatches buildResumed. */
   onResume?: () => void;
+  /**
+   * M20b (wizard): how the run starts when step 5 already asked for the automatic build — used once
+   * instead of the POST (activeRunId should then be null). "restart" falls back to the POST.
+   */
+  handover?: Promise<HandoverStart> | null;
 };
+
+/** M20b: a rule build that finished inside its request plays its rows through over at least this (from mount). */
+export const RULE_REPLAY_MS = 2_700;
+/** …but never faster than this per row, even when the answer itself took a while. */
+export const RULE_REPLAY_MIN_ROW_MS = 400;
+const RULE_ROWS = 3;
 
 /** Wizard: a calm hint once sorting has taken this long (exported for tests). Copy only — not progress. */
 export const WIZARD_SLOW_HINT_MS = 20_000;
@@ -116,6 +134,19 @@ const ERROR_COPY: Record<StopError, string> = {
     "Our server is taking longer than usual to respond. Your photos are safe — try again to pick up where we left off.",
   run_failed: "We couldn't finish with AI. Your photos are safe — open your book to continue.",
 };
+
+/** M20b: a failed RULE build (AI off) — no AI claim. */
+const RULE_FAILED_COPY = "We couldn't finish sorting your photos. Your photos are safe — open your book to continue.";
+
+function errorCopy(error: StopError, rules: boolean): string {
+  return rules && error === "run_failed" ? RULE_FAILED_COPY : ERROR_COPY[error];
+}
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    : false;
+}
 
 /** Shown during a back-off wait; the loop retries by itself. */
 const RETRY_COPY: Record<RetryCause, string> = {
@@ -171,6 +202,7 @@ export function BuildProgress({
   onDone,
   onStop,
   onResume,
+  handover = null,
 }: BuildProgressProps) {
   const router = useRouter();
   const editorHref = `/books/${bookId}/edit`;
@@ -181,7 +213,15 @@ export function BuildProgress({
    * The POST start promise, shared across StrictMode's double mount so one visit starts one
    * run (the start request is not aborted on unmount; its result is just ignored).
    */
-  const startRef = useRef<Promise<StartOutcome> | null>(null);
+  const startRef = useRef<Promise<StartOutcome | HandoverStart> | null>(null);
+  /** M20b: the handed-over auto-start answer, used by the first start only. */
+  const handoverRef = useRef<Promise<HandoverStart> | null>(handover);
+  /** M20b: a rule build (AI off, or the run reported mode 'rule') → rule wording + replay. */
+  const [rules, setRules] = useState(!aiOn);
+  const rulesRef = useRef(!aiOn);
+  /** M20b: rows done in the rule replay (null = no replay). */
+  const [replay, setReplay] = useState<number | null>(null);
+  const replayTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const controllerRef = useRef<AbortController | null>(null);
   /** Tab visible again / back online → resume a stalled loop (see src/lib/runs/drive.ts). */
   const [waker] = useState(() => new DriveWaker());
@@ -200,13 +240,15 @@ export function BuildProgress({
   // analytics (M9 T14): time on this screen, bucketed; sent once per visit.
   const [mountedAt] = useState(() => Date.now());
   const sentRef = useRef(false);
+  /** M20b: a handed-over auto start that produced no run falls back to a manual start (auto: false). */
+  const autoRef = useRef(auto);
   const trackDone = useCallback(
     (mode: "ai" | "rules", outcome: "ok" | "failed") => {
       if (sentRef.current) return;
       sentRef.current = true;
-      track("ai_build_done", { mode, outcome, ms_bucket: msBucket(Date.now() - mountedAt), auto });
+      track("ai_build_done", { mode, outcome, ms_bucket: msBucket(Date.now() - mountedAt), auto: autoRef.current });
     },
-    [mountedAt, auto],
+    [mountedAt],
   );
 
   const onDoneRef = useRef(onDone);
@@ -218,6 +260,38 @@ export function BuildProgress({
     if (onDoneRef.current) onDoneRef.current();
     else router.replace(editorHref);
   }, [router, editorHref]);
+
+  // M20b: the run is done. A rule build in the wizard plays its rows through first (the server
+  // reported "done" in one go); everything else finishes at once, as before.
+  const finished = useCallback(() => {
+    if (variant !== "wizard" || !onDoneRef.current || !rulesRef.current || prefersReducedMotion()) {
+      return goToEditor();
+    }
+    const total = Math.max(RULE_REPLAY_MIN_ROW_MS * RULE_ROWS, RULE_REPLAY_MS - (Date.now() - mountedAt));
+    const row = total / RULE_ROWS;
+    for (const t of replayTimersRef.current) clearTimeout(t);
+    setReplay(0);
+    replayTimersRef.current = [
+      setTimeout(() => setReplay(1), row),
+      setTimeout(() => setReplay(2), row * 2),
+      setTimeout(() => {
+        setReplay(null);
+        goToEditor();
+      }, total),
+    ];
+  }, [variant, mountedAt, goToEditor]);
+  useEffect(
+    () => () => {
+      for (const t of replayTimersRef.current) clearTimeout(t);
+      replayTimersRef.current = [];
+    },
+    [],
+  );
+  const markRules = useCallback((isRule: boolean) => {
+    if (!isRule || rulesRef.current) return;
+    rulesRef.current = true;
+    setRules(true);
+  }, []);
 
   // M20 T7: report stop states (once per status change) — the wizard dispatches buildStopped.
   // A run that starts again after a reported stop ("Try again", back online) reports onResume once.
@@ -251,24 +325,42 @@ export function BuildProgress({
         // Transient failures (network / 5xx / 503) back off and retry inside; a retry after a
         // start that did land gets already_running + runId. Stops once the screen is left
         // (the controller of the latest mount is aborted) — not on StrictMode's first unmount.
-        startRef.current ??= startWithRetry({
-          start: () => startRun(bookId, trigger),
-          shouldStop: () => controllerRef.current?.signal.aborted ?? true,
-          onRetry: (_n, _ms, cause) => {
-            if (!controllerRef.current?.signal.aborted) setStatus({ kind: "running", retrying: cause });
-          },
-        });
-        const out = await startRef.current;
+        const post = () =>
+          startWithRetry({
+            start: () => startRun(bookId, trigger),
+            shouldStop: () => controllerRef.current?.signal.aborted ?? true,
+            onRetry: (_n, _ms, cause) => {
+              if (!controllerRef.current?.signal.aborted) setStatus({ kind: "running", retrying: cause });
+            },
+          });
+        // M20b: step 5's auto-start answer (once) instead of a second POST.
+        startRef.current ??= handoverRef.current ?? post();
+        let out = await startRef.current;
         if (signal.aborted) return;
         startRef.current = null;
+        handoverRef.current = null;
+        if (out.kind === "restart") {
+          // The auto start made no run: start it here, like "Make my book now" (a manual build).
+          autoRef.current = false;
+          startRef.current = post();
+          out = await startRef.current;
+          if (signal.aborted) return;
+          startRef.current = null;
+        }
         switch (out.kind) {
+          case "finished":
+            // The first run already finished (another tab / an earlier visit): on to Review.
+            return goToEditor();
+          case "restart":
+            return setStatus({ kind: "error", error: "server_unavailable" }); // unreachable: post() never answers it
           case "started":
+            markRules(out.mode === "rule");
             if (out.state === "done") {
               trackDone("rules", "ok");
-              return goToEditor(); // rule mode: album written already
+              return finished(); // rule mode: album written already
             }
             if (out.state === "failed") {
-              trackDone("ai", "failed");
+              trackDone(out.mode === "rule" ? "rules" : "ai", "failed");
               return setStatus({ kind: "error", error: "run_failed" });
             }
             runId = out.runId;
@@ -325,11 +417,11 @@ export function BuildProgress({
         if (res.kind === "done") {
           if (res.tick.state === "failed") {
             runIdRef.current = null;
-            trackDone("ai", "failed");
+            trackDone(rulesRef.current ? "rules" : "ai", "failed");
             return setStatus({ kind: "error", error: "run_failed" });
           }
-          trackDone("ai", "ok");
-          return goToEditor();
+          trackDone(rulesRef.current ? "rules" : "ai", "ok");
+          return finished();
         }
         if (res.error === "not_found") runIdRef.current = null; // "Try again" starts a new run
         setStatus({ kind: "error", error: res.error });
@@ -337,7 +429,7 @@ export function BuildProgress({
         clearInterval(poll);
       }
     },
-    [bookId, trigger, goToEditor, report, waker, trackDone],
+    [bookId, trigger, goToEditor, finished, markRules, report, waker, trackDone],
   );
 
   const begin = useCallback(() => {
@@ -385,15 +477,35 @@ export function BuildProgress({
   }, [variant, running]);
 
   const copy = stageCopy(snap.state, snap.progress);
+  // Wizard rows: the rule replay (M20b) once a rule run is done, else the states the server reported.
+  const wizardRows =
+    replay !== null && status.kind === "running"
+      ? wizardReplayChecklist(replay, rules)
+      : wizardChecklist(snap.state, status.kind === "leaving", rules);
+  const replayRow = replay !== null ? wizardRows.find((r) => r.state === "current") : undefined;
   const liveText = running
     ? status.retrying
       ? RETRY_COPY[status.retrying]
-      : [copy.text, copy.detail].filter(Boolean).join(" ")
+      : replayRow
+        ? replayRow.label
+        : variant === "wizard" && rules
+          ? (wizardRows.find((r) => r.state === "current")?.label ?? WIZARD_BUILD_KEEP_OPEN_COPY)
+          : [copy.text, copy.detail].filter(Boolean).join(" ")
     : "";
   const announced = useThrottledValue(liveText, LIVE_THROTTLE_MS);
 
   if (variant === "wizard" && status.kind !== "running" && status.kind !== "leaving") {
-    return <WizardStopCard status={status} editorHref={editorHref} loginHref={loginHref} onRetry={begin} isPaid={isPaid} dailyCap={dailyCap} />;
+    return (
+      <WizardStopCard
+        status={status}
+        editorHref={editorHref}
+        loginHref={loginHref}
+        onRetry={begin}
+        isPaid={isPaid}
+        dailyCap={dailyCap}
+        rules={rules}
+      />
+    );
   }
 
   if (status.kind === "user_edited") {
@@ -436,7 +548,7 @@ export function BuildProgress({
       <div data-testid="build-error" data-error={error}>
         <Notice
           tone="error"
-          title={ERROR_COPY[error]}
+          title={errorCopy(error, rules)}
           action={
             error === "signed_out" ? (
               <Link href={loginHref} className={cn(buttonVariants({ size: "cta" }))} data-testid="build-sign-in">
@@ -465,8 +577,8 @@ export function BuildProgress({
   // running | leaving
   const leaving = status.kind === "leaving";
   if (variant === "wizard") {
-    const rows = wizardChecklist(snap.state, leaving);
-    const phase = wizardSortPhase(snap.state, leaving);
+    const rows = wizardRows;
+    const phase = leaving ? "ready" : wizardPhaseOfRows(rows);
     // The wizard always passes onDone: leaving = finished, the short "ready" moment before step 7.
     const ready = leaving;
     return (
@@ -477,6 +589,8 @@ export function BuildProgress({
         data-state={snap.state}
         data-sort-phase={phase}
         aria-label="Sorting your photos"
+        data-rules={rules ? "true" : undefined}
+        data-replay={replay !== null ? replay : undefined}
       >
         <div className="min-w-0">{preview}</div>
         <div className="flex min-w-0 flex-col gap-4">
@@ -676,6 +790,7 @@ function WizardStopCard({
   onRetry,
   isPaid,
   dailyCap,
+  rules,
 }: {
   status: Exclude<Status, { kind: "running" } | { kind: "leaving" }>;
   editorHref: string;
@@ -683,6 +798,8 @@ function WizardStopCard({
   onRetry: () => void;
   isPaid: boolean;
   dailyCap: number;
+  /** M20b: a rule build — no AI claim in the failed copy. */
+  rules: boolean;
 }) {
   const error = status.kind === "error" ? status.error : null;
   const testId = status.kind === "error" ? "build-error" : status.kind === "limit" ? "build-limit" : "build-user-edited";
@@ -694,7 +811,7 @@ function WizardStopCard({
         : WIZARD_STOP_TITLE[status.error];
   const body =
     status.kind === "error"
-      ? ERROR_COPY[status.error]
+      ? errorCopy(status.error, rules)
       : status.kind === "limit"
         ? "Your draft book is ready to look at and change."
         : "Your changes are safe — carry on in the editor.";

@@ -9,14 +9,19 @@
 // (Open my book / Try again) is drawn by BuildProgress.
 // G3: BuildProgress resumes `activeRunId`; only without one (fallback "Make my book now" / a run
 // read error) does it POST a build, and the server answers 409 already_running for a queued run.
+// M20b: `handover` = step 5's auto-start answer (maybe still on its way: the upload screen never
+// shows sorting). BuildProgress starts from it instead of POSTing, so one upload = one run, in every
+// AI mode — a rule build (AI off) that finished inside the POST plays its checklist through here.
+// not_first is re-read once (an active run → resume it; else the first run finished → Review).
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BuildProgress } from "@/components/review/BuildProgress";
 import { PhotoFan } from "@/components/review/PhotoFan";
 import { WizardHeadline } from "@/components/wizard/WizardHeadline";
 import { fetchWizardStep, type WizardStep6Data, type WizardStep7Data } from "@/lib/books/wizard-client";
 import type { BuildStopReason } from "@/lib/books/wizard-flow";
 import { wizardHeadline } from "@/lib/books/wizard-steps";
+import { handoverStart, type AutoStartOutcome, type HandoverStart } from "@/lib/upload/auto-build-client";
 
 /** The "ready" moment before step 7 (the stack + badge animation runs ~1.2 s). */
 export const READY_MS = 1_400;
@@ -35,7 +40,19 @@ export type StepSortingProps = {
   onStopped?: (reason: BuildStopReason) => void;
   /** Running again after a stop ("Try again") → the wizard dispatches buildResumed. */
   onResumed?: () => void;
+  /** M20b: step 5's auto-start answer (resolved or pending) — the run starts from it, never a 2nd POST. */
+  handover?: Promise<AutoStartOutcome> | null;
 };
+
+/** The handed-over answer → how BuildProgress starts (not_first: one re-read of step 6). */
+export async function resolveHandover(answer: Promise<AutoStartOutcome>, bookId: string): Promise<HandoverStart> {
+  const outcome = await answer.catch((): AutoStartOutcome => ({ kind: "error" }));
+  const start = handoverStart(outcome);
+  if (start.kind !== "finished") return start;
+  const again = await fetchWizardStep(bookId, 6).catch(() => null);
+  const runId = again && again.ok ? again.data.activeRunId : null;
+  return runId ? { kind: "already_running", runId } : start;
+}
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -45,8 +62,10 @@ function prefersReducedMotion(): boolean {
     : false;
 }
 
-export function StepSorting({ data, headlineId, onDone, onStopped, onResumed }: StepSortingProps) {
+export function StepSorting({ data, headlineId, onDone, onStopped, onResumed, handover = null }: StepSortingProps) {
   const bookId = data.bookId;
+  // Mapped once per mount (BuildProgress reads it on its first start only).
+  const [start] = useState(() => (handover ? resolveHandover(handover, bookId) : null));
   const finishingRef = useRef(false);
   const aliveRef = useRef(true);
   useEffect(() => {
@@ -85,7 +104,7 @@ export function StepSorting({ data, headlineId, onDone, onStopped, onResumed }: 
       <div className="mt-4 flex min-w-0 flex-col sm:mt-6">
         <BuildProgress
           bookId={bookId}
-          activeRunId={data.activeRunId}
+          activeRunId={start ? null : data.activeRunId}
           trigger={data.trigger}
           isPaid={data.isPaid}
           dailyCap={data.dailyCap}
@@ -96,6 +115,7 @@ export function StepSorting({ data, headlineId, onDone, onStopped, onResumed }: 
           onDone={finish}
           onStop={onStopped}
           onResume={onResumed}
+          handover={start}
         />
       </div>
     </div>

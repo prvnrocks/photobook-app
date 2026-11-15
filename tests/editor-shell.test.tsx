@@ -152,11 +152,11 @@ describe("editor page data", () => {
     expect(editorRedirect({ ...base, photos: [photo] })).toBe("/books/new?book=b1&step=6");
     expect(editorRedirect({ ...base, photos: [photo], aiMode: "replay" })).toBe("/books/new?book=b1&step=6");
   });
-  it("built before / AI off → classic upload or build pages", () => {
+  it("built before → classic upload or build pages; M20b: AI off fresh books go into the wizard too", () => {
     expect(editorRedirect({ ...base, hasBuildRun: true })).toBe("/books/b1/upload");
     expect(editorRedirect({ ...base, hasBuildRun: true, photos: [photo] })).toBe("/books/b1/build");
     expect(editorRedirect({ ...base, aiMode: "off" })).toBe("/books/new?book=b1&step=5");
-    expect(editorRedirect({ ...base, aiMode: "off", photos: [photo] })).toBe("/books/b1/build");
+    expect(editorRedirect({ ...base, aiMode: "off", photos: [photo] })).toBe("/books/new?book=b1&step=6");
   });
   it("a doc (valid or invalid) opens the editor", () => {
     expect(editorRedirect({ ...base, docError: "invalid" })).toBeNull();

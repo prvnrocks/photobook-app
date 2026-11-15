@@ -9,7 +9,7 @@
 //    editor; review stays reachable from the editor's "AI kept X of Y" chip).
 // M20 T9 (D-072): the href of a fresh draft goes straight into the wizard (one hop instead of the
 // upload/build page's redirect): "upload" → /books/new?book=<id>&step=5, "build" with no run going
-// → step 6 (the wizard's gate moves it on: finished run → 7, AI off → the classic build page).
+// → step 6 (the wizard's gate moves it on: finished run → 7; AI off stays in the wizard, M20b).
 // A running build/rebuild keeps /books/<id>/build: only that page can tell a rebuild (classic) from
 // a first build (it redirects the latter into the wizard).
 

@@ -18,12 +18,13 @@ export function isWizardUpload(firstRun: FirstRunState, detailsLock: SetupLockRe
 }
 
 /**
- * Step 6 ("Sorting your photos") = the first AI build: not a rebuild, AI on, and the album is
- * neither user-edited nor already AI-made (docOrigin; an unparsable doc counts as edited).
- * Rebuilds and AI-off keep the classic build screen.
+ * Step 6 ("Sorting your photos") = the first build: not a rebuild, and the album is neither
+ * user-edited nor already AI-made (docOrigin; an unparsable doc counts as edited). M20b: AI on or
+ * off — with AI off the first build is the rule build and runs in the wizard too. Rebuilds keep the
+ * classic build screen. `aiOn` is informational (kept for callers).
  */
-export function isWizardBuild(input: { trigger: "build" | "rebuild"; aiOn: boolean; doc: unknown }): boolean {
-  if (input.trigger === "rebuild" || !input.aiOn) return false;
+export function isWizardBuild(input: { trigger: "build" | "rebuild"; aiOn?: boolean; doc: unknown }): boolean {
+  if (input.trigger === "rebuild") return false;
   const origin = docOrigin(input.doc);
   return !origin.userEdited && origin.generator !== "ai";
 }
@@ -73,8 +74,9 @@ export type BuildEntryTarget = { kind: "wizard"; href: string } | { kind: "edito
 
 /**
  * /books/[id]/build entry (M20 T9, D-072). First match wins:
- *  1. rebuild (?trigger=rebuild, "Try AI again"), AI off, or a running rebuild → never the wizard:
- *     a finished ?auto=1 link opens the editor (M13 rule), otherwise the classic screen.
+ *  1. rebuild (?trigger=rebuild, "Try AI again") or a running rebuild → never the wizard: a finished
+ *     ?auto=1 link opens the editor (M13 rule), otherwise the classic screen. M20b: AI off is no
+ *     longer here — a first rule build goes through the wizard's steps 6 / 7 like an AI build.
  *  2. ?auto=1 and confirmed "no active run" (the automatic first build already ended): the gate's
  *     Review (7) → wizard step 7, anything else → the editor (as before M20).
  *  3. not a fresh first build (isWizardBuild: AI-made / edited album) → classic.
@@ -82,12 +84,12 @@ export type BuildEntryTarget = { kind: "wizard"; href: string } | { kind: "edito
  *     any other answer (7 / editor / classic) → classic, exactly as before M20.
  *
  * No loop with /books/new: its gate answers "classic" (→ /books/<id>/build, no query) only for a
- * running rebuild or AI off — rule 1 here — and for the same reads rule 4 only redirects when the gate
- * answers 6, which /books/new then renders.
+ * running rebuild — rule 1 here — and for the same reads rule 4 only redirects when the gate answers
+ * 6, which /books/new then renders.
  */
 export function buildEntryRedirect(input: BuildEntryInput): BuildEntryTarget {
   const finishedAuto = input.auto && input.activeReadOk && input.active === null;
-  if (input.trigger === "rebuild" || !input.aiOn || input.active?.trigger === "rebuild") {
+  if (input.trigger === "rebuild" || input.active?.trigger === "rebuild") {
     return finishedAuto ? { kind: "editor" } : { kind: "classic" };
   }
   const target = resolveWizardStep({

@@ -106,7 +106,9 @@ describe("BuildProgress (T7)", () => {
     expect(s).not.toContain("build-to-review");
     // 3 classic notices + 1 wizard stop card (M20 T7).
     expect(count(s, 'data-testid="build-to-editor"')).toBe(4);
-    expect(s).toMatch(/track\("ai_build_done", \{ mode, outcome, ms_bucket: msBucket\(Date\.now\(\) - mountedAt\), auto \}\)/);
+    // M20b: `auto` via autoRef (a handed-over auto start that made no run reports auto: false).
+    expect(s).toMatch(/track\("ai_build_done", \{ mode, outcome, ms_bucket: msBucket\(Date\.now\(\) - mountedAt\), auto: autoRef\.current \}\)/);
+    expect(s).toContain("const autoRef = useRef(auto);");
   });
 
   it("build page: ?auto=1 passes auto, a finished auto run opens Review / the editor, draft from books.doc", () => {

@@ -83,16 +83,47 @@ const WIZARD_STEPS: readonly { id: WizardChecklistStepId; label: string; states:
 ];
 
 /**
+ * M20b: the same three rows for a RULE build (AI off, mode 'rule'), worded for what the rule build
+ * really does (src/lib/ai/fallback.ts ruleCurate + src/lib/autolayout.ts): it drops duplicates
+ * (upload-time dHash groups), screenshots and extremely blurry photos (upload-time blur score),
+ * starts a new chapter when the day / place changes (or after a 6 h gap), then fills the pages.
+ * No AI claims ("places and moments" = the AI Storyteller).
+ */
+export const WIZARD_RULE_LABELS: Readonly<Record<WizardChecklistStepId, string>> = {
+  sift: "Leaving out duplicates and very blurry photos",
+  moments: "Grouping your photos by date and place",
+  book: "Laying out your pages",
+};
+
+function labelOf(id: WizardChecklistStepId, fallback: string, rules: boolean): string {
+  return rules ? WIZARD_RULE_LABELS[id] : fallback;
+}
+
+/**
  * The wizard checklist for a run state. `finished` = the client saw the run finish (leaving for the
  * editor): every row done. queued → all pending; failed → all pending (shown as an error elsewhere).
+ * `rules` = a rule build (M20b): rule wording, same states.
  */
-export function wizardChecklist(state: RunState, finished = false): WizardChecklistStep[] {
+export function wizardChecklist(state: RunState, finished = false, rules = false): WizardChecklistStep[] {
   const r = finished ? rank("done") : state === "failed" ? -1 : rank(state);
   return WIZARD_STEPS.map((s) => {
     const last = Math.max(...s.states.map(rank));
     const st: ChecklistStepState = r > last ? "done" : s.states.includes(state) && !finished ? "current" : "todo";
-    return { id: s.id, label: s.label, state: st };
+    return { id: s.id, label: labelOf(s.id, s.label, rules), state: st };
   });
+}
+
+/**
+ * M20b: a rule build finishes inside one request (the server reports only "done"), so step 6 plays
+ * the three rows through after the fact: rows before `rowsDone` done, the next one current, the rest
+ * to do. Only used once the server confirmed the run is done — it shows finished work, not a guess.
+ */
+export function wizardReplayChecklist(rowsDone: number, rules = true): WizardChecklistStep[] {
+  return WIZARD_STEPS.map((s, i) => ({
+    id: s.id,
+    label: labelOf(s.id, s.label, rules),
+    state: i < rowsDone ? "done" : i === rowsDone ? "current" : "todo",
+  }));
 }
 
 // --- M20 T7 (D-072): the sorting step's photo animation phase ----------------------------------
@@ -105,7 +136,13 @@ export type WizardSortPhase = "fan" | "sort" | "piles" | "ready";
 
 export function wizardSortPhase(state: RunState, finished = false): WizardSortPhase {
   if (finished || state === "done") return "ready";
-  const current = wizardChecklist(state).find((r) => r.state === "current")?.id;
+  return wizardPhaseOfRows(wizardChecklist(state));
+}
+
+/** The photo phase for checklist rows (M20b: also the rule replay's rows): follows the current row. */
+export function wizardPhaseOfRows(rows: readonly WizardChecklistStep[]): WizardSortPhase {
+  if (rows.length > 0 && rows.every((r) => r.state === "done")) return "ready";
+  const current = rows.find((r) => r.state === "current")?.id;
   if (current === "book") return "piles";
   if (current === "moments") return "sort";
   return "fan";

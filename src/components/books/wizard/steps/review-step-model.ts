@@ -104,7 +104,7 @@ export function heroCountCopy(aiUsed: boolean, kept: number, total: number): str
 export function heroSubline(aiUsed: boolean): string {
   return aiUsed
     ? "AI picked the best shots, grouped them into moments and wrote the captions. You decide what stays."
-    : "We picked these with simple rules and laid them out by date. You decide what stays.";
+    : "We sorted these by date and place and left out duplicates and very blurry shots. You decide what stays.";
 }
 
 export function pagesCopy(n: number): string {

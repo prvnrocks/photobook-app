@@ -22,7 +22,7 @@ const { docOrigin } = await import("@/lib/book/replaceable");
 const { Uploader, WIZARD_KEEP_OPEN_COPY } = await import("@/components/upload/Uploader");
 const { UploadProgress, uploadProgressText } = await import("@/components/upload/UploadProgress");
 const { UploadThumbs } = await import("@/components/upload/UploadThumbs");
-const { UploadStage, UploadPickArt, UPLOAD_SORTING_NEXT_COPY } = await import("@/components/upload/UploadStage");
+const { UploadStage, UploadPickArt, UPLOAD_DONE_HINT_COPY } = await import("@/components/upload/UploadStage");
 const stageModel = await import("@/components/upload/upload-stage-model");
 const { STAGE_MAX_THUMBS } = stageModel;
 const { BuildProgress, WIZARD_BUILD_KEEP_OPEN_COPY } = await import("@/components/review/BuildProgress");
@@ -44,7 +44,7 @@ describe("wizard chrome choice", () => {
     expect(isWizardUpload("done", null)).toBe(false);
   });
 
-  it("build: wizard only for the first AI build of an unedited, non-AI album", () => {
+  it("build: wizard only for the first build (AI on or off, M20b) of an unedited, non-AI album", () => {
     const rule = { ...devPreviewDoc(), meta: { generator: "rule" as const, generatorVersion: 1, runId: null, userEdited: false } };
     const ai = { ...rule, meta: { ...rule.meta, generator: "ai" as const } };
     const edited = { ...rule, meta: { ...rule.meta, userEdited: true } };
@@ -56,7 +56,9 @@ describe("wizard chrome choice", () => {
     expect(isWizardBuild({ trigger: "build", aiOn: true, doc: {} })).toBe(true);
     expect(isWizardBuild({ trigger: "build", aiOn: true, doc: rule })).toBe(true);
     expect(isWizardBuild({ trigger: "rebuild", aiOn: true, doc: rule })).toBe(false);
-    expect(isWizardBuild({ trigger: "build", aiOn: false, doc: rule })).toBe(false);
+    // M20b: AI off no longer keeps the classic build screen (the first rule build runs in the wizard)
+    expect(isWizardBuild({ trigger: "build", aiOn: false, doc: rule })).toBe(true);
+    expect(isWizardBuild({ trigger: "rebuild", aiOn: false, doc: rule })).toBe(false);
     expect(isWizardBuild({ trigger: "build", aiOn: true, doc: ai })).toBe(false);
     expect(isWizardBuild({ trigger: "build", aiOn: true, doc: edited })).toBe(false);
     // unparsable → treated as edited (safe side)
@@ -227,13 +229,15 @@ describe("UploadStage (M20 T5)", () => {
     expect(html).toMatch(/<p class="text-sm text-muted-foreground" data-testid="upload-counts">2 skipped · 1 failed</);
   });
 
-  it("settled: closed book, burst, 'Sorting next…', no Pause", () => {
+  it("settled: closed book, burst, upload-only hint (M20b: no 'Sorting next…'), no Pause", () => {
     const html = stage({ done: 20, uploaded: 19, failed: 1 });
     expect(html).toContain('data-state="settled"');
     expect(html).toContain('data-testid="upload-settled"');
     expect(html).toContain('data-testid="upload-burst"');
     expect(html.match(/class="up-dot"/g)).toHaveLength(18);
-    expect(html).toContain(`data-testid="upload-sorting-next">${UPLOAD_SORTING_NEXT_COPY}<`);
+    expect(html).toContain(`data-testid="upload-done-hint">${UPLOAD_DONE_HINT_COPY}<`);
+    expect(html).not.toMatch(/sort/i); // step 5 never mentions sorting (M20b)
+    expect(html).not.toContain("upload-sorting-next");
     expect(html).not.toContain("upload-pause");
     // nothing uploaded → calm, no celebration
     const none = stage({ done: 3, total: 3, uploaded: 0, skipped: 3 });

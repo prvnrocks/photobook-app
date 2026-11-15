@@ -19,6 +19,10 @@
 // "Make my book now" links, `onPhotosPicked` locks steps 1–4. The upload stage (UploadStage) stays
 // mounted while finalizing and starting (`settled`), and the wizard moves on only after both the
 // success burst (onSettled) and the auto-start answer. The classic screen is unchanged.
+// M20b: step 5 shows upload progress only, never sorting / "starting your book": once the success
+// burst has played the wizard moves on — with the answer when it's in (onAdvance), otherwise with the
+// pending answer (onAdvancePending) for step 6 to follow. Fallback answers that arrive before the
+// hand-over keep the "Make my book now" fallback here. ai_build_done { rules } is reported by step 6.
 import { ImagePlus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -45,8 +49,7 @@ import {
   type AutoStartOutcome,
   buildHref,
   editorHref,
-  NOT_READY_RETRY_MS,
-  requestAutoBuild,
+  requestAutoBuildSettled,
   shouldAutoStart,
   type FirstRunState,
 } from "@/lib/upload/auto-build-client";
@@ -68,7 +71,7 @@ import { cn } from "@/lib/utils";
 import { WIZARD_BACK_CLASS } from "@/components/wizard/WizardNav";
 import { UploadProgress } from "./UploadProgress";
 import { UploadPickArt } from "./UploadStage";
-import { SETTLE_MS, UPLOAD_PICK_WIZARD_CLASS } from "./upload-stage-model";
+import { HANDOVER_GRACE_MS, SETTLE_MS, UPLOAD_PICK_WIZARD_CLASS } from "./upload-stage-model";
 import { UploadSummary, type SummaryNext } from "./UploadSummary";
 import { UploadThumbs, useThumbStrip } from "./UploadThumbs";
 import { useWakeLock, useWarnOnLeave } from "./use-keep-awake";
@@ -105,6 +108,11 @@ export type UploaderProps = {
    * upload stage's success burst. Fallback outcomes (not_ready twice, limit, error…) stay here.
    */
   onAdvance?: (outcome: AutoStartOutcome) => void;
+  /**
+   * Wizard only (M20b): the success burst played but the auto-start answer is still on its way →
+   * called once with the pending answer instead of waiting here (step 5 never shows sorting).
+   */
+  onAdvancePending?: (answer: Promise<AutoStartOutcome>) => void;
   /** Wizard only (M20 T6): "Make my book now" calls this instead of linking to the build page. */
   onBuildNow?: () => void;
 };
@@ -148,12 +156,20 @@ export function Uploader(props: UploaderProps) {
   const autoBusyRef = useRef(false);
   /** Photos were picked on this visit (hides the wizard Back link so an upload can't be lost). */
   const [picked, setPicked] = useState(false);
-  // M20 T6: the wizard moves on after the auto-start answer AND the stage's success burst.
+  // M20 T6 / M20b: the wizard moves on after the stage's success burst — with the auto-start answer
+  // when it's in, otherwise with the pending answer.
   const onAdvanceRef = useRef(props.onAdvance);
+  const onAdvancePendingRef = useRef(props.onAdvancePending);
   useEffect(() => {
     onAdvanceRef.current = props.onAdvance;
+    onAdvancePendingRef.current = props.onAdvancePending;
   });
+  /** The auto-start request in flight (or answered with a "move on" outcome) — what the wizard gets. */
+  const requestRef = useRef<Promise<AutoStartOutcome> | null>(null);
+  /** Its answer, once in and "move on" (fallback answers never go to the wizard). */
   const advanceRef = useRef<AutoStartOutcome | null>(null);
+  /** When the request started: a pending request is handed over only after HANDOVER_GRACE_MS. */
+  const requestAtRef = useRef(0);
   const advancedRef = useRef(false);
   const burstDoneRef = useRef(false);
   /** Last queue progress (null = the stage never showed, so there's no burst to wait for). */
@@ -332,57 +348,71 @@ export function Uploader(props: UploaderProps) {
     autoBusyRef.current = true;
     setAuto({ kind: "starting" });
     const startedAt = Date.now();
-    try {
-      let retried = false;
-      for (;;) {
-        const outcome = await requestAutoBuild(bookId);
-        if (unmountedRef.current) return;
-        const next = autoStartNext(bookId, outcome, { retried, activeAtLoad: false });
-        if (next.kind === "retry") {
-          retried = true;
-          await new Promise((r) => setTimeout(r, NOT_READY_RETRY_MS));
-          if (unmountedRef.current) return;
-          continue;
-        }
-        if (next.kind === "go") {
-          if (next.rules) {
-            // A rule run (AI off) finished inside the request; the build screen would start another.
-            track("ai_build_done", {
-              mode: "rules",
-              outcome: next.rules.outcome,
-              ms_bucket: msBucket(Date.now() - startedAt),
-              auto: true,
-            });
-          }
-          // The wizard variant never navigates: the /books/new flow maps the answer (onAdvance).
-          if (wizard) queueAdvance(outcome);
-          else router.push(next.href);
-          return; // stay "starting" until the next screen replaces this one
-        }
-        setAuto({ kind: "fallback", limit: next.limit });
-        autoBusyRef.current = false;
-        return;
+    // One promise incl. the not_ready retry; it keeps going if this screen unmounts (step 6 may
+    // be waiting for it — M20b).
+    const request = requestAutoBuildSettled(bookId);
+    // The wizard moves on after the success burst, answered or not (step 5 never shows sorting).
+    if (wizard) queueAdvance(request);
+    const outcome = await request;
+    if (unmountedRef.current) return;
+    const next = autoStartNext(bookId, outcome, { retried: true, activeAtLoad: false });
+    if (next.kind === "go") {
+      // The wizard variant never navigates: the /books/new flow maps the answer (onAdvance).
+      if (wizard) {
+        advanceRef.current = outcome;
+        tryAdvance();
+        return; // the wizard moves on (step 6 reports ai_build_done for a finished rule run)
       }
-    } catch {
-      setAuto({ kind: "fallback" });
-      autoBusyRef.current = false;
+      if (next.rules) {
+        // A rule run (AI off) finished inside the request; the build screen would start another.
+        track("ai_build_done", {
+          mode: "rules",
+          outcome: next.rules.outcome,
+          ms_bucket: msBucket(Date.now() - startedAt),
+          auto: true,
+        });
+      }
+      router.push(next.href);
+      return; // stay "starting" until the next screen replaces this one
     }
+    // Already handed to step 6 (pending): it follows this answer there.
+    if (wizard && advancedRef.current) return;
+    requestRef.current = null; // a fallback answer is never handed over
+    setAuto({ kind: "fallback", limit: next.kind === "fallback" ? next.limit : undefined });
+    autoBusyRef.current = false;
   }
 
-  /** Hands the auto-start answer to the wizard once the success burst has played (or can't). */
+  /**
+   * Hands the auto-start request to the wizard once the success burst has played (or can't): its
+   * answer when that's in (onAdvance), else the pending request itself (onAdvancePending, M20b).
+   */
   function tryAdvance() {
-    const outcome = advanceRef.current;
-    const onAdvance = onAdvanceRef.current;
-    if (!outcome || !onAdvance || advancedRef.current || unmountedRef.current) return;
+    const request = requestRef.current;
+    if (!request || advancedRef.current || unmountedRef.current) return;
     if (!burstDoneRef.current && progressRef.current !== null) return;
+    const outcome = advanceRef.current;
+    if (outcome) {
+      const onAdvance = onAdvanceRef.current;
+      if (!onAdvance) return;
+      advancedRef.current = true;
+      onAdvance(outcome);
+      return;
+    }
+    const onPending = onAdvancePendingRef.current;
+    if (!onPending) return;
+    // A quick answer (run created, or a fallback that stays here) gets a moment to arrive first.
+    if (Date.now() - requestAtRef.current < HANDOVER_GRACE_MS) return;
     advancedRef.current = true;
-    onAdvance(outcome);
+    onPending(request);
   }
 
-  function queueAdvance(outcome: AutoStartOutcome) {
-    advanceRef.current = outcome;
+  function queueAdvance(request: Promise<AutoStartOutcome>) {
+    requestRef.current = request;
+    requestAtRef.current = Date.now();
+    advanceRef.current = null;
     advancedRef.current = false;
     tryAdvance();
+    setTimeout(tryAdvance, HANDOVER_GRACE_MS);
     // Safety net: the burst normally ends within SETTLE_MS; never strand the user on a lost callback.
     setTimeout(() => {
       burstDoneRef.current = true;
@@ -439,6 +469,7 @@ export function Uploader(props: UploaderProps) {
     setPicksIgnored(false);
     burstDoneRef.current = false;
     advanceRef.current = null;
+    requestRef.current = null;
     if (!picked) props.onPhotosPicked?.();
     setPicked(true);
     setLoadFailed(false);
@@ -710,7 +741,7 @@ export function Uploader(props: UploaderProps) {
 
       {stageShown && progress ? (
         // Wizard: the stage stays mounted from the first photo until the wizard moves on — settled
-        // (closed book + burst + "Sorting next…") while finalizing and starting the build.
+        // (closed book + burst + "All photos are in") while finalizing; then step 6 (M20b).
         <UploadProgress
           progress={progress}
           paused={paused}
@@ -783,7 +814,8 @@ export function Uploader(props: UploaderProps) {
         </Notice>
       ) : null}
 
-      {summary && !fatal && (phase === "done" || phase === "finalize_error") && !stageShown ? (
+      {summary && !fatal && (phase === "done" || phase === "finalize_error") && !stageShown && !(wizard && starting) ? (
+        // Wizard (M20b): never the "Starting your book…" bar — step 6 shows the sorting.
         <UploadSummary
           bookId={bookId}
           summary={summary}

@@ -7,6 +7,9 @@
 // StepSorting / StepReview wired to the flow (T7: step 6 hands over prefetched step-7 data and
 // reports stop states as buildStopped). Never navigates itself except through `leave`
 // (editor / classic build / login).
+// M20b: step 5 hands the auto-start answer (resolved or still pending) to step 6 through
+// `handoverRef`; while it's held, step 6 never skips to 7 on the gate's "finished" answer — a rule
+// build (AI off) that finished inside the POST still plays its sorting checklist, then Review.
 
 import { useEffect, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { Notice } from "@/components/app/Notice";
@@ -33,6 +36,8 @@ export type WizardDataStepsProps = {
   leaving: boolean;
   /** Step 6 data with ?auto=1 when the auto start began the run (ai_build_done { auto }). */
   autoRef: MutableRefObject<boolean>;
+  /** M20b: step 5's auto-start answer for step 6 (null = none: step 6 resumes / starts as before). */
+  handoverRef: MutableRefObject<Promise<AutoStartOutcome> | null>;
   headlineId: string;
 };
 
@@ -55,6 +60,7 @@ export function WizardDataSteps({
   leave,
   leaving,
   autoRef,
+  handoverRef,
   headlineId,
 }: WizardDataStepsProps) {
   const [loadError, setLoadError] = useState<keyof typeof LOAD_ERRORS | null>(null);
@@ -75,7 +81,9 @@ export function WizardDataSteps({
       const r = res.data.resolved;
       if (r === "editor") return leave(flowEditorHref(bookId));
       if (r === "classic") return leave(`/books/${bookId}/build`);
-      if (r !== step) {
+      // M20b: step 6 holding step 5's answer plays that run through (the gate may already say 7).
+      const handedOver = step === 6 && handoverRef.current !== null;
+      if (r !== step && !handedOver) {
         // Another tab / an earlier visit moved the book on (G3): follow the gate.
         if (step === 5 && r === 6) return void dispatch({ type: "runStarted" });
         if (step < 7 && r === 7) return void dispatch({ type: "buildDone" });
@@ -83,7 +91,7 @@ export function WizardDataSteps({
       setStepData((d) => ({ ...d, [step]: res.data }));
     });
     return () => ctrl.abort();
-  }, [step, bookId, haveData, reloadToken, autoRef, dispatch, leave, setStepData]);
+  }, [step, bookId, haveData, reloadToken, autoRef, handoverRef, dispatch, leave, setStepData]);
 
   if (loadError && !haveData) {
     return (
@@ -113,7 +121,17 @@ export function WizardDataSteps({
         onPhotosPicked={() => dispatch({ type: "photosPicked" })}
         onAdvance={(outcome: AutoStartOutcome) => {
           autoRef.current = outcome.kind === "started";
+          // A run to follow on step 6 (incl. a rule run already done inside the POST, M20b).
+          if (outcome.kind === "started" || outcome.kind === "already_running") {
+            handoverRef.current = Promise.resolve(outcome);
+          }
           dispatch({ type: "autoStart", outcome, retried: true, activeAtLoad: s5.firstRun === "active" });
+        }}
+        onAdvancePending={(answer: Promise<AutoStartOutcome>) => {
+          // M20b: the success moment ended first — step 6 shows the sorting and follows the answer.
+          autoRef.current = true;
+          handoverRef.current = answer;
+          dispatch({ type: "autoStartPending" });
         }}
         onBuildNow={() => dispatch({ type: "buildRequested" })}
       />
@@ -124,7 +142,9 @@ export function WizardDataSteps({
       <StepSorting
         data={s6}
         headlineId={headlineId}
+        handover={handoverRef.current}
         onDone={(s7data) => {
+          handoverRef.current = null; // played through: a later step-6 view follows the gate again
           // M20 T7: step 7's data prefetched during the "ready" moment → step 7 opens without a fetch.
           if (s7data && s7data.step === 7 && s7data.bookId === bookId) setStepData((d) => ({ ...d, 7: s7data }));
           dispatch({ type: "buildDone" });

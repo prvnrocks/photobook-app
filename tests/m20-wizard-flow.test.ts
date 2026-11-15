@@ -298,16 +298,23 @@ describe("autoStart mapping", () => {
     }
   });
 
-  it("a rule run finished inside the POST → editor with the rules outcome", () => {
-    expect(transition(s, auto({ kind: "started", runId: RUN, mode: "rule", state: "done" })).effect).toEqual({
-      kind: "navigate",
-      target: "editor",
-      href: editor,
-      rules: { outcome: "ok" },
-    });
-    expect(transition(s, auto({ kind: "started", runId: RUN, mode: "rule", state: "failed" })).effect).toMatchObject({
-      rules: { outcome: "failed" },
-    });
+  it("M20b: a rule run finished (or failed) inside the POST → step 6 sorting, never the editor", () => {
+    for (const state of ["done", "failed"] as const) {
+      const r = transition(s, auto({ kind: "started", runId: RUN, mode: "rule", state }));
+      expect(r.state).toMatchObject({ step: 6, runStarted: true, photosPicked: true, done: false });
+      expect(r.effect).toEqual(step6);
+    }
+  });
+
+  it("M20b: autoStartPending (answer still on its way) → step 6, step 5 locked; ignored elsewhere", () => {
+    const r = transition(s, { type: "autoStartPending" });
+    expect(r.state).toMatchObject({ step: 6, runStarted: true, photosPicked: true });
+    expect(r.effect).toEqual(step6);
+    expect(isStepLocked(r.state, 5)).toBe(true);
+    // a late known answer after the hand-over changes nothing
+    expect(transition(r.state, auto({ kind: "started", runId: RUN, mode: "rule", state: "done" })).effect).toEqual({ kind: "none" });
+    // not on step 5 / already running
+    expect(transition(r.state, { type: "autoStartPending" }).effect).toEqual({ kind: "none" });
   });
 
   it("not_first → step 6 when a run was active at load, else step 7 review", () => {

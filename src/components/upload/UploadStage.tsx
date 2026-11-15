@@ -6,8 +6,9 @@
 //     "12 of 20" + percentage, the throttled aria-live headline, calm skipped/failed counts, a stalled
 //     notice and Pause/Resume.
 //   - settled (every file reached a final state, or `settled`): the pages fold into a closed book, a
-//     short gold/emerald dot burst, then "Sorting next…"; `onSettled` fires once after the burst
-//     (immediately with reduced motion) so the wizard can move on.
+//     short gold/emerald dot burst, "All photos are in" + "Every photo is safely uploaded."; `onSettled`
+//     fires once after the burst (immediately with reduced motion) so the wizard can move on. M20b: no
+//     sorting / build status on this stage — the sorting is step 6's.
 // Motion is CSS only (upload-motion.css): transforms/opacity, all under prefers-reduced-motion:
 // no-preference; without it the same markup is a static final state. No canvas, no timers per frame.
 //
@@ -30,7 +31,8 @@ import {
 import "./upload-motion.css";
 
 export const UPLOAD_STALLED_COPY = "This is taking longer than usual. We keep retrying — check your connection and keep this tab open.";
-export const UPLOAD_SORTING_NEXT_COPY = "Sorting next…";
+/** Settled hint (M20b: upload-only — no "Sorting next…"; the sorting is step 6's). */
+export const UPLOAD_DONE_HINT_COPY = "Every photo is safely uploaded.";
 
 export type UploadStageProps = {
   progress: QueueProgress;
@@ -89,7 +91,7 @@ export function UploadStage({ progress, paused, onTogglePause, headline, statusT
   const hint =
     state === "settled"
       ? uploaded > 0
-        ? UPLOAD_SORTING_NEXT_COPY
+        ? UPLOAD_DONE_HINT_COPY
         : "No new photos were added."
       : state === "paused"
         ? "Paused. Tap Resume to carry on."
@@ -166,7 +168,7 @@ export function UploadStage({ progress, paused, onTogglePause, headline, statusT
             </p>
             <p
               className={`type-small text-muted-foreground ${state === "settled" && uploaded > 0 ? "up-next" : ""}`}
-              data-testid={state === "settled" ? "upload-sorting-next" : "upload-hint"}
+              data-testid={state === "settled" ? "upload-done-hint" : "upload-hint"}
             >
               {hint}
             </p>

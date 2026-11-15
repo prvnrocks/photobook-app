@@ -495,11 +495,13 @@ test.describe("M11 signed-in flow at 375 px (live)", () => {
     // M19 wizard; D-068: travel defaults to Geometric — this spec covers Modern.
     bookId = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", style: "modern" });
     await page.getByTestId("upload-input").setInputFiles(await makeSynthetic(page, 6));
-    // M20 (D-072): the wizard keeps the upload stage up through finalize + the held auto start
-    // (settled: "All photos are in" / "Sorting next…") — no summary / "starting" card any more.
+    // M20 (D-072): the wizard keeps the upload stage up through finalize (settled: "All photos are
+    // in") — no summary / "starting" card any more. M20b: after the success burst it moves on to step 6
+    // while the auto start is still held (the upload screen never shows sorting).
     await expect(page.getByTestId("upload-settled")).toBeVisible({ timeout: 180_000 });
-    await expect(page.getByTestId("upload-sorting-next")).toBeVisible();
-    await audit(page, "upload settled (starting)", { shot: "upload-summary" });
+    await page.waitForURL(wizardStepUrl(bookId, "6"), { timeout: 60_000 });
+    await expect(page.getByTestId("wizard-step-sorting")).toBeVisible();
+    await audit(page, "sorting (auto start held)", { shot: "upload-summary" });
   };
 
   const stepC = async () => {

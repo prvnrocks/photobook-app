@@ -31,8 +31,9 @@ export const metadata: Metadata = { title: "Making your book" };
 // M20 T9 (D-072): the first AI build of a fresh book runs inside the wizard — this page redirects it
 // to /books/new?book=<id>&step=6 (&auto=1 kept), and a finished ?auto=1 run to step 7 (Review) when
 // the wizard gate says so (else the editor, as before). Rebuilds (?trigger=rebuild, "Try AI again"),
-// a running rebuild, AI off and edited / AI-made albums keep the classic screen below — the wizard's
-// gate sends exactly those here ("classic"), so the two never loop (buildEntryRedirect).
+// a running rebuild and edited / AI-made albums keep the classic screen below — the wizard's gate
+// sends only a running rebuild here ("classic"), so the two never loop (buildEntryRedirect).
+// M20b: AI off is no longer classic — a fresh book's first (rule) build also runs in the wizard.
 
 export default async function BuildPage({
   params,
@@ -57,8 +58,8 @@ export default async function BuildPage({
       (run) => ({ ok: true as const, run }),
       () => ({ ok: false as const, run: null }),
     ),
-    // Only the wizard gate needs it (rebuild / AI off never enter the wizard). null = read error.
-    trigger === "build" && aiOn ? hasAnyRunForBook(book.id).catch(() => null) : Promise.resolve(null),
+    // Only the wizard gate needs it (a rebuild never enters the wizard). null = read error.
+    trigger === "build" ? hasAnyRunForBook(book.id).catch(() => null) : Promise.resolve(null),
     getMyProfile().catch(() => null),
   ]);
   const active = activeRead.run;
