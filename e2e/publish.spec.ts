@@ -1,7 +1,10 @@
-// M6 publish screen on the dev-only /dev-publish fixture (real PublishPanelView, stubbed actions;
-// no auth / Supabase / migration 1000), run against `next dev` like e2e/editor.spec.ts.
-// Every state at 375 px: no horizontal overflow, copy per state, conflict auto-retry, password
-// validation. Also the signed-out guard of the real /books/<id>/publish route.
+// M6 publish screen (M21 share page redesign) on the dev-only /dev-publish fixture (real ShareBand +
+// PublishPanelView + shareSlots, stubbed actions; no auth / Supabase / migration 1000), run against
+// `next dev` like e2e/editor.spec.ts. Every state at 375 px: no horizontal overflow, copy per state,
+// conflict auto-retry, password validation. Also the signed-out guard of the real
+// /books/<id>/publish route. M21: "Open flipbook" (publish-open) and the celebration burst live in
+// the book preview (share-preview); "Your edits aren't live yet" → "Update link"; the free PDF card
+// is locked (publish-pdf-locked) and never calls the PDF API; phone sticky bar (publish-sticky-bar).
 import { expect, test, type Page } from "@playwright/test";
 
 const VIEWPORT = { width: 375, height: 740 };
@@ -70,20 +73,43 @@ test("draft (free): Publish → live with link, 30-day expiry label, free notice
   await expect(page.getByTestId("publish-url")).toHaveValue(/\/b\/sara-and-omar-wedding-7Hq2xYp9Kd$/);
   await expect(page.getByTestId("publish-expiry")).toHaveText(/^Link expires \d{1,2} [A-Z][a-z]{2}( \d{4})?$/);
   await expect(page.getByTestId("share-whatsapp")).toHaveAttribute("href", /^https:\/\/wa\.me\/\?text=/);
-  await expect(page.getByTestId("publish-open")).toHaveAttribute("href", "/b/sara-and-omar-wedding-7Hq2xYp9Kd");
+  // M21: the page's one "Open flipbook" sits in the book preview; the burst fires there too.
+  await expect(page.getByTestId("publish-open")).toHaveCount(1);
+  await expect(page.getByTestId("share-preview").getByTestId("publish-open")).toHaveAttribute("href", "/b/sara-and-omar-wedding-7Hq2xYp9Kd");
+  await expect(page.getByTestId("publish-panel")).toHaveAttribute("data-celebrate", "on");
+  await expect(page.getByTestId("share-preview").getByTestId("share-burst")).toHaveCount(1);
   await expect(page.getByTestId("unpublish-button")).toBeVisible();
   await noHorizontalOverflow(page);
 });
 
-test("landed from the editor's Share (M13 T9): 'Your book is live', WhatsApp first and above the fold, param dropped", async ({ page }) => {
+test("landed from the editor's Share (M13 T9; M21): 'Your book is live', a WhatsApp control above the fold, param dropped", async ({ page }) => {
   await page.goto("/dev-publish?state=live&shared=live");
   await expect(page.getByTestId("publish-message")).toHaveText("Your book is live");
   await expect(page).toHaveURL(/\/dev-publish\?state=live$/);
+  await expect(page.getByTestId("publish-panel")).toHaveAttribute("data-celebrate", "on");
   const wa = page.getByTestId("share-whatsapp");
   await expect(wa).toHaveAttribute("href", /^https:\/\/wa\.me\/\?text=/);
   const box = (await wa.boundingBox())!;
   expect(box.height).toBeGreaterThanOrEqual(44);
-  expect(box.y + box.height, "WhatsApp is visible without scrolling").toBeLessThanOrEqual(VIEWPORT.height);
+  // M21: band + preview row + message + live card push the card's WhatsApp button down. Whenever it
+  // is off screen the phone sticky bar stands in for it (same wa.me link) — one of the two must be
+  // tappable without scrolling.
+  // The bar counts the bottom 96 px as "under the bar" (PublishPanel useOffscreen rootMargin).
+  const cardClear = box.y + box.height <= VIEWPORT.height - 96;
+  const bar = page.getByTestId("publish-sticky-bar");
+  await expect(bar).toHaveAttribute("data-action", "whatsapp");
+  console.log(`[landed-375] share-whatsapp bottom=${Math.round(box.y + box.height)} viewport=${VIEWPORT.height} clearOfBar=${cardClear}`);
+  if (cardClear) {
+    await expect(bar).toHaveAttribute("data-visible", "false");
+  } else {
+    await expect(bar).toHaveAttribute("data-visible", "true");
+    const barWa = page.getByTestId("publish-bar-whatsapp");
+    await expect(barWa).toBeVisible();
+    await expect(barWa).toHaveAttribute("href", (await wa.getAttribute("href"))!);
+    const b = (await barWa.boundingBox())!;
+    expect(b.height).toBeGreaterThanOrEqual(44);
+    expect(b.y + b.height, "sticky WhatsApp is visible without scrolling").toBeLessThanOrEqual(VIEWPORT.height);
+  }
   const y = async (id: string) => (await page.getByTestId(id).boundingBox())!.y;
   expect(await y("share-whatsapp")).toBeLessThan(await y("share-copy"));
   expect(await y("share-copy")).toBeLessThan(await y("publish-free-notice"));
@@ -95,6 +121,7 @@ test("landed from the editor's Share (M13 T9): 'Your book is live', WhatsApp fir
   await expect(page.getByTestId("publish-message")).toHaveText("Changes published");
   await page.goto("/dev-publish?state=live");
   await expect(page.getByTestId("publish-message")).toHaveCount(0);
+  await expect(page.getByTestId("publish-panel")).not.toHaveAttribute("data-celebrate", "on");
 });
 
 test("paid states: permanent link, no free notice", async ({ page }) => {
@@ -118,9 +145,11 @@ test("blocked states: disabled Publish with the reason", async ({ page }) => {
   }
 });
 
-test("changes: Publish changes chip → 'Changes published'", async ({ page }) => {
+test("changes: 'Your edits aren't live yet' → Update link → 'Changes published'", async ({ page }) => {
   await open(page, "changes");
-  await expect(page.getByTestId("publish-changes")).toContainText("edits that aren't in the shared book");
+  await expect(page.getByTestId("publish-changes")).toContainText("Your edits aren't live yet");
+  await expect(page.getByTestId("publish-changes")).toContainText("still see the version you last published");
+  await expect(page.getByTestId("publish-changes-button")).toHaveText("Update link");
   await page.getByTestId("publish-changes-button").click();
   await expect(page.getByTestId("publish-message")).toHaveText("Changes published");
   await expect(page.getByTestId("publish-changes")).toHaveCount(0);
@@ -309,12 +338,24 @@ test("PDF (paid): failed job and daily cap show copy and allow a retry", async (
   await expect(status).toContainText("You've made a lot of PDFs today — try again tomorrow");
 });
 
-test("PDF (free): no download button — upgrade only", async ({ page }) => {
+test("PDF (free): locked card, no download button, never calls the PDF API — upgrade only", async ({ page }) => {
+  const pdfCalls: string[] = [];
+  page.on("request", (r) => {
+    if (/\/api\/books\/[^/]+\/pdf/.test(new URL(r.url()).pathname)) pdfCalls.push(r.method());
+  });
   for (const s of ["draft", "live", "expired"]) {
     await open(page, s);
     await expect(page.getByTestId("pdf-download")).toHaveCount(0);
     await expect(page.getByTestId("publish-pdf")).toHaveCount(0);
+    const locked = page.getByTestId("publish-pdf-locked");
+    await expect(locked).toContainText("comes with the upgrade");
+    const link = page.getByTestId("publish-pdf-upgrade-link");
+    await expect(link).toHaveAttribute("href", "#upgrade");
+    expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await link.click();
+    await expect(page.locator("#upgrade")).toBeInViewport();
   }
   await open(page, "draft");
   await expectUpgradeState(page, "publish-upgrade");
+  expect(pdfCalls, "the locked card never calls /api/books/<id>/pdf").toEqual([]);
 });

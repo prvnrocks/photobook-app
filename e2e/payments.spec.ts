@@ -520,7 +520,13 @@ test("c. signed checkout.session.completed (3900 aed) → 200; live link loses w
 
   await page.goto(`/books/${bookId}/publish`);
   await expect(page.getByTestId("publish-upgrade")).toHaveCount(0);
-  await expect(page.getByTestId("publish-expiry")).toHaveText("Permanent link");
+  // M21: paid status lives in the band chip + the paid plan card. Test b saved a 20-page doc, so the
+  // book has unpublished edits → the primary card is "Your edits aren't live yet" (no expiry pill).
+  await expect(page.getByTestId("publish-status-chip")).toHaveText("Paid · permanent");
+  await expect(page.getByTestId("publish-plan-paid")).toBeVisible();
+  await expect(page.getByTestId("publish-pdf")).toBeVisible();
+  if ((await page.getByTestId("publish-live-card").count()) > 0) await expect(page.getByTestId("publish-expiry")).toHaveText("Permanent link");
+  else await expect(page.getByTestId("publish-changes")).toBeVisible();
 
   const big = await putDoc(withPages(row.doc, 21), row.doc_rev);
   console.log(`[c] 21-page save status=${big.status} code=${String(big.body.error ?? "-")}`);
