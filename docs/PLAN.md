@@ -244,6 +244,9 @@ Plan: `.agentos/runs/m13.md`, D-070.
 ## Milestone 22 — Editor in the emerald style (2026-11-15)
 - [x] Restyle-only editor redesign (D-074): compact emerald band (title, save chip, page count ≥lg, gold Share), cream stage with framed page, thumbnail-card strip, floating pill toolbar, card panels (side panel ≥lg, sheets on phones), emerald tool panels, editor-shaped loading skeleton; BookPage/layouts/goldens untouched; first load +2.67 kB. Report: `.agentos/runs/m22.md`. Deployed 2026-11-15.
 
+## Milestone 23 — Flipbook viewer in the emerald style (2026-11-16)
+- [x] Restyle-only /b/[slug] redesign (D-075): slim emerald band (title, chapter, Contents/Share/Fullscreen), cream stage with paint-only shadow pool, nav pill, card sheets, cream free end card with gold Create yours, leather + cream-card password/expired/unavailable/not-found screens; Flipbook/BookPage/watermark/OG untouched; /b first load +2.3 kB. Report: `.agentos/runs/m23.md`.
+
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
 - [ ] AI "story mode": a short paragraph per chapter (AI-picked backgrounds moved into M10c)

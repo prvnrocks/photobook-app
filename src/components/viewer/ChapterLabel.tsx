@@ -1,8 +1,8 @@
-// Current chapter "title · dateLabel" (D-040: chapter headings live in viewer chrome only).
+// Current chapter "title · dateLabel" (date dropped when it repeats the title) (D-040: chapter headings live in viewer chrome only).
 // dir="auto" for Arabic titles, rendered in Cairo when the title is mainly Arabic.
 // `className` replaces the default look (the viewer band passes VW_SUBLINE: pale gold on leather).
 
-import { chapterLabel, labelFontStyle, type ViewerChapter } from "@/lib/viewer/chapters";
+import { chapterDate, chapterLabel, labelFontStyle, type ViewerChapter } from "@/lib/viewer/chapters";
 import { isMainlyArabic } from "@/lib/review/ui";
 
 export function ChapterLabel({
@@ -14,6 +14,7 @@ export function ChapterLabel({
   className?: string;
 }) {
   const text = chapterLabel(chapter);
+  const date = chapterDate(chapter);
   const arabic = chapter ? isMainlyArabic(chapter.title) : false;
   return (
     <p
@@ -29,8 +30,8 @@ export function ChapterLabel({
           {/* Title stays un-isolated so dir="auto" detects its direction; the date is isolated,
               otherwise "12 Feb" after an Arabic title reorders to "Feb 12". */}
           {chapter.title.trim()}
-          {chapter.title.trim() && chapter.dateLabel?.trim() ? " · " : null}
-          {chapter.dateLabel?.trim() ? <bdi>{chapter.dateLabel.trim()}</bdi> : null}
+          {chapter.title.trim() && date ? " · " : null}
+          {date ? <bdi>{date}</bdi> : null}
         </>
       ) : (
         "\u00a0"

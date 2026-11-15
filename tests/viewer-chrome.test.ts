@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chapterForPage, chapterLabel, chapterStarts, labelFontStyle } from "@/lib/viewer/chapters";
+import { chapterDate, chapterForPage, chapterLabel, chapterStarts, labelFontStyle } from "@/lib/viewer/chapters";
 import {
   firstVisiblePageIdx,
   flipLayout,
@@ -110,6 +110,16 @@ describe("chapters", () => {
     expect(chapterLabel(doc.chapters[1])).toBe("عشاء العائلة");
     expect(chapterLabel({ title: " ", dateLabel: "May" })).toBe("May");
     expect(chapterLabel(null)).toBe("");
+  });
+  it("skips the date when it repeats the title", () => {
+    expect(chapterLabel({ title: "15 Nov 2026", dateLabel: "15 Nov 2026" })).toBe("15 Nov 2026");
+    expect(chapterLabel({ title: " 15 nov 2026 ", dateLabel: "15 Nov 2026 " })).toBe("15 nov 2026");
+    expect(chapterDate({ title: "15 Nov 2026", dateLabel: "15 Nov 2026" })).toBe("");
+    expect(chapterDate({ title: "Arrival", dateLabel: " 12 Feb " })).toBe("12 Feb");
+    expect(chapterDate({ title: "Arrival", dateLabel: null })).toBe("");
+    expect(chapterDate(null)).toBe("");
+    // A title that only contains the date still shows it.
+    expect(chapterLabel({ title: "Arrival 12 Feb", dateLabel: "12 Feb" })).toBe("Arrival 12 Feb · 12 Feb");
   });
   it("Arabic labels get Cairo first", () => {
     expect(labelFontStyle("عشاء العائلة")?.fontFamily).toMatch(/^var\(--font-cairo\)/);

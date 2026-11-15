@@ -49,7 +49,7 @@ export function ViewerMessage({
             {title}
           </h1>
           {description ? (
-            <p dir="auto" className={cx(VW_MESSAGE_BODY, "mx-auto mt-3 max-w-xs")}>
+            <p dir="auto" className={cx(VW_MESSAGE_BODY, "mx-auto mt-3 max-w-xs text-balance")}>
               {description}
             </p>
           ) : null}

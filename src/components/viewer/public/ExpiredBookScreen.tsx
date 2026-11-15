@@ -9,7 +9,7 @@
 
 import { Clock } from "lucide-react";
 import type { ReactNode } from "react";
-import { VW_CTA_EMERALD_OUTLINE, VW_CTA_GOLD } from "@/components/viewer/viewer-classes";
+import { VW_CTA_EMERALD_OUTLINE, VW_CTA_GOLD, VW_CTA_GOLD_LOOK } from "@/components/viewer/viewer-classes";
 import { cx } from "@/lib/cx";
 import { UPGRADE } from "@/lib/pricing";
 import { CREATE_YOURS_HREF } from "@/lib/viewer/share";
@@ -17,7 +17,12 @@ import { ViewerMessage } from "./ViewerMessage";
 
 /** The owner's gold Upgrade button label and classes (the screen's one gold action). */
 export const EXPIRED_UPGRADE_LABEL = `Upgrade to bring it back — ${UPGRADE.label}`;
-export const EXPIRED_UPGRADE_CLASS = cx(VW_CTA_GOLD, "w-full py-2 text-balance");
+// VW_CTA_GOLD's look with tighter sides / gap / 13 px text below sm (full alternative — cx doesn't
+// merge), so the label fits one line beside the gem at 375 px; still min-h-11 (44 px).
+export const EXPIRED_UPGRADE_CLASS = cx(
+  VW_CTA_GOLD_LOOK,
+  "w-full gap-1.5 px-4 py-2 text-[13px] text-balance disabled:cursor-not-allowed disabled:opacity-60 sm:gap-2 sm:px-5 sm:text-sm",
+);
 
 export function ExpiredBookScreen({
   isOwner,

@@ -3,9 +3,12 @@
 // Contents: chapters in reading order with their date; tap jumps to the chapter's first page.
 // M23 T3: chapter card rows on the ivory sheet — the current chapter is the mint/emerald row
 // (aria-current), each row ends in a "p. N" chip. Title and date are user text: dir="auto" on the
-// inner spans, labelFontStyle (Cairo chain) on the title, no letter-spacing.
+// inner spans, labelFontStyle (Cairo chain) on the title, no letter-spacing. The text block is
+// text-left (absolute, inherited) so an Arabic title's dir="auto" doesn't flip it to the right while
+// its date stays left — every row starts at the left edge like the band. The date is skipped when
+// it repeats the title (chapterDate).
 
-import { chapterStarts, labelFontStyle, type ChapterStart, type ViewerChapter } from "@/lib/viewer/chapters";
+import { chapterDate, chapterStarts, labelFontStyle, type ChapterStart, type ViewerChapter } from "@/lib/viewer/chapters";
 import { isMainlyArabic } from "@/lib/review/ui";
 import { ViewerSheet } from "./ViewerSheet";
 import { VW_LIST_ROW, VW_LIST_ROW_ACTIVE, VW_LIST_ROW_META, VW_MUTED, VW_PAGE_CHIP, VW_PAGE_CHIP_ACTIVE } from "./viewer-classes";
@@ -34,6 +37,7 @@ export function ContentsSheet({
           {starts.map((s) => {
             const arabic = isMainlyArabic(s.chapter.title);
             const active = s.chapter.id === currentChapterId;
+            const date = chapterDate(s.chapter);
             return (
               <li key={s.chapter.id}>
                 <button
@@ -44,7 +48,7 @@ export function ContentsSheet({
                   data-chapter-id={s.chapter.id}
                   onClick={() => onJump(s.flipIndex, s)}
                 >
-                  <span className="min-w-0 flex-1">
+                  <span className="min-w-0 flex-1 text-left">
                     <span
                       dir="auto"
                       lang={arabic ? "ar" : undefined}
@@ -53,9 +57,9 @@ export function ContentsSheet({
                     >
                       {s.chapter.title}
                     </span>
-                    {s.chapter.dateLabel ? (
+                    {date ? (
                       <span dir="auto" className={VW_LIST_ROW_META}>
-                        {s.chapter.dateLabel}
+                        {date}
                       </span>
                     ) : null}
                   </span>

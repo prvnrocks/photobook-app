@@ -48,10 +48,21 @@ export function chapterStarts(doc: ChapterDoc): ChapterStart[] {
   return out;
 }
 
-/** "title · dateLabel" (either part may be missing; "" when both are). */
+/**
+ * The chapter's date to show next to its title: trimmed dateLabel, or "" when missing or when it
+ * repeats the title (date-titled chapters would otherwise read "15 Nov 2026 · 15 Nov 2026").
+ */
+export function chapterDate(ch: Pick<ViewerChapter, "title" | "dateLabel"> | null): string {
+  if (!ch) return "";
+  const date = (ch.dateLabel ?? "").trim();
+  if (!date) return "";
+  return date.toLocaleLowerCase() === ch.title.trim().toLocaleLowerCase() ? "" : date;
+}
+
+/** "title · date" (either part may be missing; "" when both are; date skipped when it equals the title). */
 export function chapterLabel(ch: Pick<ViewerChapter, "title" | "dateLabel"> | null): string {
   if (!ch) return "";
-  return [ch.title.trim(), (ch.dateLabel ?? "").trim()].filter(Boolean).join(" · ");
+  return [ch.title.trim(), chapterDate(ch)].filter(Boolean).join(" · ");
 }
 
 /** Inline font for UI text that may be Arabic (chapter titles, book title): Cairo when mainly Arabic. */

@@ -113,6 +113,17 @@ describe("ContentsSheet", () => {
     expect(html).not.toContain("aria-current");
   });
 
+  it("rows' text block is text-left (Arabic titles start where the date does); a date equal to the title is skipped", () => {
+    const dated = {
+      chapters: [{ id: "ch-d", title: "15 Nov 2026", dateLabel: "15 Nov 2026" }],
+      pages: [{ chapterId: "ch-d" }],
+    };
+    const html = renderToStaticMarkup(<ContentsSheet open onClose={() => {}} doc={dated} currentChapterId={null} onJump={() => {}} />);
+    expect(html.match(/15 Nov 2026/g)).toHaveLength(1);
+    const plain = renderToStaticMarkup(<ContentsSheet open onClose={() => {}} doc={doc} currentChapterId={null} onJump={() => {}} />);
+    expect(plain.match(/<span class="min-w-0 flex-1 text-left">/g)).toHaveLength(2);
+  });
+
   it("tap jumps to the chapter's first page (unchanged)", () => {
     const onJump = vi.fn();
     mount(<ContentsSheet open onClose={() => {}} doc={doc} currentChapterId="ch-a" onJump={onJump} />);

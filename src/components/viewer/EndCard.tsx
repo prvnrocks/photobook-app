@@ -105,10 +105,11 @@ function PaidEnd({ model, onReplay, onShare }: Omit<EndCardProps, "isPaid" | "fo
 // Free end card recipes (cqw versions of VW_MESSAGE_EYEBROW / _HEADING / _BODY; the gold action is
 // VW_CTA_GOLD_END_PORTRAIT / _LANDSCAPE, composed from VW_CTA_GOLD_LOOK). The
 // landscape page is only 148/210 as tall, so it gets a complete compact set (full alternatives: cx
-// doesn't merge conflicting utilities) — the portrait sizes would overflow it.
+// doesn't merge conflicting utilities) — the portrait sizes would overflow it. The frame is a
+// shade darker than the stage with a hairline border (not a ring/shadow) so the page edge reads.
 const FREE = {
   portrait: {
-    frame: "absolute inset-0 flex items-center justify-center bg-[#ede4d2] p-[7cqw]",
+    frame: "absolute inset-0 flex items-center justify-center border border-[#cfbe9a] bg-[#e8ddc6] p-[7cqw]",
     card: "vw-card-in flex w-full flex-col items-center gap-[4.5cqw] rounded-[5cqw] bg-[#faf5ec] px-[8cqw] py-[10cqw] text-center ring-1 ring-[#e3c766]/45",
     eyebrow: "text-[3.2cqw] font-semibold tracking-[0.24em] text-[#7a5f0e] uppercase",
     heading: "font-display text-[8cqw] leading-tight font-semibold text-[#0e3b2e]",
@@ -116,7 +117,7 @@ const FREE = {
     cta: `mt-[2cqw] ${VW_CTA_GOLD_END_PORTRAIT}`,
   },
   landscape: {
-    frame: "absolute inset-0 flex items-center justify-center bg-[#ede4d2] p-[4cqw]",
+    frame: "absolute inset-0 flex items-center justify-center border border-[#cfbe9a] bg-[#e8ddc6] p-[4cqw]",
     card: "vw-card-in flex w-full flex-col items-center gap-[2.5cqw] rounded-[3.5cqw] bg-[#faf5ec] px-[7cqw] py-[5cqw] text-center ring-1 ring-[#e3c766]/45",
     eyebrow: "text-[2.4cqw] font-semibold tracking-[0.24em] text-[#7a5f0e] uppercase",
     heading: "font-display text-[5.6cqw] leading-tight font-semibold text-[#0e3b2e]",

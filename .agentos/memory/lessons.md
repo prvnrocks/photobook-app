@@ -158,3 +158,6 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (M22) A client import of an editor module from another route (even a dev page) stops webpack merging it into the editor chunk (~1.3 kB gz) — build dev fixtures on the server page and pass data as props.
 - (M22) Measure first-load with an exact gzip sum of the route's chunks from app-build-manifest.json (Next rounds to whole kB). Never put a translate animation on an ancestor of the crop box or dnd grids; any element with a Tailwind ring/shadow is blanked while a box-shadow keyframe runs (use outline).
 - (M22) cx doesn't merge conflicting utilities: idle/active recipes must be full alternatives; to hide a recipe element below a breakpoint wrap it in `hidden lg:block`.
+- (M23) A dev preview page that renders /b client screens changes /b's chunking (+13 kB on dev-viewer): split screens into server-safe markup components with client islands as slots, and render static stand-ins in dev.
+- (M23) Book "shadow" in page-flip = paint-only stage background placed from fitBook(), never box-shadow on the book box (spread half-shadow); check in-page cqw text on A5 landscape (0.7 height).
+- (M23) dir="auto" blocks under text-align:start flip for RTL — set text-left on the row wrapper when lines must share an edge. Start e2e drags inside .stf__block.
