@@ -1,28 +1,45 @@
-// The book creation wizard's steps (M19 T2, D-071): /books/new steps 1–4 (title → occasion → shape →
-// style; the book is created on step-4 Continue), step 5 = first-run upload, step 6 = first-run build.
-// Pure: only pure data modules (book options, design defaults) are imported, so client islands can use
-// it without pulling server code. Tested in node (tests/m19-wizard-chrome.test.tsx).
+// The book creation wizard's steps (M19 T2 D-071; M20 T2 D-072): one continuous 7-step wizard on
+// /books/new — 1 title → 2 purpose (occasion) → 3 shape → 4 style (the book is created on step-4
+// Continue) → 5 photos → 6 sorting (first AI build) → 7 review. Each step has a short stepper name, a
+// lucide icon id (mapped to components in WizardStepper, so this module stays icon-free) and a headline.
+// Pure: only pure data modules (book options, design defaults) are imported — no zod, no React — so
+// first-load client islands can use it. Tested in node (tests/m20-wizard-chrome.test.tsx).
 
 import { BOOK_TITLE_MAX_CODE_POINTS, CAPTION_LANGS, OCCASIONS, type CaptionLang, type Occasion } from "@/lib/book/options";
 import { FORM_DESIGN_STYLES, FORM_FORMATS, type FormDesignStyle } from "@/lib/design/defaults";
 
+/** Icon ids the stepper knows (WizardStepper maps each to a lucide-react icon). */
+export type WizardStepIcon = "pen-line" | "heart" | "ratio" | "palette" | "images" | "sparkles" | "book-open-check";
+
 export const WIZARD_STEPS = [
-  { id: "title", headline: "Give your book a title" },
-  { id: "occasion", headline: "What's this book for?" },
-  { id: "shape", headline: "Choose a page shape" },
-  { id: "style", headline: "Choose a book style" },
-  { id: "photos", headline: "Add your photos" },
-  { id: "sorting", headline: "Sorting your photos" },
-] as const;
+  { id: "title", name: "Title", icon: "pen-line", headline: "Give your book a title" },
+  { id: "occasion", name: "Purpose", icon: "heart", headline: "What's this book for?" },
+  { id: "shape", name: "Shape", icon: "ratio", headline: "Choose a page shape" },
+  { id: "style", name: "Style", icon: "palette", headline: "Choose a book style" },
+  { id: "photos", name: "Photos", icon: "images", headline: "Add your photos" },
+  { id: "sorting", name: "Sorting", icon: "sparkles", headline: "Sorting your photos" },
+  { id: "review", name: "Review", icon: "book-open-check", headline: "Review your book" },
+] as const satisfies readonly { id: string; name: string; icon: WizardStepIcon; headline: string }[];
 
 export type WizardStepId = (typeof WIZARD_STEPS)[number]["id"];
-/** 1-based step number shown to people ("Step 3 of 6"). */
-export type WizardStep = 1 | 2 | 3 | 4 | 5 | 6;
-/** The steps that live on /books/new (before the book exists). */
+/** 1-based step number shown to people ("Step 3 of 7"). */
+export type WizardStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+/** The steps before the book exists (answers held in the client draft). */
 export type WizardFormStep = 1 | 2 | 3 | 4;
 
 export const WIZARD_STEP_COUNT = WIZARD_STEPS.length;
 export const WIZARD_FORM_STEP_COUNT = 4;
+
+/** Every step number, in order (for steppers and loops). */
+export const WIZARD_STEP_NUMBERS: readonly WizardStep[] = [1, 2, 3, 4, 5, 6, 7];
+
+export function isWizardStep(v: unknown): v is WizardStep {
+  return typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= WIZARD_STEP_COUNT;
+}
+
+export function isWizardFormStep(step: WizardStep): step is WizardFormStep {
+  return step <= WIZARD_FORM_STEP_COUNT;
+}
 
 export function wizardHeadline(step: WizardStep): string {
   return WIZARD_STEPS[step - 1].headline;
@@ -32,20 +49,36 @@ export function wizardStepId(step: WizardStep): WizardStepId {
   return WIZARD_STEPS[step - 1].id;
 }
 
-/** "Step 3 of 6" */
+/** The short stepper name ("Purpose"). */
+export function wizardStepName(step: WizardStep): string {
+  return WIZARD_STEPS[step - 1].name;
+}
+
+export function wizardStepIcon(step: WizardStep): WizardStepIcon {
+  return WIZARD_STEPS[step - 1].icon;
+}
+
+/** "Step 3 of 7" */
 export function wizardStepLabel(step: WizardStep): string {
   return `Step ${step} of ${WIZARD_STEP_COUNT}`;
 }
 
 /**
- * The /books/new `?step=` param → 1..4. Accepts what Next gives searchParams (string, string[],
- * undefined) or anything else; only an exact "1"–"4" (first value of an array) counts, else 1.
+ * The /books/new `?step=` param → 1..7. Accepts what Next gives searchParams (string, string[],
+ * undefined) or anything else; only an exact "1"–"7" (first value of an array) counts, else 1.
+ * Steps 5–7 only make sense with ?book= — the page / flow decides what to do with them.
  */
-export function parseStep(raw: unknown): WizardFormStep {
+export function parseStep(raw: unknown): WizardStep {
   const v = Array.isArray(raw) ? raw[0] : raw;
-  if (typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 4) return v as WizardFormStep;
-  if (typeof v === "string" && /^[1-4]$/.test(v)) return Number(v) as WizardFormStep;
+  if (isWizardStep(v)) return v;
+  if (typeof v === "string" && /^[1-7]$/.test(v)) return Number(v) as WizardStep;
   return 1;
+}
+
+/** parseStep limited to the form steps (the M19 /books/new contract): anything but "1"–"4" → 1. */
+export function parseFormStep(raw: unknown): WizardFormStep {
+  const step = parseStep(raw);
+  return isWizardFormStep(step) ? step : 1;
 }
 
 export type WizardFormat = (typeof FORM_FORMATS)[number];

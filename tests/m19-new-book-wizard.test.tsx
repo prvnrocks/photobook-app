@@ -160,7 +160,7 @@ describe("new book wizard — steps and URL", () => {
   it("step 1: title (dir=auto) with the server Back link; Continue pushes ?step=2 and updates the label", async () => {
     await mount("/books/new");
     expect(shownStep()).toBe("1");
-    expect(label()).toBe("Step 1 of 6");
+    expect(label()).toBe("Step 1 of 7");
     expect($("wizard-headline").textContent).toBe("Give your book a title");
     const input = $<HTMLInputElement>("book-title");
     expect(input.getAttribute("dir")).toBe("auto");
@@ -174,8 +174,10 @@ describe("new book wizard — steps and URL", () => {
     expect(urlStep()).toBe("2");
     expect(window.history.length).toBe(lengthBefore + 1);
     expect(shownStep()).toBe("2");
-    expect(label()).toBe("Step 2 of 6");
-    expect($("wizard-progress").getAttribute("aria-valuenow")).toBe("2");
+    expect(label()).toBe("Step 2 of 7");
+    expect($("wizard-stepper").getAttribute("data-step")).toBe("2");
+    expect($("wizard-step-2").getAttribute("aria-current")).toBe("step");
+    expect($("wizard-band-title").textContent).toBe("Days by the Sea");
     expect(stored()?.title).toBe("Days by the Sea");
     // focus moves to the new headline
     expect(document.activeElement).toBe($("wizard-headline"));
@@ -217,7 +219,7 @@ describe("new book wizard — steps and URL", () => {
     expect($<HTMLButtonElement>("wizard-continue").disabled).toBe(false);
     await click($("wizard-continue"));
     expect(urlStep()).toBe("3");
-    expect(label()).toBe("Step 3 of 6");
+    expect(label()).toBe("Step 3 of 7");
   });
 
   it("caption language defaults to the server's suggestion (memory / browser)", async () => {
@@ -235,7 +237,7 @@ describe("new book wizard — steps and URL", () => {
     await historyBack();
     expect(shownStep()).toBe("2");
     expect(urlStep()).toBe("2");
-    expect(label()).toBe("Step 2 of 6");
+    expect(label()).toBe("Step 2 of 7");
     // forward again
     await act(async () => {
       window.history.forward();
@@ -276,7 +278,7 @@ describe("new book wizard — draft restore and missing steps", () => {
     await mount("/books/new?step=4");
     expect(shownStep()).toBe("2");
     expect(urlStep()).toBe("2");
-    expect(label()).toBe("Step 2 of 6");
+    expect(label()).toBe("Step 2 of 7");
   });
 
   it("a visit with nothing stored starts at step 1", async () => {

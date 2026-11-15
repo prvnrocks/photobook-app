@@ -270,6 +270,60 @@ describe("updateBookSetupAction — tone follows occasion (M19 review)", () => {
   });
 });
 
+describe("updateBookSetupAction — caption language follows the title (M20, D-072)", () => {
+  it("an Arabic title without captionLang → ar (wins over memory and Accept-Language)", async () => {
+    mocks.memory = { language: "en" };
+    mocks.acceptLanguage = "en-US";
+    const r = await updateBookSetupAction(BOOK_ID, { title: "عيد مبارك" });
+    expect(r).toMatchObject({ ok: true, setup: { title: "عيد مبارك", captionLang: "ar" } });
+    expect(mocks.writeBookSetup.mock.calls[0][2]).toEqual({ title: "عيد مبارك", caption_lang: "ar" });
+  });
+
+  it("an explicit captionLang wins over the title", async () => {
+    const r = await updateBookSetupAction(BOOK_ID, { title: "عيد مبارك", captionLang: "en" });
+    expect(r).toMatchObject({ ok: true, setup: { captionLang: "en" } });
+    expect(mocks.writeBookSetup.mock.calls[0][2]).toEqual({ title: "عيد مبارك" });
+  });
+
+  it("a Latin title re-derives from memory, then Accept-Language", async () => {
+    mocks.getMyBook.mockResolvedValue(book({ title: "عيد", caption_lang: "ar" }));
+    const r = await updateBookSetupAction(BOOK_ID, { title: "Eid" });
+    expect(r).toMatchObject({ ok: true, setup: { title: "Eid", captionLang: "en" } });
+    expect(mocks.writeBookSetup.mock.calls[0][2]).toEqual({ title: "Eid", caption_lang: "en" });
+
+    mocks.writeBookSetup.mockClear();
+    mocks.acceptLanguage = "ar-AE,ar;q=0.9";
+    expect(await updateBookSetupAction(BOOK_ID, { title: "Eid" })).toMatchObject({ ok: true, setup: { captionLang: "ar" } });
+    expect(mocks.writeBookSetup.mock.calls[0][2]).toEqual({ title: "Eid" });
+
+    mocks.writeBookSetup.mockClear();
+    mocks.acceptLanguage = "ar-AE";
+    mocks.memory = { language: "en" };
+    expect(await updateBookSetupAction(BOOK_ID, { title: "Eid" })).toMatchObject({ ok: true, setup: { captionLang: "en" } });
+  });
+
+  it("no title change → caption language untouched (no memory read needed)", async () => {
+    mocks.getMyBook.mockResolvedValue(book({ title: "عيد", caption_lang: "en" }));
+    const r = await updateBookSetupAction(BOOK_ID, { title: "عيد", occasion: "family" });
+    expect(r).toMatchObject({ ok: true, setup: { captionLang: "en" } });
+    expect(mocks.writeBookSetup.mock.calls[0][2]).not.toHaveProperty("caption_lang");
+  });
+
+  it("locked details never change the language", async () => {
+    mocks.hasAnyRunForBook.mockResolvedValue(true);
+    expect(await updateBookSetupAction(BOOK_ID, { title: "عيد" })).toEqual({ ok: false, error: "locked", reason: "ai_started" });
+    expect(mocks.writeBookSetup).not.toHaveBeenCalled();
+  });
+
+  it("a derived language change re-lays out the rule draft in that language", async () => {
+    mocks.getMyBook.mockResolvedValue(book({ doc: ruleDraft() }));
+    const r = await updateBookSetupAction(BOOK_ID, { title: "عيد" });
+    expect(r).toMatchObject({ ok: true, relaidOut: true, setup: { captionLang: "ar" } });
+    const draft = mocks.writeBookSetup.mock.calls[0][4] as { doc: { captionLang?: string; cover: { title: string } } };
+    expect(draft.doc.cover.title).toBe("عيد");
+  });
+});
+
 describe("updateBookSetupAction — shape / style (D-070)", () => {
   it("changes shape + style on an empty book (columns only; finalize lays out later)", async () => {
     const r = await updateBookSetupAction(BOOK_ID, { format: "A5_LANDSCAPE", designStyle: "scrapbook" });

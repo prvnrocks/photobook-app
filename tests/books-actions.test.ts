@@ -149,6 +149,32 @@ describe("createBookAction", () => {
     expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ tone: "fun", captionLang: "ar" });
   });
 
+  it("D-072: an Arabic-script title → ar, winning over memory and Accept-Language", async () => {
+    mocks.getOwnMemoryView.mockResolvedValue({ language: "en" });
+    mocks.acceptLanguage = "en-US,en;q=0.9";
+    await run({ title: "رحلتنا إلى العين", occasion: "travel" });
+    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ title: "رحلتنا إلى العين", captionLang: "ar" });
+  });
+
+  it("D-072: a mixed title with any Arabic letter → ar; a Latin title is no signal", async () => {
+    await run({ title: "Eid 2026 عيد", occasion: "family" });
+    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ captionLang: "ar" });
+    mocks.createBook.mockClear();
+    mocks.getOwnMemoryView.mockResolvedValue({ language: "ar" });
+    await run({ title: "Our trip", occasion: "travel" });
+    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ captionLang: "ar" });
+    mocks.createBook.mockClear();
+    mocks.getOwnMemoryView.mockResolvedValue({});
+    mocks.acceptLanguage = "en-GB";
+    await run({ title: "Our trip", occasion: "travel" });
+    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ captionLang: "en" });
+  });
+
+  it("D-072: an explicit captionLang still wins over an Arabic title", async () => {
+    await run({ ...valid, title: "عيد", captionLang: "en" });
+    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ captionLang: "en" });
+  });
+
   it("memory read failing is best effort → defaults, book still created", async () => {
     mocks.getOwnMemoryView.mockRejectedValue(new Error("db down"));
     const r = await run({ occasion: "baby" });

@@ -13,15 +13,14 @@ import { getCurrentUser } from "@/lib/auth/current-user";
 import { displayBookTitle } from "@/lib/book/display-title";
 import { OCCASION_LABELS, OCCASIONS, type Occasion } from "@/lib/book/options";
 import { detailsLockReason } from "@/lib/book/setup";
+import { docHasContent, uploadExisting } from "@/lib/books/step-data";
 import { isWizardUpload, wizardBackHref } from "@/lib/books/wizard-routes";
 import { wizardHeadline } from "@/lib/books/wizard-steps";
 import { getActiveRunForBook, hasAnyRunForBook } from "@/lib/db/agent-runs";
 import { getMyBook } from "@/lib/db/books";
 import { listUploadState } from "@/lib/db/photos";
 import { getMyProfile } from "@/lib/db/profiles";
-import type { Json } from "@/lib/supabase/database.types";
 import type { FirstRunState } from "@/lib/upload/auto-build-client";
-import type { ExistingPhoto } from "@/lib/upload/queue";
 
 export const dynamic = "force-dynamic";
 
@@ -29,10 +28,6 @@ export const metadata: Metadata = { title: "Add photos" };
 
 function isOccasion(v: string | null): v is Occasion {
   return v !== null && (OCCASIONS as readonly string[]).includes(v);
-}
-
-function docHasContent(doc: Json | null): boolean {
-  return doc !== null && typeof doc === "object" && !Array.isArray(doc) && Object.keys(doc).length > 0;
 }
 
 export default async function UploadPage({ params }: { params: Promise<{ id: string }> }) {
@@ -50,13 +45,7 @@ export default async function UploadPage({ params }: { params: Promise<{ id: str
     hasAnyRunForBook(book.id).catch(() => false),
     getActiveRunForBook(book.id).catch(() => null),
   ]);
-  const existing: ExistingPhoto[] = rows.map((r) => ({
-    id: r.id,
-    fingerprint: r.fingerprint,
-    upload_state: r.upload_state === "ready" ? "ready" : "pending",
-  }));
-  const readyCount = existing.filter((r) => r.upload_state === "ready").length;
-  const pendingCount = existing.length - readyCount;
+  const { existing, readyCount, pendingCount } = uploadExisting(rows);
   const displayName = profile?.name ?? profile?.email ?? user.email ?? null;
 
   const firstRun: FirstRunState = active ? "active" : hasRun ? "done" : "none";

@@ -11,21 +11,14 @@ import { resolveAiMode } from "@/lib/ai/client";
 import { limitsFor } from "@/lib/ai/limits";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { displayBookTitle } from "@/lib/book/display-title";
-import { parseBookDoc } from "@/lib/book/schema";
-import type { BookDoc } from "@/lib/book/types";
 import { getActiveRunForBook } from "@/lib/db/agent-runs";
 import { getMyBook } from "@/lib/db/books";
 import { listReviewPhotos } from "@/lib/db/photos";
 import { getMyProfile } from "@/lib/db/profiles";
+import { draftDoc, loadFanUrls } from "@/lib/books/step-data";
 import { isWizardBuild } from "@/lib/books/wizard-routes";
 import { wizardHeadline } from "@/lib/books/wizard-steps";
-import {
-  draftPreviewItems,
-  draftPreviewPhotoIds,
-  draftPreviewPhotos,
-  FAN_PHOTOS,
-  fanPhotoUrls,
-} from "@/lib/runs/draft-preview";
+import { draftPreviewItems, draftPreviewPhotoIds, draftPreviewPhotos } from "@/lib/runs/draft-preview";
 
 export const dynamic = "force-dynamic";
 
@@ -40,12 +33,6 @@ export const metadata: Metadata = { title: "Making your book" };
 // photos": photo fan from the draft's signed thumbs + three-row checklist). Rebuilds, AI off and
 // edited / AI-made albums keep the classic screen below.
 
-/** The stored album as a draft preview, or null (empty / unparsable doc → checklist only). */
-function draftDoc(raw: unknown): BookDoc | null {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw) || Object.keys(raw).length === 0) return null;
-  const parsed = parseBookDoc(raw);
-  return parsed.ok && parsed.doc.pages.length > 0 ? parsed.doc : null;
-}
 export default async function BuildPage({
   params,
   searchParams,
@@ -90,14 +77,8 @@ export default async function BuildPage({
   } as const;
 
   if (isWizardBuild({ trigger, aiOn, doc: book.doc })) {
-    // Fan: the draft's first photos (cover first). Sign a few spares in case some aren't signed.
-    const doc = draftDoc(book.doc);
-    let urls: string[] = [];
-    if (doc) {
-      const wanted = draftPreviewPhotoIds(doc, draftPreviewItems(doc)).slice(0, FAN_PHOTOS * 2);
-      const photos = await listReviewPhotos(book.id, wanted).catch(() => null);
-      if (photos) urls = fanPhotoUrls(wanted, photos);
-    }
+    // Fan: the draft's first photos (cover first), shared with the wizard's step 6 data.
+    const urls = await loadFanUrls(book.id, draftDoc(book.doc));
     return (
       <WizardShell step={6} displayName={displayName}>
         <WizardHeadline>{wizardHeadline(6)}</WizardHeadline>

@@ -3,7 +3,8 @@
 // The draft book is created before the user answers anything; these helpers pick the defaults the
 // setup card shows (the user can change every one of them until the first AI build starts):
 //   - suggestFormat: page shape from the photos' orientation counts;
-//   - suggestCaptionLang: caption language from the user's memory, else the device locale;
+//   - suggestCaptionLang: caption language from an Arabic-script title, else the user's memory,
+//     else the device locale (D-072);
 //   - toneForOccasion: the feel for an occasion (a remembered tone wins, D-032).
 // Nothing here reads photo content — only counts and a locale string.
 
@@ -67,12 +68,29 @@ export function suggestFormat(counts: OrientationCounts): BookFormat {
 // --- Caption language --------------------------------------------------------------------------
 
 /**
- * Caption language for a new book: the remembered language (user memory, D-032) wins; otherwise
- * the device's preferred language — `locale` is an Accept-Language header ("ar-AE,ar;q=0.9,en;q=0.8")
- * or a single tag ("ar-AE", "ar_AE", navigator.language). Arabic ("ar" primary subtag, any region)
- * as the most preferred language → "ar"; anything else, empty or unparsable → "en".
+ * Arabic letters (Arabic, Arabic Supplement, Arabic Extended-A/B, presentation forms A/B). Digits,
+ * punctuation and diacritics alone don't count — a title must contain at least one letter.
  */
-export function suggestCaptionLang(locale: string | null | undefined, memory?: CaptionLang | null): CaptionLang {
+const ARABIC_LETTER = /[\u0620-\u064A\u066E-\u06D3\u06D5\u06EE\u06EF\u06FA-\u06FF\u0750-\u077F\u0870-\u0887\u0889-\u088E\u08A0-\u08C9\uFB50-\uFDFB\uFE70-\uFEFC]/u;
+
+/** True when `text` contains at least one Arabic letter (D-072: an Arabic-script title → 'ar'). */
+export function hasArabicScript(text: string | null | undefined): boolean {
+  return typeof text === "string" && ARABIC_LETTER.test(text);
+}
+
+/**
+ * Caption language for a book (D-072 order): a `title` with Arabic letters → "ar"; else the
+ * remembered language (user memory, D-032); otherwise the device's preferred language — `locale`
+ * is an Accept-Language header ("ar-AE,ar;q=0.9,en;q=0.8") or a single tag ("ar-AE", "ar_AE",
+ * navigator.language). Arabic ("ar" primary subtag, any region) as the most preferred language →
+ * "ar"; anything else, empty or unparsable → "en". A Latin title is no signal (falls through).
+ */
+export function suggestCaptionLang(
+  locale: string | null | undefined,
+  memory?: CaptionLang | null,
+  title?: string | null,
+): CaptionLang {
+  if (hasArabicScript(title)) return "ar";
   if (isCaptionLang(memory)) return memory;
   const primary = preferredLanguage(locale);
   return primary === "ar" ? "ar" : "en";

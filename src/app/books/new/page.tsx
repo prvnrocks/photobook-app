@@ -17,7 +17,7 @@ import { getCurrentUser } from "@/lib/auth/current-user";
 import { bookDesignOf } from "@/lib/book/book-design";
 import { CAPTION_LANGS, OCCASIONS, type CaptionLang, type Occasion } from "@/lib/book/options";
 import { designLockReason, detailsLockReason } from "@/lib/book/setup";
-import { parseStep, type WizardDraft } from "@/lib/books/wizard-steps";
+import { parseFormStep, type WizardDraft } from "@/lib/books/wizard-steps";
 import { hasAnyRunForBook } from "@/lib/db/agent-runs";
 import { getMyBook } from "@/lib/db/books";
 import { getOwnMemoryView } from "@/lib/db/memory";
@@ -48,7 +48,7 @@ async function acceptLanguage(): Promise<string> {
 
 export default async function NewBookPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
-  const step = parseStep(params.step);
+  const step = parseFormStep(params.step);
   const bookParam = first(params.book);
 
   const user = await getCurrentUser();

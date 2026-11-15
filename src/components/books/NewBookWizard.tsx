@@ -24,14 +24,15 @@ import { createBookAction, updateBookSetupAction } from "@/app/books/actions";
 import { initialNewBookFormState, type NewBookField, type NewBookFormState } from "@/app/books/form-state";
 import { Notice } from "@/components/app/Notice";
 import { WizardNav } from "@/components/wizard/WizardNav";
-import { WizardStepHeader } from "@/components/wizard/WizardProgress";
+import { WizardBand } from "@/components/wizard/WizardBand";
+import { WizardBody } from "@/components/wizard/WizardBody";
 import type { CaptionLang } from "@/lib/book/options";
 import type { BookSetupField, BookSetupPatch, SetupLockReason, UpdateBookSetupResult } from "@/lib/book/setup";
 import {
   EMPTY_WIZARD_DRAFT,
   firstMissingStep,
   isAcceptableWizardTitle,
-  parseStep,
+  parseFormStep,
   parseWizardDraft,
   serializeWizardDraft,
   WIZARD_DRAFT_STORAGE_KEY,
@@ -124,7 +125,7 @@ function urlForStep(step: WizardFormStep): string {
 }
 
 function readStepFromUrl(): WizardFormStep {
-  return parseStep(new URL(window.location.href).searchParams.get("step"));
+  return parseFormStep(new URL(window.location.href).searchParams.get("step"));
 }
 
 /** Our own keys in history.state (Next merges its router state into the same object). */
@@ -153,6 +154,8 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
   const [draft, setDraft] = useState<WizardDraft>(() => edit?.draft ?? EMPTY_WIZARD_DRAFT);
   const [step, setStep] = useState<WizardFormStep>(initialStep);
   const [stepError, setStepError] = useState<StepError | null>(null);
+  /** Direction of the last step change (null until the first change: no enter animation on load). */
+  const [stepDir, setStepDir] = useState<"forward" | "back" | null>(null);
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const stepRef = useRef(step);
@@ -186,7 +189,10 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
     const data: WizardHistoryState = { wizardStep: next, wizardPrev: how === "push" ? from : undefined };
     if (how === "push") window.history.pushState(data, "", urlForStep(next));
     else window.history.replaceState({ ...(window.history.state ?? {}), ...data }, "", urlForStep(next));
-    if (next !== from) focusOnStepRef.current = true;
+    if (next !== from) {
+      focusOnStepRef.current = true;
+      setStepDir(next < from ? "back" : "forward");
+    }
     setStep(next);
   }, []);
 
@@ -220,7 +226,10 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
       const urlStep = readStepFromUrl();
       const target = allowedStep(urlStep, draftRef.current, false);
       if (target !== urlStep) window.history.replaceState(window.history.state, "", urlForStep(target));
-      if (target !== stepRef.current) focusOnStepRef.current = true;
+      if (target !== stepRef.current) {
+        focusOnStepRef.current = true;
+        setStepDir(target < stepRef.current ? "back" : "forward");
+      }
       setStep(target);
     }
     window.addEventListener("popstate", onPop);
@@ -372,15 +381,26 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
   }
 
   return (
-    <div className="flex w-full min-w-0 flex-col" data-testid="new-book-wizard" data-step={step} data-mode={mode.kind}>
-      <WizardStepHeader step={step} />
+    <div className="flex w-full min-w-0 flex-1 flex-col" data-testid="new-book-wizard" data-step={step} data-mode={mode.kind}>
+      <WizardBand
+        step={step}
+        title={draft.title}
+        canGoTo={(n) => n < step && !pending}
+        onStepClick={(n) => {
+          setStepError(null);
+          showStep(n as WizardFormStep, "push");
+        }}
+      />
+      <WizardBody wide>
       <form
         key={step}
         action={step === 4 && !edit ? formAction : undefined}
         onSubmit={onSubmit}
         noValidate
-        className={`mt-8 flex w-full min-w-0 flex-col gap-8 sm:mt-10 ${step === 1 ? "mx-auto max-w-[28rem]" : ""}`}
+        className={`flex w-full min-w-0 flex-col gap-8 ${step === 1 ? "mx-auto max-w-[28rem]" : ""}`}
         data-testid="new-book-form"
+        data-step-anim={stepDir ? "css" : undefined}
+        data-step-dir={stepDir ?? undefined}
       >
         {errorHere ? (
           <Notice tone="error" data-testid="new-book-error">
@@ -454,6 +474,7 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
           Start over
         </button>
       ) : null}
+      </WizardBody>
     </div>
   );
 }

@@ -1,28 +1,37 @@
-// Full-page chrome for the book creation wizard (M19 T2, D-071; layout after the user's wizard.png,
-// colours/type from the M17 emerald & gold tokens). Server component:
-//   header  — the app wordmark (→ /dashboard) + the account menu, without the sticky bar
-//   step    — "Step N of 6" + <WizardProgress>
-//   content — children in a centred narrow column (28rem forms, `wide` 40rem card grids)
+// Full-page chrome for the book creation wizard (M19 T2 D-071; M20 T2 D-072: the My books style).
+// Server component:
+//   header  — the app wordmark (→ /dashboard) + the account menu (plain, library width)
+//   band    — <WizardBand>: emerald leather, "NEW BOOK", the book title, the 7-step stepper
+//   body    — <WizardBody>: cream, max-w-library; `main` + optional `aside` columns on ≥ lg
 //   footer  — Photobook · Help · Privacy · Terms
-// Step screens render their own headline (wizardHeadline) and <WizardNav> inside children.
+// stepHeader="client": the client wizard draws the band and body itself (it changes step with
+// pushState, so a server-drawn title/stepper would go stale) — the shell then renders children
+// directly between header and footer and has no data-step of its own. Client wizards compose
+// <WizardBand> + <WizardBody> (both hook-free and client-safe).
+// Step screens render their own headline (wizardHeadline) and <WizardNav> inside the main column.
 
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { APP_NAME, SUPPORT_EMAIL } from "@/lib/brand";
 import type { WizardStep } from "@/lib/books/wizard-steps";
-import { WizardStepHeader } from "./WizardProgress";
+import { WizardBand } from "./WizardBand";
+import { WizardBody } from "./WizardBody";
+import "./wizard-motion.css";
 
 export type WizardShellProps = {
   step: WizardStep;
   /** name ?? email of the signed-in user, for the account button's initial. */
   displayName?: string | null;
-  /** 40rem column for card grids (shape, style); default 28rem for forms. */
+  /** Shell mode: the book title shown in the band (blank → "Your new book"). */
+  title?: string | null;
+  /** Shell mode: 52rem step column for card grids; default 28rem for forms (ignored with an aside). */
   wide?: boolean;
+  /** Shell mode: the right column on ≥ lg (e.g. the live book preview). */
+  aside?: ReactNode;
   /**
-   * "client": the children render the step label + progress themselves (<WizardStepHeader>), for
-   * screens that change step without a server render (/books/new uses pushState). The shell then
-   * shows no step header and no data-step of its own (it would go stale).
+   * "client": children draw the band + body themselves (<WizardBand>, <WizardBody>); used by
+   * /books/new, which changes step without a server render.
    */
   stepHeader?: "shell" | "client";
   children: ReactNode;
@@ -31,23 +40,34 @@ export type WizardShellProps = {
 const FOOTER_LINK =
   "inline-flex min-h-11 min-w-11 items-center justify-center rounded-md px-2 text-muted-foreground underline-offset-4 outline-none hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring";
 
-export function WizardShell({ step, displayName, wide = false, stepHeader = "shell", children }: WizardShellProps) {
+export function WizardShell({
+  step,
+  displayName,
+  title,
+  wide = false,
+  aside,
+  stepHeader = "shell",
+  children,
+}: WizardShellProps) {
   const shellHeader = stepHeader === "shell";
   return (
     <div
-      className="flex min-h-dvh flex-col bg-background bg-[radial-gradient(ellipse_80%_45%_at_50%_0%,rgb(31_111_84/0.07),transparent_70%)]"
+      className="flex min-h-dvh flex-col bg-background"
       data-testid="wizard-shell"
       data-step={shellHeader ? step : undefined}
     >
-      <AppHeader displayName={displayName} variant="plain" />
-      <main className="flex w-full flex-1 flex-col items-center px-gutter pt-2 pb-10 sm:pt-4">
-        {shellHeader ? <WizardStepHeader step={step} /> : null}
-        <div
-          className={`flex w-full min-w-0 flex-col ${shellHeader ? "mt-8 sm:mt-10" : ""} ${wide ? "max-w-[40rem]" : "max-w-[28rem]"}`}
-          data-testid="wizard-content"
-        >
-          {children}
-        </div>
+      <AppHeader displayName={displayName} variant="plain" width="library" />
+      <main className="flex w-full flex-1 flex-col" data-testid="wizard-main">
+        {shellHeader ? (
+          <>
+            <WizardBand step={step} title={title} />
+            <WizardBody wide={wide} aside={aside}>
+              {children}
+            </WizardBody>
+          </>
+        ) : (
+          children
+        )}
       </main>
       <footer className="border-t border-border/80">
         <nav
@@ -83,3 +103,5 @@ function Sep() {
 // The headline lives in its own hook-free module so client islands can use it without this file
 // (next/link + the account menu). Re-exported for existing importers.
 export { WizardHeadline } from "./WizardHeadline";
+export { WizardBand } from "./WizardBand";
+export { WizardBody } from "./WizardBody";

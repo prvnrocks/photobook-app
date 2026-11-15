@@ -26,3 +26,15 @@ export function isWizardBuild(input: { trigger: "build" | "rebuild"; aiOn: boole
   const origin = docOrigin(input.doc);
   return !origin.userEdited && origin.generator !== "ai";
 }
+
+/**
+ * M20 T1 (G2 + G3): which step a hard load may show. Lives in the dependency-free ./wizard-gate
+ * (client islands import it from there — this module pulls in docOrigin / zod).
+ */
+export {
+  resolveWizardStep,
+  type WizardDetailsLock,
+  type WizardGateInput,
+  type WizardRequestStep,
+  type WizardTarget,
+} from "./wizard-gate";

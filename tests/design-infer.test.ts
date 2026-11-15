@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   countOrientations,
+  hasArabicScript,
   orientationOf,
   preferredLanguage,
   suggestCaptionLang,
@@ -88,6 +89,29 @@ describe("suggestCaptionLang", () => {
   it("memory wins over the locale", () => {
     expect(suggestCaptionLang("en-US", "ar")).toBe("ar");
     expect(suggestCaptionLang("ar-AE", "en")).toBe("en");
+  });
+
+  it("D-072: an Arabic-script title wins over memory and locale; a Latin title is no signal", () => {
+    expect(suggestCaptionLang("en-US", "en", "عيد مبارك")).toBe("ar");
+    expect(suggestCaptionLang("en-US", "en", "Trip to العين 2026")).toBe("ar");
+    expect(suggestCaptionLang("en-US", "ar", "Our trip")).toBe("ar");
+    expect(suggestCaptionLang("ar-AE", null, "Our trip")).toBe("ar");
+    expect(suggestCaptionLang("en-US", null, "Our trip")).toBe("en");
+    expect(suggestCaptionLang("en-US", null, null)).toBe("en");
+    expect(suggestCaptionLang("en-US", null, "")).toBe("en");
+  });
+
+  it("hasArabicScript: needs an Arabic letter (digits / punctuation / diacritics alone don't count)", () => {
+    expect(hasArabicScript("مرحبا")).toBe(true);
+    expect(hasArabicScript("پ")).toBe(true); // Arabic-script letter outside the basic block
+    expect(hasArabicScript("ﻻ")).toBe(true); // presentation form
+    expect(hasArabicScript("٢٠٢٦")).toBe(false); // Arabic-Indic digits only
+    expect(hasArabicScript("؟،")).toBe(false); // Arabic punctuation only
+    expect(hasArabicScript("\u064B")).toBe(false); // a lone diacritic (fathatan)
+    expect(hasArabicScript("Hello")).toBe(false);
+    expect(hasArabicScript("שלום")).toBe(false); // Hebrew is not Arabic
+    expect(hasArabicScript(null)).toBe(false);
+    expect(hasArabicScript(undefined)).toBe(false);
   });
 
   it("invalid memory falls back to the locale", () => {

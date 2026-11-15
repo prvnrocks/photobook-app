@@ -99,8 +99,9 @@ const FIELDS: readonly NewBookField[] = ["title", "occasion", "tone", "captionLa
 
 /**
  * Creates a book. Form fields: `title` (optional), `occasion`, `tone` + `captionLang` (optional
- * since M19 / D-071: absent → remembered tone / language (D-032, best effort) else
- * DEFAULT_TONE[occasion] / the request's Accept-Language ("ar" first → "ar", else "en")),
+ * since M19 / D-071: absent → remembered tone (D-032, best effort) else DEFAULT_TONE[occasion];
+ * language (D-072): a title with Arabic letters → "ar", else the remembered language, else the
+ * request's Accept-Language ("ar" first → "ar", else "en")),
  * `format` + `designStyle` (D-063, fixed at creation; absent → portrait / the occasion's default
  * style, D-068). On success returns { ok, bookId, next } (next = /books/<id>/upload, plus
  * ?_ev=book_created when analytics is on; the wizard navigates there — M19 BUG-2); signed out →
@@ -149,7 +150,8 @@ export async function createBookAction(
       title,
       occasion,
       tone: tone ?? toneForOccasion(occasion, memory?.tone),
-      captionLang: captionLang ?? suggestCaptionLang(acceptLanguage, memory?.language),
+      // D-072: an Arabic-script title wins over memory and Accept-Language.
+      captionLang: captionLang ?? suggestCaptionLang(acceptLanguage, memory?.language, title),
       format: format ?? DEFAULT_FORM_FORMAT,
       designStyle: designStyle ?? defaultStyleFor(occasion),
     }));
@@ -216,6 +218,8 @@ const pickEnum = <T extends string>(v: string | null, values: readonly T[], fall
  * be rebuilt is refused ("failed"). Write = admin + owner filter + updated_at lock; one retry on a
  * conflict. Enums / title limits are validated like createBookAction (invalid → fieldErrors).
  * An occasion change without a `tone` re-derives the tone (remembered tone, else occasion default).
+ * A title change without a `captionLang` re-derives the caption language (D-072: Arabic-script
+ * title → "ar", else remembered language, else Accept-Language) — only while details are unlocked.
  */
 export async function updateBookSetupAction(
   bookId: string,
@@ -241,6 +245,7 @@ export async function updateBookSetupAction(
   if (!user) return { ok: false, error: "unauthenticated" };
 
   let memory: Awaited<ReturnType<typeof getOwnMemoryView>> | undefined;
+  let acceptLanguage: string | undefined;
   try {
     for (let attempt = 1; attempt <= 2; attempt++) {
       const book = await getMyBook(bookId);
@@ -281,6 +286,19 @@ export async function updateBookSetupAction(
         if (derived !== current.tone) {
           next.tone = derived;
           changed.push("tone");
+        }
+      }
+
+      // M20 (D-072): the wizard has no caption-language control — a new title without an explicit
+      // captionLang re-derives it (Arabic-script title wins, else memory, else Accept-Language).
+      // Reached only while details are unlocked (the lock check above returned otherwise).
+      if (changed.includes("title") && wanted.captionLang === undefined) {
+        if (memory === undefined) memory = await getOwnMemoryView().catch(() => null);
+        if (acceptLanguage === undefined) acceptLanguage = await requestAcceptLanguage();
+        const derived = suggestCaptionLang(acceptLanguage, memory?.language, next.title);
+        if (derived !== current.captionLang) {
+          next.captionLang = derived;
+          changed.push("captionLang");
         }
       }
 
