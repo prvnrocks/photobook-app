@@ -114,14 +114,14 @@ describe("editor-motion.css", () => {
     const guarded = block(cssNoComments, /@media\s*\(prefers-reduced-motion:\s*no-preference\)\s*\{/);
     const outside = cssNoComments.replace(guarded, "");
     expect(outside).not.toMatch(/animation|@keyframes|transition|transform/);
-    for (const name of ["ed-page-in", "ed-select-glow", "ed-save-pulse", "ed-sheet-rise"]) {
+    for (const name of ["ed-page-in", "ed-select-glow", "ed-select-glow-inset", "ed-save-pulse", "ed-sheet-rise"]) {
       expect(guarded).toContain(`.${name}`);
       expect(guarded).toContain(`@keyframes ${name}`);
     }
   });
 
   it("ed-page-in / ed-select-glow / ed-save-pulse never transform", () => {
-    for (const name of ["ed-page-in", "ed-select-glow", "ed-save-pulse"]) {
+    for (const name of ["ed-page-in", "ed-select-glow", "ed-select-glow-inset", "ed-save-pulse"]) {
       const rule = block(cssNoComments, new RegExp(`\\.${name}\\s*\\{`));
       const frames = block(cssNoComments, new RegExp(`@keyframes\\s+${name}\\s*\\{`));
       expect(rule, name).not.toBe("");
@@ -131,6 +131,9 @@ describe("editor-motion.css", () => {
     expect(block(cssNoComments, /@keyframes\s+ed-page-in\s*\{/)).toMatch(/opacity/);
     expect(block(cssNoComments, /@keyframes\s+ed-select-glow\s*\{/)).toMatch(/box-shadow/);
     expect(block(cssNoComments, /@keyframes\s+ed-save-pulse\s*\{/)).toMatch(/opacity/);
+    // Photo slots clip outward shadows: the inset variant draws inside the element.
+    expect(block(cssNoComments, /@keyframes\s+ed-select-glow-inset\s*\{/)).toMatch(/box-shadow:\s*inset/);
+    expect(block(cssNoComments, /\.ed-select-glow-inset\s*\{/)).not.toMatch(/infinite/);
   });
 
   it("ed-page-in lasts ≤ 200 ms; ed-select-glow pulses once", () => {

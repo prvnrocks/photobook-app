@@ -16,8 +16,9 @@ import {
   captionLengthInfo,
   LONG_CAPTION_HINT,
 } from "@/lib/editor/caption-tools";
-import { cn } from "@/lib/utils";
+import { cx } from "@/lib/cx";
 import type { EditorContextValue } from "../editor-context";
+import { TOOL_INPUT, TOOL_OPTION, TOOL_OPTION_ACTIVE, TOOL_SECONDARY } from "./tool-classes";
 import type { EditorPanelProps, EditorTool } from "./types";
 
 /** The selected caption's page, or null. */
@@ -30,8 +31,7 @@ export function selectedCaptionPage(ctx: Pick<EditorContextValue, "state">) {
 
 let sessionSeq = 0;
 
-const SECONDARY_BTN =
-  "flex min-h-11 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40";
+const SECONDARY_BTN = TOOL_SECONDARY;
 
 function CaptionEditorPanel({ ctx }: EditorPanelProps) {
   const target = selectedCaptionPage(ctx);
@@ -51,7 +51,7 @@ function CaptionEditorPanel({ ctx }: EditorPanelProps) {
   };
 
   return (
-    <div className="flex flex-col gap-2" data-testid="caption-editor">
+    <div className="flex flex-col gap-3" data-testid="caption-editor">
       <label htmlFor={`${id}-caption`} className="sr-only">
         Caption for page {pageIdx + 1}
       </label>
@@ -65,13 +65,13 @@ function CaptionEditorPanel({ ctx }: EditorPanelProps) {
         disabled={ctx.readOnly}
         placeholder="Write a caption…"
         onChange={(e) => onChange(e.target.value)}
-        className="w-full resize-none rounded-lg border border-input/60 bg-card px-3 py-2 text-base leading-snug outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+        className={cx(TOOL_INPUT, "resize-none leading-snug")}
         style={{ fontFamily }}
         aria-describedby={`${id}-count`}
         data-testid="caption-input"
       />
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        <p id={`${id}-count`} className={cn("tabular-nums", info.full && "font-medium text-destructive")} data-testid="caption-count" aria-live="polite">
+      <div className="-mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs text-muted-foreground">
+        <p id={`${id}-count`} className={cx("tabular-nums", info.full && "font-medium text-destructive")} data-testid="caption-count" aria-live="polite">
           {info.label}
         </p>
         {info.long ? (
@@ -80,7 +80,7 @@ function CaptionEditorPanel({ ctx }: EditorPanelProps) {
           </p>
         ) : null}
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => ctx.openTool("ai-caption")}
@@ -151,18 +151,14 @@ export function FontPicker({
             aria-checked={selected}
             disabled={disabled}
             onClick={() => onChange(f)}
-            className={cn(
-              "flex min-h-14 flex-col items-center justify-center rounded-lg border px-2 py-1 disabled:opacity-40",
-              "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
-              selected ? "border-primary bg-secondary ring-2 ring-primary" : "border-border hover:bg-muted",
-            )}
+            className={cx(selected ? TOOL_OPTION_ACTIVE : TOOL_OPTION, "flex min-h-14 flex-col items-center justify-center px-2 py-1.5")}
             style={{ fontFamily: captionFontFamily(f) }}
             data-testid={`font-${f}`}
           >
             <span className="text-lg leading-tight" dir="auto">
               {FONT_SAMPLE[f]}
             </span>
-            <span className="text-xs">{f}</span>
+            <span className="text-xs font-medium">{f}</span>
           </button>
         );
       })}
@@ -190,11 +186,7 @@ export function AlignPicker({
           aria-label={label}
           disabled={disabled}
           onClick={() => onChange(a)}
-          className={cn(
-            "flex size-11 items-center justify-center rounded-lg border disabled:opacity-40",
-            "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
-            value === a ? "border-primary bg-secondary ring-2 ring-primary" : "border-border hover:bg-muted",
-          )}
+          className={cx(value === a ? TOOL_OPTION_ACTIVE : TOOL_OPTION, "flex size-11 items-center justify-center")}
           data-testid={`align-${a}`}
         >
           <Icon className="size-5" aria-hidden="true" />

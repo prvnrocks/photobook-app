@@ -12,9 +12,20 @@ import { Check, FileCog, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { deletePageResult, movePageToChapterResult, pageUnit } from "@/lib/book/edit-ops";
 import { chapterLabel, splitNotice } from "@/lib/editor/pages";
-import { cn } from "@/lib/utils";
+import { cx } from "@/lib/cx";
+import { ED_DANGER_QUIET, ED_PANEL_EYEBROW } from "../editor-classes";
 import { showEditorToast } from "../EditorToast";
+import { TOOL_SECONDARY, TOOL_WELL } from "./tool-classes";
 import type { EditorPanelProps, EditorTool } from "./types";
+
+// M22 T6b (D-074): chapter rows in one white card, quiet danger delete, confirm as an ivory card
+// (Cancel = outlined emerald, Delete = solid destructive pill — the only solid red, after a confirm).
+const CHAPTER_ROW =
+  "flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-start text-sm text-foreground transition-colors outline-none hover:bg-[#f3f7f4] focus-visible:ring-2 focus-visible:ring-[#0e3b2e] disabled:cursor-default disabled:hover:bg-transparent motion-reduce:transition-none";
+const CHAPTER_ROW_HERE =
+  "flex min-h-11 w-full items-center gap-2 rounded-xl bg-[#e6efe9] px-3 text-start text-sm font-semibold text-[#0e3b2e] outline-none focus-visible:ring-2 focus-visible:ring-[#0e3b2e]";
+const DANGER_SOLID =
+  "inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-destructive px-4 text-sm font-semibold text-white transition-colors outline-none hover:bg-destructive/90 focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2 focus-visible:ring-offset-card motion-reduce:transition-none";
 
 export function PageMenu({ ctx, close }: EditorPanelProps) {
   const { state, actions, readOnly, book } = ctx;
@@ -89,8 +100,8 @@ export function PageMenu({ ctx, close }: EditorPanelProps) {
 
   if (confirmDelete) {
     return (
-      <div role="alertdialog" aria-labelledby="page-menu-confirm-title" className="flex flex-col gap-3" data-testid="page-menu-confirm">
-        <h3 id="page-menu-confirm-title" className="text-sm font-semibold">
+      <div role="alertdialog" aria-labelledby="page-menu-confirm-title" className={cx(TOOL_WELL, "flex flex-col gap-3 p-4")} data-testid="page-menu-confirm">
+        <h3 id="page-menu-confirm-title" className="font-display text-base leading-tight font-semibold text-[#0e3b2e]">
           Delete this two-page layout?
         </h3>
         <p className="text-sm text-muted-foreground">
@@ -100,7 +111,7 @@ export function PageMenu({ ctx, close }: EditorPanelProps) {
           <button
             type="button"
             onClick={() => setConfirmDelete(false)}
-            className="min-h-11 flex-1 rounded-lg border border-border bg-card px-4 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            className={cx(TOOL_SECONDARY, "flex-1")}
             data-testid="page-menu-confirm-cancel"
           >
             Cancel
@@ -108,7 +119,7 @@ export function PageMenu({ ctx, close }: EditorPanelProps) {
           <button
             type="button"
             onClick={doDelete}
-            className="min-h-11 flex-1 rounded-lg bg-destructive px-4 text-sm font-medium text-white outline-none hover:bg-destructive/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+            className={cx(DANGER_SOLID, "flex-1")}
             data-testid="page-menu-confirm-delete"
           >
             Delete 2 pages
@@ -132,11 +143,11 @@ export function PageMenu({ ctx, close }: EditorPanelProps) {
       </p>
 
       {doc.chapters.length > 0 ? (
-        <section className="flex flex-col gap-1" aria-labelledby="page-menu-chapters">
-          <h3 id="page-menu-chapters" className="text-sm font-semibold">
+        <section className="flex flex-col gap-2" aria-labelledby="page-menu-chapters">
+          <h3 id="page-menu-chapters" className={ED_PANEL_EYEBROW}>
             Move to chapter
           </h3>
-          <ul className="flex flex-col">
+          <ul className="flex flex-col gap-0.5 rounded-2xl border border-[#e9dfca] bg-white p-1 shadow-[0_10px_24px_-20px_rgb(14_59_46/0.5)]">
             {doc.chapters.map((c) => {
               const here = c.id === page.chapterId;
               return (
@@ -146,10 +157,7 @@ export function PageMenu({ ctx, close }: EditorPanelProps) {
                     onClick={() => onMoveTo(c.id)}
                     disabled={here || readOnly}
                     aria-current={here ? "true" : undefined}
-                    className={cn(
-                      "flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-start text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
-                      here && "bg-secondary font-medium",
-                    )}
+                    className={here ? CHAPTER_ROW_HERE : CHAPTER_ROW}
                     data-testid="page-menu-chapter"
                   >
                     <span dir="auto" className="min-w-0 flex-1 truncate">
@@ -173,7 +181,7 @@ export function PageMenu({ ctx, close }: EditorPanelProps) {
         type="button"
         onClick={onDelete}
         disabled={readOnly}
-        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-destructive-border px-4 text-sm font-medium text-destructive outline-none hover:bg-destructive-soft focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+        className={cx(ED_DANGER_QUIET, "w-full border border-destructive-border")}
         data-testid="page-menu-delete"
       >
         <Trash2 className="size-4" aria-hidden="true" />

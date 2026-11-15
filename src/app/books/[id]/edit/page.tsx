@@ -1,18 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { EditorShell } from "@/components/editor/EditorShell";
 import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
-import { buttonVariants } from "@/components/ui/button-variants";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { touchWarnedDraft } from "@/lib/db/draft-activity";
 import { getEditorData } from "@/lib/db/editor";
 import { aiSummary } from "@/lib/editor/ai-summary";
 import { editorRedirect, toEditorShellData } from "@/lib/editor/page-data";
 import { isPaymentsEnabled } from "@/lib/stripe";
-import { cn } from "@/lib/utils";
 import { shareBookAction } from "../publish/actions";
+import { EditorInvalid } from "./EditorInvalid";
 
 export const dynamic = "force-dynamic";
 
@@ -37,23 +35,7 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
   const shell = toEditorShellData(data);
   if (!shell) {
     // docError 'invalid': the stored album doesn't parse. Never show a half-broken editor.
-    return (
-      <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-4 px-4 py-10" data-testid="editor-invalid">
-        <h1 className="text-2xl font-semibold">We can&apos;t open this book</h1>
-        <p className="text-base text-muted-foreground">
-          Something in this book&apos;s data doesn&apos;t look right, so the editor can&apos;t open it safely. Your photos
-          are fine. You can go back to your photos and make the book again.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Link href={`/books/${data.book.id}/review`} className={cn(buttonVariants({ variant: "default" }), "h-11 px-4 text-base")}>
-            Back to photos
-          </Link>
-          <Link href="/dashboard" className={cn(buttonVariants({ variant: "outline" }), "h-11 px-4 text-base")}>
-            My books
-          </Link>
-        </div>
-      </main>
-    );
+    return <EditorInvalid bookId={data.book.id} />;
   }
 
   // Header "Share" (M13 T9): flush saves client-side, then publish + share screen (Memory Keeper

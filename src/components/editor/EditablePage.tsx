@@ -278,8 +278,9 @@ interface SlotOverlayProps {
  * M22 (D-074): the selected ring is an emerald inset *outline* (follows the inherited border-radius
  * like the ring did) so box-shadow stays free for ed-select-glow's one-off pulse — an animated
  * box-shadow would otherwise blank a box-shadow ring for its duration. Opacity/box-shadow only.
+ * The INSET glow variant (M22 T7): the slot clips anything drawn outside the overlay.
  */
-const SELECTED_RING = "outline-4 outline-solid outline-[#0e3b2e] -outline-offset-4 ed-select-glow";
+const SELECTED_RING = "outline-4 outline-solid outline-[#0e3b2e] -outline-offset-4 ed-select-glow-inset";
 
 function overlayClass(outline: SlotOutline, selected: boolean, dropTarget = false) {
   return cn(

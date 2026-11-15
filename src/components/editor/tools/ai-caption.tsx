@@ -18,10 +18,12 @@ import {
   type RewriteInstruction,
   type RewriteUiState,
 } from "@/lib/editor/caption-tools";
-import { cn } from "@/lib/utils";
+import { cx } from "@/lib/cx";
 import type { EditorContextValue } from "../editor-context";
+import { ED_CTA_EMERALD, ED_PANEL_EYEBROW } from "../editor-classes";
 import { UpgradeSheet } from "../UpgradeSheet";
 import { selectedCaptionPage } from "./caption-editor";
+import { TOOL_AI_MARKER, TOOL_OPTION, TOOL_OPTION_ACTIVE, TOOL_SECONDARY, TOOL_WELL } from "./tool-classes";
 import type { EditorPanelProps, EditorTool } from "./types";
 
 /** Static reason the menu can't be used right now, or null. */
@@ -33,8 +35,10 @@ export function aiMenuBlockedReason(ctx: Pick<EditorContextValue, "ai" | "state"
   return null;
 }
 
-const PRIMARY_BTN =
-  "flex min-h-11 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card";
+// M22 T6b (D-074): emerald primary (no gold — Share is the screen's one gold), outlined emerald
+// secondary, option tiles, and the suggestion as an ivory card with an "AI suggestion" marker in the
+// review step's "Written by AI" style.
+const PRIMARY_BTN = ED_CTA_EMERALD;
 
 export function rewritesLeftLabel(left: number): string {
   return `${left} ${left === 1 ? "rewrite" : "rewrites"} left`;
@@ -61,10 +65,7 @@ function OptionButton({
       onClick={onClick}
       disabled={disabled}
       title={hint}
-      className={cn(
-        "flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40",
-        active && "border-primary",
-      )}
+      className={cx(active ? TOOL_OPTION_ACTIVE : TOOL_OPTION, "flex min-h-11 items-center justify-center gap-1.5 px-3 text-center text-sm font-semibold")}
       data-testid={testId}
     >
       {active ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
@@ -124,7 +125,7 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
   if (blocked) {
     return (
       <div className="flex flex-col gap-3" data-testid="ai-caption-menu" data-state="blocked">
-        <p className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="ai-caption-blocked">
+        <p className={cx(TOOL_WELL, "flex items-center gap-2 text-sm text-muted-foreground")} data-testid="ai-caption-blocked">
           <Sparkles className="size-4 shrink-0" aria-hidden="true" />
           {blocked}
         </p>
@@ -141,16 +142,24 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
     const lang = ui.lang === "ar" ? "ar" : "en";
     return (
       <div className="flex flex-col gap-3" data-testid="ai-caption-menu" data-state="preview">
-        <p className="text-xs font-medium text-muted-foreground">AI suggestion</p>
-        <p
-          dir="auto"
-          lang={lang}
-          className="rounded-lg border border-border bg-secondary/50 px-3 py-2 text-base leading-snug break-words whitespace-pre-line"
-          style={{ fontFamily: captionFontFamily(lang === "ar" ? "Cairo" : "Playfair") }}
-          data-testid="ai-preview"
-        >
-          {ui.text}
-        </p>
+        <div className="flex min-w-0 flex-col gap-2 rounded-2xl border border-[#e9dfca] bg-[#faf6ee] p-4 shadow-[0_10px_24px_-20px_rgb(14_59_46/0.5)]">
+          <span aria-hidden="true" className="font-display text-3xl leading-none text-accent-text">
+            “
+          </span>
+          <p
+            dir="auto"
+            lang={lang}
+            className="min-w-0 text-base leading-snug break-words whitespace-pre-line text-foreground"
+            style={{ fontFamily: captionFontFamily(lang === "ar" ? "Cairo" : "Playfair") }}
+            data-testid="ai-preview"
+          >
+            {ui.text}
+          </p>
+          <p className={TOOL_AI_MARKER}>
+            <Sparkles className="size-3.5 shrink-0" aria-hidden="true" />
+            AI suggestion
+          </p>
+        </div>
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
@@ -163,7 +172,7 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
           <button
             type="button"
             onClick={() => setUi({ kind: "idle" })}
-            className="flex min-h-11 items-center justify-center rounded-lg border border-border bg-card px-3 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            className={TOOL_SECONDARY}
             data-testid="ai-keep-mine"
           >
             Keep mine
@@ -183,13 +192,13 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
   return (
     <div className="flex flex-col gap-3" data-testid="ai-caption-menu" data-state={ui.kind}>
       {failure && failure !== "limit" ? (
-        <div role="status" className="flex flex-wrap items-center gap-2 rounded-lg border border-warning-border bg-warning-soft px-3 py-2 text-sm text-foreground" data-testid="ai-caption-message">
+        <div role="status" className="flex flex-wrap items-center gap-2 rounded-2xl border border-warning-border bg-warning-soft px-3 py-2 text-sm text-foreground" data-testid="ai-caption-message">
           <p className="flex-1">{REWRITE_FAILURE_COPY[failure]}</p>
           {last && (failure === "retry" || failure === "serverBusy" || failure === "error" || failure === "busy") && !limitReached ? (
             <button
               type="button"
               onClick={() => void run(last)}
-              className="min-h-11 rounded-lg border border-warning-border bg-card px-3 font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+              className={TOOL_SECONDARY}
               data-testid="ai-try-again"
             >
               Try again
@@ -198,13 +207,13 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
         </div>
       ) : null}
       {limitReached ? (
-        <div className="flex flex-col gap-1 rounded-lg border border-border bg-secondary px-3 py-2 text-sm" data-testid="ai-caption-limit">
-          <p className="font-medium">{REWRITE_FAILURE_COPY.limit}</p>
+        <div className={cx(TOOL_WELL, "flex flex-col gap-2 text-sm")} data-testid="ai-caption-limit">
+          <p className="font-semibold text-[#0e3b2e]">{REWRITE_FAILURE_COPY.limit}</p>
           {!ctx.book.isPaid && !showUpgrade ? (
             <button
               type="button"
               onClick={() => setShowUpgrade(true)}
-              className={cn(PRIMARY_BTN, "mt-1")}
+              className={cx(PRIMARY_BTN, "self-start")}
               data-testid="ai-upgrade"
             >
               Upgrade
@@ -231,8 +240,8 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
           {shortHint}
         </p>
       ) : null}
-      <div className="flex flex-col gap-1.5">
-        <p className="text-xs font-medium text-muted-foreground">Change tone</p>
+      <div className="flex flex-col gap-2">
+        <p className={ED_PANEL_EYEBROW}>Change tone</p>
         <div className="grid grid-cols-2 gap-2">
           {options.tones.map((o) => (
             <OptionButton

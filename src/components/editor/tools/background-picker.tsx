@@ -10,6 +10,9 @@
 // edit, not one per keypress; M10b A4). The fade slider shows the stored fade. Caption ink follows the background in
 // <BookPage> (render.ts resolveBackground) — nothing to do here.
 // Pure helpers + copy: src/lib/editor/background-picker.ts.
+// M22 T6a (D-074): emerald segmented scope, emerald underline type tabs, paper cards and photo
+// tiles with an emerald ring + check badge, swatches with an emerald ring, panel small-caps labels,
+// quiet Reset. Swatch grids drop to 5 columns in the 20 rem side panel (≥ 44 px targets).
 
 import { Check, ImageIcon, PaintBucket, RotateCcw, Sparkles } from "lucide-react";
 import { useId, useMemo, useState } from "react";
@@ -46,10 +49,24 @@ import {
 } from "@/lib/editor/background-picker";
 import { rovingTabStop } from "@/lib/editor/roving";
 import type { EditorShellPhoto } from "@/lib/editor/types";
-import { cn } from "@/lib/utils";
+import { cx } from "@/lib/cx";
+import { ED_CTA_QUIET, ED_PANEL_EYEBROW } from "../editor-classes";
 import { showEditorToast } from "../EditorToast";
 import { onRadioGroupKeyDown, onRadioGroupKeyDownFocusOnly } from "../radio-group-keys";
+import { CHECK_BADGE, SEG, SEG_ACTIVE, SEG_GROUP, TOOL_PHOTO_TILE, TOOL_PHOTO_TILE_ACTIVE, TOOL_TILE, TOOL_TILE_ACTIVE } from "./tool-tile-classes";
 import type { EditorPanelProps, EditorTool } from "./types";
+
+/** Background type tab (underline), idle / selected — alternatives, never both. */
+const BG_TAB =
+  "-mb-px min-h-11 border-b-2 border-transparent text-sm font-semibold text-[#56625a] transition-colors outline-none hover:text-[#0e3b2e] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#0e3b2e] motion-reduce:transition-none";
+const BG_TAB_ACTIVE =
+  "-mb-px min-h-11 border-b-2 border-[#0e3b2e] text-sm font-semibold text-[#0e3b2e] transition-colors outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#0e3b2e] motion-reduce:transition-none";
+
+/** Round swatch, idle / selected (emerald ring) — alternatives. Focus is an outline. */
+const SWATCH =
+  "relative flex aspect-square w-full min-w-0 items-center justify-center rounded-full border border-black/15 transition-shadow outline-none hover:shadow-[0_0_0_3px_rgb(14_59_46/0.18)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0e3b2e] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:shadow-none motion-reduce:transition-none";
+const SWATCH_ACTIVE =
+  "relative flex aspect-square w-full min-w-0 items-center justify-center rounded-full border border-black/15 ring-2 ring-[#0e3b2e] ring-offset-2 ring-offset-white transition-shadow outline-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#0e3b2e] disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none";
 
 let sessionSeq = 0;
 
@@ -144,7 +161,7 @@ export function BackgroundPickerView(props: BackgroundPickerViewProps) {
   return (
     <div className="flex min-w-0 flex-col gap-3" data-testid="background-picker" data-scope={scope}>
       <div className="flex items-center gap-2">
-        <div role="radiogroup" aria-label="Apply to" onKeyDown={onRadioGroupKeyDown} className="grid flex-1 grid-cols-2 gap-1 rounded-lg bg-muted p-1" data-testid="bg-scope">
+        <div role="radiogroup" aria-label="Apply to" onKeyDown={onRadioGroupKeyDown} className={cx(SEG_GROUP, "flex-1 grid-cols-2")} data-testid="bg-scope">
           {BACKGROUND_SCOPES.map((s, i) => {
             const available = scopes.includes(s.id);
             return (
@@ -156,10 +173,7 @@ export function BackgroundPickerView(props: BackgroundPickerViewProps) {
                 disabled={!available}
                 tabIndex={i === scopeStop ? 0 : -1}
                 onClick={() => onScope(s.id)}
-                className={cn(
-                  "min-h-11 min-w-0 rounded-md px-1 text-sm font-medium disabled:opacity-40",
-                  scope === s.id ? "bg-background shadow-sm" : "text-muted-foreground",
-                )}
+                className={cx(scope === s.id ? SEG_ACTIVE : SEG, "px-1 text-sm")}
                 data-testid={`bg-scope-${s.id}`}
               >
                 {s.label}
@@ -169,7 +183,7 @@ export function BackgroundPickerView(props: BackgroundPickerViewProps) {
         </div>
         {suggested ? (
           <span
-            className="flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-900"
+            className="flex shrink-0 items-center gap-1 rounded-full border border-[#e3c766]/70 bg-[#fbf3dc] px-2.5 py-1 text-xs font-semibold text-accent-text"
             title="Picked by AI. Tap another background to choose your own."
             data-testid="bg-suggested"
           >
@@ -182,14 +196,14 @@ export function BackgroundPickerView(props: BackgroundPickerViewProps) {
           The cover uses the book background.
         </p>
       ) : scope === "book" && overrideCount > 0 ? (
-        <p className="text-xs text-amber-800" data-testid="bg-replace-note">
+        <p className="rounded-xl border border-warning-border bg-warning-soft px-3 py-2 text-xs text-foreground" data-testid="bg-replace-note">
           {adjustKeepsOverrides ? "A new background also replaces" : "Also replaces"} the background of{" "}
           {overrideCount === 1 ? "1 page that has" : `${overrideCount} pages that have`} its own.
           {adjustKeepsOverrides ? " Changing the fade keeps them." : null}
         </p>
       ) : null}
 
-      <div role="tablist" aria-label="Background type" className="grid grid-cols-3 gap-1 border-b">
+      <div role="tablist" aria-label="Background type" className="grid grid-cols-3 gap-1 border-b border-[#e9dfca]">
         {BACKGROUND_TABS.map((t) => (
           <button
             key={t.id}
@@ -199,10 +213,7 @@ export function BackgroundPickerView(props: BackgroundPickerViewProps) {
             aria-selected={tab === t.id}
             aria-controls={`${id}-panel`}
             onClick={() => onTab(t.id)}
-            className={cn(
-              "-mb-px min-h-11 border-b-2 text-sm font-medium",
-              tab === t.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground",
-            )}
+            className={tab === t.id ? BG_TAB_ACTIVE : BG_TAB}
             data-testid={`bg-tab-${t.id}`}
           >
             {t.label}
@@ -219,7 +230,7 @@ export function BackgroundPickerView(props: BackgroundPickerViewProps) {
           type="button"
           onClick={onReset}
           disabled={disabled}
-          className="flex min-h-11 items-center justify-center gap-2 rounded-lg border text-sm font-medium hover:bg-muted disabled:opacity-40"
+          className={cx(ED_CTA_QUIET, "border border-[#e9dfca]")}
           data-testid="bg-reset"
         >
           <RotateCcw className="size-4" aria-hidden="true" />
@@ -257,17 +268,13 @@ function SwatchButton({
       tabIndex={tabStop ? 0 : -1}
       disabled={disabled}
       onClick={onPick}
-      className={cn(
-        "relative flex aspect-square w-full min-w-0 items-center justify-center rounded-full border border-black/15 outline-none disabled:opacity-40",
-        "focus-visible:ring-4 focus-visible:ring-primary/60",
-        selected && "ring-2 ring-primary ring-offset-2 ring-offset-background",
-      )}
+      className={selected ? SWATCH_ACTIVE : SWATCH}
       style={{ backgroundColor: swatch.hex }}
       data-testid={testId}
       data-hex={swatch.hex}
     >
       {selected ? (
-        <Check className={cn("size-4", swatch.ink === "light" ? "text-white" : "text-neutral-800")} aria-hidden="true" />
+        <Check className={cx("size-4", swatch.ink === "light" ? "text-white" : "text-neutral-800")} aria-hidden="true" />
       ) : null}
     </button>
   );
@@ -277,7 +284,7 @@ function ColourTab({ current, disabled, onApply }: BackgroundPickerViewProps) {
   const isSel = (s: BackgroundSwatch) => current.kind === "color" && sameHex(current.hex, s.hex);
   const stop = rovingTabStop(BACKGROUND_SWATCHES.map((s) => ({ checked: isSel(s) })));
   return (
-    <div role="radiogroup" aria-label="Colour" onKeyDown={onRadioGroupKeyDown} className="grid grid-cols-6 gap-3 p-1 sm:grid-cols-8" data-testid="bg-colours">
+    <div role="radiogroup" aria-label="Colour" onKeyDown={onRadioGroupKeyDown} className="grid grid-cols-6 gap-3 p-1 sm:grid-cols-8 lg:grid-cols-5 xl:grid-cols-6" data-testid="bg-colours">
       {BACKGROUND_SWATCHES.map((s, i) => (
         <SwatchButton
           key={s.id}
@@ -331,23 +338,24 @@ function PaperTab({ current, disabled, onApply }: BackgroundPickerViewProps) {
               disabled={disabled}
               // Picking another paper keeps the tint the user chose.
               onClick={() => onApply({ kind: "texture", textureId, ...(tint ? { tint } : {}) })}
-              className={cn(
-                "flex min-w-0 flex-col items-stretch gap-1 rounded-lg p-1 text-left outline-none disabled:opacity-40",
-                "focus-visible:ring-4 focus-visible:ring-primary/60",
-                selected ? "bg-primary/10 ring-2 ring-primary" : "hover:bg-muted",
-              )}
+              className={selected ? TOOL_TILE_ACTIVE : TOOL_TILE}
               data-testid={`bg-texture-${t.id}`}
             >
-              <span className="block aspect-square w-full rounded-md border border-black/10" style={textureThumbStyle(t)} aria-hidden="true" />
-              <span className="truncate text-xs font-medium">{t.label}</span>
+              {selected ? (
+                <span className={CHECK_BADGE} aria-hidden="true">
+                  <Check className="size-3" strokeWidth={3} />
+                </span>
+              ) : null}
+              <span className="block aspect-square w-full rounded-lg border border-black/10" style={textureThumbStyle(t)} aria-hidden="true" />
+              <span className="truncate text-xs font-semibold text-[#0e3b2e]">{t.label}</span>
             </button>
           );
         })}
       </div>
       <fieldset className="flex min-w-0 flex-col gap-2" disabled={disabled || !texture}>
-        <legend className="mb-2 text-sm font-semibold">Tint</legend>
+        <legend className={cx(ED_PANEL_EYEBROW, "mb-2")}>Tint</legend>
         {!texture ? <p className="text-xs text-muted-foreground">Pick a paper first.</p> : null}
-        <div role="radiogroup" aria-label="Tint" onKeyDown={onRadioGroupKeyDown} className="grid grid-cols-5 gap-3 p-1 sm:grid-cols-9" data-testid="bg-tints">
+        <div role="radiogroup" aria-label="Tint" onKeyDown={onRadioGroupKeyDown} className="grid grid-cols-5 gap-3 p-1 sm:grid-cols-9 lg:grid-cols-5" data-testid="bg-tints">
           <button
             type="button"
             role="radio"
@@ -355,10 +363,7 @@ function PaperTab({ current, disabled, onApply }: BackgroundPickerViewProps) {
             aria-label="No tint"
             tabIndex={tintStop === 0 ? 0 : -1}
             onClick={() => texture && onApply({ kind: "texture", textureId: texture.textureId })}
-            className={cn(
-              "flex aspect-square w-full min-w-0 items-center justify-center rounded-full border border-black/15 bg-white text-[10px] leading-none font-medium text-neutral-600 disabled:opacity-40",
-              texture !== null && tint === null && "ring-2 ring-primary ring-offset-2 ring-offset-background",
-            )}
+            className={cx(texture !== null && tint === null ? SWATCH_ACTIVE : SWATCH, "bg-white text-[10px] leading-none font-semibold text-[#56625a]")}
             data-testid="bg-tint-none"
           >
             None
@@ -398,7 +403,7 @@ function PhotoTab({ scope, current, photos, disabled, onApply, onFade }: Backgro
           No photos yet.
         </p>
       ) : (
-        <div role="radiogroup" aria-label="Background photo" onKeyDown={photoKeys} className="grid max-h-56 grid-cols-4 gap-2 overflow-y-auto p-1 sm:grid-cols-5" data-testid="bg-photos" data-keys={scope === "book" ? "focus" : "select"}>
+        <div role="radiogroup" aria-label="Background photo" onKeyDown={photoKeys} className="grid max-h-56 grid-cols-4 gap-2 overflow-y-auto p-1 sm:grid-cols-5 lg:grid-cols-4" data-testid="bg-photos" data-keys={scope === "book" ? "focus" : "select"}>
           {photos.map((p, i) => {
             const selected = photo?.photoId === p.id;
             const src = p.thumbUrl ?? p.webUrl;
@@ -412,11 +417,7 @@ function PhotoTab({ scope, current, photos, disabled, onApply, onFade }: Backgro
                 tabIndex={i === photoStop ? 0 : -1}
                 disabled={disabled}
                 onClick={() => onApply(photoBackground(p.id, current))}
-                className={cn(
-                  "relative block aspect-square w-full min-w-0 overflow-hidden rounded-md bg-neutral-100 outline-none disabled:opacity-40",
-                  "focus-visible:ring-4 focus-visible:ring-primary/60",
-                  selected && "ring-4 ring-primary",
-                )}
+                className={cx(selected ? TOOL_PHOTO_TILE_ACTIVE : TOOL_PHOTO_TILE, "disabled:opacity-40")}
                 data-testid="bg-photo"
                 data-photo-id={p.id}
               >
@@ -426,6 +427,11 @@ function PhotoTab({ scope, current, photos, disabled, onApply, onFade }: Backgro
                 ) : (
                   <ImageIcon className="absolute inset-0 m-auto size-6 text-neutral-400" aria-hidden="true" />
                 )}
+                {selected ? (
+                  <span className={CHECK_BADGE} aria-hidden="true">
+                    <Check className="size-3" strokeWidth={3} />
+                  </span>
+                ) : null}
               </button>
             );
           })}
@@ -436,7 +442,7 @@ function PhotoTab({ scope, current, photos, disabled, onApply, onFade }: Backgro
         {!photo && photos.length > 0 ? <p className="text-xs text-muted-foreground">Pick a photo, then fade it so text stays readable.</p> : null}
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between text-sm">
-            <label htmlFor={`${id}-fade`} className="font-semibold">
+            <label htmlFor={`${id}-fade`} className={ED_PANEL_EYEBROW}>
               Fade
             </label>
             <span className="text-muted-foreground tabular-nums" data-testid="bg-fade-value">
@@ -452,15 +458,15 @@ function PhotoTab({ scope, current, photos, disabled, onApply, onFade }: Backgro
             value={slider.value}
             aria-valuetext={slider.valueText ?? undefined}
             onChange={(e) => photo && onFade({ ...photo, veil: nextFade(Number(e.target.value), photo.veilColor) })}
-            className="h-11 w-full accent-primary disabled:opacity-40"
+            className="h-11 w-full accent-[#0e3b2e] disabled:opacity-40"
             data-testid="bg-fade"
           />
         </div>
         <div className="flex flex-col gap-2">
-          <span className="text-sm font-semibold" id={`${id}-veil`}>
+          <span className={ED_PANEL_EYEBROW} id={`${id}-veil`}>
             Fade colour
           </span>
-          <div role="radiogroup" aria-labelledby={`${id}-veil`} onKeyDown={onRadioGroupKeyDown} className="grid grid-cols-6 gap-3 p-1" data-testid="bg-veil-colours">
+          <div role="radiogroup" aria-labelledby={`${id}-veil`} onKeyDown={onRadioGroupKeyDown} className="grid grid-cols-6 gap-3 p-1 lg:grid-cols-5 xl:grid-cols-6" data-testid="bg-veil-colours">
             {VEIL_SWATCHES.map((s, i) => (
               <SwatchButton
                 key={s.id}

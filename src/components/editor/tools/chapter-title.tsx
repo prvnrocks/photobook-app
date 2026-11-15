@@ -9,6 +9,7 @@ import { CHAPTER_TITLE_MAX, setChapterTitle } from "@/lib/book/edit-ops";
 import type { Chapter } from "@/lib/book/types";
 import { captionInputLang } from "@/lib/editor/caption-tools";
 import type { EditorContextValue } from "../editor-context";
+import { TOOL_HINT, TOOL_INPUT, TOOL_LABEL } from "./tool-classes";
 import type { EditorPanelProps, EditorTool } from "./types";
 
 /** Chapter of the page the current selection is on (slot or caption), or null. */
@@ -30,8 +31,8 @@ function ChapterTitlePanel({ ctx }: EditorPanelProps) {
   const { chapter } = current;
   const pages = ctx.state.doc.pages.filter((p) => p.chapterId === chapter.id).length;
   return (
-    <div className="flex flex-col gap-1" data-testid="chapter-editor">
-      <label htmlFor={`${id}-chapter`} className="text-sm font-medium">
+    <div className="flex flex-col gap-1.5" data-testid="chapter-editor">
+      <label htmlFor={`${id}-chapter`} className={TOOL_LABEL}>
         Chapter title
       </label>
       <input
@@ -47,10 +48,10 @@ function ChapterTitlePanel({ ctx }: EditorPanelProps) {
             coalesceKey: `chapter:${chapter.id}:${session}`,
           })
         }
-        className="min-h-11 w-full rounded-lg border bg-background px-3 py-2 text-base outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        className={`${TOOL_INPUT} min-h-11`}
         data-testid="chapter-title-input"
       />
-      <p className="text-xs text-muted-foreground">
+      <p className={`${TOOL_HINT} px-1`}>
         Used for {pages} {pages === 1 ? "page" : "pages"} in this chapter.
       </p>
     </div>

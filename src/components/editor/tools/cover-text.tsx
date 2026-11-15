@@ -9,12 +9,13 @@ import { BOOK_TITLE_MAX_CODE_POINTS } from "@/lib/book/options";
 import { setCover, SUBTITLE_MAX } from "@/lib/book/edit-ops";
 import { captionInputLang } from "@/lib/editor/caption-tools";
 import { codePointLength } from "@/lib/text/clip";
+import { TOOL_HINT, TOOL_INPUT, TOOL_LABEL } from "./tool-classes";
 import type { EditorPanelProps, EditorTool } from "./types";
 
 let sessionSeq = 0;
 
-const inputClass =
-  "min-h-11 w-full rounded-lg border bg-background px-3 py-2 text-base outline-none focus-visible:ring-2 focus-visible:ring-primary";
+// M22 T6b (D-074): white fields with the emerald focus ring.
+const inputClass = `${TOOL_INPUT} min-h-11`;
 
 function CoverTextPanel({ ctx }: EditorPanelProps) {
   const id = useId();
@@ -23,9 +24,9 @@ function CoverTextPanel({ ctx }: EditorPanelProps) {
   const lang = ctx.book.captionLang;
 
   return (
-    <div className="flex flex-col gap-3" data-testid="cover-editor">
-      <div className="flex flex-col gap-1">
-        <label htmlFor={`${id}-title`} className="text-sm font-medium">
+    <div className="flex flex-col gap-4" data-testid="cover-editor">
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor={`${id}-title`} className={TOOL_LABEL}>
           Title
         </label>
         <input
@@ -41,12 +42,12 @@ function CoverTextPanel({ ctx }: EditorPanelProps) {
           className={inputClass}
           data-testid="cover-title-input"
         />
-        <p className="text-xs text-muted-foreground tabular-nums">
+        <p className={`${TOOL_HINT} px-1 tabular-nums`}>
           {codePointLength(title)}/{BOOK_TITLE_MAX_CODE_POINTS}
         </p>
       </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor={`${id}-subtitle`} className="text-sm font-medium">
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor={`${id}-subtitle`} className={TOOL_LABEL}>
           Subtitle <span className="font-normal text-muted-foreground">(optional)</span>
         </label>
         <input

@@ -3,6 +3,7 @@
 // Low-resolution warning on a photo slot (D-037 9): below 150 dpi effective at A5 for the photo's
 // ORIGINAL size, layout slot and zoom. Never blocks anything; tap shows why.
 // Rendered by EditablePage inside each slot overlay (edit mode only).
+// M22 T6a (D-074): warm gold warning dot with an emerald focus outline; message on an emerald card.
 
 import { TriangleAlert } from "lucide-react";
 import { useEffect, useState, type MouseEvent } from "react";
@@ -55,17 +56,17 @@ export function LowResBadge({ page, slotIdx }: { page: EditorPosition; slotIdx: 
         onClick={toggle}
         aria-label={`Low resolution: ${LOW_RES_MESSAGE}`}
         aria-expanded={open}
-        className="absolute top-0 left-0 z-10 flex size-11 items-center justify-center outline-none"
+        className="absolute top-0 left-0 z-10 flex size-11 items-center justify-center rounded-full outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white"
         data-testid="low-res-badge"
       >
-        <span className="flex size-7 items-center justify-center rounded-full bg-amber-400 text-amber-950 shadow ring-2 ring-white">
+        <span className="flex size-7 items-center justify-center rounded-full bg-[#f3c969] text-[#2f2a14] shadow-[0_4px_10px_-4px_rgb(14_59_46/0.7)] ring-2 ring-white">
           <TriangleAlert className="size-4" aria-hidden="true" />
         </span>
       </button>
       {open ? (
         <p
           role="status"
-          className="pointer-events-none absolute top-11 right-1 left-1 z-10 rounded-md bg-neutral-900/90 px-2 py-1 text-xs text-white"
+          className="pointer-events-none absolute top-11 right-1 left-1 z-10 rounded-lg bg-[#0e3b2e]/95 px-2.5 py-1.5 text-xs font-medium text-[#f2e8d8] shadow-[0_8px_18px_-10px_rgb(0_0_0/0.6)]"
           data-testid="low-res-message"
         >
           {LOW_RES_MESSAGE}

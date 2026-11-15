@@ -9,6 +9,9 @@
 // photoRectOf: frame excluded, same box the render model cover-fits), so saved values render the
 // same in viewer and print. A mask dims what the slot's shape hides (circle, hexagon, diamond,
 // polygon, rounded) and outlines what shows.
+// M22 T6a (D-074): controls restyled only (zoom label, emerald slider, warning card, quiet Reset +
+// emerald Done). The crop box and its ancestors keep their classes: no transform or padding change
+// (startPan reads the box's getBoundingClientRect).
 
 import { Crop as CropIcon, RotateCcw } from "lucide-react";
 import { useRef, type KeyboardEvent, type PointerEvent } from "react";
@@ -20,6 +23,8 @@ import type { Crop } from "@/lib/book/types";
 import { getLayout } from "@/lib/layouts";
 import { panCrop, pinchZoom, zoomCrop, type CropFrame } from "@/lib/editor/crop-gesture";
 import { cropMaskOf, cropMaskPath, type CropMask } from "@/lib/editor/shaped-slots";
+import { cx } from "@/lib/cx";
+import { ED_CTA_EMERALD, ED_CTA_QUIET, ED_PANEL_EYEBROW } from "../editor-classes";
 import type { EditorContextValue } from "../editor-context";
 import type { EditorPanelProps, EditorTool } from "./types";
 
@@ -179,13 +184,13 @@ export function CropPanel({ ctx, close }: EditorPanelProps) {
         <CropMaskOverlay mask={t.mask} />
       </div>
       {t.rotate ? (
-        <p className="-mt-1 text-xs text-muted-foreground" data-testid="crop-tilt-note">
+        <p className="-mt-1 text-xs text-[#56625a]" data-testid="crop-tilt-note">
           Shown straight. The photo stays tilted on the page.
         </p>
       ) : null}
 
       <label className="flex w-full max-w-sm items-center gap-3 text-sm">
-        <span className="shrink-0 font-medium">Zoom</span>
+        <span className={cx(ED_PANEL_EYEBROW, "shrink-0")}>Zoom</span>
         <input
           type="range"
           min={CROP_ZOOM_MIN}
@@ -193,14 +198,14 @@ export function CropPanel({ ctx, close }: EditorPanelProps) {
           step={0.01}
           value={t.crop.zoom}
           onChange={(e) => apply(zoomCrop(t.frame, t.crop, Number(e.target.value)), zoomKey)}
-          className="min-h-11 flex-1 accent-primary"
+          className="min-h-11 flex-1 accent-[#0e3b2e]"
           data-testid="crop-zoom"
         />
-        <span className="w-10 shrink-0 text-right tabular-nums text-muted-foreground">{t.crop.zoom.toFixed(1)}×</span>
+        <span className="w-10 shrink-0 text-right font-semibold tabular-nums text-[#0e3b2e]">{t.crop.zoom.toFixed(1)}×</span>
       </label>
 
       {lowRes ? (
-        <p className="w-full max-w-sm rounded-md border border-warning-border bg-warning-soft px-3 py-2 text-xs text-foreground" data-testid="crop-low-res">
+        <p className="w-full max-w-sm rounded-xl border border-warning-border bg-warning-soft px-3 py-2 text-xs text-foreground" data-testid="crop-low-res">
           This photo may look blurry when printed at this size.
         </p>
       ) : null}
@@ -209,7 +214,7 @@ export function CropPanel({ ctx, close }: EditorPanelProps) {
         <button
           type="button"
           onClick={() => apply({ ...DEFAULT_CROP })}
-          className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-card text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+          className={cx(ED_CTA_QUIET, "border border-[#e9dfca]")}
           data-testid="crop-reset"
         >
           <RotateCcw className="size-4" aria-hidden="true" />
@@ -218,7 +223,7 @@ export function CropPanel({ ctx, close }: EditorPanelProps) {
         <button
           type="button"
           onClick={close}
-          className="min-h-11 rounded-lg bg-primary text-sm font-medium text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+          className={ED_CTA_EMERALD}
           data-testid="crop-done"
         >
           Done

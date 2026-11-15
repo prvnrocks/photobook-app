@@ -30,11 +30,21 @@ import { movePageResult, type PageOpResult } from "@/lib/book/edit-ops";
 import { designLabel } from "@/lib/design/defaults";
 import type { BookDoc } from "@/lib/book/types";
 import { pageCountLabel, pageUnits, splitNotice, unitMoveTarget, type PageTileUnit } from "@/lib/editor/pages";
-import { cn } from "@/lib/utils";
+import { cx } from "@/lib/cx";
 import type { EditorContextValue } from "../editor-context";
 import { DesktopPointerSensor, MOUSE_CONSTRAINT, TOUCH_CONSTRAINT } from "../dnd-sensors";
+import { ED_THUMB, ED_THUMB_ACTIVE } from "../editor-classes";
 import { showEditorToast } from "../EditorToast";
+import { TOOL_ICON_BTN } from "./tool-classes";
 import type { EditorPanelProps, EditorTool } from "./types";
+
+// M22 T6b (D-074): each page (or spread) is a small ivory card — the thumbnail card of the page
+// strip (ED_THUMB / ED_THUMB_ACTIVE) over a row of 44 px move buttons. While dragging the thumb
+// lifts with a deeper shadow only (no scale: opacity / box-shadow / outline motion only).
+const TILE_CARD = "relative flex min-w-0 flex-col gap-1 rounded-2xl border border-[#e9dfca] bg-[#faf6ee] p-1.5";
+const THUMB_DRAGGING =
+  "relative block overflow-hidden rounded-xl bg-white opacity-90 shadow-[0_22px_40px_-16px_rgb(14_59_46/0.65)] ring-2 ring-[#0e3b2e]/60 outline-none";
+const THUMB_BEHAVIOUR = "touch-manipulation select-none [-webkit-touch-callout:none]";
 
 const KEYBOARD_CODES = { start: ["Space"], cancel: ["Escape"], end: ["Space"] };
 
@@ -121,7 +131,7 @@ export function PagesSheet({ ctx, close }: EditorPanelProps) {
 
   if (pages.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground" data-testid="pages-empty">
+      <p className="rounded-2xl border border-[#e9dfca] bg-[#faf6ee] p-3 text-sm text-muted-foreground" data-testid="pages-empty">
         This book has no pages yet. Use Add page to start one.
       </p>
     );
@@ -130,13 +140,13 @@ export function PagesSheet({ ctx, close }: EditorPanelProps) {
   return (
     <div className="flex flex-col gap-3" data-testid="pages-sheet">
       <p className="text-sm text-muted-foreground">
-        <span className="font-medium text-foreground" data-testid="pages-count">
+        <span className="font-semibold text-[#0e3b2e]" data-testid="pages-count">
           {pageCountLabel(pages.length, book.maxPages)}
         </span>
         {readOnly ? " · Tap a page to open it." : " · Hold and drag to reorder, or use the arrows. Tap a page to open it."}
       </p>
       {/* D-063: shape + style are fixed at creation — shown, never editable here. */}
-      <p className="text-xs text-muted-foreground" data-testid="editor-book-design">
+      <p className="inline-flex min-h-8 items-center self-start rounded-full border border-[#e9dfca] bg-[#faf6ee] px-3 text-xs font-medium text-muted-foreground" data-testid="editor-book-design">
         <span className="sr-only">Book shape and style (set when the book was created): </span>
         {designLabel(state.doc.format, state.doc.style.designStyle)}
       </p>
@@ -153,7 +163,7 @@ export function PagesSheet({ ctx, close }: EditorPanelProps) {
         accessibility={{ announcements: announcements(units), screenReaderInstructions: { draggable: INSTRUCTIONS } }}
       >
         <SortableContext items={units.map((u) => u.id)} strategy={rectSortingStrategy} disabled={readOnly}>
-          <ol className="grid grid-cols-3 gap-x-2 gap-y-3 sm:grid-cols-4 lg:grid-cols-2" data-testid="pages-grid">
+          <ol className="grid grid-cols-2 gap-2 min-[360px]:grid-cols-3 sm:grid-cols-4 lg:grid-cols-2" data-testid="pages-grid">
             {units.map((u, k) => (
               <PageTile
                 key={u.id}
@@ -219,7 +229,7 @@ function PageTile({
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      className={cn("relative flex min-w-0 flex-col gap-1", spread && "col-span-2", isDragging && "z-10")}
+      className={cx(TILE_CARD, spread && "col-span-2", isDragging && "z-10")}
       data-testid="pages-tile"
       data-page-id={unit.id}
       data-spread={spread ? "true" : undefined}
@@ -233,21 +243,19 @@ function PageTile({
         tabIndex={0}
         aria-label={`${name}${spread ? ", two-page layout" : ""}${current ? ", current page" : ""}`}
         aria-current={current ? "page" : undefined}
-        className={cn(
-          "relative cursor-pointer touch-manipulation select-none rounded-sm outline-none [-webkit-touch-callout:none]",
-          "ring-offset-2 ring-offset-card focus-visible:ring-2 focus-visible:ring-ring",
-          current ? "ring-2 ring-primary" : "ring-1 ring-border",
-          isDragging && "scale-105 opacity-90 shadow-lift",
-          !readOnly && "cursor-grab active:cursor-grabbing",
+        className={cx(
+          isDragging ? THUMB_DRAGGING : current ? ED_THUMB_ACTIVE : ED_THUMB,
+          THUMB_BEHAVIOUR,
+          readOnly ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
         )}
         data-testid="pages-thumb"
       >
-        <div className={cn("pointer-events-none", spread && "grid grid-cols-2")}>
+        <div className={cx("pointer-events-none", spread && "grid grid-cols-2")}>
           {Array.from({ length: unit.count }, (_, k) => (
             <BookPage key={k} doc={ctx.state.doc} page={unit.start + k} mode="view" photos={thumbs} captionLang={captionLang} />
           ))}
         </div>
-        <span className="pointer-events-none absolute left-1 top-1 rounded bg-primary/85 px-1.5 text-xs font-medium text-primary-foreground">
+        <span className="pointer-events-none absolute top-1.5 left-1.5 rounded-full bg-[#0e3b2e]/90 px-2 text-xs leading-5 font-semibold text-[#f2e8d8] tabular-nums">
           {spread ? `${n}–${n + 1}` : n}
         </span>
       </div>
@@ -258,7 +266,7 @@ function PageTile({
             onClick={onEarlier}
             disabled={unit.start === 0}
             aria-label={`Move ${name.toLowerCase()} earlier`}
-            className="flex size-11 items-center justify-center rounded-lg outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"
+            className={TOOL_ICON_BTN}
             data-testid="pages-move-earlier"
           >
             <ChevronLeft className="size-5" aria-hidden="true" />
@@ -268,7 +276,7 @@ function PageTile({
             onClick={onLater}
             disabled={last >= count - 1}
             aria-label={`Move ${name.toLowerCase()} later`}
-            className="flex size-11 items-center justify-center rounded-lg outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"
+            className={TOOL_ICON_BTN}
             data-testid="pages-move-later"
           >
             <ChevronRight className="size-5" aria-hidden="true" />

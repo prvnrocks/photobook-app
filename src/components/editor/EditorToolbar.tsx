@@ -72,9 +72,18 @@ export function CoachLineView({ onDismiss }: { onDismiss(): void }) {
   );
 }
 
-/** Coach line / error strip: a small floating card above the pill bar (in flow, never over the page). */
+/**
+ * Coach line / error strip: a small floating card above the pill bar (in flow, never over the page).
+ * ≥ md it sits BESIDE the pill bar instead (TOOLBAR_ROW wraps only when there's no room), so the
+ * coach line appearing after hydration (it's never in SSR HTML) doesn't make the toolbar taller and
+ * the stage doesn't jump (M22 T7: 70 → 124 px before).
+ */
 const CARD_STRIP =
-  "mx-auto mb-2 flex w-full max-w-md items-center gap-2 rounded-2xl border ps-3 pe-1 shadow-[0_10px_24px_-18px_rgb(14_59_46/0.5)]";
+  "mx-auto mb-2 flex w-full max-w-md items-center gap-2 rounded-2xl border ps-3 pe-1 shadow-[0_10px_24px_-18px_rgb(14_59_46/0.5)] md:mx-0 md:mb-0 md:w-auto md:min-w-0 md:shrink md:grow-0 md:basis-[22rem]";
+
+/** The toolbar block: a column on phones; ≥ md one centred row (card strips · pill bar). */
+const TOOLBAR_ROW =
+  "shrink-0 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] ps-[max(0.5rem,env(safe-area-inset-left))] pe-[max(0.5rem,env(safe-area-inset-right))] md:flex md:flex-wrap md:items-center md:justify-center md:gap-x-3 md:gap-y-2";
 
 /** 44 px round dismiss button inside a card strip. */
 const STRIP_CLOSE =
@@ -201,10 +210,7 @@ export function EditorToolbar({ tools }: { tools: EditorTool[] }) {
   const shownCount = primary.length + (hasMore ? 1 : 0);
 
   return (
-    <div
-      className="shrink-0 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] ps-[max(0.5rem,env(safe-area-inset-left))] pe-[max(0.5rem,env(safe-area-inset-right))]"
-      data-testid="editor-toolbar"
-    >
+    <div className={TOOLBAR_ROW} data-testid="editor-toolbar">
       {state.error ? (
         <div
           role="alert"
@@ -223,7 +229,7 @@ export function EditorToolbar({ tools }: { tools: EditorTool[] }) {
         </div>
       ) : null}
       <EditorCoachLine show={coachApplies(ctx, tools.length)} />
-      <div className="relative mx-auto w-full max-w-md sm:w-fit sm:max-w-full">
+      <div className="relative mx-auto w-full max-w-md sm:w-fit sm:max-w-full md:mx-0">
         <div
           ref={rowRef}
           role="group"

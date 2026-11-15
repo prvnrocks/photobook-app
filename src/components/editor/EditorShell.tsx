@@ -25,7 +25,7 @@ import type { ShareResult } from "@/lib/editor/done";
 import type { EditorShellData } from "@/lib/editor/types";
 import { hasUnpublishedChanges } from "@/lib/publish/ui";
 import { AiSummaryChip } from "./AiSummaryChip";
-import { ED_BAND_ICON_BTN } from "./editor-classes";
+import { ED_BAND_ICON_BTN, ED_STAGE_HOST, ED_STRIP_SURFACE } from "./editor-classes";
 import { EditorBand } from "./EditorBand";
 import "./editor-motion.css";
 import { EditorContext, type EditorContextValue } from "./editor-context";
@@ -229,11 +229,13 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
           {spreadMode === null ? (
             // lg+ is always spread mode: keep the spread strip's width until the strip can render.
-            <div aria-hidden="true" className="hidden w-44 shrink-0 border-r border-border bg-muted/40 lg:block" />
+            // Same cream as the real strip (PageStrip), so nothing changes colour on hydration.
+            <div aria-hidden="true" className={cn("hidden w-44 shrink-0 lg:block", ED_STRIP_SURFACE)} />
           ) : (
             <PageStrip className={spread ? "hidden w-44 shrink-0 lg:block" : "hidden w-36 shrink-0 lg:block"} />
           )}
-          <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {/* One cream surface for stage + toolbar (ED_STAGE_HOST): no colour step under the toolbar. */}
+          <main className={cn("flex min-h-0 min-w-0 flex-1 flex-col", ED_STAGE_HOST)}>
             {/* Remount on mode change: item indexes mean pages in one mode and spreads in the other.
                 Width unknown (SSR/hydration): phones get the real single-page carousel, md+ a
                 spread-shaped placeholder — no single → spread flash on desktop (N7). */}

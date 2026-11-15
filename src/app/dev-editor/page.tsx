@@ -9,6 +9,8 @@
 // validator in the stub save; the stored JSON lands in window.__devEditorLastSave (M10a A8).
 // `?bg=1&bgveil=light50`: page 1 has a photo background under a white 50 % veil (M10b A4).
 // `?sample=modern-portrait|modern-landscape` (M10c: also geometric-|scrapbook-portrait|landscape, `-ar` for Arabic) swaps in a modern sample book with spreads (M10b A15).
+// `?state=readOnly|conflict|makeWithAi|aiSummary|linkExpired|paid`: named screenshot states (M22 T7,
+// ./dev-states.ts) — conflict makes one edit after load so its banner shows.
 // Upgrade sheet: enabled when the server has Stripe keys (M7 T6); `?upgrade=cancelled` → cancel notice.
 // 404s in production builds (incl. Vercel previews, which run NODE_ENV=production).
 
@@ -20,6 +22,7 @@ import { DEV_AI_MODES, DEV_SAVE_MODES, type DevAiMode, type DevSaveMode } from "
 import { parseDevPages } from "@/lib/editor/dev-pages-fixture";
 import { isPaymentsEnabled } from "@/lib/stripe";
 import { DevEditorClient } from "./DevEditorClient";
+import { devStateSaveMode, parseDevEditorState } from "./dev-states";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +36,8 @@ export default async function DevEditorPage({
   if (process.env.NODE_ENV === "production") notFound();
   const params = await searchParams;
   const q = params.save;
-  const mode = (DEV_SAVE_MODES as readonly string[]).includes(String(q)) ? (q as DevSaveMode) : "ok";
+  const state = parseDevEditorState(params.state);
+  const mode = devStateSaveMode(state, (DEV_SAVE_MODES as readonly string[]).includes(String(q)) ? (q as DevSaveMode) : "ok");
   const ai = (DEV_AI_MODES as readonly string[]).includes(String(params.ai)) ? (params.ai as DevAiMode) : "off";
-  return <DevEditorClient mode={mode} ai={ai} pages={parseDevPages(params.pages)} published={params.published === "1"} paid={params.paid === "1"} format={parseDevFormat(params.format)} paymentsEnabled={isPaymentsEnabled()} bg={params.bg === "1"} lightVeil={params.bgveil === "light50"} sample={parseDevSample(params.sample)} />;
+  return <DevEditorClient mode={mode} ai={ai} pages={parseDevPages(params.pages)} published={params.published === "1"} paid={params.paid === "1"} format={parseDevFormat(params.format)} paymentsEnabled={isPaymentsEnabled()} bg={params.bg === "1"} lightVeil={params.bgveil === "light50"} sample={parseDevSample(params.sample)} state={state} />;
 }

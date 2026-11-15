@@ -32,9 +32,13 @@ export const ED_LEATHER_LIGHTEST = "#1f5443";
 export const ED_BAND =
   "home-leather relative isolate shrink-0 overflow-hidden text-[#f2e8d8] pt-[env(safe-area-inset-top)] ps-[env(safe-area-inset-left)] pe-[env(safe-area-inset-right)]";
 
-/** The band's content row: 56 px on phones (≤ 64 px), tall from lg. */
+/**
+ * The band's content row: 56 px on phones (≤ 64 px), tall from lg. Phones: no gaps and 4 px side
+ * padding — the 44 px icon buttons already carry 12 px of air around their icons — so the title gets
+ * ≥ 140 px at 375 (M22 T7; it had ~105 px).
+ */
 export const ED_BAND_ROW =
-  "flex h-14 min-w-0 items-center gap-1 px-2 sm:gap-2 sm:px-4 lg:h-auto lg:min-h-24 lg:gap-4 lg:px-8 lg:py-5";
+  "flex h-14 min-w-0 items-center gap-0 px-1 sm:gap-2 sm:px-4 lg:h-auto lg:min-h-24 lg:gap-4 lg:px-8 lg:py-5";
 
 /** Title block (eyebrow + h1) — flexes and truncates so the row never scrolls horizontally. */
 export const ED_BAND_TITLE_WRAP = "flex min-w-0 flex-1 flex-col justify-center";
@@ -142,6 +146,18 @@ export const ED_STAGE =
   "relative min-h-0 bg-[#f4ede0] bg-[radial-gradient(ellipse_75%_65%_at_50%_42%,#fdfaf3_0%,#f4ede0_62%,#ebe2d0_100%)]";
 
 /**
+ * The stage column (EditorShell's <main>: stage + floating toolbar) as ONE cream surface (M22 T7):
+ * the column paints the ED_STAGE gradient and the stage boxes inside it (the carousel <section> and
+ * the md+ spread placeholder — main's only aria-hidden child — both ED_STAGE) turn transparent, so there's no colour step between the
+ * stage and the strip under the toolbar. ED_STAGE itself stays for stand-alone stages (spread preview).
+ */
+export const ED_STAGE_HOST =
+  "bg-[#f4ede0] bg-[radial-gradient(ellipse_75%_65%_at_50%_42%,#fdfaf3_0%,#f4ede0_62%,#ebe2d0_100%)] [&_section[aria-roledescription=carousel]]:bg-transparent [&_section[aria-roledescription=carousel]]:bg-none [&>[aria-hidden=true]]:bg-transparent [&>[aria-hidden=true]]:bg-none";
+
+/** Page strip column surface (EditorShell's width placeholder matches PageStrip's own STRIP colours). */
+export const ED_STRIP_SURFACE = "border-r border-[#e5dccb] bg-[#f4ede0]";
+
+/**
  * Outer frame around <BookPage>: soft shadow + hairline only. No padding, border width or aspect
  * changes — the page's aspect box inside is untouched (BookPage stays the single renderer).
  */
@@ -164,9 +180,11 @@ export const ED_STAGE_LABEL = "text-xs font-medium text-[#56625a]";
 /**
  * Share — the screen's ONE gold action, on the leather band. Ink on the foil's darkest stop 6.44:1.
  * 44 px on phones, 48 px from lg. Cream focus ring offset on the leather. No press transform.
+ * Phones (< sm): 10 px side padding (the note "Free · 30 days" still clears the pill's curve) so the
+ * band title has room; 16 px from sm, 24 px from lg.
  */
 export const ED_CTA_GOLD =
-  "home-foil-fill inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full px-4 font-brand text-sm font-semibold text-[#1b1b1d] shadow-[0_10px_22px_-14px_rgb(0_0_0/0.8),inset_0_1px_0_rgb(255_255_255/0.4)] transition-[filter] outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-[#f2e8d8] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0e3b2e] active:brightness-95 disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none lg:min-h-12 lg:px-6 lg:text-base";
+  "home-foil-fill inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full px-2.5 sm:px-4 font-brand text-sm font-semibold text-[#1b1b1d] shadow-[0_10px_22px_-14px_rgb(0_0_0/0.8),inset_0_1px_0_rgb(255_255_255/0.4)] transition-[filter] outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-[#f2e8d8] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0e3b2e] active:brightness-95 disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none lg:min-h-12 lg:px-6 lg:text-base";
 
 /** Emerald solid action (Make with AI, Apply, Done…): white on #0e3b2e 12.47:1, 44 px. */
 export const ED_CTA_EMERALD =

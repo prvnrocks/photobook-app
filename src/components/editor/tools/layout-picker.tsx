@@ -11,8 +11,10 @@
 // M10c T14: shaped / tilted / framed slots draw their shape, tilt and frame card (diagramSlotLook)
 // so geometric and scrapbook options are recognisable; decorations are left out. Plain slots keep
 // their M5 markup.
+// M22 T6a (D-074): options are emerald cards (selected = emerald ring + check badge), section
+// heading in panel small caps, confirm actions emerald / quiet. Diagrams unchanged.
 
-import { LayoutTemplate } from "lucide-react";
+import { Check, LayoutTemplate } from "lucide-react";
 import { useMemo, useState } from "react";
 import { changeLayout, type ChangeLayoutResult } from "@/lib/book/edit-ops";
 import { pageAspectStyle } from "@/lib/book/format-style";
@@ -24,9 +26,11 @@ import { splitNotice } from "@/lib/editor/pages";
 import { layoutChangeNotice } from "@/lib/editor/photo-picker";
 import { spreadAspectRatio } from "@/lib/editor/spreads";
 import { EDIT_ERROR_COPY } from "@/lib/editor/store";
-import { cn } from "@/lib/utils";
+import { cx } from "@/lib/cx";
+import { ED_CTA_EMERALD, ED_CTA_QUIET, ED_PANEL_EYEBROW, ED_PANEL_HEADING } from "../editor-classes";
 import type { EditorContextValue } from "../editor-context";
 import { showEditorToast } from "../EditorToast";
+import { CHECK_BADGE, TOOL_TILE, TOOL_TILE_ACTIVE } from "./tool-tile-classes";
 import type { EditorPanelProps, EditorTool } from "./types";
 
 /** Index of the page the Layout tool works on (selected slot/caption's page, else the shown page). */
@@ -55,7 +59,7 @@ export function LayoutDiagram({ layout, format, className }: { layout: Layout; f
   const order = layout.slices ? boxes.map((_, i) => i) : paintOrder(layout);
   return (
     <div
-      className={cn("relative aspect-[148/210] w-full rounded-sm border border-border bg-white", className)}
+      className={cx("relative aspect-[148/210] w-full rounded-sm border border-border bg-white", className)}
       style={spread ? { aspectRatio: spreadAspectRatio(format) } : pageAspectStyle(format)}
       aria-hidden="true"
       data-kind={spread ? "spread" : undefined}
@@ -71,7 +75,7 @@ export function LayoutDiagram({ layout, format, className }: { layout: Layout; f
         return (
           <div
             key={i}
-            className={cn("absolute", look.photo ? "bg-white shadow-[0_0_0_1px_var(--color-border)]" : "bg-input/80")}
+            className={cx("absolute", look.photo ? "bg-white shadow-[0_0_0_1px_var(--color-border)]" : "bg-input/80")}
             style={{ ...rectStyle(r, spread), ...shapeStyle, ...(look.rotate ? { transform: `rotate(${look.rotate}deg)` } : {}) }}
             data-diagram-box=""
             data-diagram-shaped="true"
@@ -154,7 +158,7 @@ export function LayoutPickerPanel({ ctx, close }: EditorPanelProps) {
     const n = confirm.captions.length;
     return (
       <div role="alertdialog" aria-labelledby="layout-confirm-title" className="flex flex-col gap-3" data-testid="layout-confirm">
-        <h3 id="layout-confirm-title" className="text-sm font-semibold">
+        <h3 id="layout-confirm-title" className={ED_PANEL_HEADING}>
           {n === 1 ? "Remove 1 caption?" : `Remove ${n} captions?`}
         </h3>
         <p className="text-sm text-muted-foreground">
@@ -162,7 +166,7 @@ export function LayoutPickerPanel({ ctx, close }: EditorPanelProps) {
         </p>
         <ul className="flex flex-col gap-2">
           {confirm.captions.map((c, i) => (
-            <li key={i} dir="auto" className="break-words rounded-lg bg-muted px-3 py-2 text-sm" data-testid="layout-confirm-caption">
+            <li key={i} dir="auto" className="break-words rounded-xl border border-[#e9dfca] bg-[#faf6ee] px-3 py-2 text-sm" data-testid="layout-confirm-caption">
               {c.text}
             </li>
           ))}
@@ -171,7 +175,7 @@ export function LayoutPickerPanel({ ctx, close }: EditorPanelProps) {
           <button
             type="button"
             onClick={() => setConfirm(null)}
-            className="min-h-11 flex-1 rounded-lg border border-border bg-card px-4 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            className={cx(ED_CTA_QUIET, "flex-1 border border-[#e9dfca]")}
             data-testid="layout-confirm-cancel"
           >
             Cancel
@@ -179,7 +183,7 @@ export function LayoutPickerPanel({ ctx, close }: EditorPanelProps) {
           <button
             type="button"
             onClick={() => apply(confirm.layout, true)}
-            className="min-h-11 flex-1 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+            className={cx(ED_CTA_EMERALD, "flex-1")}
             data-testid="layout-confirm-apply"
           >
             Remove and apply
@@ -205,8 +209,8 @@ export function LayoutPickerPanel({ ctx, close }: EditorPanelProps) {
         ))}
       </ul>
       {opts.spreads.length > 0 ? (
-        <section className="flex flex-col gap-2" aria-labelledby="layout-spreads-title" data-testid="layout-spreads">
-          <h3 id="layout-spreads-title" className="text-sm font-semibold">
+        <section className="flex flex-col gap-2 pt-1" aria-labelledby="layout-spreads-title" data-testid="layout-spreads">
+          <h3 id="layout-spreads-title" className={ED_PANEL_EYEBROW}>
             Across two pages
           </h3>
           <ul className="grid grid-cols-2 gap-2 sm:gap-3" aria-label="Two-page layouts">
@@ -240,18 +244,19 @@ function OptionButton({ o, format, onChoose }: { o: LayoutOption; format: BookFo
         disabled={o.disabled}
         aria-pressed={o.current}
         aria-label={`${label}${o.current ? " (current)" : ""}`}
-        className={cn(
-          "flex min-h-11 w-full flex-col items-stretch gap-1 rounded-lg p-1.5 text-start outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
-          o.current ? "bg-secondary ring-2 ring-primary" : "hover:bg-muted",
-          o.disabled && "cursor-not-allowed opacity-50 hover:bg-transparent",
-        )}
+        className={o.current ? TOOL_TILE_ACTIVE : TOOL_TILE}
         data-testid="layout-option"
         data-layout-id={l.id}
         data-role={l.role}
         data-disabled={o.disabled ? "true" : undefined}
       >
+        {o.current ? (
+          <span className={CHECK_BADGE} aria-hidden="true">
+            <Check className="size-3" strokeWidth={3} />
+          </span>
+        ) : null}
         <LayoutDiagram layout={l} format={format} />
-        <span className="text-xs font-medium tabular-nums">{photosLabel(l.photoCount)}</span>
+        <span className="text-xs font-semibold text-[#0e3b2e] tabular-nums">{photosLabel(l.photoCount)}</span>
         <span className="min-h-4 text-[11px] leading-tight text-muted-foreground">
           {o.reason ? (
             <span data-testid="layout-disabled-reason">{o.reason}</span>

@@ -4,7 +4,7 @@
 // exercise the toolbar extension point (dev-only route).
 
 import { Eraser, PanelBottom, Type } from "lucide-react";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { EditorShell } from "@/components/editor/EditorShell";
 import { EDITOR_TOOLS } from "@/components/editor/tools/registry";
 import type { EditorTool } from "@/components/editor/tools/types";
@@ -22,6 +22,7 @@ import {
   type DevSaveMode,
 } from "@/lib/editor/dev-fixture";
 import { withDevPagesData } from "@/lib/editor/dev-pages-fixture";
+import { withDevEditorState, type DevEditorState } from "./dev-states";
 
 const DEV_TOOLS: EditorTool[] = [
   {
@@ -72,6 +73,7 @@ export function DevEditorClient({
   bg = false,
   lightVeil = false,
   sample = null,
+  state = null,
 }: {
   mode: DevSaveMode;
   ai?: DevAiMode;
@@ -86,14 +88,16 @@ export function DevEditorClient({
   lightVeil?: boolean;
   /** `?sample=modern-portrait|modern-landscape` (M10c: also geometric-|scrapbook-portrait|landscape, `-ar` for Arabic): modern sample book with spreads (M10b A15). */
   sample?: DevSample | null;
+  /** `?state=` named screenshot state (./dev-states.ts); the save mode is already adjusted by the page. */
+  state?: DevEditorState | null;
 }) {
-  const [data] = useState(() => {
+  const [{ data, summary }] = useState(() => {
     const raw = sample ? withDevSampleBook(devEditorData(mode, ai), sample) : withDevPagesData(devEditorData(mode, ai), pages);
     const withBg = bg ? withDevBackgroundPhotos(raw) : raw;
     const fixture = bg && lightVeil ? withDevLightVeilPage(withBg) : withBg;
     const base = sample || format === fixture.doc.format ? fixture : { ...fixture, doc: { ...fixture.doc, format } };
     const d = paid ? { ...base, book: { ...base.book, isPaid: true, maxPages: 100 } } : base;
-    return published ? { ...d, publishedRev: d.docRev } : d;
+    return withDevEditorState(published ? { ...d, publishedRev: d.docRev } : d, state);
   });
   const [transport] = useState(() =>
     devTransport(
@@ -101,9 +105,22 @@ export function DevEditorClient({
       bg ? { validate: { photoIds: new Set(data.photos.map((p) => p.id)), maxPages: data.book.maxPages, savedDoc: data.doc } } : {},
     ),
   );
+  // `?state=conflict`: the banner needs a save — make one harmless edit ("Title +") once hydrated.
+  useEffect(() => {
+    if (state !== "conflict") return;
+    const click = (id: string) => document.querySelector<HTMLElement>(`[data-testid="${id}"]`)?.click();
+    const t = window.setTimeout(() => {
+      if (document.querySelector('[data-testid="editor-tool-dev-title"]')) click("editor-tool-dev-title");
+      else {
+        click("editor-more");
+        window.setTimeout(() => click("editor-tool-dev-title"), 50);
+      }
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [state]);
   return (
     <>
-      <EditorShell data={data} transport={transport} tools={TOOLS} backHref="/dev-editor" paymentsEnabled={paymentsEnabled} />
+      <EditorShell data={data} transport={transport} tools={TOOLS} backHref="/dev-editor" paymentsEnabled={paymentsEnabled} aiSummary={summary} />
       <Suspense fallback={null}>
         <UpgradeCancelledNotice floating />
       </Suspense>

@@ -5,14 +5,18 @@
 // that is already on another page swaps the two slots (replacePhoto does it); the cover uses
 // setCover. Placing an AI-dropped photo keeps it — the server marks it kept on save (D-037 4).
 // M11 T14: docked under the page on phones (dockOnMobile) so the spot being filled stays visible.
+// M22 T6a (D-074): emerald segmented tabs, photo tiles with an emerald ring + check badge for the
+// current photo, quiet destructive Remove.
 
-import { ImageIcon, Trash2 } from "lucide-react";
+import { Check, ImageIcon, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { replacePhoto, setCover } from "@/lib/book/edit-ops";
 import { defaultPickerTab, groupPickerPhotos, PICKER_TABS, type PickerTab } from "@/lib/editor/photo-picker";
 import type { EditorShellPhoto } from "@/lib/editor/types";
-import { cn } from "@/lib/utils";
+import { cx } from "@/lib/cx";
+import { ED_DANGER_QUIET } from "../editor-classes";
 import type { EditorContextValue } from "../editor-context";
+import { CHECK_BADGE, SEG, SEG_ACTIVE, SEG_GROUP, TOOL_PHOTO_TILE, TOOL_PHOTO_TILE_ACTIVE } from "./tool-tile-classes";
 import type { EditorPanelProps, EditorTool } from "./types";
 
 type Target = { kind: "slot"; pageIdx: number; slotIdx: number; current: string | null } | { kind: "cover"; current: string | null };
@@ -51,7 +55,7 @@ export function PhotoPickerPanel({ ctx, close }: EditorPanelProps) {
 
   return (
     <div className="flex flex-col gap-3" data-testid="photo-picker">
-      <div role="tablist" aria-label="Photos" className="grid grid-cols-3 gap-1 rounded-lg bg-secondary p-1">
+      <div role="tablist" aria-label="Photos" className={cx(SEG_GROUP, "grid-cols-3")}>
         {PICKER_TABS.map((t) => (
           <button
             key={t.id}
@@ -59,10 +63,7 @@ export function PhotoPickerPanel({ ctx, close }: EditorPanelProps) {
             role="tab"
             aria-selected={tab === t.id}
             onClick={() => setTab(t.id)}
-            className={cn(
-              "min-h-11 min-w-0 rounded-md px-1 text-xs leading-tight font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              tab === t.id ? "bg-card text-foreground shadow-card" : "text-muted-foreground hover:text-foreground",
-            )}
+            className={cx(tab === t.id ? SEG_ACTIVE : SEG, "px-1 text-xs leading-tight")}
             data-testid={`picker-tab-${t.id}`}
           >
             {t.label} <span className="tabular-nums">({groups[t.id].length})</span>
@@ -93,7 +94,7 @@ export function PhotoPickerPanel({ ctx, close }: EditorPanelProps) {
         <button
           type="button"
           onClick={() => choose(null)}
-          className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-destructive-border text-sm font-medium text-destructive outline-none hover:bg-destructive-soft focus-visible:ring-2 focus-visible:ring-ring"
+          className={cx(ED_DANGER_QUIET, "border border-destructive-border")}
           data-testid="picker-remove"
         >
           <Trash2 className="size-4" aria-hidden="true" />
@@ -112,10 +113,7 @@ function PhotoTile({ photo, current, hint, onPick }: { photo: EditorShellPhoto; 
       onClick={onPick}
       disabled={current}
       aria-label={current ? "Current photo" : hint === "Swap" ? "Swap with this photo" : "Use this photo"}
-      className={cn(
-        "relative block aspect-square w-full overflow-hidden rounded-md bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
-        current && "ring-4 ring-primary",
-      )}
+      className={current ? TOOL_PHOTO_TILE_ACTIVE : TOOL_PHOTO_TILE}
       data-testid="picker-photo"
       data-photo-id={photo.id}
     >
@@ -125,8 +123,13 @@ function PhotoTile({ photo, current, hint, onPick }: { photo: EditorShellPhoto; 
       ) : (
         <ImageIcon className="absolute inset-0 m-auto size-6 text-muted-foreground" aria-hidden="true" />
       )}
+      {current ? (
+        <span className={CHECK_BADGE} aria-hidden="true">
+          <Check className="size-3" strokeWidth={3} />
+        </span>
+      ) : null}
       {current || hint ? (
-        <span className="absolute inset-x-0 bottom-0 bg-primary/75 py-0.5 text-center text-[11px] font-medium text-primary-foreground">
+        <span className="absolute inset-x-0 bottom-0 bg-[#0e3b2e]/85 py-0.5 text-center text-[11px] font-semibold text-white">
           {current ? "Current" : hint}
         </span>
       ) : null}
