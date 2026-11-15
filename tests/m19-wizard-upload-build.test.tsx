@@ -13,7 +13,7 @@ vi.mock("next/navigation", async (orig) => ({
   useRouter: () => ({ refresh: vi.fn(), replace: vi.fn(), push: vi.fn() }),
 }));
 
-const { isWizardUpload, isWizardBuild, wizardBackHref } = await import("@/lib/books/wizard-routes");
+const { isWizardUpload, isWizardBuild } = await import("@/lib/books/wizard-routes");
 const { wizardChecklist } = await import("@/lib/runs/build-checklist");
 const { createThumbStrip, THUMB_STRIP_MAX } = await import("@/lib/upload/thumb-strip");
 const { fanPhotoUrls } = await import("@/lib/runs/draft-preview");
@@ -42,7 +42,6 @@ describe("wizard chrome choice", () => {
     expect(isWizardUpload("none", "ai_started")).toBe(false);
     expect(isWizardUpload("active", null)).toBe(false);
     expect(isWizardUpload("done", null)).toBe(false);
-    expect(wizardBackHref(BOOK)).toBe(`/books/new?book=${BOOK}&step=4`);
   });
 
   it("build: wizard only for the first AI build of an unedited, non-AI album", () => {
@@ -95,10 +94,10 @@ describe("Uploader (step 5)", () => {
     bookId: BOOK, userId: "u1", isPaid: false, existing: [], maxUpload: 150, readyCount: 0, pendingCount: 0,
     hasDoc: false, firstRun: "none", dailyCap: 3,
   };
-  const back = <a href="/back" data-testid="wizard-back">Back</a>;
+  const onBack = () => {};
 
   it("wizard: big pick area + Back before any photo is picked; no setup card", () => {
-    const html = renderToStaticMarkup(<Uploader {...props} variant="wizard" back={back} />);
+    const html = renderToStaticMarkup(<Uploader {...props} variant="wizard" onBack={onBack} />);
     expect(html).toMatch(/<button[^>]*min-h-56[^>]*data-testid="upload-pick"/);
     expect(html).toContain('data-testid="upload-wizard-back"');
     expect(html).toContain('data-testid="wizard-back"');
@@ -107,7 +106,7 @@ describe("Uploader (step 5)", () => {
   });
 
   it("classic: never shows Back (even if passed) and keeps the smaller pick area", () => {
-    const html = renderToStaticMarkup(<Uploader {...props} back={back} />);
+    const html = renderToStaticMarkup(<Uploader {...props} onBack={onBack} />);
     expect(html).toMatch(/<button[^>]*min-h-40[^>]*data-testid="upload-pick"/);
     expect(html).not.toContain("wizard-back");
   });
@@ -117,7 +116,7 @@ describe("Uploader (step 5)", () => {
     for (const gone of ["SetupCard", "useBookSetup", "setupCtl", "takePendingFiles", "hasPendingFiles", "pending-files", "setup-ui"]) {
       expect(u).not.toContain(gone);
     }
-    expect(u).toContain("{wizard && (props.onBack || props.back) && !picked && !busy ? (");
+    expect(u).toContain("{wizard && props.onBack && !picked && !busy ? (");
     expect(u).toContain("setPicked(true);");
     expect(existsSync(join(process.cwd(), "src/components/upload/SetupCard.tsx"))).toBe(false);
     expect(existsSync(join(process.cwd(), "src/components/upload/use-book-setup.ts"))).toBe(false);

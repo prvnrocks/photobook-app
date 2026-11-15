@@ -131,6 +131,31 @@ describe("togglePhotoAction prunes AI backgrounds on drop (a)", () => {
   });
 });
 
+describe("togglePhotoAction revalidate option (M20 review: wizard step 7)", () => {
+  it("default revalidates the review page; revalidate:false saves + prunes the same, no revalidatePath", async () => {
+    mocks.getMyBook.mockResolvedValue({ id: BOOK, doc: fadedBackgroundDoc() });
+    expect(await togglePhotoAction(BOOK, DROPPED, false)).toEqual({ ok: true });
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/books/${BOOK}/review`);
+    mocks.revalidatePath.mockClear();
+    mocks.setUserOverride.mockClear();
+    mocks.pruneUnkeptAiBackgrounds.mockClear();
+    expect(await togglePhotoAction(BOOK, DROPPED, false, { revalidate: false })).toEqual({ ok: true });
+    expect(mocks.setUserOverride).toHaveBeenCalledWith(BOOK, DROPPED, false);
+    expect(mocks.pruneUnkeptAiBackgrounds).toHaveBeenCalledWith(BOOK);
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+    expect(await togglePhotoAction(BOOK, DROPPED, true, { revalidate: true })).toEqual({ ok: true });
+    expect(mocks.revalidatePath).toHaveBeenCalledTimes(1);
+  });
+
+  it("revalidate:false keeps ownership / validation checks", async () => {
+    expect(await togglePhotoAction("nope", DROPPED, false, { revalidate: false })).toEqual({ ok: false, error: expect.any(String) });
+    mocks.getMyBook.mockResolvedValue(null);
+    expect(await togglePhotoAction(BOOK, DROPPED, false, { revalidate: false })).toEqual({ ok: false, error: expect.any(String) });
+    expect(mocks.setUserOverride).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
 describe("PDF export snapshot (b)", () => {
   const book = (doc: unknown) => ({ id: BOOK, title: "Family", is_paid: true, max_pages: 100, doc_rev: 3, caption_lang: "en", doc });
   const env = { PDF_CHROME_PATH: "/opt/chrome", NEXT_PUBLIC_APP_URL: "http://localhost:3000", BOOK_ACCESS_SECRET: "s".repeat(40) } as unknown as NodeJS.ProcessEnv;

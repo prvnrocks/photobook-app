@@ -284,7 +284,9 @@ export function transition(state: FlowState, action: FlowAction): FlowResult {
 
     case "buildRequested": {
       if (state.step !== 5 || state.mode.kind !== "edit") return { state, effect: NONE };
-      const next = moveTo(state, 6);
+      // Step 6 always starts or resumes a run (G3), so step 5 locks now: Back / the stepper can't
+      // return to a stale step 5 (and a second "Make my book now" → 409) while the run is starting.
+      const next = moveTo({ ...state, runStarted: true, photosPicked: true }, 6);
       return { state: next, effect: { kind: "push", url: urlFor(next) } };
     }
 

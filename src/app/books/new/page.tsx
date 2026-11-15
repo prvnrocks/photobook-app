@@ -19,7 +19,7 @@ import { WizardShell } from "@/components/wizard/WizardShell";
 import { resolveAiMode } from "@/lib/ai/client";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { bookDesignOf } from "@/lib/book/book-design";
-import { CAPTION_LANGS, OCCASIONS, type CaptionLang, type Occasion } from "@/lib/book/options";
+import { OCCASIONS, type Occasion } from "@/lib/book/options";
 import { docOrigin } from "@/lib/book/replaceable";
 import { designLockReason, detailsLockReason } from "@/lib/book/setup";
 import { loadWizardStep, type WizardDataStep, type WizardStepData } from "@/lib/books/wizard-data";
@@ -132,7 +132,6 @@ export default async function NewBookPage({ searchParams }: { searchParams: Sear
     const draft: WizardDraft = {
       title: book.title ?? "",
       occasion,
-      captionLang: pick<CaptionLang>(book.caption_lang, CAPTION_LANGS) ?? "en",
       format: design.format,
       designStyle: isFormDesignStyle(design.designStyle) ? design.designStyle : defaultStyleFor(occasion),
     };
@@ -148,7 +147,7 @@ export default async function NewBookPage({ searchParams }: { searchParams: Sear
   const displayName = profile?.name ?? profile?.email ?? user.email ?? null;
 
   return (
-    <WizardShell step={initialStep} displayName={displayName} stepHeader="client" wide>
+    <WizardShell displayName={displayName}>
       {/* One constant key (M20 T6): the wizard goes create → edit in place, and a server action's
           revalidation re-renders this page at the current (edit) URL — a mode key would remount it
           mid-flow. NewBookWizard's mode guard reloads when the server sends another book or a fresh

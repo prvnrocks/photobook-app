@@ -183,12 +183,12 @@ describe("step 7 review — toggles", () => {
   it("a toggle persists via togglePhotoAction, the counter follows, Undo toggles back", async () => {
     render(step7());
     await click(tile(1));
-    expect(mocks.toggle).toHaveBeenCalledWith(BOOK, id(1), false);
+    expect(mocks.toggle).toHaveBeenCalledWith(BOOK, id(1), false, { revalidate: false }); // no /books/new re-render per tap
     expect($("review-kept")?.textContent).toBe("AI kept 2 of 5 photos");
     expect($("review-count-dropped")?.textContent).toBe("(3)");
     expect($("review-undo-toast")?.textContent).toContain("Moved to Left out");
     await click($("review-undo"));
-    expect(mocks.toggle).toHaveBeenLastCalledWith(BOOK, id(1), true);
+    expect(mocks.toggle).toHaveBeenLastCalledWith(BOOK, id(1), true, { revalidate: false });
     expect($("review-kept")?.textContent).toBe("AI kept 3 of 5 photos");
     expect($("review-undo-toast")).toBeNull();
   });
@@ -219,7 +219,7 @@ describe("step 7 review — Generate album", () => {
     await click($("review-tab-dropped"));
     await click(tile(4)); // keep a left-out photo the album doesn't use
     await click($("wizard-generate"));
-    expect(mocks.update).toHaveBeenCalledWith(BOOK);
+    expect(mocks.update).toHaveBeenCalledWith(BOOK, { revalidate: false });
     expect(mocks.confirm).toHaveBeenCalledWith(BOOK);
     expect(mocks.update.mock.invocationCallOrder[0]).toBeLessThan(mocks.confirm.mock.invocationCallOrder[0]);
     expect(onConfirm).toHaveBeenCalledTimes(1); // confirm returned without redirecting → wizard navigates

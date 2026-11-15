@@ -5,7 +5,7 @@
 // Pure: only pure data modules (book options, design defaults) are imported — no zod, no React — so
 // first-load client islands can use it. Tested in node (tests/m20-wizard-chrome.test.tsx).
 
-import { BOOK_TITLE_MAX_CODE_POINTS, CAPTION_LANGS, OCCASIONS, type CaptionLang, type Occasion } from "@/lib/book/options";
+import { BOOK_TITLE_MAX_CODE_POINTS, OCCASIONS, type Occasion } from "@/lib/book/options";
 import { FORM_DESIGN_STYLES, FORM_FORMATS, type FormDesignStyle } from "@/lib/design/defaults";
 
 /** Icon ids the stepper knows (WizardStepper maps each to a lucide-react icon). */
@@ -75,20 +75,12 @@ export function parseStep(raw: unknown): WizardStep {
   return 1;
 }
 
-/** parseStep limited to the form steps (the M19 /books/new contract): anything but "1"–"4" → 1. */
-export function parseFormStep(raw: unknown): WizardFormStep {
-  const step = parseStep(raw);
-  return isWizardFormStep(step) ? step : 1;
-}
-
 export type WizardFormat = (typeof FORM_FORMATS)[number];
 
 /** What steps 1–4 collect. Unanswered choices are null; the title is "" until typed. */
 export type WizardDraft = {
   title: string;
   occasion: Occasion | null;
-  /** Not asked by a step (memory / default); carried so the create action gets it. */
-  captionLang: CaptionLang | null;
   format: WizardFormat | null;
   designStyle: FormDesignStyle | null;
 };
@@ -96,7 +88,6 @@ export type WizardDraft = {
 export const EMPTY_WIZARD_DRAFT: WizardDraft = {
   title: "",
   occasion: null,
-  captionLang: null,
   format: null,
   designStyle: null,
 };
@@ -144,15 +135,6 @@ export function firstMissingStep(draft: WizardDraft): WizardFormStep | null {
   return null;
 }
 
-/**
- * Steps 1–4 of an existing draft (the /books/new edit mode): step-5 Back, and where browser Back from
- * step 5 lands after the wizard created the book (M19 BUG-2). Lives here (not in wizard-routes, which
- * re-exports it) so the first-load wizard island doesn't pull the book schema.
- */
-export function wizardBackHref(bookId: string): string {
-  return `/books/new?book=${encodeURIComponent(bookId)}&step=4`;
-}
-
 // ---- sessionStorage draft -------------------------------------------------------------------------
 
 export const WIZARD_DRAFT_VERSION = 1;
@@ -171,7 +153,6 @@ export function serializeWizardDraft(draft: WizardDraft): string {
     v: WIZARD_DRAFT_VERSION,
     title: draft.title,
     occasion: draft.occasion,
-    captionLang: draft.captionLang,
     format: draft.format,
     designStyle: draft.designStyle,
   });
@@ -196,11 +177,9 @@ export function parseWizardDraft(raw: string | null | undefined): WizardDraft | 
     return null;
   }
   const occasion = nullableEnum(OCCASIONS, o.occasion);
-  const captionLang = nullableEnum(CAPTION_LANGS, o.captionLang);
+  // Drafts stored before D-072 also carry captionLang: tolerated and ignored (the server derives it).
   const format = nullableEnum(FORM_FORMATS, o.format);
   const designStyle = nullableEnum(FORM_DESIGN_STYLES, o.designStyle);
-  if (occasion === undefined || captionLang === undefined || format === undefined || designStyle === undefined) {
-    return null;
-  }
-  return { title: o.title, occasion, captionLang, format, designStyle };
+  if (occasion === undefined || format === undefined || designStyle === undefined) return null;
+  return { title: o.title, occasion, format, designStyle };
 }

@@ -236,6 +236,30 @@ describe("updateAlbumAction — success paths", () => {
     expect(doc.pages[1].caption).toEqual(userCap("Refitted page, my words")); // one-portrait has a caption area
   });
 
+  it("revalidate: false (wizard step 7) → same write, no revalidatePath; other option values keep revalidating", async () => {
+    const dropped = [ROWS[0], row("a2", "2026-10-12T11:00:00", "dropped"), ROWS[2]];
+    mocks.listPhotosForCuration.mockResolvedValue(dropped);
+    expect(await updateAlbumAction(BOOK, { revalidate: false })).toEqual({ ok: true, changed: true, pages: 2 });
+    expect(mocks.writeDocIfReplaceable).toHaveBeenCalledTimes(1);
+    expect(mocks.writeDocIfReplaceable.mock.calls[0][4]).toEqual({ guard: "relayout" });
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+    for (const opts of [{ revalidate: true }, {}, null, "no", { revalidate: "false" }]) {
+      mocks.revalidatePath.mockReset();
+      await updateAlbumAction(BOOK, opts as never);
+      expect(mocks.revalidatePath).toHaveBeenCalledWith(`/books/${BOOK}/review`);
+      expect(mocks.revalidatePath).toHaveBeenCalledWith("/dashboard");
+    }
+  });
+
+  it("revalidate: false keeps the guards (signed out / not mine)", async () => {
+    mocks.user = null;
+    expect(await updateAlbumAction(BOOK, { revalidate: false })).toEqual({ ok: false, error: "signed_out" });
+    mocks.user = { id: "u1" };
+    mocks.getMyBook.mockResolvedValue(null);
+    expect(await updateAlbumAction(BOOK, { revalidate: false })).toEqual({ ok: false, error: "not_found" });
+    expect(mocks.writeDocIfReplaceable).not.toHaveBeenCalled();
+  });
+
   it("newly kept photo → added", async () => {
     mocks.listPhotosForCuration.mockResolvedValue([...ROWS, row("a4", "2026-10-12T13:00:00")]);
     const r = await updateAlbumAction(BOOK);

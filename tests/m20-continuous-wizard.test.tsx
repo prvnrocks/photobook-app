@@ -130,7 +130,7 @@ type WizardDraft = import("@/lib/books/wizard-steps").WizardDraft;
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const DRAFT: WizardDraft = { title: "Sea days", occasion: "travel", captionLang: "en", format: "A5_PORTRAIT", designStyle: "modern" };
+const DRAFT: WizardDraft = { title: "Sea days", occasion: "travel", format: "A5_PORTRAIT", designStyle: "modern" };
 const base = (step: number, bookId = BOOK) => ({
   step, bookId, title: "Sea days", rawTitle: "Sea days", occasion: "travel", format: "A5_PORTRAIT",
   designStyle: "modern", captionLang: "en", isPaid: false, aiOn: true, resolved: step,
@@ -295,6 +295,79 @@ describe("created → step 5 in place", () => {
     await waitFor(() => expect($("stub-photos")).toBeTruthy());
     await settle(30);
     expect(mocks.trackEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("M20 review: no duplicate book, mode guard after the in-place create", () => {
+  it("double submit (tap + Enter in one frame) → createBookAction once; Continue stays disabled until step 5", async () => {
+    // useActionState queues a second dispatch until the first resolves, so every call answers with
+    // success: a duplicate would show up as a second (queued) call after the release.
+    const pending: ((v: unknown) => void)[] = [];
+    const ok = { ok: true, bookId: BOOK, next: `/books/new?book=${BOOK}&step=5`, step5: step5() };
+    let released = false;
+    mocks.createBookAction.mockImplementation(() =>
+      released ? Promise.resolve(ok) : new Promise((resolve) => pending.push(resolve)),
+    );
+    window.sessionStorage.setItem(WIZARD_DRAFT_STORAGE_KEY, serializeWizardDraft({ ...EMPTY_WIZARD_DRAFT, ...DRAFT }));
+    await mount("/books/new?step=4", { initialStep: 4, mode: { kind: "create" } });
+    const form = $<HTMLFormElement>("new-book-form");
+    const button = $<HTMLButtonElement>("create-book");
+    await act(async () => {
+      form.requestSubmit(button);
+      form.requestSubmit(button);
+    });
+    await settle();
+    expect(mocks.createBookAction).toHaveBeenCalledTimes(1);
+    expect($<HTMLButtonElement>("create-book").disabled).toBe(true);
+    // A late submit while the create is in flight is refused too.
+    await act(async () => {
+      $<HTMLFormElement>("new-book-form").requestSubmit();
+    });
+    expect(mocks.createBookAction).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      released = true;
+      for (const r of pending) r(ok);
+    });
+    await waitFor(() => expect($("stub-photos")).toBeTruthy());
+    await settle(50);
+    expect(mocks.createBookAction).toHaveBeenCalledTimes(1);
+    expect(url()).toBe(`/books/new?book=${BOOK}&step=5`);
+  });
+
+  it("a failed create re-enables Continue and a retry creates again (once)", async () => {
+    mocks.createBookAction.mockResolvedValueOnce({ ok: false, error: "Nope" });
+    window.sessionStorage.setItem(WIZARD_DRAFT_STORAGE_KEY, serializeWizardDraft({ ...EMPTY_WIZARD_DRAFT, ...DRAFT }));
+    await mount("/books/new?step=4", { initialStep: 4, mode: { kind: "create" } });
+    await click($("create-book"));
+    await waitFor(() => expect($("new-book-error")).toBeTruthy());
+    expect($<HTMLButtonElement>("create-book").disabled).toBe(false);
+    mocks.createBookAction.mockResolvedValueOnce({ ok: true, bookId: BOOK, next: `/books/new?book=${BOOK}&step=5`, step5: step5() });
+    await click($("create-book"));
+    await waitFor(() => expect($("stub-photos")).toBeTruthy());
+    expect(mocks.createBookAction).toHaveBeenCalledTimes(2);
+  });
+
+  it("soft nav to plain /books/new after an in-place create (props still create) → reload", async () => {
+    mocks.createBookAction.mockResolvedValue({ ok: true, bookId: BOOK, next: `/books/new?book=${BOOK}&step=5`, step5: step5() });
+    window.sessionStorage.setItem(WIZARD_DRAFT_STORAGE_KEY, serializeWizardDraft({ ...EMPTY_WIZARD_DRAFT, ...DRAFT }));
+    await mount("/books/new?step=4", { initialStep: 4, mode: { kind: "create" } });
+    await click($("create-book"));
+    await waitFor(() => expect($("stub-photos")).toBeTruthy());
+    expect(reload).not.toHaveBeenCalled();
+    window.history.pushState(null, "", "/books/new");
+    await render({ initialStep: 1, mode: { kind: "create" }, dashboardBack: <a href="/dashboard">Back</a> });
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("Make my book now → step 6; Back / browser Back can't reopen step 5 while the run starts", async () => {
+    await mount(`/books/new?book=${BOOK}&step=5`, { initialStep: 5, mode: edit(), initialData: step5() as never });
+    served["6"] = step6({ activeRunId: null });
+    await click($("stub-build-now"));
+    await waitFor(() => expect($("stub-sorting")).toBeTruthy());
+    await historyBack();
+    expect(shownStep()).toBe("6");
+    expect(url()).toBe(`/books/new?book=${BOOK}&step=6`);
+    expect($("stub-photos")).toBeNull();
   });
 });
 

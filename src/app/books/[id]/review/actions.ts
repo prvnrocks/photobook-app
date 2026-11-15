@@ -32,6 +32,20 @@ const MSG_NOT_FOUND = "That book or photo wasn't found.";
 const MSG_SAVE_FAILED = "We couldn't save that. Please try again.";
 
 /**
+ * Optional trailing argument of the review actions (M20 review): `revalidate: false` skips
+ * revalidatePath. The /books/new wizard (step 7) passes it — a revalidation makes Next re-render the
+ * calling route (/books/new, loadWizardStep(7) signing every thumb) only for the wizard to discard it;
+ * the wizard reloads its own step data. Anything but an explicit `false` keeps the classic behaviour.
+ * confirmAlbumAction still revalidates /dashboard before the editor.
+ */
+export type ReviewActionOptions = { revalidate?: boolean };
+
+function shouldRevalidate(options: unknown): boolean {
+  if (!options || typeof options !== "object") return true;
+  return (options as ReviewActionOptions).revalidate !== false;
+}
+
+/**
  * Review screen (M3): the user keeps or removes one photo. Sets user_override so the AI never
  * changes this choice again ("AI drafts, the user decides").
  * Dropping a photo also removes AI photo backgrounds that used it (M10c review S1, D-062: only an
@@ -43,6 +57,7 @@ export async function togglePhotoAction(
   bookId: string,
   photoId: string,
   keep: boolean,
+  options?: ReviewActionOptions,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!isUuid(bookId) || !isUuid(photoId) || typeof keep !== "boolean") {
     return { ok: false, error: MSG_NOT_FOUND };
@@ -61,7 +76,7 @@ export async function togglePhotoAction(
     console.error(`[review] toggle photo failed (${errorCodeOf(err)})`);
     return { ok: false, error: MSG_SAVE_FAILED };
   }
-  revalidatePath(`/books/${bookId}/review`);
+  if (shouldRevalidate(options)) revalidatePath(`/books/${bookId}/review`);
   return { ok: true };
 }
 
@@ -90,7 +105,7 @@ export type UpdateAlbumResult =
  * (none since M10c T10; M10b A19 review S1) → unsupported_design, nothing written.
  * Logs error codes only, never photo data.
  */
-export async function updateAlbumAction(bookId: string): Promise<UpdateAlbumResult> {
+export async function updateAlbumAction(bookId: string, options?: ReviewActionOptions): Promise<UpdateAlbumResult> {
   const user = await getActionUser();
   if (user === AUTH_UNAVAILABLE) return { ok: false, error: "failed" };
   if (!user) return { ok: false, error: "signed_out" };
@@ -122,8 +137,10 @@ export async function updateAlbumAction(bookId: string): Promise<UpdateAlbumResu
         { guard: "relayout" },
       );
       if (write.ok) {
-        revalidatePath(`/books/${book.id}/review`);
-        revalidatePath("/dashboard");
+        if (shouldRevalidate(options)) {
+          revalidatePath(`/books/${book.id}/review`);
+          revalidatePath("/dashboard");
+        }
         return { ok: true, changed: true, pages: doc.pages.length };
       }
       if (write.reason === "user_edited") return { ok: false, error: "user_edited" };

@@ -1,6 +1,7 @@
-// The photos of the wizard's "Sorting your photos" step (M19 T7, D-071; M20 T7, D-072). Server-safe,
-// no hooks. Photos are the draft album's already-signed 512 px thumbs (cover first); missing ones are
-// soft placeholders. Decorative (aria-hidden): the headline + checklist carry the meaning.
+// The photos of the wizard's "Sorting your photos" step (M19 T7, D-071; M20 T7, D-072), rendered by
+// StepSorting on /books/new. Server-safe, no hooks. Photos are up to FAN_PHOTOS (6) of the draft
+// album's signed 512 px thumbs, cover first (loadFanUrls); a missing top card is a soft placeholder, a
+// missing back card plain paper. Decorative (aria-hidden): the headline + checklist carry the meaning.
 //
 // M20 T7: the cards move with the run — the nearest ancestor's data-sort-phase (set by
 // <BuildProgress variant="wizard"> from the server-reported run state, wizardSortPhase) picks one of
@@ -8,15 +9,16 @@
 // piles (each pile gets a caption tag) → ready (piles gather into one stack + check badge). The
 // transforms are per-card CSS custom properties below; sorting-motion.css (imported by
 // NewBookWizard) switches between them and animates transform/opacity only, with a static
-// prefers-reduced-motion fallback. Without that stylesheet (classic /books/[id]/build) the Tailwind
-// classes alone draw the static fan.
+// prefers-reduced-motion fallback. Without that stylesheet (unit tests) the Tailwind classes alone
+// draw the static fan.
 import { Check, ImageIcon } from "lucide-react";
 import type { CSSProperties } from "react";
 
-/** Photo cards on top of the piles (the wizard passes up to FAN_PHOTOS = 6 thumbs; 3–5 back them). */
+/**
+ * Photo cards on top of the piles (the wizard passes up to FAN_PHOTOS = 6 thumbs; 3–5 back them).
+ * Six cards are drawn in total (POSES): photo cards + backing cards (extra photos if given, else paper).
+ */
 export const FAN_CARD_PHOTOS = 3;
-/** Cards drawn in total: photo cards + backing cards (extra photos if given, otherwise paper). */
-export const FAN_CARD_TOTAL = 6;
 
 type CardPose = { fan: string; mid: string; pile: string; ready: string; z: number };
 

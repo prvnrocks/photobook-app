@@ -11,7 +11,10 @@ export type NewBookFormState = {
   fieldErrors?: Partial<Record<NewBookField, string>>;
   /** Success only (M19 BUG-2): the new book's id … */
   bookId?: string;
-  /** … where to go without the wizard (/books/<id>/upload, with the one-shot ?_ev=book_created when analytics is on) … */
+  /**
+   * … the book's step 5 URL (/books/new?book=<id>&step=5, with the one-shot &_ev=book_created when
+   * analytics is on — the wizard reads the flash from it; no navigation goes there) …
+   */
   next?: string;
   /** … and the wizard's step-5 data for the new book (M20 T6: step 5 shows in place). */
   step5?: WizardStep5Data;

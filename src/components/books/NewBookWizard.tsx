@@ -90,11 +90,13 @@ export type NewBookWizardProps = {
   initialData?: WizardStepData | null;
 };
 
-/** The step that asks for each field (server errors jump there). Tone has no step → the last one. */
-export const FIELD_STEP: Record<NewBookField, WizardFormStep> = {
+/**
+ * The step that asks for each field (server errors jump there). Tone has no step → the last one;
+ * caption language isn't asked (D-072) — an error on it would fall back to step 4.
+ */
+export const FIELD_STEP: Partial<Record<NewBookField, WizardFormStep>> = {
   title: 1,
   occasion: 2,
-  captionLang: 2,
   format: 3,
   designStyle: 4,
   tone: 4,
@@ -122,8 +124,8 @@ function errorFromFields(
 ): StepError {
   let best: StepError | null = null;
   for (const [field, message] of Object.entries(fieldErrors ?? {}) as [NewBookField, string | undefined][]) {
-    if (!message || !(field in FIELD_STEP)) continue;
     const step = FIELD_STEP[field];
+    if (!message || step === undefined) continue;
     if (!best || step < best.step) best = { step, message, field };
   }
   return best ?? { step: 4, message: fallback };
@@ -249,6 +251,14 @@ export function NewBookWizard({ initialStep, mode, dashboardBack, initialData }:
   );
   const [saving, startSaving] = useTransition();
   const [leaving, setLeaving] = useState(false);
+  /**
+   * Create submit in flight or succeeded (M20 review): createBookAction resolves a frame before the
+   * success effect moves to step 5, so a second tap / Enter on the still-mounted create form would make
+   * an orphan duplicate book. The ref blocks the submit; the state keeps Continue disabled meanwhile.
+   * Cleared only when the create fails.
+   */
+  const createSubmittedRef = useRef(false);
+  const [createSubmitted, setCreateSubmitted] = useState(false);
   /** Create mode: steps 1–4 came back from sessionStorage (offer "Start over"). */
   const [restored, setRestored] = useState(false);
   // Create mode remounted on a created book's entry (see isCreatedBookEntry): render nothing but a
@@ -345,7 +355,7 @@ export function NewBookWizard({ initialStep, mode, dashboardBack, initialData }:
     let fresh = false;
     const stored = readStored();
     if (stored) {
-      current = { ...stored, captionLang: stored.captionLang ?? null };
+      current = stored;
       setDraft(current);
       setRestored(true);
     } else {
@@ -366,23 +376,40 @@ export function NewBookWizard({ initialStep, mode, dashboardBack, initialData }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Mode guard: the server sent another book / a fresh create wizard than the flow holds → reload.
-  const propKey = mode.kind === "edit" ? `edit:${mode.bookId}` : "create";
-  const propKeyRef = useRef(propKey);
+  // Mode guard: a server render (new props: soft navigation, revalidation) whose mode doesn't match the
+  // book the flow holds → reload. Compared against the flow's mode (not the previous props), so a soft
+  // nav to plain /books/new after an in-place create (props still "create") always reloads.
+  const firstPropsRef = useRef(true);
   useEffect(() => {
-    if (propKeyRef.current === propKey) return;
-    propKeyRef.current = propKey;
+    if (firstPropsRef.current) {
+      firstPropsRef.current = false; // the mount effect handles the first render
+      return;
+    }
     const fm = flowRef.current.mode;
     if (mode.kind === "edit") {
       if (fm.kind === "edit" && fm.bookId === mode.bookId) return;
     } else if (fm.kind === "create" || readUrl().book !== null) {
-      // A cached create tree restored for an old step 1–3 entry: the popstate flow already showed it
-      // as this book's edit URL.
+      // Create props at an edit URL: a revalidation re-rendered the page at the URL the flow wrote
+      // (or a cached create tree for an old step 1–3 entry the popstate flow already showed as this
+      // book's edit URL) → keep.
       return;
     }
     wizardWindow.reload(window.location.href);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propKey]);
+    // Props from a server render are new objects each time: any of them changing = a new render.
+  }, [mode, initialStep, initialData]);
+
+  // Once a run exists step 5 is locked; drop its cached data so nothing can show its stale
+  // "Make my book now" fallback again (a later step-5 view would refetch and follow the gate).
+  const runStarted = flow.runStarted;
+  useEffect(() => {
+    if (!runStarted) return;
+    setStepData((d) => {
+      if (d[5] === undefined) return d;
+      const rest = { ...d };
+      delete rest[5];
+      return rest;
+    });
+  }, [runStarted]);
 
   // Browser back / forward → the flow (guardrails decide; refused → the URL shows the current step).
   useEffect(() => {
@@ -455,6 +482,8 @@ export function NewBookWizard({ initialStep, mode, dashboardBack, initialData }:
   // createBookAction failed: keep the draft, jump to the failed step.
   useEffect(() => {
     if (state === initialNewBookFormState || state.ok) return;
+    createSubmittedRef.current = false;
+    setCreateSubmitted(false);
     writeStored(draftRef.current);
     const err = errorFromFields(state.fieldErrors, state.error ?? "We couldn't create your book. Please try again.");
     setStepError(err);
@@ -521,11 +550,20 @@ export function NewBookWizard({ initialStep, mode, dashboardBack, initialData }:
       dispatch({ type: "continue" });
       return;
     }
-    if (editingBookId) {
+    const fm = flowRef.current.mode;
+    if (fm.kind === "edit") {
       e.preventDefault();
-      saveEdit(editingBookId);
+      // The flow already holds a book (a create just succeeded, the form is about to unmount): never
+      // a second create — a save only from the edit-mode form itself.
+      if (editingBookId === fm.bookId && !saving) saveEdit(fm.bookId);
       return;
     }
+    if (createSubmittedRef.current) {
+      e.preventDefault(); // a create is in flight / done: no duplicate book
+      return;
+    }
+    createSubmittedRef.current = true;
+    setCreateSubmitted(true);
     // Create: the form action runs next. The stored draft stays until it succeeds (success effect).
     setStepError(null);
   }
@@ -544,7 +582,7 @@ export function NewBookWizard({ initialStep, mode, dashboardBack, initialData }:
     showFlow(prev, next);
   }
 
-  const pending = creating || saving || leaving;
+  const pending = creating || saving || leaving || (createSubmitted && flow.mode.kind === "create");
   const formStep = (step <= FLOW_FORM_LAST_STEP ? step : FLOW_FORM_LAST_STEP) as WizardFormStep;
   const canContinue =
     formStep === 1
@@ -633,7 +671,7 @@ export function NewBookWizard({ initialStep, mode, dashboardBack, initialData }:
                 occasion={draft.occasion}
                 onOccasion={(occasion) => update({ occasion })}
                 headlineId={HEADLINE_ID}
-                error={fieldError("occasion") ?? fieldError("captionLang")}
+                error={fieldError("occasion")}
               />
             ) : step === 3 ? (
               <StepShape

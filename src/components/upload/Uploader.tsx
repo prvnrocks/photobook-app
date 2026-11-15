@@ -11,8 +11,8 @@
 // "Make my book now" is the fallback.
 // M19 T6 (D-071): the setup card and the /books/start hand-off are gone (setup = wizard steps 1–4).
 // variant "wizard" (step 5 of a fresh book) = the wizard.png card: big pick area, then the progress
-// card with the last three thumbnails, Pause/Resume and "Keep this tab open…"; `back` (a
-// server-rendered link to step 4) shows only until the first photo is picked.
+// card with the last three thumbnails, Pause/Resume and "Keep this tab open…"; Back (`onBack`, to
+// step 4) shows only until the first photo is picked.
 // M20 T6 (D-072): inside the one continuous /books/new wizard the wizard variant never navigates:
 // `onAdvance` gets the auto-start answer instead of router.push (the wizard maps it with
 // wizard-flow's autoStart action → step 6 / 7 / editor), `onBack` / `onBuildNow` replace the Back and
@@ -30,7 +30,6 @@ import {
   useTransition,
   type ChangeEvent,
   type DragEvent,
-  type ReactNode,
 } from "react";
 import { deleteUnfinishedAction } from "@/app/books/actions";
 import { LoadingState } from "@/components/app/LoadingState";
@@ -93,11 +92,9 @@ export type UploaderProps = {
   aiOn?: boolean;
   /** "wizard" = step 5 of the creation wizard (fresh book, M19 D-071). Default "default". */
   variant?: "default" | "wizard";
-  /** Wizard only: server-rendered Back link (to step 4), shown until the first photo is picked. */
-  back?: ReactNode;
   /**
-   * Wizard only (M20 T6): Back as a button (wins over `back`), shown until the first photo is picked
-   * — the /books/new wizard changes step in place.
+   * Wizard only (M20 T6): Back as a button, shown until the first photo is picked — the /books/new
+   * wizard changes step in place.
    */
   onBack?: () => void;
   /** Wizard only (M20 T6): the first photos of this visit were picked (the wizard locks steps 1–4). */
@@ -357,7 +354,8 @@ export function Uploader(props: UploaderProps) {
               auto: true,
             });
           }
-          if (wizard && onAdvanceRef.current) queueAdvance(outcome);
+          // The wizard variant never navigates: the /books/new flow maps the answer (onAdvance).
+          if (wizard) queueAdvance(outcome);
           else router.push(next.href);
           return; // stay "starting" until the next screen replaces this one
         }
@@ -651,20 +649,17 @@ export function Uploader(props: UploaderProps) {
         </div>
       ) : null}
 
-      {wizard && (props.onBack || props.back) && !picked && !busy ? (
+      {wizard && props.onBack && !picked && !busy ? (
         <div className="flex justify-center" data-testid="upload-wizard-back">
-          {props.onBack ? (
-            <button type="button" onClick={props.onBack} className={WIZARD_BACK_CLASS} data-testid="wizard-back">
-              Back
-            </button>
-          ) : (
-            props.back
-          )}
+          <button type="button" onClick={props.onBack} className={WIZARD_BACK_CLASS} data-testid="wizard-back">
+            Back
+          </button>
         </div>
       ) : null}
 
       {showIdleNext ? (
-        firstRun === "none" && props.onBuildNow ? (
+        firstRun === "none" && wizard ? (
+          // The wizard variant: step 6 starts the build in place (no link to the build page).
           <button
             type="button"
             onClick={props.onBuildNow}

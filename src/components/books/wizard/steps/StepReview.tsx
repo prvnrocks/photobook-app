@@ -175,7 +175,12 @@ export function StepReview({ data: initial, headlineId, onConfirm, confirming = 
     };
   }, []);
 
-  const toggle = useMemo(() => togglePhotoAction.bind(null, bookId), [bookId]);
+  // revalidate: false — a revalidation would re-render /books/new on every tap only for the wizard to
+  // discard it (the step refetches its own data).
+  const toggle = useCallback(
+    (photoId: string, keep: boolean) => togglePhotoAction(bookId, photoId, keep, { revalidate: false }),
+    [bookId],
+  );
 
   /** Re-load step 7 (G1: instead of router.refresh) — fresh photos, album ids and thumb URLs. */
   const refresh = useCallback(() => {
@@ -216,7 +221,7 @@ export function StepReview({ data: initial, headlineId, onConfirm, confirming = 
       if (mustUpdate) {
         let result: UpdateAlbumResult | null = null;
         try {
-          result = await updateAlbumAction(bookId);
+          result = await updateAlbumAction(bookId, { revalidate: false });
         } catch {
           result = null;
         }

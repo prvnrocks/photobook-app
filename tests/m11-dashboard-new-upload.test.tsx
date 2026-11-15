@@ -144,8 +144,7 @@ describe("T8 dashboard cards", () => {
 describe("T9 New book page (M19 wizard)", () => {
   it("page: wizard shell with a client step header, signed-out → login, step-1 Back to the dashboard", () => {
     const page = src("src/app/books/new/page.tsx");
-    expect(page).toContain("<WizardShell");
-    expect(page).toContain('stepHeader="client"');
+    expect(page).toContain("<WizardShell displayName={displayName}>");
     expect(page).toContain('redirect(`/login?next=${encodeURIComponent(next)}`)');
     expect(page).toContain('<Link href="/dashboard" className={WIZARD_BACK_CLASS} data-testid="wizard-back">');
     expect(page).not.toContain("NewBookForm");

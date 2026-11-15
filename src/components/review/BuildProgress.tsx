@@ -5,9 +5,10 @@
 // checklist when the page passes one (`preview`). Never blocks the user: every stop state links to
 // the editor, where the rule album already exists.
 // Only ids and counts are sent; nothing about photos is logged.
-// M19 T7 (D-071): variant "wizard" = step 6 "Sorting your photos" (first build): `preview` is the
-// photo fan, then a three-row checklist (wizardChecklist — only states the server reported) and
-// "Keep this tab open…". Run loop, redirect and every stop state are the same as the classic screen.
+// M19 T7 (D-071): variant "wizard" = step 6 "Sorting your photos" (first build), used only by the
+// /books/new wizard (StepSorting): `preview` is the photo fan, then a three-row checklist
+// (wizardChecklist — only states the server reported) and "Keep this tab open…". The run loop is the
+// classic one; instead of the editor redirect it calls onDone, and its stop states are calm cards.
 // M20 T7 (D-072): the wizard variant sets data-sort-phase (wizardSortPhase) so <PhotoFan> moves with
 // the run, draws a 3-segment bar (rows done, never time), a calm "still sorting" hint after
 // WIZARD_SLOW_HINT_MS, "Your book is ready to review" when it finishes with onDone, and calm stop
@@ -466,7 +467,8 @@ export function BuildProgress({
   if (variant === "wizard") {
     const rows = wizardChecklist(snap.state, leaving);
     const phase = wizardSortPhase(snap.state, leaving);
-    const ready = leaving && !!onDone;
+    // The wizard always passes onDone: leaving = finished, the short "ready" moment before step 7.
+    const ready = leaving;
     return (
       <section
         className="grid min-w-0 grid-cols-1 items-center gap-5 sm:gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(15rem,1fr)] lg:gap-8"
@@ -547,7 +549,7 @@ export function BuildProgress({
             </p>
           ) : (
             <p className="type-small text-center text-muted-foreground lg:text-left" data-testid="build-keep-open">
-              {leaving ? buildNoteCopy(true, aiOn) : WIZARD_BUILD_KEEP_OPEN_COPY}
+              {WIZARD_BUILD_KEEP_OPEN_COPY}
             </p>
           )}
         </div>

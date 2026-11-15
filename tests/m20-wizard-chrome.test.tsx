@@ -27,11 +27,9 @@ const {
   WIZARD_STEP_NUMBERS,
   EMPTY_WIZARD_DRAFT,
   parseStep,
-  parseFormStep,
   isWizardStep,
   isWizardFormStep,
   firstMissingStep,
-  wizardBackHref,
   parseWizardDraft,
   serializeWizardDraft,
   wizardHeadline,
@@ -46,7 +44,6 @@ type Step = import("@/lib/books/wizard-steps").WizardStep;
 const full: Draft = {
   title: "Days by the Sea",
   occasion: "travel",
-  captionLang: "en",
   format: "A5_LANDSCAPE",
   designStyle: "modern",
 };
@@ -87,12 +84,6 @@ describe("wizard steps (7)", () => {
     }
   });
 
-  it("parseFormStep keeps the M19 1–4 contract", () => {
-    expect(parseFormStep("3")).toBe(3);
-    expect(parseFormStep(["4"])).toBe(4);
-    for (const v of ["5", "6", "7", "0", "x", undefined]) expect(parseFormStep(v)).toBe(1);
-  });
-
   it("step guards", () => {
     expect(ALL.every((s) => isWizardStep(s))).toBe(true);
     for (const bad of [0, 8, 1.5, "1", null]) expect(isWizardStep(bad)).toBe(false);
@@ -110,21 +101,22 @@ describe("wizard steps (7)", () => {
     expect(firstMissingStep({ ...full, format: null, designStyle: null })).toBe(3);
     expect(firstMissingStep({ ...full, designStyle: null })).toBe(4);
     expect(firstMissingStep(full)).toBeNull();
-    // captionLang is not a step
-    expect(firstMissingStep({ ...full, captionLang: null })).toBeNull();
     // occasion missing wins over later gaps
     expect(firstMissingStep({ ...full, occasion: null, format: null })).toBe(2);
-  });
-
-  it("wizardBackHref points at steps 1–4 of an existing book", () => {
-    expect(wizardBackHref("abc")).toBe("/books/new?book=abc&step=4");
   });
 
   it("draft round-trips through serialize/parse", () => {
     expect(parseWizardDraft(serializeWizardDraft(full))).toEqual(full);
     expect(parseWizardDraft(serializeWizardDraft(EMPTY_WIZARD_DRAFT))).toEqual(EMPTY_WIZARD_DRAFT);
-    const ar = { ...full, title: "أيام البحر", captionLang: "ar" as const };
+    const ar = { ...full, title: "أيام البحر" };
     expect(parseWizardDraft(serializeWizardDraft(ar))).toEqual(ar);
+    // No caption language in the draft any more (D-072) …
+    expect(JSON.parse(serializeWizardDraft(full))).not.toHaveProperty("captionLang");
+    // … but drafts stored before still parse (the extra field is ignored, whatever its value).
+    const base = JSON.parse(serializeWizardDraft(full)) as Record<string, unknown>;
+    for (const captionLang of ["ar", "en", null, "fr"]) {
+      expect(parseWizardDraft(JSON.stringify({ ...base, captionLang }))).toEqual(full);
+    }
   });
 
   it("garbage drafts parse to null", () => {
@@ -146,7 +138,6 @@ describe("wizard steps (7)", () => {
       bad({ title: "a\ud800b" }),
       bad({ occasion: "birthday" }),
       bad({ occasion: undefined }),
-      bad({ captionLang: "fr" }),
       bad({ format: "A4_PORTRAIT" }),
       bad({ format: "a5_portrait" }),
       bad({ designStyle: "vintage" }),
@@ -312,21 +303,22 @@ describe("WizardBody", () => {
 
 describe("WizardShell", () => {
   const html = renderToStaticMarkup(
-    <WizardShell step={3} displayName="sara@example.com" title="Days by the Sea" wide>
-      <WizardHeadline>{wizardHeadline(3)}</WizardHeadline>
+    <WizardShell displayName="sara@example.com">
+      <div data-testid="kid">
+        <WizardHeadline>{wizardHeadline(3)}</WizardHeadline>
+      </div>
     </WizardShell>,
   );
 
-  it("shell mode: band (title + stepper), headline, account menu, wide column", () => {
-    expect(tagOf(html, "wizard-shell")).toContain('data-step="3"');
-    expect(html).toContain("Step 3 of 7");
-    expect(html).toContain("Days by the Sea");
-    expect(html).toContain('data-testid="wizard-band"');
+  it("header (account menu) + the children; no band, body or data-step of its own — the wizard owns them", () => {
+    expect(tagOf(html, "wizard-shell")).not.toContain("data-step");
+    expect(html).not.toContain("wizard-band");
+    expect(html).not.toContain("wizard-stepper");
+    expect(html).toContain('data-testid="kid"');
     expect(html).toContain("Choose a page shape");
     expect(tagOf(html, "wizard-headline")).toContain("type-display");
     expect(html).toContain('data-testid="account-menu-button"');
     expect(tagOf(html, "header-home")).toContain('href="/dashboard"');
-    expect(tagOf(html, "wizard-content")).toContain("max-w-[52rem]");
   });
 
   it("has the footer links", () => {
@@ -334,28 +326,6 @@ describe("WizardShell", () => {
     expect(tagOf(html, "wizard-footer-help")).toContain(`href="mailto:${SUPPORT_EMAIL}"`);
     expect(tagOf(html, "wizard-footer-privacy")).toContain('href="/privacy"');
     expect(tagOf(html, "wizard-footer-terms")).toContain('href="/terms"');
-  });
-
-  it("uses the narrow column by default; aside slot in shell mode", () => {
-    const narrow = renderToStaticMarkup(<WizardShell step={1}>x</WizardShell>);
-    expect(tagOf(narrow, "wizard-content")).toContain("max-w-[28rem]");
-    expect(narrow).toContain("Step 1 of 7");
-    expect(narrow).toContain(WIZARD_TITLE_PLACEHOLDER);
-    const withAside = renderToStaticMarkup(<WizardShell step={5} aside={<i>p</i>}>x</WizardShell>);
-    expect(withAside).toContain('data-testid="wizard-aside"');
-  });
-
-  it("client mode: no band, body or data-step of its own — children own them", () => {
-    const client = renderToStaticMarkup(
-      <WizardShell step={2} stepHeader="client">
-        <div data-testid="kid">k</div>
-      </WizardShell>,
-    );
-    expect(tagOf(client, "wizard-shell")).not.toContain("data-step");
-    expect(client).not.toContain("wizard-band");
-    expect(client).not.toContain("wizard-stepper");
-    expect(client).toContain('data-testid="kid"');
-    expect(client).toContain('data-testid="account-menu-button"');
   });
 });
 

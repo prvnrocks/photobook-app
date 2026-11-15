@@ -34,10 +34,6 @@ import { resolveWizardStep, type WizardGateInput, type WizardTarget } from "./wi
 export const WIZARD_DATA_STEPS = [5, 6, 7] as const;
 export type WizardDataStep = (typeof WIZARD_DATA_STEPS)[number];
 
-export function isWizardDataStep(v: unknown): v is WizardDataStep {
-  return v === 5 || v === 6 || v === 7;
-}
-
 /** Parses `?step=` ("5" | "6" | "7" exactly) → the step, else null. */
 export function parseWizardDataStep(raw: string | null | undefined): WizardDataStep | null {
   if (raw === "5") return 5;
@@ -77,7 +73,7 @@ export type WizardStep5Data = WizardStepBase & {
   dailyCap: number;
 };
 
-/** Step 6 — what /books/[id]/build passes to <BuildProgress variant="wizard"> + <PhotoFan>. */
+/** Step 6 — what StepSorting passes to <BuildProgress variant="wizard"> + <PhotoFan>. */
 export type WizardStep6Data = WizardStepBase & {
   step: 6;
   activeRunId: string | null;

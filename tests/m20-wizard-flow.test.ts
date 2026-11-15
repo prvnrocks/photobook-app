@@ -246,13 +246,31 @@ describe("step 5", () => {
     expect(transition(atStep5(), { type: "continue" }).intent).toBeUndefined();
   });
 
-  it("fallback button goes to step 6 without locking 5 until the run exists", () => {
+  it("fallback button goes to step 6 and locks step 5 at once (step 6 always starts / resumes a run)", () => {
     const r = transition(uploading(), { type: "buildRequested" });
-    expect(r.state).toMatchObject({ step: 6, maxStep: 6, runStarted: false });
+    expect(r.state).toMatchObject({ step: 6, maxStep: 6, runStarted: true, photosPicked: true });
     expect(r.effect).toEqual({ kind: "push", url: `/books/new?book=${BOOK}&step=6` });
+    expect(isStepLocked(r.state, 5)).toBe(true);
+    expect(canGoTo(r.state, 5)).toBe(false);
+    // Back / browser Back / stepper can't reopen a stale step 5 while the run is starting.
+    const back = transition(r.state, { type: "back" });
+    expect(back.refused).toBe(true);
+    expect(back.state.step).toBe(6);
+    const pop = transition(r.state, { type: "popstate", step: "5", bookId: BOOK });
+    expect(pop.refused).toBe(true);
+    expect(pop.state.step).toBe(6);
+    expect(transition(r.state, { type: "goTo", step: 5 }).refused).toBe(true);
+    // A second request (e.g. a late tap) does nothing.
+    expect(transition(r.state, { type: "buildRequested" })).toMatchObject({ state: r.state, effect: { kind: "none" } });
+    // The run then reports in: stays on 6.
     const started = run(r.state, { type: "runStarted" });
     expect(started).toMatchObject({ step: 6, runStarted: true });
-    expect(canGoTo(started, 5)).toBe(false);
+  });
+
+  it("fallback from a hard-loaded step 5 (no photos picked in this visit) also locks 5", () => {
+    const r = transition(atStep5(), { type: "buildRequested" });
+    expect(r.state).toMatchObject({ step: 6, runStarted: true, photosPicked: true });
+    expect(isStepLocked(r.state, 4)).toBe(true);
   });
 
   it("runStarted on step 5 moves to 6", () => {

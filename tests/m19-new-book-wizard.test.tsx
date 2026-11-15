@@ -332,7 +332,7 @@ describe("new book wizard — steps and URL", () => {
 
 describe("new book wizard — draft restore and missing steps", () => {
   it("restores choices from sessionStorage after a refresh", async () => {
-    store({ title: "أيام البحر", occasion: "wedding", captionLang: "ar", format: "A5_LANDSCAPE" });
+    store({ title: "أيام البحر", occasion: "wedding", format: "A5_LANDSCAPE" });
     await mount("/books/new?step=3");
     expect(shownStep()).toBe("3");
     expect(radio("format-A5_LANDSCAPE").checked).toBe(true);
@@ -393,7 +393,7 @@ describe("new book wizard — start over (M19 review)", () => {
     await mount(`/books/new?book=${BOOK}&step=2`, {
       kind: "edit",
       bookId: BOOK,
-      draft: { title: "Mine", occasion: "family", captionLang: "en", format: "A5_PORTRAIT", designStyle: "modern" },
+      draft: { title: "Mine", occasion: "family", format: "A5_PORTRAIT", designStyle: "modern" },
       designLock: null,
     });
     expect($("wizard-start-over")).toBeNull();
@@ -445,7 +445,14 @@ describe("new book wizard — shape, style and submit", () => {
         release = () => resolve({ ok: false });
       });
     });
-    store({ title: "Days by the Sea", occasion: "travel", captionLang: "ar", format: "A5_LANDSCAPE" });
+    // An old (pre-D-072) stored draft that still carries a caption language.
+    window.sessionStorage.setItem(
+      WIZARD_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        ...JSON.parse(serializeWizardDraft({ ...EMPTY_WIZARD_DRAFT, title: "Days by the Sea", occasion: "travel", format: "A5_LANDSCAPE" })),
+        captionLang: "ar",
+      }),
+    );
     await mount("/books/new?step=4");
     const submit = $<HTMLButtonElement>("create-book");
     expect(submit.textContent).toBe("Continue");
@@ -572,7 +579,6 @@ describe("new book wizard — edit mode (T8)", () => {
   const editDraft: WizardDraft = {
     title: "",
     occasion: "graduation",
-    captionLang: "en",
     format: "A5_PORTRAIT",
     designStyle: "classic",
   };
@@ -694,7 +700,7 @@ describe("/books/new server page", () => {
     expect(props.mode).toEqual({
       kind: "edit",
       bookId: BOOK,
-      draft: { title: "", occasion: "wedding", captionLang: "ar", format: "A5_LANDSCAPE", designStyle: "scrapbook" },
+      draft: { title: "", occasion: "wedding", format: "A5_LANDSCAPE", designStyle: "scrapbook" },
       designLock: null,
     });
   });
