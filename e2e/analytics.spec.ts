@@ -231,15 +231,16 @@ test.describe("analytics (live sign-up)", () => {
     await expect.poll(() => cap.events.find((e) => e.event === "signed_up")?.properties.method, { timeout: 20_000 }).toBe("email");
     await expect(page).not.toHaveURL(/_ev=/);
 
-    // M19: the creation wizard (title → occasion → shape → style → create).
-    await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", goto: false });
-    await expect(page).toHaveURL(/\/books\/[0-9a-f-]{36}\/upload/, { timeout: 30_000 });
-    const bookId = /\/books\/([0-9a-f-]{36})\//.exec(page.url())?.[1] ?? "";
+    // M19/M20: the creation wizard (title → occasion → shape → style → create); M20 stays on
+    // /books/new (?book=<id>&step=5) — the book id lives in the query, which analytics never sees.
+    const bookId = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", goto: false });
+    await expect(page).toHaveURL(new RegExp(`/books/new\\?book=${bookId}&step=5$`), { timeout: 30_000 });
     await expect.poll(() => cap.events.some((e) => e.event === "book_created"), { timeout: 20_000 }).toBe(true);
     await expect(page).not.toHaveURL(/_ev=/);
     await expect
-      .poll(() => cap.events.some((e) => String(e.properties.$current_url ?? "").endsWith("/books/:id/upload")), { timeout: 20_000 })
+      .poll(() => cap.events.some((e) => e.event === "book_created" && String(e.properties.$current_url ?? "").endsWith("/books/new")), { timeout: 20_000 })
       .toBe(true);
+    expect(cap.events.filter((e) => e.event === "book_created").length).toBe(1);
 
     await expectNoClientStorage(page);
     expect(cap.realHostHits).toEqual([]);

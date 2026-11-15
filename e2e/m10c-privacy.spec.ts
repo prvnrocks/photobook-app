@@ -21,7 +21,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { buildEvent, postEvent } from "../scripts/stripe-signed-event.mjs";
 import { getLayout } from "../src/lib/layouts";
-import { createBookViaWizard } from "./helpers/create-book";
+import { createBookViaWizard, finishWizardToEditor, waitForSortingOrReview } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1");
@@ -229,7 +229,7 @@ test.beforeAll(async ({ browser }, info) => {
   page = await context.newPage();
   page.on("dialog", (d) => void d.accept());
   await page.goto(`/auth/confirm?token_hash=${await signInHash()}&type=magiclink&next=/books/new`);
-  await expect(page).toHaveURL(/\/books\/new$/);
+  await expect(page).toHaveURL(/\/books\/new(\?step=1)?$/);
 });
 
 test.afterAll(async () => {
@@ -276,9 +276,10 @@ test("a. scrapbook replay build has an AI faded-photo chapter-opener background"
   bookId = await createBookViaWizard(page, { title: "Privacy Days", occasion: "baby", format: "A5_PORTRAIT", expectStyle: "scrapbook" });
   await page.getByTestId("upload-input").setInputFiles(await makePhotos(page, uploadSpecs(5300), "priv"));
   // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build\?auto=1$/, { timeout: 240_000 });
-  // M13 T7: the build hands over to the editor (review is reached from the "AI kept X of Y" chip).
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/edit$/, { timeout: 420_000 });
+  // M20: step 6 (sorting) / 7 (review) in place on /books/new?book=<id>&step=6|7.
+  await waitForSortingOrReview(page, bookId, 240_000);
+  // M20 (D-072): the build hands over to step 7 (Review) → "Generate album" → the editor.
+  await finishWizardToEditor(page, bookId, { timeout: 420_000 });
   const { doc } = await row();
   const i = doc.pages.findIndex((p) => p.background?.kind === "photo" && p.background.source === "ai");
   console.log(`[a] pages=${doc.pages.length} aiPhotoBgPage=${i} bookBg=${doc.style.background.kind}/${doc.style.backgroundSource} pageBgs=${JSON.stringify(doc.pages.map((p, j) => (p.background ? `${j}:${p.background.kind}:${p.background.source}` : null)).filter(Boolean))}`);

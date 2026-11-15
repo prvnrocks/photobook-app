@@ -37,7 +37,7 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { expect, test, type Browser, type BrowserContext, type Page, type TestInfo } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { createBookViaWizard } from "./helpers/create-book";
+import { createBookViaWizard, generateAlbum, waitForReview, wizardStepUrl } from "./helpers/create-book";
 
 const VIEWPORT = { width: 375, height: 812 };
 const TAB_STOPS = 6;
@@ -495,9 +495,11 @@ test.describe("M11 signed-in flow at 375 px (live)", () => {
     // M19 wizard; D-068: travel defaults to Geometric — this spec covers Modern.
     bookId = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", style: "modern" });
     await page.getByTestId("upload-input").setInputFiles(await makeSynthetic(page, 6));
-    await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 180_000 });
-    await expect(page.getByTestId("upload-auto-starting")).toBeVisible();
-    await audit(page, "upload summary (starting)", { shot: "upload-summary" });
+    // M20 (D-072): the wizard keeps the upload stage up through finalize + the held auto start
+    // (settled: "All photos are in" / "Sorting next…") — no summary / "starting" card any more.
+    await expect(page.getByTestId("upload-settled")).toBeVisible({ timeout: 180_000 });
+    await expect(page.getByTestId("upload-sorting-next")).toBeVisible();
+    await audit(page, "upload settled (starting)", { shot: "upload-summary" });
   };
 
   const stepC = async () => {
@@ -516,11 +518,15 @@ test.describe("M11 signed-in flow at 375 px (live)", () => {
     });
     // The one automatic first build of this run (a replay run), released from the hold.
     releaseAuto();
-    await page.waitForURL(/\/build\?auto=1$/, { timeout: 60_000 });
+    // M20: step 6 (sorting) in place on /books/new?book=<id>&step=6.
+    await page.waitForURL(wizardStepUrl(bookId, "6"), { timeout: 60_000 });
     await expect(page.getByTestId("build-checklist")).toBeVisible({ timeout: 30_000 });
     await audit(page, "build", { tab: false, shot: "build" });
-    // M13 T7: the build hands over to the editor; review is reached from the "AI kept X of Y" chip.
-    await page.waitForURL(/\/edit$/, { timeout: 420_000 });
+    // M20 (D-072): the build hands over to step 7 (Review) → "Generate album" → the editor; the
+    // classic review is still reached from the "AI kept X of Y" chip.
+    await waitForReview(page, bookId, 420_000);
+    await audit(page, "wizard review (step 7)", { tab: false });
+    await generateAlbum(page, bookId);
     await page.unrouteAll({ behavior: "ignoreErrors" });
     const steps = await page.evaluate(() => (window as unknown as { __m11Steps?: { t: number; s: string }[] }).__m11Steps ?? []);
     console.log(`[build] server states delivered: ${delivered.map((d) => d.state).join(">")}`);

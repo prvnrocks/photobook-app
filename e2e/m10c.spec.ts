@@ -54,7 +54,7 @@ import { expect, test, type Browser, type BrowserContext, type Page } from "@pla
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { buildEvent, postEvent } from "../scripts/stripe-signed-event.mjs";
 import { getLayout, hasCaptionArea } from "../src/lib/layouts";
-import { createBookViaWizard } from "./helpers/create-book";
+import { createBookViaWizard, finishWizardToEditor, waitForSortingOrReview } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live M10c gate");
@@ -351,9 +351,10 @@ async function createViaForm(occasion: "travel" | "baby", expectStyle: "geometri
 async function uploadAndBuild(id: string, files: { name: string; mimeType: string; buffer: Buffer }[]) {
   await page.getByTestId("upload-input").setInputFiles(files);
   // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).
-  await page.waitForURL(new RegExp(`/books/${id}/build\\?auto=1$`), { timeout: 240_000 });
-  // M13 T7: the build hands over to the editor (review is reached from the "AI kept X of Y" chip).
-  await page.waitForURL(new RegExp(`/books/${id}/edit$`), { timeout: 420_000 });
+  // M20: step 6 (sorting) / 7 (review) in place on /books/new?book=<id>&step=6|7.
+  await waitForSortingOrReview(page, id, 240_000);
+  // M20 (D-072): the build hands over to step 7 (Review) → "Generate album" → the editor.
+  await finishWizardToEditor(page, id, { timeout: 420_000 });
   await expect(page.getByTestId("editor-shell")).toBeVisible();
 }
 
@@ -447,7 +448,7 @@ test.beforeAll(async ({ browser }, info) => {
     });
   });
   await page.goto(`/auth/confirm?token_hash=${await signInHash()}&type=magiclink&next=/books/new`);
-  await expect(page).toHaveURL(/\/books\/new$/);
+  await expect(page).toHaveURL(/\/books\/new(\?step=1)?$/);
 });
 
 test.afterAll(async () => {

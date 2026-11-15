@@ -1,10 +1,13 @@
 /**
- * Shared e2e helper: walk the M19 book creation wizard (D-071) on /books/new and land on step 5
- * (/books/<id>/upload). Steps: 1 title (book-title) → 2 occasion (occasion-* labels; lang-en/lang-ar)
- * → 3 shape (format-* labels) → 4 style (style-* labels) → create-book.
+ * Shared e2e helper: walk the book creation wizard on /books/new (M19 D-071, M20 D-072 — one
+ * continuous 7-step wizard). Steps: 1 title (book-title) → 2 purpose (occasion-* labels; NO caption-
+ * language control since M20 — the server derives it: Arabic-script title → memory →
+ * Accept-Language → en) → 3 shape (format-* labels) → 4 style (style-* labels) → create-book. The
+ * create stays on the same document: /books/new?book=<id>&step=5 (photos), then step 6 (sorting,
+ * ?step=6) and step 7 (review, ?step=7) render in place; "Generate album" (wizard-generate) is the
+ * one navigation, to /books/<id>/edit.
  *
  * The occasion / format / style testids sit on the card <label>; the native radio is inside it.
- * The caption-language testids sit on the radio itself.
  */
 import { expect, type Locator, type Page } from "@playwright/test";
 
@@ -16,8 +19,6 @@ export type WizardOptions = {
   /** Typed on step 1; "" / undefined = leave blank (allowed). */
   title?: string;
   occasion?: WizardOccasion;
-  /** Caption language switch on step 2; undefined = keep the suggested default. */
-  lang?: "en" | "ar";
   format?: WizardFormat;
   /** Click this style on step 4; undefined = keep the occasion's default. */
   style?: WizardStyle;
@@ -33,25 +34,29 @@ export type WizardOptions = {
   beforeContinue?: (step: 1 | 2 | 3 | 4) => Promise<void>;
 };
 
-const UUID_UPLOAD = /\/books\/([0-9a-f-]{36})\/upload$/;
+/** Step 5 in the continuous wizard: /books/new?book=<id>&step=5 (no navigation since step 1). */
+export const WIZARD_STEP5_URL = /\/books\/new\?book=([0-9a-f-]{36})&step=5$/;
+/** Step 6 (sorting) or 7 (review) of a book — a fast replay run may skip past 6 before we look. */
+export const wizardStepUrl = (bookId: string, steps = "[67]") => new RegExp(`/books/new\\?book=${bookId}&step=${steps}$`);
+export const WIZARD_TOTAL = 7;
 
 /** The native radio inside a card label testid. */
 export function cardRadio(page: Page, testId: string): Locator {
   return page.getByTestId(testId).locator('input[type="radio"]');
 }
 
-export async function expectWizardStep(page: Page, step: 1 | 2 | 3 | 4, timeout = 15_000): Promise<void> {
+export async function expectWizardStep(page: Page, step: 1 | 2 | 3 | 4 | 5 | 6 | 7, timeout = 15_000): Promise<void> {
   await expect(page.getByTestId("new-book-wizard")).toHaveAttribute("data-step", String(step), { timeout });
-  await expect(page.getByTestId("wizard-step-label")).toHaveText(`Step ${step} of 6`, { timeout });
+  await expect(page.getByTestId("wizard-step-label")).toHaveText(`Step ${step} of ${WIZARD_TOTAL}`, { timeout });
 }
 
 /**
- * Wait until the wizard island is hydrated: typing into the title updates the cover art preview
- * (client state). A probe character is typed and removed so the real title starts clean.
+ * Wait until the wizard island is hydrated: typing into the title updates the band title (client
+ * state). A probe word is typed and removed so the real title starts clean.
  */
 export async function waitForWizardHydrated(page: Page): Promise<void> {
   const input = page.getByTestId("book-title");
-  const cover = page.getByTestId("wizard-cover-title");
+  const cover = page.getByTestId("wizard-band-title");
   await expect(input).toBeVisible({ timeout: 30_000 });
   await expect(async () => {
     await input.fill("Probe");
@@ -88,10 +93,6 @@ export async function walkWizardToStyle(page: Page, opts: WizardOptions = {}): P
   const occasion = opts.occasion ?? "travel";
   await pressOn(opts, page.getByTestId(`occasion-${occasion}`), `Occasion: ${occasion}`);
   await expect(cardRadio(page, `occasion-${occasion}`)).toBeChecked();
-  if (opts.lang) {
-    await pressOn(opts, page.getByTestId(`lang-${opts.lang}`), `Captions: ${opts.lang}`);
-    await expect(page.getByTestId(`lang-${opts.lang}`)).toBeChecked();
-  }
   await opts.beforeContinue?.(2);
   await wizardContinue(page, 2, opts);
 
@@ -112,12 +113,51 @@ export async function walkWizardToStyle(page: Page, opts: WizardOptions = {}): P
 }
 
 /**
- * Walk all four wizard steps and create the book. Returns the new book id (the page is on
- * /books/<id>/upload, step 5).
+ * Walk all four wizard steps and create the book. Returns the new book id (the page stays on
+ * /books/new — now ?book=<id>&step=5 — with the upload picker of step 5 ready).
  */
 export async function createBookViaWizard(page: Page, opts: WizardOptions = {}): Promise<string> {
   await walkWizardToStyle(page, opts);
   await pressOn(opts, page.getByTestId("create-book"), "Continue (step 4: create)");
-  await page.waitForURL(UUID_UPLOAD, { timeout: 30_000 });
-  return UUID_UPLOAD.exec(new URL(page.url()).pathname)![1];
+  await page.waitForURL(WIZARD_STEP5_URL, { timeout: 30_000 });
+  await expectWizardStep(page, 5, 30_000);
+  await expect(page.getByTestId("upload-pick")).toBeVisible({ timeout: 30_000 });
+  const u = new URL(page.url());
+  return WIZARD_STEP5_URL.exec(u.pathname + u.search)![1];
+}
+
+/** After photos were picked on step 5: wait until the wizard is on step 6 (sorting) or already 7. */
+export async function waitForSortingOrReview(page: Page, bookId: string, timeout = 240_000): Promise<6 | 7> {
+  await page.waitForURL(wizardStepUrl(bookId), { timeout });
+  return new URL(page.url()).searchParams.get("step") === "6" ? 6 : 7;
+}
+
+/** Wait for step 7 (Review) to be ready to generate (the run finished). */
+export async function waitForReview(page: Page, bookId: string, timeout = 420_000): Promise<void> {
+  await page.waitForURL(wizardStepUrl(bookId, "7"), { timeout });
+  await expectWizardStep(page, 7, 60_000);
+  await expect(page.getByTestId("wizard-generate")).toBeEnabled({ timeout: 60_000 });
+}
+
+/**
+ * Step 7 → editor: "Generate album" (confirmAlbumAction redirects; soft navigation) and wait for the
+ * editor shell. `press` = tap-counting wrapper.
+ */
+export async function generateAlbum(
+  page: Page,
+  bookId: string,
+  opts: { press?: WizardOptions["press"]; timeout?: number } = {},
+): Promise<void> {
+  const btn = page.getByTestId("wizard-generate");
+  await expect(btn).toBeEnabled({ timeout: 60_000 });
+  if (opts.press) await opts.press(btn, "Generate album (step 7)");
+  else await btn.click();
+  await page.waitForURL(new RegExp(`/books/${bookId}/edit$`), { timeout: opts.timeout ?? 120_000 });
+  await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 60_000 });
+}
+
+/** Photos picked on step 5 → sorting → review → Generate album → editor (the whole first run). */
+export async function finishWizardToEditor(page: Page, bookId: string, opts: { timeout?: number } = {}): Promise<void> {
+  await waitForReview(page, bookId, opts.timeout ?? 420_000);
+  await generateAlbum(page, bookId);
 }

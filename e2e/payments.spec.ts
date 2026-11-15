@@ -34,7 +34,7 @@ import path from "node:path";
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { buildEvent, postEvent, signPayload } from "../scripts/stripe-signed-event.mjs";
-import { createBookViaWizard } from "./helpers/create-book";
+import { createBookViaWizard, finishWizardToEditor, waitForSortingOrReview } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live payments flow");
@@ -333,7 +333,7 @@ test.beforeAll(async ({ browser, request }, info) => {
   page = await context.newPage();
   page.on("dialog", (d) => void d.accept());
   await page.goto(`/auth/confirm?token_hash=${await signInHash()}&type=magiclink&next=/books/new`);
-  await expect(page).toHaveURL(/\/books\/new$/);
+  await expect(page).toHaveURL(/\/books\/new(\?step=1)?$/);
 });
 
 test.afterAll(async () => {
@@ -406,9 +406,10 @@ test("a. build (replay) → publish a free book → viewer has watermark + foote
   bookId = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", style: "modern", goto: false });
   await page.getByTestId("upload-input").setInputFiles(await makeSynthetic(page, 6));
   // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build\?auto=1$/, { timeout: 180_000 });
-  // M13 T7: the build hands over to the editor (review is reached from the "AI kept X of Y" chip).
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/edit$/, { timeout: 420_000 });
+  // M20: step 6 (sorting) / 7 (review) in place on /books/new?book=<id>&step=6|7.
+  await waitForSortingOrReview(page, bookId, 180_000);
+  // M20 (D-072): the build hands over to step 7 (Review) → "Generate album" → the editor.
+  await finishWizardToEditor(page, bookId, { timeout: 420_000 });
   // M13 T9: editor Share publishes and opens the share screen.
   const t0 = Date.now();
   await page.getByTestId("editor-done").click();

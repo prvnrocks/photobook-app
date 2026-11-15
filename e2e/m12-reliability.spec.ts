@@ -33,7 +33,7 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { expect, test, type BrowserContext, type Page, type Route } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { createBookViaWizard } from "./helpers/create-book";
+import { createBookViaWizard, finishWizardToEditor, wizardStepUrl } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live M12 reliability flow");
@@ -205,7 +205,7 @@ test.beforeAll(async ({ browser }, info) => {
   page = await context.newPage();
   page.on("dialog", (d) => void d.accept());
   await page.goto(`/auth/confirm?token_hash=${await signInHash()}&type=magiclink&next=/books/new`);
-  await expect(page).toHaveURL(/\/books\/new$/);
+  await expect(page).toHaveURL(/\/books\/new(\?step=1)?$/);
 });
 
 test.afterAll(async () => {
@@ -314,10 +314,9 @@ test("a. a held storage upload hits its budget → queue retries → upload, fin
 
   // Build continues (replay) to the editor (M13 T7).
   await page.getByTestId("build-album").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build$/, { timeout: 30_000 });
-  // M13 T7: the build hands over to the editor.
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/edit$/, { timeout: 240_000 });
-  await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 30_000 });
+  // M20: "Make my book now" → step 6 in place (/books/new?book=<id>&step=6) → step 7 → Generate → editor.
+  await page.waitForURL(wizardStepUrl(book1), { timeout: 30_000 });
+  await finishWizardToEditor(page, book1, { timeout: 240_000 });
   const runs = await runsOf(book1);
   console.log(`[a] runs=${runs.length} states=${runs.map((r) => r.state).join(",")} modes=${runs.map((r) => r.mode).join(",")}`);
   expect(runs.some((r) => r.state === "done")).toBe(true);
@@ -347,7 +346,9 @@ test("b. finalize answers 503 + Retry-After once → the upload screen waits and
   await page.getByTestId("upload-input").setInputFiles(await makeSynthetic(page, 4, 301));
   // While the client waits out the 503 the screen stays in "finalizing" (no error, no retry button).
   await expect.poll(() => finalizeCalls.length, { timeout: 180_000, intervals: [250] }).toBeGreaterThanOrEqual(1);
-  await expect(page.getByTestId("upload-finalizing")).toBeVisible();
+  // M20 (D-072): in the wizard the upload stage stays up (settled) while finalizing — the classic
+  // "upload-finalizing" line only shows outside it.
+  await expect(page.getByTestId("upload-finalizing").or(page.getByTestId("upload-settled")).first()).toBeVisible();
   await expect(page.getByTestId("finalize-error")).toHaveCount(0);
   await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 120_000 });
   await expect(page.getByTestId("finalize-error")).toHaveCount(0);
@@ -384,16 +385,15 @@ test("c. advance answers 503 once → build shows 'Taking longer than usual — 
   });
 
   await page.getByTestId("build-album").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build$/, { timeout: 30_000 });
+  await page.waitForURL(wizardStepUrl(book2, "6"), { timeout: 30_000 });
   const reconnecting = page.getByTestId("build-reconnecting");
   await expect(reconnecting).toBeVisible({ timeout: 60_000 });
   await expect(reconnecting).toHaveAttribute("data-cause", "server");
   await expect(reconnecting).toContainText(RETRY_COPY);
   await expect(page.getByTestId("build-error")).toHaveCount(0);
   await noHorizontalOverflow();
-  // M13 T7: the build hands over to the editor.
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/edit$/, { timeout: 240_000 });
-  await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 30_000 });
+  // M20: the build hands over to step 7 (Review) → "Generate album" → the editor.
+  await finishWizardToEditor(page, book2, { timeout: 240_000 });
   await page.unroute("**/api/ai/runs/*/advance");
 
   const causes = await page.evaluate(() => (window as unknown as { __buildCauses?: string[] }).__buildCauses ?? []);

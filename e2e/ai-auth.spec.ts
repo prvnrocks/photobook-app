@@ -44,7 +44,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { createBookViaWizard, walkWizardToStyle } from "./helpers/create-book";
+import { createBookViaWizard, generateAlbum, waitForReview, walkWizardToStyle, WIZARD_STEP5_URL } from "./helpers/create-book";
 import { PLANTED_PRECHECK_TEXT, isPlantedMismatch } from "../src/lib/ai/agents/caption-writer-replay";
 import { buildCaptionContext, checkCaption } from "../src/lib/ai/caption-check";
 import { hasCaptionArea } from "../src/lib/ai/captions";
@@ -448,14 +448,19 @@ async function createBookAt(
   // M19: the creation wizard. D-068: travel defaults to Geometric; these specs cover Modern (default
   // here) or Classic. The wizard has no tone choice (picked by the server: memory, else the occasion's
   // default) — a non-default tone is asserted as stored, then set on the row before the build.
+  // M20 (D-072): no caption-language control — an Arabic-script title makes the book Arabic.
   await page.goto(`${base}/books/new`);
   const id = await createBookViaWizard(page, {
     occasion: "travel",
     format: "A5_PORTRAIT",
     style: opts.style ?? "modern",
-    lang: opts.lang,
+    ...(opts.lang === "ar" ? { title: "رحلتنا إلى العين" } : {}),
     goto: false,
   });
+  if (opts.lang) {
+    const lang = await admin.from("books").select("caption_lang").eq("id", id).single();
+    expect((lang.data as { caption_lang: string } | null)?.caption_lang).toBe(opts.lang);
+  }
   await expect(page.getByTestId("upload-pick")).toBeVisible();
   if (opts.tone) {
     const created = await admin.from("books").select("tone").eq("id", id).single();
@@ -484,9 +489,15 @@ function armAutoGate() {
 async function uploadAndWaitSummary(files: FileSpec[], expected: number) {
   armAutoGate();
   await page.getByTestId("upload-input").setInputFiles(files);
-  await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 180_000 });
+  // M20 (D-072): in the wizard the upload stage stays up through finalize and the (held) auto start —
+  // settled ("All photos are in" + "Sorting next…"), no summary flash. Count the ready rows instead.
+  await expect(page.getByTestId("upload-settled")).toBeVisible({ timeout: 180_000 });
+  await expect(page.getByTestId("upload-sorting-next")).toBeVisible();
   await expect(page.getByTestId("finalize-error")).toHaveCount(0);
-  await expect(page.getByTestId("summary-added")).toHaveText(`${expected} photos added`);
+  const bookId = new URL(page.url()).searchParams.get("book") ?? "";
+  await expect
+    .poll(async () => (await photoRows(bookId)).filter((r) => r.upload_state === "ready").length, { timeout: 60_000 })
+    .toBe(expected);
 }
 
 async function buildStates(): Promise<string[]> {
@@ -512,8 +523,12 @@ async function buildTexts(): Promise<string[]> {
 async function buildToReview() {
   await resetBuildStates();
   releaseAuto();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build\?auto=1$/, { timeout: 30_000 });
-  await editorThenReview(180_000);
+  // M20: step 6 (sorting) → step 7 (review) in place on /books/new → "Generate album" → editor.
+  await page.waitForURL(/\/books\/new\?book=[0-9a-f-]{36}&step=[67]$/, { timeout: 30_000 });
+  const id = new URL(page.url()).searchParams.get("book") ?? "";
+  await waitForReview(page, id, 180_000);
+  await generateAlbum(page, id);
+  await editorThenReview(30_000);
 }
 
 /** Build finished → the editor opens; the chip leads to the review screen. */
@@ -620,7 +635,7 @@ test.beforeAll(async ({ browser }, info) => {
   page.on("dialog", (d) => void d.accept());
   const hashed = await signInLink();
   await page.goto(`/auth/confirm?token_hash=${hashed}&type=magiclink&next=/books/new`);
-  await expect(page).toHaveURL(/\/books\/new$/);
+  await expect(page).toHaveURL(/\/books\/new(\?step=1)?$/);
 
   const [dupA, dupB] = await makeNearDupPair(page);
   synth = await makeSynthetic(page, 7);
@@ -1181,6 +1196,9 @@ test("h. user caption (D-031/D-037): rebuild 409 user_edited (API + stale button
 });
 
 test("m. Memory Keeper: ≥ 3 short user captions → review → Continue in the editor → Done → user_memory (tone, short, en)", async () => {
+  // M20 (D-072): the wizard's "Generate album" is confirmAlbumAction (Memory Keeper), so test a's
+  // first run already wrote memory (language + the stored tone). Start this check from a clean row.
+  await admin.from("user_memory").delete().eq("user_id", uid);
   expect(await memoryRow()).toBeNull();
   const before = await bookRow(bookA);
   const doc = structuredClone(before.doc) as { pages: DocPage[] };
@@ -1265,8 +1283,8 @@ test("n. memory → new book gets the remembered tone; book 2 build gets memory;
   const sw = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(sw).toBeLessThanOrEqual(VIEWPORT.width);
   await page.getByTestId("create-book").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
-  const bookM = new URL(page.url()).pathname.split("/")[2];
+  await page.waitForURL(WIZARD_STEP5_URL, { timeout: 30_000 });
+  const bookM = new URL(page.url()).searchParams.get("book") ?? "";
   const stored = await admin.from("books").select("tone, caption_lang").eq("id", bookM).single();
   expect(stored.data).toEqual({ tone: "nostalgic", caption_lang: "en" });
   const files = synth.slice(0, 6);

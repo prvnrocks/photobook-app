@@ -23,7 +23,7 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { createBookViaWizard } from "./helpers/create-book";
+import { createBookViaWizard, finishWizardToEditor, waitForSortingOrReview } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live signed-in editor flow");
@@ -175,7 +175,7 @@ test.beforeAll(async ({ browser }, info) => {
   page = await context.newPage();
   page.on("dialog", (d) => void d.accept());
   await page.goto(`/auth/confirm?token_hash=${await signInHash()}&type=magiclink&next=/books/new`);
-  await expect(page).toHaveURL(/\/books\/new$/);
+  await expect(page).toHaveURL(/\/books\/new(\?step=1)?$/);
 });
 
 test.afterAll(async () => {
@@ -209,9 +209,9 @@ test("a. build an album (replay) → review → Continue opens the editor at 375
   const files = await makeSynthetic(page, 6);
   await page.getByTestId("upload-input").setInputFiles(files);
   // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build\?auto=1$/, { timeout: 180_000 });
-  // M13 T7: the build hands over to the editor (review is reached from the "AI kept X of Y" chip).
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/edit$/, { timeout: 420_000 });
+  // M20: step 6 (sorting) → step 7 (review) in place on /books/new → "Generate album" → editor.
+  await waitForSortingOrReview(page, bookId, 180_000);
+  await finishWizardToEditor(page, bookId, { timeout: 420_000 });
 
   // Dashboard: a built book opens the editor even before any edit (M13, D-070).
   await page.goto("/dashboard");

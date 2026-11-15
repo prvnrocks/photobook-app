@@ -8,9 +8,10 @@
  * /auth/confirm, no email) → M19 creation wizard /books/new (title blank, occasion Travel, Portrait,
  * default style) → step-4 Continue creates the book → step 5 "Choose photos" (native picker =
  * filechooser, excluded) → upload + finalize → automatic first build (replay, wizard step 6 with the
- * photo fan) → editor → Share → share screen → Send on WhatsApp (wa.me stubbed). Asserts:
- *   - M19 re-baseline (D-071): ≤ 4 app taps counted from the step-4 Continue (Continue, Choose photos,
- *     Share, WhatsApp) and still ≤ 3 after the photos are chosen;
+ * photo fan) → step 7 Review → "Generate album" → editor → Share → share screen → Send on WhatsApp
+ * (wa.me stubbed). M20 (D-072): steps 1–7 are one document (/books/new?book=<id>&step=N). Asserts:
+ *   - M20 re-baseline (D-072, amends M19's 4): ≤ 5 app taps counted from the step-4 Continue
+ *     (Continue, Choose photos, Generate album, Share, WhatsApp) and still ≤ 4 after the photos are chosen;
  *   - logs time from photos chosen to the first preview (step-6 photo fan with a loaded photo, or
  *     the first editor [data-page], each reported) and to the WhatsApp intent; asserts first
  *     preview < 60 s (M13 Done when);
@@ -20,8 +21,9 @@
  *     NEXT_PUBLIC_POSTHOG_HOST=https://ph.e2e.invalid, intercepted here — nothing leaves the machine):
  *     book_created, upload_done, ai_build_done{auto:true} and published each fire exactly once.
  * Variant "wizard choices": Wedding + Classic picked in the wizard; the book row + built doc use them.
- * Variant "arabic": Accept-Language ar → the wizard's caption language defaults to Arabic (step 2
- *   shows it), replay writes Arabic captions, the editor shows them with dir="auto".
+ * Variant "arabic" (M20, D-072): an Arabic-script title on an en-US browser → the book's caption
+ *   language is Arabic with no step-2 control (none exists any more), replay writes Arabic captions,
+ *   the editor shows them with dir="auto".
  *
  * Screenshots: docs/design/m13-after-<nn>-<name>-375.png (dir override: M13_SHOT_DIR).
  * One throwaway user per test `e2e+m13run-<random>@example.com`. afterAll (always): storage under
@@ -43,7 +45,15 @@ import path from "node:path";
 import { gunzipSync } from "node:zlib";
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page, type Request } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { cardRadio, createBookViaWizard, walkWizardToStyle, type WizardOptions } from "./helpers/create-book";
+import {
+  cardRadio,
+  createBookViaWizard,
+  waitForSortingOrReview,
+  walkWizardToStyle,
+  WIZARD_STEP5_URL,
+  wizardStepUrl,
+  type WizardOptions,
+} from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 const ANALYTICS = process.env.E2E_ANALYTICS === "1";
@@ -67,7 +77,6 @@ const PH_HOST = process.env.E2E_POSTHOG_HOST ?? "https://ph.e2e.invalid";
 // posthog-js drops events from headless/bot user agents — present as a normal phone browser.
 const PHONE_UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
-const UUID = "[0-9a-f-]{36}";
 const ARABIC_RE = /[؀-ۿ]/;
 
 function env(name: string): string {
@@ -148,6 +157,16 @@ async function newSession(browser: Browser, opts: { locale?: string; analytics?:
         if (!seen.has(where)) {
           seen.add(where);
           (window as unknown as { __m13FirstPage?: (w: string, t: number) => void }).__m13FirstPage?.(where, Date.now());
+        }
+      }
+      // M20 T8: step 7 (Review) shows the cover photo of the drafted album.
+      if (!seen.has("review-cover")) {
+        const loaded = Array.from(document.querySelectorAll('[data-testid="review-cover-img"]')).some(
+          (i) => (i as HTMLImageElement).complete && (i as HTMLImageElement).naturalWidth > 0,
+        );
+        if (loaded) {
+          seen.add("review-cover");
+          (window as unknown as { __m13FirstPage?: (w: string, t: number) => void }).__m13FirstPage?.("review-cover", Date.now());
         }
       }
       // M19 T7: the step-6 build screen previews the draft as a fan of photos (no book pages).
@@ -484,6 +503,15 @@ async function choosePhotos(s: Session, files: string[], press?: (t: Locator, la
   return at;
 }
 
+/** M20: step 7 (Review) → "Generate album" → editor. */
+async function reviewThenEditor(s: Session, timeout: number) {
+  await s.page.waitForURL(wizardStepUrl(s.bookId, "7"), { timeout });
+  const gen = s.page.getByTestId("wizard-generate");
+  await expect(gen).toBeEnabled({ timeout: 60_000 });
+  await gen.tap();
+  await waitForEditor(s, 120_000);
+}
+
 async function waitForEditor(s: Session, timeout: number) {
   await s.page.waitForURL(new RegExp(`/books/${s.bookId}/edit`), { timeout });
   await expect(s.page.getByTestId("editor-shell")).toBeVisible({ timeout: 60_000 });
@@ -572,7 +600,7 @@ test.afterAll(async () => {
   expect(runsLeft).toBe(0);
 });
 
-test("first run: landing → login → wizard → choose photos → auto build → editor → Share → WhatsApp (≤ 4 taps from step-4 Continue)", async ({ browser }) => {
+test("first run: landing → login → wizard → choose photos → auto build → review → editor → Share → WhatsApp (≤ 5 taps from step-4 Continue)", async ({ browser }) => {
   test.setTimeout(900_000);
   const s = await newSession(browser, { analytics: ANALYTICS });
   const page = s.page;
@@ -620,7 +648,7 @@ test("first run: landing → login → wizard → choose photos → auto build �
   const stepNames = { 1: "wizard-title", 2: "wizard-occasion", 3: "wizard-shape", 4: "wizard-style" } as const;
   await wizardToUpload(s, {
     press: async (t, label) => {
-      if (/create/.test(label)) counting = true; // M19 re-baseline: count from the step-4 Continue
+      if (/create/.test(label)) counting = true; // M19/M20 re-baseline: count from the step-4 Continue
       await tap(t, label);
     },
     onStep: async (n) => {
@@ -630,7 +658,7 @@ test("first run: landing → login → wizard → choose photos → auto build �
   });
 
   // 4. Step 5: one big "Choose photos" (counted).
-  await expect(page.getByTestId("wizard-step-label")).toHaveText("Step 5 of 6");
+  await expect(page.getByTestId("wizard-step-label")).toHaveText("Step 5 of 7");
   await screen(7, "upload-empty");
   await audit(page, "upload-empty");
   const photosChosen = await choosePhotos(s, photoPaths, tap);
@@ -642,25 +670,31 @@ test("first run: landing → login → wizard → choose photos → auto build �
   await expect(page.getByTestId("upload-progress")).toBeVisible({ timeout: 60_000 });
   await screen(8, "upload");
 
-  // 5. Build screen = wizard step 6 (replay) with the photo fan, then straight to the editor.
-  await page.waitForURL(new RegExp(`/books/${s.bookId}/build`), { timeout: 420_000 });
+  // 5. Build screen = wizard step 6 (replay) with the photo fan, in place on /books/new (M20).
+  await waitForSortingOrReview(page, s.bookId, 420_000);
   const buildUrlAt = Date.now();
-  expect(new URL(page.url()).searchParams.get("auto")).toBe("1");
   let buildShot = false;
   const strip = page.getByTestId("build-photo-fan");
   if (await strip.waitFor({ state: "visible", timeout: 20_000 }).then(() => true, () => false)) {
     await imagesSettled(page);
-    if (/\/build/.test(page.url())) {
+    if (new URL(page.url()).searchParams.get("step") === "6") {
       await screen(9, "build");
       buildShot = true;
     }
   }
   console.log(`[m13-run] build screen shot=${buildShot}`);
+  // 6. Step 7 Review (M20, D-072): what the AI kept, chapters, captions → "Generate album" (counted).
+  await page.waitForURL(wizardStepUrl(s.bookId, "7"), { timeout: 420_000 });
+  const gen = page.getByTestId("wizard-generate");
+  await expect(gen).toBeEnabled({ timeout: 60_000 });
+  const reviewAt = Date.now();
+  await screen(10, "review");
+  await tap(gen, "Generate album (step 7)");
   await waitForEditor(s, 420_000);
   const editorAt = Date.now();
   await expect.poll(() => s.firstPage.editor !== undefined, { timeout: 60_000 }).toBe(true);
   await imagesSettled(page);
-  await screen(10, "editor");
+  await screen(11, "editor");
   const chip = page.getByTestId("ai-summary-chip");
   const chipText = (await chip.isVisible().catch(() => false)) ? ((await page.getByTestId("ai-summary-label").textContent()) ?? "") : "";
   console.log(`[m13-run] AI chip visible=${chipText !== ""} text="${chipText.replace(/\d+/g, "N")}"`);
@@ -675,7 +709,7 @@ test("first run: landing → login → wizard → choose photos → auto build �
   await expect(wa).toBeVisible();
   const sharedAt = Date.now();
   await imagesSettled(page);
-  await screen(11, "share");
+  await screen(12, "share");
 
   // 7. WhatsApp intent.
   expect((await wa.getAttribute("href")) ?? "").toMatch(/^https:\/\/wa\.me\/\?text=/);
@@ -706,12 +740,14 @@ test("first run: landing → login → wizard → choose photos → auto build �
     console.log(`[m13-run] ai_build_done props=${JSON.stringify(Object.keys(build?.properties ?? {}).filter((k) => !k.startsWith("$")))} published first=${String(published?.properties.first)}`);
   }
 
-  // M19 re-baseline: ≤ 4 app taps from the step-4 Continue; still ≤ 3 after the photos were chosen.
+  // M20 re-baseline (D-072): ≤ 5 app taps from the step-4 Continue; still ≤ 4 after the photos were chosen.
   const tapsAfterPhotos = taps.filter((t) => t.at > photosChosen);
-  expect(taps.length, taps.map((t) => t.label).join(" | ")).toBeLessThanOrEqual(4);
-  expect(tapsAfterPhotos.length, tapsAfterPhotos.map((t) => t.label).join(" | ")).toBeLessThanOrEqual(3);
+  expect(taps.length, taps.map((t) => t.label).join(" | ")).toBeLessThanOrEqual(5);
+  expect(tapsAfterPhotos.length, tapsAfterPhotos.map((t) => t.label).join(" | ")).toBeLessThanOrEqual(4);
 
-  const firstPreview = Math.min(...[s.firstPage["build-fan"], s.firstPage.editor].filter((v): v is number => v !== undefined));
+  const firstPreview = Math.min(
+    ...[s.firstPage["build-fan"], s.firstPage["review-cover"], s.firstPage.editor].filter((v): v is number => v !== undefined),
+  );
   const summary = {
     viewport: "375x812",
     photosSelected: photoPaths.length,
@@ -724,6 +760,8 @@ test("first run: landing → login → wizard → choose photos → auto build �
     ms: {
       photosChosenToBuildScreen: since(buildUrlAt),
       photosChosenToFirstFanPhoto: since(s.firstPage["build-fan"]),
+      photosChosenToReview: since(reviewAt),
+      photosChosenToFirstReviewCover: since(s.firstPage["review-cover"]),
       photosChosenToEditor: since(editorAt),
       photosChosenToFirstEditorPage: since(s.firstPage.editor),
       photosChosenToFirstPreview: since(firstPreview),
@@ -764,17 +802,17 @@ test("wizard choices variant: Wedding + Classic picked in the wizard → row + b
   await expect(cardRadio(page, "style-classic")).toBeChecked();
   await shot(page, "wizard-style-classic");
   await page.getByTestId("create-book").tap();
-  await page.waitForURL(new RegExp(`/books/${UUID}/upload$`), { timeout: 30_000 });
-  s.bookId = new URL(page.url()).pathname.split("/")[2];
+  await page.waitForURL(WIZARD_STEP5_URL, { timeout: 30_000 });
+  s.bookId = new URL(page.url()).searchParams.get("book") ?? "";
   users.find((u) => u.uid === s.uid)?.bookIds.add(s.bookId);
   await choosePhotos(s, photoPaths.slice(0, VARIANT_PHOTOS));
 
-  await page.waitForURL(new RegExp(`/books/${s.bookId}/build`), { timeout: 300_000 });
+  await waitForSortingOrReview(page, s.bookId, 300_000);
   if (await page.getByTestId("build-photo-fan").waitFor({ state: "visible", timeout: 15_000 }).then(() => true, () => false)) {
     // The build screen moves on by itself: no Tab walk (it has no controls while running).
     await audit(page, "build", { tab: false });
   } else console.log("[m13-run setup] build photo fan not seen");
-  await waitForEditor(s, 300_000);
+  await reviewThenEditor(s, 300_000);
   const { data: row } = await admin.from("books").select("occasion, design_style, tone, doc").eq("id", s.bookId).single();
   const r = row as { occasion: string; design_style: string; tone: string | null; doc: { style?: { designStyle?: string } } | null };
   console.log(`[m13-run setup] occasion=${r.occasion} style=${r.design_style} tone=${r.tone} docStyle=${r.doc?.style?.designStyle ?? "(v1 default)"}`);
@@ -786,18 +824,20 @@ test("wizard choices variant: Wedding + Classic picked in the wizard → row + b
   await s.context.close();
 });
 
-test("arabic variant: Accept-Language ar → Arabic captions by default", async ({ browser }) => {
+test("arabic variant: Arabic title (en-US browser) → Arabic captions, no step-2 language control", async ({ browser }) => {
   test.setTimeout(600_000);
-  const s = await newSession(browser, { locale: "ar-AE" });
+  const s = await newSession(browser, { locale: "en-US" });
   const page = s.page;
   await signIn(s, "/books/new");
   await expect(page).toHaveURL(/\/books\/new/, { timeout: 30_000 });
-  // Step 2 shows the suggested caption language (Accept-Language ar → العربية) without a tap.
+  // M20 (D-072): no caption-language control on step 2 — the Arabic-script title decides.
   await wizardToUpload(s, {
+    title: "رحلتنا إلى العين",
     press: (t) => t.tap(),
     onStep: async (n) => {
       if (n !== 2) return;
-      await expect(page.getByTestId("lang-ar")).toBeChecked();
+      await expect(page.locator('[data-testid^="lang-"]')).toHaveCount(0);
+      await expect(page.locator('input[name="captionLang"]')).toHaveCount(0);
       await shot(page, "wizard-arabic");
     },
   });
@@ -805,7 +845,8 @@ test("arabic variant: Accept-Language ar → Arabic captions by default", async 
   const { data: start } = await admin.from("books").select("caption_lang").eq("id", s.bookId).single();
   expect((start as { caption_lang: string }).caption_lang).toBe("ar");
 
-  await waitForEditor(s, 300_000);
+  await waitForSortingOrReview(page, s.bookId, 300_000);
+  await reviewThenEditor(s, 300_000);
   // Arabic captions on book pages, with dir="auto".
   const captions = page.locator('[data-page] [dir="auto"]');
   await expect.poll(async () => (await captions.allTextContents()).filter((t) => ARABIC_RE.test(t)).length, { timeout: 30_000 }).toBeGreaterThan(0);

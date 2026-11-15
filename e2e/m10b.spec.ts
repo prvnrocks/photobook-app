@@ -55,7 +55,7 @@ import { expect, test, type Browser, type BrowserContext, type Page } from "@pla
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { buildEvent, postEvent } from "../scripts/stripe-signed-event.mjs";
 import { hasCaptionArea } from "../src/lib/ai/captions";
-import { createBookViaWizard } from "./helpers/create-book";
+import { createBookViaWizard, finishWizardToEditor, waitForSortingOrReview, wizardStepUrl } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live M10b gate");
@@ -275,16 +275,16 @@ async function uploadAndBuild(id: string, files: { name: string; mimeType: strin
   await page.getByTestId("upload-input").setInputFiles(files);
   if (files.length >= 5) {
     // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).
-    await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build\?auto=1$/, { timeout: 180_000 });
+    // M20: step 6 in place on /books/new?book=<id>&step=6.
+    await waitForSortingOrReview(page, id, 180_000);
   } else {
     // Fewer than 5 photos: no automatic build; the fallback "Make my book now" starts it.
     await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 180_000 });
     await page.getByTestId("build-album").click();
-    await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build(\?.*)?$/, { timeout: 60_000 });
+    await page.waitForURL(wizardStepUrl(id), { timeout: 60_000 });
   }
-  // M13 T7: the build hands over to the editor (review is reached from the "AI kept X of Y" chip).
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/edit$/, { timeout: 420_000 });
-  await expect(page.getByTestId("editor-shell")).toBeVisible();
+  // M20 (D-072): step 7 (Review) → "Generate album" → the editor.
+  await finishWizardToEditor(page, id, { timeout: 420_000 });
 }
 
 /** Next button until page-flip reports `index` as current (spread mode: the pair's left index). */
@@ -347,7 +347,7 @@ test.beforeAll(async ({ browser }, info) => {
   page = await context.newPage();
   page.on("dialog", (d) => void d.accept());
   await page.goto(`/auth/confirm?token_hash=${await signInHash()}&type=magiclink&next=/books/new`);
-  await expect(page).toHaveURL(/\/books\/new$/);
+  await expect(page).toHaveURL(/\/books\/new(\?step=1)?$/);
 });
 
 test.afterAll(async () => {

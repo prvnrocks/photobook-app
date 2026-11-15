@@ -33,7 +33,7 @@ import { expect, test, type BrowserContext, type Page, type Route } from "@playw
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { parseBookDoc, validateBookDoc } from "../src/lib/book/schema";
 import { mapUploadDbError } from "../src/lib/upload/errors";
-import { cardRadio, createBookViaWizard, expectWizardStep, walkWizardToStyle, wizardContinue } from "./helpers/create-book";
+import { cardRadio, createBookViaWizard, expectWizardStep, walkWizardToStyle, wizardContinue, WIZARD_STEP5_URL } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live signed-in upload flow");
@@ -247,7 +247,7 @@ test.beforeAll(async ({ browser }) => {
   const hashed = await signInLink();
   // M19: login → /books/new (the landing CTA's target, the creation wizard).
   await page.goto(`/auth/confirm?token_hash=${hashed}&type=magiclink&next=/books/new`);
-  await expect(page).toHaveURL(/\/books\/new$/);
+  await expect(page).toHaveURL(/\/books\/new(\?step=1)?$/);
 
   // A separate user-session client (publishable key, RLS) for live error-shape checks.
   userClient = createClient(url, env("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"), {
@@ -299,7 +299,7 @@ test.afterAll(async () => {
 test("wizard at 375px: steps 1–4 → step 5 upload, auto build asked; rows, storage, places, fallback album", async () => {
   book1 = await startBookWithPhotos(files);
   // Step 5 in wizard chrome; untitled → neutral header ("Your book", no "Untitled book").
-  await expect(page.getByTestId("wizard-step-label")).toHaveText("Step 5 of 6");
+  await expect(page.getByTestId("wizard-step-label")).toHaveText("Step 5 of 7");
   await expect(page.getByTestId("upload-book-title")).toHaveText("Your book");
   // Back to steps 1–4 is offered only before any pick.
   await expect(page.getByTestId("upload-wizard-back")).toHaveCount(0);
@@ -536,8 +536,12 @@ test("cap: 150 ready rows in a free book → UI limit notice, 0 rows added; DB t
 
   await page.reload();
   await expect(page.getByTestId("upload-capacity")).toContainText("150 added");
-  await page.getByTestId("upload-input").setInputFiles([files[1]]);
-  await expect(page.getByTestId("upload-limit")).toBeVisible({ timeout: 60_000 });
+  // M20: after a hard load the step-5 island (lazy chunk) may still be hydrating — a file set on the
+  // server-rendered input before that is lost. Re-pick until the queue answers.
+  await expect(async () => {
+    await page.getByTestId("upload-input").setInputFiles([files[1]]);
+    await expect(page.getByTestId("upload-limit")).toBeVisible({ timeout: 10_000 });
+  }).toPass({ timeout: 60_000 });
   await expect(page.getByTestId("upload-limit")).toContainText("Free books hold 150 photos");
   await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 60_000 });
   await expect(page.getByTestId("summary-added")).toHaveText("No new photos added");
@@ -728,8 +732,8 @@ test("creation wizard at 375px: Landscape + Classic → row format A5_LANDSCAPE 
   await expect(cardRadio(page, "style-classic")).toBeChecked();
 
   await page.getByTestId("create-book").click();
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/upload$/, { timeout: 30_000 });
-  const id = new URL(page.url()).pathname.split("/")[2];
+  await page.waitForURL(WIZARD_STEP5_URL, { timeout: 30_000 });
+  const id = new URL(page.url()).searchParams.get("book") ?? "";
   const { data, error } = await admin.from("books").select("format, design_style, occasion").eq("id", id).single();
   if (error) throw new Error(`books select failed (${error.code})`);
   expect(data).toEqual({ format: "A5_LANDSCAPE", design_style: "classic", occasion: "wedding" });

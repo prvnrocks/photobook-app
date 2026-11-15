@@ -37,7 +37,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { createBookViaWizard } from "./helpers/create-book";
+import { createBookViaWizard, finishWizardToEditor, waitForSortingOrReview } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live PDF export flow");
@@ -113,7 +113,7 @@ async function createSignedInUser(browser: Browser, tag: string): Promise<User> 
   u.page = await u.context.newPage();
   u.page.on("dialog", (d) => void d.accept());
   await u.page.goto(`/auth/confirm?token_hash=${await signInHash(email)}&type=magiclink&next=/books/new`);
-  await expect(u.page).toHaveURL(/\/books\/new$/);
+  await expect(u.page).toHaveURL(/\/books\/new(\?step=1)?$/);
   return u;
 }
 
@@ -443,10 +443,11 @@ test("a. build (replay) from 40 large GPS-tagged photos", async () => {
   const t0 = Date.now();
   await page.getByTestId("upload-input").setInputFiles(files);
   // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build\?auto=1$/, { timeout: 600_000 });
+  // M20: step 6 (sorting) / 7 (review) in place on /books/new?book=<id>&step=6|7.
+  await waitForSortingOrReview(page, bookId, 600_000);
   console.log(`[a] upload ${((Date.now() - t0) / 1000).toFixed(1)} s`);
-  // M13 T7: the build hands over to the editor (review is reached from the "AI kept X of Y" chip).
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/edit$/, { timeout: 420_000 });
+  // M20 (D-072): the build hands over to step 7 (Review) → "Generate album" → the editor.
+  await finishWizardToEditor(page, bookId, { timeout: 420_000 });
   const { data: photos, error } = await admin
     .from("photos")
     .select("id")

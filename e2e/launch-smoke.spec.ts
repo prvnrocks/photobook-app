@@ -42,7 +42,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { createBookViaWizard } from "./helpers/create-book";
+import { createBookViaWizard, generateAlbum, waitForReview, wizardStepUrl } from "./helpers/create-book";
 import { buildEvent, postEvent, signPayload } from "../scripts/stripe-signed-event.mjs";
 
 const ENABLED = process.env.E2E_AUTH === "1";
@@ -277,7 +277,7 @@ test.beforeAll(async ({ browser, request }, info) => {
   page.on("dialog", (d) => void d.accept());
   // M19: landing CTA → login → /books/new (the creation wizard).
   await page.goto(`/auth/confirm?token_hash=${await signInHash()}&type=magiclink&next=/books/new`);
-  await expect(page).toHaveURL(/\/books\/new$/);
+  await expect(page).toHaveURL(/\/books\/new(\?step=1)?$/);
 });
 
 test.afterAll(async () => {
@@ -355,8 +355,9 @@ test("a. login → wizard → upload (step 5) → automatic AI build (replay, st
   await page.getByTestId("upload-input").setInputFiles(await makeSynthetic(page, 6));
   await noHorizontalOverflow(page);
   // No Build tap: once uploads + finalize settle the first build starts by itself.
-  await page.waitForURL(new RegExp(`/books/${bookId}/build\\?auto=1$`), { timeout: 240_000 });
-  // M19 T7: the first build is wizard step 6 — a fan of the draft's photos + a 3-row checklist.
+  // M20: step 6 (sorting) renders in place on /books/new?book=<id>&step=6.
+  await page.waitForURL(wizardStepUrl(bookId, "6"), { timeout: 240_000 });
+  // M19 T7 / M20 T7: the first build is wizard step 6 — a fan of the draft's photos + a 3-row checklist.
   await expect(page.getByTestId("build-photo-fan")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("build-step-sift")).toBeVisible();
   // The fan's photos really load (signed 512 px thumbs), not just placeholders.
@@ -369,8 +370,11 @@ test("a. login → wizard → upload (step 5) → automatic AI build (replay, st
   await page.screenshot({ path: test.info().outputPath("m13-build-375.png"), fullPage: true });
   const setup = (await admin.from("books").select("occasion, tone, design_style").eq("id", bookId).single()).data;
   expect(setup).toEqual({ occasion: "travel", tone: "fun", design_style: "modern" });
-  // M13 T7: the build hands over to the editor (review is reached from the "AI kept X of Y" chip).
-  await page.waitForURL(new RegExp(`/books/${bookId}/edit$`), { timeout: 420_000 });
+  // M20 (D-072): the build hands over to step 7 (Review) → "Generate album" → the editor
+  // (review stays reachable from the "AI kept X of Y" chip).
+  await waitForReview(page, bookId, 420_000);
+  await noHorizontalOverflow(page);
+  await generateAlbum(page, bookId);
   await noHorizontalOverflow(page);
   await expect(page.getByTestId("editor-shell")).toBeVisible();
   await expect(page.getByTestId("ai-summary-chip")).toBeVisible();
