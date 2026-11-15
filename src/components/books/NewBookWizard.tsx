@@ -16,6 +16,9 @@
 //     editor when the details are locked).
 //   - Edit (T8, ?book=<id>): prefilled from the book (sessionStorage unused); step-4 Continue saves
 //     with updateBookSetupAction and goes to /books/<id>/upload.
+//   - M20 T4: a live book preview (WizardBookPreview) follows the draft — the aside on ≥ lg
+//     (WizardPreviewAside, kept mounted across steps so it animates), a compact mini above each
+//     step's headline on phones. No caption-language question (D-072): the server derives it.
 // First-load island: no cn / buttonVariants / next/link (the step-1 Back link comes from the server).
 
 import { useRouter } from "next/navigation";
@@ -26,7 +29,6 @@ import { Notice } from "@/components/app/Notice";
 import { WizardNav } from "@/components/wizard/WizardNav";
 import { WizardBand } from "@/components/wizard/WizardBand";
 import { WizardBody } from "@/components/wizard/WizardBody";
-import type { CaptionLang } from "@/lib/book/options";
 import type { BookSetupField, BookSetupPatch, SetupLockReason, UpdateBookSetupResult } from "@/lib/book/setup";
 import {
   EMPTY_WIZARD_DRAFT,
@@ -45,9 +47,10 @@ import { StepOccasion } from "./wizard/StepOccasion";
 import { StepShape } from "./wizard/StepShape";
 import { StepStyle } from "./wizard/StepStyle";
 import { StepTitle } from "./wizard/StepTitle";
+import { WizardBookPreview, WizardPreviewAside } from "./wizard/WizardBookPreview";
 
 export type NewBookWizardMode =
-  | { kind: "create"; initialLang: CaptionLang }
+  | { kind: "create" }
   | { kind: "edit"; bookId: string; draft: WizardDraft; designLock: SetupLockReason | null };
 
 export type NewBookWizardProps = {
@@ -179,7 +182,6 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
     () => mode.kind === "create" && typeof window !== "undefined" && isCreatedBookEntry(window.location.href),
   );
 
-  const captionLang: CaptionLang = draft.captionLang ?? (mode.kind === "create" ? mode.initialLang : "en");
   const style = effectiveStyle(draft.designStyle, draft.occasion);
   const designLocked = edit?.designLock != null;
 
@@ -294,7 +296,7 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
     const patch: BookSetupPatch = {
       title: d.title.trim() === "" ? null : d.title,
       occasion: d.occasion,
-      captionLang,
+      // No captionLang (D-072): the server re-derives it when the title changes.
     };
     if (!designLocked && d.format) {
       patch.format = d.format;
@@ -368,6 +370,18 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
           ? draft.format !== null
           : draft.occasion !== null && draft.format !== null;
   const errorHere = stepError && stepError.step === step ? stepError : null;
+  // Live preview (M20 T4): the style tints / opens the book on step 4 (or once picked).
+  const previewProps = {
+    title: draft.title,
+    occasion: draft.occasion,
+    format: draft.format,
+    designStyle: step === 4 ? style : draft.designStyle,
+    open: step === 4,
+    typing: step === 1,
+  };
+  const miniPreview = (
+    <WizardBookPreview {...previewProps} size={step === 1 ? "md" : "sm"} className="mb-4 lg:hidden" />
+  );
   const fieldError = (f: NewBookField) => (errorHere?.field === f ? errorHere.message : undefined);
 
   if (reopening) {
@@ -391,13 +405,16 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
           showStep(n as WizardFormStep, "push");
         }}
       />
-      <WizardBody wide>
+      <WizardBody wide aside={<WizardPreviewAside {...previewProps} />} asideBelowLg="hide">
+      {/* Phones / tablets: the mini preview stays mounted above the (keyed) step form, so it animates
+          between steps (shrinks after step 1, morphs on a shape change, opens on step 4). */}
+      {miniPreview}
       <form
         key={step}
         action={step === 4 && !edit ? formAction : undefined}
         onSubmit={onSubmit}
         noValidate
-        className={`flex w-full min-w-0 flex-col gap-8 ${step === 1 ? "mx-auto max-w-[28rem]" : ""}`}
+        className="flex w-full min-w-0 flex-col gap-8"
         data-testid="new-book-form"
         data-step-anim={stepDir ? "css" : undefined}
         data-step-dir={stepDir ?? undefined}
@@ -418,9 +435,7 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
         ) : step === 2 ? (
           <StepOccasion
             occasion={draft.occasion}
-            captionLang={captionLang}
             onOccasion={(occasion) => update({ occasion })}
-            onCaptionLang={(lang) => update({ captionLang: lang })}
             headlineId={HEADLINE_ID}
             error={fieldError("occasion") ?? fieldError("captionLang")}
           />
@@ -431,6 +446,8 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
             headlineId={HEADLINE_ID}
             locked={designLocked}
             error={fieldError("format")}
+            title={draft.title}
+            occasion={draft.occasion}
           />
         ) : (
           <StepStyle
@@ -447,7 +464,6 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
           <>
             <input type="hidden" name="title" value={draft.title} />
             <input type="hidden" name="occasion" value={draft.occasion ?? ""} />
-            <input type="hidden" name="captionLang" value={captionLang} />
             <input type="hidden" name="format" value={draft.format ?? ""} />
             <input type="hidden" name="designStyle" value={style} />
           </>
@@ -461,7 +477,7 @@ export function NewBookWizard({ initialStep, mode, dashboardBack }: NewBookWizar
           pending={step === 4 && pending}
           disabled={!canContinue || pending}
           continueTestId={step === 4 ? (edit ? "wizard-save" : "create-book") : "wizard-continue"}
-          className="mx-auto max-w-[28rem]"
+          className="mx-auto max-w-[36rem]"
         />
       </form>
       {restored && !edit && !pending ? (

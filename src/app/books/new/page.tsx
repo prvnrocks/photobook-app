@@ -7,7 +7,6 @@
 // The step changes client-side (pushState), so the client island renders the step header itself.
 
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { NewBookWizard, type NewBookWizardMode } from "@/components/books/NewBookWizard";
@@ -20,10 +19,8 @@ import { designLockReason, detailsLockReason } from "@/lib/book/setup";
 import { parseFormStep, type WizardDraft } from "@/lib/books/wizard-steps";
 import { hasAnyRunForBook } from "@/lib/db/agent-runs";
 import { getMyBook } from "@/lib/db/books";
-import { getOwnMemoryView } from "@/lib/db/memory";
 import { getMyProfile } from "@/lib/db/profiles";
 import { defaultStyleFor, isFormDesignStyle } from "@/lib/design/defaults";
-import { suggestCaptionLang } from "@/lib/design/infer";
 import { isUuid } from "@/lib/uuid";
 
 export const dynamic = "force-dynamic";
@@ -36,14 +33,6 @@ const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v
 
 function pick<T extends string>(v: string | null, values: readonly T[]): T | null {
   return (values as readonly string[]).includes(v ?? "") ? (v as T) : null;
-}
-
-async function acceptLanguage(): Promise<string> {
-  try {
-    return (await headers()).get("accept-language") ?? "";
-  } catch {
-    return "";
-  }
 }
 
 export default async function NewBookPage({ searchParams }: { searchParams: SearchParams }) {
@@ -80,9 +69,9 @@ export default async function NewBookPage({ searchParams }: { searchParams: Sear
     // Always null today (same rule as the details lock, which redirected above); kept as defence.
     mode = { kind: "edit", bookId: book.id, draft, designLock: designLockReason({ hasRun, doc: book.doc }) };
   } else {
-    // Best effort (D-032): a memory error must never block creating a book.
-    const [memory, locale] = await Promise.all([getOwnMemoryView().catch(() => null), acceptLanguage()]);
-    mode = { kind: "create", initialLang: suggestCaptionLang(locale, memory?.language) };
+    // No caption-language question any more (D-072): createBookAction derives it (Arabic-script
+    // title → memory → Accept-Language → en).
+    mode = { kind: "create" };
   }
 
   const profile = await profilePromise;

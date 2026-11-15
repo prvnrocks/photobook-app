@@ -58,11 +58,17 @@ describe("wizard shape + style steps (M10b A12 → M19)", () => {
     }
     expect(shape).toContain("148 × 210 mm");
     expect(shape + style).not.toMatch(/<svg(?![^>]*aria-hidden="true")/);
-    // M19 polish: wizard cards use the "card" art (viewBox hugs the page, sized by height ~2/3 of the card).
-    expect(shape).toContain('viewBox="14 7 36.5 50.5"');
-    expect(shape).toContain("h-36 max-w-full sm:h-56");
-    expect(shape).toContain("h-[6.5rem] max-w-full sm:h-40");
-    expect(style).toContain("h-24 max-w-full sm:h-36");
+    // M20 T4: shape cards show a small 3D book per shape (one art box height, so labels line up)
+    // with a "fits …" hint; style cards show a two-page spread in the "card" art (viewBox hugs the
+    // page), sized by a reserved box per shape.
+    expect(shape).toContain('class="ws-book" data-format="A5_PORTRAIT"');
+    expect(shape).toContain('class="ws-book" data-format="A5_LANDSCAPE"');
+    expect(shape.match(/ws-shape-art relative flex h-40 w-full/g)).toHaveLength(2);
+    expect(shape).toContain("Fits phone photos");
+    expect(shape).toContain("Fits landscapes");
+    expect(shape).not.toContain("wizard-preview-title");
+    expect(style).toContain('class="ws-spread-box" data-format="A5_LANDSCAPE"');
+    expect(style.match(/ws-spread-page ws-spread-(left|right)/g)).toHaveLength(8);
     expect(style).toContain('viewBox="7 14 50.5 36.5"');
     // style previews are drawn in the chosen shape (landscape page box)
     expect(style).toContain('width="45" height="31"');

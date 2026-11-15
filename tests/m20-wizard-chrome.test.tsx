@@ -291,11 +291,20 @@ describe("WizardBody", () => {
 
   it("two columns on ≥ lg with an aside; clipped horizontally", () => {
     const html = renderToStaticMarkup(<WizardBody aside={<p>preview</p>}>x</WizardBody>);
-    expect(html).toContain("lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]");
+    // M20 T4: the columns fill the library width (preview column grows: 26 → 30 → 34rem).
+    expect(html).toContain("lg:grid-cols-[minmax(0,1fr)_minmax(20rem,26rem)]");
+    expect(html).toContain("xl:grid-cols-[minmax(0,1fr)_30rem]");
+    expect(html).toContain("2xl:grid-cols-[minmax(0,1fr)_34rem]");
     expect(html).toContain("grid-cols-1");
     expect(tagOf(html, "wizard-aside")).toContain("<aside");
+    expect(tagOf(html, "wizard-aside")).not.toContain("hidden lg:block");
     expect(html).toContain("<p>preview</p>");
     expect(tagOf(html, "wizard-body")).toContain("overflow-x-clip");
+  });
+
+  it("asideBelowLg=hide drops the aside below lg (the step draws its own mini version)", () => {
+    const html = renderToStaticMarkup(<WizardBody aside={<p>preview</p>} asideBelowLg="hide">x</WizardBody>);
+    expect(tagOf(html, "wizard-aside")).toContain("hidden lg:block");
   });
 });
 

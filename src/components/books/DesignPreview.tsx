@@ -4,7 +4,7 @@
 
 import type { BookFormat } from "@/lib/book/types";
 import type { FormDesignStyle } from "@/lib/design/defaults";
-import { cn } from "@/lib/utils";
+import { cx as join } from "@/lib/cx";
 
 // Page boxes in a 64 × 64 viewBox, centred; ratio ≈ A5 (1 : 1.414).
 const PAGE: Record<BookFormat, { x: number; y: number; w: number; h: number }> = {
@@ -71,7 +71,9 @@ function Frame({
       viewBox={viewBox}
       aria-hidden="true"
       focusable="false"
-      className={cn(variant === "card" ? "h-16 w-auto shrink-0" : "size-16 shrink-0", className)}
+      // A given className replaces the default size (plain join, no tailwind-merge: these previews
+      // ship in the /books/new first-load island, M20 T4).
+      className={className ? join("shrink-0", className) : variant === "card" ? "h-16 w-auto shrink-0" : "size-16 shrink-0"}
     >
       <rect x={p.x + 1.2} y={p.y + 1.2} width={p.w} height={p.h} rx="1.5" className="fill-foreground/10" />
       <rect x={p.x} y={p.y} width={p.w} height={p.h} rx="1.5" strokeWidth="1" className={page} />
@@ -193,7 +195,7 @@ function GeometricPreview({ format, className, variant = "default" }: { format: 
   return (
     <Frame format={format} className={className} variant={variant}>
       <polygon points={band} className={photoClass(variant, 0)} />
-      <circle cx={r1(cx)} cy={r1(cy)} r={r1(cr)} strokeWidth="1.2" className={cn(photoClass(variant, 1), "stroke-background")} />
+      <circle cx={r1(cx)} cy={r1(cy)} r={r1(cr)} strokeWidth="1.2" className={join(photoClass(variant, 1), "stroke-background")} />
       <polygon points={hexagon(hx, hy, hr)} className={photoClass(variant, 2)} />
       <line
         x1={r1(hx + hr + m * 0.12)}

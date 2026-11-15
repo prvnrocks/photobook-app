@@ -13,7 +13,7 @@ export type ThumbStripItem = { key: number; url: string };
 export type ThumbStripDeps = {
   createUrl: (file: Blob) => string;
   revokeUrl: (url: string) => void;
-  /** Thumbnails kept on screen (default 3, as wizard.png). */
+  /** Thumbnails kept on screen (default 12: the M20 upload stage animates at most 12, D-072). */
   max?: number;
 };
 
@@ -29,7 +29,7 @@ export type ThumbStrip = {
   dispose(): void;
 };
 
-export const THUMB_STRIP_MAX = 3;
+export const THUMB_STRIP_MAX = 12;
 
 export function createThumbStrip({ createUrl, revokeUrl, max = THUMB_STRIP_MAX }: ThumbStripDeps): ThumbStrip {
   const files = new Map<number, Blob>();

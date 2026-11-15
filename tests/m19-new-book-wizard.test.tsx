@@ -76,7 +76,7 @@ afterEach(() => {
 
 const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 
-async function mount(url: string, mode: Mode = { kind: "create", initialLang: "en" }) {
+async function mount(url: string, mode: Mode = { kind: "create" }) {
   window.history.replaceState(null, "", url);
   const step = Number(new URL(window.location.href).searchParams.get("step") ?? "1");
   const initialStep = (step >= 1 && step <= 4 ? step : 1) as 1 | 2 | 3 | 4;
@@ -165,10 +165,17 @@ describe("new book wizard — steps and URL", () => {
     const input = $<HTMLInputElement>("book-title");
     expect(input.getAttribute("dir")).toBe("auto");
     expect(container.textContent).toContain("You can change it later.");
+    // M20 T4: the cover lives in the live preview (aside ≥ lg + phone mini), not in step 1.
+    expect($("wizard-cover-art")).toBeNull();
+    expect(container.querySelectorAll('[data-testid="wizard-preview"]')).toHaveLength(2);
+    expect($("wizard-aside").className).toContain("hidden lg:block");
     expect($("wizard-back").getAttribute("href")).toBe("/dashboard");
 
     await typeInto(input, "Days by the Sea");
-    expect($("wizard-cover-title").textContent).toBe("Days by the Sea");
+    for (const t of container.querySelectorAll('[data-testid="wizard-preview-title"]')) {
+      expect(t.textContent).toBe("Days by the Sea");
+      expect(t.querySelector("span")!.getAttribute("dir")).toBe("auto");
+    }
     const lengthBefore = window.history.length;
     await click($("wizard-continue"));
     expect(urlStep()).toBe("2");
@@ -201,7 +208,7 @@ describe("new book wizard — steps and URL", () => {
     expect($<HTMLButtonElement>("wizard-continue").disabled).toBe(true);
   });
 
-  it("step 2: six occasion cards (2 cols, 3 from sm), Continue disabled until one is picked, language switch", async () => {
+  it("step 2: six occasion cards (2 cols, 3 from sm), Continue disabled until one is picked, no language switch (D-072)", async () => {
     await mount("/books/new");
     await click($("wizard-continue"));
     for (const id of ["wedding", "travel", "baby", "graduation", "family", "other"]) {
@@ -209,12 +216,10 @@ describe("new book wizard — steps and URL", () => {
     }
     expect($("occasion-grid").className).toContain("grid-cols-2 gap-3 sm:grid-cols-3");
     expect($<HTMLButtonElement>("wizard-continue").disabled).toBe(true);
-    expect($<HTMLInputElement>("lang-en").checked).toBe(true);
-    const ar = $("lang-ar").parentElement!.querySelector("span[lang]")!;
-    expect(ar.getAttribute("lang")).toBe("ar");
-    expect(ar.className).toContain("font-arabic");
-    await click($("lang-ar"));
-    expect(stored()?.captionLang).toBe("ar");
+    // The caption-language control is gone: the server picks the language.
+    for (const id of ["lang-en", "lang-ar", "caption-lang"]) expect($(id)).toBeNull();
+    expect(container.querySelector('input[name="wizard-captionLang"]')).toBeNull();
+    expect(container.textContent).not.toContain("Captions in");
     await click(radio("occasion-travel"));
     expect($<HTMLButtonElement>("wizard-continue").disabled).toBe(false);
     await click($("wizard-continue"));
@@ -222,10 +227,62 @@ describe("new book wizard — steps and URL", () => {
     expect(label()).toBe("Step 3 of 7");
   });
 
-  it("caption language defaults to the server's suggestion (memory / browser)", async () => {
-    store({ title: "", occasion: null });
-    await mount("/books/new?step=2", { kind: "create", initialLang: "ar" });
-    expect($<HTMLInputElement>("lang-ar").checked).toBe(true);
+  it("title suggestion chips fill the title (44px, pressed state) and update the cover", async () => {
+    await mount("/books/new");
+    const chips = $("title-suggestions").querySelectorAll("button");
+    expect(chips.length).toBeGreaterThanOrEqual(3);
+    for (const c of chips) {
+      expect(c.getAttribute("type")).toBe("button");
+      expect(c.className).toContain("min-h-11");
+    }
+    await click($("title-suggestion-2"));
+    expect($<HTMLInputElement>("book-title").value).toBe("Abu Dhabi weekend");
+    expect($("title-suggestion-2").getAttribute("aria-pressed")).toBe("true");
+    expect($("title-suggestion-0").getAttribute("aria-pressed")).toBe("false");
+    expect($("wizard-preview-title").textContent).toBe("Abu Dhabi weekend");
+    expect($("wizard-band-title").textContent).toBe("Abu Dhabi weekend");
+    expect(stored()?.title).toBe("Abu Dhabi weekend");
+    // a chip is not a submit: still on step 1
+    expect(shownStep()).toBe("1");
+    // the ink underline grows with the title
+    expect(Number($("book-title-ink").style.getPropertyValue("--ink"))).toBeGreaterThan(0.5);
+  });
+
+  it("the live preview follows every choice: title, occasion emblem, shape, style + open spread", async () => {
+    await mount("/books/new");
+    const previews = () => [...container.querySelectorAll<HTMLElement>('[data-testid="wizard-preview"]')];
+    const attr = (name: string) => previews().map((p) => p.getAttribute(name));
+    expect(attr("data-format")).toEqual(["A5_PORTRAIT", "A5_PORTRAIT"]);
+    expect(attr("data-open")).toEqual(["false", "false"]);
+    expect(attr("data-size")).toEqual(["md", "full"]);
+    expect(previews().every((p) => p.getAttribute("aria-hidden") === "true")).toBe(true);
+    // Arabic title → the Arabic font on the cover
+    await typeInto($<HTMLInputElement>("book-title"), "رحلتنا إلى العين");
+    expect($("wizard-preview-title").className).toContain("font-arabic");
+    await click($("wizard-continue"));
+    expect(attr("data-size")).toEqual(["sm", "full"]);
+    expect($("wizard-preview-emblem")).toBeNull();
+    await click(radio("occasion-wedding"));
+    expect(attr("data-occasion")).toEqual(["wedding", "wedding"]);
+    expect($("wizard-preview-emblem").getAttribute("data-emblem")).toBe("wedding");
+    await click(radio("occasion-baby"));
+    expect($("wizard-preview-emblem").getAttribute("data-emblem")).toBe("baby");
+    expect($("wizard-preview-summary").textContent).toContain("Baby");
+    await click($("wizard-continue"));
+    await click(radio("format-A5_LANDSCAPE"));
+    expect(attr("data-format")).toEqual(["A5_LANDSCAPE", "A5_LANDSCAPE"]);
+    expect(attr("data-open")).toEqual(["false", "false"]);
+    await click($("wizard-continue"));
+    // step 4: opens to a spread in the occasion's default style, then follows the pick
+    expect(attr("data-open")).toEqual(["true", "true"]);
+    expect(attr("data-style")).toEqual(["scrapbook", "scrapbook"]);
+    await click(radio("style-modern"));
+    expect(attr("data-style")).toEqual(["modern", "modern"]);
+    expect($("wizard-preview-summary").textContent).toContain("Modern");
+    // back to step 3: the book closes again but keeps the picked style's tint
+    await back();
+    expect(attr("data-open")).toEqual(["false", "false"]);
+    expect(attr("data-style")).toEqual(["modern", "modern"]);
   });
 
   it("browser back (popstate) returns to the previous step; Back button uses history when it can", async () => {
@@ -268,7 +325,6 @@ describe("new book wizard — draft restore and missing steps", () => {
     expect(radio("format-A5_LANDSCAPE").checked).toBe(true);
     await back();
     expect(radio("occasion-wedding").checked).toBe(true);
-    expect($<HTMLInputElement>("lang-ar").checked).toBe(true);
     await back();
     expect($<HTMLInputElement>("book-title").value).toBe("أيام البحر");
   });
@@ -385,7 +441,8 @@ describe("new book wizard — shape, style and submit", () => {
     const fd = sent as unknown as FormData;
     expect(fd.get("title")).toBe("Days by the Sea");
     expect(fd.get("occasion")).toBe("travel");
-    expect(fd.get("captionLang")).toBe("ar");
+    // D-072: no caption language from the client (even from an old stored draft) — the server derives it.
+    expect(fd.has("captionLang")).toBe(false);
     expect(fd.get("format")).toBe("A5_LANDSCAPE");
     expect(fd.get("designStyle")).toBe("geometric");
     expect(fd.has("tone")).toBe(false);
@@ -512,7 +569,6 @@ describe("new book wizard — edit mode (T8)", () => {
     expect(mocks.updateBookSetupAction).toHaveBeenCalledWith(BOOK, {
       title: null,
       occasion: "graduation",
-      captionLang: "en",
       format: "A5_LANDSCAPE",
       designStyle: "classic",
     });
@@ -538,7 +594,6 @@ describe("new book wizard — edit mode (T8)", () => {
     expect(mocks.updateBookSetupAction).toHaveBeenCalledWith(BOOK, {
       title: "Grad 2026",
       occasion: "graduation",
-      captionLang: "en",
     });
   });
 
@@ -577,16 +632,16 @@ describe("/books/new server page", () => {
     await expect(run({ step: "3" })).rejects.toThrow("REDIRECT:/login?next=%2Fbooks%2Fnew");
   });
 
-  it("create: step from ?step=, caption language from memory, else the browser", async () => {
+  it("create: step from ?step=; no caption language from the page (D-072: the create action derives it)", async () => {
     mocks.memory = { language: "ar" };
     let props = wizardProps(await run({ step: "3" }));
     expect(props.initialStep).toBe(3);
-    expect(props.mode).toEqual({ kind: "create", initialLang: "ar" });
+    expect(props.mode).toEqual({ kind: "create" });
     mocks.memory = null;
     mocks.acceptLanguage = "ar-AE,ar;q=0.9";
     props = wizardProps(await run({ step: "9" }));
     expect(props.initialStep).toBe(1);
-    expect(props.mode).toEqual({ kind: "create", initialLang: "ar" });
+    expect(props.mode).toEqual({ kind: "create" });
   });
 
   it("edit: missing / foreign book → 404", async () => {
@@ -618,5 +673,46 @@ describe("/books/new server page", () => {
     mocks.book = { id: BOOK, title: "T", occasion: "other", caption_lang: "en", doc: {}, format: "A5_PORTRAIT", design_style: "modern" };
     mocks.hasRun = true;
     await expect(run({ book: BOOK, step: "2" })).rejects.toThrow(`REDIRECT:/books/${BOOK}/edit`);
+  });
+});
+
+// M20 T4: steps 1–4 personality + the live preview. Reduced motion = the same final states, static.
+describe("steps-motion.css (M20 T4)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const css = readFileSync(join(process.cwd(), "src/components/books/wizard/steps-motion.css"), "utf8");
+  const start = css.indexOf("@media (prefers-reduced-motion: no-preference)");
+  const motionBlock = (() => {
+    let depth = 0;
+    for (let i = css.indexOf("{", start); i < css.length; i++) {
+      if (css[i] === "{") depth++;
+      else if (css[i] === "}" && --depth === 0) return css.slice(start, i + 1);
+    }
+    return "";
+  })();
+  const outside = css.replace(motionBlock, "").replace(/@keyframes[\s\S]*?\n}\n/g, "");
+
+  it("every animation and transition is inside the no-preference block", () => {
+    expect(start).toBeGreaterThan(-1);
+    expect(outside).not.toMatch(/\banimation(-name|-delay)?\s*:/);
+    expect(outside).not.toMatch(/\btransition\s*:/);
+    for (const sel of [".wbp-float", ".wbp-emblem", ".wbp-cover", ".ws-rise", ".ws-chip", ".ws-book", ".ws-spread-right"]) {
+      expect(motionBlock).toContain(sel);
+    }
+  });
+
+  it("static states are the final ones: open cover, open spreads, selected-shape hint", () => {
+    // open book: the cover is turned outside the motion block
+    expect(outside).toMatch(/\.wbp\[data-open\] \.wbp-cover\s*{\s*transform: rotateY\(-180deg\)/);
+    // style spreads: closed (translate) only with motion
+    expect(outside).not.toMatch(/\.ws-spread-(left|right)\s*{[^}]*translateX/);
+    expect(motionBlock).toMatch(/\.ws-spread-left\s*{\s*transform: translateX\(50%\)/);
+    expect(outside).toMatch(/\.wz-choice:has\(input:checked\) \.ws-shape-fit\s*{\s*opacity: 1/);
+  });
+
+  it("is not in globals.css", () => {
+    const globals = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
+    expect(globals).not.toContain("wbp-");
+    expect(globals).not.toContain(".ws-");
   });
 });

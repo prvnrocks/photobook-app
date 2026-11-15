@@ -1,0 +1,364 @@
+/* Wizard upload stage motion (M20 T5, D-072). Owned by T5 — not globals.css. Imported by UploadStage.
+   Plain CSS (no Tailwind directives). Outside the no-preference block everything is a static final
+   state; every `animation` / `transition` lives inside (prefers-reduced-motion: no-preference).
+   Only transform and opacity animate (plus the ring's stroke-dashoffset, a paint-only property). */
+
+/* ---- Shared book pieces --------------------------------------------------------------------------- */
+.up-cover {
+  border-radius: 7% / 10%;
+  background: linear-gradient(135deg, #1f5443 0%, #0e3b2e 55%, #0b3025 100%);
+  box-shadow: 0 10px 24px -12px rgb(14 59 46 / 0.55), inset 0 0 0 2px rgb(201 162 39 / 0.35);
+}
+.up-page,
+.up-pick-page {
+  background: #fbf7ef;
+  box-shadow: inset 0 0 0 1px rgb(14 59 46 / 0.06);
+}
+.up-page-l,
+.up-pick-page-l {
+  border-radius: 6% 2% 2% 6% / 8% 3% 3% 8%;
+  transform-origin: right center;
+  background: linear-gradient(90deg, #fbf7ef 80%, #efe7d6 100%);
+}
+.up-page-r,
+.up-pick-page-r {
+  border-radius: 2% 6% 6% 2% / 3% 8% 8% 3%;
+  transform-origin: left center;
+  background: linear-gradient(270deg, #fbf7ef 80%, #efe7d6 100%);
+}
+.up-spine {
+  border-radius: 9999px;
+  background: linear-gradient(90deg, rgb(14 59 46 / 0), rgb(14 59 46 / 0.22), rgb(14 59 46 / 0));
+}
+.up-glow {
+  background: radial-gradient(closest-side, rgb(201 162 39 / 0.32), rgb(127 214 166 / 0.18) 55%, rgb(127 214 166 / 0) 100%);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* ---- Pick art: drag-over opens the book wider ------------------------------------------------------ */
+.up-pick-book {
+  transform-origin: center 60%;
+}
+[data-drag="over"] .up-pick-book {
+  transform: scale(1.05);
+}
+[data-drag="over"] .up-pick-page-l {
+  transform: translateX(-3%) rotate(-3deg);
+}
+[data-drag="over"] .up-pick-page-r {
+  transform: translateX(3%) rotate(3deg);
+}
+[data-drag="over"] .up-pick-book .up-glow {
+  opacity: 1;
+}
+
+/* ---- Stage: incoming card, thumbs, pile, closed book, burst --------------------------------------- */
+.up-incoming {
+  z-index: 3;
+}
+.up-incoming-card {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border: 3px solid #fff;
+  border-radius: 6px;
+  background: #e8ddc6;
+  box-shadow: 0 6px 14px -6px rgb(14 59 46 / 0.4);
+}
+.up-incoming-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, rgb(255 255 255 / 0) 30%, rgb(255 255 255 / 0.75) 50%, rgb(255 255 255 / 0) 70%);
+  transform: translateX(-100%);
+}
+.up-stage:not([data-state="running"]) .up-incoming {
+  opacity: 0;
+}
+
+.up-thumbs {
+  z-index: 2;
+}
+.up-thumb {
+  transform: rotate(var(--r, 0deg));
+}
+.up-thumb-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border: 3px solid #fff;
+  border-radius: 4px;
+  background: #e8ddc6;
+  box-shadow: 0 4px 10px -4px rgb(14 59 46 / 0.45);
+}
+/* Sparkle: a four-point star at the top corner (only visible while animating). */
+.up-thumb::after {
+  content: "";
+  position: absolute;
+  top: -14%;
+  right: -12%;
+  width: 34%;
+  aspect-ratio: 1;
+  background: #e3c766;
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.up-pile {
+  z-index: 4;
+  right: 3%;
+  width: 13%;
+  aspect-ratio: 4 / 3;
+}
+.up-pile-card {
+  position: absolute;
+  inset: 0;
+  border: 2px solid #fff;
+  border-radius: 4px;
+  background: #e8ddc6;
+  box-shadow: 0 3px 8px -4px rgb(14 59 46 / 0.4);
+}
+.up-pile-card:first-child {
+  transform: rotate(-8deg) translate(-6%, 4%);
+}
+.up-pile-card:nth-child(2) {
+  transform: rotate(5deg);
+}
+.up-pile-badge {
+  position: absolute;
+  right: -14%;
+  bottom: -22%;
+  display: flex;
+  min-width: 2.25rem;
+  height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.4rem;
+  border: 2px solid #fff;
+  border-radius: 9999px;
+  background: #0e3b2e;
+  color: #faf6ee;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.up-closed {
+  border-radius: 4% 8% 8% 4% / 3% 5% 5% 3%;
+  background: linear-gradient(135deg, #1f5443 0%, #0e3b2e 60%, #0b3025 100%);
+  box-shadow: 0 14px 28px -14px rgb(14 59 46 / 0.6), inset 4px 0 0 rgb(0 0 0 / 0.15);
+  opacity: 0;
+  transform: scaleX(0.2);
+}
+.up-closed-frame {
+  border: 1.5px solid rgb(201 162 39 / 0.75);
+  border-radius: 4px;
+}
+.up-closed-check {
+  background: #c9a227;
+  color: #1b1b1d;
+  transform: translate(-50%, -50%);
+}
+.up-stage[data-state="settled"] .up-closed {
+  opacity: 1;
+  transform: none;
+}
+.up-stage[data-state="settled"] .up-page,
+.up-stage[data-state="settled"] .up-cover,
+.up-stage[data-state="settled"] .up-thumbs,
+.up-stage[data-state="settled"] .up-spine {
+  opacity: 0;
+}
+.up-stage[data-state="settled"] .up-page-l,
+.up-stage[data-state="settled"] .up-page-r {
+  transform: scaleX(0);
+}
+.up-stage[data-state="settled"] .up-cover {
+  transform: scaleX(0.5);
+}
+
+.up-burst {
+  z-index: 5;
+  width: 0;
+  height: 0;
+}
+.up-dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 9999px;
+  opacity: 0;
+}
+
+/* ---- Motion (only when the user hasn't asked for less) -------------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+  .up-glow {
+    animation: up-breathe 3.6s ease-in-out infinite alternate;
+  }
+  .up-stage[data-state="settled"] .up-glow {
+    animation: none;
+  }
+  .up-pick-book,
+  .up-pick-page-l,
+  .up-pick-page-r {
+    transition: transform 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .up-pick-book .up-glow {
+    transition: opacity 300ms ease;
+  }
+  .up-pick-cta {
+    transition: transform 200ms ease;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .group:hover .up-pick-cta {
+      transform: translateY(-2px);
+    }
+  }
+
+  .up-incoming {
+    transition: opacity 250ms ease;
+  }
+  .up-stage[data-state="running"] .up-incoming-card {
+    animation: up-bob 1.6s ease-in-out infinite alternate;
+  }
+  .up-stage[data-state="running"] .up-incoming-card::after {
+    animation: up-shimmer 1.3s ease-in-out infinite;
+  }
+
+  .up-thumb {
+    animation: up-fly 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .up-thumb::after {
+    animation: up-sparkle 620ms ease-out 460ms both;
+  }
+  .up-pile-badge {
+    animation: up-bump 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .up-ring-fill {
+    transition: stroke-dashoffset 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .up-page,
+  .up-cover,
+  .up-spine,
+  .up-thumbs {
+    transition:
+      transform 480ms cubic-bezier(0.65, 0, 0.35, 1),
+      opacity 360ms ease 120ms;
+  }
+  .up-closed {
+    transition:
+      transform 520ms cubic-bezier(0.34, 1.4, 0.64, 1) 260ms,
+      opacity 240ms ease 260ms;
+  }
+  .up-stage[data-state="settled"] .up-closed-check {
+    animation: up-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) 640ms both;
+  }
+  .up-dot {
+    animation: up-burst 900ms cubic-bezier(0.22, 1, 0.36, 1) calc(520ms + var(--d, 0ms)) both;
+  }
+  .up-next {
+    animation: up-fade-in 400ms ease 900ms both;
+  }
+}
+
+@keyframes up-breathe {
+  from {
+    opacity: 0.45;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 0.9;
+    transform: scale(1.04);
+  }
+}
+@keyframes up-bob {
+  from {
+    transform: translateY(-6%);
+  }
+  to {
+    transform: translateY(6%);
+  }
+}
+@keyframes up-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes up-fly {
+  0% {
+    opacity: 0;
+    transform: translate(var(--fx, 0), var(--fy, -120%)) rotate(0deg) scale(1.3);
+  }
+  18% {
+    opacity: 1;
+  }
+  72% {
+    transform: translate(0, 0) rotate(calc(var(--r, 0deg) * 1.6)) scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(var(--r, 0deg));
+  }
+}
+@keyframes up-sparkle {
+  0% {
+    opacity: 0;
+    transform: scale(0.2) rotate(0deg);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(1.15) rotate(45deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.5) rotate(90deg);
+  }
+}
+@keyframes up-bump {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes up-pop {
+  from {
+    transform: translate(-50%, -50%) scale(0);
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+@keyframes up-burst {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))) scale(1);
+  }
+}
+@keyframes up-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

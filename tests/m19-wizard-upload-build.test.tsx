@@ -15,13 +15,16 @@ vi.mock("next/navigation", async (orig) => ({
 
 const { isWizardUpload, isWizardBuild, wizardBackHref } = await import("@/lib/books/wizard-routes");
 const { wizardChecklist } = await import("@/lib/runs/build-checklist");
-const { createThumbStrip } = await import("@/lib/upload/thumb-strip");
+const { createThumbStrip, THUMB_STRIP_MAX } = await import("@/lib/upload/thumb-strip");
 const { fanPhotoUrls } = await import("@/lib/runs/draft-preview");
 const { devPreviewDoc } = await import("@/lib/book/dev-preview");
 const { docOrigin } = await import("@/lib/book/replaceable");
 const { Uploader, WIZARD_KEEP_OPEN_COPY } = await import("@/components/upload/Uploader");
 const { UploadProgress, uploadProgressText } = await import("@/components/upload/UploadProgress");
 const { UploadThumbs } = await import("@/components/upload/UploadThumbs");
+const { UploadStage, UploadPickArt, UPLOAD_SORTING_NEXT_COPY } = await import("@/components/upload/UploadStage");
+const stageModel = await import("@/components/upload/upload-stage-model");
+const { STAGE_MAX_THUMBS } = stageModel;
 const { BuildProgress, WIZARD_BUILD_KEEP_OPEN_COPY } = await import("@/components/review/BuildProgress");
 const { PhotoFan } = await import("@/components/review/PhotoFan");
 type UploaderProps = import("@/components/upload/Uploader").UploaderProps;
@@ -131,7 +134,7 @@ describe("UploadProgress wizard card", () => {
     type: "progress", done: 12, total: 20, uploaded: 12, failed: 0, skipped: 0, retried: 0, ...over,
   });
 
-  it("'12 of 20 uploaded' + bar + thumbs + Pause, same testids", () => {
+  it("'12 of 20 uploaded' + ring + thumbs + Pause, same testids (M20: rendered as the upload stage)", () => {
     const html = renderToStaticMarkup(
       <UploadProgress progress={p()} paused={false} onTogglePause={() => {}} variant="wizard" thumbs={<UploadThumbs items={[]} />} />,
     );
@@ -150,12 +153,154 @@ describe("UploadProgress wizard card", () => {
     expect(uploadProgressText(p(), true, "default")).toBe("Paused · 12 of 20 done");
   });
 
-  it("thumbs: three stable slots, decorative, object URLs as img src", () => {
-    const html = renderToStaticMarkup(<UploadThumbs items={[{ key: 4, url: "blob:a" }]} />);
-    expect(html).toMatch(/<ul aria-hidden="true"/);
-    expect(html.match(/<li /g)).toHaveLength(3);
-    expect(html).toContain('src="blob:a"');
-    expect(html).toContain('alt=""');
+  it("thumbs (M20 T5): at most 12 on the book, decorative, object URLs as img src, stable slots", () => {
+    const one = renderToStaticMarkup(<UploadThumbs items={[{ key: 4, url: "blob:a" }]} />);
+    expect(one).toMatch(/<ul aria-hidden="true"/);
+    expect(one.match(/<li /g)).toHaveLength(1);
+    expect(one).toContain('src="blob:a"');
+    expect(one).toContain('alt=""');
+    const many = Array.from({ length: 15 }, (_, i) => ({ key: i, url: `blob:${i}` }));
+    const html = renderToStaticMarkup(<UploadThumbs items={many} />);
+    expect(html.match(/data-testid="upload-thumb"/g)).toHaveLength(STAGE_MAX_THUMBS);
+    expect(html).toContain('data-count="12"');
+    expect(html).not.toContain('src="blob:2"'); // only the newest 12
+    expect(html).toContain('src="blob:14"');
+    for (const m of html.match(/<li [^>]*>/g) ?? []) expect(m).toMatch(/style="left:[\d.]+%;top:[\d.]+%;width:17%/);
+  });
+});
+
+// --- M20 T5: the upload stage ---------------------------------------------------------------------
+
+describe("UploadStage (M20 T5)", () => {
+  const p = (over: Partial<QueueProgress> = {}): QueueProgress => ({
+    type: "progress", done: 12, total: 20, uploaded: 12, failed: 0, skipped: 0, retried: 0, ...over,
+  });
+  const stage = (over: Partial<QueueProgress> = {}, extra: { paused?: boolean; settled?: boolean } = {}) =>
+    renderToStaticMarkup(
+      <UploadStage
+        progress={p(over)}
+        paused={extra.paused ?? false}
+        onTogglePause={() => {}}
+        headline="now"
+        statusText="throttled"
+        settled={extra.settled}
+        thumbs={<UploadThumbs items={[]} />}
+      />,
+    );
+
+  it("running: ring with count + %, incoming card, visible headline, sr-only throttled live region", () => {
+    const html = stage();
+    expect(html).toMatch(/data-testid="upload-running"[^>]*data-variant="wizard"[^>]*data-state="running"/);
+    expect(html).toMatch(/role="progressbar"[^>]*aria-valuemax="20"[^>]*aria-valuenow="12"/);
+    expect(html).toMatch(/data-testid="upload-ring-count">12 of 20</);
+    expect(html).toMatch(/data-testid="upload-percent">60%</);
+    expect(html).toContain('data-testid="upload-incoming"');
+    // The visible headline follows every tick; only the throttled copy is announced.
+    expect(html).toMatch(/aria-hidden="true" data-testid="upload-progress">now</);
+    expect(html).toMatch(/class="sr-only" role="status" aria-live="polite" data-testid="upload-progress-live">throttled</);
+    expect(html.match(/aria-live=/g)).toHaveLength(1);
+    expect(html).toMatch(/data-testid="upload-pause"[^>]*>Pause</);
+    expect(html).not.toContain("upload-pile");
+    expect(html).not.toContain("upload-burst");
+    expect(html).not.toContain("upload-stalled"); // only after STALL_MS without progress
+  });
+
+  it("UploadProgress passes the unthrottled headline and the throttled live text", () => {
+    const html = renderToStaticMarkup(<UploadProgress progress={p()} paused={false} onTogglePause={() => {}} variant="wizard" />);
+    expect(html).toMatch(/data-testid="upload-progress">12 of 20 uploaded</);
+    expect(html).toMatch(/data-testid="upload-progress-live">12 of 20 uploaded</);
+    expect(src("src/components/upload/UploadProgress.tsx")).toContain("useThrottledValue(text, paused ? 0 : ANNOUNCE_EVERY_MS)");
+  });
+
+  it("older photos collapse into a +N pile beyond 12", () => {
+    expect(stage({ done: 15, uploaded: 15 })).toMatch(/data-testid="upload-pile"[\s\S]*>\+3</);
+    expect(stage({ done: 12, uploaded: 12 })).not.toContain("upload-pile");
+  });
+
+  it("paused: Resume, no incoming shimmer state; skipped/failed shown calmly", () => {
+    const html = stage({ skipped: 2, failed: 1 }, { paused: true });
+    expect(html).toContain('data-state="paused"');
+    expect(html).toMatch(/data-testid="upload-pause"[^>]*>Resume</);
+    expect(html).toMatch(/<p class="text-sm text-muted-foreground" data-testid="upload-counts">2 skipped · 1 failed</);
+  });
+
+  it("settled: closed book, burst, 'Sorting next…', no Pause", () => {
+    const html = stage({ done: 20, uploaded: 19, failed: 1 });
+    expect(html).toContain('data-state="settled"');
+    expect(html).toContain('data-testid="upload-settled"');
+    expect(html).toContain('data-testid="upload-burst"');
+    expect(html.match(/class="up-dot"/g)).toHaveLength(18);
+    expect(html).toContain(`data-testid="upload-sorting-next">${UPLOAD_SORTING_NEXT_COPY}<`);
+    expect(html).not.toContain("upload-pause");
+    // nothing uploaded → calm, no celebration
+    const none = stage({ done: 3, total: 3, uploaded: 0, skipped: 3 });
+    expect(none).toContain('data-state="settled"');
+    expect(none).not.toContain("upload-burst");
+    expect(none).toContain("No new photos were added.");
+    // forced by the caller (e.g. while finalizing) / never settled with nothing picked
+    expect(stage({}, { settled: true })).toContain('data-state="settled"');
+    expect(stage({ done: 0, total: 0, uploaded: 0 })).toContain('data-state="running"');
+  });
+
+  it("model: stable slots, pile, percent, slot geometry inside the book", () => {
+    const { assignSlots, pileCount, stagePercent, stageState, THUMB_SLOTS, THUMB_W, THUMB_H } = stageModel;
+    expect(THUMB_SLOTS).toHaveLength(STAGE_MAX_THUMBS);
+    for (const s of THUMB_SLOTS) {
+      expect(s.left).toBeGreaterThanOrEqual(3);
+      expect(s.left + THUMB_W).toBeLessThanOrEqual(97);
+      expect(s.top).toBeGreaterThanOrEqual(26); // below the incoming card, on the book (y ≥ 24 %)
+      expect(s.top + THUMB_H).toBeLessThanOrEqual(97);
+    }
+    const a = assignSlots(new Map(), [0, 1, 2]);
+    expect([...a]).toEqual([[0, 0], [1, 1], [2, 2]]);
+    const full = assignSlots(new Map(), Array.from({ length: 12 }, (_, k) => k));
+    const next = assignSlots(full, [...Array.from({ length: 11 }, (_, k) => k + 1), 20]);
+    expect(next.get(20)).toBe(0); // newest takes the evicted photo's slot
+    for (let k = 1; k < 12; k++) expect(next.get(k)).toBe(k); // nobody moves
+    expect(new Set(next.values()).size).toBe(12);
+    expect(assignSlots(new Map(), Array.from({ length: 20 }, (_, k) => k)).size).toBe(12);
+    expect(pileCount(15)).toBe(3);
+    expect(pileCount(4)).toBe(0);
+    expect(stagePercent({ done: 1, total: 3, uploaded: 1 })).toBe(33);
+    expect(stagePercent({ done: 0, total: 0, uploaded: 0 })).toBe(0);
+    expect(stageState({ done: 2, total: 2, uploaded: 2 }, true)).toBe("settled");
+    expect(stageState({ done: 1, total: 2, uploaded: 1 }, true)).toBe("paused");
+  });
+
+  it("pick art: book + dashed drop page + big 'Choose photos'; reacts to the button's data-drag", () => {
+    const html = renderToStaticMarkup(<UploadPickArt />);
+    expect(html).toContain('data-testid="upload-pick-art"');
+    expect(html).toContain("border-dashed");
+    expect(html).toContain("Drop photos here");
+    expect(html).toMatch(/up-pick-cta[^"]*min-h-12[^"]*"/);
+    expect(html).toMatch(/Choose photos/);
+    expect(src("src/components/upload/upload-motion.css")).toContain('[data-drag="over"] .up-pick-book');
+    expect(stageModel.UPLOAD_PICK_WIZARD_CLASS).toMatch(/(^| )group( |$)/);
+    expect(stageModel.UPLOAD_PICK_WIZARD_CLASS).toContain("min-h-56");
+  });
+
+  it("motion: every animation/transition sits under prefers-reduced-motion: no-preference (static otherwise)", () => {
+    const css = src("src/components/upload/upload-motion.css").replace(/\/\*[\s\S]*?\*\//g, "");
+    const open = css.indexOf("@media (prefers-reduced-motion: no-preference)");
+    expect(open).toBeGreaterThan(-1);
+    let depth = 0;
+    let end = -1;
+    for (let i = css.indexOf("{", open); i < css.length; i++) {
+      if (css[i] === "{") depth++;
+      else if (css[i] === "}" && --depth === 0) {
+        end = i;
+        break;
+      }
+    }
+    const outside = css.slice(0, open) + css.slice(end + 1);
+    const inside = css.slice(open, end);
+    expect(outside).not.toMatch(/(^|[\s;{])(animation|transition)(-[a-z-]+)?\s*:/);
+    expect(inside).toMatch(/animation:\s*up-fly/);
+    expect(inside).toMatch(/animation:\s*up-burst/);
+    // compositor-friendly: no animated layout properties
+    for (const kf of css.match(/@keyframes[^{]+\{[\s\S]*?\n\}/g) ?? []) {
+      expect(kf).not.toMatch(/\b(width|height|top|left|right|bottom|margin|padding)\s*:/);
+    }
   });
 });
 
@@ -179,17 +324,18 @@ describe("thumb strip (object URLs)", () => {
   };
   const files = (k: number) => Array.from({ length: k }, () => new Blob(["x"]));
 
-  it("keeps the last 3 uploaded; revokes each URL as it leaves the strip", () => {
+  it("keeps the last 12 uploaded (M20 stage); revokes each URL as it leaves the strip", () => {
     const { strip, live, revoked } = setup();
-    strip.track(0, files(5));
-    strip.uploaded(0);
-    strip.uploaded(1);
-    strip.uploaded(2);
-    expect(live.size).toBe(3);
+    expect(THUMB_STRIP_MAX).toBe(STAGE_MAX_THUMBS);
+    strip.track(0, files(14));
+    for (let k = 0; k < 12; k++) strip.uploaded(k);
+    expect(live.size).toBe(12);
     expect(revoked).toEqual([]);
-    expect(strip.uploaded(3).map((t) => t.key)).toEqual([1, 2, 3]);
+    expect(strip.uploaded(12).map((t) => t.key)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     expect(revoked).toEqual(["blob:0"]);
-    expect(live.size).toBe(3);
+    strip.uploaded(13);
+    expect(revoked).toEqual(["blob:0", "blob:1"]);
+    expect(live.size).toBe(12);
   });
 
   it("failed / skipped / unknown keys never get a URL; duplicates are ignored", () => {
