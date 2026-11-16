@@ -248,7 +248,7 @@ Plan: `.agentos/runs/m13.md`, D-070.
 - [x] Restyle-only /b/[slug] redesign (D-075): slim emerald band (title, chapter, Contents/Share/Fullscreen), cream stage with paint-only shadow pool, nav pill, card sheets, cream free end card with gold Create yours, leather + cream-card password/expired/unavailable/not-found screens; Flipbook/BookPage/watermark/OG untouched; /b first load +2.3 kB. Report: `.agentos/runs/m23.md`. Deployed 2026-11-16.
 
 ## Milestone 24 — Settings in the emerald style (2026-11-16)
-- [x] Restyle-only /settings (D-076): emerald band with email chip, desktop section nav, account / reminders / AI memory cards, quiet danger zone that arms on DELETE; reminders switch no longer sticks after a save; first load −15 kB. Report: `.agentos/runs/m24.md`.
+- [x] Restyle-only /settings (D-076): emerald band with email chip, desktop section nav, account / reminders / AI memory cards, quiet danger zone that arms on DELETE; reminders switch no longer sticks after a save; first load −15 kB. Report: `.agentos/runs/m24.md`. Deployed 2026-11-16.
 
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
