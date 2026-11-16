@@ -221,5 +221,5 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 ## 2026-11-16 — Milestone 24 (Settings in the emerald style) — done + deployed
 - Restyle-only settings (D-076); reminders stuck-switch bug fixed; tested live; reviewer APPROVED; /settings −15 kB.
 
-## 2026-11-16 — Milestone 25 (Sign-in in the emerald style) — done, awaiting deploy OK
+## 2026-11-16 — Milestone 25 (Sign-in in the emerald style) — done + deployed
 - Restyle-only login (D-077); pre-existing 8-digit OTP bug fixed (code sign-in never worked); tested live; reviewer APPROVED; /login −15 kB.
