@@ -227,5 +227,5 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 ## 2026-11-16 — Milestone 26 (Upgrade screens in the emerald style) — done + deployed
 - Restyle-only upgrade success/cancel screens (D-078); payments e2e green; reviewer APPROVED. User to set Stripe branding (#0E3B2E brand + accent, pill buttons).
 
-## 2026-11-16 — Milestone 27 (Realistic open-book look) — done, awaiting deploy OK
+## 2026-11-16 — Milestone 27 (Realistic open-book look) — done + deployed
 - Viewer book realism per user reference; fold seam fixed; tested prod build; reviewer APPROVED.
