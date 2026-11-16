@@ -62,7 +62,7 @@ export default async function SettingsPage() {
           email={email}
           back={
             <Link href="/dashboard" className={SETTINGS_BAND_BACK}>
-              <ChevronLeft className="size-4 shrink-0" aria-hidden="true" />
+              <ChevronLeft className="size-4 shrink-0 rtl:rotate-180" aria-hidden="true" />
               My books
             </Link>
           }

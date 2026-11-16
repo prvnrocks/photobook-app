@@ -6,7 +6,7 @@
 // plain strings picked per state (no cn in this first-load island).
 
 import { Bell } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { setEmailRemindersAction } from "@/app/settings/actions";
 import { REMINDERS_OFF_NOTICE } from "@/lib/cleanup/rules";
 import {
@@ -53,30 +53,35 @@ export function EmailRemindersToggleView({
     tone: "ok" | "error";
     text: string;
   } | null>(null);
-  const [pending, startTransition] = useTransition();
+  // Local busy flag, not useTransition: the action's revalidatePath("/settings") re-renders a route
+  // with loading.tsx, and a transition's pending can stay true until reload (refresh-hang lesson) —
+  // that left the switch disabled after one tap (M24 test). Busy ends when the action answers.
+  const [pending, setPending] = useState(false);
 
-  const toggle = () => {
+  const toggle = async () => {
+    if (pending) return;
     const next = !on;
     setOn(next);
     setMessage(null);
-    startTransition(async () => {
-      let result: SetEmailRemindersResult | null = null;
-      try {
-        result = await save(next);
-      } catch {
-        result = null;
-      }
-      if (result?.ok) {
-        setOn(result.on);
-        setMessage({ tone: "ok", text: ACCOUNT_COPY.remindersSaved });
-      } else {
-        setOn(!next);
-        setMessage({
-          tone: "error",
-          text: remindersErrorCopy(result && !result.ok ? result.error : null),
-        });
-      }
-    });
+    setPending(true);
+    let result: SetEmailRemindersResult | null = null;
+    try {
+      result = await save(next);
+    } catch {
+      result = null;
+    } finally {
+      setPending(false);
+    }
+    if (result?.ok) {
+      setOn(result.on);
+      setMessage({ tone: "ok", text: ACCOUNT_COPY.remindersSaved });
+    } else {
+      setOn(!next);
+      setMessage({
+        tone: "error",
+        text: remindersErrorCopy(result && !result.ok ? result.error : null),
+      });
+    }
   };
 
   return (
@@ -135,7 +140,7 @@ export function EmailRemindersToggleView({
           {ACCOUNT_COPY.remindersLoadError}
         </Notice>
       ) : null}
-      {/* Empty live region: cancel the card gap so no blank row shows under the text. */}
+      {/* Empty live region: cancel SETTINGS_CARD's gap-4 so no blank row shows (keep -mt-4 in sync with that gap). */}
       <div aria-live="polite" className="empty:-mt-4">
         {message ? (
           <p
