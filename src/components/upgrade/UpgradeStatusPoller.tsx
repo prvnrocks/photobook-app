@@ -230,7 +230,7 @@ export function UpgradeStatusView({
         <Seal tone="paid" icon={Check} />
         <div className="flex flex-col items-center gap-2">
           <h1 className={UP_HEADING}>Your book is upgraded</h1>
-          <p className={UP_BODY}>Thank you! Here&apos;s what you get:</p>
+          <p role="status" className={UP_BODY}>Thank you! Here&apos;s what you get:</p>
         </div>
         <ul className={UP_BENEFITS} data-testid="upgrade-benefits">
           {[

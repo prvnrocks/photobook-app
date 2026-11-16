@@ -6,7 +6,7 @@
 // the cancelled notice's looks live in upgrade-button-classes.ts (they ship on other routes).
 //
 // Contrast (tests/m26-upgrade.test.tsx recomputes every pair in UPGRADE_CONTRAST):
-//   card #fffcf6: heading emerald #0e3b2e 12.2, body #4a4740 9.0, eyebrow gold #7a5f0e 5.9.
+//   card #fffcf6: heading emerald #0e3b2e 12.2, body #4a4740 9.0.
 //   benefit card #faf6ee: ink #1b1b1d 16.1; check #f2e8d8 on emerald #0e3b2e 10.4 (graphic).
 //   gold pill: ink #1b1b1d on the foil's darkest stop #bf9a23 6.44.
 //   emerald pills: white on #0e3b2e 12.5; emerald on white 12.5.
@@ -18,7 +18,6 @@ export const UP_CARD =
   "relative isolate flex w-full min-w-0 flex-col items-center gap-4 overflow-hidden rounded-[1.75rem] border border-[#e9dfca] bg-[#fffcf6] px-5 pt-7 pb-6 text-center shadow-[0_18px_40px_-28px_rgb(14_59_46/0.45)] sm:px-8 sm:pt-9 sm:pb-8";
 
 /** Small caps line above the heading (never user text): antique gold on the card. */
-export const UP_EYEBROW = "text-[0.7rem] font-semibold tracking-[0.24em] text-[#7a5f0e] uppercase";
 
 /** The state heading (h1, serif emerald). */
 export const UP_HEADING = "font-display text-[1.6rem] leading-tight font-semibold text-[#0e3b2e] sm:text-[1.9rem]";
@@ -79,7 +78,6 @@ export const UP_REF =
 export const UPGRADE_CONTRAST: ReadonlyArray<readonly [string, string, string, number]> = [
   ["heading", "#0e3b2e", "#fffcf6", 4.5],
   ["body", "#4a4740", "#fffcf6", 4.5],
-  ["eyebrow", "#7a5f0e", "#fffcf6", 4.5],
   ["benefit text", "#1b1b1d", "#faf6ee", 4.5],
   ["benefit check (graphic)", "#f2e8d8", "#0e3b2e", 3],
   ["gold pill ink", "#1b1b1d", "#bf9a23", 4.5],
