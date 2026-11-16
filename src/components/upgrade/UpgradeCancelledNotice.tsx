@@ -6,6 +6,7 @@
 // removed with window.history.replaceState (Next syncs it with useSearchParams) rather than
 // router.replace: no server round trip, so the editor page's loader doesn't run again and its
 // client state is untouched. Render inside <Suspense> (useSearchParams).
+// M26 (D-078): soft amber-cream card in the share page's card shape (upgrade-button-classes.ts).
 
 import { TriangleAlert, X } from "lucide-react";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -16,6 +17,7 @@ import {
   UPGRADE_CANCELLED_PARAM,
   UPGRADE_CANCELLED_VALUE,
 } from "@/lib/upgrade/ui";
+import { UPGRADE_CANCELLED_BOX, UPGRADE_CANCELLED_DISMISS, UPGRADE_CANCELLED_ICON } from "./upgrade-button-classes";
 
 export function UpgradeCancelledNotice({ floating = false, className }: { floating?: boolean; className?: string }) {
   const pathname = usePathname();
@@ -35,15 +37,17 @@ export function UpgradeCancelledNotice({ floating = false, className }: { floati
   const box = (
     <div
       role="status"
-      className={`type-small flex w-full min-w-0 items-center gap-3 rounded-2xl border border-warning-border bg-warning-soft py-1 ps-4 pe-1 text-foreground shadow-[0_12px_28px_-22px_rgb(14_59_46/0.5)]${className ? ` ${className}` : ""}`}
+      className={`${UPGRADE_CANCELLED_BOX}${className ? ` ${className}` : ""}`}
       data-testid="upgrade-cancelled"
     >
-      <TriangleAlert className="size-5 shrink-0 text-warning" aria-hidden="true" />
-      <p className="min-w-0 flex-1 py-2">{UPGRADE_CANCELLED_COPY}</p>
+      <span className={UPGRADE_CANCELLED_ICON} aria-hidden="true">
+        <TriangleAlert className="size-4" />
+      </span>
+      <p className="min-w-0 flex-1 py-2 font-medium">{UPGRADE_CANCELLED_COPY}</p>
       <button
         type="button"
         onClick={() => setShow(false)}
-        className="flex size-11 shrink-0 items-center justify-center rounded-full text-foreground/80 outline-none hover:bg-warning-border/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        className={UPGRADE_CANCELLED_DISMISS}
         aria-label="Dismiss"
         data-testid="upgrade-cancelled-dismiss"
       >

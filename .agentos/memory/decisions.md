@@ -264,3 +264,7 @@ Decision: New book form offers Modern (default for every occasion via DEFAULT_ST
 ## D-077 — M25 login in the emerald style (2026-11-16)
 - Decision: restyle-only /login: leather background with cream card on phones; ≥lg split leather brand panel (wordmark, "Your memories, in print", floating home book cover) + cream card; gold email CTA, Google emerald outline. No auth/copy changes.
 - Why: user request 2026-11-16 ("redesign the login page in the same emerald style").
+
+## D-078 — M26 upgrade payment screens in the emerald style (2026-11-16)
+- Decision: restyle-only post-checkout screens (/books/[id]/upgrade/success all states + cancelled notice) with emerald band, cream cards, gold seal/celebration, one gold CTA; Stripe-hosted checkout styled via Stripe dashboard branding, not code. No pre-checkout page (no extra tap).
+- Why: user request 2026-11-16 ("redesign the upgrade payment page in the same emerald style").

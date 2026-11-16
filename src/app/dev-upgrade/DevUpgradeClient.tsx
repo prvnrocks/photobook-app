@@ -39,12 +39,12 @@ export function DevUpgradeClient({ state, flow }: { state: DevUpgradeState; flow
   );
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-4 px-gutter pb-10 pt-3">
+    <>
       {flow ? (
         <UpgradeStatusFlow bookId={BOOK_ID} initialPaid={false} liveSlug={SLUG} check={check} refresh={() => {}} />
       ) : (
         <UpgradeStatusView bookId={BOOK_ID} phase={PHASE[state]} liveSlug={state === "paid-live" ? SLUG : null} onRetry={() => {}} />
       )}
-    </main>
+    </>
   );
 }

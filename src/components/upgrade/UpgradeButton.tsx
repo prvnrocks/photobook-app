@@ -14,9 +14,9 @@ import { Gem, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { startUpgradeCheckout } from "@/app/books/[id]/upgrade/actions";
-import { BTN } from "@/components/app/button-classes";
 import { Notice } from "@/components/app/Notice";
 import { useRefreshTransition } from "@/components/app/use-refresh-transition";
+import { UPGRADE_BUTTON_OUTLINE, UPGRADE_BUTTON_PRIMARY } from "@/components/upgrade/upgrade-button-classes";
 import { track } from "@/lib/analytics/client";
 import type { StartUpgradeCheckoutResult, StartUpgradeErrorCode } from "@/lib/upgrade/types";
 import { PAYMENTS_UNAVAILABLE_HINT, runUpgradeCheckout, UPGRADE_BUTTON_LABEL } from "@/lib/upgrade/ui";
@@ -38,13 +38,14 @@ export type UpgradeButtonProps = {
   className?: string;
 };
 
-// Shared Button looks (M11, D-067): 44 px touch / 48 px cta, token colours, visible focus ring.
-// whitespace-normal: the label may wrap on narrow screens instead of overflowing. Precomputed (BTN):
-// this ships on /b and publish, which must not pull in cn/ui-button.
+// Default looks (M26, D-078): emerald pills — 48 px solid / 44 px outline, visible focus ring,
+// whitespace-normal so the label wraps on narrow screens. Plain strings (upgrade-button-classes.ts):
+// this ships on /b, publish and the editor, which must not pull in cn/ui-button. A caller's
+// className replaces these entirely (share PlanCard, viewer ExpiredBook, editor UpgradeSheet).
 const VARIANTS: Record<NonNullable<UpgradeButtonProps["variant"]>, string> = {
-  primary: BTN.ctaPrimaryWrap,
-  outline: BTN.touchOutlineWrap,
-  viewer: BTN.ctaPrimaryWrap,
+  primary: UPGRADE_BUTTON_PRIMARY,
+  outline: UPGRADE_BUTTON_OUTLINE,
+  viewer: UPGRADE_BUTTON_PRIMARY,
 };
 
 export function UpgradeButton(props: UpgradeButtonProps) {

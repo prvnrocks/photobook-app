@@ -218,7 +218,7 @@ describe("upgrade status view", () => {
   const view = (phase: UpgradePollPhase, liveSlug: string | null = null) =>
     renderToStaticMarkup(<UpgradeStatusView bookId={BOOK} phase={phase} liveSlug={liveSlug} onRetry={() => {}} />);
 
-  it("M11: every phase has one h1 with the exact heading, shared button looks (≥ 44 px, focus ring)", () => {
+  it("M11/M26: every phase has one h1 with the exact heading, pill buttons ≥ 44 px with a focus ring", () => {
     const heads: Array<[UpgradePollPhase, string]> = [
       ["polling", "Confirming payment…"],
       ["processing", "Your payment is processing…"],
@@ -234,7 +234,7 @@ describe("upgrade status view", () => {
       expect(html.match(/<h1/g)?.length, phase).toBe(1);
       expect(html, phase).toMatch(new RegExp(`<h1[^>]*>${title}</h1>`));
       for (const m of html.matchAll(/<(?:a|button)[^>]*class="([^"]*)"/g)) {
-        expect(m[1], phase).toMatch(/\bh-12\b/);
+        expect(m[1], phase).toMatch(/\bmin-h-1[12]\b/); // M26: emerald / gold pills, ≥ 44 px
         expect(m[1], phase).toContain("focus-visible:ring-2");
       }
     }
