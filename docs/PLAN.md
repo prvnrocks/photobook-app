@@ -254,7 +254,7 @@ Plan: `.agentos/runs/m13.md`, D-070.
 - [x] Restyle-only /login (D-077): leather background + cream card; desktop brand panel with floating book; gold email CTA, emerald Google outline; restyled code step; −15 kB first load. Also fixed: email code sign-in now accepts the 8-digit codes Supabase sends (6–10 digits, spaces/dashes OK). Report: `.agentos/runs/m25.md`. Deployed 2026-11-16.
 
 ## Milestone 26 — Upgrade payment screens in the emerald style (2026-11-16)
-- [x] Restyle-only post-checkout screens (D-078): emerald band with book title, confirming seal, paid celebration with benefit cards and gold Publish, calm timeout/failed cards, cancelled notice; payment logic untouched; Stripe-hosted checkout branding via dashboard (#0E3B2E). Report: `.agentos/runs/m26.md`.
+- [x] Restyle-only post-checkout screens (D-078): emerald band with book title, confirming seal, paid celebration with benefit cards and gold Publish, calm timeout/failed cards, cancelled notice; payment logic untouched; Stripe-hosted checkout branding via dashboard (#0E3B2E). Report: `.agentos/runs/m26.md`. Deployed 2026-11-16.
 
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)

@@ -224,5 +224,5 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 ## 2026-11-16 — Milestone 25 (Sign-in in the emerald style) — done + deployed
 - Restyle-only login (D-077); pre-existing 8-digit OTP bug fixed (code sign-in never worked); tested live; reviewer APPROVED; /login −15 kB.
 
-## 2026-11-16 — Milestone 26 (Upgrade screens in the emerald style) — done, awaiting deploy OK
+## 2026-11-16 — Milestone 26 (Upgrade screens in the emerald style) — done + deployed
 - Restyle-only upgrade success/cancel screens (D-078); payments e2e green; reviewer APPROVED. User to set Stripe branding (#0E3B2E brand + accent, pill buttons).
