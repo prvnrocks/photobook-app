@@ -247,7 +247,7 @@ const PAGE_PAIRS: { name: string; fg: string; bg: string; min: number }[] = [
   { name: "legal muted cream on leather lightest (phones)", fg: "#d7cdb9", bg: LEATHER_LIGHTEST, min: 4.5 },
   { name: "legal link cream on leather lightest (phones)", fg: "#f2e8d8", bg: LEATHER_LIGHTEST, min: 4.5 },
   { name: "panel eyebrow pale gold on leather lightest", fg: "#e3c766", bg: LEATHER_LIGHTEST, min: 4.5 },
-  { name: "panel headline foil lightest-stop min on leather lightest", fg: "#d9b84a", bg: LEATHER_LIGHTEST, min: 4.5 },
+  { name: "panel headline foil darkest stop on leather lightest", fg: "#d9b84a", bg: LEATHER_LIGHTEST, min: 4.5 },
   { name: "panel subcopy muted cream on leather lightest", fg: "#d7cdb9", bg: LEATHER_LIGHTEST, min: 4.5 },
   { name: "legal ink-soft on cream panel (≥lg)", fg: "#4a4740", bg: CREAM_PANEL, min: 4.5 },
   { name: "legal ink-soft on cream panel centre (≥lg)", fg: "#4a4740", bg: CREAM_PANEL_LIGHT, min: 4.5 },

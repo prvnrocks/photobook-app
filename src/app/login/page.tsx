@@ -47,7 +47,8 @@ const LEGAL_LINK =
 /** The ≥lg brand panel: the home hero's eyebrow, headline and subcopy beside a floating book. */
 function BrandPanel() {
   return (
-    <div
+    <aside
+      aria-label={`About ${APP_NAME}`}
       data-testid="login-brand"
       className="relative hidden min-h-dvh min-w-0 flex-col px-12 pt-6 pb-12 lg:flex xl:px-16"
     >
@@ -83,7 +84,7 @@ function BrandPanel() {
           />
         </div>
       </div>
-    </div>
+    </aside>
   );
 }
 
