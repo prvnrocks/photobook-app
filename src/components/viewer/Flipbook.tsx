@@ -74,6 +74,11 @@ export type FlipbookProps = {
   onFlip?: (index: number) => void;
   /** Fired when a book instance is ready (first load and after a phone/spread switch). */
   onReady?: (info: FlipbookReadyInfo) => void;
+  /**
+   * True while page-flip really turns a page (animated turn or a drag that started a turn), false
+   * once it rests again. Viewer paint only (the hardcover case switches at the turn's start).
+   */
+  onTurning?: (turning: boolean) => void;
   /** Imperative controls for viewer chrome (prev/next buttons, contents sheet). */
   apiRef?: Ref<FlipbookApi | null>;
   /** Appended as the last page (back cover, shown alone). Must not need hooks/state from the parent. */
@@ -316,15 +321,26 @@ type BookInstanceProps = {
   startPage: number;
   onInstance: (pf: PageFlipInstance | null) => void;
   onFlipIndex: (index: number) => void;
+  onTurning: (turning: boolean) => void;
 };
 
+/** page-flip's flip controller holds a calculation only while a turn is really under way. */
+function turnInProgress(pf: PageFlipInstance | null): boolean {
+  try {
+    const flip = (pf as unknown as { getFlipController?: () => { getCalculation?: () => unknown } | null } | null)?.getFlipController?.();
+    return !!flip?.getCalculation?.();
+  } catch {
+    return false;
+  }
+}
+
 /** One react-pageflip book. Remounted (keyed) when the page count or spread mode changes. */
-function BookInstance({ pageCount, spread, ratio, startPage, onInstance, onFlipIndex }: BookInstanceProps) {
+function BookInstance({ pageCount, spread, ratio, startPage, onInstance, onFlipIndex, onTurning }: BookInstanceProps) {
   const bookRef = useRef<{ pageFlip(): PageFlipInstance | undefined } | null>(null);
   const instRef = useRef<PageFlipInstance | null>(null);
-  const cbRef = useRef({ onInstance, onFlipIndex });
+  const cbRef = useRef({ onInstance, onFlipIndex, onTurning });
   useLayoutEffect(() => {
-    cbRef.current = { onInstance, onFlipIndex };
+    cbRef.current = { onInstance, onFlipIndex, onTurning };
   });
 
   // Settings are fixed for the life of this instance (react-pageflip reads them once).
@@ -371,7 +387,7 @@ function BookInstance({ pageCount, spread, ratio, startPage, onInstance, onFlipI
     [pageCount, spread],
   );
 
-  const handlers = useMemo<Pick<HTMLFlipBookProps, "onInit" | "onFlip">>(
+  const handlers = useMemo<Pick<HTMLFlipBookProps, "onInit" | "onFlip" | "onChangeState">>(
     () => ({
       onInit: () => {
         const pf = bookRef.current?.pageFlip() ?? null;
@@ -380,6 +396,18 @@ function BookInstance({ pageCount, spread, ratio, startPage, onInstance, onFlipI
       },
       onFlip: (e: FlipEvent) => {
         if (typeof e.data === "number") cbRef.current.onFlipIndex(e.data);
+      },
+      // "flipping" (click / keys / buttons) or "user_fold" (drag): a turn may start. page-flip sets
+      // user_fold before it knows whether the drag can turn anything (e.g. backwards on the cover),
+      // so check its calculation once the current call has run. "read" (and the corner hover
+      // "fold_corner") = resting. The "flip" event comes first in the same task, so the case never
+      // shows the old state in between.
+      onChangeState: (e: FlipEvent) => {
+        if (e.data === "flipping" || e.data === "user_fold") {
+          queueMicrotask(() => {
+            if (turnInProgress(instRef.current)) cbRef.current.onTurning(true);
+          });
+        } else cbRef.current.onTurning(false);
       },
     }),
     [],
@@ -418,6 +446,7 @@ export function Flipbook({
   currentPage,
   onFlip,
   onReady,
+  onTurning,
   apiRef,
   endPage,
   pageOverlay,
@@ -440,14 +469,15 @@ export function Flipbook({
   const [instance, setInstance] = useState<PageFlipInstance | null>(null);
   const currentRef = useRef(current);
 
-  const cbRef = useRef({ onFlip, onReady });
+  const cbRef = useRef({ onFlip, onReady, onTurning });
   useLayoutEffect(() => {
-    cbRef.current = { onFlip, onReady };
+    cbRef.current = { onFlip, onReady, onTurning };
   });
 
   const onInstance = useCallback(
     (pf: PageFlipInstance | null) => {
       setInstance(pf);
+      cbRef.current.onTurning?.(false);
       if (!pf || spread === null) return;
       cbRef.current.onReady?.({ pageCount: pf.getPageCount(), spread, layout });
       // A remount (spread switch) may start elsewhere (e.g. end card index moved): resync.
@@ -465,6 +495,7 @@ export function Flipbook({
     setCurrent(i);
     cbRef.current.onFlip?.(i);
   }, []);
+  const onTurningCb = useCallback((t: boolean) => cbRef.current.onTurning?.(t), []);
 
   // Our stage size changed (not necessarily a window resize): let page-flip re-measure.
   useLayoutEffect(() => {
@@ -538,6 +569,7 @@ export function Flipbook({
               startPage={startIndexFor(layout, current)}
               onInstance={onInstance}
               onFlipIndex={onFlipIndex}
+              onTurning={onTurningCb}
             />
           </PagesContext.Provider>
         </div>

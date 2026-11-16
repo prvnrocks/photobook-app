@@ -259,6 +259,9 @@ Plan: `.agentos/runs/m13.md`, D-070.
 ## Milestone 27 — Realistic open-book look in the viewer (2026-11-16)
 - [x] Viewer-only book realism from the user's flipbook-design.png: spine shading + highlight, page-block edges (follow progress), outer-edge hairlines, rolled silver corner curl (hides during turns, not on last page), deeper ground shadow; page content, print, size unchanged; /b +1.1 kB. Report: `.agentos/runs/m27.md`. Deployed 2026-11-16.
 
+## Milestone 28 — Hardcover look in the flipbook viewer (2026-11-17)
+- [x] Viewer-only hardcover (D-079): stiff front/back boards, cover overlap (squares), wrapped board edges in the cover colour (linen for light covers), hinge groove, cover colour to the board edge, page block on the boards, case follows the cover turn; size/content/print unchanged; /b +1.5 kB. Report: `.agentos/runs/m28.md`.
+
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
 - [ ] AI "story mode": a short paragraph per chapter (AI-picked backgrounds moved into M10c)

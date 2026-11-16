@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { FlipPage } from "@/components/viewer/FlipPage";
 import { fitBook, pageRatio } from "@/lib/viewer/fit";
-import { bookEdgesStyle, maxStackPx, paperFor } from "@/lib/viewer/paper";
+import { bookCase, maxStackPx, paperFor, STACK_LEAVES } from "@/lib/viewer/paper";
 import type { StageMetrics } from "@/lib/viewer/stage-pool";
 
 const root = process.cwd();
@@ -170,14 +170,14 @@ describe("paper CSS (viewer-motion.css)", () => {
   });
 });
 
-describe("bookEdgesStyle: page-block edges beside the visible book", () => {
+describe("bookCase(…).edges: page-block edges beside the visible book", () => {
   const s = stage(1280, 657, 16);
   const box = fitBook({ width: 1248, height: 625 }, true, PORTRAIT)!;
   const bookLeft = 16 + (1248 - box.width) / 2;
   const max = maxStackPx(box.pageWidth);
 
   it("cover alone: the closed book's fore-edge right of the cover (M28: past its wrapped edge), no stack on the left", () => {
-    const e = bookEdgesStyle(s, true, PORTRAIT, [0], 14)!;
+    const e = bookCase(s, true, PORTRAIT, [0], 14)!.edges!;
     expect(e.left).toBeGreaterThan(bookLeft + 2 * box.pageWidth); // past the cover's board edge
     expect(e.left).toBeLessThanOrEqual(bookLeft + 2 * box.pageWidth + 8);
     expect(e.width).toBe(max);
@@ -187,18 +187,18 @@ describe("bookEdgesStyle: page-block edges beside the visible book", () => {
   });
 
   it("middle spread: both stacks, thickness follows progress, outside the book box", () => {
-    const e = bookEdgesStyle(s, true, PORTRAIT, [3, 4], 14)!;
+    const e = bookCase(s, true, PORTRAIT, [3, 4], 14)!.edges!;
     const tL = bookLeft - e.left;
     const tR = e.left + e.width - (bookLeft + box.width);
     expect(tL).toBeGreaterThanOrEqual(2);
     expect(tR).toBeGreaterThan(tL);
     expect(tR).toBeLessThanOrEqual(max);
-    expect(e.background).toContain(`repeating-linear-gradient(to left,#fdfcf9 0 2px,#cfc8ba 2px 3px) 0 0/${tL}px 100% no-repeat`);
-    expect(e.background).toContain(`repeating-linear-gradient(to right,#fdfcf9 0 2px,#cfc8ba 2px 3px) 100% 0/${tR}px 100% no-repeat`);
+    expect(e.background).toContain(`repeating-linear-gradient(to left,${STACK_LEAVES}) 0 0/${tL}px 100% no-repeat`);
+    expect(e.background).toContain(`repeating-linear-gradient(to right,${STACK_LEAVES}) 100% 0/${tR}px 100% no-repeat`);
   });
 
   it("end card alone: under the left page only, no stack on the right", () => {
-    const e = bookEdgesStyle(s, true, PORTRAIT, [13], 14)!;
+    const e = bookCase(s, true, PORTRAIT, [13], 14)!.edges!;
     // M28: the closed book's fore-edge, left of the back board's wrapped edge.
     expect(e.left + e.width).toBeLessThan(bookLeft);
     expect(e.left + e.width).toBeGreaterThanOrEqual(bookLeft - 8);
@@ -209,21 +209,21 @@ describe("bookEdgesStyle: page-block edges beside the visible book", () => {
   it("phone: only the right stack (spine on the left), stays inside the stage at 375 / 320", () => {
     for (const w of [375, 320]) {
       for (const ratio of [PORTRAIT, LANDSCAPE]) {
-        const e = bookEdgesStyle(stage(w, 524, 8), false, ratio, [2], 13)!;
+        const e = bookCase(stage(w, 524, 8), false, ratio, [2], 13)!.edges!;
         expect(e.background).not.toContain("to left");
         expect(e.left + e.width).toBeLessThanOrEqual(w);
         expect(e.left).toBeGreaterThanOrEqual(0);
       }
     }
     // M28: the last page is the closed back — its fore-edge stays right of it (spine left), inside the stage.
-    const back = bookEdgesStyle(stage(375, 524, 8), false, PORTRAIT, [12], 13)!;
+    const back = bookCase(stage(375, 524, 8), false, PORTRAIT, [12], 13)!.edges!;
     expect(back.background).not.toContain("to left");
     expect(back.left + back.width).toBeLessThanOrEqual(375);
   });
 
   it("no book → null", () => {
-    expect(bookEdgesStyle(stage(40, 40, 8), false, PORTRAIT, [0], 13)).toBeNull();
-    expect(bookEdgesStyle(s, true, PORTRAIT, [], 14)).toBeNull();
+    expect(bookCase(stage(40, 40, 8), false, PORTRAIT, [0], 13)).toBeNull();
+    expect(bookCase(s, true, PORTRAIT, [], 14)).toBeNull();
   });
 
   it("ViewerShell paints the edges as a pointer-events-none sibling before the flipbook", () => {

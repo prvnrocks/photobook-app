@@ -13,6 +13,7 @@
 
 import { fitBook, type PageRatio } from "./fit";
 import type { StageMetrics } from "./stage-pool";
+import { visiblePages } from "./window";
 
 /**
  * - left / right: a page of an open spread (fold on its right / left edge)
@@ -56,14 +57,22 @@ export interface BookEdgesStyle {
   background: string;
 }
 
-/** Thickest stack (px) for a page `pageWidth` wide: ~2.2 %, 3–10 px. */
+/** Thickest stack (px) for a page `pageWidth` wide: ~1.5 %, 3–7 px (M28: thinner, it sits on the boards). */
 export function maxStackPx(pageWidth: number): number {
-  return Math.min(10, Math.max(3, Math.round(pageWidth * 0.022)));
+  return Math.min(7, Math.max(3, Math.round(pageWidth * 0.015)));
 }
 
-/** Paper leaves (2 px light, 1 px line) `t` px thick at `pos`; `dir` points away from the book. */
+/** Paper leaves: 2 px warm off-white, 1 px faint grey line (M28: paper-toned, not stark white). */
+export const STACK_LEAVES = "#eee7d9 0 2px,#d4cab7 2px 3px";
+/**
+ * The page block `t` px thick at `pos`; `dir` points away from the book. Over the leaves, a soft
+ * warm shadow towards the outer edge (where the block meets the board), so it reads as layered
+ * paper on the case rather than a light stripe.
+ */
 function stackLayer(dir: "left" | "right", t: number, pos: string): string {
-  return t > 0 ? `repeating-linear-gradient(to ${dir},#fdfcf9 0 2px,#cfc8ba 2px 3px) ${pos}/${t}px 100% no-repeat` : "";
+  if (t <= 0) return "";
+  const size = `${pos}/${t}px 100% no-repeat`;
+  return `linear-gradient(to ${dir},rgb(70 56 34/0) 30%,rgb(70 56 34/0.22)) ${size},repeating-linear-gradient(to ${dir},${STACK_LEAVES}) ${size}`;
 }
 
 /** Absolute placement of one case element (stage padding-box px). */
@@ -99,9 +108,12 @@ export interface BookCase {
   spine: number;
   /** Page-block edges (stacked paper lines): beside the pages when open, the closed book's fore-edge when closed. */
   edges: BookEdgesStyle | null;
-  /** How far the case reaches beyond the visible pages on each side (ground shadow), px. */
-  grow: { left: number; right: number; top: number; bottom: number };
+  /** How far the case reaches beyond the visible pages (ground shadow), px. */
+  grow: { left: number; right: number; bottom: number };
 }
+
+/** Breathing room (px) the case always leaves to the stage edges (phones: the screen edge). */
+export const CASE_GAP = 3;
 
 /** Square for a page `pageHeight` px tall: ~2 % of the page height, 3–14 px (before clamping). */
 export function squarePx(pageHeight: number): number {
@@ -114,7 +126,7 @@ const clampN = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, 
  * The hardcover case round the visible pages, all paint behind the flipbook (stage padding-box
  * px). Mirrors the Flipbook's own fit (fitBook on the stage content box, centred), like
  * stagePoolStyle; the book box itself never changes. Every part stays inside the stage: each side
- * reaches at most to the stage edge (≥ the stage padding — 8 px phone, 16 px ≥ sm).
+ * reaches at most to CASE_GAP px short of the stage edge (stage padding 8 px phone, 16 px ≥ sm).
  * Null when the book doesn't fit or nothing is visible.
  */
 export function bookCase(
@@ -141,11 +153,12 @@ export function bookCase(
   const alone = spread && visible.length === 1;
   const visLeft = alone && first === 0 ? bookLeft + P : bookLeft;
   const visWidth = alone ? P : box.width;
-  // Room to the stage's padding-box edges round the visible pages.
-  const sL = Math.floor(visLeft);
-  const sR = Math.floor(stage.width - (visLeft + visWidth));
-  const sT = Math.floor(bookTop);
-  const sB = Math.floor(stage.height - (bookTop + H));
+  // Room round the visible pages, CASE_GAP short of the stage's padding-box edges.
+  const room = (n: number) => Math.max(0, Math.floor(n) - CASE_GAP);
+  const sL = room(visLeft);
+  const sR = room(stage.width - (visLeft + visWidth));
+  const sT = room(bookTop);
+  const sB = room(stage.height - (bookTop + H));
   const max = maxStackPx(P);
   const target = squarePx(H);
 
@@ -193,7 +206,6 @@ export function bookCase(
       grow: {
         left: hinge === "left" ? sp : far,
         right: hinge === "left" ? far : sp,
-        top: r,
         bottom: r + e,
       },
     };
@@ -226,17 +238,22 @@ export function bookCase(
             background: [stackLayer("left", tL, "0 0"), stackLayer("right", tR, "100% 0")].filter(Boolean).join(","),
           }
         : null,
-    grow: { left, right, top: r, bottom: r },
+    grow: { left, right, bottom: r },
   };
 }
 
-/** Page-block edges only (M27 API): `bookCase(…).edges`. */
-export function bookEdgesStyle(
-  stage: StageMetrics,
-  spread: boolean,
-  ratio: PageRatio,
-  visible: readonly number[],
-  count: number,
-): BookEdgesStyle | null {
-  return bookCase(stage, spread, ratio, visible, count)?.edges ?? null;
+/**
+ * What the case should surround while page-flip turns a board (M28): a turn that starts from the
+ * closed book (cover alone, back alone, phone cover / last page) can only open it, so the case
+ * switches to the neighbouring open pages as the turn starts — the boards are already there under
+ * the turning cover instead of popping in when it lands. Turns from an open spread keep it (a cover
+ * closing still swings over the open boards). `visible` = what page-flip shows now.
+ */
+export function turnCaseVisible(visible: readonly number[], count: number, spread: boolean): readonly number[] {
+  if (visible.length !== 1 || count < 2) return visible;
+  const i = visible[0];
+  const next = i === 0 ? visiblePages(1, count, spread) : i === count - 1 ? visiblePages(count - 2, count, spread) : null;
+  // A book with no inner page (cover + back only) turns closed to closed: keep it.
+  const closed = (v: readonly number[]) => v.length === 1 && (spread || v[0] === 0 || v[0] === count - 1);
+  return next && !closed(next) ? next : visible;
 }

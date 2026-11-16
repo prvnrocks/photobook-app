@@ -15,10 +15,10 @@ import { Watermark } from "@/components/book/Watermark";
 import type { BookDoc } from "@/lib/book/types";
 import { cx } from "@/lib/cx";
 import { chapterForPage, chapterLabel, labelFontStyle } from "@/lib/viewer/chapters";
-import { coverBoardColor, endCardModel, FREE_END_PAPER } from "@/lib/viewer/end-card";
+import { casePaint, coverBoardColor, endCardModel, type CasePaint } from "@/lib/viewer/end-card";
 import { pageRatio } from "@/lib/viewer/fit";
 import { firstVisiblePageIdx, flipLayout } from "@/lib/viewer/pages";
-import { bookCase } from "@/lib/viewer/paper";
+import { bookCase, turnCaseVisible } from "@/lib/viewer/paper";
 import { poolSide, stagePoolStyle, type StageMetrics } from "@/lib/viewer/stage-pool";
 import { visiblePages } from "@/lib/viewer/window";
 import { ChapterLabel } from "./ChapterLabel";
@@ -90,8 +90,8 @@ function useStageMetrics(el: HTMLElement | null): StageMetrics | null {
 }
 
 /** CSS custom properties the case paint reads (viewer-motion.css .vw-board / .vw-board-face). */
-function caseVars(color: string, spineX: number | null, square: number, spine = 0): CSSProperties {
-  const vars: Record<string, string> = { "--vw-cover": color, "--vw-sq": `${square}px` };
+function caseVars(paint: CasePaint, spineX: number | null, square: number, spine = 0): CSSProperties {
+  const vars: Record<string, string> = { "--vw-cover": paint.base, "--vw-cover-shade": paint.shade, "--vw-sq": `${square}px` };
   if (spineX !== null) vars["--vw-spine-x"] = `${spineX}px`;
   if (spine > 0) vars["--vw-sp"] = `${spine}px`;
   return vars as CSSProperties;
@@ -104,6 +104,8 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
   const [current, setCurrent] = useState(0);
   const [spread, setSpread] = useState(false);
   const [ready, setReady] = useState(false);
+  // page-flip is turning a page (Flipbook onTurning): the case switches to where the turn goes.
+  const [turning, setTurning] = useState(false);
   const [sheet, setSheet] = useState<"contents" | "share" | null>(null);
   const [chromeShown, setChromeShown] = useState(false);
   const fs = useFullscreen(rootRef);
@@ -122,19 +124,23 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
   // page-block edges (M27) sit on the boards. Paint only, outside the book box.
   const metrics = useStageMetrics(stageEl);
   const ratio = useMemo(() => pageRatio(doc.format), [doc.format]);
-  const visibleKey = visible.join(",");
+  // While a board turns out of the closed book, the case already surrounds the open pages it
+  // turns to (turnCaseVisible), so the board is there under the turning cover.
+  const caseVisible = turning ? turnCaseVisible(visible, layout.count, spread) : visible;
+  const visibleKey = caseVisible.join(",");
   const bookCaseStyle = useMemo(
     () =>
-      ready && metrics ? bookCase(metrics, spread, ratio, visibleKey.split(",").map(Number), layout.count) : null,
+      ready && metrics
+        ? bookCase(metrics, spread, ratio, visibleKey ? visibleKey.split(",").map(Number) : [], layout.count)
+        : null,
     [ready, metrics, spread, ratio, visibleKey, layout.count],
   );
   const edgesStyle = bookCaseStyle?.edges ?? null;
-  const boardColor = useMemo(() => coverBoardColor(doc.style.background), [doc.style.background]);
-  // Closed on the back: the face bleeds the end page's colour (paid: the book background; free: the
-  // end card's paper).
-  const faceColor = bookCaseStyle?.state === "back" && !isPaid ? FREE_END_PAPER : boardColor;
+  // One material for both boards (front and back, every state): the cover's colour — a very light
+  // cover mixed toward linen at the edges. The pages themselves keep their own colours.
+  const paint = useMemo(() => casePaint(coverBoardColor(doc.style.background)), [doc.style.background]);
   // The stage's ground-shadow pool (VW_STAGE layer 1) under the visible book and its case.
-  const side = poolSide(spread, visible);
+  const side = poolSide(spread, caseVisible);
   const grow = bookCaseStyle?.grow;
   const poolStyle = useMemo(
     () => (metrics ? (stagePoolStyle(metrics, spread, ratio, side, grow) ?? undefined) : undefined),
@@ -241,8 +247,9 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
           <div
             aria-hidden="true"
             className="vw-board pointer-events-none absolute"
-            style={{ ...bookCaseStyle.boards, ...caseVars(boardColor, bookCaseStyle.spineX, bookCaseStyle.square) }}
+            style={{ ...bookCaseStyle.boards, ...caseVars(paint, bookCaseStyle.spineX, bookCaseStyle.square) }}
             data-state={bookCaseStyle.state}
+            data-light={paint.light ? "true" : undefined}
             data-testid="book-board"
           />
         ) : null}
@@ -251,8 +258,9 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
           <div
             aria-hidden="true"
             className="vw-board-face pointer-events-none absolute"
-            style={{ ...bookCaseStyle.face, ...caseVars(faceColor, null, bookCaseStyle.square, bookCaseStyle.spine) }}
+            style={{ ...bookCaseStyle.face, ...caseVars(paint, null, bookCaseStyle.square, bookCaseStyle.spine) }}
             data-hinge={bookCaseStyle.hinge}
+            data-light={paint.light ? "true" : undefined}
             data-testid="book-cover-face"
           />
         ) : null}
@@ -262,6 +270,7 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
           captionLang={captionLang}
           onFlip={setCurrent}
           onReady={onReady}
+          onTurning={setTurning}
           apiRef={api}
           endPage={endPage}
           pageOverlay={pageOverlay}

@@ -49,7 +49,7 @@ function cardColor(bg: Background | string): string {
   return backgroundColor(bg);
 }
 
-/** The free end card's paper (EndCard FreeEnd frame bg-[#e8ddc6]): the back board's face colour. */
+/** The free end card's paper (EndCard FreeEnd frame background). */
 export const FREE_END_PAPER = "#e8ddc6";
 
 /** Deep cloth emerald: the hardcover's material when the cover colour can't be read. */
@@ -61,8 +61,43 @@ export const BOARD_CLOTH = "#0e3b2e";
  * BookPage paints the cover (plain colour, tinted paper or a photo background's veil colour).
  */
 export function coverBoardColor(bg: Background | string | null | undefined): string {
-  const hex = bg ? cardColor(bg) : "";
-  return hexLuminance(hex) !== null ? hex : BOARD_CLOTH;
+  // An unknown background kind (newer doc, bad data) can make cardColor return undefined.
+  const hex: unknown = bg ? cardColor(bg) : undefined;
+  return typeof hex === "string" && hexLuminance(hex) !== null ? hex : BOARD_CLOTH;
+}
+
+/** Warm linen grey: the board material a very light cover is mixed toward so it still reads as a board. */
+export const BOARD_LINEN = "#cfc5b2";
+
+/** Covers lighter than this (WCAG luminance) get a linen-toned board edge and stronger edge shading. */
+export const LIGHT_COVER_LUMINANCE = 0.8;
+
+/** `a` mixed with `b` (sRGB, t = share of `b`), as #rrggbb. Both must be 6-digit hex. */
+export function mixHex(a: string, b: string, t: number): string {
+  const ch = (h: string, i: number) => parseInt(h.trim().slice(1 + 2 * i, 3 + 2 * i), 16);
+  let out = "#";
+  for (let i = 0; i < 3; i++) out += Math.round(ch(a, i) * (1 - t) + ch(b, i) * t).toString(16).padStart(2, "0");
+  return out;
+}
+
+export interface CasePaint {
+  /** Board material (board edges, the open rim, the closed case's wrapped edge). */
+  base: string;
+  /** The same material in shadow (the far board of a closed book). */
+  shade: string;
+  /** A very light cover: the material is mixed toward linen and the edges get stronger shading. */
+  light: boolean;
+}
+
+/**
+ * M28: the hardcover case's paint from coverBoardColor(). Computed here (not CSS color-mix, which
+ * Safari < 16.2 doesn't support). A white / very light cover would leave a white mat round the
+ * open book and only an outline round the closed one, so its board edge is mixed toward linen.
+ */
+export function casePaint(cover: string): CasePaint {
+  const light = (hexLuminance(cover) ?? 0) > LIGHT_COVER_LUMINANCE;
+  const base = light ? mixHex(cover, BOARD_LINEN, 0.6) : cover;
+  return { base, shade: mixHex(base, "#000000", 0.22), light };
 }
 
 /** Ink the book's pages use on this book background (v1 string = a colour background). */

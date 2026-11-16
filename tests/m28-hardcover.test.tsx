@@ -7,10 +7,10 @@ import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { FlipPage } from "@/components/viewer/FlipPage";
-import { BOARD_CLOTH, coverBoardColor, FREE_END_PAPER } from "@/lib/viewer/end-card";
+import { BOARD_CLOTH, BOARD_LINEN, casePaint, coverBoardColor, FREE_END_PAPER, hexLuminance, mixHex } from "@/lib/viewer/end-card";
 import { fitBook, pageRatio, type PageRatio } from "@/lib/viewer/fit";
 import { flipLayout } from "@/lib/viewer/pages";
-import { bookCase, isBoardPage, maxStackPx, paperFor, squarePx, type BookCase, type CaseBox } from "@/lib/viewer/paper";
+import { bookCase, CASE_GAP, isBoardPage, maxStackPx, paperFor, squarePx, turnCaseVisible, type BookCase, type CaseBox } from "@/lib/viewer/paper";
 import { stagePoolStyle, type StageMetrics } from "@/lib/viewer/stage-pool";
 import { visiblePages } from "@/lib/viewer/window";
 
@@ -161,13 +161,13 @@ describe("bookCase: the hardcover case round the visible pages", () => {
     expect(c.state).toBe("open");
     expect(c.face).toBeNull();
     const r = c.square;
-    expect(r).toBe(Math.min(squarePx(pages.height), 16));
+    expect(r).toBe(Math.min(squarePx(pages.height), 16 - CASE_GAP));
     expect(c.boards.top).toBe(pages.top - r);
     expect(bottom(c.boards)).toBe(bottom(pages) + r);
     expect(c.boards.left).toBe(c.edges!.left - r);
     expect(right(c.boards)).toBe(right(c.edges!) + r);
     expect(c.boards.left + c.spineX!).toBe(pages.left + pages.width / 2);
-    expect(c.grow).toEqual({ left: pages.left - c.boards.left, right: right(c.boards) - right(pages), top: r, bottom: r });
+    expect(c.grow).toEqual({ left: pages.left - c.boards.left, right: right(c.boards) - right(pages), bottom: r });
   });
 
   it("open on a phone: spine flush left, board + page block on the right only", () => {
@@ -177,6 +177,9 @@ describe("bookCase: the hardcover case round the visible pages", () => {
     expect(c.boards.left).toBe(pages.left);
     expect(c.spineX).toBeNull();
     expect(c.edges!.background).not.toContain("to left");
+    // M28 polish: paper-toned leaves with a warm shadow towards the board, not a stark white strip.
+    expect(c.edges!.background).toContain("linear-gradient(to right,rgb(70 56 34/0) 30%,rgb(70 56 34/0.22))");
+    expect(c.edges!.background).not.toMatch(/#fff|#fdfcf9/i);
   });
 
   it("phone: cover and last page are the closed book (hinge left)", () => {
@@ -184,7 +187,7 @@ describe("bookCase: the hardcover case round the visible pages", () => {
     expect(bookCase(phone, false, PORTRAIT, [12], 13)).toMatchObject({ state: "back", hinge: "left" });
   });
 
-  it("never leaves the stage (≥ its padding: 8 px phone, 16 px ≥ sm), never covers the book box differently", () => {
+  it("never leaves the stage (CASE_GAP short of its edges), never covers the book box differently", () => {
     const stages: Array<[StageMetrics, boolean]> = [
       [stage(375, 524, 8), false],
       [stage(320, 470, 8), false],
@@ -202,10 +205,10 @@ describe("bookCase: the hardcover case round the visible pages", () => {
           const c = bookCase(s, spread, ratio, visible, count)!;
           const pages = pagesRect(s, spread, ratio, visible);
           for (const b of parts(c)) {
-            expect(b.left).toBeGreaterThanOrEqual(0);
-            expect(b.top).toBeGreaterThanOrEqual(0);
-            expect(right(b)).toBeLessThanOrEqual(s.width);
-            expect(bottom(b)).toBeLessThanOrEqual(s.height);
+            expect(b.left).toBeGreaterThanOrEqual(CASE_GAP);
+            expect(b.top).toBeGreaterThanOrEqual(CASE_GAP);
+            expect(right(b)).toBeLessThanOrEqual(s.width - CASE_GAP);
+            expect(bottom(b)).toBeLessThanOrEqual(s.height - CASE_GAP);
           }
           // Squares ~2–3 % of the page height at most.
           expect(c.square).toBeLessThanOrEqual(Math.max(3, Math.round(pages.height * 0.03)));
@@ -221,15 +224,19 @@ describe("bookCase: the hardcover case round the visible pages", () => {
     }
   });
 
-  it("where the book touches the stage padding, the case reaches no further than the padding", () => {
-    // 375 phone portrait: width-limited, 8 px either side.
-    const c = bookCase(stage(375, 600, 8), false, PORTRAIT, [0], 13)!;
-    expect(right(c.boards)).toBeLessThanOrEqual(375);
-    expect(c.grow.right).toBeLessThanOrEqual(8);
+  it("where the book touches the stage padding, the case leaves CASE_GAP (≥ 2–3 px) to the stage edge", () => {
+    expect(CASE_GAP).toBeGreaterThanOrEqual(2);
+    // 375 phone portrait: width-limited, 8 px either side — closed and open.
+    for (const v of [[0], [3], [12]]) {
+      const c = bookCase(stage(375, 600, 8), false, PORTRAIT, v, 13)!;
+      for (const b of parts(c)) expect(right(b)).toBeLessThanOrEqual(375 - CASE_GAP);
+      expect(c.grow.right).toBeLessThanOrEqual(8 - CASE_GAP);
+    }
     // 1280 portrait spread: height-limited, 16 px top and bottom.
     const d = bookCase(stage(1280, 657, 16), true, PORTRAIT, [5, 6], 14)!;
-    expect(d.grow.top).toBeLessThanOrEqual(16);
-    expect(d.grow.bottom).toBeLessThanOrEqual(16);
+    const pages = pagesRect(stage(1280, 657, 16), true, PORTRAIT, [5, 6]);
+    expect(pages.top - d.boards.top).toBeLessThanOrEqual(16 - CASE_GAP);
+    expect(d.grow.bottom).toBeLessThanOrEqual(16 - CASE_GAP);
   });
 
   it("null when there is no book", () => {
@@ -249,8 +256,33 @@ describe("case colour", () => {
     expect(BOARD_CLOTH).toBe("#0e3b2e");
   });
 
-  it("free end card's paper is the back face colour (EndCard frame)", () => {
-    expect(read("src/components/viewer/EndCard.tsx")).toContain(`bg-[${FREE_END_PAPER}]`);
+  it("guards a background whose colour can't be read (unknown kind → undefined)", () => {
+    expect(coverBoardColor({ kind: "pattern" } as never)).toBe(BOARD_CLOTH);
+  });
+
+  it("the free end card paints FREE_END_PAPER inline (no duplicate literal)", () => {
+    const src = read("src/components/viewer/EndCard.tsx");
+    expect(src).toContain("backgroundColor: FREE_END_PAPER");
+    expect(src).not.toContain(FREE_END_PAPER);
+    expect(FREE_END_PAPER).toBe("#e8ddc6");
+  });
+
+  it("casePaint: coloured covers keep their colour; shade = 22 % toward black (computed, no color-mix)", () => {
+    expect(casePaint("#24476B")).toEqual({ base: "#24476B", shade: mixHex("#24476B", "#000000", 0.22), light: false });
+    expect(mixHex("#ffffff", "#000000", 0.22)).toBe("#c7c7c7");
+    expect(mixHex("#ffffff", BOARD_LINEN, 1)).toBe(BOARD_LINEN);
+    expect(casePaint(BOARD_CLOTH).light).toBe(false);
+  });
+
+  it("casePaint: very light covers get a linen-toned, visibly darker board", () => {
+    for (const c of ["#FFFFFF", "#F5EFE6", "#fdfcf9"]) {
+      const p = casePaint(c);
+      expect(p.light).toBe(true);
+      expect(p.base).not.toBe(c);
+      expect(hexLuminance(p.base)!).toBeLessThan(0.75);
+      expect(hexLuminance(p.base)!).toBeGreaterThan(0.45);
+      expect(hexLuminance(p.shade)!).toBeLessThan(hexLuminance(p.base)!);
+    }
   });
 });
 
@@ -301,9 +333,53 @@ describe("ViewerShell + CSS", () => {
     expect(rule(/\.vw-board-face\[data-hinge\]/)).toMatch(/background-color:\s*var\(--vw-cover\)/);
     const caseRules = [...css.matchAll(/([^{}]*\.vw-board[^{}]*)\{([^}]*)\}/g)].map((m) => m[2]).join("\n");
     expect(caseRules).not.toMatch(/transform|translate|scale|rotate|animation|transition|margin|padding/);
+    // Safari < 16.2 has no color-mix(): the shade is computed in TS (casePaint) and passed in.
+    expect(css).not.toMatch(/color-mix/);
+    expect(rule(/\.vw-board\[data-state="front"\],\s*\.vw-board\[data-state="back"\]/)).toMatch(/var\(--vw-cover-shade/);
+    expect(rule(/\.vw-board\[data-state\]\[data-light\]/)).toMatch(/inset 0 0 0 1px/);
+    expect(rule(/\.vw-board-face\[data-hinge\]\[data-light\]/)).toMatch(/inset 0 0 0 1px/);
+  });
+
+  it("both boards are one material: the face never takes the end card's paper; data-light on both", () => {
+    expect(shell).not.toContain("FREE_END_PAPER");
+    expect(shell.match(/caseVars\(paint,/g)).toHaveLength(2);
+    expect(shell.match(/data-light=\{paint\.light/g)).toHaveLength(2);
+    expect(shell).toMatch(/visibleKey \? visibleKey\.split\(","\)\.map\(Number\) : \[\]/);
   });
 
   it("no :has() with a leading combinator (production minifier bug)", () => {
     expect(css).not.toMatch(/:has\(\s*[>+~]/);
+  });
+});
+
+describe("turnCaseVisible: the case switches when a board starts turning", () => {
+  it("spread: cover alone → first spread; back alone → last spread; open spreads unchanged", () => {
+    expect(turnCaseVisible([0], 14, true)).toEqual([1, 2]);
+    expect(turnCaseVisible([13], 14, true)).toEqual([11, 12]);
+    expect(turnCaseVisible([5, 6], 14, true)).toEqual([5, 6]);
+    expect(turnCaseVisible([1, 2], 14, true)).toEqual([1, 2]);
+    // cover + back only: closed to closed, keep.
+    expect(turnCaseVisible([0], 2, true)).toEqual([0]);
+  });
+
+  it("phone: cover → page 1, last → the page before; middle pages unchanged", () => {
+    expect(turnCaseVisible([0], 13, false)).toEqual([1]);
+    expect(turnCaseVisible([12], 13, false)).toEqual([11]);
+    expect(turnCaseVisible([5], 13, false)).toEqual([5]);
+    expect(turnCaseVisible([0], 2, false)).toEqual([0]);
+  });
+
+  it("the target is an open case", () => {
+    const s = stage(1280, 657, 16);
+    expect(bookCase(s, true, PORTRAIT, turnCaseVisible([0], 14, true), 14)!.state).toBe("open");
+    expect(bookCase(s, true, PORTRAIT, turnCaseVisible([13], 14, true), 14)!.state).toBe("open");
+  });
+
+  it("Flipbook reports turns from page-flip's changeState (flipping / user_fold with a live calculation)", () => {
+    const src = read("src/components/viewer/Flipbook.tsx");
+    expect(src).toMatch(/onChangeState: \(e: FlipEvent\)/);
+    expect(src).toMatch(/e\.data === "flipping" \|\| e\.data === "user_fold"/);
+    expect(src).toContain("getCalculation");
+    expect(read("src/components/viewer/ViewerShell.tsx")).toContain("onTurning={setTurning}");
   });
 });

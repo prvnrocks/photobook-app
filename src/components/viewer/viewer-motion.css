@@ -244,8 +244,10 @@
    .vw-board: open = both boards under the spread; the rim beyond the text block is the cover
    material turned over the board edge (darker outer edge, a light rounded-edge highlight, a soft
    fall-off towards the edge) with the spine hollow at --vw-spine-x on the top / bottom rims.
-   Closed = the far board seen past the page block, a shade darker (in shadow). Qualified by their
-   always-present data attributes (like .vw-paper[data-paper]). */
+   Closed = the far board seen past the page block, a shade darker (in shadow: --vw-cover-shade,
+   computed in casePaint — no color-mix, Safari < 16.2). Qualified by their always-present data
+   attributes (like .vw-paper[data-paper]). data-light: a very light cover (casePaint mixes its
+   edge toward linen) gets deeper edge shading so the boards read as boards, not a white mat. */
 .vw-board[data-state] {
   border-radius: 3px;
   background-color: var(--vw-cover);
@@ -267,7 +269,7 @@
 }
 .vw-board[data-state="front"],
 .vw-board[data-state="back"] {
-  background-color: color-mix(in srgb, var(--vw-cover) 78%, #000);
+  background-color: var(--vw-cover-shade, var(--vw-cover));
 }
 
 /* Closed book: the shown board's face round the cover / back page — the cover art printed past
@@ -292,4 +294,20 @@
 .vw-board-face[data-hinge="right"] {
   --vw-spine-dir: to left;
   border-radius: 4px 2px 2px 4px;
+}
+
+/* Very light covers (data-light): stronger outer line, rounded-edge fall-off and contact shadow. */
+.vw-board[data-state][data-light] {
+  box-shadow:
+    inset 0 0 0 1px rgb(60 48 30 / 0.5),
+    inset 0 0 0 2px rgb(255 255 255 / 0.4),
+    inset 0 0 calc(var(--vw-sq) * 0.9) rgb(60 48 30 / 0.34),
+    0 1px 4px rgb(0 0 0 / 0.26);
+}
+.vw-board-face[data-hinge][data-light] {
+  box-shadow:
+    inset 0 0 0 1px rgb(60 48 30 / 0.48),
+    inset 0 0 0 2px rgb(255 255 255 / 0.45),
+    inset 0 0 calc(var(--vw-sq) * 1.6) rgb(60 48 30 / 0.3),
+    1px 2px 4px rgb(0 0 0 / 0.3);
 }
