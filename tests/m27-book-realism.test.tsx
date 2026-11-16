@@ -105,6 +105,43 @@ describe("paper CSS (viewer-motion.css)", () => {
     expect(css).toMatch(/\n\.vw-paper\[data-paper="back"\]\s*\{\s*--vw-hinge:\s*to left;\s*\}/);
   });
 
+  it("hairline on the outer edges only — never on the fold / spine side (m10b fold seam)", () => {
+    const shadows = (body: string) => (body.match(/box-shadow:([^;]*);/)?.[1] ?? "").split(",").map((s) => s.trim());
+    // Right page, cover alone, phone page: top, bottom, right (inset -1px 0 = right edge).
+    const outerRight = shadows(rule(/\.vw-paper\[data-paper\]/));
+    expect(outerRight).toEqual(["inset 0 1px 0 var(--vw-hair)", "inset 0 -1px 0 var(--vw-hair)", "inset -1px 0 0 var(--vw-hair)"]);
+    // Left page and back alone: top, bottom, left.
+    const outerLeft = shadows(rule(/\.vw-paper\[data-paper="left"\],\s*\.vw-paper\[data-paper="back"\]/));
+    expect(outerLeft).toEqual(["inset 0 1px 0 var(--vw-hair)", "inset 0 -1px 0 var(--vw-hair)", "inset 1px 0 0 var(--vw-hair)"]);
+    // No all-round ring left anywhere, and no other rule redraws a side.
+    expect(css).not.toMatch(/inset 0 0 0 1px/);
+    const withShadow = [...css.matchAll(/([^{}]*)\{[^}]*box-shadow:[^}]*inset[^}]*\}/g)].map((m) => m[1].trim());
+    expect(withShadow).toEqual(['.vw-paper[data-paper]', '.vw-paper[data-paper="left"],\n.vw-paper[data-paper="back"]']);
+  });
+
+  it("curl is a rolled corner: ~15 % wide, ~25 % tall (px-clamped), quarter-ellipse, cylinder shading, cast shadow", () => {
+    const curl = [...css.matchAll(/\n\.vw-paper\[data-curl\]::after\s*\{([^}]*)\}/g)].map((m) => m[1]).join("\n"); // the static rule
+    expect(curl).toMatch(/content:\s*""/);
+    expect(curl).toMatch(/top:\s*0;/);
+    expect(curl).toMatch(/right:\s*0;/);
+    expect(curl).toMatch(/width:\s*clamp\(26px, 15%, 104px\)/);
+    expect(curl).toMatch(/height:\s*clamp\(44px, 25%, 180px\)/);
+    expect(curl).toMatch(/border-bottom-left-radius:\s*100%/);
+    const stops = curl.match(/#[0-9a-f]{3,6} \d+(\.\d+)?%/g) ?? [];
+    expect(stops.length).toBeGreaterThanOrEqual(10); // revealed sheet + several cylinder stops
+    expect(curl).toMatch(/linear-gradient\(\s*to bottom left/);
+    expect(curl).toMatch(/box-shadow:\s*-\d+px \d+px \d+px/); // soft shadow cast down-left onto the page
+    // Sizes on real pages: 1280 spread page, 375 phone page, A5 landscape page — corner only.
+    const px = (pct: number, min: number, max: number, of: number) => Math.min(max, Math.max(min, (of * pct) / 100));
+    for (const [w, h] of [[465, 660], [359, 510], [625, 440], [160, 227]]) {
+      const cw = px(15, 26, 104, w);
+      const ch = px(25, 44, 180, h);
+      expect(cw / w).toBeLessThanOrEqual(0.17);
+      expect(ch / h).toBeLessThanOrEqual(0.26);
+      expect(cw).toBeGreaterThanOrEqual(26);
+    }
+  });
+
   it("curl hint hides while page-flip draws a turn", () => {
     expect(css).toMatch(/\.stf__block:has\(\.stf__item[^)]*:not\(\.--simple\)\) \.vw-paper::after\s*\{\s*visibility:\s*hidden/);
     // A leading combinator in :has() is mangled by the production minifier into a hide-all rule.

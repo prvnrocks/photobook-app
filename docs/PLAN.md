@@ -256,6 +256,9 @@ Plan: `.agentos/runs/m13.md`, D-070.
 ## Milestone 26 — Upgrade payment screens in the emerald style (2026-11-16)
 - [x] Restyle-only post-checkout screens (D-078): emerald band with book title, confirming seal, paid celebration with benefit cards and gold Publish, calm timeout/failed cards, cancelled notice; payment logic untouched; Stripe-hosted checkout branding via dashboard (#0E3B2E). Report: `.agentos/runs/m26.md`. Deployed 2026-11-16.
 
+## Milestone 27 — Realistic open-book look in the viewer (2026-11-16)
+- [x] Viewer-only book realism from the user's flipbook-design.png: spine shading + highlight, page-block edges (follow progress), outer-edge hairlines, rolled silver corner curl (hides during turns, not on last page), deeper ground shadow; page content, print, size unchanged; /b +1.1 kB. Report: `.agentos/runs/m27.md`.
+
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
 - [ ] AI "story mode": a short paragraph per chapter (AI-picked backgrounds moved into M10c)
