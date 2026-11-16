@@ -104,8 +104,8 @@ export function LoginForm({ next, error = false }: LoginFormProps) {
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
-              maxLength={10}
-              pattern="\d{6,10}"
+              maxLength={13}
+              pattern="[0-9 \-]{6,13}"
               required
               data-testid="login-code"
               aria-invalid={verifyState.error ? true : undefined}

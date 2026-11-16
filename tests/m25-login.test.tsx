@@ -119,8 +119,8 @@ describe("LoginForm — code step", () => {
     const code = tagOf(html, "login-code");
     expect(code).toContain('inputMode="numeric"');
     expect(code).toContain('autoComplete="one-time-code"');
-    expect(code).toContain('maxLength="10"');
-    expect(code).toContain('pattern="\\d{6,10}"');
+    expect(code).toContain('maxLength="13"');
+    expect(code).toContain('pattern="[0-9 \\-]{6,13}"');
     expect(code).toContain("text-center");
     expect(code).toContain("h-12");
     expect(html).toContain("sara@example.com");

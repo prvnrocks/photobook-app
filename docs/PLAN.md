@@ -250,6 +250,9 @@ Plan: `.agentos/runs/m13.md`, D-070.
 ## Milestone 24 — Settings in the emerald style (2026-11-16)
 - [x] Restyle-only /settings (D-076): emerald band with email chip, desktop section nav, account / reminders / AI memory cards, quiet danger zone that arms on DELETE; reminders switch no longer sticks after a save; first load −15 kB. Report: `.agentos/runs/m24.md`. Deployed 2026-11-16.
 
+## Milestone 25 — Sign-in in the emerald style (2026-11-16)
+- [x] Restyle-only /login (D-077): leather background + cream card; desktop brand panel with floating book; gold email CTA, emerald Google outline; restyled code step; −15 kB first load. Also fixed: email code sign-in now accepts the 8-digit codes Supabase sends (6–10 digits, spaces/dashes OK). Report: `.agentos/runs/m25.md`.
+
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
 - [ ] AI "story mode": a short paragraph per chapter (AI-picked backgrounds moved into M10c)
