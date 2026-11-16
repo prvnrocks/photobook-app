@@ -18,6 +18,7 @@ import { chapterForPage, chapterLabel, labelFontStyle } from "@/lib/viewer/chapt
 import { endCardModel } from "@/lib/viewer/end-card";
 import { pageRatio } from "@/lib/viewer/fit";
 import { firstVisiblePageIdx, flipLayout } from "@/lib/viewer/pages";
+import { bookEdgesStyle } from "@/lib/viewer/paper";
 import { poolSide, stagePoolStyle, type StageMetrics } from "@/lib/viewer/stage-pool";
 import { visiblePages } from "@/lib/viewer/window";
 import { ChapterLabel } from "./ChapterLabel";
@@ -94,6 +95,7 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
   const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null);
   const [current, setCurrent] = useState(0);
   const [spread, setSpread] = useState(false);
+  const [ready, setReady] = useState(false);
   const [sheet, setSheet] = useState<"contents" | "share" | null>(null);
   const [chromeShown, setChromeShown] = useState(false);
   const fs = useFullscreen(rootRef);
@@ -115,6 +117,15 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
     () => (metrics ? (stagePoolStyle(metrics, spread, ratio, side) ?? undefined) : undefined),
     [metrics, spread, ratio, side],
   );
+  // Page-block edges (M27): stacked paper lines beside the visible book, once the book is up.
+  const visibleKey = visible.join(",");
+  const edgesStyle = useMemo(
+    () =>
+      ready && metrics
+        ? bookEdgesStyle(metrics, spread, ratio, visibleKey.split(",").map(Number), layout.count)
+        : null,
+    [ready, metrics, spread, ratio, visibleKey, layout.count],
+  );
 
   // Stable nodes: Flipbook puts them in context; new identities re-render every page.
   // Paid end card (D-054): snapshot title in the cover font on the page background; Replay flips
@@ -131,7 +142,10 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
   );
   const pageOverlay = useMemo(() => (isPaid ? undefined : <Watermark />), [isPaid]);
 
-  const onReady = useCallback((info: FlipbookReadyInfo) => setSpread(info.spread), []);
+  const onReady = useCallback((info: FlipbookReadyInfo) => {
+    setSpread(info.spread);
+    setReady(true);
+  }, []);
   const toggleFullscreen = useCallback(() => {
     setChromeShown(false);
     void fs.toggle();
@@ -207,6 +221,9 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
           if (pseudo && e.target === e.currentTarget) setChromeShown((v) => !v);
         }}
       >
+        {/* Before the flipbook in the DOM, so the book paints over it; absolute, pointer-events none,
+            outside the book box — paint only, page-flip's geometry is untouched. */}
+        {edgesStyle ? <div aria-hidden="true" className="pointer-events-none absolute" style={edgesStyle} data-testid="book-edges" /> : null}
         <FlipbookLoader
           doc={doc}
           photos={photos}

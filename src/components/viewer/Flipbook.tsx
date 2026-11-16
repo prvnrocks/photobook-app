@@ -45,6 +45,7 @@ import { resolveBackground } from "@/lib/book/render";
 import type { BookDoc } from "@/lib/book/types";
 import { fitBook, pageRatio, SPREAD_MEDIA_QUERY, type PageRatio } from "@/lib/viewer/fit";
 import { flipLayout, flipPageKind, startIndexFor, type FlipLayout } from "@/lib/viewer/pages";
+import { paperFor } from "@/lib/viewer/paper";
 import { inPhotoWindow, photoWindow, spreadStart, type PhotoWindow } from "@/lib/viewer/window";
 import { FlipPage } from "./FlipPage";
 
@@ -357,11 +358,11 @@ function BookInstance({ pageCount, spread, ratio, startPage, onInstance, onFlipI
   const children = useMemo(
     () =>
       Array.from({ length: pageCount }, (_, i) => (
-        <FlipPage key={i} index={i} density={i === 0 ? "hard" : undefined}>
+        <FlipPage key={i} index={i} density={i === 0 ? "hard" : undefined} paper={paperFor(i, pageCount, spread)}>
           <WindowedPage index={i} />
         </FlipPage>
       )),
-    [pageCount],
+    [pageCount, spread],
   );
 
   const handlers = useMemo<Pick<HTMLFlipBookProps, "onInit" | "onFlip">>(

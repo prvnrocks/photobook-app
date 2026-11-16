@@ -71,4 +71,116 @@
       opacity: 0.55;
     }
   }
+
+  /* M27: the paper corner curl peels in once when a page mounts (clip-path only, inside the page;
+     see .vw-paper below). */
+  .vw-paper[data-curl]::after {
+    animation: vw-peel 0.7s ease-out 0.45s both;
+  }
+
+  @keyframes vw-peel {
+    from {
+      clip-path: inset(0 0 100% 100%);
+    }
+    to {
+      clip-path: inset(0 0 0 0);
+    }
+  }
 }
+
+/* ---- Real-book paper (M27) -------------------------------------------------------------------
+   .vw-paper is the last child of every flipbook page (FlipPage): gutter shading at the fold, a
+   hairline round the page and a static corner-curl hint. Paint only — absolute, pointer-events
+   none, no transform — and inside the page element, so it turns with the page mid-flip. Viewer
+   only: BookPage, the editor and print never render it. data-paper = left | right | cover | back
+   | single (src/lib/viewer/paper.ts). Page order is LTR for every book (D-040). The curl's one-off
+   peel-in lives in the reduced-motion block above. */
+.vw-paper[data-paper] {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgb(60 50 40 / 0.07);
+}
+
+/* Left page of a spread: deep fold shadow on its right edge, fading over ~30 %. */
+.vw-paper[data-paper="left"] {
+  background: linear-gradient(
+    to left,
+    rgb(0 0 0 / 0.34) 0%,
+    rgb(0 0 0 / 0.17) 2.5%,
+    rgb(0 0 0 / 0.06) 11%,
+    rgb(0 0 0 / 0.02) 21%,
+    transparent 32%
+  );
+}
+
+/* Right page: dark line at the fold, a light highlight beside it, then a soft shade (~16 %). */
+.vw-paper[data-paper="right"] {
+  background: linear-gradient(
+    to right,
+    rgb(0 0 0 / 0.3) 0%,
+    rgb(0 0 0 / 0.1) 1.2%,
+    rgb(255 255 255 / 0.22) 2.6%,
+    rgb(0 0 0 / 0.06) 6%,
+    transparent 17%
+  );
+}
+
+/* Phone, one page: lighter shading on the spine (left) side. */
+.vw-paper[data-paper="single"] {
+  background: linear-gradient(
+    to right,
+    rgb(0 0 0 / 0.18) 0%,
+    rgb(0 0 0 / 0.06) 1.6%,
+    rgb(255 255 255 / 0.16) 3%,
+    rgb(0 0 0 / 0.04) 6%,
+    transparent 13%
+  );
+}
+
+/* Closed book: a light hinge groove near the spine (cover on the right, back page on the left). */
+.vw-paper[data-paper="cover"],
+.vw-paper[data-paper="back"] {
+  background: linear-gradient(
+    var(--vw-hinge, to right),
+    rgb(0 0 0 / 0.16) 0%,
+    rgb(255 255 255 / 0.14) 1.4%,
+    rgb(0 0 0 / 0.07) 2.8%,
+    transparent 8%
+  );
+}
+.vw-paper[data-paper="back"] {
+  --vw-hinge: to left;
+}
+
+/* Corner curl at the top-right (right pages, cover, phone pages; never the last page). The square
+   (taller than wide, like a peel down the edge) is split on its diagonal ("to bottom left" puts the
+   50 % line through the other two corners): the top-right half shows the paper beneath, the
+   bottom-left half is the curled-over flap (silver gradient across it). drop-shadow falls from the flap's free edges.
+   Only while the book rests: page-flip drops .--simple from a page it draws turning (or folding on
+   hover) and hides off-screen pages with "display: none", so a shown page without .--simple means
+   a turn is in progress — then every hint hides and never doubles the real curl. No combinator at
+   the start of :has() — the production minifier mangled `:has(> …)` into a bare hide-all rule. */
+.vw-paper[data-curl]::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto auto;
+  width: clamp(18px, 8.5%, 52px);
+  aspect-ratio: 1 / 1.7;
+  background: linear-gradient(
+    to bottom left,
+    #fbfaf7 0%,
+    #efede8 42%,
+    #d2cfc9 49.3%,
+    #b9b9b9 50%,
+    #fff 62%,
+    #a9a9a9 88%,
+    #ddd 100%
+  );
+  filter: drop-shadow(-2px 2px 2px rgb(0 0 0 / 0.25));
+}
+.stf__block:has(.stf__item[style*="display: block"]:not(.--simple)) .vw-paper::after {
+  visibility: hidden;
+}
+

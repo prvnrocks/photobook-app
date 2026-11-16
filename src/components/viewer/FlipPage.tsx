@@ -6,8 +6,12 @@
 // classes only. react-pageflip pushes every non-null ref call into its page list, so a repeated
 // call for the same node (StrictMode ref re-invocation) would register a page twice. Defensive:
 // not observed with React 19.1 + Next 15.5 dev StrictMode, but we forward each (ref, el) pair once.
+// M27: `paper` adds the viewer-only "real book" overlay (gutter shading, hairline, corner curl —
+// vw-paper in viewer-motion.css) as the page's last child: absolute, pointer-events none, paint
+// only, so it moves with the page while page-flip turns it and never takes a tap or a drag.
 
 import { forwardRef, useCallback, useRef, type ForwardedRef, type ReactNode } from "react";
+import type { PaperInfo } from "@/lib/viewer/paper";
 
 type Props = {
   children: ReactNode;
@@ -15,6 +19,8 @@ type Props = {
   index: number;
   /** "hard" for covers (page-flip reads data-density). */
   density?: "hard" | "soft";
+  /** Viewer paper overlay: which side of the fold this page sits on, and the corner-curl hint. */
+  paper?: PaperInfo;
 };
 
 function assignRef<T>(ref: ForwardedRef<T>, value: T | null) {
@@ -22,7 +28,7 @@ function assignRef<T>(ref: ForwardedRef<T>, value: T | null) {
   else if (ref) ref.current = value;
 }
 
-export const FlipPage = forwardRef<HTMLDivElement, Props>(function FlipPage({ children, index, density }, ref) {
+export const FlipPage = forwardRef<HTMLDivElement, Props>(function FlipPage({ children, index, density, paper }, ref) {
   const last = useRef<{ ref: ForwardedRef<HTMLDivElement>; el: HTMLDivElement } | null>(null);
   const setEl = useCallback(
     (el: HTMLDivElement | null) => {
@@ -36,6 +42,14 @@ export const FlipPage = forwardRef<HTMLDivElement, Props>(function FlipPage({ ch
   return (
     <div ref={setEl} className="overflow-hidden bg-white" data-flip-index={index} data-density={density}>
       {children}
+      {paper ? (
+        <span
+          aria-hidden="true"
+          className="vw-paper"
+          data-paper={paper.side}
+          data-curl={paper.curl ? "true" : undefined}
+        />
+      ) : null}
     </div>
   );
 });

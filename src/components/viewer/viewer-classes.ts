@@ -76,7 +76,7 @@ export const VW_BAND_TEXT_BTN =
  * the stage.
  */
 export const VW_STAGE =
-  "bg-[#f4ede0] bg-[radial-gradient(ellipse_44%_7%_at_50%_93%,rgb(14_59_46/0.2)_0%,rgb(14_59_46/0.08)_55%,transparent_100%),radial-gradient(ellipse_75%_65%_at_50%_42%,#fdfaf3_0%,#f4ede0_62%,#ebe2d0_100%)]";
+  "bg-[#f4ede0] bg-[radial-gradient(ellipse_44%_7%_at_50%_93%,rgb(14_59_46/0.3)_0%,rgb(14_59_46/0.13)_50%,transparent_100%),radial-gradient(ellipse_75%_65%_at_50%_42%,#fdfaf3_0%,#f4ede0_62%,#ebe2d0_100%)]";
 
 
 /**
