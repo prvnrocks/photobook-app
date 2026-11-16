@@ -13,7 +13,7 @@ import { getSiteUrl, MISSING_APP_URL_ERROR, safeNextPath } from "@/lib/auth/redi
 import { createClient } from "@/lib/supabase/server";
 
 const MSG_INVALID_EMAIL = "Please enter a valid email address.";
-const MSG_INVALID_CODE = "Please enter the 6-digit code from the email.";
+const MSG_INVALID_CODE = "Please enter the code from the email.";
 const MSG_RATE_LIMIT = "Too many attempts. Please wait a minute and try again.";
 const MSG_SEND_FAILED = "We couldn't send the email right now. Please try again.";
 const MSG_BAD_CODE = "That code is wrong or has expired. Check the latest email or request a new code.";

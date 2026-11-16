@@ -151,8 +151,11 @@ describe("form-state validators", () => {
     expect(normalizeEmail(null)).toBeNull();
   });
 
-  it("normalizes 6-digit codes", () => {
+  it("normalizes 6–10 digit codes (hosted Supabase sends 8)", () => {
     expect(normalizeOtpCode("123456")).toBe("123456");
+    expect(normalizeOtpCode("12345678")).toBe("12345678");
+    expect(normalizeOtpCode("1234 5678")).toBe("12345678");
+    expect(normalizeOtpCode("12345678901")).toBeNull();
     expect(normalizeOtpCode(" 123 456 ")).toBe("123456");
     expect(normalizeOtpCode("12345")).toBeNull();
     expect(normalizeOtpCode("12345a")).toBeNull();

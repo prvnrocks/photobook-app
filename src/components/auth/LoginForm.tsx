@@ -87,7 +87,7 @@ export function LoginForm({ next, error = false }: LoginFormProps) {
           <div aria-live="polite" className={LG_SENT_CARD}>
             <MailCheck className={LG_SENT_ICON} aria-hidden="true" />
             <p className="type-small min-w-0 break-words">
-              Check your email — we sent a link and a 6-digit code to{" "}
+              Check your email — we sent a link and a code to{" "}
               <strong className="font-semibold [overflow-wrap:anywhere]">{sendState.email}</strong>
             </p>
           </div>
@@ -96,7 +96,7 @@ export function LoginForm({ next, error = false }: LoginFormProps) {
             <input type="hidden" name="email" value={sendState.email} />
             <NextInput next={next} testId />
             <label htmlFor="login-code" className={LG_LABEL}>
-              6-digit code
+              Code from the email
             </label>
             <input
               id="login-code"
@@ -104,8 +104,8 @@ export function LoginForm({ next, error = false }: LoginFormProps) {
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
-              maxLength={6}
-              pattern="\d{6}"
+              maxLength={10}
+              pattern="\d{6,10}"
               required
               data-testid="login-code"
               aria-invalid={verifyState.error ? true : undefined}

@@ -1,5 +1,5 @@
 // M25 (D-077): /login in the emerald style — testids and behaviour hooks kept in both steps (email and
-// 6-digit code), exactly one gold action per step, 44 px+ controls, numeric contrast for every text
+// emailed code), exactly one gold action per step, 44 px+ controls, numeric contrast for every text
 // pair, the decorative book (aria-hidden, lazy, float only without reduced motion), and no
 // cn/buttonVariants/next/link/Button in the LoginForm client island. Static renders; actions mocked.
 import { readFileSync } from "node:fs";
@@ -119,7 +119,8 @@ describe("LoginForm — code step", () => {
     const code = tagOf(html, "login-code");
     expect(code).toContain('inputMode="numeric"');
     expect(code).toContain('autoComplete="one-time-code"');
-    expect(code).toContain('maxLength="6"');
+    expect(code).toContain('maxLength="10"');
+    expect(code).toContain('pattern="\\d{6,10}"');
     expect(code).toContain("text-center");
     expect(code).toContain("h-12");
     expect(html).toContain("sara@example.com");

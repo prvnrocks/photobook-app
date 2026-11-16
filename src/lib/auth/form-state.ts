@@ -19,9 +19,9 @@ export function normalizeEmail(value: unknown): string | null {
   return EMAIL_RE.test(email) ? email : null;
 }
 
-/** Six digits, ignoring spaces/dashes the user may type; or null. */
+/** The emailed code (6–10 digits — Supabase's OTP length is a project setting; hosted is 8), ignoring spaces/dashes; or null. */
 export function normalizeOtpCode(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const code = value.replace(/[\s-]/g, "");
-  return /^\d{6}$/.test(code) ? code : null;
+  return /^\d{6,10}$/.test(code) ? code : null;
 }
