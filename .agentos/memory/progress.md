@@ -217,3 +217,6 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 
 ## 2026-11-16 — Milestone 23 (Viewer in the emerald style) — done + deployed
 - Restyle-only viewer (D-075); tested signed-out + live AI off/replay; reviewer APPROVED; /b +2.3 kB; watermark/OG/analytics unchanged.
+
+## 2026-11-16 — Milestone 24 (Settings in the emerald style) — done, awaiting deploy OK
+- Restyle-only settings (D-076); reminders stuck-switch bug fixed; tested live; reviewer APPROVED; /settings −15 kB.

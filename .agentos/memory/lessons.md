@@ -161,3 +161,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (M23) A dev preview page that renders /b client screens changes /b's chunking (+13 kB on dev-viewer): split screens into server-safe markup components with client islands as slots, and render static stand-ins in dev.
 - (M23) Book "shadow" in page-flip = paint-only stage background placed from fitBook(), never box-shadow on the book box (spread half-shadow); check in-page cqw text on A5 landscape (0.7 height).
 - (M23) dir="auto" blocks under text-align:start flip for RTL — set text-left on the row wrapper when lines must share an edge. Start e2e drags inside .stf__block.
+- (M24) Don't tie a control's disabled/aria-busy to useTransition pending when its action calls revalidatePath on a loading.tsx route — use a local busy flag. Toggle specs should tap twice without reload. Swapping shadcn Button for plain <button> + recipe in islands saved ~15 kB on /settings.

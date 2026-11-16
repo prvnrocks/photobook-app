@@ -153,6 +153,18 @@ test("settings: reminders toggle saves; delete account removes everything (375 p
   const prof = await admin.from("profiles").select("email_reminders").eq("id", uid).single();
   expect(prof.data?.email_reminders).toBe(false);
 
+  // M24: a second tap without reload works (the switch must not stay busy after "Saved").
+  await expect(toggle).toBeEnabled({ timeout: 2_000 });
+  await expect(toggle).not.toHaveAttribute("aria-busy", "true");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId("settings-reminders-saved")).toBeVisible();
+  await expect(toggle).toBeEnabled({ timeout: 2_000 });
+  const prof2 = await admin.from("profiles").select("email_reminders").eq("id", uid).single();
+  expect(prof2.data?.email_reminders).toBe(true);
+  await page.reload();
+  await expect(page.getByTestId("settings-reminders-toggle")).toHaveAttribute("aria-checked", "true");
+
   const scrollW = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(scrollW).toBeLessThanOrEqual(VIEWPORT.width);
 
