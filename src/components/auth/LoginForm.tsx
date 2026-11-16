@@ -5,15 +5,23 @@ import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { sendMagicLink, signInWithGoogle, verifyEmailCode } from "@/app/auth/actions";
 import { Notice } from "@/components/app/Notice";
-import { Button } from "@/components/ui/button";
+import {
+  LG_CODE_INPUT,
+  LG_CTA_GHOST,
+  LG_CTA_GOLD,
+  LG_CTA_OUTLINE,
+  LG_DIVIDER,
+  LG_DIVIDER_LINE,
+  LG_HINT,
+  LG_INPUT,
+  LG_LABEL,
+  LG_SENT_CARD,
+  LG_SENT_ICON,
+} from "@/components/auth/login-classes";
 import { initialAuthFormState, type AuthFormState } from "@/lib/auth/form-state";
-import { cn } from "@/lib/utils";
 
 const LINK_ERROR =
   "That sign-in link has expired or was already used. Request a new one below.";
-
-const inputClass =
-  "h-12 w-full min-w-0 rounded-lg border border-input bg-card px-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 aria-invalid:border-destructive";
 
 type LoginFormProps = {
   /** Already sanitised with safeNextPath on the server. */
@@ -22,32 +30,24 @@ type LoginFormProps = {
   error?: boolean;
 };
 
+// Plain <button> + recipe strings (no shadcn Button / cn / buttonVariants): keeps this first-load
+// island small (lessons M17–M24). className is one complete recipe from login-classes.
 function SubmitButton({
   children,
   pendingText,
-  variant = "default",
   testId,
   className,
 }: {
   children: React.ReactNode;
   pendingText: string;
-  variant?: "default" | "outline" | "ghost";
   testId?: string;
-  className?: string;
+  className: string;
 }) {
   const { pending } = useFormStatus();
   return (
-    <Button
-      type="submit"
-      variant={variant}
-      disabled={pending}
-      aria-busy={pending}
-      data-testid={testId}
-      size="cta"
-      className={className}
-    >
+    <button type="submit" disabled={pending} aria-busy={pending} data-testid={testId} className={className}>
       {pending ? pendingText : children}
-    </Button>
+    </button>
   );
 }
 
@@ -84,18 +84,18 @@ export function LoginForm({ next, error = false }: LoginFormProps) {
     <div className="flex w-full min-w-0 flex-col gap-6">
       {showCodeStep ? (
         <div className="flex flex-col gap-4">
-          <div aria-live="polite" className="flex items-start gap-3 rounded-xl border border-success-border bg-success-soft p-4">
-            <MailCheck className="mt-0.5 size-5 shrink-0 text-success" aria-hidden="true" />
-            <p className="type-small break-words text-foreground">
+          <div aria-live="polite" className={LG_SENT_CARD}>
+            <MailCheck className={LG_SENT_ICON} aria-hidden="true" />
+            <p className="type-small min-w-0 break-words">
               Check your email — we sent a link and a 6-digit code to{" "}
-              <strong className="font-semibold break-all">{sendState.email}</strong>
+              <strong className="font-semibold [overflow-wrap:anywhere]">{sendState.email}</strong>
             </p>
           </div>
 
           <form action={verifyAction} className="flex flex-col gap-3">
             <input type="hidden" name="email" value={sendState.email} />
             <NextInput next={next} testId />
-            <label htmlFor="login-code" className="text-sm font-medium">
+            <label htmlFor="login-code" className={LG_LABEL}>
               6-digit code
             </label>
             <input
@@ -110,32 +110,26 @@ export function LoginForm({ next, error = false }: LoginFormProps) {
               data-testid="login-code"
               aria-invalid={verifyState.error ? true : undefined}
               aria-describedby={verifyState.error ? "login-code-error" : undefined}
-              className={cn(inputClass, "text-center font-mono text-lg tracking-[0.3em]")}
+              className={LG_CODE_INPUT}
             />
             {verifyState.error ? (
               <div id="login-code-error">
                 <ErrorBanner message={verifyState.error} />
               </div>
             ) : null}
-            <SubmitButton pendingText="Signing in…" testId="login-verify">
+            <SubmitButton pendingText="Signing in…" testId="login-verify" className={LG_CTA_GOLD}>
               Sign in with code
             </SubmitButton>
           </form>
 
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button
-              type="button"
-              variant="ghost"
-              size="touch"
-              className="w-full text-base sm:flex-1"
-              onClick={() => setDismissed(sendState)}
-            >
+          <div className="flex flex-col gap-2">
+            <button type="button" className={LG_CTA_GHOST} onClick={() => setDismissed(sendState)}>
               Use a different email
-            </Button>
-            <form action={sendAction} className="sm:flex-1">
+            </button>
+            <form action={sendAction}>
               <input type="hidden" name="email" value={sendState.email} />
               <NextInput next={next} />
-              <SubmitButton variant="outline" pendingText="Sending…">
+              <SubmitButton pendingText="Sending…" className={LG_CTA_OUTLINE}>
                 Resend
               </SubmitButton>
             </form>
@@ -145,7 +139,7 @@ export function LoginForm({ next, error = false }: LoginFormProps) {
         <form action={sendAction} className="flex flex-col gap-3">
           {showLinkError ? <ErrorBanner message={LINK_ERROR} /> : null}
           <NextInput next={next} testId />
-          <label htmlFor="login-email" className="text-sm font-medium">
+          <label htmlFor="login-email" className={LG_LABEL}>
             Email
           </label>
           <input
@@ -161,27 +155,27 @@ export function LoginForm({ next, error = false }: LoginFormProps) {
             placeholder="you@example.com"
             data-testid="login-email"
             aria-invalid={sendState.error ? true : undefined}
-            className={inputClass}
+            className={LG_INPUT}
           />
           {sendState.error ? <ErrorBanner message={sendState.error} /> : null}
-          <SubmitButton pendingText="Sending…" testId="login-send">
+          <SubmitButton pendingText="Sending…" testId="login-send" className={`${LG_CTA_GOLD} mt-1`}>
             Email me a sign-in link
           </SubmitButton>
         </form>
       )}
 
-      <div className="flex items-center gap-3 text-sm text-muted-foreground" aria-hidden="true">
-        <span className="h-px flex-1 bg-border" />
+      <div className={LG_DIVIDER} aria-hidden="true">
+        <span className={LG_DIVIDER_LINE} />
         or
-        <span className="h-px flex-1 bg-border" />
+        <span className={LG_DIVIDER_LINE} />
       </div>
 
       <form action={signInWithGoogle} className="flex flex-col gap-2">
         <NextInput next={next} />
-        <SubmitButton variant="outline" pendingText="Opening Google…" testId="login-google">
+        <SubmitButton pendingText="Opening Google…" testId="login-google" className={LG_CTA_OUTLINE}>
           Continue with Google
         </SubmitButton>
-        <p className="text-xs leading-relaxed text-muted-foreground">
+        <p className={LG_HINT}>
           Opening this from WhatsApp? Use email — Google sign-in may not work inside the
           WhatsApp browser.
         </p>

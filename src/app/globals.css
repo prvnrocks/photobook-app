@@ -311,6 +311,17 @@
     opacity: 0.7;
   }
 }
+/* M25 login: the brand panel's book bobs gently (6 px, 7 s). Static under prefers-reduced-motion. */
+@keyframes home-float {
+  to {
+    transform: translate3d(0, -6px, 0);
+  }
+}
+@utility home-float {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: home-float 7s ease-in-out infinite alternate;
+  }
+}
 @keyframes home-marquee {
   to {
     transform: translate3d(-50%, 0, 0);

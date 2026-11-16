@@ -260,3 +260,7 @@ Decision: New book form offers Modern (default for every occasion via DEFAULT_ST
 ## D-076 — M24 settings in the emerald style (2026-11-16)
 - Decision: restyle-only /settings: My-books-style emerald band (ACCOUNT, Settings, email chip, back link), ≥lg sticky section nav + cards, phone stack; emerald switch; quiet separated danger zone. No new settings or copy.
 - Why: user request 2026-11-16 ("redesign the settings page in the same emerald style").
+
+## D-077 — M25 login in the emerald style (2026-11-16)
+- Decision: restyle-only /login: leather background with cream card on phones; ≥lg split leather brand panel (wordmark, "Your memories, in print", floating home book cover) + cream card; gold email CTA, Google emerald outline. No auth/copy changes.
+- Why: user request 2026-11-16 ("redesign the login page in the same emerald style").
