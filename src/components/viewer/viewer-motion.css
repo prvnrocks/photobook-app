@@ -72,10 +72,11 @@
     }
   }
 
-  /* M27: the paper corner curl peels in once when a page mounts (clip-path only, inside the page;
-     see .vw-paper below). */
+  /* M27: the paper corner curl peels in whenever its page is shown (page-flip toggles display on
+     every flip; clip-path only, inside the page; see .vw-paper below). Fill mode `backwards` (not
+     `both`) so no clip-path stays applied afterwards — it would clip the flap's drop shadow. */
   .vw-paper[data-curl]::after {
-    animation: vw-peel 0.7s ease-out 0.45s both;
+    animation: vw-peel 0.7s ease-out 0.45s backwards;
   }
 
   @keyframes vw-peel {
