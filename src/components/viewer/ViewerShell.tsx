@@ -8,17 +8,17 @@
 // (publicDocToRenderDoc). Chrome heights never change while reading (the stage keeps its size, so
 // page-flip never re-measures); nothing translates or scales the stage or the flipbook.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Ellipsis, List, Share2 } from "lucide-react";
 import type { RenderPhotos } from "@/components/book/BookPage";
 import { Watermark } from "@/components/book/Watermark";
 import type { BookDoc } from "@/lib/book/types";
 import { cx } from "@/lib/cx";
 import { chapterForPage, chapterLabel, labelFontStyle } from "@/lib/viewer/chapters";
-import { endCardModel } from "@/lib/viewer/end-card";
+import { coverBoardColor, endCardModel, FREE_END_PAPER } from "@/lib/viewer/end-card";
 import { pageRatio } from "@/lib/viewer/fit";
 import { firstVisiblePageIdx, flipLayout } from "@/lib/viewer/pages";
-import { bookEdgesStyle } from "@/lib/viewer/paper";
+import { bookCase } from "@/lib/viewer/paper";
 import { poolSide, stagePoolStyle, type StageMetrics } from "@/lib/viewer/stage-pool";
 import { visiblePages } from "@/lib/viewer/window";
 import { ChapterLabel } from "./ChapterLabel";
@@ -89,6 +89,14 @@ function useStageMetrics(el: HTMLElement | null): StageMetrics | null {
   return m;
 }
 
+/** CSS custom properties the case paint reads (viewer-motion.css .vw-board / .vw-board-face). */
+function caseVars(color: string, spineX: number | null, square: number, spine = 0): CSSProperties {
+  const vars: Record<string, string> = { "--vw-cover": color, "--vw-sq": `${square}px` };
+  if (spineX !== null) vars["--vw-spine-x"] = `${spineX}px`;
+  if (spine > 0) vars["--vw-sp"] = `${spine}px`;
+  return vars as CSSProperties;
+}
+
 export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl, shareTitle }: ViewerShellProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const api = useRef<FlipbookApi | null>(null);
@@ -109,22 +117,28 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
   const atStart = current <= 0;
   const atEnd = visible.includes(layout.count - 1);
 
-  // The stage's ground-shadow pool (VW_STAGE layer 1) under the visible book; paint only.
+  // Hardcover case (M28) round the visible pages, once the book is up: boards under an open book,
+  // the cover board's bleed / wrapped edge and the closed book's thickness round a closed one; the
+  // page-block edges (M27) sit on the boards. Paint only, outside the book box.
   const metrics = useStageMetrics(stageEl);
-  const side = poolSide(spread, visible);
   const ratio = useMemo(() => pageRatio(doc.format), [doc.format]);
-  const poolStyle = useMemo(
-    () => (metrics ? (stagePoolStyle(metrics, spread, ratio, side) ?? undefined) : undefined),
-    [metrics, spread, ratio, side],
-  );
-  // Page-block edges (M27): stacked paper lines beside the visible book, once the book is up.
   const visibleKey = visible.join(",");
-  const edgesStyle = useMemo(
+  const bookCaseStyle = useMemo(
     () =>
-      ready && metrics
-        ? bookEdgesStyle(metrics, spread, ratio, visibleKey.split(",").map(Number), layout.count)
-        : null,
+      ready && metrics ? bookCase(metrics, spread, ratio, visibleKey.split(",").map(Number), layout.count) : null,
     [ready, metrics, spread, ratio, visibleKey, layout.count],
+  );
+  const edgesStyle = bookCaseStyle?.edges ?? null;
+  const boardColor = useMemo(() => coverBoardColor(doc.style.background), [doc.style.background]);
+  // Closed on the back: the face bleeds the end page's colour (paid: the book background; free: the
+  // end card's paper).
+  const faceColor = bookCaseStyle?.state === "back" && !isPaid ? FREE_END_PAPER : boardColor;
+  // The stage's ground-shadow pool (VW_STAGE layer 1) under the visible book and its case.
+  const side = poolSide(spread, visible);
+  const grow = bookCaseStyle?.grow;
+  const poolStyle = useMemo(
+    () => (metrics ? (stagePoolStyle(metrics, spread, ratio, side, grow) ?? undefined) : undefined),
+    [metrics, spread, ratio, side, grow],
   );
 
   // Stable nodes: Flipbook puts them in context; new identities re-render every page.
@@ -223,7 +237,25 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
       >
         {/* Before the flipbook in the DOM, so the book paints over it; absolute, pointer-events none,
             outside the book box — paint only, page-flip's geometry is untouched. */}
+        {bookCaseStyle ? (
+          <div
+            aria-hidden="true"
+            className="vw-board pointer-events-none absolute"
+            style={{ ...bookCaseStyle.boards, ...caseVars(boardColor, bookCaseStyle.spineX, bookCaseStyle.square) }}
+            data-state={bookCaseStyle.state}
+            data-testid="book-board"
+          />
+        ) : null}
         {edgesStyle ? <div aria-hidden="true" className="pointer-events-none absolute" style={edgesStyle} data-testid="book-edges" /> : null}
+        {bookCaseStyle?.face ? (
+          <div
+            aria-hidden="true"
+            className="vw-board-face pointer-events-none absolute"
+            style={{ ...bookCaseStyle.face, ...caseVars(faceColor, null, bookCaseStyle.square, bookCaseStyle.spine) }}
+            data-hinge={bookCaseStyle.hinge}
+            data-testid="book-cover-face"
+          />
+        ) : null}
         <FlipbookLoader
           doc={doc}
           photos={photos}

@@ -49,6 +49,22 @@ function cardColor(bg: Background | string): string {
   return backgroundColor(bg);
 }
 
+/** The free end card's paper (EndCard FreeEnd frame bg-[#e8ddc6]): the back board's face colour. */
+export const FREE_END_PAPER = "#e8ddc6";
+
+/** Deep cloth emerald: the hardcover's material when the cover colour can't be read. */
+export const BOARD_CLOTH = "#0e3b2e";
+
+/**
+ * M28: colour of the hardcover case in the viewer (board edges, bleed round the closed cover, the
+ * turned-in cover material inside the open book): the cover's background — the book default, as
+ * BookPage paints the cover (plain colour, tinted paper or a photo background's veil colour).
+ */
+export function coverBoardColor(bg: Background | string | null | undefined): string {
+  const hex = bg ? cardColor(bg) : "";
+  return hexLuminance(hex) !== null ? hex : BOARD_CLOTH;
+}
+
 /** Ink the book's pages use on this book background (v1 string = a colour background). */
 export function endCardInk(bg: Background | string): Ink {
   const background: Background = typeof bg === "string" ? { kind: "color", hex: bg } : bg;

@@ -48,7 +48,14 @@ export function poolSide(spread: boolean, visible: readonly number[]): PoolSide 
  * doesn't fit (the recipe's default 93 % placement then applies). Mirrors the Flipbook's own fit:
  * fitBook on the stage content box, centred both ways.
  */
-export function stagePoolStyle(stage: StageMetrics, spread: boolean, ratio: PageRatio, side: PoolSide): PoolStyle | null {
+export function stagePoolStyle(
+  stage: StageMetrics,
+  spread: boolean,
+  ratio: PageRatio,
+  side: PoolSide,
+  /** M28: the hardcover case reaches this far beyond the visible pages — the pool sits under it. */
+  grow?: { left: number; right: number; bottom: number },
+): PoolStyle | null {
   const avail = {
     width: stage.width - stage.padLeft - stage.padRight,
     height: stage.height - stage.padTop - stage.padBottom,
@@ -59,10 +66,10 @@ export function stagePoolStyle(stage: StageMetrics, spread: boolean, ratio: Page
 
   const bookLeft = stage.padLeft + (avail.width - box.width) / 2;
   const bookTop = stage.padTop + (avail.height - box.height) / 2;
-  const bookBottom = bookTop + box.height;
+  const bookBottom = bookTop + box.height + (grow?.bottom ?? 0);
   const halfOnly = spread && side !== "center";
-  const visLeft = side === "right" && spread ? bookLeft + box.pageWidth : bookLeft;
-  const visWidth = halfOnly ? box.pageWidth : box.width;
+  const visLeft = (side === "right" && spread ? bookLeft + box.pageWidth : bookLeft) - (grow?.left ?? 0);
+  const visWidth = (halfOnly ? box.pageWidth : box.width) + (grow?.left ?? 0) + (grow?.right ?? 0);
 
   // Ellipse a little wider than the book (rx = 0.55 × width), 10–24 px tall radius, centre tucked
   // 30 % of that radius under the book's foot so the shadow reads as contact, not a halo.

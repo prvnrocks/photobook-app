@@ -45,7 +45,7 @@ import { resolveBackground } from "@/lib/book/render";
 import type { BookDoc } from "@/lib/book/types";
 import { fitBook, pageRatio, SPREAD_MEDIA_QUERY, type PageRatio } from "@/lib/viewer/fit";
 import { flipLayout, flipPageKind, startIndexFor, type FlipLayout } from "@/lib/viewer/pages";
-import { paperFor } from "@/lib/viewer/paper";
+import { isBoardPage, paperFor } from "@/lib/viewer/paper";
 import { inPhotoWindow, photoWindow, spreadStart, type PhotoWindow } from "@/lib/viewer/window";
 import { FlipPage } from "./FlipPage";
 
@@ -355,10 +355,16 @@ function BookInstance({ pageCount, spread, ratio, startPage, onInstance, onFlipI
   }));
 
   // Static children: content comes from PagesContext so these elements never change.
+  // Hardcover (M28): the front cover (0) and the back (last) are hard boards — they turn stiffly
+  // round the spine (no soft curl) and lie flat. The other side of each board's leaf (flip index 1
+  // inside the front cover, count - 2 inside the back) stays soft on purpose: in spread mode
+  // page-flip turns a leaf whose two sides differ in density as one hard leaf (Flip.start sets
+  // both drawing densities to hard), so the cover leaf already turns as a board; marking index 1
+  // hard would change nothing there but make it turn stiffly on phones, where it is a paper page.
   const children = useMemo(
     () =>
       Array.from({ length: pageCount }, (_, i) => (
-        <FlipPage key={i} index={i} density={i === 0 ? "hard" : undefined} paper={paperFor(i, pageCount, spread)}>
+        <FlipPage key={i} index={i} density={isBoardPage(i, pageCount) ? "hard" : undefined} paper={paperFor(i, pageCount, spread)}>
           <WindowedPage index={i} />
         </FlipPage>
       )),

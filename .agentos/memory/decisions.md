@@ -268,3 +268,7 @@ Decision: New book form offers Modern (default for every occasion via DEFAULT_ST
 ## D-078 — M26 upgrade payment screens in the emerald style (2026-11-16)
 - Decision: restyle-only post-checkout screens (/books/[id]/upgrade/success all states + cancelled notice) with emerald band, cream cards, gold seal/celebration, one gold CTA; Stripe-hosted checkout styled via Stripe dashboard branding, not code. No pre-checkout page (no extra tap).
 - Why: user request 2026-11-16 ("redesign the upgrade payment page in the same emerald style").
+
+## D-079 — M28 hardcover look in the viewer (2026-11-17)
+- Decision: viewer-only hardcover: hard front/back boards that turn stiffly, boards overhang the text block (squares), cover material wraps the board edges, hinge groove (squeeze) near the spine, cover art bleeds to the board edge; paint only, book box size unchanged. Print-ready wrap/bleed/spine cover PDF deferred to the printing milestone (needs printer specs).
+- Why: user request 2026-11-17; user chose viewer-only scope.

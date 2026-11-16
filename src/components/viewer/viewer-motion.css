@@ -211,3 +211,85 @@
   visibility: hidden;
 }
 
+
+/* ---- Hardcover (M28) -------------------------------------------------------------------------
+   Hinge groove ("squeeze") on the hard boards: FlipPage marks the front cover and the back with
+   data-board = the hinge side (paper.ts). A soft dark line ~4.7 % in from the spine edge with a
+   light ridge beside it, full height, plus the board's slight shading at the spine itself. Inside
+   the page's own overlay, so it turns with the board. */
+.vw-paper[data-paper][data-board] {
+  background: linear-gradient(
+    var(--vw-hinge, to right),
+    rgb(0 0 0 / 0.16) 0%,
+    rgb(0 0 0 / 0.05) 1.4%,
+    transparent 3.2%,
+    rgb(0 0 0 / 0.06) 3.9%,
+    rgb(0 0 0 / 0.26) 4.6%,
+    rgb(0 0 0 / 0.1) 5.1%,
+    rgb(255 255 255 / 0.34) 5.6%,
+    rgb(255 255 255 / 0.1) 6.6%,
+    transparent 8.2%
+  );
+}
+.vw-paper[data-paper][data-board="left"] {
+  --vw-hinge: to right;
+}
+.vw-paper[data-paper][data-board="right"] {
+  --vw-hinge: to left;
+}
+
+/* The case round the visible pages: absolute elements on the stage behind the flipbook, placed
+   by bookCase() (paper.ts), coloured by --vw-cover (the cover's background, else cloth emerald).
+   Paint only — no transform, nothing inside the book box changes.
+   .vw-board: open = both boards under the spread; the rim beyond the text block is the cover
+   material turned over the board edge (darker outer edge, a light rounded-edge highlight, a soft
+   fall-off towards the edge) with the spine hollow at --vw-spine-x on the top / bottom rims.
+   Closed = the far board seen past the page block, a shade darker (in shadow). Qualified by their
+   always-present data attributes (like .vw-paper[data-paper]). */
+.vw-board[data-state] {
+  border-radius: 3px;
+  background-color: var(--vw-cover);
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0 / 0.36),
+    inset 0 0 0 2px rgb(255 255 255 / 0.22),
+    inset 0 0 calc(var(--vw-sq) * 0.7) rgb(0 0 0 / 0.26),
+    0 1px 3px rgb(0 0 0 / 0.2);
+}
+.vw-board[data-state="open"] {
+  background-image: linear-gradient(
+    to right,
+    transparent calc(var(--vw-spine-x) - 14px),
+    rgb(0 0 0 / 0.12) calc(var(--vw-spine-x) - 5px),
+    rgb(0 0 0 / 0.38) var(--vw-spine-x),
+    rgb(0 0 0 / 0.12) calc(var(--vw-spine-x) + 5px),
+    transparent calc(var(--vw-spine-x) + 14px)
+  );
+}
+.vw-board[data-state="front"],
+.vw-board[data-state="back"] {
+  background-color: color-mix(in srgb, var(--vw-cover) 78%, #000);
+}
+
+/* Closed book: the shown board's face round the cover / back page — the cover art printed past
+   the trim to the board edge (bleed: the cover colour) and wrapped round it (rounded edge: dark
+   outer line, highlight, fall-off), rounding into the spine on the hinge side (--vw-sp). It casts
+   a little shadow on the far board and page block. */
+.vw-board-face[data-hinge] {
+  border-radius: 2px 4px 4px 2px;
+  background-color: var(--vw-cover);
+  background-image: linear-gradient(
+    var(--vw-spine-dir, to right),
+    rgb(0 0 0 / 0.34) 0,
+    rgb(0 0 0 / 0.08) var(--vw-sp, 0px),
+    transparent calc(var(--vw-sp, 0px) + 1px)
+  );
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0 / 0.32),
+    inset 0 0 0 2px rgb(255 255 255 / 0.3),
+    inset 0 0 calc(var(--vw-sq) * 1.4) rgb(0 0 0 / 0.22),
+    1px 2px 3px rgb(0 0 0 / 0.24);
+}
+.vw-board-face[data-hinge="right"] {
+  --vw-spine-dir: to left;
+  border-radius: 4px 2px 2px 4px;
+}

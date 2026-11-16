@@ -9,6 +9,7 @@
 // M27: `paper` adds the viewer-only "real book" overlay (gutter shading, hairline, corner curl —
 // vw-paper in viewer-motion.css) as the page's last child: absolute, pointer-events none, paint
 // only, so it moves with the page while page-flip turns it and never takes a tap or a drag.
+// M28: on the hard boards (front cover, back) it also draws the hinge groove (data-board).
 
 import { forwardRef, useCallback, useRef, type ForwardedRef, type ReactNode } from "react";
 import type { PaperInfo } from "@/lib/viewer/paper";
@@ -17,7 +18,7 @@ type Props = {
   children: ReactNode;
   /** Flip index (0 = cover), exposed as data-flip-index for tests and viewer chrome. */
   index: number;
-  /** "hard" for covers (page-flip reads data-density). */
+  /** "hard" for the boards — front cover and back (page-flip reads data-density). */
   density?: "hard" | "soft";
   /** Viewer paper overlay: which side of the fold this page sits on, and the corner-curl hint. */
   paper?: PaperInfo;
@@ -48,6 +49,7 @@ export const FlipPage = forwardRef<HTMLDivElement, Props>(function FlipPage({ ch
           className="vw-paper"
           data-paper={paper.side}
           data-curl={paper.curl ? "true" : undefined}
+          data-board={paper.board}
         />
       ) : null}
     </div>

@@ -40,21 +40,23 @@ function walk(dir: string): string[] {
 describe("paperFor: side of the fold + curl per flip page", () => {
   it("spread: cover alone right, odd left, even right, unpaired last page alone on the left", () => {
     const count = 14; // cover + 12 pages + end card
-    expect(paperFor(0, count, true)).toEqual({ side: "cover", curl: true });
+    // M28: the cover and the back are hard boards — hinge groove, no curl.
+    expect(paperFor(0, count, true)).toEqual({ side: "cover", curl: false, board: "left" });
     expect(paperFor(1, count, true)).toEqual({ side: "left", curl: false });
     expect(paperFor(2, count, true)).toEqual({ side: "right", curl: true });
     expect(paperFor(11, count, true)).toEqual({ side: "left", curl: false });
     expect(paperFor(12, count, true)).toEqual({ side: "right", curl: true });
-    expect(paperFor(13, count, true)).toEqual({ side: "back", curl: false });
+    expect(paperFor(13, count, true)).toEqual({ side: "back", curl: false, board: "right" });
   });
 
   it("spread with a paired last page: its right page has no curl", () => {
     expect(paperFor(2, 3, true)).toEqual({ side: "right", curl: false });
   });
 
-  it("phone: every page single (spine left), curl on all but the last", () => {
-    for (let i = 0; i < 12; i++) expect(paperFor(i, 13, false)).toEqual({ side: "single", curl: true });
-    expect(paperFor(12, 13, false)).toEqual({ side: "single", curl: false });
+  it("phone: every page single (spine left), curl on all but the boards (M28: cover + last)", () => {
+    expect(paperFor(0, 13, false)).toEqual({ side: "single", curl: false, board: "left" });
+    for (let i = 1; i < 12; i++) expect(paperFor(i, 13, false)).toEqual({ side: "single", curl: true });
+    expect(paperFor(12, 13, false)).toEqual({ side: "single", curl: false, board: "left" });
   });
 });
 
@@ -113,9 +115,12 @@ describe("paper CSS (viewer-motion.css)", () => {
     // Left page and back alone: top, bottom, left.
     const outerLeft = shadows(rule(/\.vw-paper\[data-paper="left"\],\s*\.vw-paper\[data-paper="back"\]/));
     expect(outerLeft).toEqual(["inset 0 1px 0 var(--vw-hair)", "inset 0 -1px 0 var(--vw-hair)", "inset 1px 0 0 var(--vw-hair)"]);
-    // No all-round ring left anywhere, and no other rule redraws a side.
-    expect(css).not.toMatch(/inset 0 0 0 1px/);
-    const withShadow = [...css.matchAll(/([^{}]*)\{[^}]*box-shadow:[^}]*inset[^}]*\}/g)].map((m) => m[1].trim());
+    // No all-round ring on any page overlay, and no other overlay rule redraws a side. (M28's case
+    // elements — .vw-board / .vw-board-face — sit on the stage outside the book box.)
+    const withShadow = [...css.matchAll(/([^{}]*)\{[^}]*box-shadow:[^}]*inset[^}]*\}/g)]
+      .map((m) => m[1].trim())
+      .filter((sel) => sel.includes("vw-paper"));
+    for (const m of css.matchAll(/([^{}]*vw-paper[^{}]*)\{([^}]*)\}/g)) expect(m[2]).not.toMatch(/inset 0 0 0 1px/);
     expect(withShadow).toEqual(['.vw-paper[data-paper]', '.vw-paper[data-paper="left"],\n.vw-paper[data-paper="back"]']);
   });
 
@@ -169,16 +174,16 @@ describe("bookEdgesStyle: page-block edges beside the visible book", () => {
   const s = stage(1280, 657, 16);
   const box = fitBook({ width: 1248, height: 625 }, true, PORTRAIT)!;
   const bookLeft = 16 + (1248 - box.width) / 2;
-  const bookTop = 16 + (625 - box.height) / 2;
   const max = maxStackPx(box.pageWidth);
 
-  it("cover alone: under the right page only, no stack on the left", () => {
+  it("cover alone: the closed book's fore-edge right of the cover (M28: past its wrapped edge), no stack on the left", () => {
     const e = bookEdgesStyle(s, true, PORTRAIT, [0], 14)!;
-    expect(e.left).toBe(bookLeft + box.pageWidth);
-    expect(e.width).toBe(box.pageWidth + max);
+    expect(e.left).toBeGreaterThan(bookLeft + 2 * box.pageWidth); // past the cover's board edge
+    expect(e.left).toBeLessThanOrEqual(bookLeft + 2 * box.pageWidth + 8);
+    expect(e.width).toBe(max);
     expect(e.background).not.toContain("to left");
-    expect(e.background).toContain(`100% 0/${max}px 100% no-repeat`);
-    expect([e.top, e.height]).toEqual([bookTop, box.height]);
+    expect(e.background).toContain(`0 0/${max}px 100% no-repeat`);
+    expect(e.height).toBe(box.height);
   });
 
   it("middle spread: both stacks, thickness follows progress, outside the book box", () => {
@@ -194,7 +199,9 @@ describe("bookEdgesStyle: page-block edges beside the visible book", () => {
 
   it("end card alone: under the left page only, no stack on the right", () => {
     const e = bookEdgesStyle(s, true, PORTRAIT, [13], 14)!;
-    expect(e.left + e.width).toBe(bookLeft + box.pageWidth);
+    // M28: the closed book's fore-edge, left of the back board's wrapped edge.
+    expect(e.left + e.width).toBeLessThan(bookLeft);
+    expect(e.left + e.width).toBeGreaterThanOrEqual(bookLeft - 8);
     expect(e.background).not.toContain("to right");
     expect(e.background).toContain(" 0 0/");
   });
@@ -208,7 +215,10 @@ describe("bookEdgesStyle: page-block edges beside the visible book", () => {
         expect(e.left).toBeGreaterThanOrEqual(0);
       }
     }
-    expect(bookEdgesStyle(stage(375, 524, 8), false, PORTRAIT, [12], 13)).toBeNull(); // last page
+    // M28: the last page is the closed back — its fore-edge stays right of it (spine left), inside the stage.
+    const back = bookEdgesStyle(stage(375, 524, 8), false, PORTRAIT, [12], 13)!;
+    expect(back.background).not.toContain("to left");
+    expect(back.left + back.width).toBeLessThanOrEqual(375);
   });
 
   it("no book → null", () => {
