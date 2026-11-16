@@ -2,7 +2,10 @@
 
 // Settings → "Email reminders" switch (M9 T10, D-057). Saves immediately (optimistic); on failure
 // it flips back and shows why. <EmailRemindersToggleView> takes the action as a prop (unit tests).
+// M24 (D-076): emerald card + switch (on = emerald, off = muted); recipes from settings-classes.ts,
+// plain strings picked per state (no cn in this first-load island).
 
+import { Bell } from "lucide-react";
 import { useState, useTransition } from "react";
 import { setEmailRemindersAction } from "@/app/settings/actions";
 import { REMINDERS_OFF_NOTICE } from "@/lib/cleanup/rules";
@@ -12,7 +15,17 @@ import {
   type SetEmailRemindersResult,
 } from "@/lib/settings/account";
 import { Notice } from "@/components/app/Notice";
-import { cn } from "@/lib/utils";
+import {
+  SETTINGS_CARD,
+  SETTINGS_CARD_HEAD,
+  SETTINGS_CARD_HEADING,
+  SETTINGS_ICON_CHIP,
+  SETTINGS_SWITCH_BUTTON,
+  SETTINGS_SWITCH_THUMB_OFF,
+  SETTINGS_SWITCH_THUMB_ON,
+  SETTINGS_SWITCH_TRACK_OFF,
+  SETTINGS_SWITCH_TRACK_ON,
+} from "@/components/settings/settings-classes";
 
 export function EmailRemindersToggle({
   initialOn,
@@ -69,13 +82,18 @@ export function EmailRemindersToggleView({
   return (
     <section
       aria-labelledby="settings-reminders-heading"
-      className="flex min-w-0 flex-col gap-3 rounded-2xl border border-border bg-card p-5 shadow-card"
+      className={SETTINGS_CARD}
       data-testid="settings-reminders"
     >
       <div className="flex min-w-0 items-center justify-between gap-3">
-        <h2 id="settings-reminders-heading" className="type-h2 text-foreground">
-          {ACCOUNT_COPY.remindersHeading}
-        </h2>
+        <div className={SETTINGS_CARD_HEAD}>
+          <span aria-hidden="true" className={SETTINGS_ICON_CHIP}>
+            <Bell className="size-5" />
+          </span>
+          <h2 id="settings-reminders-heading" className={`${SETTINGS_CARD_HEADING} self-center`}>
+            {ACCOUNT_COPY.remindersHeading}
+          </h2>
+        </div>
         {initialOn === null ? null : (
           <button
             type="button"
@@ -86,36 +104,25 @@ export function EmailRemindersToggleView({
             aria-busy={pending}
             disabled={pending}
             onClick={toggle}
-            className="flex min-h-11 shrink-0 items-center gap-2 rounded-full px-1 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:opacity-60"
+            className={SETTINGS_SWITCH_BUTTON}
             data-testid="settings-reminders-toggle"
             data-state={on ? "on" : "off"}
           >
             <span
-              className="w-7 text-end text-muted-foreground"
+              className={on ? "w-7 text-end text-[#0e3b2e]" : "w-7 text-end text-muted-foreground"}
               aria-hidden="true"
             >
               {on ? ACCOUNT_COPY.remindersOn : ACCOUNT_COPY.remindersOff}
             </span>
-            <span
-              aria-hidden="true"
-              className={cn(
-                "relative inline-flex h-7 w-12 items-center rounded-full transition-colors",
-                on ? "bg-primary" : "bg-input",
-              )}
-            >
-              <span
-                className={cn(
-                  "inline-block size-6 rounded-full bg-card shadow-card transition-transform motion-reduce:transition-none",
-                  on ? "translate-x-[1.375rem] rtl:-translate-x-[1.375rem]" : "translate-x-0.5 rtl:-translate-x-0.5",
-                )}
-              />
+            <span aria-hidden="true" className={on ? SETTINGS_SWITCH_TRACK_ON : SETTINGS_SWITCH_TRACK_OFF}>
+              <span className={on ? SETTINGS_SWITCH_THUMB_ON : SETTINGS_SWITCH_THUMB_OFF} />
             </span>
           </button>
         )}
       </div>
       <p
         id="settings-reminders-detail"
-        className="text-sm text-muted-foreground"
+        className="type-small text-muted-foreground"
       >
         {ACCOUNT_COPY.remindersDetail}{" "}
         {/* Unknown setting (null) → the off notice too: deletions happen either way. */}
@@ -128,13 +135,14 @@ export function EmailRemindersToggleView({
           {ACCOUNT_COPY.remindersLoadError}
         </Notice>
       ) : null}
-      <div aria-live="polite">
+      {/* Empty live region: cancel the card gap so no blank row shows under the text. */}
+      <div aria-live="polite" className="empty:-mt-4">
         {message ? (
           <p
             className={
               message.tone === "error"
                 ? "text-sm text-destructive"
-                : "text-sm text-success"
+                : "text-sm font-medium text-[#0e3b2e]"
             }
             data-testid={
               message.tone === "error"

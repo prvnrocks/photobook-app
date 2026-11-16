@@ -256,3 +256,7 @@ Decision: New book form offers Modern (default for every occasion via DEFAULT_ST
 - Decision: restyle-only /b/[slug] redesign: slim always-visible emerald band (title, chapter, Contents/Share/Fullscreen), cream stage with a background "pool" shadow (no box-shadow on the book box), emerald counter pill, card sheets, cream free end card with gold "Create yours", leather+cream-card password/expired/unavailable/not-found screens; Flipbook/FlipPage/BookPage/watermark/OG untouched; no band brand mark (D-040 kept).
 - Why: user request 2026-11-15 ("redesign the flipbook viewer page in the same emerald style").
 - Alternatives rejected: auto-hiding band (overlay covers page / collapse re-measures page-flip); band brand seal; new end-card copy.
+
+## D-076 — M24 settings in the emerald style (2026-11-16)
+- Decision: restyle-only /settings: My-books-style emerald band (ACCOUNT, Settings, email chip, back link), ≥lg sticky section nav + cards, phone stack; emerald switch; quiet separated danger zone. No new settings or copy.
+- Why: user request 2026-11-16 ("redesign the settings page in the same emerald style").

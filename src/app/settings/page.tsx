@@ -1,18 +1,32 @@
+// Settings (M9 T10 / D-032; M24 emerald restyle, D-076): the library-width app header, the emerald
+// SettingsBand (back to My books, ACCOUNT, Settings, signed-in email chip), then ≥ lg a sticky section
+// nav beside the cards column (Account, Email reminders, What the AI has learned, Danger zone); phones
+// stack the cards. Restyle only: same settings, copy, testids and server actions.
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ArrowLeft, ChevronLeft } from "lucide-react";
 import { redirect } from "next/navigation";
-import { PageHeader } from "@/components/app/PageHeader";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { DeleteAccount } from "@/components/settings/DeleteAccount";
 import { EmailRemindersToggle } from "@/components/settings/EmailRemindersToggle";
+import { SettingsAccount } from "@/components/settings/SettingsAccount";
+import { SettingsBand } from "@/components/settings/SettingsBand";
 import { SettingsMemory } from "@/components/settings/SettingsMemory";
-import { buttonVariants } from "@/components/ui/button-variants";
+import { SettingsNav } from "@/components/settings/SettingsNav";
+import {
+  SETTINGS_ANCHOR,
+  SETTINGS_BAND_BACK,
+  SETTINGS_COLUMNS,
+  SETTINGS_CONTAINER,
+  SETTINGS_CONTENT,
+  SETTINGS_DANGER_LABEL,
+  SETTINGS_DANGER_ZONE,
+  SETTINGS_FOOT_LINK,
+} from "@/components/settings/settings-page-classes";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getOwnEmailReminders } from "@/lib/db/account";
 import { getOwnMemoryView, type OwnMemoryView } from "@/lib/db/memory";
 import { getMyProfile } from "@/lib/db/profiles";
-import { SETTINGS_COPY } from "@/lib/settings/ui";
-import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -42,43 +56,44 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <AppHeader displayName={displayName} />
-      <main className="mx-auto w-full max-w-app px-gutter pt-4 pb-12">
-        <PageHeader
-          className="mb-stack"
-          back={{ href: "/dashboard", label: "My books" }}
-          eyebrow="Account"
-          title={SETTINGS_COPY.heading}
-          titleTestId="settings-heading"
-          description={
-            email ? (
-              <>
-                Signed in as{" "}
-                <span dir="auto" className="font-medium break-all text-foreground" data-testid="settings-email">
-                  {email}
-                </span>
-              </>
-            ) : undefined
+      <AppHeader displayName={displayName} width="library" />
+      <main>
+        <SettingsBand
+          email={email}
+          back={
+            <Link href="/dashboard" className={SETTINGS_BAND_BACK}>
+              <ChevronLeft className="size-4 shrink-0" aria-hidden="true" />
+              My books
+            </Link>
           }
         />
-        <div className="flex min-w-0 flex-col gap-4">
-          <EmailRemindersToggle initialOn={remindersOn} />
-          <SettingsMemory view={memory} />
-        </div>
+        <div className={`${SETTINGS_CONTAINER} ${SETTINGS_COLUMNS}`}>
+          <aside className="hidden lg:block lg:self-stretch">
+            <SettingsNav />
+          </aside>
+          <div className={SETTINGS_CONTENT}>
+            <div id="account" className={SETTINGS_ANCHOR}>
+              <SettingsAccount email={email} />
+            </div>
+            <div id="email-reminders" className={SETTINGS_ANCHOR}>
+              <EmailRemindersToggle initialOn={remindersOn} />
+            </div>
+            <div id="ai-memory" className={SETTINGS_ANCHOR}>
+              <SettingsMemory view={memory} />
+            </div>
 
-        {/* Danger zone: set apart by space, a rule and its own label so it never reads as a regular setting. */}
-        <div className="mt-section border-t border-dashed border-destructive-border pt-stack">
-          <p className="mb-3 text-xs font-semibold tracking-[0.14em] text-destructive uppercase">Danger zone</p>
-          <DeleteAccount />
-        </div>
+            {/* Danger zone: set apart by space, a dashed rule and its own label so it never reads as a regular setting. */}
+            <div id="danger-zone" className={`${SETTINGS_ANCHOR} ${SETTINGS_DANGER_ZONE}`} data-testid="settings-danger-zone">
+              <p className={SETTINGS_DANGER_LABEL}>Danger zone</p>
+              <DeleteAccount />
+            </div>
 
-        <Link
-          href="/dashboard"
-          className={cn(buttonVariants({ variant: "ghost", size: "touch" }), "mt-6 w-full text-base")}
-          data-testid="back-to-dashboard"
-        >
-          Back to my books
-        </Link>
+            <Link href="/dashboard" className={SETTINGS_FOOT_LINK} data-testid="back-to-dashboard">
+              <ArrowLeft className="size-4 shrink-0" aria-hidden="true" />
+              Back to my books
+            </Link>
+          </div>
+        </div>
       </main>
     </>
   );

@@ -1,7 +1,17 @@
 // "What the AI has learned" section of /settings (D-032). Presentational: the page loads the
 // view; `view === undefined` means loading failed. Only friendly labels are shown, never raw prefs.
+// M24 (D-076): ivory card, the rows as a definition list in a cream well, emerald outline Clear.
+import { Sparkles } from "lucide-react";
 import { Notice } from "@/components/app/Notice";
 import { SettingsClearButton } from "@/components/settings/SettingsClearButton";
+import { SETTINGS_CARD, SETTINGS_CARD_HEAD, SETTINGS_CARD_HEADING, SETTINGS_ICON_CHIP } from "@/components/settings/settings-classes";
+import {
+  SETTINGS_DD,
+  SETTINGS_DT,
+  SETTINGS_ROW,
+  SETTINGS_VALUE_CHIP,
+  SETTINGS_WELL,
+} from "@/components/settings/settings-page-classes";
 import {
   isMemoryViewEmpty,
   lastUpdatedLabel,
@@ -25,11 +35,7 @@ function RowValue({ row }: { row: MemoryRow }) {
     return (
       <ul className="flex min-w-0 flex-wrap gap-1.5">
         {row.values.map((v, i) => (
-          <li
-            key={`${i}-${v}`}
-            dir="auto"
-            className="max-w-full rounded-full bg-secondary px-2.5 py-0.5 text-sm break-words text-secondary-foreground"
-          >
+          <li key={`${i}-${v}`} dir="auto" className={SETTINGS_VALUE_CHIP}>
             {v}
           </li>
         ))}
@@ -48,31 +54,32 @@ export function SettingsMemory({ view }: { view: MemoryViewLike | null | undefin
   return (
     <section
       aria-labelledby="settings-memory-heading"
-      className="flex min-w-0 flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-card"
+      className={SETTINGS_CARD}
       data-testid="settings-memory"
     >
-      <h2 id="settings-memory-heading" className="type-h2 text-foreground">
-        {SETTINGS_COPY.memoryHeading}
-      </h2>
+      <div className={SETTINGS_CARD_HEAD}>
+        <span aria-hidden="true" className={SETTINGS_ICON_CHIP}>
+          <Sparkles className="size-5" />
+        </span>
+        <h2 id="settings-memory-heading" className={`${SETTINGS_CARD_HEADING} self-center`}>
+          {SETTINGS_COPY.memoryHeading}
+        </h2>
+      </div>
       {failed ? (
         <Notice tone="error" data-testid="settings-error">
           {SETTINGS_COPY.loadError}
         </Notice>
       ) : empty ? (
-        <p className="text-sm text-muted-foreground" data-testid="settings-empty">
+        <p className="type-small text-muted-foreground" data-testid="settings-empty">
           {SETTINGS_COPY.empty}
         </p>
       ) : (
         <div className="flex min-w-0 flex-col gap-3">
-          <dl className="flex min-w-0 flex-col divide-y divide-border" data-testid="settings-memory-list">
+          <dl className={`${SETTINGS_WELL} flex flex-col divide-y divide-[#e9dfca]`} data-testid="settings-memory-list">
             {rows.map((row) => (
-              <div
-                key={row.key}
-                className="flex min-w-0 flex-col gap-1 py-2.5 first:pt-0 last:pb-0"
-                data-testid={`settings-row-${row.key}`}
-              >
-                <dt className="text-sm text-muted-foreground">{row.label}</dt>
-                <dd className="min-w-0 text-base font-medium">
+              <div key={row.key} className={SETTINGS_ROW} data-testid={`settings-row-${row.key}`}>
+                <dt className={SETTINGS_DT}>{row.label}</dt>
+                <dd className={SETTINGS_DD}>
                   <RowValue row={row} />
                 </dd>
               </div>
@@ -85,7 +92,7 @@ export function SettingsMemory({ view }: { view: MemoryViewLike | null | undefin
           ) : null}
         </div>
       )}
-      <p className="text-sm text-muted-foreground" data-testid="settings-privacy">
+      <p className="type-small text-muted-foreground" data-testid="settings-privacy">
         {SETTINGS_COPY.privacy}
       </p>
       {/* Stable position: keeps the "Cleared" message across router.refresh(). */}

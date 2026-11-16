@@ -3,12 +3,22 @@
 // Settings → "Delete account" danger zone (M9 T10, D-060). Type DELETE → button enables. On success
 // the server action signs out and redirects to "/?account=deleted" (it never returns); any returned
 // value is an error. <DeleteAccountView> takes the action as a prop (unit tests).
+// M24 (D-076): a quiet card until DELETE is typed, then red-tinted with the solid red button (the
+// button stays disabled until then — unchanged logic). Plain button + settings-classes.ts recipes as
+// full alternatives (no Button/cn in this island).
 
 import { Loader2, TriangleAlert } from "lucide-react";
 import { useState, useTransition } from "react";
 import { deleteAccountAction } from "@/app/settings/actions";
 import { Notice } from "@/components/app/Notice";
-import { Button } from "@/components/ui/button";
+import {
+  SETTINGS_CARD_HEADING,
+  SETTINGS_DANGER_CARD_ARMED,
+  SETTINGS_DANGER_CARD_QUIET,
+  SETTINGS_DANGER_INPUT,
+  SETTINGS_DELETE_BUTTON_IDLE,
+  SETTINGS_DELETE_BUTTON_READY,
+} from "@/components/settings/settings-classes";
 import {
   ACCOUNT_COPY,
   deleteAccountErrorCopy,
@@ -52,16 +62,17 @@ export function DeleteAccountView({
   return (
     <section
       aria-labelledby="settings-delete-heading"
-      className="flex min-w-0 flex-col gap-3 rounded-2xl border border-destructive-border bg-destructive-soft/60 p-5"
+      className={confirmed ? SETTINGS_DANGER_CARD_ARMED : SETTINGS_DANGER_CARD_QUIET}
       data-testid="settings-delete-account"
+      data-state={confirmed ? "armed" : "quiet"}
     >
-      <h2 id="settings-delete-heading" className="flex items-center gap-2 type-h2 text-destructive">
-        <TriangleAlert className="size-5 shrink-0" aria-hidden="true" />
+      <h2 id="settings-delete-heading" className={`flex items-center gap-2 ${SETTINGS_CARD_HEADING}`}>
+        <TriangleAlert className="size-5 shrink-0 text-destructive" aria-hidden="true" />
         {ACCOUNT_COPY.dangerHeading}
       </h2>
       <p className="type-small text-foreground">{ACCOUNT_COPY.dangerDetail}</p>
       <p className="type-small text-muted-foreground">{ACCOUNT_COPY.dangerPayments}</p>
-      <form onSubmit={onSubmit} className="flex min-w-0 flex-col gap-3">
+      <form onSubmit={onSubmit} className="mt-1 flex min-w-0 flex-col gap-3">
         <label htmlFor="settings-delete-confirm" className="text-sm font-medium">
           {ACCOUNT_COPY.confirmLabel}
         </label>
@@ -76,7 +87,7 @@ export function DeleteAccountView({
           spellCheck={false}
           dir="ltr"
           disabled={pending}
-          className="h-11 w-full min-w-0 rounded-lg border border-input bg-card px-3 text-base text-foreground outline-none focus-visible:border-destructive focus-visible:ring-2 focus-visible:ring-destructive/30"
+          className={SETTINGS_DANGER_INPUT}
           data-testid="settings-delete-input"
         />
         {error ? (
@@ -84,18 +95,16 @@ export function DeleteAccountView({
             {error}
           </Notice>
         ) : null}
-        <Button
+        <button
           type="submit"
-          variant="destructive"
-          size="touch"
-          className="w-full bg-destructive text-base text-white hover:bg-destructive/90 focus-visible:ring-destructive disabled:opacity-50"
+          className={confirmed ? SETTINGS_DELETE_BUTTON_READY : SETTINGS_DELETE_BUTTON_IDLE}
           disabled={!confirmed || pending}
           aria-busy={pending}
           data-testid="settings-delete-button"
         >
-          {pending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
+          {pending ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
           {pending ? ACCOUNT_COPY.deleting : ACCOUNT_COPY.button}
-        </Button>
+        </button>
       </form>
     </section>
   );

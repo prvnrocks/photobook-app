@@ -160,8 +160,11 @@ describe("login (T7)", () => {
 
 describe("settings (T7)", () => {
   it("delete account is styled as a danger zone and keeps its testids", () => {
+    // M24 (D-076): quiet until DELETE is typed, then the red danger tint.
     const html = renderToStaticMarkup(<DeleteAccountView deleteAccount={async () => {}} />);
-    expect(tagOf(html, "settings-delete-account")).toContain("border-destructive-border");
+    expect(tagOf(html, "settings-delete-account")).toContain('data-state="quiet"');
+    const armed = renderToStaticMarkup(<DeleteAccountView deleteAccount={async () => {}} initialText="DELETE" />);
+    expect(tagOf(armed, "settings-delete-account")).toContain("border-destructive-border");
     for (const id of ["settings-delete-input", "settings-delete-button"]) expect(has(html, id)).toBe(true);
     expect(tagOf(html, "settings-delete-button")).toContain("h-11");
   });
