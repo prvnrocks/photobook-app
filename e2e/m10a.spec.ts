@@ -816,10 +816,12 @@ test("h. D-087 / D-088: the cover's own photo background → saved → Publish c
   // On the cover: "Cover only" first, with all three types.
   await expect(page.getByTestId("bg-scope-cover")).toHaveAttribute("aria-checked", "true");
   await page.getByTestId("bg-tab-photo").click();
-  const first = page.getByTestId("bg-photo").first();
-  const coverPhotoId = (await first.getAttribute("data-photo-id")) ?? "";
+  // A photo other than the cover's own photo, so the PDF check below can tell the two apart.
+  const onCover = coverId((await bookRow()).doc);
+  const ids = await page.getByTestId("bg-photo").evaluateAll((els) => els.map((e) => e.getAttribute("data-photo-id") ?? ""));
+  const coverPhotoId = ids.find((id) => id !== "" && id !== onCover) ?? "";
   expect(coverPhotoId).toMatch(/^[0-9a-f-]{36}$/);
-  await first.click();
+  await page.locator(`[data-testid="bg-photo"][data-photo-id="${coverPhotoId}"]`).click();
   await expect(cur(page).locator('[data-page="cover"] img[data-bg="photo"]')).toHaveCount(1);
   await expect.poll(async () => coverBg((await bookRow()).doc), { timeout: 20_000 }).toMatchObject({ kind: "photo", photoId: coverPhotoId });
   expect(coverBg((await bookRow()).doc)).not.toHaveProperty("source");
@@ -860,7 +862,8 @@ test("h. D-087 / D-088: the cover's own photo background → saved → Publish c
     expect(ins.fonts.filter((f) => f.type3 || f.subtype === "Type3").length).toBe(0);
     const coverImages = a.pages[0].images.filter((i) => /DCT/.test(i.filter ?? ""));
     console.log(`[h] cover sheet images: ${JSON.stringify(coverImages.map((i) => [i.w, i.h, i.where]))}`);
-    expect(coverImages.length).toBeGreaterThan(0);
+    // The cover photo and, separately, the background photo.
+    expect(new Set(coverImages.map((i) => i.k)).size).toBeGreaterThanOrEqual(2);
   }
   console.log(`[h] cover photo background ${coverPhotoId.slice(0, 8)} saved, published, viewed${paid ? ", PDF ok" : ""}`);
 });
