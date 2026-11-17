@@ -287,3 +287,8 @@ Decision: New book form offers Modern (default for every occasion via DEFAULT_ST
 - Decision: accept /books/[id]/edit first-load +3.35 kB gz vs main (like-for-like builds; +2.92 kB on T7's baseline) for M29; budget for this milestone raised from +3 to +3.5 kB.
 - Why: 22 cover layouts (+2.4 kB) + D-081 fitter (+0.3 kB) + Cover style tool (+0.5 kB); ~1 % of the page. User chose "accept the overshoot" 2026-11-17.
 - Note: the editor ships the whole layout catalogue — new layout data counts against the editor budget before any UI.
+
+## D-083 — Cover style tool placement (2026-11-17)
+- Decision: on the cover with nothing selected, "Cover style" takes Layout's slot in the 3-tool row (Cover style / Background / Pages + More); behind More when the cover photo/title is selected; the panel docks under the page on phones and stays open after a tap so styles can be compared.
+- Why: simple editor rule (≤3 tools + More, D-070-era); seeing the big cover change while comparing beats open-pick-close cycles.
+- Alternatives rejected: 4th top-level tool; close-on-tap like Layout.

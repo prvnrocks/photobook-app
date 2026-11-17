@@ -262,6 +262,12 @@ Plan: `.agentos/runs/m13.md`, D-070.
 ## Milestone 28 — Hardcover look in the flipbook viewer (2026-11-17)
 - [x] Viewer-only hardcover (D-079): stiff front/back boards, cover overlap (squares), wrapped board edges in the cover colour (linen for light covers), hinge groove, cover colour to the board edge, page block on the boards, case follows the cover turn; size/content/print unchanged; /b +1.5 kB. Report: `.agentos/runs/m28.md`. Deployed 2026-11-17.
 
+## Milestone 29 — Cover styles per theme (2026-11-17)
+- [x] 22 new one-photo cover styles (classic +3, modern +2, geometric +3, scrapbook +3 per format; D-080), user-chosen only (autoPick:false; AI and build default unchanged); contact sheet signed off by the user
+- [x] Editor "Cover style" tool: live previews of the user's own cover, one tap = one undo step, docked on phones; v2 save for new classic portrait covers
+- [x] Word-aware, per-font title fitting for all text panels (D-081): no clipped titles at any length in editor, viewer and PDF
+- [x] Print / publish / OG checks; tester PASS (edit route +3.35 kB accepted, D-082); reviewer APPROVED. Report: `.agentos/runs/m29.md`.
+
 ## Milestone 10+ — After launch
 - [ ] Printing in the UAE (print-shop partner, print-ready PDF, address checkout, Aramex delivery, `/admin/orders`)
 - [ ] AI "story mode": a short paragraph per chapter (AI-picked backgrounds moved into M10c)
