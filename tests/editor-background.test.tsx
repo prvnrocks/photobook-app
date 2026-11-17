@@ -505,6 +505,17 @@ describe("cover background colour (D-087)", () => {
     expect(parseBookDoc({ ...stored, cover: { ...stored.cover, background: LINEN } }).ok).toBe(false);
   });
 
+  it("the server save validator accepts a cover colour and keeps it; rejects anything else there", () => {
+    const base = devPreviewDoc();
+    const r = validateEditorDoc(storedDoc(setCoverBackground(base, NAVY)), ctx());
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.doc.cover.background).toEqual(NAVY);
+    const bad = (background: unknown) => validateEditorDoc({ ...base, cover: { ...base.cover, background } }, ctx());
+    expect(bad(LINEN)).toEqual({ ok: false, code: "invalid_doc" });
+    expect(bad({ ...NAVY, source: "user" })).toEqual({ ok: false, code: "invalid_doc" });
+    expect(bad({ kind: "color", hex: "navy" })).toEqual({ ok: false, code: "invalid_doc" });
+  });
+
   it("published snapshot carries the cover colour and renders it; a user choice the AI must not overwrite", () => {
     const doc = setCoverBackground(devPreviewDoc(), NAVY);
     const pub = toPublicDoc(doc);
