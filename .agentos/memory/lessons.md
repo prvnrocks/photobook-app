@@ -174,3 +174,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (M29) Compare bundle sizes only between builds made in the same session/setup — module order alone shifts gzip ±0.4 kB.
 - (M29) Running dev-editor e2e in the shared tree overwrites docs/design screenshots — run from a git-archive scratch copy or `git checkout -- docs/design` after.
 - (M29) A session cut-off kills running builders: check the run report vs `git diff --stat` on resume; finished files may lack goldens/run-report entries.
+- (2026-11-17) A publish made while Vercel is still building runs the OLD code — after a publish-path fix, wait for "Ready" before republishing to verify (check published_doc in the DB if in doubt).
