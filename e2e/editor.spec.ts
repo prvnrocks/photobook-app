@@ -1615,3 +1615,43 @@ test.describe("desktop tool sidebar at 1280 × 800 (/dev-editor)", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
   });
 });
+
+// Header "Preview" (2026-11-17): the draft in the real flipbook, full screen, beside Share.
+for (const vp of [
+  { name: "375 px", viewport: { width: 375, height: 812 }, mobile: true, second: "1 / 6" },
+  { name: "1280 px", viewport: { width: 1280, height: 800 }, mobile: false, second: "1–2 / 6" },
+]) {
+  test.describe(`book preview at ${vp.name} (/dev-editor)`, () => {
+    test.use({ viewport: vp.viewport, hasTouch: vp.mobile, isMobile: vp.mobile });
+
+    test("Preview beside Share opens the flipbook with the watermark; arrows turn pages; Escape returns to the editor", async ({ page }) => {
+      await page.goto("/dev-editor");
+      const open = page.getByTestId("editor-preview-open");
+      const ob = (await open.boundingBox())!;
+      const sb = (await page.getByTestId("editor-band").locator('[data-testid^="editor-share"], [data-testid="share-button"], button, a').last().boundingBox())!;
+      expect(ob.width).toBeGreaterThanOrEqual(44);
+      expect(ob.height).toBeGreaterThanOrEqual(44);
+      expect(ob.x + ob.width).toBeLessThanOrEqual(sb.x + 1);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+
+      await open.click();
+      const preview = page.getByTestId("editor-preview");
+      await expect(preview).toBeVisible();
+      const counter = page.getByTestId("editor-preview-counter");
+      await expect(counter).toHaveText("Cover");
+      await expect(preview.getByTestId("watermark").first()).toBeAttached(); // free fixture book
+      await expect(page.getByTestId("editor-preview-prev")).toBeDisabled();
+      await page.getByTestId("editor-preview-next").click();
+      await expect(counter).toHaveText(vp.second);
+      await page.keyboard.press("ArrowLeft");
+      await expect(counter).toHaveText("Cover");
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+
+      // Escape closes the preview only; the editor is where it was (still on the cover, nothing undone).
+      await page.keyboard.press("Escape");
+      await expect(preview).toHaveCount(0);
+      await expect(page.getByTestId("editor-shell")).toBeVisible();
+      await expect(open).toBeFocused();
+    });
+  });
+}

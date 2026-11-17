@@ -9,7 +9,7 @@
 // Contrast on the leather's lightest point #1f5443: cream 7.19, pale gold 5.25; chip tones ≥ 5.5.
 
 import type { ReactNode } from "react";
-import { Redo2, Undo2 } from "lucide-react";
+import { Eye, Redo2, Undo2 } from "lucide-react";
 import { cx } from "@/lib/cx";
 import {
   ED_BAND,
@@ -34,6 +34,8 @@ type EditorBandProps = {
   saveStatus: ReactNode;
   undo: EditorBandHistory;
   redo: EditorBandHistory;
+  /** Opens the book preview (the flipbook as readers see it); absent = no Preview button. */
+  onPreview?: () => void;
   /** <EditorShareButton>. */
   share: ReactNode;
   /** Pages in the doc (spread halves count) and the book's page limit; the chip hides when unknown. */
@@ -48,7 +50,7 @@ export function bandPageCountLabel(count: number, max: number | null | undefined
   return `${count} / ${max} pages`;
 }
 
-export function EditorBand({ back, title, saveStatus, undo, redo, share, pages, readOnly }: EditorBandProps) {
+export function EditorBand({ back, title, saveStatus, undo, redo, onPreview, share, pages, readOnly }: EditorBandProps) {
   const pageLabel = pages ? bandPageCountLabel(pages.count, pages.max) : null;
   return (
     <header className={ED_BAND} data-testid="editor-band">
@@ -85,6 +87,19 @@ export function EditorBand({ back, title, saveStatus, undo, redo, share, pages, 
         <button type="button" onClick={redo.onClick} disabled={redo.disabled} aria-label="Redo" className={ED_BAND_ICON_BTN} data-testid="editor-redo">
           <Redo2 className="size-5" aria-hidden="true" />
         </button>
+        {onPreview ? (
+          // Phones: a 44 px eye icon; ≥ lg an outlined "Preview" pill beside Share.
+          <button
+            type="button"
+            onClick={onPreview}
+            aria-label="Preview the book"
+            className={cx(ED_BAND_ICON_BTN, "lg:ms-2 lg:w-auto lg:gap-2 lg:border lg:border-[#f2e8d8]/45 lg:px-4 lg:text-sm lg:font-semibold")}
+            data-testid="editor-preview-open"
+          >
+            <Eye className="size-5" aria-hidden="true" />
+            <span className="hidden lg:inline">Preview</span>
+          </button>
+        ) : null}
         <div className="shrink-0 lg:ms-2">{share}</div>
       </div>
       <span aria-hidden="true" className="home-foil-h absolute inset-x-0 bottom-0 h-px" />

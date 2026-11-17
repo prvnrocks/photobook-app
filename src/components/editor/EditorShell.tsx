@@ -12,6 +12,7 @@
 // photo URLs heal themselves via usePhotoUrls.
 
 import { ArrowLeft } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { displayBookTitle } from "@/lib/book/display-title";
@@ -45,6 +46,9 @@ import { useEditorStore } from "./useEditorStore";
 import { useBrokenImageWatcher, usePhotoUrls } from "./usePhotoUrls";
 import { useSidebarMode } from "./useSidebarMode";
 import { useSpreadMode } from "./useSpreadMode";
+
+// On demand: the flipbook (page-flip) and viewer CSS stay out of the editor's first load.
+const DraftPreview = dynamic(() => import("@/components/viewer/DraftPreview"), { ssr: false });
 
 export type EditorShellProps = {
   data: EditorShellData;
@@ -93,6 +97,9 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
   const [rewrites, setRewritesState] = useState({ used: data.rewritesUsed, left: data.rewritesLeft });
   const [aiBlocked, setAiBlocked] = useState<AiSessionBlock | null>(null);
   const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const openPreview = useCallback(() => setPreviewOpen(true), []);
+  const closePreview = useCallback(() => setPreviewOpen(false), []);
   const rootRef = useRef<HTMLDivElement>(null);
   useBrokenImageWatcher(rootRef, photos);
 
@@ -218,6 +225,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
           redo={{ onClick: actions.redo, disabled: !canRedo(state) }}
           pages={{ count: pageCount, max: data.book.maxPages }}
           readOnly={state.readOnly}
+          onPreview={openPreview}
           share={
             <EditorShareButton
               bookId={data.book.id}
@@ -274,6 +282,9 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
           ) : null}
           <EditorToastHost />
         </div>
+        {previewOpen ? (
+          <DraftPreview doc={state.doc} photos={photos.web} captionLang={data.book.captionLang} isPaid={data.book.isPaid} onClose={closePreview} />
+        ) : null}
       </div>
     </EditorContext.Provider>
   );

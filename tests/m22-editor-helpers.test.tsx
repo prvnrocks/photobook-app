@@ -131,6 +131,21 @@ describe("EditorShell stage boxes render bare (N4)", () => {
   });
 });
 
+describe("EditorBand Preview button", () => {
+  const band = (onPreview?: () => void) =>
+    renderToStaticMarkup(
+      <EditorBand back={null} title="T" saveStatus={null} undo={{ onClick() {}, disabled: true }} redo={{ onClick() {}, disabled: true }} share={<i data-testid="share" />} onPreview={onPreview} />,
+    );
+  it("sits just before Share, labelled, 44 px; absent without onPreview", () => {
+    const html = band(() => {});
+    expect(html).toContain('data-testid="editor-preview-open"');
+    expect(html).toMatch(/aria-label="Preview the book"[^>]*class="[^"]*size-11/);
+    expect(html.indexOf("editor-preview-open")).toBeGreaterThan(html.indexOf("editor-redo"));
+    expect(html.indexOf("editor-preview-open")).toBeLessThan(html.indexOf('data-testid="share"'));
+    expect(band()).not.toContain("editor-preview-open");
+  });
+});
+
 describe("EditorBand eyebrow (≥ lg) follows read-only", () => {
   const band = (readOnly?: boolean) =>
     renderToStaticMarkup(
