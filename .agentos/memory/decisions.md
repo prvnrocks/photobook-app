@@ -297,3 +297,8 @@ Decision: New book form offers Modern (default for every occasion via DEFAULT_ST
 - Decision: (1) Small tasks (a fix, tweak or single-area change; no new milestone): the orchestrator does it directly, runs `npm run lint && npm run typecheck && npm test`, plus a quick browser check if visual — no separate builder/tester/reviewer agents. (2) Bundle-size builds only when a change touches editor/viewer/print bundles, and ONE comparison build (main vs HEAD, same session), not four. (3) Live e2e (E2E_AUTH, AI_MODE=off/replay) only as the gate before a deploy, not after every step. Full /build-milestone pipeline stays for real milestones.
 - Why: user found agents slow even for small tasks (M29: tester alone ~35 min, mostly builds + live e2e). User approved all three 2026-11-17.
 - Alternatives rejected: keep the full pipeline for everything.
+
+## D-085 — Published snapshot keeps occasion only for the accent sticker (2026-11-17)
+- Decision: v2 `published_doc` gets optional `occasion` only when the cover/pages draw OCCASION_ACCENT and occasion ≠ "other"; viewer uses it, else "other". No live-column fallback (would need a get_published_book migration) — pre-fix snapshots fix themselves on republish.
+- Why: scrapbook viewer showed the "other" accent while editor/PDF showed the occasion's; the sticker already reveals the occasion, so D-039's privacy intent holds; all other snapshots stay byte-identical.
+- Alternatives rejected: always publish occasion (churns every snapshot); RPC + live fallback (migration for a cosmetic fix).

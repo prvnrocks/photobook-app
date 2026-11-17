@@ -3,8 +3,12 @@
 // viewer's chapter label "title · date" / Contents sheet (D-040). Kept: chapter `dateLabel` (a
 // coarse human label like "March 2025" the owner shares as part of the album). Dropped: `meta`
 // (generator, runId, userEdited), caption `source` (who wrote it), page background `source`
-// (who chose it), chapter `place` (GPS-derived), `occasion`, and any unknown keys — objects are
+// (who chose it), chapter `place` (GPS-derived), `occasion` (except below), and any unknown keys — objects are
 // rebuilt field by field, never spread.
+// `occasion` (optional, v2 only, 2026-11-17): kept ONLY when the book shows the occasion accent
+// sticker (a layout decoration or text plate using OCCASION_ACCENT) and it isn't "other" — the
+// sticker already shows the occasion, so storing it reveals nothing new; every other snapshot stays
+// byte-identical. Older snapshots lack it and render the "other" accent until republished.
 // `captionLang` (optional, added in the M6 review): the book's caption language frozen at publish
 // time, so the viewer never reads the live books.caption_lang (D-039). Snapshots published before
 // it existed simply lack the key and still parse; the viewer then falls back to the live column.
@@ -21,6 +25,7 @@ import { z } from "zod";
 import {
   BackgroundSchema,
   BookFormatSchema,
+  OccasionSchema,
   CaptionSchema,
   ChapterSchema,
   CoverSchema,
@@ -36,6 +41,7 @@ import {
 import { usesV2Features } from "@/lib/book/doc-version";
 import { backgroundColor, captionAlignOn } from "@/lib/book/render";
 import { getLayout } from "@/lib/layouts";
+import { OCCASION_ACCENT } from "@/lib/design/stickers";
 import { CAPTION_LANGS, type CaptionLang } from "@/lib/book/options";
 import type { Background, BookDoc, BookPage, Caption } from "@/lib/book/types";
 import { LIMITS } from "@/lib/ai/limits";
@@ -94,6 +100,8 @@ export const PublicBookDocV2Schema = z
       .object({ background: BackgroundSchema, designStyle: DesignStyleSchema, font: StyleSchema.shape.font })
       .strict(),
     captionLang: CaptionLangField,
+    /** Optional: only when the accent sticker depends on it (see header). */
+    occasion: OccasionSchema.optional(),
   })
   .strict();
 
@@ -167,6 +175,14 @@ function publicCaptionAlign(page: BookPage, c: Caption): Caption["align"] {
   return (a === "start") !== rtl ? "left" : "right";
 }
 
+/** True when the cover or any page layout draws the occasion accent sticker (decoration or text plate). */
+function showsOccasionAccent(doc: BookDoc): boolean {
+  return [doc.cover.layout, ...doc.pages.map((p) => p.layout)].some((id) => {
+    const l = getLayout(id);
+    return !!l && (!!l.decorations?.some((d) => d.id === OCCASION_ACCENT) || !!l.texts?.some((t) => t.plate?.id === OCCASION_ACCENT));
+  });
+}
+
 /**
  * Public copy of a (parsed) book doc: v1 shape when the doc uses no v2-only feature (byte-identical
  * to M6–M9 snapshots), else v2. Fresh objects, never aliases `doc`.
@@ -202,6 +218,7 @@ export function toPublicDoc(doc: BookDoc, opts: ToPublicDocOptions = {}): Public
         font: doc.style.font,
       },
     };
+    if (doc.occasion !== "other" && showsOccasionAccent(doc)) out.occasion = doc.occasion;
   }
   if (opts.captionLang === "en" || opts.captionLang === "ar") out.captionLang = opts.captionLang;
   return out;
@@ -218,13 +235,13 @@ export function parsePublicDoc(input: unknown): PublicDocParse {
 /**
  * Adapter for the shared renderer, whose props are typed as the full BookDoc. Fills fields the
  * renderer never reads with neutral values (caption and page-background source "user", null place,
- * occasion "other", no meta). Returns the in-memory v2 doc (v1 snapshot upgraded: colour
+ * occasion from the snapshot else "other", no meta). Returns the in-memory v2 doc (v1 snapshot upgraded: colour
  * background, classic style). Render-only — never save the result as a book doc.
  */
 export function publicDocToRenderDoc(pub: PublicBookDoc): BookDoc {
   const base = {
     version: 2 as const,
-    occasion: "other" as const,
+    occasion: pub.version === 2 ? (pub.occasion ?? "other") : ("other" as const),
     cover: { ...pub.cover },
     chapters: pub.chapters.map((c) => ({ id: c.id, title: c.title, dateLabel: c.dateLabel, place: null })),
   };

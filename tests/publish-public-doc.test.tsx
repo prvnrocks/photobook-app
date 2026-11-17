@@ -292,7 +292,7 @@ describe("v2 snapshot", () => {
     };
     expect(mutate(() => {})).toBe(true);
     expect(mutate((d) => (d.meta = {}))).toBe(false);
-    expect(mutate((d) => (d.occasion = "wedding"))).toBe(false);
+    expect(mutate((d) => (d.occasion = "birthday"))).toBe(false); // not an occasion (a valid one is allowed in v2 since 2026-11-17)
     expect(mutate((d) => (d.pages[0].background.source = "user"))).toBe(false);
     expect(mutate((d) => (d.pages[0].background.extra = 1))).toBe(false);
     expect(mutate((d) => (d.pages[0].extra = 1))).toBe(false);
