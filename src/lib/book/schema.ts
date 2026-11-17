@@ -371,6 +371,11 @@ export const LayoutTextSchema = z.strictObject({
   plate: TextPlateSchema.optional(),
   /** Degrees clockwise about the box centre (text stays live text). */
   rotate: z.number().min(-SLOT_ROTATE_MAX).max(SLOT_ROTATE_MAX).optional(),
+  /**
+   * M29: share of the box height the font fitter (panelFontMm) sizes against — slack for narrow
+   * columns where real word wrap needs more lines than the estimate. Omitted = 1 (pre-M29 layouts).
+   */
+  fit: z.number().min(0.5).max(1).optional(),
 });
 
 const LayoutObjectSchema = z.object({

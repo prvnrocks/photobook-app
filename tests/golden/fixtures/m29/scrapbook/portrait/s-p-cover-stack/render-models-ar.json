@@ -1,0 +1,820 @@
+{
+  "screen": {
+    "kind": "cover",
+    "layoutId": "s-p-cover-stack",
+    "knownLayout": true,
+    "slot": {
+      "index": 0,
+      "rect": {
+        "x": 16.2162,
+        "y": 10.4762,
+        "w": 67.5676,
+        "h": 53.3333,
+        "rotate": -2,
+        "frame": {
+          "kind": "border",
+          "mm": 2.5,
+          "hex": "#FBF8F1"
+        },
+        "shadow": "soft"
+      },
+      "photoId": "d0",
+      "photo": {
+        "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23c2410c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed0%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+        "style": {
+          "width": 100,
+          "height": 118.3801995633704,
+          "left": 0,
+          "top": -9.190099781685198
+        }
+      },
+      "look": {
+        "rotate": -2,
+        "shadow": {
+          "translate": "0.7% 0.8036%",
+          "color": "rgba(0, 0, 0, 0.14)"
+        },
+        "frame": {
+          "kind": "border",
+          "color": "#FBF8F1",
+          "photo": {
+            "x": 2.5,
+            "y": 2.2321,
+            "w": 95,
+            "h": 95.5357
+          }
+        }
+      }
+    },
+    "textRect": {
+      "x": 9.4595,
+      "y": 71.4286,
+      "w": 81.081,
+      "h": 20.9524
+    },
+    "title": {
+      "text": "رحلتنا الطويلة إلى الجبال والبحر مع العائلة كلها في صيف لا ينسى أبدا مليء بالضحك والحب والذكريات الجميلة معا في كل يوم ج",
+      "lang": "ar",
+      "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif",
+      "sizeCqw": 3.6
+    },
+    "subtitle": {
+      "text": "أسبوع بعيدًا، ٢٠٢٦",
+      "lang": "ar",
+      "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif"
+    },
+    "panels": [
+      {
+        "bind": "coverTitle",
+        "role": "title",
+        "rect": {
+          "x": 9.4595,
+          "y": 72.381,
+          "w": 81.081,
+          "h": 13.3333
+        },
+        "text": "رحلتنا الطويلة إلى الجبال والبحر مع العائلة كلها في صيف لا ينسى أبدا مليء بالضحك والحب والذكريات الجميلة معا في كل يوم ج",
+        "lang": "ar",
+        "align": "center",
+        "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+        "fontSizeCqw": 4.7838,
+        "lineHeight": 1.1,
+        "typography": {
+          "fontWeight": 400,
+          "fontStyle": "normal"
+        }
+      },
+      {
+        "bind": "coverSubtitle",
+        "role": "year",
+        "rect": {
+          "x": 12.1622,
+          "y": 86.6667,
+          "w": 75.6756,
+          "h": 4.7619
+        },
+        "text": "أسبوع بعيدًا، ٢٠٢٦",
+        "lang": "ar",
+        "align": "center",
+        "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+        "fontSizeCqw": 3.1081,
+        "lineHeight": 1.25,
+        "typography": {
+          "fontWeight": 400,
+          "fontStyle": "normal"
+        }
+      }
+    ],
+    "decorations": [
+      {
+        "kind": "plate",
+        "rect": {
+          "x": 21.6216,
+          "y": 9.0476,
+          "w": 67.5676,
+          "h": 52.381
+        },
+        "rotate": 7,
+        "layer": "under",
+        "art": {
+          "stickerId": "plate-tag",
+          "viewBox": "0 0 140 40",
+          "preserveAspectRatio": "none",
+          "paths": [
+            {
+              "d": "M18 0H136A4 4 0 0 1 140 4V36A4 4 0 0 1 136 40H18L0 20Z",
+              "fill": "#DCE6EE"
+            },
+            {
+              "d": "M19.6 3.5H134.5A2 2 0 0 1 136.5 5.5V34.5A2 2 0 0 1 134.5 36.5H19.6L4.6 20Z",
+              "fill": "none",
+              "stroke": "#9EA6AB",
+              "strokeWidth": 0.8,
+              "strokeDasharray": "3 2.4"
+            },
+            {
+              "d": "M10.6 20A4.4 4.4 0 1 0 19.4 20A4.4 4.4 0 1 0 10.6 20Z",
+              "fill": "#B4BDC3"
+            },
+            {
+              "d": "M12.4 20A2.6 2.6 0 1 0 17.6 20A2.6 2.6 0 1 0 12.4 20Z",
+              "fill": "rgba(255, 255, 255, 0.85)"
+            }
+          ]
+        }
+      },
+      {
+        "kind": "plate",
+        "rect": {
+          "x": 13.5135,
+          "y": 14.2857,
+          "w": 67.5676,
+          "h": 51.4286
+        },
+        "rotate": -6,
+        "layer": "under",
+        "art": {
+          "stickerId": "plate-label",
+          "viewBox": "0 0 140 30",
+          "preserveAspectRatio": "none",
+          "paths": [
+            {
+              "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+              "fill": "#D8C7A8"
+            },
+            {
+              "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+              "fill": "none",
+              "stroke": "rgba(225, 211, 187, 0.9)",
+              "strokeWidth": 0.7
+            },
+            {
+              "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+              "fill": "#E6DBC6"
+            },
+            {
+              "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+              "fill": "rgba(255, 255, 255, 0.5)"
+            }
+          ]
+        }
+      },
+      {
+        "kind": "tape",
+        "rect": {
+          "x": 35.8416,
+          "y": 8.2305,
+          "w": 25.6757,
+          "h": 4.5238
+        },
+        "rotate": 2,
+        "layer": "over",
+        "art": {
+          "stickerId": "tape-washi",
+          "viewBox": "0 0 120 30",
+          "preserveAspectRatio": "xMidYMid meet",
+          "paths": [
+            {
+              "d": "M2.6 0L21.73 0.56L40.87 0.45L60 0.27L79.13 0.82L98.27 0.75L117.4 0.5L118.51 3.75L117.6 7.5L119.9 11.25L116.98 15L119.63 18.75L116.86 22.5L119.86 26.25L116.9 30L98.27 29.74L79.13 29.81L60 29.5L40.87 29.08L21.73 29.64L2.6 29.85L0.83 26.25L3.36 22.5L0.13 18.75L2.91 15L0.22 11.25L3.31 7.5L1.47 3.75L2.26 0Z",
+              "fill": "rgba(233, 217, 182, 0.72)"
+            },
+            {
+              "d": "M4 3.2H116V8.5H4Z",
+              "fill": "rgba(255, 255, 255, 0.22)"
+            },
+            {
+              "d": "M4 25H116V27H4Z",
+              "fill": "rgba(175, 163, 137, 0.18)"
+            }
+          ]
+        }
+      },
+      {
+        "kind": "sticker",
+        "rect": {
+          "x": 73.4672,
+          "y": 54.6661,
+          "w": 16.2163,
+          "h": 11.4286
+        },
+        "rotate": 8,
+        "layer": "over",
+        "art": {
+          "stickerId": "accent-plane",
+          "viewBox": "0 0 120 70",
+          "preserveAspectRatio": "xMidYMid meet",
+          "paths": [
+            {
+              "d": "M4 64C16 64 22 54 32 52C42 50 44 58 52 52C58 47 62 38 74 32",
+              "fill": "none",
+              "stroke": "rgba(79, 127, 166, 0.75)",
+              "strokeWidth": 1.6,
+              "strokeDasharray": "4 4",
+              "strokeLinecap": "round"
+            },
+            {
+              "d": "M118 4L70 26L84 34Z",
+              "fill": "#B0C5D7"
+            },
+            {
+              "d": "M118 4L84 34L92 52Z",
+              "fill": "#4F7FA6"
+            },
+            {
+              "d": "M84 34L92 52L88 38Z",
+              "fill": "#375974"
+            },
+            {
+              "d": "M118 4L70 26L78 28Z",
+              "fill": "#7299B8"
+            }
+          ]
+        }
+      },
+      {
+        "kind": "sticker",
+        "rect": {
+          "x": 82.7703,
+          "y": 68.119,
+          "w": 7.4324,
+          "h": 4.7143
+        },
+        "rotate": 14,
+        "layer": "over",
+        "art": {
+          "stickerId": "heart-outline",
+          "viewBox": "0 0 100 90",
+          "preserveAspectRatio": "xMidYMid meet",
+          "paths": [
+            {
+              "d": "M50 86C22 66 3 47 4 27C5 11 19 2 32 3C42 4 48 11 50 19C53 10 60 3 70 3C83 3 96 12 96 28C96 48 78 66 50 86ZM50.5 78C29.5 63 15.25 48.75 16 33.75C16.75 21.75 27.25 15 37 15.75C44.5 16.5 49 21.75 50.5 27.75C52.75 21 58 15.75 65.5 15.75C75.25 15.75 85 22.5 85 34.5C85 49.5 71.5 63 50.5 78Z",
+              "fill": "#B65A4E",
+              "fillRule": "evenodd"
+            },
+            {
+              "d": "M14 14C22 8 32 8 38 13",
+              "fill": "none",
+              "stroke": "rgba(215, 164, 158, 0.7)",
+              "strokeWidth": 1.4,
+              "strokeLinecap": "round"
+            }
+          ]
+        }
+      },
+      {
+        "kind": "sticker",
+        "rect": {
+          "x": 9.1216,
+          "y": 63.5714,
+          "w": 8.7838,
+          "h": 6.1905
+        },
+        "rotate": -12,
+        "layer": "over",
+        "art": {
+          "stickerId": "flower",
+          "viewBox": "0 0 100 100",
+          "preserveAspectRatio": "xMidYMid meet",
+          "paths": [
+            {
+              "d": "M50 50Q80 22.4 50 4Q20 22.4 50 50Z",
+              "fill": "#E3A39A"
+            },
+            {
+              "d": "M50 50Q85.52 70 93.75 35.79Q66.98 12.94 50 50Z",
+              "fill": "#E3A39A"
+            },
+            {
+              "d": "M50 50Q41.95 89.96 77.04 87.21Q90.49 54.7 50 50Z",
+              "fill": "#E3A39A"
+            },
+            {
+              "d": "M50 50Q9.51 54.7 22.96 87.21Q58.05 89.96 50 50Z",
+              "fill": "#E3A39A"
+            },
+            {
+              "d": "M50 50Q33.02 12.94 6.25 35.79Q14.48 70 50 50Z",
+              "fill": "#E3A39A"
+            },
+            {
+              "d": "M50 50Q69.41 43.7 67.63 25.73Q49.99 29.6 50 50Z",
+              "fill": "rgba(238, 200, 194, 0.7)"
+            },
+            {
+              "d": "M50 50Q61.98 66.51 78.53 59.27Q69.4 43.69 50 50Z",
+              "fill": "rgba(238, 200, 194, 0.7)"
+            },
+            {
+              "d": "M50 50Q38 66.5 50 80Q62 66.5 50 50Z",
+              "fill": "rgba(238, 200, 194, 0.7)"
+            },
+            {
+              "d": "M50 50Q30.6 43.69 21.47 59.27Q38.02 66.51 50 50Z",
+              "fill": "rgba(238, 200, 194, 0.7)"
+            },
+            {
+              "d": "M50 50Q50.01 29.6 32.37 25.73Q30.59 43.7 50 50Z",
+              "fill": "rgba(238, 200, 194, 0.7)"
+            },
+            {
+              "d": "M50 50L50 22",
+              "fill": "none",
+              "stroke": "rgba(182, 130, 123, 0.45)",
+              "strokeWidth": 1,
+              "strokeLinecap": "round"
+            },
+            {
+              "d": "M50 50L76.63 41.35",
+              "fill": "none",
+              "stroke": "rgba(182, 130, 123, 0.45)",
+              "strokeWidth": 1,
+              "strokeLinecap": "round"
+            },
+            {
+              "d": "M50 50L66.46 72.65",
+              "fill": "none",
+              "stroke": "rgba(182, 130, 123, 0.45)",
+              "strokeWidth": 1,
+              "strokeLinecap": "round"
+            },
+            {
+              "d": "M50 50L33.54 72.65",
+              "fill": "none",
+              "stroke": "rgba(182, 130, 123, 0.45)",
+              "strokeWidth": 1,
+              "strokeLinecap": "round"
+            },
+            {
+              "d": "M50 50L23.37 41.35",
+              "fill": "none",
+              "stroke": "rgba(182, 130, 123, 0.45)",
+              "strokeWidth": 1,
+              "strokeLinecap": "round"
+            },
+            {
+              "d": "M39 50A11 11 0 1 0 61 50A11 11 0 1 0 39 50Z",
+              "fill": "#E2B04A"
+            },
+            {
+              "d": "M43.4 47A3.6 3.6 0 1 0 50.6 47A3.6 3.6 0 1 0 43.4 47Z",
+              "fill": "#F3D58A"
+            },
+            {
+              "d": "M55.2 50A1.3 1.3 0 1 0 57.8 50A1.3 1.3 0 1 0 55.2 50Z",
+              "fill": "#A8742C"
+            },
+            {
+              "d": "M51.95 55.63A1.3 1.3 0 1 0 54.55 55.63A1.3 1.3 0 1 0 51.95 55.63Z",
+              "fill": "#A8742C"
+            },
+            {
+              "d": "M45.45 55.63A1.3 1.3 0 1 0 48.05 55.63A1.3 1.3 0 1 0 45.45 55.63Z",
+              "fill": "#A8742C"
+            },
+            {
+              "d": "M42.2 50A1.3 1.3 0 1 0 44.8 50A1.3 1.3 0 1 0 42.2 50Z",
+              "fill": "#A8742C"
+            },
+            {
+              "d": "M45.45 44.37A1.3 1.3 0 1 0 48.05 44.37A1.3 1.3 0 1 0 45.45 44.37Z",
+              "fill": "#A8742C"
+            },
+            {
+              "d": "M51.95 44.37A1.3 1.3 0 1 0 54.55 44.37A1.3 1.3 0 1 0 51.95 44.37Z",
+              "fill": "#A8742C"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "bleed": {
+    "kind": "cover",
+    "layoutId": "s-p-cover-stack",
+    "knownLayout": true,
+    "slot": {
+      "index": 0,
+      "rect": {
+        "x": 16.2162,
+        "y": 10.4762,
+        "w": 67.5676,
+        "h": 53.3333,
+        "rotate": -2,
+        "frame": {
+          "kind": "border",
+          "mm": 2.5,
+          "hex": "#FBF8F1"
+        },
+        "shadow": "soft"
+      },
+      "photoId": "d0",
+      "photo": {
+        "url": "https://print-assets.invalid/d0.jpg",
+        "style": {
+          "width": 100,
+          "height": 118.3801995633704,
+          "left": 0,
+          "top": -9.190099781685198
+        }
+      },
+      "look": {
+        "rotate": -2,
+        "shadow": {
+          "translate": "0.7% 0.8036%",
+          "color": "rgba(0, 0, 0, 0.14)"
+        },
+        "frame": {
+          "kind": "border",
+          "color": "#FBF8F1",
+          "photo": {
+            "x": 2.5,
+            "y": 2.2321,
+            "w": 95,
+            "h": 95.5357
+          }
+        }
+      }
+    },
+    "textRect": {
+      "x": 9.4595,
+      "y": 71.4286,
+      "w": 81.081,
+      "h": 20.9524
+    },
+    "title": {
+      "text": "رحلتنا الطويلة إلى الجبال والبحر مع العائلة كلها في صيف لا ينسى أبدا مليء بالضحك والحب والذكريات الجميلة معا في كل يوم ج",
+      "lang": "ar",
+      "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif",
+      "sizeCqw": 3.6
+    },
+    "subtitle": {
+      "text": "أسبوع بعيدًا، ٢٠٢٦",
+      "lang": "ar",
+      "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif"
+    },
+    "panels": [
+      {
+        "bind": "coverTitle",
+        "role": "title",
+        "rect": {
+          "x": 9.4595,
+          "y": 72.381,
+          "w": 81.081,
+          "h": 13.3333
+        },
+        "text": "رحلتنا الطويلة إلى الجبال والبحر مع العائلة كلها في صيف لا ينسى أبدا مليء بالضحك والحب والذكريات الجميلة معا في كل يوم ج",
+        "lang": "ar",
+        "align": "center",
+        "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+        "fontSizeCqw": 4.7838,
+        "lineHeight": 1.1,
+        "typography": {
+          "fontWeight": 400,
+          "fontStyle": "normal"
+        }
+      },
+      {
+        "bind": "coverSubtitle",
+        "role": "year",
+        "rect": {
+          "x": 12.1622,
+          "y": 86.6667,
+          "w": 75.6756,
+          "h": 4.7619
+        },
+        "text": "أسبوع بعيدًا، ٢٠٢٦",
+        "lang": "ar",
+        "align": "center",
+        "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+        "fontSizeCqw": 3.1081,
+        "lineHeight": 1.25,
+        "typography": {
+          "fontWeight": 400,
+          "fontStyle": "normal"
+        }
+      }
+    ],
+    "decorations": [
+      {
+        "kind": "plate",
+        "rect": {
+          "x": 21.6216,
+          "y": 9.0476,
+          "w": 67.5676,
+          "h": 52.381
+        },
+        "rotate": 7,
+        "layer": "under",
+        "art": {
+          "stickerId": "plate-tag",
+          "viewBox": "0 0 140 40",
+          "preserveAspectRatio": "none",
+          "paths": [
+            {
+              "d": "M18 0H136A4 4 0 0 1 140 4V36A4 4 0 0 1 136 40H18L0 20Z",
+              "fill": "#DCE6EE"
+            },
+            {
+              "d": "M19.6 3.5H134.5A2 2 0 0 1 136.5 5.5V34.5A2 2 0 0 1 134.5 36.5H19.6L4.6 20Z",
+              "fill": "none",
+              "stroke": "#9EA6AB",
+              "strokeWidth": 0.8,
+              "strokeDasharray": "3 2.4"
+            },
+            {
+              "d": "M10.6 20A4.4 4.4 0 1 0 19.4 20A4.4 4.4 0 1 0 10.6 20Z",
+              "fill": "#B4BDC3"
+            },
+            {
+              "d": "M12.4 20A2.6 2.6 0 1 0 17.6 20A2.6 2.6 0 1 0 12.4 20Z",
+              "fill": "rgba(255, 255, 255, 0.85)"
+            }
+          ]
+        }
+      },
+      {
+        "kind": "plate",
+        "rect": {
+          "x": 13.5135,
+          "y": 14.2857,
+          "w": 67.5676,
+          "h": 51.4286
+        },
+        "rotate": -6,
+        "layer": "under",
+        "art": {
+          "stickerId": "plate-label",
+          "viewBox": "0 0 140 30",
+          "preserveAspectRatio": "none",
+          "paths": [
+            {
+              "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+              "fill": "#D8C7A8"
+            },
+            {
+              "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+              "fill": "none",
+              "stroke": "rgba(225, 211, 187, 0.9)",
+              "strokeWidth": 0.7
+            },
+            {
+              "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+              "fill": "#E6DBC6"
+            },
+            {
+              "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+              "fill": "rgba(255, 255, 255, 0.5)"
+            }
+          ]
+        }
+      },
+      {
+        "kind": "tape",
+        "rect": {
+          "x": 35.8416,
+          "y": 8.2305,
+          "w": 25.6757,
+          "h": 4.5238
+        },
+        "rotate": 2,
+        "layer": "over",
+        "art": {
+          "stickerId": "tape-washi",
+          "viewBox": "0 0 120 30",
+          "preserveAspectRatio": "xMidYMid meet",
+          "paths": [
+            {
+              "d": "M2.6 0L21.73 0.56L40.87 0.45L60 0.27L79.13 0.82L98.27 0.75L117.4 0.5L118.51 3.75L117.6 7.5L119.9 11.25L116.98 15L119.63 18.75L116.86 22.5L119.86 26.25L116.9 30L98.27 29.74L79.13 29.81L60 29.5L40.87 29.08L21.73 29.64L2.6 29.85L0.83 26.25L3.36 22.5L0.13 18.75L2.91 15L0.22 11.25L3.31 7.5L1.47 3.75L2.26 0Z",
+              "fill": "rgba(233, 217, 182, 0.72)"
+            },
+            {
+              "d": "M4 3.2H116V8.5H4Z",
+              "fill": "rgba(255, 255, 255, 0.22)"
+            },
+            {
+              "d": "M4 25H116V27H4Z",
+              "fill": "rgba(175, 163, 137, 0.18)"
+            }
+          ]
+        }
+      },
+      {
+        "kind": "sticker",
+        "rect": {
+          "x": 73.4672,
+          "y": 54.6661,
+          "w": 16.2163,
+          "h": 11.4286
+        },
+        "rotate": 8,
+        "layer": "over",
+        "art": {
+          "stickerId": "accent-plane",
+          "viewBox": "0 0 120 70",
+          "preserveAspectRatio": "xMidYMid meet",
+          "paths": [
+            {
+              "d": "M4 64C16 64 22 54 32 52C42 50 44 58 52 52C58 47 62 38 74 32",
+              "fill": "none",
+              "stroke": "rgba(79, 127, 166, 0.75)",
+              "strokeWidth": 1.6,
+              "strokeDasharray": "4 4",
+              "strokeLinecap": "round"
+            },
+            {
+              "d": "M118 4L70 26L84 34Z",
+              "fill": "#B0C5D7"
+            },
+            {
+              "d": "M118 4L84 34L92 52Z",
+              "fill": "#4F7FA6"
+            },
+            {
+              "d": "M84 34L92 52L88 38Z",
+              "fill": "#375974"
+            },
+            {
+              "d": "M118 4L70 26L78 28Z",
+              "fill": "#7299B8"
+            }
+          ]
+        }
+      },
+      {
+        "kind": "sticker",
+        "rect": {
+          "x": 82.7703,
+          "y": 68.119,
+          "w": 7.4324,
+          "h": 4.7143
+        },
+        "rotate": 14,
+        "layer": "over",
+        "art": {
+          "stickerId": "heart-outline",
+          "viewBox": "0 0 100 90",
+          "preserveAspectRatio": "xMidYMid meet",
+          "paths": [
+            {
+              "d": "M50 86C22 66 3 47 4 27C5 11 19 2 32 3C42 4 48 11 50 19C53 10 60 3 70 3C83 3 96 12 96 28C96 48 78 66 50 86ZM50.5 78C29.5 63 15.25 48.75 16 33.75C16.75 21.75 27.25 15 37 15.75C44.5 16.5 49 21.75 50.5 27.75C52.75 21 58 15.75 65.5 15.75C75.25 15.75 85 22.5 85 34.5C85 49.5 71.5 63 50.5 78Z",
+              "fill": "#B65A4E",
+              "fillRule": "evenodd"
+            },
+            {
+              "d": "M14 14C22 8 32 8 38 13",
+              "fill": "none",
+              "stroke": "rgba(215, 164, 158, 0.7)",
+              "strokeWidth": 1.4,
+              "strokeLinecap": "round"
+            }
+          ]
+        }
+      },
+      {
+        "kind": "sticker",
+        "rect": {
+          "x": 9.1216,
+          "y": 63.5714,
+          "w": 8.7838,
+          "h": 6.1905
+        },
+        "rotate": -12,
+        "layer": "over",
+        "art": {
+          "stickerId": "flower",
+          "viewBox": "0 0 100 100",
+          "preserveAspectRatio": "xMidYMid meet",
+          "paths": [
+            {
+              "d": "M50 50Q80 22.4 50 4Q20 22.4 50 50Z",
+              "fill": "#E3A39A"
+            },
+            {
+              "d": "M50 50Q85.52 70 93.75 35.79Q66.98 12.94 50 50Z",
+              "fill": "#E3A39A"
+            },
+            {
+              "d": "M50 50Q41.95 89.96 77.04 87.21Q90.49 54.7 50 50Z",
+              "fill": "#E3A39A"
+            },
+            {
+              "d": "M50 50Q9.51 54.7 22.96 87.21Q58.05 89.96 50 50Z",
+              "fill": "#E3A39A"
+            },
+            {
+              "d": "M50 50Q33.02 12.94 6.25 35.79Q14.48 70 50 50Z",
+              "fill": "#E3A39A"
+            },
+            {
+              "d": "M50 50Q69.41 43.7 67.63 25.73Q49.99 29.6 50 50Z",
+              "fill": "rgba(238, 200, 194, 0.7)"
+            },
+            {
+              "d": "M50 50Q61.98 66.51 78.53 59.27Q69.4 43.69 50 50Z",
+              "fill": "rgba(238, 200, 194, 0.7)"
+            },
+            {
+              "d": "M50 50Q38 66.5 50 80Q62 66.5 50 50Z",
+              "fill": "rgba(238, 200, 194, 0.7)"
+            },
+            {
+              "d": "M50 50Q30.6 43.69 21.47 59.27Q38.02 66.51 50 50Z",
+              "fill": "rgba(238, 200, 194, 0.7)"
+            },
+            {
+              "d": "M50 50Q50.01 29.6 32.37 25.73Q30.59 43.7 50 50Z",
+              "fill": "rgba(238, 200, 194, 0.7)"
+            },
+            {
+              "d": "M50 50L50 22",
+              "fill": "none",
+              "stroke": "rgba(182, 130, 123, 0.45)",
+              "strokeWidth": 1,
+              "strokeLinecap": "round"
+            },
+            {
+              "d": "M50 50L76.63 41.35",
+              "fill": "none",
+              "stroke": "rgba(182, 130, 123, 0.45)",
+              "strokeWidth": 1,
+              "strokeLinecap": "round"
+            },
+            {
+              "d": "M50 50L66.46 72.65",
+              "fill": "none",
+              "stroke": "rgba(182, 130, 123, 0.45)",
+              "strokeWidth": 1,
+              "strokeLinecap": "round"
+            },
+            {
+              "d": "M50 50L33.54 72.65",
+              "fill": "none",
+              "stroke": "rgba(182, 130, 123, 0.45)",
+              "strokeWidth": 1,
+              "strokeLinecap": "round"
+            },
+            {
+              "d": "M50 50L23.37 41.35",
+              "fill": "none",
+              "stroke": "rgba(182, 130, 123, 0.45)",
+              "strokeWidth": 1,
+              "strokeLinecap": "round"
+            },
+            {
+              "d": "M39 50A11 11 0 1 0 61 50A11 11 0 1 0 39 50Z",
+              "fill": "#E2B04A"
+            },
+            {
+              "d": "M43.4 47A3.6 3.6 0 1 0 50.6 47A3.6 3.6 0 1 0 43.4 47Z",
+              "fill": "#F3D58A"
+            },
+            {
+              "d": "M55.2 50A1.3 1.3 0 1 0 57.8 50A1.3 1.3 0 1 0 55.2 50Z",
+              "fill": "#A8742C"
+            },
+            {
+              "d": "M51.95 55.63A1.3 1.3 0 1 0 54.55 55.63A1.3 1.3 0 1 0 51.95 55.63Z",
+              "fill": "#A8742C"
+            },
+            {
+              "d": "M45.45 55.63A1.3 1.3 0 1 0 48.05 55.63A1.3 1.3 0 1 0 45.45 55.63Z",
+              "fill": "#A8742C"
+            },
+            {
+              "d": "M42.2 50A1.3 1.3 0 1 0 44.8 50A1.3 1.3 0 1 0 42.2 50Z",
+              "fill": "#A8742C"
+            },
+            {
+              "d": "M45.45 44.37A1.3 1.3 0 1 0 48.05 44.37A1.3 1.3 0 1 0 45.45 44.37Z",
+              "fill": "#A8742C"
+            },
+            {
+              "d": "M51.95 44.37A1.3 1.3 0 1 0 54.55 44.37A1.3 1.3 0 1 0 51.95 44.37Z",
+              "fill": "#A8742C"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

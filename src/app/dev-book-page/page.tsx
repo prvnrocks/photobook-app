@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { BookPage } from "@/components/book/BookPage";
 import { devPreviewDoc, devPreviewPhotos } from "@/lib/book/dev-preview";
 import { devSampleDoc, devSamplePhotos, parseDevSample } from "@/lib/book/dev-sample";
+import { CoverSheet } from "./CoverSheet";
 import { SampleBook } from "./SampleBook";
 
 // `?sample=modern-portrait|modern-landscape` (M10b A9; M10c: geometric-|scrapbook-portrait|landscape[-ar]):
@@ -19,6 +20,11 @@ export default async function DevBookPagePreview({
 }) {
   if (process.env.NODE_ENV === "production") notFound();
   const sp = await searchParams;
+  const covers = typeof sp.covers === "string" ? /^(classic|modern|geometric|scrapbook)-(portrait|landscape)$/.exec(sp.covers) : null;
+  if (covers) {
+    const style = covers[1] as "classic" | "modern" | "geometric" | "scrapbook";
+    return <CoverSheet style={style} format={covers[2] === "portrait" ? "A5_PORTRAIT" : "A5_LANDSCAPE"} photos={devSamplePhotos()} />;
+  }
   const sample = parseDevSample(sp.sample);
   if (sample) {
     return <SampleBook doc={devSampleDoc(sample)} photos={devSamplePhotos()} mode={sp.mode === "edit" ? "edit" : "view"} title={sample} captionLang={sample.endsWith("-ar") ? "ar" : "en"} />;

@@ -1,0 +1,393 @@
+{
+  "screen": {
+    "kind": "cover",
+    "layoutId": "g-l-cover-circle",
+    "knownLayout": true,
+    "slot": {
+      "index": 0,
+      "rect": {
+        "x": 33.3333,
+        "y": 6.7568,
+        "w": 40,
+        "h": 56.7567,
+        "shape": {
+          "kind": "circle"
+        }
+      },
+      "photoId": "d0",
+      "photo": {
+        "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23c2410c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed0%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+        "style": {
+          "width": 100.00000000000003,
+          "height": 133.3334666668,
+          "left": -1.4210854715202004e-14,
+          "top": -16.666733333400003
+        }
+      },
+      "look": {
+        "shape": "circle",
+        "borderRadius": "50%"
+      }
+    },
+    "textRect": {
+      "x": 11.4286,
+      "y": 66.8919,
+      "w": 83.8095,
+      "h": 29.7297
+    },
+    "title": {
+      "text": "Our long summer by the sea with grandma, the cousins, three dogs and far too much ice cream every single day",
+      "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif",
+      "sizeCqw": 2.5371
+    },
+    "subtitle": {
+      "text": "Summer 2026 · Abu Dhabi, Muscat and the long road home",
+      "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif"
+    },
+    "textScale": 0.7048,
+    "panels": [
+      {
+        "bind": "coverTitle",
+        "role": "title",
+        "rect": {
+          "x": 11.4286,
+          "y": 66.8919,
+          "w": 83.8095,
+          "h": 19.5946
+        },
+        "text": "Our long summer by the sea with grandma, the cousins, three dogs and far too much ice cream every single day",
+        "align": "center",
+        "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+        "fontSizeCqw": 3.9857,
+        "lineHeight": 1.1,
+        "typography": {
+          "fontWeight": 600,
+          "fontStyle": "normal",
+          "letterSpacing": "0.01em"
+        }
+      },
+      {
+        "bind": "coverSubtitle",
+        "role": "year",
+        "rect": {
+          "x": 11.4286,
+          "y": 90.5405,
+          "w": 83.8095,
+          "h": 6.0811
+        },
+        "text": "Summer 2026 · Abu Dhabi, Muscat and the long road home",
+        "align": "center",
+        "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+        "fontSizeCqw": 2.1905,
+        "lineHeight": 1.25,
+        "typography": {
+          "fontWeight": 400,
+          "fontStyle": "normal",
+          "letterSpacing": "0.16em"
+        }
+      }
+    ],
+    "decorations": [
+      {
+        "kind": "plate",
+        "rect": {
+          "x": 48.5714,
+          "y": 88.1081,
+          "w": 9.5238,
+          "h": 0.8108
+        },
+        "layer": "under",
+        "art": {
+          "stickerId": "plate-label",
+          "viewBox": "0 0 140 30",
+          "preserveAspectRatio": "none",
+          "paths": [
+            {
+              "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+              "fill": "#235A5E"
+            },
+            {
+              "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+              "fill": "none",
+              "stroke": "rgba(83, 126, 129, 0.9)",
+              "strokeWidth": 0.7
+            },
+            {
+              "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+              "fill": "#709496"
+            },
+            {
+              "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+              "fill": "rgba(255, 255, 255, 0.5)"
+            }
+          ]
+        }
+      },
+      {
+        "kind": "sticker",
+        "rect": {
+          "x": 6.6667,
+          "y": 5.4054,
+          "w": 6.6666,
+          "h": 9.4595
+        },
+        "layer": "under",
+        "art": {
+          "stickerId": "photo-corner",
+          "viewBox": "0 0 40 40",
+          "preserveAspectRatio": "xMidYMid meet",
+          "paths": [
+            {
+              "d": "M0 2A2 2 0 0 1 2 0H40L0 40Z",
+              "fill": "#235A5E"
+            },
+            {
+              "d": "M36 2.6L2.6 36",
+              "fill": "none",
+              "stroke": "rgba(145, 173, 175, 0.55)",
+              "strokeWidth": 1,
+              "strokeLinecap": "round"
+            },
+            {
+              "d": "M6 0.8H34",
+              "fill": "none",
+              "stroke": "rgba(255, 255, 255, 0.18)",
+              "strokeWidth": 1.2,
+              "strokeLinecap": "round"
+            }
+          ]
+        }
+      },
+      {
+        "kind": "sticker",
+        "rect": {
+          "x": 89.5238,
+          "y": 5.4054,
+          "w": 6.6667,
+          "h": 9.4595
+        },
+        "rotate": 90,
+        "layer": "under",
+        "art": {
+          "stickerId": "photo-corner",
+          "viewBox": "0 0 40 40",
+          "preserveAspectRatio": "xMidYMid meet",
+          "paths": [
+            {
+              "d": "M0 2A2 2 0 0 1 2 0H40L0 40Z",
+              "fill": "#235A5E"
+            },
+            {
+              "d": "M36 2.6L2.6 36",
+              "fill": "none",
+              "stroke": "rgba(145, 173, 175, 0.55)",
+              "strokeWidth": 1,
+              "strokeLinecap": "round"
+            },
+            {
+              "d": "M6 0.8H34",
+              "fill": "none",
+              "stroke": "rgba(255, 255, 255, 0.18)",
+              "strokeWidth": 1.2,
+              "strokeLinecap": "round"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "bleed": {
+    "kind": "cover",
+    "layoutId": "g-l-cover-circle",
+    "knownLayout": true,
+    "slot": {
+      "index": 0,
+      "rect": {
+        "x": 33.3333,
+        "y": 6.7568,
+        "w": 40,
+        "h": 56.7567
+      },
+      "photoId": "d0",
+      "photo": {
+        "url": "https://print-assets.invalid/d0.jpg",
+        "style": {
+          "width": 100.00000000000003,
+          "height": 133.3334666668,
+          "left": -1.4210854715202004e-14,
+          "top": -16.666733333400003
+        }
+      },
+      "look": {
+        "shape": "circle",
+        "borderRadius": "50%"
+      }
+    },
+    "textRect": {
+      "x": 11.4286,
+      "y": 66.8919,
+      "w": 83.8095,
+      "h": 29.7297
+    },
+    "title": {
+      "text": "Our long summer by the sea with grandma, the cousins, three dogs and far too much ice cream every single day",
+      "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif",
+      "sizeCqw": 2.5371
+    },
+    "subtitle": {
+      "text": "Summer 2026 · Abu Dhabi, Muscat and the long road home",
+      "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif"
+    },
+    "textScale": 0.7048,
+    "panels": [
+      {
+        "bind": "coverTitle",
+        "role": "title",
+        "rect": {
+          "x": 11.4286,
+          "y": 66.8919,
+          "w": 83.8095,
+          "h": 19.5946
+        },
+        "text": "Our long summer by the sea with grandma, the cousins, three dogs and far too much ice cream every single day",
+        "align": "center",
+        "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+        "fontSizeCqw": 3.9857,
+        "lineHeight": 1.1,
+        "typography": {
+          "fontWeight": 600,
+          "fontStyle": "normal",
+          "letterSpacing": "0.01em"
+        }
+      },
+      {
+        "bind": "coverSubtitle",
+        "role": "year",
+        "rect": {
+          "x": 11.4286,
+          "y": 90.5405,
+          "w": 83.8095,
+          "h": 6.0811
+        },
+        "text": "Summer 2026 · Abu Dhabi, Muscat and the long road home",
+        "align": "center",
+        "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+        "fontSizeCqw": 2.1905,
+        "lineHeight": 1.25,
+        "typography": {
+          "fontWeight": 400,
+          "fontStyle": "normal",
+          "letterSpacing": "0.16em"
+        }
+      }
+    ],
+    "decorations": [
+      {
+        "kind": "plate",
+        "rect": {
+          "x": 48.5714,
+          "y": 88.1081,
+          "w": 9.5238,
+          "h": 0.8108
+        },
+        "layer": "under",
+        "art": {
+          "stickerId": "plate-label",
+          "viewBox": "0 0 140 30",
+          "preserveAspectRatio": "none",
+          "paths": [
+            {
+              "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+              "fill": "#235A5E"
+            },
+            {
+              "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+              "fill": "none",
+              "stroke": "rgba(83, 126, 129, 0.9)",
+              "strokeWidth": 0.7
+            },
+            {
+              "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+              "fill": "#709496"
+            },
+            {
+              "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+              "fill": "rgba(255, 255, 255, 0.5)"
+            }
+          ]
+        }
+      },
+      {
+        "kind": "sticker",
+        "rect": {
+          "x": 6.6667,
+          "y": 5.4054,
+          "w": 6.6666,
+          "h": 9.4595
+        },
+        "layer": "under",
+        "art": {
+          "stickerId": "photo-corner",
+          "viewBox": "0 0 40 40",
+          "preserveAspectRatio": "xMidYMid meet",
+          "paths": [
+            {
+              "d": "M0 2A2 2 0 0 1 2 0H40L0 40Z",
+              "fill": "#235A5E"
+            },
+            {
+              "d": "M36 2.6L2.6 36",
+              "fill": "none",
+              "stroke": "rgba(145, 173, 175, 0.55)",
+              "strokeWidth": 1,
+              "strokeLinecap": "round"
+            },
+            {
+              "d": "M6 0.8H34",
+              "fill": "none",
+              "stroke": "rgba(255, 255, 255, 0.18)",
+              "strokeWidth": 1.2,
+              "strokeLinecap": "round"
+            }
+          ]
+        }
+      },
+      {
+        "kind": "sticker",
+        "rect": {
+          "x": 89.5238,
+          "y": 5.4054,
+          "w": 6.6667,
+          "h": 9.4595
+        },
+        "rotate": 90,
+        "layer": "under",
+        "art": {
+          "stickerId": "photo-corner",
+          "viewBox": "0 0 40 40",
+          "preserveAspectRatio": "xMidYMid meet",
+          "paths": [
+            {
+              "d": "M0 2A2 2 0 0 1 2 0H40L0 40Z",
+              "fill": "#235A5E"
+            },
+            {
+              "d": "M36 2.6L2.6 36",
+              "fill": "none",
+              "stroke": "rgba(145, 173, 175, 0.55)",
+              "strokeWidth": 1,
+              "strokeLinecap": "round"
+            },
+            {
+              "d": "M6 0.8H34",
+              "fill": "none",
+              "stroke": "rgba(255, 255, 255, 0.18)",
+              "strokeWidth": 1.2,
+              "strokeLinecap": "round"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

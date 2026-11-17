@@ -703,7 +703,7 @@ function textPanels(
       text,
       t.font,
       (rect.w / 100) * page.w * (textBox.w / 100),
-      (rect.h / 100) * page.h * (textBox.h / 100),
+      (rect.h / 100) * page.h * (textBox.h / 100) * (t.fit ?? 1),
     );
     out.push({
       bind: t.bind,

@@ -7,7 +7,7 @@ import { bleedRect, printSlotSizeMm } from "@/lib/book/bleed";
 import { LayoutSchema, validateBookDoc } from "@/lib/book/schema";
 import { layoutsFor, rectHalf, repairSpreads, toPageRect } from "@/lib/book/spreads";
 import type { BookDoc, BookPage, Caption, Layout, Rect } from "@/lib/book/types";
-import { getLayout, LAYOUTS, SAFE_MM } from "@/lib/layouts";
+import { getLayout, LAYOUTS, SAFE_MM, M29_COVERS } from "@/lib/layouts";
 import { MODERN_PORTRAIT_LAYOUTS } from "@/lib/layouts/modern/portrait";
 import { GUTTER_MM, PAGE_H_MM, PAGE_W_MM } from "@/lib/layouts/modern/portrait/geometry";
 
@@ -55,9 +55,9 @@ describe("modern portrait catalogue", () => {
 
   it("is wired into the catalogue: getLayout + layoutsFor(A5_PORTRAIT, modern, role)", () => {
     for (const l of all) expect(getLayout(l.id)).toBe(l);
-    expect(LAYOUTS.filter((l) => l.style === "modern" && l.format === "A5_PORTRAIT")).toEqual([...all]);
+    expect(LAYOUTS.filter((l) => l.style === "modern" && l.format === "A5_PORTRAIT" && !M29_COVERS.includes(l))).toEqual([...all]);
     for (const role of ["page", "spread", "cover"] as const) {
-      expect(layoutsFor("A5_PORTRAIT", "modern", role)).toEqual(byRole(role));
+      expect(layoutsFor("A5_PORTRAIT", "modern", role).filter((l) => !M29_COVERS.includes(l))).toEqual(byRole(role));
     }
   });
 

@@ -11,7 +11,7 @@ import { polygonInPage, shapePoints, type Point } from "@/lib/book/slot-geometry
 import { layoutsFor, rectHalf, repairSpreads } from "@/lib/book/spreads";
 import type { BookDoc, BookFormat, BookPage, Caption, Layout, LayoutSlotDef, Rect } from "@/lib/book/types";
 import { DECORATION_STICKER_IDS, STICKERS } from "@/lib/design/stickers";
-import { getLayout, LAYOUTS, SAFE_MM } from "@/lib/layouts";
+import { getLayout, LAYOUTS, SAFE_MM, M29_COVERS } from "@/lib/layouts";
 import { GEOMETRIC_LANDSCAPE_LAYOUTS } from "@/lib/layouts/geometric/landscape";
 import { GEO_GUTTER_MM } from "@/lib/layouts/geometric/geometry";
 import { GEOMETRIC_PORTRAIT_LAYOUTS } from "@/lib/layouts/geometric/portrait";
@@ -118,8 +118,8 @@ describe.each(SETS)("geometric $orientation catalogue", ({ format, prefix, list 
 
   it("is wired into the catalogue: getLayout + layoutsFor(format, geometric, role)", () => {
     for (const l of list) expect(getLayout(l.id)).toBe(l);
-    expect(LAYOUTS.filter((l) => l.style === "geometric" && l.format === format)).toEqual([...list]);
-    for (const role of ["page", "spread", "cover"] as const) expect(layoutsFor(format, "geometric", role)).toEqual(byRole(role));
+    expect(LAYOUTS.filter((l) => l.style === "geometric" && l.format === format && !M29_COVERS.includes(l))).toEqual([...list]);
+    for (const role of ["page", "spread", "cover"] as const) expect(layoutsFor(format, "geometric", role).filter((l) => !M29_COVERS.includes(l))).toEqual(byRole(role));
   });
 
   it("single pages cover every photo count 1–5, mostly with a caption area", () => {

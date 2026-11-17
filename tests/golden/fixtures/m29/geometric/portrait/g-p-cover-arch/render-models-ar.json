@@ -1,0 +1,303 @@
+{
+  "screen": {
+    "kind": "cover",
+    "layoutId": "g-p-cover-arch",
+    "knownLayout": true,
+    "slot": {
+      "index": 0,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 100,
+        "h": 100,
+        "shape": {
+          "kind": "polygon",
+          "points": [
+            [
+              0,
+              0
+            ],
+            [
+              100,
+              0
+            ],
+            [
+              100,
+              100
+            ],
+            [
+              87.162,
+              100
+            ],
+            [
+              87.162,
+              60.952
+            ],
+            [
+              80.065,
+              45.558
+            ],
+            [
+              61.484,
+              36.044
+            ],
+            [
+              38.516,
+              36.044
+            ],
+            [
+              19.935,
+              45.558
+            ],
+            [
+              12.838,
+              60.952
+            ],
+            [
+              12.838,
+              100
+            ],
+            [
+              0,
+              100
+            ]
+          ]
+        }
+      },
+      "photoId": "d0",
+      "photo": {
+        "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23c2410c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed0%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+        "style": {
+          "width": 106.41891891891892,
+          "height": 100,
+          "left": -3.2094594594594597,
+          "top": 0
+        }
+      },
+      "look": {
+        "shape": "polygon",
+        "clipPath": "polygon(0% 0%, 100% 0%, 100% 100%, 87.162% 100%, 87.162% 60.952%, 80.065% 45.558%, 61.484% 36.044%, 38.516% 36.044%, 19.935% 45.558%, 12.838% 60.952%, 12.838% 100%, 0% 100%)"
+      }
+    },
+    "textRect": {
+      "x": 18.2432,
+      "y": 57.1429,
+      "w": 63.5136,
+      "h": 35.2381
+    },
+    "title": {
+      "text": "رحلتنا الطويلة إلى الجبال والبحر مع العائلة كلها في صيف لا ينسى أبدا مليء بالضحك والحب والذكريات الجميلة معا في كل يوم ج",
+      "lang": "ar",
+      "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif",
+      "sizeCqw": 3.6
+    },
+    "subtitle": {
+      "text": "أسبوع بعيدًا، ٢٠٢٦",
+      "lang": "ar",
+      "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif"
+    },
+    "panels": [
+      {
+        "bind": "coverTitle",
+        "role": "title",
+        "rect": {
+          "x": 18.2432,
+          "y": 57.1429,
+          "w": 63.5136,
+          "h": 23.8095
+        },
+        "text": "رحلتنا الطويلة إلى الجبال والبحر مع العائلة كلها في صيف لا ينسى أبدا مليء بالضحك والحب والذكريات الجميلة معا في كل يوم ج",
+        "lang": "ar",
+        "align": "center",
+        "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+        "fontSizeCqw": 5.6554,
+        "lineHeight": 1.1,
+        "typography": {
+          "fontWeight": 700,
+          "fontStyle": "normal"
+        }
+      },
+      {
+        "bind": "coverSubtitle",
+        "role": "year",
+        "rect": {
+          "x": 18.2432,
+          "y": 86.6667,
+          "w": 63.5136,
+          "h": 5.7143
+        },
+        "text": "أسبوع بعيدًا، ٢٠٢٦",
+        "lang": "ar",
+        "align": "center",
+        "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+        "fontSizeCqw": 3.1081,
+        "lineHeight": 1.25,
+        "typography": {
+          "fontWeight": 400,
+          "fontStyle": "normal"
+        }
+      }
+    ],
+    "decorations": [
+      {
+        "kind": "plate",
+        "rect": {
+          "x": 41.8919,
+          "y": 83.5238,
+          "w": 16.2162,
+          "h": 0.5714
+        },
+        "layer": "under",
+        "art": {
+          "stickerId": "plate-label",
+          "viewBox": "0 0 140 30",
+          "preserveAspectRatio": "none",
+          "paths": [
+            {
+              "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+              "fill": "#235A5E"
+            },
+            {
+              "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+              "fill": "none",
+              "stroke": "rgba(83, 126, 129, 0.9)",
+              "strokeWidth": 0.7
+            },
+            {
+              "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+              "fill": "#709496"
+            },
+            {
+              "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+              "fill": "rgba(255, 255, 255, 0.5)"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "bleed": {
+    "kind": "cover",
+    "layoutId": "g-p-cover-arch",
+    "knownLayout": true,
+    "slot": {
+      "index": 0,
+      "rect": {
+        "x": -2.027027027027027,
+        "y": -1.4285714285714286,
+        "w": 104.05405405405406,
+        "h": 102.85714285714285
+      },
+      "photoId": "d0",
+      "photo": {
+        "url": "https://print-assets.invalid/d0.jpg",
+        "style": {
+          "width": 105.19480519480517,
+          "height": 100,
+          "left": -2.597402597402585,
+          "top": 0
+        }
+      },
+      "look": {
+        "shape": "polygon",
+        "clipPath": "polygon(0% 0%, 100% 0%, 100% 100%, 85.7141% 100%, 85.7141% 60.6478%, 78.8936% 45.6814%, 61.0366% 36.4317%, 38.9634% 36.4317%, 21.1064% 45.6814%, 14.2859% 60.6478%, 14.2859% 100%, 0% 100%)"
+      }
+    },
+    "textRect": {
+      "x": 18.2432,
+      "y": 57.1429,
+      "w": 63.5136,
+      "h": 35.2381
+    },
+    "title": {
+      "text": "رحلتنا الطويلة إلى الجبال والبحر مع العائلة كلها في صيف لا ينسى أبدا مليء بالضحك والحب والذكريات الجميلة معا في كل يوم ج",
+      "lang": "ar",
+      "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif",
+      "sizeCqw": 3.6
+    },
+    "subtitle": {
+      "text": "أسبوع بعيدًا، ٢٠٢٦",
+      "lang": "ar",
+      "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif"
+    },
+    "panels": [
+      {
+        "bind": "coverTitle",
+        "role": "title",
+        "rect": {
+          "x": 18.2432,
+          "y": 57.1429,
+          "w": 63.5136,
+          "h": 23.8095
+        },
+        "text": "رحلتنا الطويلة إلى الجبال والبحر مع العائلة كلها في صيف لا ينسى أبدا مليء بالضحك والحب والذكريات الجميلة معا في كل يوم ج",
+        "lang": "ar",
+        "align": "center",
+        "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
+        "fontSizeCqw": 5.6554,
+        "lineHeight": 1.1,
+        "typography": {
+          "fontWeight": 700,
+          "fontStyle": "normal"
+        }
+      },
+      {
+        "bind": "coverSubtitle",
+        "role": "year",
+        "rect": {
+          "x": 18.2432,
+          "y": 86.6667,
+          "w": 63.5136,
+          "h": 5.7143
+        },
+        "text": "أسبوع بعيدًا، ٢٠٢٦",
+        "lang": "ar",
+        "align": "center",
+        "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
+        "fontSizeCqw": 3.1081,
+        "lineHeight": 1.25,
+        "typography": {
+          "fontWeight": 400,
+          "fontStyle": "normal"
+        }
+      }
+    ],
+    "decorations": [
+      {
+        "kind": "plate",
+        "rect": {
+          "x": 41.8919,
+          "y": 83.5238,
+          "w": 16.2162,
+          "h": 0.5714
+        },
+        "layer": "under",
+        "art": {
+          "stickerId": "plate-label",
+          "viewBox": "0 0 140 30",
+          "preserveAspectRatio": "none",
+          "paths": [
+            {
+              "d": "M5 0H135A5 5 0 0 1 140 5V25A5 5 0 0 1 135 30H5A5 5 0 0 1 0 25V5A5 5 0 0 1 5 0Z",
+              "fill": "#235A5E"
+            },
+            {
+              "d": "M6.4 3H133.6A3.4 3.4 0 0 1 137 6.4V23.6A3.4 3.4 0 0 1 133.6 27H6.4A3.4 3.4 0 0 1 3 23.6V6.4A3.4 3.4 0 0 1 6.4 3Z",
+              "fill": "none",
+              "stroke": "rgba(83, 126, 129, 0.9)",
+              "strokeWidth": 0.7
+            },
+            {
+              "d": "M6.5 15A2 2 0 1 0 10.5 15A2 2 0 1 0 6.5 15ZM129.5 15A2 2 0 1 0 133.5 15A2 2 0 1 0 129.5 15Z",
+              "fill": "#709496"
+            },
+            {
+              "d": "M7.3 14.6A0.8 0.8 0 1 0 8.9 14.6A0.8 0.8 0 1 0 7.3 14.6ZM130.3 14.6A0.8 0.8 0 1 0 131.9 14.6A0.8 0.8 0 1 0 130.3 14.6Z",
+              "fill": "rgba(255, 255, 255, 0.5)"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

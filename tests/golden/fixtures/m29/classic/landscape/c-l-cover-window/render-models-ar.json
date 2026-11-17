@@ -1,0 +1,204 @@
+{
+  "screen": {
+    "kind": "cover",
+    "layoutId": "c-l-cover-window",
+    "knownLayout": true,
+    "slot": {
+      "index": 0,
+      "rect": {
+        "x": 20.476,
+        "y": 8.108,
+        "w": 59.048,
+        "h": 54.054,
+        "frame": {
+          "kind": "border",
+          "mm": 0.4,
+          "hex": "#7A6F63"
+        }
+      },
+      "photoId": "d0",
+      "photo": {
+        "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23c2410c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed0%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+        "style": {
+          "width": 100,
+          "height": 207.40896371275798,
+          "left": 0,
+          "top": -53.70448185637899
+        }
+      },
+      "look": {
+        "frame": {
+          "kind": "border",
+          "color": "#7A6F63",
+          "photo": {
+            "x": 0.3226,
+            "y": 0.5,
+            "w": 99.3548,
+            "h": 99
+          }
+        }
+      }
+    },
+    "textRect": {
+      "x": 9.524,
+      "y": 64.865,
+      "w": 80.952,
+      "h": 29.054
+    },
+    "title": {
+      "text": "رحلتنا الطويلة إلى الجبال والبحر مع العائلة كلها في صيف لا ينسى أبدا مليء بالضحك والحب والذكريات الجميلة معا في كل يوم ج",
+      "lang": "ar",
+      "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif",
+      "sizeCqw": 2.5371
+    },
+    "subtitle": {
+      "text": "أسبوع بعيدًا، ٢٠٢٦",
+      "lang": "ar",
+      "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif"
+    },
+    "textScale": 0.7048,
+    "panels": [
+      {
+        "bind": "coverTitle",
+        "role": "title",
+        "rect": {
+          "x": 9.524,
+          "y": 64.865,
+          "w": 80.952,
+          "h": 21.622
+        },
+        "text": "رحلتنا الطويلة إلى الجبال والبحر مع العائلة كلها في صيف لا ينسى أبدا مليء بالضحك والحب والذكريات الجميلة معا في كل يوم ج",
+        "lang": "ar",
+        "align": "center",
+        "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif",
+        "fontSizeCqw": 4.3333,
+        "lineHeight": 1.1,
+        "typography": {
+          "fontWeight": 600,
+          "fontStyle": "normal"
+        }
+      },
+      {
+        "bind": "coverSubtitle",
+        "role": "subtitle",
+        "rect": {
+          "x": 9.524,
+          "y": 87.162,
+          "w": 80.952,
+          "h": 6.757
+        },
+        "text": "أسبوع بعيدًا، ٢٠٢٦",
+        "lang": "ar",
+        "align": "center",
+        "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif",
+        "fontSizeCqw": 2.1905,
+        "lineHeight": 1.25,
+        "typography": {
+          "fontWeight": 400,
+          "fontStyle": "normal"
+        }
+      }
+    ]
+  },
+  "bleed": {
+    "kind": "cover",
+    "layoutId": "c-l-cover-window",
+    "knownLayout": true,
+    "slot": {
+      "index": 0,
+      "rect": {
+        "x": 20.476,
+        "y": 8.108,
+        "w": 59.048,
+        "h": 54.054,
+        "frame": {
+          "kind": "border",
+          "mm": 0.4,
+          "hex": "#7A6F63"
+        }
+      },
+      "photoId": "d0",
+      "photo": {
+        "url": "https://print-assets.invalid/d0.jpg",
+        "style": {
+          "width": 100,
+          "height": 207.40896371275798,
+          "left": 0,
+          "top": -53.70448185637899
+        }
+      },
+      "look": {
+        "frame": {
+          "kind": "border",
+          "color": "#7A6F63",
+          "photo": {
+            "x": 0.3226,
+            "y": 0.5,
+            "w": 99.3548,
+            "h": 99
+          }
+        }
+      }
+    },
+    "textRect": {
+      "x": 9.524,
+      "y": 64.865,
+      "w": 80.952,
+      "h": 29.054
+    },
+    "title": {
+      "text": "رحلتنا الطويلة إلى الجبال والبحر مع العائلة كلها في صيف لا ينسى أبدا مليء بالضحك والحب والذكريات الجميلة معا في كل يوم ج",
+      "lang": "ar",
+      "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif",
+      "sizeCqw": 2.5371
+    },
+    "subtitle": {
+      "text": "أسبوع بعيدًا، ٢٠٢٦",
+      "lang": "ar",
+      "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif"
+    },
+    "textScale": 0.7048,
+    "panels": [
+      {
+        "bind": "coverTitle",
+        "role": "title",
+        "rect": {
+          "x": 9.524,
+          "y": 64.865,
+          "w": 80.952,
+          "h": 21.622
+        },
+        "text": "رحلتنا الطويلة إلى الجبال والبحر مع العائلة كلها في صيف لا ينسى أبدا مليء بالضحك والحب والذكريات الجميلة معا في كل يوم ج",
+        "lang": "ar",
+        "align": "center",
+        "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif",
+        "fontSizeCqw": 4.3333,
+        "lineHeight": 1.1,
+        "typography": {
+          "fontWeight": 600,
+          "fontStyle": "normal"
+        }
+      },
+      {
+        "bind": "coverSubtitle",
+        "role": "subtitle",
+        "rect": {
+          "x": 9.524,
+          "y": 87.162,
+          "w": 80.952,
+          "h": 6.757
+        },
+        "text": "أسبوع بعيدًا، ٢٠٢٦",
+        "lang": "ar",
+        "align": "center",
+        "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif",
+        "fontSizeCqw": 2.1905,
+        "lineHeight": 1.25,
+        "typography": {
+          "fontWeight": 400,
+          "fontStyle": "normal"
+        }
+      }
+    ]
+  }
+}

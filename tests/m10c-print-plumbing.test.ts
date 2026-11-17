@@ -13,11 +13,13 @@ import { effectiveDpi, layoutSlotMm, slotSizeMm } from "@/lib/book/resolution";
 import { validateBookDoc } from "@/lib/book/schema";
 import { photoRectOf } from "@/lib/book/slot-geometry";
 import type { BookDoc, Layout } from "@/lib/book/types";
-import { getLayout, LAYOUTS } from "@/lib/layouts";
+import { getLayout, LAYOUTS, M29_COVERS } from "@/lib/layouts";
 import { neededPx, planPrintImages, PRINT_DPI } from "@/lib/pdf/image-plan";
 
-const NEW = LAYOUTS.filter((l) => /^[gs]-[pl]-/.test(l.id));
-const OLD = LAYOUTS.filter((l) => !/^[gs]-[pl]-/.test(l.id));
+// M29 covers (user-chosen only, all themes) are not part of the M10c sets; their bleed rule is checked below.
+const M29 = new Set<Layout>(M29_COVERS);
+const NEW = LAYOUTS.filter((l) => /^[gs]-[pl]-/.test(l.id) && !M29.has(l));
+const OLD = LAYOUTS.filter((l) => !/^[gs]-[pl]-/.test(l.id) && !M29.has(l));
 const framed = (l: Layout, i: number) => !!l.slots[i].frame && l.slots[i].frame!.kind !== "none";
 const mmOf = (l: Layout, i: number) => {
   const r = photoRectOf(l, i, l.format)!;
@@ -37,6 +39,11 @@ describe("slotBleeds", () => {
       });
     }
     expect(framedOrTilted).toBeGreaterThan(30);
+  });
+
+  it("M29 covers follow the same rule: framed or tilted slots never bleed, the rest do", () => {
+    expect(M29.size).toBeGreaterThan(0);
+    for (const l of M29) l.slots.forEach((s, i) => expect(slotBleeds(s), `${l.id}#${i}`).toBe(!framed(l, i) && !s.rotate));
   });
 });
 

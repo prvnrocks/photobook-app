@@ -1,0 +1,194 @@
+{
+  "screen": {
+    "kind": "cover",
+    "layoutId": "c-p-cover-window",
+    "knownLayout": true,
+    "slot": {
+      "index": 0,
+      "rect": {
+        "x": 10.811,
+        "y": 7.619,
+        "w": 78.378,
+        "h": 59.048,
+        "frame": {
+          "kind": "border",
+          "mm": 0.4,
+          "hex": "#7A6F63"
+        }
+      },
+      "photoId": "d0",
+      "photo": {
+        "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23c2410c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed0%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+        "style": {
+          "width": 100,
+          "height": 124.67390904388067,
+          "left": 0,
+          "top": -12.336954521940335
+        }
+      },
+      "look": {
+        "frame": {
+          "kind": "border",
+          "color": "#7A6F63",
+          "photo": {
+            "x": 0.3448,
+            "y": 0.3226,
+            "w": 99.3103,
+            "h": 99.3548
+          }
+        }
+      }
+    },
+    "textRect": {
+      "x": 10.811,
+      "y": 69.048,
+      "w": 78.378,
+      "h": 23.81
+    },
+    "title": {
+      "text": "Our long summer by the sea with grandma, the cousins, three dogs and far too much ice cream every single day",
+      "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif",
+      "sizeCqw": 3.6
+    },
+    "subtitle": {
+      "text": "Summer 2026 · Abu Dhabi, Muscat and the long road home",
+      "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif"
+    },
+    "panels": [
+      {
+        "bind": "coverTitle",
+        "role": "title",
+        "rect": {
+          "x": 10.811,
+          "y": 69.048,
+          "w": 78.378,
+          "h": 17.143
+        },
+        "text": "Our long summer by the sea with grandma, the cousins, three dogs and far too much ice cream every single day",
+        "align": "center",
+        "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif",
+        "fontSizeCqw": 5.2027,
+        "lineHeight": 1.1,
+        "typography": {
+          "fontWeight": 600,
+          "fontStyle": "normal"
+        }
+      },
+      {
+        "bind": "coverSubtitle",
+        "role": "subtitle",
+        "rect": {
+          "x": 10.811,
+          "y": 86.667,
+          "w": 78.378,
+          "h": 6.19
+        },
+        "text": "Summer 2026 · Abu Dhabi, Muscat and the long road home",
+        "align": "center",
+        "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif",
+        "fontSizeCqw": 3.1081,
+        "lineHeight": 1.25,
+        "typography": {
+          "fontWeight": 400,
+          "fontStyle": "normal"
+        }
+      }
+    ]
+  },
+  "bleed": {
+    "kind": "cover",
+    "layoutId": "c-p-cover-window",
+    "knownLayout": true,
+    "slot": {
+      "index": 0,
+      "rect": {
+        "x": 10.811,
+        "y": 7.619,
+        "w": 78.378,
+        "h": 59.048,
+        "frame": {
+          "kind": "border",
+          "mm": 0.4,
+          "hex": "#7A6F63"
+        }
+      },
+      "photoId": "d0",
+      "photo": {
+        "url": "https://print-assets.invalid/d0.jpg",
+        "style": {
+          "width": 100,
+          "height": 124.67390904388067,
+          "left": 0,
+          "top": -12.336954521940335
+        }
+      },
+      "look": {
+        "frame": {
+          "kind": "border",
+          "color": "#7A6F63",
+          "photo": {
+            "x": 0.3448,
+            "y": 0.3226,
+            "w": 99.3103,
+            "h": 99.3548
+          }
+        }
+      }
+    },
+    "textRect": {
+      "x": 10.811,
+      "y": 69.048,
+      "w": 78.378,
+      "h": 23.81
+    },
+    "title": {
+      "text": "Our long summer by the sea with grandma, the cousins, three dogs and far too much ice cream every single day",
+      "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif",
+      "sizeCqw": 3.6
+    },
+    "subtitle": {
+      "text": "Summer 2026 · Abu Dhabi, Muscat and the long road home",
+      "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif"
+    },
+    "panels": [
+      {
+        "bind": "coverTitle",
+        "role": "title",
+        "rect": {
+          "x": 10.811,
+          "y": 69.048,
+          "w": 78.378,
+          "h": 17.143
+        },
+        "text": "Our long summer by the sea with grandma, the cousins, three dogs and far too much ice cream every single day",
+        "align": "center",
+        "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif",
+        "fontSizeCqw": 5.2027,
+        "lineHeight": 1.1,
+        "typography": {
+          "fontWeight": 600,
+          "fontStyle": "normal"
+        }
+      },
+      {
+        "bind": "coverSubtitle",
+        "role": "subtitle",
+        "rect": {
+          "x": 10.811,
+          "y": 86.667,
+          "w": 78.378,
+          "h": 6.19
+        },
+        "text": "Summer 2026 · Abu Dhabi, Muscat and the long road home",
+        "align": "center",
+        "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif",
+        "fontSizeCqw": 3.1081,
+        "lineHeight": 1.25,
+        "typography": {
+          "fontWeight": 400,
+          "fontStyle": "normal"
+        }
+      }
+    ]
+  }
+}

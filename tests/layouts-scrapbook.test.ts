@@ -11,7 +11,7 @@ import { photoRectOf, rotatedBoundsPct, type BoundsPct } from "@/lib/book/slot-g
 import { layoutsFor, rectHalf, repairSpreads } from "@/lib/book/spreads";
 import type { BookDoc, BookFormat, BookPage, Caption, Layout, Rect } from "@/lib/book/types";
 import { DECORATION_STICKER_IDS, OCCASION_ACCENT, STICKERS } from "@/lib/design/stickers";
-import { getLayout, LAYOUTS, SAFE_MM } from "@/lib/layouts";
+import { getLayout, LAYOUTS, SAFE_MM, M29_COVERS } from "@/lib/layouts";
 import { SCRAPBOOK_LANDSCAPE_LAYOUTS } from "@/lib/layouts/scrapbook/landscape";
 import { SCRAPBOOK_PORTRAIT_LAYOUTS } from "@/lib/layouts/scrapbook/portrait";
 
@@ -62,8 +62,8 @@ describe.each(SETS)("scrapbook $format catalogue", ({ format, prefix, layouts })
 
   it("is wired into the catalogue: getLayout + layoutsFor(format, scrapbook, role)", () => {
     for (const l of layouts) expect(getLayout(l.id)).toBe(l);
-    expect(LAYOUTS.filter((l) => l.style === "scrapbook" && l.format === format)).toEqual([...layouts]);
-    for (const role of ["page", "spread", "cover"] as const) expect(layoutsFor(format, "scrapbook", role)).toEqual(byRole(role));
+    expect(LAYOUTS.filter((l) => l.style === "scrapbook" && l.format === format && !M29_COVERS.includes(l))).toEqual([...layouts]);
+    for (const role of ["page", "spread", "cover"] as const) expect(layoutsFor(format, "scrapbook", role).filter((l) => !M29_COVERS.includes(l))).toEqual(byRole(role));
   });
 
   it("single pages cover photo counts 1–5 and both orientations for 1–2 photos", () => {

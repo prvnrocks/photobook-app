@@ -1,0 +1,238 @@
+{
+  "screen": {
+    "kind": "cover",
+    "layoutId": "m-p-cover-type",
+    "knownLayout": true,
+    "slot": {
+      "index": 0,
+      "rect": {
+        "x": 37.8378,
+        "y": 34.2857,
+        "w": 62.1622,
+        "h": 65.7143
+      },
+      "photoId": "d0",
+      "photo": {
+        "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%221600%22%20viewBox%3D%220%200%201200%201600%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23c2410c%22%2F%3E%3Cpath%20d%3D%22M0%200L1200%201600M1200%200L0%201600%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%22.4%22%20stroke-width%3D%2212%22%2F%3E%3Ccircle%20cx%3D%22600%22%20cy%3D%22800%22%20r%3D%22120%22%20fill%3D%22%23fff%22%20fill-opacity%3D%22.7%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%221100%22%20font-size%3D%22150%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%3Ed0%201200%C3%971600%3C%2Ftext%3E%3C%2Fsvg%3E",
+        "style": {
+          "width": 112.49995597828766,
+          "height": 100,
+          "left": -6.249977989143829,
+          "top": 0
+        }
+      }
+    },
+    "textRect": {
+      "x": 8.1081,
+      "y": 8.5714,
+      "w": 83.7838,
+      "h": 20.9524
+    },
+    "title": {
+      "text": "Lanes & Light",
+      "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif",
+      "sizeCqw": 7
+    },
+    "subtitle": {
+      "text": "A week away · 2026",
+      "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif"
+    },
+    "panels": [
+      {
+        "bind": "coverTitle",
+        "role": "chapter",
+        "rect": {
+          "x": 8.1081,
+          "y": 8.5714,
+          "w": 83.7838,
+          "h": 15.2381
+        },
+        "text": "Lanes & Light",
+        "align": "start",
+        "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+        "fontSizeCqw": 5.4054,
+        "lineHeight": 1.05,
+        "typography": {
+          "fontWeight": 400,
+          "fontStyle": "normal",
+          "textTransform": "uppercase"
+        }
+      },
+      {
+        "bind": "coverSubtitle",
+        "role": "subtitle",
+        "rect": {
+          "x": 8.1081,
+          "y": 24.7619,
+          "w": 66.2162,
+          "h": 4.7619
+        },
+        "text": "A week away · 2026",
+        "align": "start",
+        "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+        "fontSizeCqw": 3.1081,
+        "lineHeight": 1.25,
+        "typography": {
+          "fontWeight": 400,
+          "fontStyle": "normal"
+        }
+      }
+    ],
+    "slices": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 48.6413,
+        "h": 32.1256
+      },
+      {
+        "x": 51.3587,
+        "y": 0,
+        "w": 48.6413,
+        "h": 32.1256
+      },
+      {
+        "x": 0,
+        "y": 33.9372,
+        "w": 48.6413,
+        "h": 32.1256
+      },
+      {
+        "x": 51.3587,
+        "y": 33.9372,
+        "w": 48.6413,
+        "h": 32.1256
+      },
+      {
+        "x": 0,
+        "y": 67.8744,
+        "w": 48.6413,
+        "h": 32.1256
+      },
+      {
+        "x": 51.3587,
+        "y": 67.8744,
+        "w": 48.6413,
+        "h": 32.1256
+      }
+    ]
+  },
+  "bleed": {
+    "kind": "cover",
+    "layoutId": "m-p-cover-type",
+    "knownLayout": true,
+    "slot": {
+      "index": 0,
+      "rect": {
+        "x": 37.8378,
+        "y": 34.2857,
+        "w": 64.18922702702703,
+        "h": 67.14287142857141
+      },
+      "photoId": "d0",
+      "photo": {
+        "url": "https://print-assets.invalid/d0.jpg",
+        "style": {
+          "width": 111.31574754019091,
+          "height": 100,
+          "left": -5.657873770095456,
+          "top": 0
+        }
+      }
+    },
+    "textRect": {
+      "x": 8.1081,
+      "y": 8.5714,
+      "w": 83.7838,
+      "h": 20.9524
+    },
+    "title": {
+      "text": "Lanes & Light",
+      "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif",
+      "sizeCqw": 7
+    },
+    "subtitle": {
+      "text": "A week away · 2026",
+      "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif"
+    },
+    "panels": [
+      {
+        "bind": "coverTitle",
+        "role": "chapter",
+        "rect": {
+          "x": 8.1081,
+          "y": 8.5714,
+          "w": 83.7838,
+          "h": 15.2381
+        },
+        "text": "Lanes & Light",
+        "align": "start",
+        "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
+        "fontSizeCqw": 5.4054,
+        "lineHeight": 1.05,
+        "typography": {
+          "fontWeight": 400,
+          "fontStyle": "normal",
+          "textTransform": "uppercase"
+        }
+      },
+      {
+        "bind": "coverSubtitle",
+        "role": "subtitle",
+        "rect": {
+          "x": 8.1081,
+          "y": 24.7619,
+          "w": 66.2162,
+          "h": 4.7619
+        },
+        "text": "A week away · 2026",
+        "align": "start",
+        "fontFamily": "var(--font-cormorant, \"Cormorant Garamond\"), var(--font-amiri, \"Amiri\"), var(--font-cairo), var(--font-inter), serif",
+        "fontSizeCqw": 3.1081,
+        "lineHeight": 1.25,
+        "typography": {
+          "fontWeight": 400,
+          "fontStyle": "normal"
+        }
+      }
+    ],
+    "slices": [
+      {
+        "x": 0,
+        "y": 0,
+        "w": 47.1053,
+        "h": 31.4421
+      },
+      {
+        "x": 49.7369,
+        "y": 0,
+        "w": 50.2631,
+        "h": 31.4421
+      },
+      {
+        "x": 0,
+        "y": 33.2151,
+        "w": 47.1053,
+        "h": 31.4421
+      },
+      {
+        "x": 49.7369,
+        "y": 33.2151,
+        "w": 50.2631,
+        "h": 31.4421
+      },
+      {
+        "x": 0,
+        "y": 66.4303,
+        "w": 47.1053,
+        "h": 33.5697
+      },
+      {
+        "x": 49.7369,
+        "y": 66.4303,
+        "w": 50.2631,
+        "h": 33.5697
+      }
+    ]
+  }
+}
