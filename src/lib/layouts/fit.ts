@@ -21,7 +21,7 @@
 import { assertSupportedDesign, type BookDesign } from "@/lib/book/book-design";
 import { DEFAULT_FORMAT, pageMm } from "@/lib/book/format";
 import { photoRectOf, shapePoints } from "@/lib/book/slot-geometry";
-import { layoutsFor } from "@/lib/book/spreads";
+import { autoCoversFor, layoutsFor } from "@/lib/book/spreads";
 import type { BookFormat, DesignStyle, Layout } from "@/lib/book/types";
 
 export type FitOrientation = "portrait" | "landscape" | "square";
@@ -106,12 +106,13 @@ export function bestPageLayout(orients: readonly FitOrientation[], opts: BestLay
 
 /**
  * Cover layout of the book's design for a cover photo of orientation `orient` (null = no photo):
- * among the style's one-photo covers (all covers when none has one photo), the first whose slot
- * prefers that orientation, else the first. Classic A5 portrait → "cover".
+ * among the style's auto-pickable one-photo covers (autoCoversFor — M29 user-only cover styles are
+ * never picked; all auto covers when none has one photo), the first whose slot prefers that
+ * orientation, else the first. Classic A5 portrait → "cover".
  */
 export function bestCoverLayout(design: BookDesign = DEFAULT_DESIGN, orient: FitOrientation | null = null): string {
   assertSupportedDesign(design);
-  const covers = layoutsFor(design.format, design.designStyle, "cover");
+  const covers = autoCoversFor(design.format, design.designStyle);
   const ones = covers.filter((l) => l.photoCount === 1);
   const pool = ones.length > 0 ? ones : covers;
   const hit = orient === null ? undefined : pool.find((l) => fitsSlot(l.prefers[0] ?? "any", orient));
@@ -325,7 +326,7 @@ export function designFitScore(
  */
 export function coverPhotoOrientation(design: BookDesign): "portrait" | "landscape" | null {
   if (!isShapeAware(design)) return null;
-  const covers = layoutsFor(design.format, design.designStyle, "cover");
+  const covers = autoCoversFor(design.format, design.designStyle);
   const cover = covers.find((l) => l.photoCount === 1) ?? covers[0];
   if (!cover) return null;
   const pref = cover.prefers[0] ?? "any";

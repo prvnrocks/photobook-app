@@ -4,7 +4,7 @@
 // M9 code can still read them. Drop the v1 downgrade once M10c has settled.
 // Pure: used by client editor, API routes, AI pipeline and tests.
 
-import { getLayout } from "@/lib/layouts";
+import { CLASSIC_PORTRAIT_LAYOUTS, getLayout } from "@/lib/layouts";
 import { isV2CaptionFont } from "./fonts-v2";
 import { DEFAULT_DESIGN_STYLE, MAX_SLOTS_V1, upgradeV1 } from "./schema";
 import type { BookDoc, BookDocV1, BookPageV1 } from "./types";
@@ -17,7 +17,7 @@ export function upgradeDocV1(v1: BookDocV1): BookDoc {
 /**
  * True when `doc` cannot be written as v1 without losing something: landscape format, a non-colour
  * book background, a book backgroundSource (M10c D5), a non-classic design style, any page background or spread side, more slots
- * on a page than v1 allows, a spread or non-classic layout (page or cover), or a v2-only caption
+ * on a page than v1 allows, a layout outside the M1–M10a classic portrait set (page or cover), or a v2-only caption
  * font (fonts-v2.ts) as book font or on a page caption. (An explicit `page.background: null` is
  * the same as absent.) Unknown layout ids are not v2 by themselves (validation rejects them).
  */
@@ -38,10 +38,18 @@ export function usesV2Features(doc: BookDoc): boolean {
   );
 }
 
-/** A known layout that M9 cannot render: a spread, a non-classic style or a non-portrait format. */
+/** The M1–M10a ids — the only layouts M9 can render (built on first use: no import-order trap). */
+let v1LayoutIds: ReadonlySet<string> | null = null;
+const isV1LayoutId = (id: string) => (v1LayoutIds ??= new Set(CLASSIC_PORTRAIT_LAYOUTS.map((l) => l.id))).has(id);
+
+/**
+ * A known layout that M9 cannot render: anything outside CLASSIC_PORTRAIT_LAYOUTS — a spread, a
+ * non-classic style, a non-portrait format, or a newer classic A5 portrait layout (M29 cover
+ * styles, D-080). For every pre-M29 layout this is the same answer as the M10b rule
+ * (spread || style ≠ classic || format ≠ portrait).
+ */
 function isV2Layout(id: string): boolean {
-  const l = getLayout(id);
-  return !!l && (l.role === "spread" || l.style !== DEFAULT_DESIGN_STYLE || l.format !== "A5_PORTRAIT");
+  return getLayout(id) !== undefined && !isV1LayoutId(id);
 }
 
 /** v2 → v1. Caller must have checked !usesV2Features(doc). Copies only v1 keys, in v1 order. */

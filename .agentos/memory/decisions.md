@@ -272,3 +272,8 @@ Decision: New book form offers Modern (default for every occasion via DEFAULT_ST
 ## D-079 — M28 hardcover look in the viewer (2026-11-17)
 - Decision: viewer-only hardcover: hard front/back boards that turn stiffly, boards overhang the text block (squares), cover material wraps the board edges, hinge groove (squeeze) near the spine, cover art bleeds to the board edge; paint only, book box size unchanged. Print-ready wrap/bleed/spine cover PDF deferred to the printing milestone (needs printer specs).
 - Why: user request 2026-11-17; user chose viewer-only scope.
+
+## D-080 — M29 cover styles per theme (2026-11-17)
+- Decision: 4 cover styles per theme × format (≈22 new one-photo cover layouts, autoPick:false, in separate covers-m29 arrays); chosen in the editor via a "Cover style" tool; build default and AI catalogue unchanged (prompt/goldens byte-identical); new classic portrait covers save as v2; no schema/DB change.
+- Why: user request 2026-11-17 ("Add different styles for the cover pages to choose on each theme design").
+- Alternatives rejected: 6 per theme; real multi-photo collages (schema change); wizard choice (migration / extra action).

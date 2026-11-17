@@ -4,12 +4,18 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { serializeDoc, upgradeDocV1, usesV2Features } from "@/lib/book/doc-version";
 import { MAX_SLOTS_V1, MAX_SLOTS_V2, parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import type { BookDoc, BookDocV1, BookPageV1 } from "@/lib/book/types";
+import { LAYOUTS, M29_COVERS } from "@/lib/layouts";
+import { TEST_M29_COVERS, testCoverId } from "./fixtures/test-m29-covers";
 import { parsePublicDoc } from "@/lib/publish/public-doc";
 import { baseDocV1, representativeDocV1 } from "./golden/m9-inputs";
+
+// M29: test-only autoPick:false covers (one per design) appended to the catalogue, standing in
+// for the real M29 cover styles. Every existing layout is unchanged.
+vi.mock("@/lib/layouts", async (orig) => (await import("./fixtures/test-m29-covers")).withTestCovers(await orig()));
 
 const FIXTURES = join(__dirname, "golden", "fixtures", "m9");
 const readFixture = (name: string): Record<string, unknown> => JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));
@@ -350,5 +356,43 @@ describe("validateBookDoc on v2", () => {
       pages: doc.pages.map((p, i) => (i === 3 ? { ...p, slots: p.slots.map((s, j) => (j === 0 ? { ...s, photoId: PHOTO_A } : s)) } : p)),
     };
     expect(validateBookDoc(slotted, { photoIds, maxPages: 100 })).toEqual([]);
+  });
+});
+
+describe("M29 cover styles (D-080): v1 detection", () => {
+  const v1Base = () => upgradeDocV1(representativeDocV1());
+
+  it("a new classic A5 portrait cover (outside CLASSIC_PORTRAIT_LAYOUTS) saves as v2 and round-trips", () => {
+    const base = v1Base();
+    expect(usesV2Features(base)).toBe(false);
+    const doc: BookDoc = { ...base, cover: { ...base.cover, layout: testCoverId("classic", "A5_PORTRAIT") } };
+    expect(usesV2Features(doc)).toBe(true);
+    const stored = clone(serializeDoc(doc));
+    expect(stored.version).toBe(2);
+    const back = parsedOrThrow(stored);
+    expect(back.cover).toEqual(doc.cover);
+    expect(serializeDoc(back)).toEqual(stored);
+    // Switching back to the M1 cover makes the same book v1 again (byte-identical to before).
+    expect(serializeDoc({ ...back, cover: { ...back.cover, layout: "cover" } })).toEqual(serializeDoc(base));
+  });
+
+  it("for every pre-M29 layout the v2 answer is unchanged (spread || non-classic || non-portrait)", () => {
+    const later = new Set([...M29_COVERS, ...TEST_M29_COVERS].map((l) => l.id));
+    const pre = LAYOUTS.filter((l) => !later.has(l.id));
+    expect(pre.length).toBeGreaterThan(50);
+    for (const l of pre) {
+      const base = v1Base();
+      const doc: BookDoc =
+        l.role === "cover"
+          ? { ...base, cover: { ...base.cover, layout: l.id } }
+          : { ...base, pages: base.pages.map((p, i) => (i === 0 ? { ...p, layout: l.id } : p)) };
+      const m10b = l.role === "spread" || l.style !== "classic" || l.format !== "A5_PORTRAIT";
+      expect(usesV2Features(doc), l.id).toBe(m10b);
+    }
+  });
+
+  it("unknown layout ids are still not v2 by themselves", () => {
+    const base = v1Base();
+    expect(usesV2Features({ ...base, cover: { ...base.cover, layout: "no-such-cover" } })).toBe(false);
   });
 });

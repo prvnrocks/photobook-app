@@ -24,7 +24,7 @@ import type { StoryPhoto } from "@/lib/ai/story";
 import { ReplayTransport, MIN_CACHEABLE_TOKENS } from "@/lib/ai/transport-replay";
 import type { BookDesign } from "@/lib/book/book-design";
 import { validateBookDoc } from "@/lib/book/schema";
-import { isSpreadAligned, layoutsFor } from "@/lib/book/spreads";
+import { autoCoversFor, isSpreadAligned, layoutsFor } from "@/lib/book/spreads";
 import type { BookDoc } from "@/lib/book/types";
 import {
   AI_BACKGROUND_CATALOGUE,
@@ -75,7 +75,8 @@ describe("Storyteller v6 prompts", () => {
   it("geometric / scrapbook catalogues list every layout of the design with slot shape, tilt, frame, text and caption", () => {
     for (const d of NEW4) {
       const cat = layoutCatalogue(d);
-      const own = (["page", "spread", "cover"] as const).flatMap((r) => layoutsFor(d.format, d.designStyle, r));
+      // M29: the catalogue lists only auto-pickable covers (autoCoversFor).
+      const own = [...(["page", "spread"] as const).flatMap((r) => layoutsFor(d.format, d.designStyle, r)), ...autoCoversFor(d.format, d.designStyle)];
       const listed = [...cat.split("\nBACKGROUNDS (")[0].matchAll(/^- ([a-z0-9-]+) · /gm)].map((m) => m[1]);
       expect(new Set(listed)).toEqual(new Set(own.map((l) => l.id)));
       for (const l of own) {

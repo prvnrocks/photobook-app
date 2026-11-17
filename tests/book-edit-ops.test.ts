@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   addPage,
   canAddPage,
@@ -15,11 +15,18 @@ import {
   setCaptionFont,
   setChapterTitle,
   setCover,
+  setCoverLayout,
   setCrop,
   usedPhotoIds,
 } from "@/lib/book/edit-ops";
 import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import type { BookDoc, BookPage } from "@/lib/book/types";
+import { serializeDoc } from "@/lib/book/doc-version";
+import { testCoverId } from "./fixtures/test-m29-covers";
+
+// M29: test-only autoPick:false covers (one per design) appended to the catalogue, standing in
+// for the real M29 cover styles (setCoverLayout cases). Every existing layout is unchanged.
+vi.mock("@/lib/layouts", async (orig) => (await import("./fixtures/test-m29-covers")).withTestCovers(await orig()));
 
 const PHOTOS = new Set(Array.from({ length: 120 }, (_, i) => `ph${i + 1}`));
 const C = { x: 0.5, y: 0.5, zoom: 1 };
@@ -440,6 +447,59 @@ describe("cover & chapters", () => {
     expect(setChapterTitle(base(), "c2", "y".repeat(200)).chapters[1].title.length).toBeLessThanOrEqual(80);
     expectValid(out);
     expect(code(() => setChapterTitle(base(), "zz", "a"))).toBe("unknown_chapter");
+  });
+});
+
+describe("setCoverLayout (M29 cover styles)", () => {
+  const NEW_CLASSIC = testCoverId("classic", "A5_PORTRAIT");
+
+  it("switches the cover style and keeps photo, title and subtitle; input untouched; valid; saves as v2", () => {
+    const { d, snap } = frozen();
+    const out = setCoverLayout(d, NEW_CLASSIC);
+    expect(out).not.toBe(d);
+    expect(out.cover).toEqual({ ...d.cover, layout: NEW_CLASSIC });
+    expect(out.cover.photoId).toBe("ph1");
+    expect(out.cover.title).toBe("Weekend");
+    expect(out.cover.subtitle).toBe("Abu Dhabi");
+    expect(out.pages).toBe(d.pages);
+    expect(out.chapters).toBe(d.chapters);
+    expect(JSON.stringify(d)).toBe(snap);
+    expectValid(out);
+    expect(serializeDoc(out).version).toBe(2);
+    // …and back to the M1 cover: same content, v1 again.
+    const back = setCoverLayout(out, "cover");
+    expect(back.cover).toEqual(d.cover);
+    expect(serializeDoc(back).version).toBe(1);
+  });
+
+  it("same layout → the same doc reference (no undo entry)", () => {
+    const d = base();
+    expect(setCoverLayout(d, "cover")).toBe(d);
+    const out = setCoverLayout(d, NEW_CLASSIC);
+    expect(setCoverLayout(out, NEW_CLASSIC)).toBe(out);
+  });
+
+  it("keeps a null cover photo", () => {
+    const d = setCover(base(), { photoId: null });
+    expect(setCoverLayout(d, NEW_CLASSIC).cover).toEqual({ ...d.cover, layout: NEW_CLASSIC });
+  });
+
+  it("rejects another style, another format, a page/spread layout and unknown ids (typed codes)", () => {
+    const d = base();
+    expect(code(() => setCoverLayout(d, testCoverId("modern", "A5_PORTRAIT")))).toBe("layout_not_for_book");
+    expect(code(() => setCoverLayout(d, "m-p-cover-strips"))).toBe("layout_not_for_book");
+    expect(code(() => setCoverLayout(d, testCoverId("classic", "A5_LANDSCAPE")))).toBe("layout_not_for_book");
+    expect(code(() => setCoverLayout(d, "c-l-cover"))).toBe("layout_not_for_book");
+    expect(code(() => setCoverLayout(d, "one-portrait"))).toBe("not_a_cover_layout");
+    expect(code(() => setCoverLayout(d, "nope"))).toBe("unknown_layout");
+  });
+
+  it("works for a non-classic book (its own style + format only)", () => {
+    const d: BookDoc = { ...base(), format: "A5_LANDSCAPE", style: { ...base().style, designStyle: "modern" } };
+    const out = setCoverLayout(d, testCoverId("modern", "A5_LANDSCAPE"));
+    expect(out.cover.layout).toBe(testCoverId("modern", "A5_LANDSCAPE"));
+    expect(setCoverLayout(out, "m-l-cover-panel").cover).toEqual({ ...d.cover, layout: "m-l-cover-panel" });
+    expect(code(() => setCoverLayout(d, testCoverId("modern", "A5_PORTRAIT")))).toBe("layout_not_for_book");
   });
 });
 

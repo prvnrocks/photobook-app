@@ -14,6 +14,7 @@ import { V2_CAPTION_FONTS } from "@/lib/book/fonts-v2";
 import { LayoutSchema, parseBookDoc, TEXT_FONT_ROLES, validateBookDoc } from "@/lib/book/schema";
 import { TEXT_ROLES } from "@/lib/design/styles";
 import {
+  autoCoversFor,
   isSpreadAligned,
   layoutsFor,
   rectHalf,
@@ -239,7 +240,7 @@ describe("layout schema v2", () => {
       LAYOUTS.filter((l) => l.role === "page" && l.style === "classic" && l.format === "A5_PORTRAIT").map((l) => l.id),
     );
     expect(layoutsFor("A5_PORTRAIT", "classic", "spread").map((l) => l.id)).toEqual(["test-spread-a", "test-spread-b", "test-spread-c"]);
-    expect(layoutsFor("A5_PORTRAIT", "classic", "cover").map((l) => l.id)).toEqual(["cover"]);
+    expect(autoCoversFor("A5_PORTRAIT", "classic").map((l) => l.id)).toEqual(["cover"]); // + M29 cover styles (autoPick:false)
     // Real modern portrait pages (M10b A5a) come first, the test-only one is appended by withTestSpreads.
     expect(layoutsFor("A5_PORTRAIT", "modern", "page").map((l) => l.id)).toEqual(
       LAYOUTS.filter((l) => l.role === "page" && l.style === "modern" && l.format === "A5_PORTRAIT").map((l) => l.id),

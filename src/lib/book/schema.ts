@@ -400,6 +400,12 @@ const LayoutObjectSchema = z.object({
   slices: z.array(LayoutRectSchema).min(2).max(8).optional(),
   /** M10c: stickers / tape / label plates (pure decoration, sticker-catalogue ids). */
   decorations: z.array(LayoutDecorationSchema).max(16).optional(),
+  /**
+   * M29 (D-080), covers only: `false` = a user-chosen cover style — never picked automatically
+   * (bestCoverLayout, coverPhotoOrientation, the Storyteller catalogue use autoCoversFor in
+   * lib/book/spreads). Absent = auto-pickable (every pre-M29 layout).
+   */
+  autoPick: z.literal(false).optional(),
 });
 
 type LayoutObject = z.infer<typeof LayoutObjectSchema>;
@@ -427,7 +433,7 @@ export function makeLayoutSchema(opts: LayoutCheckOptions = {}) {
 
 /**
  * Semantic layout checks (messages contain no user data). M10b: slices, rects inside the role's
- * area, twin rules. M10c: shape/frame/rotation/decoration geometry — see m10cLayoutIssues.
+ * area, twin rules. M29: autoPick only on covers. M10c: shape/frame/rotation/decoration geometry — see m10cLayoutIssues.
  */
 export function layoutIssues(l: LayoutObject, opts: LayoutCheckOptions = {}): string[] {
   const issues: string[] = [];
@@ -450,6 +456,7 @@ export function layoutIssues(l: LayoutObject, opts: LayoutCheckOptions = {}): st
   }
   if (l.role === "spread" && !l.twin) issues.push("spread needs a twin");
   if (l.role !== "spread" && l.twin) issues.push("only spreads have a twin");
+  if (l.autoPick !== undefined && l.role !== "cover") issues.push("only covers may set autoPick");
   issues.push(...m10cLayoutIssues(l, opts));
   return issues;
 }

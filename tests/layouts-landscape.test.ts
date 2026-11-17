@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { EDGE_EPS_PCT } from "@/lib/book/bleed";
 import { pageMm } from "@/lib/book/format";
 import { LayoutSchema, validateBookDoc } from "@/lib/book/schema";
-import { layoutsFor, rectHalf, repairSpreads, toPageRect } from "@/lib/book/spreads";
+import { autoCoversFor, layoutsFor, rectHalf, repairSpreads, toPageRect } from "@/lib/book/spreads";
 import type { BookDoc, BookPage, DesignStyle, Layout, Rect } from "@/lib/book/types";
 import { BLEED_MM, getLayout, SAFE_MM } from "@/lib/layouts";
 import { CLASSIC_LANDSCAPE_LAYOUTS } from "@/lib/layouts/classic/landscape";
@@ -64,11 +64,11 @@ describe("landscape catalogue", () => {
 
   it("classic has the 6 page counterparts + a cover; modern ~8 pages, 3 spreads, 2 covers", () => {
     expect(layoutsFor("A5_LANDSCAPE", "classic", "page")).toHaveLength(6);
-    expect(layoutsFor("A5_LANDSCAPE", "classic", "cover")).toHaveLength(1);
+    expect(autoCoversFor("A5_LANDSCAPE", "classic")).toHaveLength(1); // M29 cover styles are extra (autoPick:false)
     expect(layoutsFor("A5_LANDSCAPE", "classic", "spread")).toHaveLength(0);
     expect(layoutsFor("A5_LANDSCAPE", "modern", "page").length).toBeGreaterThanOrEqual(8);
     expect(layoutsFor("A5_LANDSCAPE", "modern", "spread")).toHaveLength(3);
-    expect(layoutsFor("A5_LANDSCAPE", "modern", "cover")).toHaveLength(2);
+    expect(autoCoversFor("A5_LANDSCAPE", "modern")).toHaveLength(2);
   });
 
   it("the modern text panel binds chapter title + date and has a caption area", () => {
@@ -106,7 +106,7 @@ describe("landscape catalogue", () => {
   });
 
   it("modern covers place coverTitle + coverSubtitle inside the cover's title block", () => {
-    for (const l of layoutsFor("A5_LANDSCAPE", "modern", "cover")) {
+    for (const l of autoCoversFor("A5_LANDSCAPE", "modern")) {
       expect(l.texts!.map((t) => t.bind)).toEqual(["coverTitle", "coverSubtitle"]);
       expect(l.texts![0].font).toBe("title");
       for (const t of l.texts!) expect(contains(l.caption!, t.box)).toBe(true);

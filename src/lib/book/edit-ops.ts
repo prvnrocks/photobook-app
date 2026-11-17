@@ -39,6 +39,8 @@ export type EditOpErrorCode =
   | "slot_out_of_range"
   | "unknown_layout"
   | "not_a_page_layout"
+  /** setCoverLayout got a page or spread layout (M29). */
+  | "not_a_cover_layout"
   | "unknown_chapter"
   | "no_caption_area"
   | "page_limit"
@@ -108,7 +110,7 @@ function captionArea(page: BookPage): Layout["caption"] {
   return layout.caption;
 }
 
-/** D-063: a page layout must match the book's format and design style (absent style = classic). */
+/** D-063: a page / cover layout must match the book's format and design style (absent style = classic). */
 function assertLayoutForBook(doc: BookDoc, layout: Layout): void {
   if (layout.format !== doc.format || layout.style !== (doc.style.designStyle ?? "classic")) {
     throw new EditOpError("layout_not_for_book");
@@ -754,6 +756,22 @@ export function setCover(doc: BookDoc, patch: CoverPatch): BookDoc {
   const c = doc.cover;
   if (cover.title === c.title && cover.subtitle === c.subtitle && cover.photoId === c.photoId) return doc;
   return { ...doc, cover };
+}
+
+/**
+ * M29 (D-080): switch the cover to another cover style of the book's format + design style
+ * (any of coverStylesFor, including `autoPick: false` styles — the user's choice). Only
+ * `cover.layout` changes: photo, title and subtitle are kept (the cover's photo is re-fitted by
+ * the renderer). Same layout → the input doc itself (no undo entry).
+ * Throws EditOpError: unknown_layout, not_a_cover_layout, layout_not_for_book.
+ */
+export function setCoverLayout(doc: BookDoc, layoutId: string): BookDoc {
+  const layout = getLayout(layoutId);
+  if (!layout) throw new EditOpError("unknown_layout");
+  if (layout.role !== "cover") throw new EditOpError("not_a_cover_layout");
+  assertLayoutForBook(doc, layout);
+  if (doc.cover.layout === layout.id) return doc;
+  return { ...doc, cover: { ...doc.cover, layout: layout.id } };
 }
 
 /** Rename a chapter (≤ 80 units, clipped). */

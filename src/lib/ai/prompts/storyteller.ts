@@ -10,7 +10,7 @@
 // Bump STORYTELLER_PROMPT_VERSION whenever this text changes meaningfully.
 
 import { DEFAULT_BOOK_DESIGN, type BookDesign } from "@/lib/book/book-design";
-import { layoutsFor } from "@/lib/book/spreads";
+import { autoCoversFor, layoutsFor } from "@/lib/book/spreads";
 import type { DesignStyle, Layout } from "@/lib/book/types";
 import { swatchById, textureById } from "@/lib/design/backgrounds";
 import { AI_BACKGROUND_CATALOGUE, FADED_PHOTO_ID, suggestsBackgrounds, type AiBackgroundStyle } from "@/lib/design/background-suggest";
@@ -160,7 +160,9 @@ export function layoutCatalogue(design: BookDesign = DEFAULT_BOOK_DESIGN): strin
   const line = isShapedStyle(design.designStyle) ? shapedCatalogueLine : catalogueLine;
   const pages = layoutsFor(design.format, design.designStyle, "page").map(line);
   const spreads = layoutsFor(design.format, design.designStyle, "spread");
-  const covers = layoutsFor(design.format, design.designStyle, "cover");
+  // M29: user-only cover styles (autoPick:false) are never listed — the AI never picks them and
+  // the cached prompt stays byte-identical.
+  const covers = autoCoversFor(design.format, design.designStyle);
   const lines = [
     "PAGE LAYOUTS (use only these ids in pages[].layoutId; photoIds must have exactly that many aliases, in slot order):",
     ...pages,

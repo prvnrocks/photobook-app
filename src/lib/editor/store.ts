@@ -261,6 +261,7 @@ export const EDIT_ERROR_COPY: Record<EditOpErrorCode, string> = {
   slot_out_of_range: "That photo spot no longer exists.",
   unknown_layout: "That layout isn't available.",
   not_a_page_layout: "That layout can't be used on a page.",
+  not_a_cover_layout: "That layout can't be used on the cover.",
   unknown_chapter: "That chapter no longer exists.",
   no_caption_area: "This layout has no room for a caption. Pick a layout with a caption first.",
   page_limit: "You've reached the page limit for this book.",

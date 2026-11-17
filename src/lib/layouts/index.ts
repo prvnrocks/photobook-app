@@ -17,6 +17,14 @@ import { GEOMETRIC_LANDSCAPE_LAYOUTS } from "./geometric/landscape";
 import { GEOMETRIC_PORTRAIT_LAYOUTS } from "./geometric/portrait";
 import { SCRAPBOOK_LANDSCAPE_LAYOUTS } from "./scrapbook/landscape";
 import { SCRAPBOOK_PORTRAIT_LAYOUTS } from "./scrapbook/portrait";
+import { CLASSIC_PORTRAIT_COVERS } from "./classic/portrait/covers-m29";
+import { CLASSIC_LANDSCAPE_COVERS } from "./classic/landscape/covers-m29";
+import { MODERN_PORTRAIT_COVERS } from "./modern/portrait/covers-m29";
+import { MODERN_LANDSCAPE_COVERS } from "./modern/landscape/covers-m29";
+import { GEOMETRIC_PORTRAIT_COVERS } from "./geometric/portrait/covers-m29";
+import { GEOMETRIC_LANDSCAPE_COVERS } from "./geometric/landscape/covers-m29";
+import { SCRAPBOOK_PORTRAIT_COVERS } from "./scrapbook/portrait/covers-m29";
+import { SCRAPBOOK_LANDSCAPE_COVERS } from "./scrapbook/landscape/covers-m29";
 
 /** The M1–M10a catalogue: classic A5 portrait. Order and geometry frozen (goldens, AI prompt cache). */
 export const CLASSIC_PORTRAIT_LAYOUTS: readonly Layout[] = [
@@ -27,6 +35,21 @@ export const CLASSIC_PORTRAIT_LAYOUTS: readonly Layout[] = [
   twoHorizontal,
   threeMixed,
   fourGrid,
+];
+
+/**
+ * M29 cover styles (D-080), every format and style, in catalogue order. All `autoPick: false`:
+ * chosen only by the user (editor "Cover style" tool), never by bestCoverLayout or the AI.
+ */
+export const M29_COVERS: readonly Layout[] = [
+  ...CLASSIC_PORTRAIT_COVERS,
+  ...CLASSIC_LANDSCAPE_COVERS,
+  ...MODERN_PORTRAIT_COVERS,
+  ...MODERN_LANDSCAPE_COVERS,
+  ...GEOMETRIC_PORTRAIT_COVERS,
+  ...GEOMETRIC_LANDSCAPE_COVERS,
+  ...SCRAPBOOK_PORTRAIT_COVERS,
+  ...SCRAPBOOK_LANDSCAPE_COVERS,
 ];
 
 /** Every layout of every format and style (M10b). Format/style-aware code uses layoutsFor() in lib/book/spreads. */
@@ -40,6 +63,8 @@ export const LAYOUTS: readonly Layout[] = [
   ...GEOMETRIC_LANDSCAPE_LAYOUTS,
   ...SCRAPBOOK_PORTRAIT_LAYOUTS,
   ...SCRAPBOOK_LANDSCAPE_LAYOUTS,
+  // M29 cover styles (D-080): appended after everything above, autoPick:false (editor-only).
+  ...M29_COVERS,
 ];
 
 export const LAYOUT_IDS: readonly string[] = LAYOUTS.map((l) => l.id);

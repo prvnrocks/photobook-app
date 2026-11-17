@@ -41,6 +41,23 @@ export function layoutsFor(format: BookFormat, style: DesignStyle | null, role: 
   return LAYOUTS.filter((l) => l.role === role && l.format === format && (style === null || l.style === style));
 }
 
+/**
+ * M29 (D-080): every cover layout of `format` + `style` the user may choose (editor "Cover
+ * style" tool) — the pre-M29 covers first, then the M29 styles, in catalogue order (stable).
+ */
+export function coverStylesFor(format: BookFormat, style: DesignStyle): readonly Layout[] {
+  return layoutsFor(format, style, "cover");
+}
+
+/**
+ * Covers that may be picked automatically (bestCoverLayout, coverPhotoOrientation, Storyteller
+ * catalogue): coverStylesFor without `autoPick: false` — i.e. exactly the pre-M29 covers, so the
+ * build default, the AI prompt and every golden stay byte-identical.
+ */
+export function autoCoversFor(format: BookFormat, style: DesignStyle): readonly Layout[] {
+  return coverStylesFor(format, style).filter((l) => l.autoPick !== false);
+}
+
 /** The spread layout `id`, or undefined when unknown / not a spread. */
 export function getSpreadLayout(id: string): Layout | undefined {
   const l = getLayout(id);

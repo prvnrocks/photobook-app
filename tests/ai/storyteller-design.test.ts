@@ -16,7 +16,7 @@ import { AlbumPlanAiSchema, AlbumPlanBackgroundsAiSchema, type AlbumPlan } from 
 import type { StoryPhoto } from "@/lib/ai/story";
 import type { BookDesign } from "@/lib/book/book-design";
 import { validateBookDoc } from "@/lib/book/schema";
-import { isSpreadAligned, layoutsFor } from "@/lib/book/spreads";
+import { autoCoversFor, isSpreadAligned, layoutsFor } from "@/lib/book/spreads";
 import type { BookDoc } from "@/lib/book/types";
 import { getLayout } from "@/lib/layouts";
 import { aliasMaps, RUN_ID, storyBook } from "../helpers/story-fixtures";
@@ -53,9 +53,11 @@ describe("Storyteller v5 system prompt per design", () => {
   it("each catalogue lists exactly that design's layouts (built at runtime from layoutsFor), nothing per book", () => {
     for (const d of ALL) {
       const text = storytellerSystemText(d);
-      const own = new Set(
-        (["page", "spread", "cover"] as const).flatMap((r) => layoutsFor(d.format, d.designStyle, r).map((l) => l.id)),
-      );
+      // M29: covers = autoCoversFor (user-only cover styles are never listed).
+      const own = new Set([
+        ...(["page", "spread"] as const).flatMap((r) => layoutsFor(d.format, d.designStyle, r).map((l) => l.id)),
+        ...autoCoversFor(d.format, d.designStyle).map((l) => l.id),
+      ]);
       // v6: the BACKGROUNDS list (modern) uses the same "- id · " shape — count layouts only.
       const layoutsPart = text.split("\nBACKGROUNDS (")[0];
       const listed = new Set([...layoutsPart.matchAll(/^- ([a-z0-9-]+) · /gm)].map((m) => m[1]));
