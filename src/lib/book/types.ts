@@ -12,7 +12,7 @@ import type {
   PageSchemaV1,
   CaptionSchema,
   ChapterSchema,
-  CoverSchema,
+  CoverSchemaV2,
   CropSchema,
   DocMetaSchema,
   GeneratorSchema,
@@ -49,7 +49,7 @@ export type Crop = z.infer<typeof CropSchema>;
 export type Caption = z.infer<typeof CaptionSchema>;
 export type CaptionSource = Caption["source"];
 export type Chapter = z.infer<typeof ChapterSchema>;
-export type Cover = z.infer<typeof CoverSchema>;
+export type Cover = z.infer<typeof CoverSchemaV2>;
 export type DocMeta = z.infer<typeof DocMetaSchema>;
 export type Generator = z.infer<typeof GeneratorSchema>;
 export type Style = z.infer<typeof StyleSchema>;

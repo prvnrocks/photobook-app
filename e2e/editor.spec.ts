@@ -1119,11 +1119,12 @@ test.describe("backgrounds at 375 px (/dev-editor?bg=1)", () => {
     await expect(counter(page)).toContainText("Cover");
     await settle(page);
 
-    // Cover: only "Whole book".
+    // Cover: "Cover only" (its own colour, D-087) or "Whole book" — no "This page".
     await page.getByTestId("editor-tool-background").click();
     await expect(panel(page)).toBeVisible();
-    await expect(page.getByTestId("bg-scope-page")).toBeDisabled();
-    await expect(page.getByTestId("bg-scope-book")).toHaveAttribute("aria-checked", "true");
+    await expect(page.getByTestId("bg-scope-page")).toHaveCount(0);
+    await expect(page.getByTestId("bg-scope-cover")).toHaveAttribute("aria-checked", "true");
+    await expect(page.getByTestId("bg-scope-book")).toBeEnabled();
     await expect(page.getByTestId("bg-cover-note")).toBeVisible();
     await page.getByTestId("editor-panel-close").click();
 
@@ -1652,6 +1653,58 @@ for (const vp of [
       await expect(preview).toHaveCount(0);
       await expect(page.getByTestId("editor-shell")).toBeVisible();
       await expect(open).toBeFocused();
+    });
+  });
+}
+
+// Cover colour (D-087, 2026-11-17): the cover gets a background colour of its own.
+for (const vp of [
+  { name: "375 px", viewport: { width: 375, height: 812 }, mobile: true },
+  { name: "1280 px", viewport: { width: 1280, height: 800 }, mobile: false },
+]) {
+  test.describe(`cover background colour at ${vp.name} (/dev-editor)`, () => {
+    test.use({ viewport: vp.viewport, hasTouch: vp.mobile, isMobile: vp.mobile });
+
+    test("Background on the cover: Cover only changes just the cover; Reset brings the book background back; preview shows it", async ({ page }) => {
+      await page.goto("/dev-editor");
+      const shown = (sel: string) => page.locator(`[data-testid="carousel-item"][aria-hidden="false"] ${sel}`).first();
+      const bg = (sel: string) => shown(sel).evaluate((el) => getComputedStyle(el).backgroundColor);
+      await expect.poll(() => bg('[data-page="cover"]')).toBe("rgb(255, 255, 255)");
+
+      // The tool is there with nothing selected and while the cover photo is selected.
+      await shown('[data-page="cover"] [data-testid="slot-target"]').click();
+      await expect(page.getByTestId("editor-tool-background")).toBeVisible();
+      await page.getByTestId("editor-tool-background").click();
+      const picker = page.getByTestId("background-picker");
+      await expect(picker).toHaveAttribute("data-scope", "cover");
+      await expect(page.getByTestId("bg-scope-cover")).toHaveAttribute("aria-checked", "true");
+      await expect(page.getByTestId("bg-tab-photo")).toHaveCount(0); // colour only for the cover
+      await expect(page.getByTestId("bg-reset")).toHaveCount(0);
+
+      await picker.getByRole("radio", { name: "Teal" }).click();
+      await expect.poll(() => bg('[data-page="cover"]')).toBe("rgb(35, 90, 94)");
+      await expect(page.getByTestId("bg-reset")).toBeVisible();
+      await expect(page.getByTestId("save-status")).toHaveAttribute("data-state", "saved", { timeout: 10_000 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+
+      // Preview: the flipbook's cover has the colour too.
+      await page.getByTestId("editor-panel-close").click();
+      await page.getByTestId("editor-preview-open").click();
+      const previewCover = page.getByTestId("editor-preview").locator('[data-page="cover"]').first();
+      await expect.poll(() => previewCover.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(35, 90, 94)");
+      await page.keyboard.press("Escape");
+
+      // The pages keep the book background.
+      await page.getByTestId("carousel-next").click();
+      await expect.poll(() => bg('[data-page="0"]')).not.toBe("rgb(35, 90, 94)");
+      await page.getByTestId("carousel-prev").click();
+
+      // Reset → the book background again.
+      await expect(shown('[data-page="cover"]')).toBeVisible();
+      if ((await page.getByTestId("background-picker").count()) === 0) await page.getByTestId("editor-tool-background").click();
+      await page.getByTestId("bg-reset").click();
+      await expect.poll(() => bg('[data-page="cover"]')).toBe("rgb(255, 255, 255)");
+      await expect(page.getByTestId("bg-reset")).toHaveCount(0);
     });
   });
 }

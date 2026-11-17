@@ -787,8 +787,8 @@ export function setChapterTitle(doc: BookDoc, chapterId: string, title: string):
 
 // ---- backgrounds (M10a A8) -----------------------------------------------------------------------
 //
-// A page shows page.background when set, else the book default style.background (the cover always
-// shows the book default). Every background the editor writes is a user choice: page overrides get
+// A page shows page.background when set, else the book default style.background (the cover shows
+// cover.background — a colour of its own, D-087 — else the book default). Every background the editor writes is a user choice: page overrides get
 // source "user" so AI suggestions (M10c, source "ai") never replace them. Photo backgrounds don't
 // "place" a photo: they may use any photo of the book, also one that is on a page or AI-dropped
 // (the server checks ownership; validate-editor-doc.ts).
@@ -839,6 +839,24 @@ export function resetPageBackground(doc: BookDoc, pageIdx: number): BookDoc {
   return withPage(doc, pageIdx, rest);
 }
 
+/**
+ * Give the cover its own background colour (D-087), or `null` to show the book default again (the
+ * key is removed, so a book without other v2 features is stored as v1 again). Colour only: any
+ * other kind throws "invalid_background". Same colour / nothing to reset → the input doc.
+ */
+export function setCoverBackground(doc: BookDoc, bg: Background | null): BookDoc {
+  if (bg === null) {
+    if (doc.cover.background == null) return doc;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- drop the key
+    const { background: _drop, ...rest } = doc.cover;
+    return { ...doc, cover: rest };
+  }
+  const clean = cleanBackground(bg);
+  if (clean.kind !== "color") throw new EditOpError("invalid_background");
+  if (doc.cover.background && sameBackground(doc.cover.background, clean)) return doc;
+  return { ...doc, cover: { ...doc.cover, background: clean } };
+}
+
 export interface SetBookBackgroundOptions {
   /**
    * Keep pages' own backgrounds (default false). "Whole book" in the editor means every page, so
@@ -859,6 +877,9 @@ export function setBookBackground(doc: BookDoc, bg: Background, opts: SetBookBac
   const markUser = suggestsBackgrounds(doc.style.designStyle) && doc.style.backgroundSource !== "user";
   const sameDefault = sameBackground(doc.style.background, clean) && !markUser;
   const clearPages = opts.keepPageOverrides !== true && doc.pages.some((p) => p.background != null);
+  // "Whole book" means the cover too: its own colour goes with the page overrides.
+  const clearCover = opts.keepPageOverrides !== true && doc.cover.background != null;
+  if (clearCover) return setBookBackground(setCoverBackground(doc, null), bg, opts);
   if (sameDefault && !clearPages) return doc;
   const style: BookDoc["style"] = sameDefault
     ? doc.style
@@ -873,7 +894,7 @@ export function setBookBackground(doc: BookDoc, bg: Background, opts: SetBookBac
   return { ...doc, style, pages };
 }
 
-/** Number of pages with their own background (shown by "Whole book" before it replaces them). */
+/** Number of pages (the cover counts as one) with their own background (shown by "Whole book" before it replaces them). */
 export function pageBackgroundOverrideCount(doc: BookDoc): number {
-  return doc.pages.filter((p) => p.background !== undefined && p.background !== null).length;
+  return doc.pages.filter((p) => p.background !== undefined && p.background !== null).length + (doc.cover.background != null ? 1 : 0);
 }

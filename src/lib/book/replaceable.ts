@@ -75,6 +75,8 @@ export function hasUserCaptions(doc: unknown): boolean {
 export function hasUserBackgrounds(doc: unknown): boolean {
   if (!isPlainObject(doc)) return false;
   if (isPlainObject(doc.style) && doc.style.backgroundSource === "user") return true;
+  // A cover colour of its own is always the user's choice (D-087).
+  if (isPlainObject(doc.cover) && isPlainObject(doc.cover.background)) return true;
   return (
     Array.isArray(doc.pages) &&
     doc.pages.some((p) => isPlainObject(p) && isPlainObject(p.background) && p.background.source === "user")

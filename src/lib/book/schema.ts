@@ -124,6 +124,15 @@ export const PageBackgroundSchema = z.discriminatedUnion("kind", [
   PhotoBackgroundSchema.extend(withSource),
 ]);
 
+/**
+ * v2 cover: the v1 cover plus an optional colour of its own (2026-11-17, D-087). Absent/null = the
+ * book default (style.background). Colour only — always the user's choice (the AI never sets it),
+ * so there is no `source`. A cover colour makes the stored doc v2 (usesV2Features).
+ */
+export const CoverSchemaV2 = CoverSchema.extend({
+  background: ColorBackgroundSchema.nullable().optional(),
+});
+
 export const BOOK_FORMATS = ["A5_PORTRAIT", "A5_LANDSCAPE"] as const;
 export const BookFormatSchema = z.enum(BOOK_FORMATS);
 export const DESIGN_STYLES = ["classic", "modern", "geometric", "scrapbook"] as const;
@@ -218,7 +227,7 @@ export const BookDocSchema = z.object({
   version: z.literal(2),
   format: BookFormatSchema,
   occasion: OccasionSchema,
-  cover: CoverSchema,
+  cover: CoverSchemaV2,
   chapters: z.array(ChapterSchema).max(100),
   pages: z.array(PageSchema).max(LIMITS.paid.maxPages),
   style: StyleSchema,

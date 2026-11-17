@@ -2,7 +2,7 @@
 // Rendered through <BookPage page="cover"> in editor, viewer and print; can also be used directly.
 
 import type { ReactNode } from "react";
-import { coverRenderModel, resolveBackground, scaleCqw, type RenderPhotos } from "@/lib/book/render";
+import { coverRenderModel, resolveCoverBackground, scaleCqw, type RenderPhotos } from "@/lib/book/render";
 import type { BookDoc } from "@/lib/book/types";
 import { Decorations } from "./Decoration";
 import { BackgroundLayer, Box, INK_TEXT, PageFrame, PhotoSlot, SlicedPhotoSlot, TextPanel, type BookRenderMode } from "./PageParts";
@@ -24,8 +24,8 @@ export type BookCoverProps = {
 
 export function BookCover({ doc, mode, photos, captionLang, renderSlotOverlay, renderTextOverlay, className, priority }: BookCoverProps) {
   const m = coverRenderModel(doc, photos, captionLang, { bleed: mode === "print" });
-  // The cover has no page entry, so no override: it always shows the book default background.
-  const bg = resolveBackground(doc, null, photos);
+  // The cover's own colour (cover.background), else the book default background.
+  const bg = resolveCoverBackground(doc, photos);
   return (
     <PageFrame
       background={bg.baseHex}

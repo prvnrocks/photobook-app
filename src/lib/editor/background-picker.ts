@@ -1,9 +1,9 @@
 // Background picker (M10a A8): pure helpers behind the editor's "Background" tool
 // (src/components/editor/tools/background-picker.tsx). No React, no layout maths.
 //
-// Scope: "page" = page.background override (source "user"), "book" = style.background (the
-// cover and every page; replaces page overrides — setBookBackground). The cover has no page
-// entry, so on the cover only "book" is offered.
+// Scope: "page" = page.background override (source "user"), "cover" = cover.background (the
+// cover's own colour, D-087 — colour only), "book" = style.background (the cover and every page;
+// replaces page and cover overrides — setBookBackground). On the cover: "cover" and "book".
 
 import { PhotoBackgroundSchema } from "@/lib/book/schema";
 import type { Background, BookDoc, PageBackground } from "@/lib/book/types";
@@ -20,7 +20,7 @@ import {
 import type { EditorPosition } from "./store";
 import type { EditorShellPhoto } from "./types";
 
-export type BackgroundScope = "page" | "book";
+export type BackgroundScope = "page" | "cover" | "book";
 export type BackgroundTab = "color" | "texture" | "photo";
 
 export const BACKGROUND_TABS: readonly { id: BackgroundTab; label: string }[] = [
@@ -33,6 +33,22 @@ export const BACKGROUND_SCOPES: readonly { id: BackgroundScope; label: string }[
   { id: "page", label: "This page" },
   { id: "book", label: "Whole book" },
 ];
+
+/** Scope choices on the cover: its own colour, or the whole book. */
+export const COVER_BACKGROUND_SCOPES: readonly { id: BackgroundScope; label: string }[] = [
+  { id: "cover", label: "Cover only" },
+  { id: "book", label: "Whole book" },
+];
+
+/** The scope choices to show for the offered scopes (cover vs page). */
+export function scopeChoices(scopes: readonly BackgroundScope[]): readonly { id: BackgroundScope; label: string }[] {
+  return scopes.includes("cover") ? COVER_BACKGROUND_SCOPES : BACKGROUND_SCOPES;
+}
+
+/** Background types a scope offers: the cover's own background is a colour only. */
+export function scopeTabs(scope: BackgroundScope): readonly { id: BackgroundTab; label: string }[] {
+  return scope === "cover" ? BACKGROUND_TABS.filter((t) => t.id === "color") : BACKGROUND_TABS;
+}
 
 /** Fade slider (veil opacity) range and step. */
 export const FADE_MIN = BACKGROUND_VEIL_MIN;
@@ -59,9 +75,9 @@ export function backgroundPageIdx(doc: BookDoc, page: EditorPosition): number | 
   return typeof page === "number" && page >= 0 && page < doc.pages.length ? page : null;
 }
 
-/** Scopes to offer: the cover only has the book background. */
+/** Scopes to offer: a page has its own background or the book's; the cover its own colour or the book's. */
 export function availableScopes(pageIdx: number | null): BackgroundScope[] {
-  return pageIdx === null ? ["book"] : ["page", "book"];
+  return pageIdx === null ? ["cover", "book"] : ["page", "book"];
 }
 
 /** The page's own background, or null (absent / null = book default). */
@@ -82,6 +98,7 @@ export function currentBackground(doc: BookDoc, scope: BackgroundScope, pageIdx:
     const own = pageOverride(doc, pageIdx);
     if (own) return withoutSource(own);
   }
+  if (scope === "cover" && doc.cover.background) return doc.cover.background;
   return doc.style.background;
 }
 
@@ -92,6 +109,7 @@ export function initialTab(bg: Background): BackgroundTab {
 
 /** Tab to show for `scope`: the kind of that scope's background (on open and on a scope switch). */
 export function scopeTab(doc: BookDoc, scope: BackgroundScope, pageIdx: number | null): BackgroundTab {
+  if (scope === "cover") return "color";
   return initialTab(currentBackground(doc, scope, pageIdx));
 }
 
@@ -108,6 +126,7 @@ export function isBookSuggested(doc: Pick<BookDoc, "style">): boolean {
  */
 export function isSuggested(doc: BookDoc, pageIdx: number | null, scope: BackgroundScope = "page"): boolean {
   if (scope === "book") return isBookSuggested(doc);
+  if (scope === "cover") return doc.cover.background ? false : isBookSuggested(doc);
   const own = pageOverride(doc, pageIdx);
   return own ? own.source === "ai" : isBookSuggested(doc);
 }
@@ -197,7 +216,7 @@ export function keepsPageOverrides(bookBackground: Background, next: Background)
  */
 export function planBookBackground(doc: BookDoc, next: Background): { keepPageOverrides: boolean; replaced: number } {
   if (keepsPageOverrides(doc.style.background, next)) return { keepPageOverrides: true, replaced: 0 };
-  return { keepPageOverrides: false, replaced: doc.pages.filter((p) => p.background != null).length };
+  return { keepPageOverrides: false, replaced: doc.pages.filter((p) => p.background != null).length + (doc.cover.background != null ? 1 : 0) };
 }
 
 /** Fade as a whole percent for labels ("75%"). */

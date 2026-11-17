@@ -31,7 +31,7 @@ import { BookPage, type RenderCaption } from "@/components/book/BookPage";
 import { INK_TEXT } from "@/components/book/PageParts";
 import type { Ink } from "@/lib/design/backgrounds";
 import { replacePhoto } from "@/lib/book/edit-ops";
-import { CAPTION_LINE_HEIGHT, captionSizeCqw, resolveBackground } from "@/lib/book/render";
+import { CAPTION_LINE_HEIGHT, captionSizeCqw, resolveCoverBackground } from "@/lib/book/render";
 import type { Caption, Layout } from "@/lib/book/types";
 import { getLayout } from "@/lib/layouts";
 import {
@@ -226,7 +226,7 @@ export function EditablePage({ page, priority }: { page: EditorPosition; priorit
             : () => (
                 <CoverTextTarget
                   empty={!doc.cover.title && !doc.cover.subtitle}
-                  ink={resolveBackground(doc).ink}
+                  ink={resolveCoverBackground(doc).ink}
                   selected={coverTextSelected}
                   onClick={toggle({ kind: "cover", part: "text" })}
                 />

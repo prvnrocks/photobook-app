@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { ChevronLeft, ChevronRight, Ellipsis, List, Share2 } from "lucide-react";
 import type { RenderPhotos } from "@/components/book/BookPage";
 import { Watermark } from "@/components/book/Watermark";
+import { coverBackground } from "@/lib/book/render";
 import type { BookDoc } from "@/lib/book/types";
 import { cx } from "@/lib/cx";
 import { chapterForPage, chapterLabel, labelFontStyle } from "@/lib/viewer/chapters";
@@ -138,7 +139,9 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
   const edgesStyle = bookCaseStyle?.edges ?? null;
   // One material for both boards (front and back, every state): the cover's colour — a very light
   // cover mixed toward linen at the edges. The pages themselves keep their own colours.
-  const paint = useMemo(() => casePaint(coverBoardColor(doc.style.background)), [doc.style.background]);
+  // The cover's own colour (D-087) else the book background: the case and the back cover match the front.
+  const coverBg = coverBackground(doc);
+  const paint = useMemo(() => casePaint(coverBoardColor(coverBg)), [coverBg]);
   // The stage's ground-shadow pool (VW_STAGE layer 1) under the visible book and its case.
   const side = poolSide(spread, caseVisible);
   const grow = bookCaseStyle?.grow;
@@ -151,8 +154,8 @@ export function ViewerShell({ doc, photos, captionLang, title, isPaid, shareUrl,
   // Paid end card (D-054): snapshot title in the cover font on the page background; Replay flips
   // back to the cover, Share opens the share sheet. Callbacks are stable (ref + state setter).
   const endModel = useMemo(
-    () => (isPaid ? endCardModel({ title, styleFont: doc.style.font, background: doc.style.background }) : undefined),
-    [isPaid, title, doc.style.font, doc.style.background],
+    () => (isPaid ? endCardModel({ title, styleFont: doc.style.font, background: coverBg }) : undefined),
+    [isPaid, title, doc.style.font, coverBg],
   );
   const replay = useCallback(() => api.current?.goTo(0), []);
   const openShare = useCallback(() => setSheet("share"), []);

@@ -274,6 +274,20 @@ export function effectiveBackground(doc: Pick<BookDoc, "style">, page?: Pick<Boo
   return page?.background ?? doc.style.background;
 }
 
+/** The background the cover shows: its own colour (`cover.background`), else the book default. */
+export function coverBackground(doc: Pick<BookDoc, "style"> & { cover?: Pick<BookDoc["cover"], "background"> | null }): Background {
+  return doc.cover?.background ?? doc.style.background;
+}
+
+/** resolveBackground for the cover (its own colour, else the book default). */
+export function resolveCoverBackground(
+  doc: Pick<BookDoc, "style"> & { cover?: Pick<BookDoc["cover"], "background"> | null },
+  photos?: RenderPhotos,
+): ResolvedBackground {
+  const own = doc.cover?.background;
+  return resolveBackground(doc, own ? { background: { ...own, source: "user" } } : null, photos);
+}
+
 /**
  * A background resolved for rendering (M10a A6). `baseHex` is the frame's plain CSS colour —
  * exactly backgroundColor() — painted under any texture/photo layer (and shown while a layer

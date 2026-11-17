@@ -20,21 +20,22 @@ import {
   pageBackgroundOverrideCount,
   resetPageBackground,
   setBookBackground,
+  setCoverBackground,
   setPageBackground,
 } from "@/lib/book/edit-ops";
 import type { Background } from "@/lib/book/types";
 import { BACKGROUND_SWATCHES, TEXTURE_IDS, textureById, type BackgroundSwatch, type Texture, type TextureId } from "@/lib/design/backgrounds";
 import {
   availableScopes,
-  BACKGROUND_SCOPES,
-  BACKGROUND_TABS,
   backgroundPageIdx,
   backgroundPhotoCandidates,
   currentBackground,
   FADE_MAX,
   FADE_STEP,
   fadeSlider,
+  scopeChoices,
   scopeTab,
+  scopeTabs,
   isSuggested,
   nextFade,
   pageOverride,
@@ -87,6 +88,10 @@ export function BackgroundPickerPanel({ ctx }: EditorPanelProps) {
       ctx.actions.edit((d) => setPageBackground(d, pageIdx, bg), { goTo: pageIdx, coalesceKey });
       return;
     }
+    if (scope === "cover") {
+      ctx.actions.edit((d) => setCoverBackground(d, bg), { goTo: "cover", coalesceKey });
+      return;
+    }
     // Fade / veil colour of the same book photo is an adjustment: page overrides stay, no toast.
     const { keepPageOverrides, replaced } = planBookBackground(doc, bg);
     ctx.actions.edit((d) => setBookBackground(d, bg, { keepPageOverrides }), { coalesceKey });
@@ -100,8 +105,9 @@ export function BackgroundPickerPanel({ ctx }: EditorPanelProps) {
   };
 
   const reset = () => {
-    if (ctx.readOnly || pageIdx === null) return;
-    ctx.actions.edit((d) => resetPageBackground(d, pageIdx), { goTo: pageIdx });
+    if (ctx.readOnly) return;
+    if (scope === "cover") ctx.actions.edit((d) => setCoverBackground(d, null), { goTo: "cover" });
+    else if (pageIdx !== null) ctx.actions.edit((d) => resetPageBackground(d, pageIdx), { goTo: pageIdx });
   };
 
   return (
@@ -113,11 +119,11 @@ export function BackgroundPickerPanel({ ctx }: EditorPanelProps) {
         // Open the tab of what the new scope shows (a page photo vs a paper book background).
         if (next !== scope) setTab(scopeTab(doc, next, pageIdx));
       }}
-      tab={tab}
+      tab={scope === "cover" ? "color" : tab}
       onTab={setTab}
       current={current}
       suggested={isSuggested(doc, pageIdx, scope)}
-      hasOverride={scope === "page" && pageOverride(doc, pageIdx) !== null}
+      hasOverride={scope === "cover" ? doc.cover.background != null : scope === "page" && pageOverride(doc, pageIdx) !== null}
       overrideCount={pageBackgroundOverrideCount(doc)}
       adjustKeepsOverrides={scope === "book" && doc.style.background.kind === "photo"}
       photos={photos}
@@ -156,13 +162,15 @@ export interface BackgroundPickerViewProps {
 /** Router-free view (static-render tests). */
 export function BackgroundPickerView(props: BackgroundPickerViewProps) {
   const { scopes, scope, onScope, tab, onTab, suggested, hasOverride, overrideCount, adjustKeepsOverrides, disabled, onReset } = props;
-  const scopeStop = rovingTabStop(BACKGROUND_SCOPES.map((s) => ({ checked: scope === s.id, disabled: !scopes.includes(s.id) })));
+  const choices = scopeChoices(scopes);
+  const tabs = scopeTabs(scope);
+  const scopeStop = rovingTabStop(choices.map((s) => ({ checked: scope === s.id, disabled: !scopes.includes(s.id) })));
   const id = useId();
   return (
     <div className="flex min-w-0 flex-col gap-3" data-testid="background-picker" data-scope={scope}>
       <div className="flex items-center gap-2">
         <div role="radiogroup" aria-label="Apply to" onKeyDown={onRadioGroupKeyDown} className={cx(SEG_GROUP, "flex-1 grid-cols-2")} data-testid="bg-scope">
-          {BACKGROUND_SCOPES.map((s, i) => {
+          {choices.map((s, i) => {
             const available = scopes.includes(s.id);
             return (
               <button
@@ -191,9 +199,9 @@ export function BackgroundPickerView(props: BackgroundPickerViewProps) {
           </span>
         ) : null}
       </div>
-      {scopes.length === 1 ? (
+      {scope === "cover" ? (
         <p className="text-xs text-muted-foreground" data-testid="bg-cover-note">
-          The cover uses the book background.
+          {hasOverride ? "The cover has its own colour." : "Pick a colour for the cover only. The pages keep theirs."}
         </p>
       ) : scope === "book" && overrideCount > 0 ? (
         <p className="rounded-xl border border-warning-border bg-warning-soft px-3 py-2 text-xs text-foreground" data-testid="bg-replace-note">
@@ -203,8 +211,8 @@ export function BackgroundPickerView(props: BackgroundPickerViewProps) {
         </p>
       ) : null}
 
-      <div role="tablist" aria-label="Background type" className="grid grid-cols-3 gap-1 border-b border-[#e9dfca]">
-        {BACKGROUND_TABS.map((t) => (
+      <div role="tablist" aria-label="Background type" className={cx("grid gap-1 border-b border-[#e9dfca]", tabs.length === 1 ? "grid-cols-1" : "grid-cols-3")}>
+        {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
@@ -490,7 +498,8 @@ export const backgroundTool: EditorTool = {
   id: "background",
   label: "Background",
   icon: PaintBucket,
-  scopes: ["none"],
+  // "cover": stays available while the cover photo / title is selected (the cover has its own colour).
+  scopes: ["none", "cover"],
   order: 22,
   tier: "primary",
   panelTitle: "Background",
