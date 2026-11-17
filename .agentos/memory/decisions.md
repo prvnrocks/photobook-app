@@ -302,3 +302,8 @@ Decision: New book form offers Modern (default for every occasion via DEFAULT_ST
 - Decision: v2 `published_doc` gets optional `occasion` only when the cover/pages draw OCCASION_ACCENT and occasion ≠ "other"; viewer uses it, else "other". No live-column fallback (would need a get_published_book migration) — pre-fix snapshots fix themselves on republish.
 - Why: scrapbook viewer showed the "other" accent while editor/PDF showed the occasion's; the sticker already reveals the occasion, so D-039's privacy intent holds; all other snapshots stay byte-identical.
 - Alternatives rejected: always publish occasion (churns every snapshot); RPC + live fallback (migration for a cosmetic fix).
+
+## D-086 — Desktop tool sidebar, sticky photo picker, crop in place (2026-11-17)
+- Decision: ≥ 1024 px the editor's tools sit in a labelled rail on the right (all tools, no More sheet); phones/tablets keep the ≤3 tools + More bottom bar (D-070 unchanged there). On desktop a photo tap opens the photo picker beside the page and it stays open (pick, re-tap) until the user closes it. Crop is done on the page itself at every width (drag / pinch / scroll / slider; panel = zoom, Reset, Done; docked on phones); the separate crop preview box is gone.
+- Why: user asked for a clearer sidebar, a picker that doesn't close itself, and crop "within the place" (2026-11-17). A sidebar can't fit 375 px (locked mobile-first rule).
+- Alternatives rejected: sidebar on phones; drag-to-crop on any selected photo without the Crop tool (clashes with drag-swap and carousel swipe).
