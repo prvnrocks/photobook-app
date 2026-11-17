@@ -31,6 +31,7 @@ import type { SelectionKind } from "@/lib/editor/store";
 import type { EditorTool, ToolTier } from "./types";
 import { cropTool } from "./crop-mode";
 import { layoutPickerTool } from "./layout-picker";
+import { coverStyleTool } from "./cover-style";
 import { backgroundTool } from "./background-picker";
 import { photoPickerTool } from "./photo-picker";
 import { aiCaptionTool } from "./ai-caption";
@@ -51,6 +52,7 @@ export const EDITOR_TOOLS: readonly EditorTool[] = [
   photoPickerTool,
   cropTool,
   layoutPickerTool,
+  coverStyleTool,
   backgroundTool,
   pagesTool,
   addPageTool,
