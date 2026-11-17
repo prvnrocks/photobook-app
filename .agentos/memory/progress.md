@@ -230,5 +230,5 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 ## 2026-11-16 — Milestone 27 (Realistic open-book look) — done + deployed
 - Viewer book realism per user reference; fold seam fixed; tested prod build; reviewer APPROVED.
 
-## 2026-11-17 — Milestone 28 (Hardcover look) — done, awaiting deploy OK
+## 2026-11-17 — Milestone 28 (Hardcover look) — done + deployed
 - Viewer-only hardcover (D-079); tested prod build; reviewer APPROVED; polish applied. Print-ready wrap/bleed cover deferred to printing milestone.
