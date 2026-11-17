@@ -233,7 +233,8 @@ Format: `## YYYY-MM-DD — Milestone N — status` then 3–6 bullets: what was 
 ## 2026-11-17 — Milestone 28 (Hardcover look) — done + deployed
 - Viewer-only hardcover (D-079); tested prod build; reviewer APPROVED; polish applied. Print-ready wrap/bleed cover deferred to printing milestone.
 
-## 2026-11-17 — Milestone 29 (Cover styles per theme) — done, NOT deployed
+## 2026-11-17 — Milestone 29 (Cover styles per theme) — done + deployed
 - Branch m29-cover-styles (pushed; code tip 671ff68, checkpoint 318e148). 22 user-chosen cover styles (D-080, autoPick:false, AI/build default unchanged), editor "Cover style" tool (D-083), word-aware per-font text fitter for all panels (D-081; fixes clipped mid-length titles incl. live g-p-cover/g-l-cover/m-p-cover-strips; m10c goldens regenerated once, m9/m10b unchanged), LayoutText.fit (only g-l-cover-hex). Dev contact sheet /dev-book-page?covers=<theme>-<format>.
 - Tests: npm test 8841; e2e m29-cover-style dev + live (AI off + replay) green; regressions + PDF live green. Edit route +3.35 kB gz accepted (D-082). Reviewer APPROVED (nits fixed). Report: .agentos/runs/m29.md.
 - NEXT: user OK → merge to main + deploy (Vercel), confirm on a real published /b page. Backlog: published snapshot drops occasion (scrapbook viewer shows "other" sticker); tilted scrapbook AR date labels flagged by overflow probe (pre-existing, likely probe artefact).
+- (2026-11-17) Deployed: main FF to m29 (74d2c3c, then 1ec1b61 memory-only); user confirmed Vercel production Ready + Cover style button live. NEXT: backlog (published snapshot drops occasion → scrapbook viewer sticker).
