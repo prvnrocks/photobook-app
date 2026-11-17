@@ -15,7 +15,8 @@ import {
   isCaptionFont,
   type CaptionFont,
 } from "./fonts";
-import { roleFont, STYLE_TOKENS, styleTokens, type TextRole } from "@/lib/design/styles";
+import type { BookFontName } from "@/lib/book/fonts";
+import { roleFont, STYLE_TOKENS, styleTokens, type ResolvedRoleFont, type TextRole } from "@/lib/design/styles";
 import {
   plateInk,
   resolveStickerId,
@@ -554,17 +555,91 @@ const PANEL_TYPE: Record<TextRole, { maxMm: number; minMm: number; lineHeight: n
  * the box (never truncates — below minMm it stops shrinking and the box may clip, which the
  * layout tests keep out of reach for the title limits). Deterministic, so all modes agree.
  */
-export function panelFontMm(text: string, role: TextRole, boxWmm: number, boxHmm: number): number {
-  const t = PANEL_TYPE[role];
-  const chars = Math.max(1, Array.from(text.trim()).length);
+export function panelFontMm(
+  text: string,
+  role: TextRole,
+  boxWmm: number,
+  boxHmm: number,
+  face?: { charEm: number; lineGrow: number },
+): number {
+  const base = PANEL_TYPE[role];
+  const t = face ? { ...base, charEm: face.charEm, lineHeight: base.lineHeight * face.lineGrow } : base;
+  const paragraphs = panelParagraphs(text);
   let size = Math.min(t.maxMm, boxHmm / t.lineHeight);
   while (size > t.minMm) {
     const perLine = Math.max(1, Math.floor(boxWmm / (size * t.charEm)));
-    const lines = Math.ceil(chars / perLine);
+    const lines = wrappedLines(paragraphs, perLine);
     if (lines * size * t.lineHeight <= boxHmm) break;
     size = Math.max(t.minMm, size * 0.92);
   }
   return Math.round(size * 100) / 100;
+}
+
+/**
+ * Average advance per character (em) of each book face in its own script, measured in Chromium on
+ * mixed EN / AR sentences at the heaviest shipped weight (M29). `upper` = Latin with
+ * text-transform: uppercase. Used by the panel fitter instead of one role-wide guess, which was too
+ * narrow for Playfair / Inter / caps and clipped mid-length titles.
+ */
+const GLYPH_EM: Record<BookFontName, { lower: number; upper: number; line?: number }> = {
+  Playfair: { lower: 0.47, upper: 0.59 },
+  Inter: { lower: 0.5, upper: 0.6 },
+  Cairo: { lower: 0.45, upper: 0.52, line: 1.045 },
+  Tajawal: { lower: 0.46, upper: 0.51 },
+  Cormorant: { lower: 0.41, upper: 0.56 },
+  Amiri: { lower: 0.35, upper: 0.57, line: 1.045 },
+  Bebas: { lower: 0.34, upper: 0.34 },
+  Lalezar: { lower: 0.36, upper: 0.49, line: 1.03 },
+  GreatVibes: { lower: 0.31, upper: 0.81 },
+  ArefRuqaa: { lower: 0.3, upper: 0.63, line: 1.045 },
+};
+/** Slack on top of the average width: real words are not average and lines don't pack perfectly. */
+const GLYPH_SAFETY = 1.1;
+
+/**
+ * Real line-box height / CSS line-height for a face (Chromium grows lines for faces with tall
+ * ascent/descent metrics: Cairo, Amiri, Aref Ruqaa ≈ +4.5 %, Lalezar ≈ +3 %).
+ */
+export function panelLineGrow(f: Pick<ResolvedRoleFont, "font">): number {
+  return GLYPH_EM[f.font].line ?? 1;
+}
+
+/** Per-character width (em) the fitter uses for a resolved panel font (face, case, tracking). */
+export function panelCharEm(f: Pick<ResolvedRoleFont, "font" | "textTransform" | "letterSpacing">): number {
+  const g = GLYPH_EM[f.font];
+  const track = f.letterSpacing ? parseFloat(f.letterSpacing) || 0 : 0;
+  return ((f.textTransform === "uppercase" ? g.upper : g.lower) + track) * GLYPH_SAFETY;
+}
+
+/** Words (in code points) per paragraph; panels render `whitespace-pre-line`, so "\n" starts a line. */
+function panelParagraphs(text: string): number[][] {
+  return text
+    .trim()
+    .split("\n")
+    .map((p) => p.split(/\s+/).filter(Boolean).map((w) => Array.from(w).length));
+}
+
+/**
+ * Lines a greedy word wrap needs at `perLine` characters per line (M29: was chars / perLine, which
+ * ignored whole-word breaks and clipped mid-length titles). A word longer than a line breaks
+ * (`break-words`) over as many lines as it needs.
+ */
+function wrappedLines(paragraphs: number[][], perLine: number): number {
+  let lines = 0;
+  for (const words of paragraphs) {
+    let cur = 0;
+    let n = words.length ? 0 : 1;
+    for (const w of words) {
+      if (cur > 0 && cur + 1 + w <= perLine) {
+        cur += 1 + w;
+        continue;
+      }
+      n += Math.ceil(w / perLine);
+      cur = w % perLine || perLine;
+    }
+    lines += n;
+  }
+  return Math.max(1, lines);
 }
 
 // --- Spread halves (M10b A9) ---------------------------------------------------------------------
@@ -704,6 +779,7 @@ function textPanels(
       t.font,
       (rect.w / 100) * page.w * (textBox.w / 100),
       (rect.h / 100) * page.h * (textBox.h / 100) * (t.fit ?? 1),
+      { charEm: panelCharEm(f), lineGrow: panelLineGrow(f) },
     );
     out.push({
       bind: t.bind,

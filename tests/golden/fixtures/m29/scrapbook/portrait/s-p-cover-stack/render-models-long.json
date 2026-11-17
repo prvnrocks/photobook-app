@@ -74,7 +74,7 @@
         "text": "Our long summer by the sea with grandma, the cousins, three dogs and far too much ice cream every single day",
         "align": "center",
         "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
-        "fontSizeCqw": 5.2027,
+        "fontSizeCqw": 4.7838,
         "lineHeight": 1.1,
         "typography": {
           "fontWeight": 400,
@@ -94,7 +94,7 @@
         "text": "Summer 2026 · Abu Dhabi, Muscat and the long road home",
         "align": "center",
         "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
-        "fontSizeCqw": 2.8581,
+        "fontSizeCqw": 2.6284,
         "lineHeight": 1.25,
         "typography": {
           "fontWeight": 400,
@@ -481,7 +481,7 @@
         "text": "Our long summer by the sea with grandma, the cousins, three dogs and far too much ice cream every single day",
         "align": "center",
         "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
-        "fontSizeCqw": 5.2027,
+        "fontSizeCqw": 4.7838,
         "lineHeight": 1.1,
         "typography": {
           "fontWeight": 400,
@@ -501,7 +501,7 @@
         "text": "Summer 2026 · Abu Dhabi, Muscat and the long road home",
         "align": "center",
         "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
-        "fontSizeCqw": 2.8581,
+        "fontSizeCqw": 2.6284,
         "lineHeight": 1.25,
         "typography": {
           "fontWeight": 400,

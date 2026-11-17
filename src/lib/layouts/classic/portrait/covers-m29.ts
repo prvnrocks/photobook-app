@@ -77,7 +77,7 @@ export const classicPortraitCoverSplit: Layout = {
   slots: [mm(80, 0, 68, 210)], // 80 0 68×210 mm, bleeds top/right/bottom
   caption: mm(10, 62, 60, 66), // 10 62 60×66 mm — 10 mm from the spine, 10 mm short of the photo
   texts: [
-    { bind: "coverTitle", box: mm(10, 62, 60, 48), align: "center", font: "title", fit: 0.75 }, // 10 62 60×48 mm
+    { bind: "coverTitle", box: mm(10, 62, 60, 48), align: "center", font: "title" }, // 10 62 60×48 mm
     { bind: "coverSubtitle", box: mm(10, 112, 60, 18), align: "center", font: "subtitle" }, // 10 112 60×18 mm
   ],
 };

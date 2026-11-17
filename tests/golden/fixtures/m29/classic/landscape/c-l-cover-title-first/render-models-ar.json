@@ -54,7 +54,7 @@
         "lang": "ar",
         "align": "center",
         "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif",
-        "fontSizeCqw": 4.3333,
+        "fontSizeCqw": 3.6667,
         "lineHeight": 1.1,
         "typography": {
           "fontWeight": 600,
@@ -138,7 +138,7 @@
         "lang": "ar",
         "align": "center",
         "fontFamily": "var(--font-cairo), var(--font-tajawal), sans-serif",
-        "fontSizeCqw": 4.3333,
+        "fontSizeCqw": 3.6667,
         "lineHeight": 1.1,
         "typography": {
           "fontWeight": 600,

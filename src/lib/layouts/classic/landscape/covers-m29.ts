@@ -77,7 +77,7 @@ export const classicLandscapeCoverSplit: Layout = {
   slots: [mm(105, 0, 105, 148)], // 105 0 105×148 mm, bleeds top/right/bottom
   caption: mm(14, 46, 77, 52), // 14 46 77×52 mm — 14 mm from the spine, 14 mm short of the photo
   texts: [
-    { bind: "coverTitle", box: mm(14, 46, 77, 36), align: "center", font: "title", fit: 0.9 }, // 14 46 77×36 mm
+    { bind: "coverTitle", box: mm(14, 46, 77, 36), align: "center", font: "title" }, // 14 46 77×36 mm
     { bind: "coverSubtitle", box: mm(14, 84, 77, 14), align: "center", font: "subtitle" }, // 14 84 77×14 mm
   ],
 };

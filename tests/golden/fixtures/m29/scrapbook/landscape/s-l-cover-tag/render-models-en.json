@@ -75,7 +75,7 @@
         "text": "Lanes & Light",
         "align": "center",
         "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
-        "fontSizeCqw": 5.5619,
+        "fontSizeCqw": 6.0476,
         "lineHeight": 1.1,
         "typography": {
           "fontWeight": 400,
@@ -468,7 +468,7 @@
         "text": "Lanes & Light",
         "align": "center",
         "fontFamily": "var(--font-bebas, \"Bebas Neue\"), var(--font-lalezar, \"Lalezar\"), var(--font-cairo), var(--font-inter), sans-serif",
-        "fontSizeCqw": 5.5619,
+        "fontSizeCqw": 6.0476,
         "lineHeight": 1.1,
         "typography": {
           "fontWeight": 400,

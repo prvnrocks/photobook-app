@@ -51,7 +51,7 @@
         "text": "Our long summer by the sea with grandma, the cousins, three dogs and far too much ice cream every single day",
         "align": "center",
         "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif",
-        "fontSizeCqw": 4.3333,
+        "fontSizeCqw": 3.9857,
         "lineHeight": 1.1,
         "typography": {
           "fontWeight": 600,
@@ -131,7 +131,7 @@
         "text": "Our long summer by the sea with grandma, the cousins, three dogs and far too much ice cream every single day",
         "align": "center",
         "fontFamily": "var(--font-playfair), var(--font-cairo), var(--font-tajawal), serif",
-        "fontSizeCqw": 4.3333,
+        "fontSizeCqw": 3.9857,
         "lineHeight": 1.1,
         "typography": {
           "fontWeight": 600,

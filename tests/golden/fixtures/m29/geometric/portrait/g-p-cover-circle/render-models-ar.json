@@ -60,7 +60,7 @@
         "lang": "ar",
         "align": "center",
         "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
-        "fontSizeCqw": 5.2027,
+        "fontSizeCqw": 4.7838,
         "lineHeight": 1.1,
         "typography": {
           "fontWeight": 700,
@@ -255,7 +255,7 @@
         "lang": "ar",
         "align": "center",
         "fontFamily": "var(--font-amiri, \"Amiri\"), var(--font-cormorant, \"Cormorant Garamond\"), var(--font-cairo), var(--font-inter), serif",
-        "fontSizeCqw": 5.2027,
+        "fontSizeCqw": 4.7838,
         "lineHeight": 1.1,
         "typography": {
           "fontWeight": 700,

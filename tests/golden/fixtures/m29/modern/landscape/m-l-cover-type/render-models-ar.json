@@ -54,7 +54,7 @@
         "lang": "ar",
         "align": "start",
         "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
-        "fontSizeCqw": 3.8095,
+        "fontSizeCqw": 3.2238,
         "lineHeight": 1.05,
         "typography": {
           "fontWeight": 400,
@@ -177,7 +177,7 @@
         "lang": "ar",
         "align": "start",
         "fontFamily": "var(--font-lalezar, \"Lalezar\"), var(--font-bebas, \"Bebas Neue\"), var(--font-cairo), var(--font-inter), sans-serif",
-        "fontSizeCqw": 3.8095,
+        "fontSizeCqw": 3.2238,
         "lineHeight": 1.05,
         "typography": {
           "fontWeight": 400,

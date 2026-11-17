@@ -277,3 +277,8 @@ Decision: New book form offers Modern (default for every occasion via DEFAULT_ST
 - Decision: 4 cover styles per theme × format (≈22 new one-photo cover layouts, autoPick:false, in separate covers-m29 arrays); chosen in the editor via a "Cover style" tool; build default and AI catalogue unchanged (prompt/goldens byte-identical); new classic portrait covers save as v2; no schema/DB change.
 - Why: user request 2026-11-17 ("Add different styles for the cover pages to choose on each theme design").
 - Alternatives rejected: 6 per theme; real multi-photo collages (schema change); wizard choice (migration / extra action).
+
+## D-081 — Text panel fitter is word-aware and per-font (2026-11-17)
+- Decision: panelFontMm wraps greedily by whole words and uses the resolved face's measured glyph width (GLYPH_EM in render.ts: per font, lower/upper case, + letter-spacing, ×1.1 safety) and line growth (Cairo/Amiri/Aref Ruqaa ×1.045, Lalezar ×1.03) instead of one role-wide 0.42–0.48 em guess. Optional LayoutText.fit (0.5–1) stays for very narrow columns (only g-l-cover-hex uses it).
+- Why: mid-length titles (~30–40 chars) clipped on 8 new M29 covers and on live covers (g-p-cover, g-l-cover, m-p-cover-strips). User chose "fix sizing for all covers" 2026-11-17, accepting a one-time regeneration of affected pre-M29 goldens (only m10c changed: chapter titles ±8 %; m9/m10b byte-identical).
+- Alternatives rejected: word-aware for M29 covers only (keeps the live bug); shrinking only the new boxes (fragile).

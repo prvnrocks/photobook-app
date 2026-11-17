@@ -75,7 +75,7 @@ export const geometricLandscapeCoverArch: Layout = {
   slots: [poly(archPhoto)],
   caption: rect(14, 30, 84, 116),
   texts: [
-    { bind: "coverTitle", box: rect(14, 30, 84, 96), align: "start", font: "title", fit: 0.85 },
+    { bind: "coverTitle", box: rect(14, 30, 84, 96), align: "start", font: "title" },
     { bind: "coverSubtitle", box: rect(14, 102, 84, 116), align: "start", font: "year" },
   ],
   decorations: [rule(14, 98.4, 38, 99.6), wedge(14, 14, 12)],
@@ -97,7 +97,7 @@ export const geometricLandscapeCoverHex: Layout = {
   slots: [g.hexagon(HEX.cx, HEX.cy, HEX.w)],
   caption: rect(20, 34, 76, 114),
   texts: [
-    { bind: "coverTitle", box: rect(20, 34, 76, 98), align: "start", font: "title" },
+    { bind: "coverTitle", box: rect(20, 34, 76, 98), align: "start", font: "title", fit: 0.85 },
     { bind: "coverSubtitle", box: rect(20, 100, 78, 116), align: "start", font: "year" },
   ],
   decorations: [rule(14, 36, 15.2, 114), wedge(194, 4, 12, 90), wedge(194, 132, 12, 180)],

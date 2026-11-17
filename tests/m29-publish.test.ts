@@ -87,7 +87,7 @@ describe("M29 covers: catalogue + LayoutText.fit", () => {
     expect(LayoutTextSchema.safeParse({ ...base, fit: 0.4 }).success).toBe(false);
     expect(LayoutTextSchema.safeParse({ ...base, fit: 1.1 }).success).toBe(false);
     const withFit = M29_COVERS.filter((l) => l.texts?.some((t) => t.fit !== undefined));
-    expect(withFit.map((l) => l.id).sort()).toEqual(["c-l-cover-split", "c-p-cover-split", "g-l-cover-arch"]);
+    expect(withFit.map((l) => l.id).sort()).toEqual(["g-l-cover-hex"]);
     for (const l of M29_COVERS) expect(LayoutSchema.safeParse(l).success, l.id).toBe(true);
   });
 });

@@ -20,6 +20,10 @@ const VARIANTS = [
     lang: "en",
   },
   { key: "ar", title: AR_120, subtitle: "أسبوع بعيدًا، ٢٠٢٦", lang: "ar" },
+  { key: "mid", title: "Desert weekend with the whole family", subtitle: "Liwa · March 2026", lang: "en" },
+  { key: "mid2", title: "Our first summer in Abu Dhabi together", subtitle: "June – August 2026", lang: "en" },
+  { key: "ar-mid", title: "عطلة نهاية الأسبوع في الصحراء مع العائلة", subtitle: "ليوا · مارس ٢٠٢٦", lang: "ar" },
+  { key: "word", title: "Supercalifragilisticexpialidocious adventures", subtitle: "2026", lang: "en" },
 ] as const;
 
 export function CoverSheet({ style, format, photos }: { style: DesignStyle; format: BookFormat; photos: RenderPhotos }) {
