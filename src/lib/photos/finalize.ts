@@ -150,6 +150,7 @@ function referencedPhotoIds(doc: unknown): Set<string> | null {
   }
   // Photo backgrounds (M10a) count too: a missing one makes the doc stale as well.
   if (parsed.doc.style.background.kind === "photo") ids.add(parsed.doc.style.background.photoId);
+  if (parsed.doc.cover.background?.kind === "photo") ids.add(parsed.doc.cover.background.photoId);
   return ids;
 }
 

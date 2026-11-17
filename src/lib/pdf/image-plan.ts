@@ -128,13 +128,14 @@ interface Use {
 }
 
 /**
- * Background photo ids the doc shows: the cover (book default) and every page (its override,
+ * Background photo ids the doc shows: the cover (its own background, else the book default) and every page (its override,
  * else the book default) — pages with unknown layouts too, they render blank on their background.
  */
-export function backgroundPhotoUses(doc: Pick<BookDoc, "style" | "pages">): string[] {
+export function backgroundPhotoUses(doc: Pick<BookDoc, "style" | "pages"> & { cover?: Pick<BookDoc["cover"], "background"> }): string[] {
   const ids = new Set<string>();
-  const bookBg = doc.style.background.kind === "photo" ? doc.style.background.photoId : null;
-  if (bookBg) ids.add(bookBg); // the cover always shows the book default
+  // The cover shows its own background (D-087 / D-088), else the book default.
+  const coverBg = doc.cover?.background ?? doc.style.background;
+  if (coverBg.kind === "photo") ids.add(coverBg.photoId);
   for (const page of doc.pages) {
     const bg = page.background ?? doc.style.background;
     if (bg.kind === "photo") ids.add(bg.photoId);

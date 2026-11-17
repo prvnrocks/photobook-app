@@ -125,12 +125,13 @@ export const PageBackgroundSchema = z.discriminatedUnion("kind", [
 ]);
 
 /**
- * v2 cover: the v1 cover plus an optional colour of its own (2026-11-17, D-087). Absent/null = the
- * book default (style.background). Colour only — always the user's choice (the AI never sets it),
- * so there is no `source`. A cover colour makes the stored doc v2 (usesV2Features).
+ * v2 cover: the v1 cover plus an optional background of its own (D-087; colour, paper or faded
+ * photo since D-088). Absent/null = the book default (style.background). Always the user's choice
+ * (the AI never sets it), so there is no `source`. A cover background makes the stored doc v2
+ * (usesV2Features).
  */
 export const CoverSchemaV2 = CoverSchema.extend({
-  background: ColorBackgroundSchema.nullable().optional(),
+  background: BackgroundSchema.nullable().optional(),
 });
 
 export const BOOK_FORMATS = ["A5_PORTRAIT", "A5_LANDSCAPE"] as const;
@@ -643,6 +644,10 @@ export function validateBookDoc(
   }
   if (doc.cover.photoId !== null && !photoIds.has(doc.cover.photoId)) {
     issues.push("cover: unknown photo");
+  }
+
+  if (doc.cover.background?.kind === "photo" && !backgroundPhotoIds.has(doc.cover.background.photoId)) {
+    issues.push("cover.background: unknown photo");
   }
 
   if (doc.style.background.kind === "photo" && !backgroundPhotoIds.has(doc.style.background.photoId)) {

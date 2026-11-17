@@ -148,7 +148,7 @@ export function validateEditorDoc(input: unknown, ctx: EditorDocContext): Editor
   }
 
   // Background photos: any upload-ready photo of this book (kept or dropped); not "placed".
-  const bgPhotos = [doc.style.background, ...doc.pages.map((p) => p.background)];
+  const bgPhotos = [doc.style.background, doc.cover.background, ...doc.pages.map((p) => p.background)];
   for (const bg of bgPhotos) {
     if (bg?.kind === "photo" && !ctx.photoIds.has(bg.photoId)) return { ok: false, code: "foreign_photo" };
     if (!tintOk(bg)) return { ok: false, code: "invalid_doc" };

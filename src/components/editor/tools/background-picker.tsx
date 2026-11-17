@@ -27,6 +27,7 @@ import type { Background } from "@/lib/book/types";
 import { BACKGROUND_SWATCHES, TEXTURE_IDS, textureById, type BackgroundSwatch, type Texture, type TextureId } from "@/lib/design/backgrounds";
 import {
   availableScopes,
+  BACKGROUND_TABS,
   backgroundPageIdx,
   backgroundPhotoCandidates,
   currentBackground,
@@ -35,7 +36,6 @@ import {
   fadeSlider,
   scopeChoices,
   scopeTab,
-  scopeTabs,
   isSuggested,
   nextFade,
   pageOverride,
@@ -119,7 +119,7 @@ export function BackgroundPickerPanel({ ctx }: EditorPanelProps) {
         // Open the tab of what the new scope shows (a page photo vs a paper book background).
         if (next !== scope) setTab(scopeTab(doc, next, pageIdx));
       }}
-      tab={scope === "cover" ? "color" : tab}
+      tab={tab}
       onTab={setTab}
       current={current}
       suggested={isSuggested(doc, pageIdx, scope)}
@@ -163,7 +163,6 @@ export interface BackgroundPickerViewProps {
 export function BackgroundPickerView(props: BackgroundPickerViewProps) {
   const { scopes, scope, onScope, tab, onTab, suggested, hasOverride, overrideCount, adjustKeepsOverrides, disabled, onReset } = props;
   const choices = scopeChoices(scopes);
-  const tabs = scopeTabs(scope);
   const scopeStop = rovingTabStop(choices.map((s) => ({ checked: scope === s.id, disabled: !scopes.includes(s.id) })));
   const id = useId();
   return (
@@ -201,7 +200,7 @@ export function BackgroundPickerView(props: BackgroundPickerViewProps) {
       </div>
       {scope === "cover" ? (
         <p className="text-xs text-muted-foreground" data-testid="bg-cover-note">
-          {hasOverride ? "The cover has its own colour." : "Pick a colour for the cover only. The pages keep theirs."}
+          {hasOverride ? "The cover has its own background." : "Pick a background for the cover only. The pages keep theirs."}
         </p>
       ) : scope === "book" && overrideCount > 0 ? (
         <p className="rounded-xl border border-warning-border bg-warning-soft px-3 py-2 text-xs text-foreground" data-testid="bg-replace-note">
@@ -211,8 +210,8 @@ export function BackgroundPickerView(props: BackgroundPickerViewProps) {
         </p>
       ) : null}
 
-      <div role="tablist" aria-label="Background type" className={cx("grid gap-1 border-b border-[#e9dfca]", tabs.length === 1 ? "grid-cols-1" : "grid-cols-3")}>
-        {tabs.map((t) => (
+      <div role="tablist" aria-label="Background type" className="grid grid-cols-3 gap-1 border-b border-[#e9dfca]">
+        {BACKGROUND_TABS.map((t) => (
           <button
             key={t.id}
             type="button"

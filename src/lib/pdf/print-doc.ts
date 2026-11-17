@@ -94,7 +94,7 @@ function pagePhotoIds(pages: readonly PhotoIdsPage[], index: number): (string | 
  */
 export function printPhotoIds(
   doc: {
-    cover: { photoId: string | null };
+    cover: { photoId: string | null; background?: BackgroundRef };
     pages: readonly PhotoIdsPage[];
     style?: { background?: BackgroundRef };
   },
@@ -105,7 +105,9 @@ export function printPhotoIds(
   for (const t of targets) {
     if (t === "cover") {
       if (doc.cover.photoId) ids.add(doc.cover.photoId);
-      if (bookBg) ids.add(bookBg);
+      // The cover's own background (D-087 / D-088), else the book default.
+      const coverBg = doc.cover.background ? backgroundPhotoId(doc.cover.background) : bookBg;
+      if (coverBg) ids.add(coverBg);
     } else {
       const page = doc.pages[t];
       if (!page) {
@@ -166,7 +168,7 @@ export interface ChunkPlanOptions {
  * compute once per pass and pass it to both.
  */
 export function printChunkRanges(
-  doc: { cover: { photoId: string | null }; pages: readonly PhotoIdsPage[]; style?: { background?: BackgroundRef } },
+  doc: { cover: { photoId: string | null; background?: BackgroundRef }; pages: readonly PhotoIdsPage[]; style?: { background?: BackgroundRef } },
   opts: ChunkPlanOptions = {},
 ): SheetRange[] {
   const maxSheets = Number.isSafeInteger(opts.maxSheets) && (opts.maxSheets as number) >= 1 ? (opts.maxSheets as number) : CHUNK_SHEETS;

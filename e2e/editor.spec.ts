@@ -1666,7 +1666,7 @@ for (const vp of [
     test.use({ viewport: vp.viewport, hasTouch: vp.mobile, isMobile: vp.mobile });
 
     test("Background on the cover: Cover only changes just the cover; Reset brings the book background back; preview shows it", async ({ page }) => {
-      await page.goto("/dev-editor");
+      await page.goto("/dev-editor?bg=1");
       const shown = (sel: string) => page.locator(`[data-testid="carousel-item"][aria-hidden="false"] ${sel}`).first();
       const bg = (sel: string) => shown(sel).evaluate((el) => getComputedStyle(el).backgroundColor);
       await expect.poll(() => bg('[data-page="cover"]')).toBe("rgb(255, 255, 255)");
@@ -1678,7 +1678,8 @@ for (const vp of [
       const picker = page.getByTestId("background-picker");
       await expect(picker).toHaveAttribute("data-scope", "cover");
       await expect(page.getByTestId("bg-scope-cover")).toHaveAttribute("aria-checked", "true");
-      await expect(page.getByTestId("bg-tab-photo")).toHaveCount(0); // colour only for the cover
+      await expect(page.getByTestId("bg-tab-texture")).toBeVisible(); // colour, paper and photo (D-088)
+      await expect(page.getByTestId("bg-tab-photo")).toBeVisible();
       await expect(page.getByTestId("bg-reset")).toHaveCount(0);
 
       await picker.getByRole("radio", { name: "Teal" }).click();
@@ -1699,9 +1700,22 @@ for (const vp of [
       await expect.poll(() => bg('[data-page="0"]')).not.toBe("rgb(35, 90, 94)");
       await page.getByTestId("carousel-prev").click();
 
-      // Reset → the book background again.
+      // Paper and a faded photo for the cover only; page 1 never gets a background layer from it.
       await expect(shown('[data-page="cover"]')).toBeVisible();
       if ((await page.getByTestId("background-picker").count()) === 0) await page.getByTestId("editor-tool-background").click();
+      await page.getByTestId("bg-tab-texture").click();
+      await page.getByTestId("bg-panel-texture").getByRole("radio").nth(1).click();
+      await expect(shown('[data-page="cover"] [data-bg="texture"]')).toBeAttached();
+      await page.getByTestId("bg-tab-photo").click();
+      await page.getByTestId("bg-panel-photo").locator("button[data-photo-id], [role=radio]").first().click();
+      await expect(shown('[data-page="cover"] [data-bg="photo"]')).toBeAttached();
+      await expect(shown('[data-page="cover"] [data-bg="texture"]')).toHaveCount(0);
+      // The stub save runs the real save validator: the stored doc keeps the cover's photo background.
+      await expect
+        .poll(() => page.evaluate(() => (window as unknown as { __devEditorLastSave?: { stored?: { cover?: { background?: { kind?: string } } } } }).__devEditorLastSave?.stored?.cover?.background?.kind), { timeout: 10_000 })
+        .toBe("photo");
+
+      // Reset → the book background again.
       await page.getByTestId("bg-reset").click();
       await expect.poll(() => bg('[data-page="cover"]')).toBe("rgb(255, 255, 255)");
       await expect(page.getByTestId("bg-reset")).toHaveCount(0);

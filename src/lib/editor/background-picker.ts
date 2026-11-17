@@ -2,7 +2,7 @@
 // (src/components/editor/tools/background-picker.tsx). No React, no layout maths.
 //
 // Scope: "page" = page.background override (source "user"), "cover" = cover.background (the
-// cover's own colour, D-087 — colour only), "book" = style.background (the cover and every page;
+// cover's own background, D-087 / D-088), "book" = style.background (the cover and every page;
 // replaces page and cover overrides — setBookBackground). On the cover: "cover" and "book".
 
 import { PhotoBackgroundSchema } from "@/lib/book/schema";
@@ -43,11 +43,6 @@ export const COVER_BACKGROUND_SCOPES: readonly { id: BackgroundScope; label: str
 /** The scope choices to show for the offered scopes (cover vs page). */
 export function scopeChoices(scopes: readonly BackgroundScope[]): readonly { id: BackgroundScope; label: string }[] {
   return scopes.includes("cover") ? COVER_BACKGROUND_SCOPES : BACKGROUND_SCOPES;
-}
-
-/** Background types a scope offers: the cover's own background is a colour only. */
-export function scopeTabs(scope: BackgroundScope): readonly { id: BackgroundTab; label: string }[] {
-  return scope === "cover" ? BACKGROUND_TABS.filter((t) => t.id === "color") : BACKGROUND_TABS;
 }
 
 /** Fade slider (veil opacity) range and step. */
@@ -109,7 +104,6 @@ export function initialTab(bg: Background): BackgroundTab {
 
 /** Tab to show for `scope`: the kind of that scope's background (on open and on a scope switch). */
 export function scopeTab(doc: BookDoc, scope: BackgroundScope, pageIdx: number | null): BackgroundTab {
-  if (scope === "cover") return "color";
   return initialTab(currentBackground(doc, scope, pageIdx));
 }
 

@@ -788,7 +788,7 @@ export function setChapterTitle(doc: BookDoc, chapterId: string, title: string):
 // ---- backgrounds (M10a A8) -----------------------------------------------------------------------
 //
 // A page shows page.background when set, else the book default style.background (the cover shows
-// cover.background — a colour of its own, D-087 — else the book default). Every background the editor writes is a user choice: page overrides get
+// cover.background — a background of its own, D-087 / D-088 — else the book default). Every background the editor writes is a user choice: page overrides get
 // source "user" so AI suggestions (M10c, source "ai") never replace them. Photo backgrounds don't
 // "place" a photo: they may use any photo of the book, also one that is on a page or AI-dropped
 // (the server checks ownership; validate-editor-doc.ts).
@@ -840,9 +840,9 @@ export function resetPageBackground(doc: BookDoc, pageIdx: number): BookDoc {
 }
 
 /**
- * Give the cover its own background colour (D-087), or `null` to show the book default again (the
- * key is removed, so a book without other v2 features is stored as v1 again). Colour only: any
- * other kind throws "invalid_background". Same colour / nothing to reset → the input doc.
+ * Give the cover its own background (D-087; colour, paper or faded photo — D-088), or `null` to
+ * show the book default again (the key is removed, so a book without other v2 features is stored
+ * as v1 again). Same background / nothing to reset → the input doc.
  */
 export function setCoverBackground(doc: BookDoc, bg: Background | null): BookDoc {
   if (bg === null) {
@@ -852,7 +852,6 @@ export function setCoverBackground(doc: BookDoc, bg: Background | null): BookDoc
     return { ...doc, cover: rest };
   }
   const clean = cleanBackground(bg);
-  if (clean.kind !== "color") throw new EditOpError("invalid_background");
   if (doc.cover.background && sameBackground(doc.cover.background, clean)) return doc;
   return { ...doc, cover: { ...doc.cover, background: clean } };
 }

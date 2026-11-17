@@ -146,7 +146,7 @@ function reflow(doc: BookDoc, photoId: string, photos: readonly StripPhotoDims[]
   for (const p of doc.pages) for (const s of p.slots) if (s.photoId !== null && s.photoId !== photoId) slotIds.add(s.photoId);
   if (doc.cover.photoId !== null && doc.cover.photoId !== photoId) slotIds.add(doc.cover.photoId);
   const bgIds = new Set<string>(slotIds);
-  for (const b of [doc.style.background, ...doc.pages.map((p) => p.background)]) {
+  for (const b of [doc.style.background, doc.cover.background, ...doc.pages.map((p) => p.background)]) {
     if (b?.kind === "photo" && b.photoId !== photoId) bgIds.add(b.photoId);
   }
   const issues = validateBookDoc(parsed.doc, {

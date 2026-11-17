@@ -28,7 +28,6 @@ import {
   OccasionSchema,
   CaptionSchema,
   ChapterSchema,
-  ColorBackgroundSchema,
   CoverSchema,
   CropSchema,
   DEFAULT_DESIGN_STYLE,
@@ -94,8 +93,8 @@ export const PublicBookDocV2Schema = z
   .object({
     version: z.literal(2),
     format: BookFormatSchema,
-    /** v2 only: the cover's own colour (D-087), absent = book default. Strict incl. inside the colour. */
-    cover: CoverSchema.extend({ background: ColorBackgroundSchema.optional() }).strict(),
+    /** v2 only: the cover's own background (D-087 / D-088) WITHOUT `source`, absent = book default. Strict incl. inside it. */
+    cover: CoverSchema.extend({ background: BackgroundSchema.optional() }).strict(),
     chapters: z.array(PublicChapterSchema).max(100),
     pages: z.array(PublicPageSchemaV2).max(LIMITS.paid.maxPages),
     style: z
@@ -205,7 +204,7 @@ export function toPublicDoc(doc: BookDoc, opts: ToPublicDocOptions = {}): Public
     out = {
       version: 2,
       format: doc.format,
-      cover: doc.cover.background ? { ...publicCover(doc), background: { kind: "color", hex: doc.cover.background.hex } } : publicCover(doc),
+      cover: doc.cover.background ? { ...publicCover(doc), background: copyBackground(doc.cover.background) } : publicCover(doc),
       chapters: publicChapters(doc),
       pages: doc.pages.map((p) => {
         const page: PublicBookDocV2["pages"][number] = publicPageBase(p);
@@ -244,7 +243,7 @@ export function publicDocToRenderDoc(pub: PublicBookDoc): BookDoc {
   const base = {
     version: 2 as const,
     occasion: pub.version === 2 ? (pub.occasion ?? "other") : ("other" as const),
-    cover: { ...pub.cover, ...(pub.version === 2 && pub.cover.background ? { background: { ...pub.cover.background } } : {}) },
+    cover: { ...pub.cover, ...(pub.version === 2 && pub.cover.background ? { background: copyBackground(pub.cover.background) } : {}) },
     chapters: pub.chapters.map((c) => ({ id: c.id, title: c.title, dateLabel: c.dateLabel, place: null })),
   };
   const page = (p: PublicBookDoc["pages"][number]): BookPage => ({
@@ -289,6 +288,7 @@ export function publicPhotoIds(pub: PublicBookDoc): string[] {
   for (const p of pub.pages) for (const s of p.slots) add(s.photoId);
   if (pub.version === 2) {
     if (pub.style.background.kind === "photo") add(pub.style.background.photoId);
+    if (pub.cover.background?.kind === "photo") add(pub.cover.background.photoId);
     for (const p of pub.pages) if (p.background?.kind === "photo") add(p.background.photoId);
   }
   return [...seen];

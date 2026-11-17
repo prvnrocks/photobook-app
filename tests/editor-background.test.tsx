@@ -20,7 +20,10 @@ import { BookPage } from "@/components/book/BookPage";
 import { coverBackground, resolveBackground, resolveCoverBackground } from "@/lib/book/render";
 import { hasUserBackgrounds } from "@/lib/book/replaceable";
 import { parseBookDoc } from "@/lib/book/schema";
-import { parsePublicDoc, publicDocToRenderDoc, toPublicDoc } from "@/lib/publish/public-doc";
+import { parsePublicDoc, publicDocToRenderDoc, publicPhotoIds, toPublicDoc } from "@/lib/publish/public-doc";
+import { backgroundPhotoUses } from "@/lib/pdf/image-plan";
+import { printPhotoIds } from "@/lib/pdf/print-doc";
+import { stripMissingBackgrounds } from "@/lib/book/strip-backgrounds";
 import type { Background, BookDoc } from "@/lib/book/types";
 import { validateEditorDoc, type EditorDocContext } from "@/lib/book/validate-editor-doc";
 import { BACKGROUND_SWATCHES, TEXTURE_IDS } from "@/lib/design/backgrounds";
@@ -315,7 +318,7 @@ describe("BackgroundPickerView", () => {
     expect(h).toContain('data-testid="bg-panel-texture"');
   });
 
-  it("scope toggle: This page default; cover → Cover only / Whole book, colour only for the cover", () => {
+  it("scope toggle: This page default; cover → Cover only / Whole book, all three types", () => {
     const page = html();
     expect(page).toMatch(/aria-checked="true"[^>]*data-testid="bg-scope-page"/);
     expect(page).not.toContain("bg-cover-note");
@@ -325,14 +328,11 @@ describe("BackgroundPickerView", () => {
     expect(cover).toMatch(/aria-checked="true"[^>]*data-testid="bg-scope-cover"/);
     expect(cover).toMatch(/aria-checked="false"[^>]*data-testid="bg-scope-book"/);
     expect(cover).toContain("Cover only");
-    expect(cover).toContain("Pick a colour for the cover only.");
-    // The cover's own background is a colour: no Paper / Photo tabs in that scope.
-    expect(cover).toContain('data-testid="bg-tab-color"');
-    expect(cover).not.toContain('data-testid="bg-tab-texture"');
-    expect(cover).not.toContain('data-testid="bg-tab-photo"');
-    expect(html({ scopes: ["cover", "book"], scope: "cover", tab: "color", hasOverride: true })).toContain("The cover has its own colour.");
-    // Whole book on the cover keeps all three types.
-    expect(html({ scopes: ["cover", "book"], scope: "book" })).toContain('data-testid="bg-tab-photo"');
+    expect(cover).toContain("Pick a background for the cover only.");
+    // Colour, Paper and Photo for the cover too (D-088).
+    for (const t of ["color", "texture", "photo"]) expect(cover).toContain(`data-testid="bg-tab-${t}"`);
+    expect(html({ scopes: ["cover", "book"], scope: "cover", tab: "color", hasOverride: true })).toContain("The cover has its own background.");
+    expect(html({ scopes: ["cover", "book"], scope: "cover", tab: "photo" })).toContain('data-testid="bg-panel-photo"');
   });
 
   it("Whole book warns when pages have their own background", () => {
@@ -429,7 +429,7 @@ describe("Background tool", () => {
     expect(visibleTools(EDITOR_TOOLS, sel).map((t) => t.id)).not.toContain("background");
   });
 
-  it("panel opens on the current background's tab, This page scope; cover → Cover only (colour)", () => {
+  it("panel opens on the current background's tab, This page scope; cover → Cover only", () => {
     const doc = setPageBackground(devPreviewDoc(), 1, LINEN);
     const page = renderToStaticMarkup(<BackgroundPickerPanel ctx={ctxAt(1, doc)} close={() => {}} />);
     expect(page).toContain('data-scope="page"');
@@ -443,6 +443,9 @@ describe("Background tool", () => {
     const own = renderToStaticMarkup(<BackgroundPickerPanel ctx={ctxAt("cover", setCoverBackground(doc, NAVY))} close={() => {}} />);
     expect(own).toMatch(/aria-checked="true" aria-label="Navy"/);
     expect(own).toContain("bg-reset");
+    // A cover with paper of its own opens on the Paper tab.
+    const paper = renderToStaticMarkup(<BackgroundPickerPanel ctx={ctxAt("cover", setCoverBackground(doc, LINEN))} close={() => {}} />);
+    expect(paper).toContain('data-testid="bg-panel-texture"');
   });
 
   it("stays available while something on the cover is selected", () => {
@@ -456,15 +459,16 @@ describe("Background tool", () => {
 const storedDoc = (d: BookDoc): unknown => JSON.parse(JSON.stringify(serializeDoc(d)));
 
 describe("cover background colour (D-087)", () => {
-  it("setCoverBackground: colour only, own key, reset removes it; pages and book default untouched", () => {
+  it("setCoverBackground: colour, paper or photo; own key, reset removes it; pages and book default untouched", () => {
     const doc = devPreviewDoc();
     const out = setCoverBackground(doc, NAVY);
     expect(out.cover.background).toEqual(NAVY);
     expect(out.style).toBe(doc.style);
     expect(out.pages).toBe(doc.pages);
     expect(setCoverBackground(out, { kind: "color", hex: "#1e2a47" })).toBe(out); // same colour → no undo entry
-    expect(() => setCoverBackground(doc, LINEN)).toThrow(EditOpError);
-    expect(() => setCoverBackground(doc, PHOTO)).toThrow(EditOpError);
+    expect(setCoverBackground(doc, LINEN).cover.background).toEqual(LINEN);
+    expect(setCoverBackground(doc, PHOTO).cover.background).toEqual(PHOTO);
+    expect(() => setCoverBackground(doc, { kind: "texture", textureId: "nope" } as unknown as Background)).toThrow(EditOpError);
     const reset = setCoverBackground(out, null);
     expect("background" in reset.cover).toBe(false);
     expect(setCoverBackground(doc, null)).toBe(doc);
@@ -501,8 +505,9 @@ describe("cover background colour (D-087)", () => {
     const cleared = storedDoc((setCoverBackground(setCoverBackground(base, NAVY), null))) as { version: number; cover: object };
     expect(cleared.version).toBe(baseVersion);
     expect("background" in cleared.cover).toBe(false);
-    // Not a colour → the doc is rejected, never silently kept.
-    expect(parseBookDoc({ ...stored, cover: { ...stored.cover, background: LINEN } }).ok).toBe(false);
+    // Paper is fine too; an invalid background → the doc is rejected, never silently kept.
+    expect(parseBookDoc({ ...stored, cover: { ...stored.cover, background: LINEN } }).ok).toBe(true);
+    expect(parseBookDoc({ ...stored, cover: { ...stored.cover, background: { ...NAVY, source: "user" } } }).ok).toBe(false);
   });
 
   it("the server save validator accepts a cover colour and keeps it; rejects anything else there", () => {
@@ -511,9 +516,33 @@ describe("cover background colour (D-087)", () => {
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.doc.cover.background).toEqual(NAVY);
     const bad = (background: unknown) => validateEditorDoc({ ...base, cover: { ...base.cover, background } }, ctx());
-    expect(bad(LINEN)).toEqual({ ok: false, code: "invalid_doc" });
+    expect(bad({ kind: "texture", textureId: "nope" })).toEqual({ ok: false, code: "invalid_doc" });
+    expect(bad({ ...PHOTO, photoId: FOREIGN })).toEqual({ ok: false, code: "foreign_photo" });
+    expect(validateEditorDoc(storedDoc(setCoverBackground(base, PHOTO)), ctx()).ok).toBe(true);
+    expect(validateEditorDoc(storedDoc(setCoverBackground(base, LINEN)), ctx()).ok).toBe(true);
     expect(bad({ ...NAVY, source: "user" })).toEqual({ ok: false, code: "invalid_doc" });
     expect(bad({ kind: "color", hex: "navy" })).toEqual({ ok: false, code: "invalid_doc" });
+  });
+
+  it("cover photo background (D-088): published + signed, in the PDF photo lists, removed with its photo", () => {
+    const doc = setCoverBackground(devPreviewDoc(), PHOTO);
+    const pub = toPublicDoc(doc);
+    expect(pub.cover).toMatchObject({ background: PHOTO });
+    expect(parsePublicDoc(JSON.parse(JSON.stringify(pub))).ok).toBe(true);
+    expect(publicPhotoIds(pub)).toContain(PHOTO.photoId);
+    expect(publicPhotoIds(toPublicDoc(devPreviewDoc()))).not.toContain(PHOTO.photoId);
+    // PDF: the cover sheet needs the photo; pages don't.
+    expect(printPhotoIds(doc, ["cover"])).toContain(PHOTO.photoId);
+    expect(printPhotoIds(doc, [0])).not.toContain(PHOTO.photoId);
+    expect(backgroundPhotoUses(doc)).toContain(PHOTO.photoId);
+    expect(backgroundPhotoUses(devPreviewDoc())).not.toContain(PHOTO.photoId);
+    // Photo deleted → the cover shows the book default again; other photos stay.
+    const stripped = stripMissingBackgrounds(doc, (id) => id !== PHOTO.photoId);
+    expect(stripped.changed).toBe(true);
+    expect("background" in stripped.doc.cover).toBe(false);
+    expect(stripMissingBackgrounds(doc, () => true).doc).toBe(doc);
+    // Renders through the same layer as a page photo background, with the veil's ink.
+    expect(resolveCoverBackground(doc, { [PHOTO.photoId]: { url: "https://x.test/p.jpg", width: 10, height: 10 } })).toMatchObject({ kind: "photo", photoSrc: "https://x.test/p.jpg" });
   });
 
   it("published snapshot carries the cover colour and renders it; a user choice the AI must not overwrite", () => {

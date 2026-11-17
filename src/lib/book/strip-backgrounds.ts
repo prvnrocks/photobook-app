@@ -14,7 +14,7 @@ export interface StripResult {
 }
 
 /**
- * Drops photo backgrounds (book default + page overrides) whose photo `exists` rejects. Book
+ * Drops photo backgrounds (book default + cover + page overrides) whose photo `exists` rejects. Book
  * default → white colour (no earlier colour is stored; style default when backgroundSource "ai"), page override → removed (page falls back
  * to the book default). Returns the input object (changed:false) when nothing is removed.
  */
@@ -34,5 +34,13 @@ export function stripMissingBackgrounds(doc: BookDoc, exists: (photoId: string) 
     delete rest.background;
     return rest;
   });
-  return changed ? { doc: { ...doc, style, pages }, changed } : { doc, changed };
+  // The cover's own photo background (D-088): removed, so the cover shows the book default again.
+  let cover = doc.cover;
+  if (cover.background?.kind === "photo" && !exists(cover.background.photoId)) {
+    const rest = { ...cover };
+    delete rest.background;
+    cover = rest;
+    changed = true;
+  }
+  return changed ? { doc: { ...doc, cover, style, pages }, changed } : { doc, changed };
 }

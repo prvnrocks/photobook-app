@@ -802,3 +802,65 @@ test("g. S3: deletePhotoAction on a background photo strips it from the doc; edi
   }
   console.log(`[g] S3 delete: status=${res.status()} docRev ${start.doc_rev}→${after.doc_rev}→${final.doc_rev} saves=${JSON.stringify(saves)} publishedStillRefs=${JSON.stringify(final.published_doc).includes(bgPhotoId)}`);
 });
+
+test("h. D-087 / D-088: the cover's own photo background → saved → Publish changes → viewer cover shows it → PDF still exports", async ({ browser }) => {
+  test.skip(!b1Done, "needs test f");
+  test.setTimeout(420_000);
+  type CoverBg = { kind?: string; photoId?: string; source?: string } | undefined;
+  const coverBg = (d: StoredDoc | null): CoverBg => (d as unknown as { cover?: { background?: CoverBg } } | null)?.cover?.background;
+
+  await page.goto(`/books/${bookId}/edit`);
+  await expect(page.getByTestId("editor-shell")).toBeVisible();
+  await settle(page);
+  await openBgTool(page);
+  // On the cover: "Cover only" first, with all three types.
+  await expect(page.getByTestId("bg-scope-cover")).toHaveAttribute("aria-checked", "true");
+  await page.getByTestId("bg-tab-photo").click();
+  const first = page.getByTestId("bg-photo").first();
+  const coverPhotoId = (await first.getAttribute("data-photo-id")) ?? "";
+  expect(coverPhotoId).toMatch(/^[0-9a-f-]{36}$/);
+  await first.click();
+  await expect(cur(page).locator('[data-page="cover"] img[data-bg="photo"]')).toHaveCount(1);
+  await expect.poll(async () => coverBg((await bookRow()).doc), { timeout: 20_000 }).toMatchObject({ kind: "photo", photoId: coverPhotoId });
+  expect(coverBg((await bookRow()).doc)).not.toHaveProperty("source");
+  // The pages did not get it.
+  expect(((await bookRow()).doc.pages as unknown as DocPage[]).some((p) => p.background?.kind === "photo" && (p.background as { photoId?: string }).photoId === coverPhotoId)).toBe(false);
+  await closePanel(page);
+
+  // Publish changes → the snapshot carries it (no source).
+  await page.getByTestId("editor-publish-changes").click();
+  await expect.poll(async () => coverBg((await bookRow()).published_doc), { timeout: 60_000 }).toMatchObject({ kind: "photo", photoId: coverPhotoId });
+  expect(coverBg((await bookRow()).published_doc)).not.toHaveProperty("source");
+
+  // Anonymous viewer: the cover's background photo is signed and loads.
+  const v = await browser.newContext({ baseURL, viewport: PHONE, hasTouch: true, isMobile: true });
+  try {
+    const vp = await v.newPage();
+    const errors: string[] = [];
+    vp.on("pageerror", (e) => errors.push(e.message));
+    expect((await vp.goto(`/b/${slug}`))?.status()).toBe(200);
+    const fb = vp.getByTestId("flipbook");
+    await expect(fb).toHaveAttribute("data-ready", "true", { timeout: 30_000 });
+    await expect
+      .poll(async () => fb.locator('[data-page="cover"] img[data-bg="photo"]').evaluateAll((els) => els.filter((e) => (e as HTMLImageElement).naturalWidth > 0).length), { timeout: 20_000 })
+      .toBeGreaterThan(0);
+    await noHorizontalOverflow(vp, PHONE.width);
+    expect(errors).toEqual([]);
+  } finally {
+    await v.close();
+  }
+
+  // PDF (paid in test d): still exports, right page count, the cover sheet carries a full-sheet DCT image.
+  if (paid) {
+    const pages = (await bookRow()).doc.pages.length;
+    const file = await downloadPdf("m10a-cover-background.pdf");
+    const ins = inspect(file);
+    const a = analyze(file);
+    expect(ins.pageCount).toBe(pages + 1);
+    expect(ins.fonts.filter((f) => f.type3 || f.subtype === "Type3").length).toBe(0);
+    const coverImages = a.pages[0].images.filter((i) => /DCT/.test(i.filter ?? ""));
+    console.log(`[h] cover sheet images: ${JSON.stringify(coverImages.map((i) => [i.w, i.h, i.where]))}`);
+    expect(coverImages.length).toBeGreaterThan(0);
+  }
+  console.log(`[h] cover photo background ${coverPhotoId.slice(0, 8)} saved, published, viewed${paid ? ", PDF ok" : ""}`);
+});
