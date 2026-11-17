@@ -292,3 +292,8 @@ Decision: New book form offers Modern (default for every occasion via DEFAULT_ST
 - Decision: on the cover with nothing selected, "Cover style" takes Layout's slot in the 3-tool row (Cover style / Background / Pages + More); behind More when the cover photo/title is selected; the panel docks under the page on phones and stays open after a tap so styles can be compared.
 - Why: simple editor rule (≤3 tools + More, D-070-era); seeing the big cover change while comparing beats open-pick-close cycles.
 - Alternatives rejected: 4th top-level tool; close-on-tap like Layout.
+
+## D-084 — Lighter workflow for small tasks (2026-11-17)
+- Decision: (1) Small tasks (a fix, tweak or single-area change; no new milestone): the orchestrator does it directly, runs `npm run lint && npm run typecheck && npm test`, plus a quick browser check if visual — no separate builder/tester/reviewer agents. (2) Bundle-size builds only when a change touches editor/viewer/print bundles, and ONE comparison build (main vs HEAD, same session), not four. (3) Live e2e (E2E_AUTH, AI_MODE=off/replay) only as the gate before a deploy, not after every step. Full /build-milestone pipeline stays for real milestones.
+- Why: user found agents slow even for small tasks (M29: tester alone ~35 min, mostly builds + live e2e). User approved all three 2026-11-17.
+- Alternatives rejected: keep the full pipeline for everything.
