@@ -6,6 +6,8 @@
 //          conflict2 = both calls).
 //   ?shared=live|changes — landed from the editor's Share (M13 T9): one-time message + celebration.
 //   ?format=landscape · ?style=classic|modern|geometric|scrapbook · ?cover=photo (sample cover)
+//   ?cover=real (the real cover via <BookPage>: modern/geometric/scrapbook sample doc, classic preview doc)
+//   + ?layout=<cover layout id> (e.g. s-p-cover-tape) + ?occasion=baby|wedding|…
 //   ?title=… (book title; Arabic welcome) · ?motion=reduce (start with reduced motion simulated)
 //   ?toolbar=0 — hide the fixture toolbar (screenshots).
 // Upgrade: enabled when the server has Stripe keys (isPaymentsEnabled); the real action runs, so
@@ -15,6 +17,10 @@
 import { notFound } from "next/navigation";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { DESIGN_STYLES } from "@/lib/book/schema";
+import { devPreviewDoc, devPreviewPhotos } from "@/lib/book/dev-preview";
+import { devSampleDoc, devSamplePhotos, parseDevSample } from "@/lib/book/dev-sample";
+import { OCCASIONS } from "@/lib/book/options";
+import { getLayout } from "@/lib/layouts";
 import type { BookFormat, DesignStyle } from "@/lib/book/types";
 import { publishCompare } from "@/lib/publish/compare";
 import { parseDevPublishState } from "@/lib/publish/dev-fixture";
@@ -42,6 +48,21 @@ export default async function DevPublishPage({
   const style = one(params.style) ?? "";
   const designStyle: DesignStyle = (DESIGN_STYLES as readonly string[]).includes(style) ? (style as DesignStyle) : "classic";
   const title = (one(params.title) ?? "").slice(0, 120) || "Sara & Omar";
+  let cover = null;
+  if (one(params.cover) === "real") {
+    const sample = parseDevSample(`${designStyle}-${format === "A5_LANDSCAPE" ? "landscape" : "portrait"}`);
+    const base = sample ? devSampleDoc(sample) : devPreviewDoc();
+    const layout = getLayout(one(params.layout) ?? "");
+    const occ = one(params.occasion);
+    const doc = {
+      ...base,
+      pages: [],
+      chapters: [],
+      occasion: (OCCASIONS as readonly string[]).includes(occ ?? "") ? (occ as (typeof OCCASIONS)[number]) : base.occasion,
+      cover: { ...base.cover, title, layout: layout && layout.role === "cover" && layout.format === base.format ? layout.id : base.cover.layout },
+    };
+    cover = { doc, photos: sample ? devSamplePhotos() : devPreviewPhotos(), captionLang: /[\u0600-\u06FF]/.test(title) ? ("ar" as const) : ("en" as const) };
+  }
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       <AppHeader displayName="Sara" variant="plain" width="library" />
@@ -52,7 +73,7 @@ export default async function DevPublishPage({
         compare={publishCompare()}
         shared={shared}
         title={title}
-        preview={{ coverThumbUrl: one(params.cover) === "photo" ? SAMPLE_COVER : null, format, designStyle }}
+        preview={{ coverThumbUrl: one(params.cover) === "photo" ? SAMPLE_COVER : null, format: cover?.doc.format ?? format, designStyle, cover }}
         reduceMotion={one(params.motion) === "reduce"}
         toolbar={one(params.toolbar) !== "0"}
       />

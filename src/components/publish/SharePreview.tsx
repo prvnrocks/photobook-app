@@ -14,9 +14,15 @@
 // widen the page at 375 px.
 
 import type { ReactNode } from "react";
-import type { BookFormat, DesignStyle } from "@/lib/book/types";
+import type { BookDoc, BookFormat, DesignStyle } from "@/lib/book/types";
+import type { RenderPhotos } from "@/lib/book/render";
 import { cx } from "@/lib/cx";
-import { BookCoverStatic as BookCover } from "@/components/dashboard/book-cover-art";
+import { BookPage } from "@/components/book/BookPage";
+import {
+  BOOK_COVER_BOX,
+  BOOK_COVER_SKIN,
+  BookCoverStatic,
+} from "@/components/dashboard/book-cover-art";
 import { LIBRARY_STAGE } from "@/components/dashboard/library-classes";
 import { ShareBurst } from "./ShareBurst";
 import { SHARE_TITLE_FALLBACK } from "./ShareBand";
@@ -27,7 +33,49 @@ export type SharePreviewData = {
   coverThumbUrl: string | null;
   format: BookFormat;
   designStyle: DesignStyle;
+  /** The real cover (chosen cover style, title, stickers); absent/null → generic shelf cover. */
+  cover?: {
+    doc: BookDoc;
+    photos: RenderPhotos;
+    captionLang: "en" | "ar";
+  } | null;
 };
+
+/**
+ * The book on the stage: its real cover through the shared <BookPage> (same render as editor,
+ * viewer and PDF) when the preview has it, else the generic shelf cover. Same box and board skin
+ * either way, so the stage layout doesn't change.
+ */
+function BookCover({ preview }: { preview: SharePreviewData }) {
+  const { cover, format, designStyle, coverThumbUrl } = preview;
+  if (!cover)
+    return (
+      <BookCoverStatic
+        url={coverThumbUrl}
+        format={format}
+        designStyle={designStyle}
+        size="shelf"
+      />
+    );
+  return (
+    <div
+      className={cx(
+        "relative overflow-hidden bg-white",
+        BOOK_COVER_BOX.shelf[format],
+        BOOK_COVER_SKIN.shelf,
+      )}
+      data-testid="share-preview-cover"
+    >
+      <BookPage
+        doc={cover.doc}
+        page="cover"
+        mode="view"
+        photos={cover.photos}
+        captionLang={cover.captionLang}
+      />
+    </div>
+  );
+}
 
 export type SharePreviewProps = {
   preview: SharePreviewData;
@@ -72,13 +120,16 @@ export function SharePreview({
   className,
 }: SharePreviewProps) {
   const t = (title ?? "").trim() || SHARE_TITLE_FALLBACK;
-  const { coverThumbUrl, format, designStyle } = preview;
+  const { format } = preview;
   const meta = `${pageCountLabel(pageCount)} · ${formatLabel(format)}`;
 
   if (responsive) {
     return (
       <figure
-        className={cx("relative flex min-w-0 items-center gap-4 lg:flex-col lg:items-stretch lg:gap-0", className)}
+        className={cx(
+          "relative flex min-w-0 items-center gap-4 lg:flex-col lg:items-stretch lg:gap-0",
+          className,
+        )}
         data-testid="share-preview"
         data-variant="responsive"
         data-format={format}
@@ -92,31 +143,43 @@ export function SharePreview({
         >
           <div className="share-float-lg w-full lg:max-w-[19rem]">
             <div className="share-cover-hop relative flex w-full justify-center">
-              <BookCover url={coverThumbUrl} format={format} designStyle={designStyle} size="shelf" />
-              <span
-                aria-hidden="true"
-                className={cx(
-                  "pointer-events-none absolute bottom-[9%] hidden rounded-[3px] border-t border-[#c9a227]/70 bg-[#0e3b2e]/85 px-2 py-1 text-center font-display text-base leading-tight font-semibold text-[#f2e8d8] shadow-[0_4px_10px_-6px_rgb(0_0_0/0.6)] lg:block",
-                  PLATE_INSET[format] ?? PLATE_INSET.A5_PORTRAIT,
-                )}
-                data-testid="share-preview-cover-title"
-              >
-                <span dir="auto" className="line-clamp-2 break-words">
-                  {t}
+              <BookCover preview={preview} />
+              {preview.cover ? null : (
+                <span
+                  aria-hidden="true"
+                  className={cx(
+                    "pointer-events-none absolute bottom-[9%] hidden rounded-[3px] border-t border-[#c9a227]/70 bg-[#0e3b2e]/85 px-2 py-1 text-center font-display text-base leading-tight font-semibold text-[#f2e8d8] shadow-[0_4px_10px_-6px_rgb(0_0_0/0.6)] lg:block",
+                    PLATE_INSET[format] ?? PLATE_INSET.A5_PORTRAIT,
+                  )}
+                  data-testid="share-preview-cover-title"
+                >
+                  <span dir="auto" className="line-clamp-2 break-words">
+                    {t}
+                  </span>
                 </span>
-              </span>
+              )}
             </div>
           </div>
           <ShareBurst />
         </div>
         <figcaption className="flex min-w-0 flex-1 flex-col items-start lg:min-h-11 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between lg:gap-x-3 lg:gap-y-1 lg:px-1 lg:pt-2">
-          <span className="block w-full truncate font-display text-base font-semibold text-[#0e3b2e] lg:sr-only" data-testid="share-preview-title">
+          <span
+            className="block w-full truncate font-display text-base font-semibold text-[#0e3b2e] lg:sr-only"
+            data-testid="share-preview-title"
+          >
             <span dir="auto">{t}</span>
           </span>
-          <span className="text-sm text-muted-foreground" data-testid="share-preview-meta">
+          <span
+            className="text-sm text-muted-foreground"
+            data-testid="share-preview-meta"
+          >
             {meta}
           </span>
-          {open ? <span className="-ms-3 mt-0.5 flex lg:ms-0 lg:-me-3 lg:mt-0">{open}</span> : null}
+          {open ? (
+            <span className="-ms-3 mt-0.5 flex lg:ms-0 lg:-me-3 lg:mt-0">
+              {open}
+            </span>
+          ) : null}
         </figcaption>
       </figure>
     );
@@ -131,17 +194,28 @@ export function SharePreview({
         data-format={format}
         data-celebrate={celebrate ? "on" : undefined}
       >
-        <div className={cx(LIBRARY_STAGE, "relative isolate flex w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl px-1.5 py-3")}>
+        <div
+          className={cx(
+            LIBRARY_STAGE,
+            "relative isolate flex w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl px-1.5 py-3",
+          )}
+        >
           <div className="share-cover-hop flex w-full justify-center">
-            <BookCover url={coverThumbUrl} format={format} designStyle={designStyle} size="shelf" />
+            <BookCover preview={preview} />
           </div>
           <ShareBurst />
         </div>
         <figcaption className="flex min-w-0 flex-1 flex-col items-start">
-          <span className="block w-full truncate font-display text-base font-semibold text-[#0e3b2e]" data-testid="share-preview-title">
+          <span
+            className="block w-full truncate font-display text-base font-semibold text-[#0e3b2e]"
+            data-testid="share-preview-title"
+          >
             <span dir="auto">{t}</span>
           </span>
-          <span className="text-sm text-muted-foreground" data-testid="share-preview-meta">
+          <span
+            className="text-sm text-muted-foreground"
+            data-testid="share-preview-meta"
+          >
             {meta}
           </span>
           {open ? <span className="-ms-3 mt-0.5 flex">{open}</span> : null}
@@ -166,26 +240,31 @@ export function SharePreview({
       >
         <div className="share-float w-full max-w-[19rem]">
           <div className="share-cover-hop relative flex w-full justify-center">
-            <BookCover url={coverThumbUrl} format={format} designStyle={designStyle} size="shelf" />
-            {/* Decorative repeat of the band's title, so the cover reads as this book. */}
-            <span
-              aria-hidden="true"
-              className={cx(
-                "pointer-events-none absolute bottom-[9%] rounded-[3px] border-t border-[#c9a227]/70 bg-[#0e3b2e]/85 px-2 py-1 text-center font-display text-sm leading-tight font-semibold text-[#f2e8d8] shadow-[0_4px_10px_-6px_rgb(0_0_0/0.6)] sm:text-base",
-                PLATE_INSET[format] ?? PLATE_INSET.A5_PORTRAIT,
-              )}
-              data-testid="share-preview-cover-title"
-            >
-              <span dir="auto" className="line-clamp-2 break-words">
-                {t}
+            <BookCover preview={preview} />
+            {/* Decorative repeat of the band's title, so the cover reads as this book (generic cover only). */}
+            {preview.cover ? null : (
+              <span
+                aria-hidden="true"
+                className={cx(
+                  "pointer-events-none absolute bottom-[9%] rounded-[3px] border-t border-[#c9a227]/70 bg-[#0e3b2e]/85 px-2 py-1 text-center font-display text-sm leading-tight font-semibold text-[#f2e8d8] shadow-[0_4px_10px_-6px_rgb(0_0_0/0.6)] sm:text-base",
+                  PLATE_INSET[format] ?? PLATE_INSET.A5_PORTRAIT,
+                )}
+                data-testid="share-preview-cover-title"
+              >
+                <span dir="auto" className="line-clamp-2 break-words">
+                  {t}
+                </span>
               </span>
-            </span>
+            )}
           </div>
         </div>
         <ShareBurst />
       </div>
       <figcaption className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1 pt-2">
-        <span className="text-sm text-muted-foreground" data-testid="share-preview-meta">
+        <span
+          className="text-sm text-muted-foreground"
+          data-testid="share-preview-meta"
+        >
           {meta}
         </span>
         {open ? <span className="-me-3 flex">{open}</span> : null}

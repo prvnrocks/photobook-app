@@ -38,12 +38,15 @@ export function coverPhotoIdOfDoc(doc: unknown): string | null {
   return null;
 }
 
+/** The cover photo as the renderer takes it: signed 512px thumb + ORIGINAL pixel size (crop math). */
+export type CoverPhoto = { photoId: string; url: string; width: number | null; height: number | null };
+
 /**
- * Signed URL (COVER_THUMB_TTL_SECONDS) of the 512px thumb of the book's cover photo (see
- * coverPhotoIdOfDoc), or null when there is none / the photo is gone, not ready, not this book's,
+ * The book's cover photo (see coverPhotoIdOfDoc) with a signed URL (COVER_THUMB_TTL_SECONDS) of
+ * its 512px thumb, or null when there is none / the photo is gone, not ready, not this book's,
  * has no thumb / signing failed. One photos lookup + ONE createSignedUrl call, user client.
  */
-export async function getCoverThumbUrl(bookId: string, doc: unknown): Promise<string | null> {
+export async function getCoverPhoto(bookId: string, doc: unknown): Promise<CoverPhoto | null> {
   if (!isUuid(bookId)) return null;
   const photoId = coverPhotoIdOfDoc(doc);
   if (!photoId) return null;
@@ -51,7 +54,7 @@ export async function getCoverThumbUrl(bookId: string, doc: unknown): Promise<st
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("photos")
-      .select("id, book_id, thumb_path")
+      .select("id, book_id, thumb_path, width, height")
       .eq("id", photoId)
       .eq("upload_state", "ready")
       .maybeSingle();
@@ -60,8 +63,13 @@ export async function getCoverThumbUrl(bookId: string, doc: unknown): Promise<st
       .from(PHOTOS_BUCKET)
       .createSignedUrl(data.thumb_path, COVER_THUMB_TTL_SECONDS);
     if (signError || !signed?.signedUrl) return null;
-    return signed.signedUrl;
+    return { photoId, url: signed.signedUrl, width: data.width ?? null, height: data.height ?? null };
   } catch {
     return null;
   }
+}
+
+/** Signed thumb URL of the cover photo only (getCoverPhoto().url), or null. */
+export async function getCoverThumbUrl(bookId: string, doc: unknown): Promise<string | null> {
+  return (await getCoverPhoto(bookId, doc))?.url ?? null;
 }

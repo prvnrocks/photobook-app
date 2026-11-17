@@ -8,11 +8,12 @@ import { revalidatePath } from "next/cache";
 import { learnFromBook } from "@/lib/ai/learn-from-book";
 import { AUTH_UNAVAILABLE, getActionUser } from "@/lib/auth/action-user";
 import { getSiteUrl } from "@/lib/auth/redirect";
-import { validateBookDoc } from "@/lib/book/schema";
+import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import { stripUnusableAiPhotoBackgrounds } from "@/lib/design/background-suggest";
-import type { BookFormat, DesignStyle } from "@/lib/book/types";
+import type { BookDoc, BookFormat, DesignStyle } from "@/lib/book/types";
+import type { RenderPhotos } from "@/lib/book/render";
 import { getMyBook } from "@/lib/db/books";
-import { getCoverThumbUrl } from "@/lib/db/cover-thumb";
+import { getCoverPhoto } from "@/lib/db/cover-thumb";
 import { listPlaceablePhotos } from "@/lib/db/photos";
 import {
   getPublishRow,
@@ -87,6 +88,12 @@ export type PublishPreview = {
   coverThumbUrl: string | null;
   format: BookFormat;
   designStyle: DesignStyle;
+  /**
+   * The book's real cover (chosen cover style, title, design, occasion sticker) for <BookPage
+   * page="cover">: the saved doc without pages/chapters + the cover photo. null = unparseable doc
+   * (the preview then falls back to the generic shelf cover).
+   */
+  cover?: { doc: BookDoc; photos: RenderPhotos; captionLang: "en" | "ar" } | null;
 };
 
 export type GetPublishStateResult =
@@ -371,6 +378,20 @@ function toState(row: PublishRow, now: Date): PublishState {
   };
 }
 
+/** The cover-only doc + photo map the share preview renders (null when the doc doesn't parse). */
+function previewCover(
+  rawDoc: unknown,
+  photo: Awaited<ReturnType<typeof getCoverPhoto>>,
+  captionLang: string | null,
+): NonNullable<PublishPreview["cover"]> | null {
+  const parsed = parseBookDoc(rawDoc);
+  if (!parsed.ok) return null;
+  const doc: BookDoc = { ...parsed.doc, pages: [], chapters: [] };
+  const photos: RenderPhotos =
+    photo && photo.photoId === doc.cover.photoId ? { [photo.photoId]: { url: photo.url, width: photo.width, height: photo.height } } : {};
+  return { doc, photos, captionLang: captionLang === "ar" ? "ar" : "en" };
+}
+
 /**
  * Publish screen state (T8). canPublishReason covers the cheap rules (expired, invalid_doc,
  * empty, page_limit); photo ownership is re-checked by publishBookAction.
@@ -381,12 +402,17 @@ export async function getPublishState(bookId: string): Promise<GetPublishStateRe
   try {
     const row = await getPublishRow(owner.bookId, owner.userId);
     if (!row) return { ok: false, error: "not_found" };
-    // getCoverThumbUrl never throws; the guard keeps a signing problem from failing the page.
-    const coverThumbUrl = await getCoverThumbUrl(owner.bookId, row.doc).catch(() => null);
+    // getCoverPhoto never throws; the guard keeps a signing problem from failing the page.
+    const photo = await getCoverPhoto(owner.bookId, row.doc).catch(() => null);
     return {
       ok: true,
       state: toState(row, new Date()),
-      preview: { coverThumbUrl, format: row.format, designStyle: row.design_style },
+      preview: {
+        coverThumbUrl: photo?.url ?? null,
+        format: row.format,
+        designStyle: row.design_style,
+        cover: previewCover(row.doc, photo, row.caption_lang),
+      },
     };
   } catch (err) {
     console.error(`[publish-state] failed (${errorCodeOf(err)})`);

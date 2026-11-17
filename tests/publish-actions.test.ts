@@ -41,14 +41,14 @@ const fake = vi.hoisted(() => {
       update: (payload: unknown) => builder(table, "update", payload),
     }),
   };
-  return { state, admin, revalidatePath: vi.fn(), learnFromBook: vi.fn(), getCoverThumbUrl: vi.fn() };
+  return { state, admin, revalidatePath: vi.fn(), learnFromBook: vi.fn(), getCoverPhoto: vi.fn() };
 });
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => fake.admin }));
 vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: async () => fake.state.user }));
 vi.mock("@/lib/db/books", () => ({ getMyBook: async () => fake.state.mine }));
 vi.mock("@/lib/db/photos", () => ({ listPlaceablePhotos: async () => fake.state.photos }));
-vi.mock("@/lib/db/cover-thumb", () => ({ getCoverThumbUrl: fake.getCoverThumbUrl }));
+vi.mock("@/lib/db/cover-thumb", () => ({ getCoverPhoto: fake.getCoverPhoto }));
 vi.mock("@/lib/ai/learn-from-book", () => ({ learnFromBook: fake.learnFromBook }));
 vi.mock("next/cache", () => ({ revalidatePath: fake.revalidatePath }));
 
@@ -114,7 +114,7 @@ beforeEach(() => {
   fake.state.photos = Array.from({ length: 16 }, (_, i) => ({ id: `d${i}`, status: "kept" }));
   fake.learnFromBook.mockReset().mockResolvedValue("updated");
   fake.revalidatePath.mockReset();
-  fake.getCoverThumbUrl.mockReset().mockResolvedValue(null);
+  fake.getCoverPhoto.mockReset().mockResolvedValue(null);
   logs = [];
   vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => void logs.push(a.map(String).join(" ")));
   vi.spyOn(console, "log").mockImplementation((...a: unknown[]) => void logs.push(a.map(String).join(" ")));
@@ -548,7 +548,7 @@ describe("getPublishState", () => {
         canPublishReason: null,
         maxPages: 20,
       }),
-      preview: { coverThumbUrl: null, format: "A5_PORTRAIT", designStyle: "classic" },
+      preview: expect.objectContaining({ coverThumbUrl: null, format: "A5_PORTRAIT", designStyle: "classic" }),
     });
     // the read never selects the snapshot itself, only a JSON path
     expect(String(fake.state.chains[0].calls[0][1])).toContain("published_doc->version");
@@ -556,23 +556,42 @@ describe("getPublishState", () => {
   });
 
   it("M21 preview: cover thumb (signed for this book + its doc), format and design style", async () => {
-    fake.getCoverThumbUrl.mockResolvedValue("https://signed/thumb.jpg");
     const d = doc();
+    fake.getCoverPhoto.mockResolvedValue({ photoId: d.cover.photoId, url: "https://signed/thumb.jpg", width: 1200, height: 1600 });
     fake.state.results.push({ data: row({ doc: d, format: "A5_LANDSCAPE", design_style: "modern" }), error: null });
     const r = await getPublishState(BOOK);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.preview).toEqual({ coverThumbUrl: "https://signed/thumb.jpg", format: "A5_LANDSCAPE", designStyle: "modern" });
-    expect(fake.getCoverThumbUrl).toHaveBeenCalledTimes(1);
-    expect(fake.getCoverThumbUrl).toHaveBeenCalledWith(BOOK, d);
+    expect(r.preview).toMatchObject({ coverThumbUrl: "https://signed/thumb.jpg", format: "A5_LANDSCAPE", designStyle: "modern" });
+    expect(fake.getCoverPhoto).toHaveBeenCalledTimes(1);
+    expect(fake.getCoverPhoto).toHaveBeenCalledWith(BOOK, d);
+  });
+
+  it("preview.cover: the saved doc's cover (no pages/chapters) + the cover photo for <BookPage>", async () => {
+    const d = doc();
+    fake.getCoverPhoto.mockResolvedValue({ photoId: d.cover.photoId, url: "https://signed/thumb.jpg", width: 1200, height: 1600 });
+    fake.state.results.push({ data: row({ doc: d }), error: null });
+    const r = await getPublishState(BOOK);
+    if (!r.ok) throw new Error("not ok");
+    const c = r.preview.cover!;
+    expect(c.doc.cover).toEqual(d.cover);
+    expect(c.doc.pages).toEqual([]);
+    expect(c.doc.chapters).toEqual([]);
+    expect(c.doc.occasion).toBe(d.occasion);
+    expect(c.photos).toEqual(d.cover.photoId ? { [d.cover.photoId]: { url: "https://signed/thumb.jpg", width: 1200, height: 1600 } } : {});
+    expect(c.captionLang).toMatch(/^(en|ar)$/);
+    // an unparseable doc → no real cover (generic preview), page still loads
+    fake.state.results.push({ data: row({ doc: { nope: 1 } }), error: null });
+    const bad = await getPublishState(BOOK);
+    expect(bad.ok && bad.preview.cover).toBeNull();
   });
 
   it("M21 preview: no thumb / a signing failure → coverThumbUrl null, the page still loads", async () => {
     fake.state.results.push({ data: row(), error: null });
     const none = await getPublishState(BOOK);
-    expect(none.ok && none.preview).toEqual({ coverThumbUrl: null, format: "A5_PORTRAIT", designStyle: "classic" });
+    expect(none.ok && none.preview).toMatchObject({ coverThumbUrl: null, format: "A5_PORTRAIT", designStyle: "classic" });
 
-    fake.getCoverThumbUrl.mockRejectedValue(new Error("sign failed"));
+    fake.getCoverPhoto.mockRejectedValue(new Error("sign failed"));
     fake.state.results.push({ data: row(), error: null });
     const failed = await getPublishState(BOOK);
     expect(failed.ok).toBe(true);
