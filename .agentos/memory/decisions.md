@@ -282,3 +282,8 @@ Decision: New book form offers Modern (default for every occasion via DEFAULT_ST
 - Decision: panelFontMm wraps greedily by whole words and uses the resolved face's measured glyph width (GLYPH_EM in render.ts: per font, lower/upper case, + letter-spacing, ×1.1 safety) and line growth (Cairo/Amiri/Aref Ruqaa ×1.045, Lalezar ×1.03) instead of one role-wide 0.42–0.48 em guess. Optional LayoutText.fit (0.5–1) stays for very narrow columns (only g-l-cover-hex uses it).
 - Why: mid-length titles (~30–40 chars) clipped on 8 new M29 covers and on live covers (g-p-cover, g-l-cover, m-p-cover-strips). User chose "fix sizing for all covers" 2026-11-17, accepting a one-time regeneration of affected pre-M29 goldens (only m10c changed: chapter titles ±8 %; m9/m10b byte-identical).
 - Alternatives rejected: word-aware for M29 covers only (keeps the live bug); shrinking only the new boxes (fragile).
+
+## D-082 — M29 editor bundle budget +3.5 kB (2026-11-17)
+- Decision: accept /books/[id]/edit first-load +3.35 kB gz vs main (like-for-like builds; +2.92 kB on T7's baseline) for M29; budget for this milestone raised from +3 to +3.5 kB.
+- Why: 22 cover layouts (+2.4 kB) + D-081 fitter (+0.3 kB) + Cover style tool (+0.5 kB); ~1 % of the page. User chose "accept the overshoot" 2026-11-17.
+- Note: the editor ships the whole layout catalogue — new layout data counts against the editor budget before any UI.
