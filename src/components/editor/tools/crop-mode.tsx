@@ -1,32 +1,34 @@
 "use client";
 
-// Crop (M5 Task 9): explicit crop mode for a page slot. The panel shows the slot at its real
-// aspect ratio, rendered with the same cropToStyle maths as <BookPage> (big page, strip and print
-// match). Drag to pan (pointer events, focal point x/y), pinch or slider to zoom 1–4, arrow keys
-// nudge. Every gesture is one undo step (coalesceKey); the big page updates live behind the sheet.
-// While the panel is open on mobile its backdrop blocks the carousel, so pages can't swipe.
+// Crop (M5 Task 9; in place since 2026-11-17): the photo is adjusted right where it sits on the
+// page. While the Crop tool is open, the selected slot on the big page becomes the crop area
+// (CropInPlace, rendered by EditablePage instead of the slot's tap target): drag to move the photo
+// (pointer events, focal point x/y), pinch or scroll to zoom 1–4, arrow keys nudge. The panel only
+// holds the zoom slider, Reset and Done — docked under the page on phones, in the sidebar on
+// desktop — so the page stays visible. Every gesture is one undo step (coalesceKey).
+// Same cropToStyle maths as <BookPage> (big page, strip and print match).
 // M10c T14: shaped / tilted / framed slots crop in the UNROTATED photo rect (layoutSlotMm =
-// photoRectOf: frame excluded, same box the render model cover-fits), so saved values render the
-// same in viewer and print. A mask dims what the slot's shape hides (circle, hexagon, diamond,
-// polygon, rounded) and outlines what shows.
-// M22 T6a (D-074): controls restyled only (zoom label, emerald slider, warning card, quiet Reset +
-// emerald Done). The crop box and its ancestors keep their classes: no transform or padding change
-// (startPan reads the box's getBoundingClientRect).
+// photoRectOf: frame excluded, same box the render model cover-fits). The on-screen size of that
+// rect comes from the rendered page box (mm → px), and a drag on a tilted slot is turned back by
+// the tilt, so the photo follows the finger. The slot's own shape clips the photo on the page, so
+// no separate mask is needed.
 
 import { Crop as CropIcon, RotateCcw } from "lucide-react";
-import { useRef, type KeyboardEvent, type PointerEvent } from "react";
-import { CROP_ZOOM_MAX, CROP_ZOOM_MIN, cropToStyle, DEFAULT_CROP } from "@/lib/book/crop";
+import { useEffect, useRef, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
+import { CROP_ZOOM_MAX, CROP_ZOOM_MIN, DEFAULT_CROP } from "@/lib/book/crop";
 import { setCrop } from "@/lib/book/edit-ops";
+import { pageMm } from "@/lib/book/format";
 import { isSlotLowRes, layoutSlotMm } from "@/lib/book/resolution";
-import { cropBoxStyle } from "@/lib/book/render";
 import type { Crop } from "@/lib/book/types";
 import { getLayout } from "@/lib/layouts";
 import { panCrop, pinchZoom, zoomCrop, type CropFrame } from "@/lib/editor/crop-gesture";
-import { cropMaskOf, cropMaskPath, type CropMask } from "@/lib/editor/shaped-slots";
 import { cx } from "@/lib/cx";
 import { ED_CTA_EMERALD, ED_CTA_QUIET, ED_PANEL_EYEBROW } from "../editor-classes";
-import type { EditorContextValue } from "../editor-context";
+import { useEditor, type EditorContextValue } from "../editor-context";
 import type { EditorPanelProps, EditorTool } from "./types";
+
+/** Id of the Crop tool: while it is the active tool, the selected slot is cropped in place. */
+export const CROP_TOOL_ID = "crop";
 
 type CropTarget = {
   pageIdx: number;
@@ -37,9 +39,7 @@ type CropTarget = {
   url: string;
   photo: { width: number; height: number };
   frame: CropFrame;
-  /** Visible part of the photo rect (slot shape; M10c). */
-  mask: CropMask;
-  /** Slot tilt in degrees (the panel shows it straight). */
+  /** Slot tilt in degrees (drags are turned back by it). */
   rotate: number;
 };
 
@@ -65,7 +65,6 @@ export function cropTarget(ctx: Pick<EditorContextValue, "state" | "photos">): C
     url: p.url,
     photo: { width: p.width, height: p.height },
     frame: { photoW: p.width, photoH: p.height, slotWmm: mm.w, slotHmm: mm.h },
-    mask: cropMaskOf(layout, sel.slotIdx, ctx.state.doc.format),
     rotate: layout?.slots[sel.slotIdx]?.rotate ?? 0,
   };
 }
@@ -74,34 +73,89 @@ type Gesture =
   | { kind: "pan"; id: number; x: number; y: number; start: Crop; w: number; h: number; key: string }
   | { kind: "pinch"; dist: number; zoom: number; key: string };
 
-export function CropPanel({ ctx, close }: EditorPanelProps) {
+type CropCtx = Pick<EditorContextValue, "state" | "photos" | "actions" | "readOnly">;
+
+function applyCrop(ctx: CropCtx, t: Pick<CropTarget, "pageIdx" | "slotIdx">, crop: Crop, coalesceKey?: string) {
+  if (ctx.readOnly) return;
+  const { pageIdx, slotIdx } = t;
+  ctx.actions.edit((d) => setCrop(d, pageIdx, slotIdx, crop), { coalesceKey, select: { kind: "slot", pageIdx, slotIdx } });
+}
+
+/**
+ * On-screen size (px, before the tilt) of the slot's photo rect, from the rendered page box that
+ * `el` sits in: page px per mm × the photo rect's mm. null when the page isn't laid out.
+ */
+function photoRectPx(el: Element, t: CropTarget, format: EditorContextValue["state"]["doc"]["format"]): { w: number; h: number } | null {
+  const rect = el.closest<HTMLElement>("[data-page]")?.getBoundingClientRect();
+  const mm = pageMm(format);
+  if (!rect || !(rect.width > 0) || !(rect.height > 0)) return null;
+  return { w: (rect.width / mm.w) * t.frame.slotWmm, h: (rect.height / mm.h) * t.frame.slotHmm };
+}
+
+/** A screen-space drag turned back by the slot's tilt (CSS rotate, clockwise degrees). Exported for tests. */
+export function untilt(dx: number, dy: number, rotateDeg: number): { dx: number; dy: number } {
+  if (!rotateDeg) return { dx, dy };
+  const a = (rotateDeg * Math.PI) / 180;
+  const cos = Math.cos(a);
+  const sin = Math.sin(a);
+  return { dx: dx * cos + dy * sin, dy: -dx * sin + dy * cos };
+}
+
+/** Wheel → zoom factor per pixel scrolled (scroll up = zoom in). */
+const WHEEL_ZOOM = 0.002;
+
+/**
+ * The crop area ON the page: covers the selected slot while the Crop tool is open (EditablePage
+ * renders it in place of the slot's tap target). `children` = the slot's shape outline, if any.
+ */
+export function CropInPlace({ label, className, children }: { label: string; className?: string; children?: ReactNode }) {
+  const ctx = useEditor();
   const t = cropTarget(ctx);
   const boxRef = useRef<HTMLDivElement>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<Gesture | null>(null);
   const seq = useRef(0);
-  const live = useRef(t);
-  live.current = t;
+  const live = useRef({ t, ctx });
+  live.current = { t, ctx };
+
+  // Wheel zoom needs a non-passive listener (React's onWheel can't preventDefault the page scroll).
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      const { t: cur, ctx: c } = live.current;
+      if (!cur) return;
+      e.preventDefault();
+      const zoom = cur.crop.zoom * Math.exp(-e.deltaY * WHEEL_ZOOM);
+      applyCrop(c, cur, zoomCrop(cur.frame, cur.crop, zoom), `crop:${cur.pageId}:${cur.slotIdx}:zoom`);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  // Keyboard users: the slot's button was replaced by this area — take the focus it lost.
+  useEffect(() => {
+    const active = document.activeElement;
+    if (!active || active === document.body) boxRef.current?.focus({ preventScroll: true });
+  }, []);
 
   if (!t) return null;
 
   const keyFor = (kind: string) => `crop:${t.pageId}:${t.slotIdx}:${kind}:${++seq.current}`;
   const apply = (crop: Crop, coalesceKey?: string) => {
-    const cur = live.current;
-    if (!cur || ctx.readOnly) return;
-    const { pageIdx, slotIdx } = cur;
-    ctx.actions.edit((d) => setCrop(d, pageIdx, slotIdx, crop), { coalesceKey, select: { kind: "slot", pageIdx, slotIdx } });
+    const { t: cur, ctx: c } = live.current;
+    if (cur) applyCrop(c, cur, crop, coalesceKey);
   };
 
   const startPan = (id: number, x: number, y: number) => {
-    const cur = live.current;
-    const rect = boxRef.current?.getBoundingClientRect();
-    if (!cur || !rect || rect.width === 0 || rect.height === 0) return;
-    gesture.current = { kind: "pan", id, x, y, start: cur.crop, w: rect.width, h: rect.height, key: keyFor("pan") };
+    const cur = live.current.t;
+    const size = cur && boxRef.current ? photoRectPx(boxRef.current, cur, ctx.state.doc.format) : null;
+    if (!cur || !size) return;
+    gesture.current = { kind: "pan", id, x, y, start: cur.crop, w: size.w, h: size.h, key: keyFor("pan") };
   };
 
   const startPinch = () => {
-    const cur = live.current;
+    const cur = live.current.t;
     const [a, b] = Array.from(pointers.current.values());
     if (!cur || !a || !b) return;
     gesture.current = { kind: "pinch", dist: Math.hypot(a.x - b.x, a.y - b.y), zoom: cur.crop.zoom, key: keyFor("pinch") };
@@ -109,6 +163,8 @@ export function CropPanel({ ctx, close }: EditorPanelProps) {
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.focus({ preventScroll: true });
     e.currentTarget.setPointerCapture?.(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size === 1) startPan(e.pointerId, e.clientX, e.clientY);
@@ -119,10 +175,11 @@ export function CropPanel({ ctx, close }: EditorPanelProps) {
     if (!pointers.current.has(e.pointerId)) return;
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const g = gesture.current;
-    const cur = live.current;
+    const cur = live.current.t;
     if (!g || !cur) return;
     if (g.kind === "pan" && g.id === e.pointerId) {
-      apply(panCrop(cur.frame, g.start, (e.clientX - g.x) / g.w, (e.clientY - g.y) / g.h), g.key);
+      const d = untilt(e.clientX - g.x, e.clientY - g.y, cur.rotate);
+      apply(panCrop(cur.frame, g.start, d.dx / g.w, d.dy / g.h), g.key);
     } else if (g.kind === "pinch") {
       const [a, b] = Array.from(pointers.current.values());
       if (a && b) apply(zoomCrop(cur.frame, cur.crop, pinchZoom(g.zoom, g.dist, Math.hypot(a.x - b.x, a.y - b.y))), g.key);
@@ -145,49 +202,50 @@ export function CropPanel({ ctx, close }: EditorPanelProps) {
     apply(panCrop(t.frame, t.crop, d[0], d[1]), `crop:${t.pageId}:${t.slotIdx}:keys`);
   };
 
-  const style = cropToStyle(t.frame.photoW, t.frame.photoH, t.frame.slotWmm, t.frame.slotHmm, t.crop);
-  const aspect = t.frame.slotWmm / t.frame.slotHmm;
+  // A click here is the end of a drag (or a tap on the photo being cropped): never a deselect.
+  const swallow = (e: MouseEvent) => e.stopPropagation();
+
+  return (
+    <div
+      ref={boxRef}
+      role="application"
+      aria-label={`${label}: drag to move the photo, scroll or pinch to zoom, arrow keys to nudge`}
+      tabIndex={0}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerEnd}
+      onPointerCancel={onPointerEnd}
+      onKeyDown={onKeyDown}
+      onClick={swallow}
+      onDoubleClick={swallow}
+      className={cx("absolute inset-0 block cursor-grab touch-none select-none active:cursor-grabbing", className ?? "outline-none")}
+      style={{ borderRadius: "inherit" }}
+      data-testid="crop-area"
+      data-zoom={t.crop.zoom}
+    >
+      {/* Rule-of-thirds guide. */}
+      <div className="pointer-events-none absolute inset-0 grid grid-cols-3 grid-rows-3" aria-hidden="true">
+        {Array.from({ length: 9 }, (_, i) => (
+          <span key={i} className="border-[0.5px] border-white/60" />
+        ))}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+export function CropPanel({ ctx, close }: EditorPanelProps) {
+  const t = cropTarget(ctx);
+  if (!t) return null;
+
   const lowRes = isSlotLowRes(t.photo, t.layoutId, t.slotIdx, t.crop.zoom, ctx.state.doc.format);
   const zoomKey = `crop:${t.pageId}:${t.slotIdx}:zoom`;
 
   return (
     <div className="flex flex-col items-center gap-3" data-testid="crop-mode">
-      <div
-        ref={boxRef}
-        role="application"
-        aria-label="Crop area: drag to move the photo, arrow keys to nudge"
-        tabIndex={0}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerEnd}
-        onPointerCancel={onPointerEnd}
-        onKeyDown={onKeyDown}
-        className="relative cursor-grab touch-none overflow-hidden rounded-sm bg-muted outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card active:cursor-grabbing"
-        style={{ aspectRatio: String(aspect), width: `min(100%, calc(36dvh * ${aspect}))` }}
-        data-testid="crop-area"
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element -- short-lived signed URLs */}
-        <img
-          src={t.url}
-          alt=""
-          draggable={false}
-          className="pointer-events-none absolute block"
-          style={{ ...cropBoxStyle(style), maxWidth: "none" }}
-          data-testid="crop-image"
-        />
-        {/* Rule-of-thirds guide. */}
-        <div className="pointer-events-none absolute inset-0 grid grid-cols-3 grid-rows-3" aria-hidden="true">
-          {Array.from({ length: 9 }, (_, i) => (
-            <span key={i} className="border-[0.5px] border-white/50" />
-          ))}
-        </div>
-        <CropMaskOverlay mask={t.mask} />
-      </div>
-      {t.rotate ? (
-        <p className="-mt-1 text-xs text-[#56625a]" data-testid="crop-tilt-note">
-          Shown straight. The photo stays tilted on the page.
-        </p>
-      ) : null}
+      <p className="w-full max-w-sm text-sm text-[#56625a]" data-testid="crop-hint">
+        Drag the photo on the page to move it. Pinch, scroll or use the slider to zoom.
+      </p>
 
       <label className="flex w-full max-w-sm items-center gap-3 text-sm">
         <span className={cx(ED_PANEL_EYEBROW, "shrink-0")}>Zoom</span>
@@ -197,7 +255,7 @@ export function CropPanel({ ctx, close }: EditorPanelProps) {
           max={CROP_ZOOM_MAX}
           step={0.01}
           value={t.crop.zoom}
-          onChange={(e) => apply(zoomCrop(t.frame, t.crop, Number(e.target.value)), zoomKey)}
+          onChange={(e) => applyCrop(ctx, t, zoomCrop(t.frame, t.crop, Number(e.target.value)), zoomKey)}
           className="min-h-11 flex-1 accent-[#0e3b2e]"
           data-testid="crop-zoom"
         />
@@ -213,19 +271,14 @@ export function CropPanel({ ctx, close }: EditorPanelProps) {
       <div className="grid w-full max-w-sm grid-cols-2 gap-2">
         <button
           type="button"
-          onClick={() => apply({ ...DEFAULT_CROP })}
+          onClick={() => applyCrop(ctx, t, { ...DEFAULT_CROP })}
           className={cx(ED_CTA_QUIET, "border border-[#e9dfca]")}
           data-testid="crop-reset"
         >
           <RotateCcw className="size-4" aria-hidden="true" />
           Reset
         </button>
-        <button
-          type="button"
-          onClick={close}
-          className={ED_CTA_EMERALD}
-          data-testid="crop-done"
-        >
+        <button type="button" onClick={close} className={ED_CTA_EMERALD} data-testid="crop-done">
           Done
         </button>
       </div>
@@ -233,37 +286,16 @@ export function CropPanel({ ctx, close }: EditorPanelProps) {
   );
 }
 
-/**
- * Dims the part of the photo rect the slot's shape hides and outlines the visible shape (SVG in the
- * crop box's own %, so it matches the render model's clip exactly). Nothing for rect slots.
- */
-function CropMaskOverlay({ mask }: { mask: CropMask }) {
-  const d = cropMaskPath(mask);
-  if (!d) return null;
-  return (
-    <svg
-      aria-hidden="true"
-      focusable="false"
-      viewBox="0 0 100 100"
-      preserveAspectRatio="none"
-      className="pointer-events-none absolute inset-0 block size-full"
-      data-testid="crop-mask"
-      data-shape={mask.kind}
-    >
-      <path d={`M0,0 H100 V100 H0 Z ${d}`} fill="rgba(0,0,0,0.55)" fillRule="evenodd" />
-      <path d={d} fill="none" stroke="white" strokeWidth={2} vectorEffect="non-scaling-stroke" />
-    </svg>
-  );
-}
-
 export const cropTool: EditorTool = {
-  id: "crop",
+  id: CROP_TOOL_ID,
   label: "Crop",
   icon: CropIcon,
   scopes: ["slot"],
   order: 12,
   tier: "primary",
   panelTitle: "Crop photo",
+  // The photo is cropped on the page itself: keep the page visible above the controls on phones.
+  dockOnMobile: true,
   isAvailable: (ctx) => cropTarget(ctx) !== null,
   Panel: CropPanel,
 };

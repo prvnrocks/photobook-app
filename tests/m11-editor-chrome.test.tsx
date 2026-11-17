@@ -93,10 +93,10 @@ describe("coach line storage", () => {
 });
 
 describe("editor tools (T14)", () => {
-  it("Layout and Replace dock under the page on phones; Crop stays a sheet", () => {
+  it("Layout, Replace and Crop dock under the page on phones (Crop edits the photo on the page itself)", () => {
     expect(layoutPickerTool.dockOnMobile).toBe(true);
     expect(photoPickerTool.dockOnMobile).toBe(true);
-    expect(cropTool.dockOnMobile).toBeFalsy();
+    expect(cropTool.dockOnMobile).toBe(true);
   });
 
   it("AI tool uses the Sparkles icon and a plain label (no emoji)", () => {

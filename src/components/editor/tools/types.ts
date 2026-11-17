@@ -60,6 +60,10 @@ export interface EditorTool {
    * page stays visible while the tool previews its edits live (e.g. Background).
    */
   dockOnMobile?: boolean;
-  /** Open the Panel as soon as the selection enters one of `scopes` (e.g. caption editor on caption tap). */
-  openOnSelect?: boolean;
+  /**
+   * Open the Panel as soon as the selection enters one of `scopes` (e.g. caption editor on caption
+   * tap). "sidebar" = only with the desktop tool sidebar (ctx.sidebar) — e.g. the photo picker
+   * opens beside the page when a photo is tapped; phones keep the page full size.
+   */
+  openOnSelect?: boolean | "sidebar";
 }

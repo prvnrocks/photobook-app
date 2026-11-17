@@ -219,7 +219,6 @@ describe("crop on shaped / framed / tilted slots matches the render model (scree
         const page = pageMm(doc.format);
         expect(t.frame.slotWmm).toBeCloseTo((pr.w / 100) * page.w, 6);
         expect(t.frame.slotHmm).toBeCloseTo((pr.h / 100) * page.h, 6);
-        expect(t.mask).toEqual(cropMaskOf(l, slotIdx, doc.format));
         expect(t.rotate).toBe(l.slots[slotIdx].rotate ?? 0);
 
         // A pan + zoom in the panel, saved, renders exactly as the panel showed it.

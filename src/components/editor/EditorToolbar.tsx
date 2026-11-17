@@ -86,6 +86,9 @@ const CARD_STRIP =
 const TOOLBAR_ROW =
   "shrink-0 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] ps-[max(0.5rem,env(safe-area-inset-left))] pe-[max(0.5rem,env(safe-area-inset-right))] md:flex md:flex-wrap md:items-center md:justify-center md:gap-x-3 md:gap-y-2";
 
+/** Desktop sidebar: only the error strip / coach line, centred under the page; no height when empty. */
+const TOOLBAR_STRIPS_ONLY = "flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-2 px-3 pb-3 empty:hidden";
+
 /**
  * Pill overrides (merged over ED_PILL / ED_PILL_ACTIVE by cn — tailwind-merge, so these win):
  * phones (< sm): up to 4 equal pills share the bar, icon over label, 56 px tall — < 360 px (e.g.
@@ -133,7 +136,12 @@ function focusIsIn(el: HTMLElement | null): boolean {
   return !active || active === document.body || (!!el && el.contains(active));
 }
 
-export function EditorToolbar({ tools }: { tools: EditorTool[] }) {
+/**
+ * `sidebar` (useSidebarMode): true → the tools live in the desktop rail (EditorToolRail), so only
+ * the error strip / coach line render here; null (width not known yet) → the pill bar is hidden
+ * ≥ lg with CSS so it never flashes on desktop.
+ */
+export function EditorToolbar({ tools, sidebar = false }: { tools: EditorTool[]; sidebar?: boolean | null }) {
   const ctx = useEditor();
   const { state, actions, activeTool } = ctx;
   const { primary, more } = splitTools(tools, ctx);
@@ -207,7 +215,7 @@ export function EditorToolbar({ tools }: { tools: EditorTool[] }) {
   const shownCount = primary.length + (hasMore ? 1 : 0);
 
   return (
-    <div className={TOOLBAR_ROW} data-testid="editor-toolbar">
+    <div className={sidebar === true ? TOOLBAR_STRIPS_ONLY : TOOLBAR_ROW} data-testid="editor-toolbar">
       {state.error ? (
         <div
           role="alert"
@@ -226,7 +234,8 @@ export function EditorToolbar({ tools }: { tools: EditorTool[] }) {
         </div>
       ) : null}
       <EditorCoachLine show={coachApplies(ctx, tools.length)} />
-      <div className="relative mx-auto w-full max-w-md sm:w-fit sm:max-w-full md:mx-0">
+      {sidebar === true ? null : (
+      <div className={cn("relative mx-auto w-full max-w-md sm:w-fit sm:max-w-full md:mx-0", sidebar === null && "lg:hidden")}>
         <div
           ref={rowRef}
           role="group"
@@ -293,6 +302,7 @@ export function EditorToolbar({ tools }: { tools: EditorTool[] }) {
         </div>
         {moreOpen && hasMore ? <MoreSheet id={moreId} tools={more} ctx={ctx} onClose={closeMore} onPick={pickFromMore} /> : null}
       </div>
+      )}
     </div>
   );
 }
@@ -342,7 +352,7 @@ export function EditorPanelHost({ tool }: { tool: EditorTool | null }) {
           docked ? "relative max-h-[42dvh] shrink-0" : "fixed inset-x-0 bottom-0 z-40 max-h-[70dvh]",
           // ≥ lg: the side card panel beside the stage (lg-prefixed so the
           // phone sheet above stays one element: lg:w-80 xl:w-96, own scroll, card shadow).
-          "lg:static lg:z-auto lg:my-3 lg:me-3 lg:max-h-none lg:w-80 lg:shrink-0 lg:rounded-3xl lg:border lg:border-[#e9dfca] lg:pb-0 lg:shadow-[0_18px_40px_-28px_rgb(14_59_46/0.45)] xl:w-96",
+          "lg:static lg:z-auto lg:my-3 lg:me-3 lg:max-h-none lg:w-72 lg:shrink-0 lg:rounded-3xl lg:border lg:border-[#e9dfca] lg:pb-0 lg:shadow-[0_18px_40px_-28px_rgb(14_59_46/0.45)] xl:w-80 2xl:w-96",
         )}
         data-testid={`editor-panel-${tool.id}`}
         data-editor-panel=""

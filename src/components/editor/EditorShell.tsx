@@ -32,7 +32,8 @@ import { EditorContext, type EditorContextValue } from "./editor-context";
 import { EditorShareButton } from "./EditorShareButton";
 import { MakeWithAiChip } from "./MakeWithAiChip";
 import { EditorToastHost } from "./EditorToast";
-import { EditorPanelHost, EditorToolbar } from "./EditorToolbar";
+import { EditorPanelHost, EditorToolbar, selectionKey } from "./EditorToolbar";
+import { ED_RAIL_SURFACE, ED_RAIL_WIDTH, EditorToolRail } from "./EditorToolRail";
 import { PageCarousel, SpreadCarouselPlaceholder } from "./PageCarousel";
 import { cn } from "@/lib/utils";
 import { PageStrip } from "./PageStrip";
@@ -42,6 +43,7 @@ import type { EditorTool } from "./tools/types";
 import { useAutosave } from "./useAutosave";
 import { useEditorStore } from "./useEditorStore";
 import { useBrokenImageWatcher, usePhotoUrls } from "./usePhotoUrls";
+import { useSidebarMode } from "./useSidebarMode";
 import { useSpreadMode } from "./useSpreadMode";
 
 export type EditorShellProps = {
@@ -80,6 +82,9 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
   // null until the screen width is known (server render + hydration) — see the render below.
   const spreadMode = useSpreadMode(layout);
   const spread = spreadMode === true;
+  // null until the screen width is known: the bottom bar is hidden ≥ lg with CSS meanwhile.
+  const sidebarMode = useSidebarMode();
+  const sidebar = sidebarMode === true;
   const [transport] = useState(() => transportProp ?? httpEditorTransport(data.book.id));
   const saveEnabled = data.canSave && data.docRev !== null;
   const { state, actions } = useEditorStore(data.doc, { readOnly: !saveEnabled });
@@ -130,11 +135,12 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
       },
       aiPath,
       spread,
+      sidebar,
       activeTool,
       openTool,
       closeTool,
     }),
-    [data.book, paymentsEnabled, data.aiMode, state, actions, photos, autosave.status, autosave.flush, autosave.settle, rewrites, setRewrites, aiBlocked, aiPath, spread, activeTool, openTool, closeTool],
+    [data.book, paymentsEnabled, data.aiMode, state, actions, photos, autosave.status, autosave.flush, autosave.settle, rewrites, setRewrites, aiBlocked, aiPath, spread, sidebar, activeTool, openTool, closeTool],
   );
 
   const registry = useMemo(() => toolsProp ?? (extraTools ? [...EDITOR_TOOLS, ...extraTools] : EDITOR_TOOLS), [toolsProp, extraTools]);
@@ -142,10 +148,13 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
   const active = shown.find((t) => t.id === activeTool) ?? null;
 
   // Auto-open on selection (tools with openOnSelect); close a panel whose tool no longer applies.
-  const lastSelection = useRef(state.selection);
+  // "Changed" = a different thing is selected (selectionKey), not a new object for the same thing:
+  // edits re-select their own slot (in-place crop, photo swap) and must not reopen another panel.
+  const selKey = selectionKey(state.selection);
+  const lastSelection = useRef(selKey);
   useEffect(() => {
-    const changed = lastSelection.current !== state.selection;
-    lastSelection.current = state.selection;
+    const changed = lastSelection.current !== selKey;
+    lastSelection.current = selKey;
     if (changed) {
       const auto = autoOpenTool(registry, ctx);
       if (auto) {
@@ -154,7 +163,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
       }
     }
     if (activeTool !== null && !active) setActiveTool(null);
-  }, [state.selection, registry, ctx, activeTool, active]);
+  }, [selKey, registry, ctx, activeTool, active]);
 
   // Keyboard: undo/redo, arrows to flip pages (spreads on ≥ md), Escape to close/deselect.
   const page = state.page;
@@ -254,9 +263,15 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
               </div>
             )}
             {spreadMode === null ? <SpreadCarouselPlaceholder className="hidden md:flex" bare /> : null}
-            <EditorToolbar tools={shown} />
+            <EditorToolbar tools={shown} sidebar={sidebarMode} />
           </main>
           <EditorPanelHost tool={active} />
+          {/* Desktop tool sidebar (≥ lg): after the panel, so an open panel sits between page and rail. */}
+          {sidebarMode === null ? (
+            <div aria-hidden="true" className={cn("hidden shrink-0 lg:block", ED_RAIL_WIDTH, ED_RAIL_SURFACE)} />
+          ) : sidebar ? (
+            <EditorToolRail tools={shown} />
+          ) : null}
           <EditorToastHost />
         </div>
       </div>

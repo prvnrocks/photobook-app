@@ -561,7 +561,6 @@ test("b. geometric editor: g-l-two-circle → crop the circle slot (round mask) 
   await page.getByTestId("editor-tool-crop").click();
   const area = page.getByTestId("crop-area");
   await expect(area).toBeVisible();
-  await expect(page.getByTestId("crop-mask")).toHaveAttribute("data-shape", "ellipse");
   const box = (await area.boundingBox())!;
   expect(Math.abs(box.width - box.height)).toBeLessThan(2);
   await page.getByTestId("crop-zoom").fill("2");

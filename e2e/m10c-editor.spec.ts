@@ -215,8 +215,7 @@ test.describe("phone at 375 px (touch)", () => {
     await page.getByTestId("editor-tool-crop").click();
     const area = page.getByTestId("crop-area");
     await expect(area).toBeVisible();
-    await expect(page.getByTestId("crop-mask")).toHaveAttribute("data-shape", "ellipse");
-    // Square crop box for a circle (the unrotated photo rect).
+    // Cropped in place: the crop area is the circle slot on the page (square box, clipped by the slot's shape).
     const box = (await area.boundingBox())!;
     expect(Math.abs(box.width - box.height)).toBeLessThan(2);
     await page.getByTestId("crop-zoom").fill("2");
@@ -226,7 +225,7 @@ test.describe("phone at 375 px (touch)", () => {
     await page.mouse.up();
     expect(await overflow(page)).toBeLessThanOrEqual(0);
     await page.screenshot({ path: `${SHOTS}/m10c-editor-375-crop-circle.png` });
-    const cropStyle = await page.getByTestId("crop-image").getAttribute("style");
+    const cropStyle = await img().getAttribute("style");
     await page.getByTestId("crop-done").click();
     await expect(page.getByTestId("editor-panel-crop")).toHaveCount(0);
     const after = await img().getAttribute("style");

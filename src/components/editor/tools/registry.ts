@@ -85,7 +85,9 @@ export function visibleTools(tools: readonly EditorTool[], ctx: EditorContextVal
 /** The tool to auto-open for the current selection (first visible tool with openOnSelect). */
 export function autoOpenTool(tools: readonly EditorTool[], ctx: EditorContextValue): EditorTool | null {
   if (ctx.state.selection === null) return null;
-  return visibleTools(tools, ctx).find((t) => t.openOnSelect && t.Panel) ?? null;
+  return (
+    visibleTools(tools, ctx).find((t) => t.Panel && (t.openOnSelect === true || (t.openOnSelect === "sidebar" && ctx.sidebar === true))) ?? null
+  );
 }
 
 /** Big buttons in the toolbar row per selection; the rest go behind "More" (M13, ≤ 4 buttons at 375 px). */

@@ -33,6 +33,11 @@ const cur = (page: Page) => page.locator('[data-testid="carousel-item"][aria-hid
 const counter = (page: Page) => page.getByTestId("page-counter");
 /** M13 simple toolbar: open "More", then tap a tool that lives in its sheet (testid unchanged). */
 async function viaMore(page: Page, id: string) {
+  // Desktop (≥ lg): every tool sits in the sidebar rail — there is no More sheet.
+  if ((await page.getByTestId("editor-tool-rail").count()) > 0) {
+    await page.getByTestId(`editor-tool-${id}`).click();
+    return;
+  }
   await page.getByTestId("editor-more").click();
   await expect(page.getByTestId("editor-more-sheet")).toBeVisible();
   await page.getByTestId(`editor-tool-${id}`).click();

@@ -49,6 +49,11 @@ export interface EditorContextValue {
    * page last tapped inside the shown spread. Absent = false (single page).
    */
   spread?: boolean;
+  /**
+   * Desktop tool sidebar (≥ lg, useSidebarMode): tools sit in the right-hand rail, a tapped photo
+   * opens the photo picker beside it, and panels stay open until the user closes them. Absent = false.
+   */
+  sidebar?: boolean;
   /** Id of the tool whose Panel is open, or null. */
   activeTool: string | null;
   openTool(id: string): void;

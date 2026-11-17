@@ -1,7 +1,10 @@
 "use client";
 
 // The big editor page: the shared <BookPage> in "edit" mode plus tap targets for selection.
-// - Photo slot → selects { slot } (cover photo → { cover, photo }); tap again deselects.
+// - Photo slot → selects { slot } (cover photo → { cover, photo }); tap again deselects (with the
+//   desktop tool sidebar it stays selected, so the photo picker beside the page stays open).
+// - Crop tool open → the selected slot IS the crop area (CropInPlace: drag / pinch / scroll on the
+//   page itself). Double-click a photo to start cropping it.
 // - Caption area → selects { caption } (placeholder "Tap to add a caption" when empty).
 // - Cover title/subtitle area → selects { cover, text }.
 // - Tap on empty page space → clears the selection.
@@ -44,6 +47,7 @@ import type { EditorPosition, EditorSelection } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
 import { DesktopPointerSensor, MOUSE_CONSTRAINT, TOUCH_CONSTRAINT } from "./dnd-sensors";
 import { useEditor } from "./editor-context";
+import { CROP_TOOL_ID, CropInPlace } from "./tools/crop-mode";
 import { LowResBadge } from "./tools/low-res-badge";
 
 /** Styles whose text panels (plates, tilted labels) may sit over photos: taps pass through them. */
@@ -68,7 +72,7 @@ function sameSelection(a: EditorSelection, b: EditorSelection): boolean {
 }
 
 export function EditablePage({ page, priority }: { page: EditorPosition; priority?: boolean }) {
-  const { state, actions, photos, readOnly, book } = useEditor();
+  const { state, actions, photos, readOnly, book, sidebar, activeTool, openTool } = useEditor();
   const { doc, selection } = state;
   const wrapper = useRef<HTMLDivElement>(null);
   const lastDrag = useRef(0);
@@ -95,7 +99,16 @@ export function EditablePage({ page, priority }: { page: EditorPosition; priorit
       idx = resolveSlotTap(ownerPage(owner), slotIdx, pt);
     }
     const sel = slotSel(idx, owner);
-    actions.select(sameSelection(selection, sel) ? null : sel);
+    // Desktop sidebar: a second tap keeps the photo selected (its panel stays open until closed).
+    actions.select(!sidebar && sameSelection(selection, sel) ? null : sel);
+  };
+
+  /** Double-click a photo → crop it in place. */
+  const cropSlot = (slotIdx: number, owner: number | "cover") => (e: MouseEvent) => {
+    e.stopPropagation();
+    if (owner === "cover" || (doc.pages[owner]?.slots[slotIdx]?.photoId ?? null) === null) return;
+    actions.select({ kind: "slot", pageIdx: owner, slotIdx });
+    openTool(CROP_TOOL_ID);
   };
 
   // `owner` = the doc page holding the slot/caption (a spread's right half shows its left page's).
@@ -180,9 +193,21 @@ export function EditablePage({ page, priority }: { page: EditorPosition; priorit
                   selected: sameSelection(selection, slotSel(slotIdx, owner)),
                   label: `Photo ${slotIdx + 1} on ${label}`,
                   onClick: tapSlot(slotIdx, owner),
+                  onDoubleClick: cropSlot(slotIdx, owner),
                   outline: slotOutline(ownerPage(owner)?.slots[slotIdx]),
                 };
                 const hasPhoto = owner !== "cover" && (doc.pages[owner]?.slots[slotIdx]?.photoId ?? null) !== null;
+                if (props.selected && hasPhoto && activeTool === CROP_TOOL_ID) {
+                  // Crop in place: this slot is the crop area (no tap target, no drag-swap).
+                  return (
+                    <>
+                      <CropInPlace label={props.label} className={props.outline.kind === "box" ? CROP_RING : "outline-none"}>
+                        <PolygonOutline outline={props.outline} selected />
+                      </CropInPlace>
+                      <LowResBadge page={owner} slotIdx={slotIdx} />
+                    </>
+                  );
+                }
                 return (
                   <>
                     {dragOwner !== null && owner === dragOwner ? (
@@ -264,6 +289,8 @@ interface SlotOverlayProps {
   selected: boolean;
   label: string;
   onClick: (e: MouseEvent) => void;
+  /** Double-click → crop in place. */
+  onDoubleClick?: (e: MouseEvent) => void;
   /** How the selection outline follows the slot's shape (M10c). */
   outline: SlotOutline;
 }
@@ -281,6 +308,9 @@ interface SlotOverlayProps {
  * The INSET glow variant (M22 T7): the slot clips anything drawn outside the overlay.
  */
 const SELECTED_RING = "outline-4 outline-solid outline-[#0e3b2e] -outline-offset-4 ed-select-glow-inset";
+
+/** Crop-in-place ring: gold dashes inside the emerald line, so "adjusting" reads differently from "selected". */
+const CROP_RING = "outline-4 outline-dashed outline-[#e3c766] -outline-offset-4";
 
 function overlayClass(outline: SlotOutline, selected: boolean, dropTarget = false) {
   return cn(
@@ -313,11 +343,12 @@ function PolygonOutline({ outline, selected, dropTarget }: { outline: SlotOutlin
   );
 }
 
-function SlotOverlay({ selected, label, onClick, outline }: SlotOverlayProps) {
+function SlotOverlay({ selected, label, onClick, onDoubleClick, outline }: SlotOverlayProps) {
   return (
     <button
       type="button"
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       aria-label={label}
       aria-pressed={selected}
       className={overlayClass(outline, selected)}
@@ -339,6 +370,7 @@ function DraggableSlotOverlay({
   selected,
   label,
   onClick,
+  onDoubleClick,
   outline,
 }: SlotOverlayProps & { id: string; slotIdx: number; canDrag: boolean; dragSource: boolean }) {
   const data: SlotDropData = { slotIdx };
@@ -354,6 +386,7 @@ function DraggableSlotOverlay({
       ref={setRef}
       type="button"
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       aria-label={label}
       aria-pressed={selected}
       className={cn(overlayClass(outline, selected, dropTarget), dragSource && "bg-white/40")}

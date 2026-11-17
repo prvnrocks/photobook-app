@@ -47,7 +47,8 @@ export function PhotoPickerPanel({ ctx, close }: EditorPanelProps) {
       const { pageIdx, slotIdx } = target;
       ctx.actions.edit((d) => replacePhoto(d, pageIdx, slotIdx, photoId), { select: { kind: "slot", pageIdx, slotIdx } });
     }
-    close();
+    // Desktop sidebar: the picker stays open until the user closes it (try another photo right away).
+    if (!ctx.sidebar) close();
   };
 
   const list = groups[tab];
@@ -147,6 +148,8 @@ export const photoPickerTool: EditorTool = {
   panelTitle: "Choose a photo",
   // M11: the page stays visible above the panel on phones while choosing.
   dockOnMobile: true,
+  // Desktop sidebar: tapping a photo opens the picker beside the page.
+  openOnSelect: "sidebar",
   isAvailable: (ctx) => pickerTarget(ctx) !== null,
   Panel: PhotoPickerPanel,
 };

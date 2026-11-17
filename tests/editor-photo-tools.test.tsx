@@ -3,15 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 import { EditorShell } from "@/components/editor/EditorShell";
 import type { EditorContextValue } from "@/components/editor/editor-context";
 import type { EditorPhotos } from "@/components/editor/usePhotoUrls";
-import { cropTarget, CropPanel, cropTool } from "@/components/editor/tools/crop-mode";
+import { cropTarget, CropPanel, cropTool, untilt } from "@/components/editor/tools/crop-mode";
 import { LayoutPickerPanel, layoutPickerTool, layoutTargetPage } from "@/components/editor/tools/layout-picker";
 import { LOW_RES_MESSAGE, slotIsLowRes } from "@/components/editor/tools/low-res-badge";
 import { PhotoPickerPanel, photoPickerTool, pickerTarget } from "@/components/editor/tools/photo-picker";
-import { visibleTools } from "@/components/editor/tools/registry";
+import { autoOpenTool, visibleTools } from "@/components/editor/tools/registry";
 import { cropToStyle, DEFAULT_CROP } from "@/lib/book/crop";
 import { changeLayout, replacePhoto, setCrop } from "@/lib/book/edit-ops";
-import { cropBoxStyle } from "@/lib/book/render";
-import { layoutSlotMm } from "@/lib/book/resolution";
 import { effectiveFocal, panCrop, pinchZoom, zoomCrop, type CropFrame } from "@/lib/editor/crop-gesture";
 import { devEditorData, devTransport } from "@/lib/editor/dev-fixture";
 import { defaultPickerTab, groupPickerPhotos, layoutChangeNotice } from "@/lib/editor/photo-picker";
@@ -219,18 +217,39 @@ describe("photo tools render smoke", () => {
     expect(html).toMatch(/aria-pressed="true"[^>]*data-layout-id="full-page"/);
   });
 
-  it("CropPanel: same cropToStyle box as BookPage, zoom slider at the slot zoom", () => {
+  it("CropPanel: controls only (the photo is cropped on the page), zoom slider at the slot zoom", () => {
     const ctx = ctxWith({ kind: "slot", pageIdx: 0, slotIdx: 0 });
     const html = renderToStaticMarkup(<CropPanel ctx={ctx} close={noop} />);
-    const p = ctx.photos.web.d1!;
-    const mm = layoutSlotMm("full-page", 0)!;
-    const box = cropBoxStyle(cropToStyle(p.width!, p.height!, mm.w, mm.h, { x: 0.3, y: 0.5, zoom: 1.4 }));
-    expect(html).toContain(`left:${box.left}`);
-    expect(html).toContain(`width:${box.width}`);
+    // No separate preview: the crop area is the slot on the page (CropInPlace).
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain('data-testid="crop-area"');
+    expect(html).toContain('data-testid="crop-hint"');
     expect(html).toMatch(/value="1.4"[^>]*data-testid="crop-zoom"|data-testid="crop-zoom"[^>]*value="1.4"/);
     expect(html).toContain('data-testid="crop-done"');
     expect(html).toContain('data-testid="crop-reset"');
     expect(html).toContain('data-testid="crop-low-res"'); // d1 landscape bled full-page at 1.4× < 150 dpi
+  });
+});
+
+describe("crop in place + desktop sidebar", () => {
+  it("untilt turns a screen drag back by the slot's tilt", () => {
+    expect(untilt(10, -4, 0)).toEqual({ dx: 10, dy: -4 });
+    // A slot tilted 90° clockwise: dragging down on screen is dragging right along the photo.
+    const q = untilt(0, 10, 90);
+    expect(q.dx).toBeCloseTo(10, 6);
+    expect(q.dy).toBeCloseTo(0, 6);
+    const r = untilt(10, 0, -90);
+    expect(r.dx).toBeCloseTo(0, 6);
+    expect(r.dy).toBeCloseTo(10, 6);
+  });
+
+  it("a tapped photo opens the picker only with the desktop sidebar", () => {
+    const tools = [photoPickerTool, cropTool, layoutPickerTool];
+    const slot = ctxWith({ kind: "slot", pageIdx: 0, slotIdx: 0 });
+    expect(autoOpenTool(tools, slot)).toBeNull();
+    expect(autoOpenTool(tools, { ...slot, sidebar: true })?.id).toBe("replace");
+    expect(autoOpenTool(tools, { ...ctxWith({ kind: "cover", part: "photo" }), sidebar: true })?.id).toBe("replace");
+    expect(autoOpenTool(tools, { ...ctxWith(null), sidebar: true })).toBeNull();
   });
 });
 

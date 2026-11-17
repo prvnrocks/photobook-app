@@ -13,6 +13,11 @@ test.use({ viewport: { width: W, height: 812 } });
 
 /** M13 simple toolbar: open "More", then tap a tool that lives in its sheet (testid unchanged). */
 async function viaMore(page: Page, id: string) {
+  // Desktop (≥ lg): every tool sits in the sidebar rail — there is no More sheet.
+  if ((await page.getByTestId("editor-tool-rail").count()) > 0) {
+    await page.getByTestId(`editor-tool-${id}`).click();
+    return;
+  }
   await page.getByTestId("editor-more").click();
   await expect(page.getByTestId("editor-more-sheet")).toBeVisible();
   await page.getByTestId(`editor-tool-${id}`).click();
@@ -279,17 +284,19 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
     for (let i = 1; i <= 10; i++) await page.mouse.move(box.x + box.width / 2 - i * 6, box.y + box.height / 2);
     await page.mouse.up();
     await page.getByTestId("crop-zoom").fill("2");
-    const cropStyle = await page.getByTestId("crop-image").getAttribute("style");
+    // Cropped in place: the crop area is the slot on the page, so the page photo itself moved.
+    await expect(area).toHaveAttribute("data-zoom", "2");
+    const cropStyle = await img().getAttribute("style");
+    expect(cropStyle).not.toBe(before);
     await page.getByTestId("crop-done").click();
     await expect(page.getByTestId("editor-panel-crop")).toHaveCount(0);
+    await expect(page.getByTestId("crop-area")).toHaveCount(0);
     const after = await img().getAttribute("style");
-    expect(after).not.toBe(before);
-    const pct = (s: string | null) => (s?.match(/(left|top|width|height):\s*[-\d.]+%/g) ?? []).join(";");
-    expect(pct(after)).toBe(pct(cropStyle));
+    expect(after).toBe(cropStyle);
     await waitSaved(page);
     await goToItem(page, 4);
     await goToItem(page, 2);
-    expect(pct(await img().getAttribute("style"))).toBe(pct(after));
+    expect(await img().getAttribute("style")).toBe(after);
   });
 
   test("reorder pages with the move buttons (Pages sheet) → Saved ✓", async ({ page }) => {
@@ -571,14 +578,15 @@ test.describe("editor UI at 375 px (/dev-editor)", () => {
       })
       .toBe(true);
     await expectNoOverflow(page, "docked caption sheet");
-    // M11 T14: Replace docks under the page too (the spot being filled stays visible); Crop keeps the sheet.
+    // M11 T14: Replace docks under the page too (the spot being filled stays visible); so does Crop
+    // (the photo is cropped on the page itself).
     await page.getByTestId("editor-panel-close").click();
     await cur(page).locator('[data-slot-index="0"] [data-testid="slot-target"]').click();
     await page.getByTestId("editor-tool-replace").click();
     await expect(page.getByTestId("editor-panel-replace")).toHaveAttribute("data-docked", "true");
     await page.getByTestId("editor-panel-close").click();
     await page.getByTestId("editor-tool-crop").click();
-    await expect(page.getByTestId("editor-panel-crop")).toHaveAttribute("data-docked", "false");
+    await expect(page.getByTestId("editor-panel-crop")).toHaveAttribute("data-docked", "true");
   });
 
   test("M11: Layout picker docks under the page — page stays visible, options ≥ 44 px; coach line once", async ({ page }) => {
@@ -1536,5 +1544,74 @@ test.describe("backgrounds at 375 px (/dev-editor?bg=1)", () => {
     await page.getByTestId("editor-tool-background").click();
     await expect(page.getByTestId("editor-toast-host")).toHaveAttribute("data-above-panel", "true");
     await expect.poll(above).toBe(true);
+  });
+});
+
+// Desktop tool sidebar (2026-11-17): tools in a right-hand rail, a tapped photo opens the photo
+// picker beside the page and it stays open until closed, crop happens on the page itself.
+test.describe("desktop tool sidebar at 1280 × 800 (/dev-editor)", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("rail instead of the bottom bar; photo tap opens the picker, which stays open; crop in place", async ({ page }) => {
+    await page.goto("/dev-editor");
+    const rail = page.getByTestId("editor-tool-rail");
+    await expect(rail).toBeVisible();
+    await expect(page.getByTestId("editor-toolbar-row")).toHaveCount(0);
+    await expect(page.getByTestId("editor-more")).toHaveCount(0);
+    // The rail sits at the right edge, every tool labelled and ≥ 44 px.
+    const rb = (await rail.boundingBox())!;
+    expect(rb.x + rb.width).toBeGreaterThan(1280 - 2);
+    for (const b of await rail.locator("button, a").all()) {
+      const box = (await b.boundingBox())!;
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(((await b.textContent()) ?? "").trim().length).toBeGreaterThan(0);
+    }
+
+    await page.getByTestId("carousel-next").click();
+    const slot = page.locator('[data-testid="carousel-item"][aria-hidden="false"] [data-page="0"] [data-testid="slot-target"]').first();
+    const img = page.locator('[data-testid="carousel-item"][aria-hidden="false"] [data-page="0"] [data-slot-index="0"] img').first();
+    await slot.click();
+    const picker = page.getByTestId("editor-panel-replace");
+    await expect(picker).toBeVisible();
+    // Panel between the page and the rail.
+    const pb = (await picker.boundingBox())!;
+    expect(pb.x + pb.width).toBeLessThanOrEqual((await rail.boundingBox())!.x + 1);
+
+    // Picking a photo keeps the picker open; tapping the photo again keeps it selected and open.
+    const src0 = await img.getAttribute("src");
+    await page.locator('[data-testid="picker-photo"]:not([disabled])').first().click();
+    await expect.poll(() => img.getAttribute("src")).not.toBe(src0);
+    await expect(picker).toBeVisible();
+    await slot.click();
+    await expect(slot).toHaveAttribute("data-selected", "true");
+    await expect(picker).toBeVisible();
+
+    // Crop on the page: the slot becomes the crop area; drag moves the page photo itself.
+    await page.getByTestId("editor-tool-crop").click();
+    const area = page.getByTestId("crop-area").first();
+    await expect(area).toBeVisible();
+    await page.getByTestId("crop-zoom").fill("2");
+    await expect(area).toHaveAttribute("data-zoom", "2");
+    const before = await img.getAttribute("style");
+    const box = (await area.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2 + 30, { steps: 5 });
+    await page.mouse.up();
+    expect(await img.getAttribute("style")).not.toBe(before);
+    await page.mouse.wheel(0, -200);
+    await expect(area).not.toHaveAttribute("data-zoom", "2");
+    await expect(page.getByTestId("editor-panel-crop")).toBeVisible();
+    await page.getByTestId("crop-done").click();
+    await expect(page.getByTestId("crop-area")).toHaveCount(0);
+
+    // The user closes the panel; the rail stays.
+    await slot.click();
+    await page.getByTestId("editor-tool-replace").click();
+    await expect(picker).toBeVisible();
+    await page.getByTestId("editor-panel-close").click();
+    await expect(picker).toHaveCount(0);
+    await expect(rail).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
   });
 });
