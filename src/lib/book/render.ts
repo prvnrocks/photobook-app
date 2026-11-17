@@ -541,7 +541,11 @@ export function captionSizeCqw(c: Pick<RenderCaption, "fontSizeCqw">): number {
   return c.fontSizeCqw ?? CAPTION_FONT_SIZE_CQW;
 }
 
-/** Panel sizing per role: largest size in mm, smallest it may shrink to, line height, average glyph width (em). */
+/**
+ * Panel sizing per role: largest size in mm, smallest it may shrink to, line height, average glyph
+ * width (em). Since D-081 the renderer always passes the resolved face (panelCharEm / panelLineGrow);
+ * `charEm` here is only the fallback for callers without a face (tests, tools).
+ */
 const PANEL_TYPE: Record<TextRole, { maxMm: number; minMm: number; lineHeight: number; charEm: number }> = {
   title: { maxMm: 15, minMm: 5, lineHeight: 1.1, charEm: 0.42 },
   chapter: { maxMm: 8, minMm: 3.5, lineHeight: 1.05, charEm: 0.42 },
@@ -613,11 +617,16 @@ export function panelCharEm(f: Pick<ResolvedRoleFont, "font" | "textTransform" |
 
 /** Words (in code points) per paragraph; panels render `whitespace-pre-line`, so "\n" starts a line. */
 function panelParagraphs(text: string): number[][] {
+  // Same text the panel draws: only spaces/tabs collapse at the ends (pre-line keeps "\n"), and
+  // no-break spaces (U+00A0, U+202F) join words like the browser does.
   return text
-    .trim()
+    .replace(/^[ \t]+|[ \t]+$/g, "")
     .split("\n")
-    .map((p) => p.split(/\s+/).filter(Boolean).map((w) => Array.from(w).length));
+    .map((p) => p.split(BREAKABLE_SPACE).filter(Boolean).map((w) => Array.from(w).length));
 }
+
+/** Spaces a line may break at (whitespace minus no-break spaces and "\n", handled per paragraph). */
+const BREAKABLE_SPACE = /[ \t\r\f\v\u1680\u2000-\u200a\u2028\u2029\u205f\u3000]+/;
 
 /**
  * Lines a greedy word wrap needs at `perLine` characters per line (M29: was chars / perLine, which

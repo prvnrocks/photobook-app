@@ -64,6 +64,29 @@ describe("panelFontMm — word-aware fitting (D-081)", () => {
     const s = panelFontMm(words, "title", 60, 30);
     const perLine = Math.floor(60 / (s * TITLE.charEm));
     expect(greedyLines(words, perLine) * s * TITLE.lineHeight).toBeLessThanOrEqual(30 + 1e-6);
+    // Pre-D-081 char-count fitting, inline. Word fitting is never larger, and strictly smaller
+    // for some widths (where whole words need an extra line) — reverting to ceil(chars / perLine) fails.
+    const oldSize = (w: number, h: number) => {
+      let old = Math.min(TITLE.maxMm, h / TITLE.lineHeight);
+      while (old > TITLE.minMm) {
+        const per = Math.max(1, Math.floor(w / (old * TITLE.charEm)));
+        if (Math.ceil(Array.from(words).length / per) * old * TITLE.lineHeight <= h) break;
+        old = Math.max(TITLE.minMm, old * 0.92);
+      }
+      return Math.round(old * 100) / 100;
+    };
+    let smaller = 0;
+    for (let w = 30; w <= 120; w += 2) {
+      const now = panelFontMm(words, "title", w, 30);
+      expect(now, `w=${w}`).toBeLessThanOrEqual(oldSize(w, 30));
+      if (now < oldSize(w, 30)) smaller++;
+    }
+    expect(smaller).toBeGreaterThan(0);
+  });
+
+  it("leading newlines count as lines; a no-break space never splits a word", () => {
+    expect(panelFontMm("\n\n\nDesert weekend", "title", 100, 30)).toBeLessThan(panelFontMm("Desert weekend", "title", 100, 30));
+    expect(panelFontMm("Sara\u00a0&\u00a0Omar", "title", 30, 40)).toBeLessThanOrEqual(panelFontMm("Sara & Omar", "title", 30, 40));
   });
 
   it('"\\n" starts a new line (whitespace-pre-line): three one-letter lines cannot be set at the single-line size', () => {
