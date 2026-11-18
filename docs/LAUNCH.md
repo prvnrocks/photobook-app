@@ -180,8 +180,11 @@ Preview origin (e.g. the branch alias of a `staging` branch) that is also in the
       It widens `books_design_style_check` to the six styles (adds `magazine`, `editorial`); nothing else changes.
       M30 code without 2100 fails to create a magazine / editorial book (23514); older code never writes the new
       values and keeps working after 2100. Rolling the code back later needs no DB change.
+- [ ] **Storybook: push `20261119002200_storybook.sql` BEFORE deploying any code that uses it** (additive: two new
+      tables `storybooks` + `storybook_versions`, owner read-only, server-side writes; no existing table changes). The
+      current code does not use them, so it runs with or without 2200. Then run `rls_check.sql` → 179.
 - [ ] Supabase → SQL Editor → paste the whole of `supabase/tests/rls_check.sql` → Run. Expected: an error panel
-      starting with **`RLS OK — all 177 checks passed`** (176 before 2100, 175 before 2000, 173 before 1900) (raised on purpose; it rolls everything back). Anything
+      starting with **`RLS OK — all 179 checks passed`** (177 before 2200, 176 before 2100, 175 before 2000, 173 before 1900) (raised on purpose; it rolls everything back). Anything
       else (`RLS FAIL [...]`, permission denied) is a blocker.
 - [ ] Verify `private.auth_user_email` works (the warning emails depend on it; needs `postgres` to read
       `auth.users`):

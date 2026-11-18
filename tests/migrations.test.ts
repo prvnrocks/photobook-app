@@ -2907,7 +2907,7 @@ describe("migrations: Milestone 30 design styles magazine + editorial (2100, D-0
   it("exists right after 2000, is the latest migration, migration-first header with a rollback note", () => {
     expect(m, `${name} missing`).toBeDefined();
     expect(files.indexOf(name)).toBe(files.indexOf("20261115002000_album_confirmed.sql") + 1);
-    expect(files.at(-1)).toBe(name);
+    expect(files.indexOf(name)).toBe(files.indexOf("20261115002000_album_confirmed.sql") + 1); // latest until 2200
     expect(raw).toContain("D-090");
     expect(raw).toContain("additive: apply BEFORE code");
     expect(raw).toMatch(/Rollback:[\s\S]*never writes\s+(?:--\s+)?the new values/);
@@ -2938,12 +2938,65 @@ describe("migrations: Milestone 30 design styles magazine + editorial (2100, D-0
     for (const old of defs[0]!) expect(defs[1]).toContain(old);
   });
 
-  it("rls_check.sql covers 2100, counts 177 checks, and its backfill check names every style", () => {
+  it("rls_check.sql covers 2100 (177 checks then; 2200 → 179), and its backfill check names every style", () => {
     const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
     expect(rls).toContain(name);
     expect(rls).toContain("RLS FAIL [design styles m30]");
-    expect(rls).toContain("RLS OK — all 177 checks passed");
     expect(rls).toContain(`doc -> 'style' ->> 'designStyle' in (${designStyles.map((x) => `'${x}'`).join(", ")})`);
     expect(rls).toContain(`array[${[...designStyles].sort().map((x) => `'${x}'`).join(", ")}]`);
+  });
+});
+
+describe("migrations: AI Balanced Storybook foundation (2200)", () => {
+  const name = "20261119002200_storybook.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const flat = sql.replace(/\s+/g, " ");
+
+  it("is the latest migration and purely additive (no alter of existing tables, no drop, no backfill)", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files[files.length - 1]).toBe(name);
+    expect(sql).not.toMatch(/\bdrop\b/);
+    expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
+    expect(sql).not.toMatch(/security\s+definer/);
+    expect(sql).not.toMatch(/\b(update|delete\s+from|insert\s+into)\s+public\./);
+    const altered = [...sql.matchAll(/alter\s+table\s+public\.(\w+)/g)].map((x) => x[1]);
+    expect([...new Set(altered)].sort()).toEqual(["storybook_versions", "storybooks"]);
+    expect(sql).not.toMatch(/create\s+or\s+replace/);
+  });
+
+  it("creates storybooks + storybook_versions with cascade to books / users and server-only writes", () => {
+    expect(flat).toContain("book_id uuid primary key references public.books (id) on delete cascade");
+    expect(flat).toContain("book_id uuid not null references public.storybooks (book_id) on delete cascade");
+    expect(flat).toContain("run_id uuid references public.agent_runs (id) on delete set null");
+    expect(flat).toContain("constraint storybook_versions_book_version_key unique (book_id, version)");
+    expect(flat).toContain("revoke all on table public.storybooks, public.storybook_versions from anon, authenticated, public;");
+    expect(flat).toContain("grant select on table public.storybooks, public.storybook_versions to authenticated;");
+    expect(sql).not.toMatch(/grant\s+(?!select\b|all\b)[a-z, ]+on\s+table\s+public\.storybook/);
+    expect(sql).not.toMatch(/for\s+(insert|update|delete|all)\s+to/);
+    expect(sql).not.toMatch(/to\s+anon\b/);
+  });
+
+  it("DB checks match the zod enums and defaults (status, origin, 0.35 narrative target)", async () => {
+    const { STORYBOOK_STATUSES, VERSION_ORIGINS, STORY_BALANCE } = await import("@/lib/storybook/schemas");
+    expect(flat).toContain(`check (status in (${STORYBOOK_STATUSES.map((x) => `'${x}'`).join(", ")}))`);
+    expect(flat).toContain(`check (origin in (${VERSION_ORIGINS.map((x) => `'${x}'`).join(", ")}))`);
+    expect(flat).toContain(`target_narrative_share numeric(3, 2) not null default ${STORY_BALANCE.narrativeShare}`);
+  });
+
+  it("versions are immutable (trigger) and rls_check.sql covers 2200 with 179 checks", () => {
+    expect(flat).toContain("create trigger storybook_versions_immutable before update on public.storybook_versions");
+    expect(flat).toContain("revoke all on function private.storybook_versions_immutable() from public, anon, authenticated;");
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain(name);
+    expect(rls).toContain("RLS FAIL [storybooks]");
+    expect(rls).toContain("RLS FAIL [storybook versions]");
+    expect(rls).toContain("RLS OK — all 179 checks passed");
+  });
+
+  it("database.types.ts lists both tables (hand-edited)", () => {
+    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
+    expect(types).toMatch(/storybooks: \{\s*Row: \{[\s\S]*?target_narrative_share: number/);
+    expect(types).toMatch(/storybook_versions: \{\s*Row: \{[\s\S]*?parent_version: number \| null/);
   });
 });

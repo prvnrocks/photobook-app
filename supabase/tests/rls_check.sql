@@ -60,7 +60,10 @@
 --      nor clear it, service role can)
 --      and 20261118002100_design_styles_m30.sql (books_design_style_check
 --      widened to six styles: owner may insert 'magazine' / 'editorial',
---      unknown styles still rejected, still insert-only).
+--      unknown styles still rejected, still insert-only)
+--      and 20261119002200_storybook.sql (storybooks + storybook_versions:
+--      owner reads own rows only, no client writes, versions immutable and
+--      unique per book, cascade on book delete).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -69,7 +72,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 177 checks passed
+--       RLS OK — all 179 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -3740,6 +3743,128 @@ begin
   reset role;
   if not exists (select 1 from public.books where id = ds_m and design_style = 'editorial') then
     raise exception 'RLS FAIL [design styles m30]: service role could not write design_style editorial';
+  end if;
+  checks := checks + 1;
+
+  -- ===========================================================================
+  -- 2200 storybook: storybooks + storybook_versions (AI Balanced Storybook)
+  -- ===========================================================================
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  set local role service_role;
+  insert into public.storybooks (book_id, user_id) values (ds_m, uid_a);
+  insert into public.storybook_versions (book_id, user_id, version, origin, content)
+  values (ds_m, uid_a, 1, 'ai', '{"v":1}'::jsonb);
+  reset role;
+
+  -- storybooks: owner reads own row; B and anon see nothing; no client writes
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.storybooks where book_id = ds_m;
+  if n <> 1 then
+    raise exception 'RLS FAIL [storybooks]: owner cannot read own storybook';
+  end if;
+  begin
+    update public.storybooks set context = '{"x":1}'::jsonb where book_id = ds_m;
+    raise exception 'RLS FAIL [storybooks]: owner could update a storybook';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.storybooks (book_id, user_id) values (ds_b, uid_a);
+    raise exception 'RLS FAIL [storybooks]: owner could insert a storybook';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    delete from public.storybooks where book_id = ds_m;
+    raise exception 'RLS FAIL [storybooks]: owner could delete a storybook';
+  exception when insufficient_privilege then null;
+  end;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_b, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.storybooks;
+  if n <> 0 then
+    raise exception 'RLS FAIL [storybooks]: B can read A''s storybook';
+  end if;
+  reset role;
+  set local role anon;
+  begin
+    select count(*) into n from public.storybooks;
+    raise exception 'RLS FAIL [storybooks]: anon can select storybooks';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  -- checks hold for the service role too
+  set local role service_role;
+  begin
+    update public.storybooks set status = 'nope' where book_id = ds_m;
+    raise exception 'RLS FAIL [storybooks]: unknown status accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.storybooks set context = '[]'::jsonb where book_id = ds_m;
+    raise exception 'RLS FAIL [storybooks]: non-object context accepted';
+  exception when check_violation then null;
+  end;
+  reset role;
+  checks := checks + 1;
+
+  -- storybook_versions: owner reads own; no client writes; immutable; unique per book; cascade
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.storybook_versions where book_id = ds_m;
+  if n <> 1 then
+    raise exception 'RLS FAIL [storybook versions]: owner cannot read own version';
+  end if;
+  begin
+    insert into public.storybook_versions (book_id, user_id, version, origin, content)
+    values (ds_m, uid_a, 2, 'user', '{}'::jsonb);
+    raise exception 'RLS FAIL [storybook versions]: owner could insert a version';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    delete from public.storybook_versions where book_id = ds_m;
+    raise exception 'RLS FAIL [storybook versions]: owner could delete a version';
+  exception when insufficient_privilege then null;
+  end;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_b, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.storybook_versions;
+  if n <> 0 then
+    raise exception 'RLS FAIL [storybook versions]: B can read A''s versions';
+  end if;
+  reset role;
+  set local role service_role;
+  begin
+    update public.storybook_versions set content = '{"v":2}'::jsonb where book_id = ds_m;
+    raise exception 'RLS FAIL [storybook versions]: a version was updated in place';
+  exception when object_not_in_prerequisite_state then null;
+  end;
+  begin
+    insert into public.storybook_versions (book_id, user_id, version, origin, content)
+    values (ds_m, uid_a, 1, 'ai', '{}'::jsonb);
+    raise exception 'RLS FAIL [storybook versions]: duplicate version number accepted';
+  exception when unique_violation then null;
+  end;
+  begin
+    insert into public.storybook_versions (book_id, user_id, version, parent_version, origin, content)
+    values (ds_m, uid_a, 2, 2, 'ai', '{}'::jsonb);
+    raise exception 'RLS FAIL [storybook versions]: parent_version >= version accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.storybook_versions (book_id, user_id, version, origin, content)
+    values (ds_m, uid_a, 2, 'robot', '{}'::jsonb);
+    raise exception 'RLS FAIL [storybook versions]: unknown origin accepted';
+  exception when check_violation then null;
+  end;
+  reset role;
+  -- deleting the book removes the storybook and its versions
+  delete from public.books where id = ds_m;
+  if exists (select 1 from public.storybooks where book_id = ds_m)
+     or exists (select 1 from public.storybook_versions where book_id = ds_m) then
+    raise exception 'RLS FAIL [storybook versions]: book delete left story rows behind';
   end if;
   checks := checks + 1;
 

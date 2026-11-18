@@ -540,6 +540,107 @@ export type Database = {
         }
         Relationships: []
       }
+      storybook_versions: {
+        Row: {
+          book_id: string
+          content: Json
+          created_at: string
+          generator: Json
+          id: string
+          origin: string
+          parent_version: number | null
+          run_id: string | null
+          schema_version: number
+          user_id: string
+          version: number
+        }
+        Insert: {
+          book_id: string
+          content: Json
+          created_at?: string
+          generator?: Json
+          id?: string
+          origin: string
+          parent_version?: number | null
+          run_id?: string | null
+          schema_version?: number
+          user_id: string
+          version: number
+        }
+        Update: {
+          book_id?: string
+          content?: Json
+          created_at?: string
+          generator?: Json
+          id?: string
+          origin?: string
+          parent_version?: number | null
+          run_id?: string | null
+          schema_version?: number
+          user_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "storybook_versions_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "storybooks"
+            referencedColumns: ["book_id"]
+          },
+          {
+            foreignKeyName: "storybook_versions_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      storybooks: {
+        Row: {
+          book_id: string
+          context: Json
+          context_rev: number
+          created_at: string
+          current_version: number
+          status: string
+          target_narrative_share: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          book_id: string
+          context?: Json
+          context_rev?: number
+          created_at?: string
+          current_version?: number
+          status?: string
+          target_narrative_share?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          book_id?: string
+          context?: Json
+          context_rev?: number
+          created_at?: string
+          current_version?: number
+          status?: string
+          target_narrative_share?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "storybooks_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: true
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_memory: {
         Row: {
           prefs: Json
