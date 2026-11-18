@@ -66,7 +66,9 @@
 --      unique per book, cascade on book delete)
 --      and 20261119002300_photo_ingest.sql (photo_ingest: owner reads own
 --      rows only, no client writes, state / reason / hash checks, cascade on
---      photo delete).
+--      photo delete)
+--      and 20261119002400_photo_analyses.sql (photo_analyses: service role
+--      only, one ok row per cache key, cascade on photo delete).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -75,7 +77,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 180 checks passed
+--       RLS OK — all 181 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -3951,6 +3953,91 @@ begin
   insert into public.photo_ingest (photo_id, book_id, user_id, state, reason, fingerprint)
   values (photo_a, book_a, uid_a, 'rejected', 'ai_copy_not_jpeg', 's1:0123456789abcdef');
   reset role;
+  checks := checks + 1;
+
+  -- ===========================================================================
+  -- 2400 photo analyses: photo_analyses (Photo Intelligence cache + usage log)
+  -- ===========================================================================
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  set local role service_role;
+  insert into public.photo_analyses (user_id, book_id, photo_id, image_sha256, model, prompt_version,
+                                     mode, status, analysis, input_tokens, output_tokens, cost_usd)
+  values (uid_a, book_a, photo_a, repeat('b', 64), 'claude-opus-5-5', 'photo-insight-1',
+          'live', 'ok', '{"scene":"group"}'::jsonb, 900, 120, 0.006);
+  -- a second ok row for the same cache key is refused; error rows are not limited
+  begin
+    insert into public.photo_analyses (user_id, book_id, photo_id, image_sha256, model, prompt_version, mode, status, analysis)
+    values (uid_a, book_a, photo_a, repeat('b', 64), 'claude-opus-5-5', 'photo-insight-1', 'live', 'ok', '{}'::jsonb);
+    raise exception 'RLS FAIL [photo analyses]: two ok rows for one cache key';
+  exception when unique_violation then null;
+  end;
+  insert into public.photo_analyses (user_id, book_id, photo_id, image_sha256, model, prompt_version, mode, status, error)
+  values (uid_a, book_a, photo_a, repeat('b', 64), 'claude-opus-5-5', 'photo-insight-1', 'live', 'error', 'timeout'),
+         (uid_a, book_a, photo_a, repeat('b', 64), 'claude-opus-5-5', 'photo-insight-1', 'live', 'error', 'refusal');
+  -- another prompt version or model is a different key
+  insert into public.photo_analyses (user_id, book_id, photo_id, image_sha256, model, prompt_version, mode, status, analysis)
+  values (uid_a, book_a, photo_a, repeat('b', 64), 'claude-opus-5-5', 'photo-insight-2', 'live', 'ok', '{}'::jsonb),
+         (uid_a, book_a, photo_a, repeat('b', 64), 'claude-sonnet-5-5', 'photo-insight-1', 'live', 'ok', '{}'::jsonb);
+  begin
+    insert into public.photo_analyses (user_id, book_id, photo_id, image_sha256, model, prompt_version, mode, status)
+    values (uid_a, book_a, photo_a, repeat('c', 64), 'm', 'p', 'live', 'ok');
+    raise exception 'RLS FAIL [photo analyses]: ok row without an analysis accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.photo_analyses (user_id, book_id, photo_id, image_sha256, model, prompt_version, mode, status)
+    values (uid_a, book_a, photo_a, repeat('c', 64), 'm', 'p', 'live', 'error');
+    raise exception 'RLS FAIL [photo analyses]: error row without a code accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.photo_analyses (user_id, book_id, photo_id, image_sha256, model, prompt_version, mode, status, error)
+    values (uid_a, book_a, photo_a, 'not-a-hash', 'm', 'p', 'live', 'error', 'timeout');
+    raise exception 'RLS FAIL [photo analyses]: bad image hash accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.photo_analyses (user_id, book_id, photo_id, image_sha256, model, prompt_version, mode, status, error, cost_usd)
+    values (uid_a, book_a, photo_a, repeat('c', 64), 'm', 'p', 'live', 'error', 'timeout', -1);
+    raise exception 'RLS FAIL [photo analyses]: negative cost accepted';
+  exception when check_violation then null;
+  end;
+  reset role;
+  -- no client access at all: not even the owner
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  begin
+    select count(*) into n from public.photo_analyses;
+    raise exception 'RLS FAIL [photo analyses]: owner can select photo_analyses';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.photo_analyses (user_id, book_id, photo_id, image_sha256, model, prompt_version, mode, status, error)
+    values (uid_a, book_a, photo_a, repeat('d', 64), 'm', 'p', 'live', 'error', 'timeout');
+    raise exception 'RLS FAIL [photo analyses]: owner can insert photo_analyses';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    delete from public.photo_analyses;
+    raise exception 'RLS FAIL [photo analyses]: owner can delete photo_analyses';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  set local role anon;
+  begin
+    select count(*) into n from public.photo_analyses;
+    raise exception 'RLS FAIL [photo analyses]: anon can select photo_analyses';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  if not exists (select 1 from pg_class where oid = 'public.photo_analyses'::regclass and relrowsecurity) then
+    raise exception 'RLS FAIL [photo analyses]: RLS not enabled';
+  end if;
+  if exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'photo_analyses') then
+    raise exception 'RLS FAIL [photo analyses]: unexpected policy';
+  end if;
   checks := checks + 1;
 
   -- ---------------------------------------------------------------------------

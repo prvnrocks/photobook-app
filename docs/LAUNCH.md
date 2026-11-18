@@ -130,6 +130,10 @@ Preview origin (e.g. the branch alias of a `staging` branch) that is also in the
 | `ANTHROPIC_API_KEY` | live key | optional (costs money) | optional | **yes** | Anthropic Console → API keys |
 | `AI_MODE` | empty (auto → live with key) or `live` | empty / `replay` | `replay` | no | — (`off` \| `replay` \| `live`) |
 | `AI_DAILY_BUDGET_USD` | **`10`** at launch | e.g. `2` | empty | no | — (USD per Asia/Dubai day; `0` = AI off) |
+| `AI_PHOTO_MODEL` | empty (= `claude-opus-5-5`) | empty | empty | no | — (`claude-opus-5-5` \| `claude-sonnet-5-5`; photo analysis only) |
+| `AI_PHOTO_CONCURRENCY` | empty (= 4) | empty | empty | no | — (1–8 parallel photo analyses) |
+| `AI_PHOTO_TIMEOUT_MS` | empty (= 30000) | empty | empty | no | — (5000–120000 ms per request) |
+| `AI_PHOTO_MAX_RETRIES` | empty (= 2) | empty | empty | no | — (0–4 retries of 429 / 5xx / timeouts) |
 | `ADMIN_USER_IDS` | your uid (`:user`) | your uid | your uid | no (but not public) | Supabase → Authentication → Users. Gates `/admin/runs`, `/admin/ai-spend` and `scripts/comp-book.mjs` |
 | `MAPBOX_TOKEN` | prod token | same or dev token | dev token | **yes** | Mapbox → Account → Access tokens |
 | `STRIPE_SECRET_KEY` | `sk_live_…` / `rk_live_…` | `sk_test_…` | `sk_test_…` | **yes** | Stripe → Developers → API keys |
@@ -186,8 +190,12 @@ Preview origin (e.g. the branch alias of a `staging` branch) that is also in the
 - [ ] **Photo ingestion: push `20261119002300_photo_ingest.sql`** (additive: one new table `photo_ingest`, owner
       read-only, server-side writes). The ingestion code skips itself while the table is missing, so either order
       works; uploads and AI keep running. Then run `rls_check.sql` → 180.
+- [ ] **Photo Intelligence: push `20261119002400_photo_analyses.sql` BEFORE any code calls `analyzePhoto()` live**
+      (additive: one service-role-only table `photo_analyses` = analysis cache + token / cost log). Live calls are
+      refused while it is missing. Optional env: `AI_PHOTO_MODEL`, `AI_PHOTO_CONCURRENCY`, `AI_PHOTO_TIMEOUT_MS`,
+      `AI_PHOTO_MAX_RETRIES` (see `.env.example`). Then run `rls_check.sql` → 181.
 - [ ] Supabase → SQL Editor → paste the whole of `supabase/tests/rls_check.sql` → Run. Expected: an error panel
-      starting with **`RLS OK — all 180 checks passed`** (179 before 2300, 177 before 2200, 176 before 2100, 175 before 2000, 173 before 1900) (raised on purpose; it rolls everything back). Anything
+      starting with **`RLS OK — all 181 checks passed`** (180 before 2400, 179 before 2300, 177 before 2200, 176 before 2100, 175 before 2000, 173 before 1900) (raised on purpose; it rolls everything back). Anything
       else (`RLS FAIL [...]`, permission denied) is a blocker.
 - [ ] Verify `private.auth_user_email` works (the warning emails depend on it; needs `postgres` to read
       `auth.users`):

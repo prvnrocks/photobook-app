@@ -127,7 +127,7 @@ function effectiveTablePrivileges(): Acl {
 const sorted = (s: Set<string> | undefined) => [...(s ?? [])].sort();
 
 /** Tables with RLS on and no policies: only the service role (BYPASSRLS) touches them. */
-const SERVICE_ROLE_ONLY_TABLES = ["agent_steps", "book_unlock_attempts"];
+const SERVICE_ROLE_ONLY_TABLES = ["agent_steps", "book_unlock_attempts", "photo_analyses"];
 
 describe("migrations: files", () => {
   it("found the migration files and parsed them", () => {
@@ -3006,9 +3006,9 @@ describe("migrations: server-side photo ingestion status (2300)", () => {
   const sql = m?.sql ?? "";
   const flat = sql.replace(/\s+/g, " ");
 
-  it("is the latest migration and purely additive (photos, storage and existing functions untouched)", () => {
+  it("comes right after 2200 and is purely additive (photos, storage and existing functions untouched)", () => {
     expect(m, `${name} missing`).toBeDefined();
-    expect(files[files.length - 1]).toBe(name);
+    expect(files.indexOf(name)).toBe(files.indexOf("20261119002200_storybook.sql") + 1); // latest until 2400
     expect(sql).not.toMatch(/\bdrop\b/);
     expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
     expect(sql).not.toMatch(/security\s+definer/);
@@ -3040,12 +3040,61 @@ describe("migrations: server-side photo ingestion status (2300)", () => {
     expect(flat).toContain("constraint photo_ingest_verified_complete");
   });
 
-  it("rls_check.sql covers 2300 and counts 180 checks; database.types.ts lists the table", () => {
+  it("rls_check.sql covers 2300 (180 checks then; 2400 → 181); database.types.ts lists the table", () => {
     const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
     expect(rls).toContain(name);
     expect(rls).toContain("RLS FAIL [photo ingest]");
-    expect(rls).toContain("RLS OK — all 180 checks passed");
     const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
     expect(types).toMatch(/photo_ingest: \{\s*Row: \{[\s\S]*?ai_copy_sha256: string \| null/);
+  });
+});
+
+describe("migrations: Photo Intelligence cache + usage log (2400)", () => {
+  const name = "20261119002400_photo_analyses.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const flat = sql.replace(/\s+/g, " ");
+
+  it("is the latest migration and purely additive", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files[files.length - 1]).toBe(name);
+    expect(sql).not.toMatch(/\bdrop\b/);
+    expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
+    expect(sql).not.toMatch(/security\s+definer/);
+    expect(sql).not.toMatch(/create\s+(or\s+replace\s+)?(function|trigger)/);
+    expect(sql).not.toMatch(/\b(update|delete\s+from|insert\s+into)\s+(public|storage)\./);
+    const altered = [...sql.matchAll(/alter\s+table\s+public\.(\w+)/g)].map((x) => x[1]);
+    expect([...new Set(altered)]).toEqual(["photo_analyses"]);
+  });
+
+  it("service role only: RLS on, no policy, no client grant (the analysis describes photo content)", () => {
+    expect(flat).toContain("alter table public.photo_analyses enable row level security;");
+    expect(flat).toContain("revoke all on table public.photo_analyses from anon, authenticated, public;");
+    expect(flat).toContain("grant all on table public.photo_analyses to service_role;");
+    expect(sql).not.toMatch(/create\s+policy/);
+    expect(sql).not.toMatch(/to\s+(anon|authenticated)\b/);
+  });
+
+  it("cache key = user + image hash + model + prompt version, unique among ok rows; deleted with the photo", () => {
+    expect(flat).toContain("create unique index photo_analyses_cache_key_idx on public.photo_analyses (user_id, image_sha256, model, prompt_version) where status = 'ok';");
+    expect(flat).toContain("photo_id uuid not null references public.photos (id) on delete cascade");
+    expect(flat).toContain("book_id uuid not null references public.books (id) on delete cascade");
+    expect(flat).toContain("user_id uuid not null references auth.users (id) on delete cascade");
+  });
+
+  it("stores tokens, model, latency and cost for every call; error rows carry a code and no analysis", () => {
+    for (const col of ["input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "latency_ms"]) expect(flat).toContain(`${col} integer not null default 0`);
+    expect(flat).toContain("cost_usd numeric(10, 6) not null default 0");
+    expect(flat).toContain("check (mode in ('live', 'replay'))");
+    expect(flat).toContain("(status = 'error' and analysis is null and error is not null and error ~ '^[a-z_]{3,40}$')");
+  });
+
+  it("rls_check.sql covers 2400 and counts 181 checks; database.types.ts lists the table", () => {
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain(name);
+    expect(rls).toContain("RLS FAIL [photo analyses]");
+    expect(rls).toContain("RLS OK — all 181 checks passed");
+    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
+    expect(types).toMatch(/photo_analyses: \{\s*Row: \{[\s\S]*?image_sha256: string/);
   });
 });

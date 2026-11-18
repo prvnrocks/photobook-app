@@ -97,6 +97,36 @@ export const VersionOriginSchema = z.enum(VERSION_ORIGINS);
 
 // ---------------------------------------------------------------------------- ① Photo Intelligence
 
+/** What a photo can do in a story. A SUGGESTION from the vision model; the planner decides. */
+export const STORY_PHOTO_ROLES = ["establishing", "action", "portrait", "detail", "emotion", "closing"] as const;
+
+/** photos.drop_reason is free text (Curator reasons + the user's own removal); anything else is "other". */
+export const STORY_DROP_REASONS = [...DROP_REASONS, "user_removed", "other"] as const;
+
+export const VISION_LIMITS = { objects: 12, objectText: 40, activities: 6, activityText: 60 } as const;
+
+/**
+ * Output of the Photo Intelligence service (src/lib/ai/photo-intelligence) for one photo.
+ * Everything here is about what is VISIBLE. There is deliberately no field for names,
+ * relationships, dates, places or memories: those come only from metadata or the user.
+ * `atmosphere` is the one subjective field and says so in the data (`interpretation: true`).
+ */
+export const PhotoVisionSchema = z
+  .object({
+    description: text(STORY_LIMITS.factText),
+    scene: z.enum(SCENES),
+    objects: z.array(text(VISION_LIMITS.objectText)).max(VISION_LIMITS.objects),
+    activities: z.array(text(VISION_LIMITS.activityText)).max(VISION_LIMITS.activities),
+    peopleCount: int(0, 200),
+    /** From the stored pixel size, not from the model. */
+    orientation: z.enum(["portrait", "landscape", "square"]),
+    storyRole: z.enum(STORY_PHOTO_ROLES),
+    atmosphere: z.object({ label: z.enum(MOODS), interpretation: z.literal(true) }).strict(),
+    model: z.string().min(1).max(64),
+    promptVersion: z.string().min(1).max(40),
+  })
+  .strict();
+
 /**
  * One photo as the story layer sees it: the upload pipeline's metadata (exifr, dHash, blur,
  * colour) + the Curator's note (photos.ai) + optional story signals added by Task 2.
@@ -130,15 +160,17 @@ export const PhotoAnalysisSchema = z
       .nullable(),
     // decision (photos.status / drop_reason / user_override)
     keep: z.boolean(),
-    dropReason: z.enum(DROP_REASONS).nullable(),
+    dropReason: z.enum(STORY_DROP_REASONS).nullable(),
     userOverride: z.boolean(),
+    /** Photo Intelligence result (Task 3); absent until the photo was analysed. */
+    vision: PhotoVisionSchema.optional(),
     // story signals (optional; filled by Photo Intelligence in Task 2)
     story: z
       .object({
         /** 1–10: how much this photo carries the story (a turning point scores high). */
         significance: int(1, 10),
         /** What the photo can do in the story. */
-        role: z.enum(["establishing", "action", "portrait", "detail", "emotion", "closing"]),
+        role: z.enum(STORY_PHOTO_ROLES),
         tags: z.array(text(40)).max(STORY_LIMITS.tags),
       })
       .strict()

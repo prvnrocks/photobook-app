@@ -9,6 +9,7 @@ import type {
   NarrativeBlockSchema,
   PersonSchema,
   PhotoAnalysisSchema,
+  PhotoVisionSchema,
   ProvenanceSchema,
   StoryGeneratorSchema,
   StoryPageSchema,
@@ -26,6 +27,8 @@ export type StoryGenerator = z.infer<typeof StoryGeneratorSchema>;
 export type VersionOrigin = z.infer<typeof VersionOriginSchema>;
 /** Story-layer view of a photo. (The Curator's raw output type is `PhotoAnalysis` in lib/ai/schemas.) */
 export type PhotoAnalysis = z.infer<typeof PhotoAnalysisSchema>;
+/** Vision-model output for one photo (visible content only). */
+export type PhotoVision = z.infer<typeof PhotoVisionSchema>;
 export type Person = z.infer<typeof PersonSchema>;
 export type MemoryContext = z.infer<typeof MemoryContextSchema>;
 export type Moment = z.infer<typeof MomentSchema>;

@@ -13,6 +13,8 @@ export const PRICING: Readonly<
   Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }>
 > = {
   "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
+  /** Selectable for photo analysis only (AI_PHOTO_MODEL, src/lib/ai/photo-intelligence/config.ts). */
+  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 },
 };
 
 /**

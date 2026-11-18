@@ -418,6 +418,84 @@ export type Database = {
           },
         ]
       }
+      photo_analyses: {
+        Row: {
+          analysis: Json | null
+          book_id: string
+          cache_read_tokens: number
+          cache_write_tokens: number
+          cost_usd: number
+          created_at: string
+          error: string | null
+          id: string
+          image_sha256: string
+          input_tokens: number
+          latency_ms: number
+          mode: string
+          model: string
+          output_tokens: number
+          photo_id: string
+          prompt_version: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          analysis?: Json | null
+          book_id: string
+          cache_read_tokens?: number
+          cache_write_tokens?: number
+          cost_usd?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          image_sha256: string
+          input_tokens?: number
+          latency_ms?: number
+          mode: string
+          model: string
+          output_tokens?: number
+          photo_id: string
+          prompt_version: string
+          status: string
+          user_id: string
+        }
+        Update: {
+          analysis?: Json | null
+          book_id?: string
+          cache_read_tokens?: number
+          cache_write_tokens?: number
+          cost_usd?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          image_sha256?: string
+          input_tokens?: number
+          latency_ms?: number
+          mode?: string
+          model?: string
+          output_tokens?: number
+          photo_id?: string
+          prompt_version?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "photo_analyses_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "photo_analyses_photo_id_fkey"
+            columns: ["photo_id"]
+            isOneToOne: false
+            referencedRelation: "photos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       photo_ingest: {
         Row: {
           ai_copy_bytes: number | null
