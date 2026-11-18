@@ -25,6 +25,10 @@ import { GEOMETRIC_PORTRAIT_COVERS } from "./geometric/portrait/covers-m29";
 import { GEOMETRIC_LANDSCAPE_COVERS } from "./geometric/landscape/covers-m29";
 import { SCRAPBOOK_PORTRAIT_COVERS } from "./scrapbook/portrait/covers-m29";
 import { SCRAPBOOK_LANDSCAPE_COVERS } from "./scrapbook/landscape/covers-m29";
+import { MAGAZINE_PORTRAIT_COVERS, MAGAZINE_PORTRAIT_LAYOUTS } from "./magazine/portrait";
+import { MAGAZINE_LANDSCAPE_COVERS, MAGAZINE_LANDSCAPE_LAYOUTS } from "./magazine/landscape";
+import { EDITORIAL_PORTRAIT_COVERS, EDITORIAL_PORTRAIT_LAYOUTS } from "./editorial/portrait";
+import { EDITORIAL_LANDSCAPE_COVERS, EDITORIAL_LANDSCAPE_LAYOUTS } from "./editorial/landscape";
 
 /** The M1–M10a catalogue: classic A5 portrait. Order and geometry frozen (goldens, AI prompt cache). */
 export const CLASSIC_PORTRAIT_LAYOUTS: readonly Layout[] = [
@@ -52,6 +56,22 @@ export const M29_COVERS: readonly Layout[] = [
   ...SCRAPBOOK_LANDSCAPE_COVERS,
 ];
 
+/**
+ * M30 (D-090): the magazine + editorial catalogues, appended after everything above. Each
+ * style/format directory exports its layouts (auto cover, pages, spreads) and its user-chosen cover
+ * styles (autoPick: false); all layouts of the four directories first, then all cover styles.
+ */
+export const M30_LAYOUTS: readonly Layout[] = [
+  ...MAGAZINE_PORTRAIT_LAYOUTS,
+  ...MAGAZINE_LANDSCAPE_LAYOUTS,
+  ...EDITORIAL_PORTRAIT_LAYOUTS,
+  ...EDITORIAL_LANDSCAPE_LAYOUTS,
+  ...MAGAZINE_PORTRAIT_COVERS,
+  ...MAGAZINE_LANDSCAPE_COVERS,
+  ...EDITORIAL_PORTRAIT_COVERS,
+  ...EDITORIAL_LANDSCAPE_COVERS,
+];
+
 /** Every layout of every format and style (M10b). Format/style-aware code uses layoutsFor() in lib/book/spreads. */
 export const LAYOUTS: readonly Layout[] = [
   ...CLASSIC_PORTRAIT_LAYOUTS,
@@ -65,6 +85,8 @@ export const LAYOUTS: readonly Layout[] = [
   ...SCRAPBOOK_LANDSCAPE_LAYOUTS,
   // M29 cover styles (D-080): appended after everything above, autoPick:false (editor-only).
   ...M29_COVERS,
+  // M30 magazine + editorial (D-090): appended last (empty until the layout tasks land).
+  ...M30_LAYOUTS,
 ];
 
 export const LAYOUT_IDS: readonly string[] = LAYOUTS.map((l) => l.id);

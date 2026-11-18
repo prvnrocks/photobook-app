@@ -371,7 +371,7 @@ describe("M30 layout schema: blocks, ink, quarter turns, n", () => {
 
   it("text: ink enum, n int 0..5, bindings, roles", () => {
     const ok = (t: unknown) => LayoutTextSchema.safeParse(t).success;
-    expect([...TEXT_INKS]).toEqual(["ink", "muted", "accent", "paper"]);
+    expect([...TEXT_INKS]).toEqual(["ink", "muted", "accent", "paper", "accentOnDark"]);
     expect([...TEXT_BINDINGS]).toEqual(["chapterTitle", "dateLabel", "pageCaption", "coverTitle", "coverSubtitle", "chapterDescription", "coverLine"]);
     expect(ok(text())).toBe(true);
     for (const ink of TEXT_INKS) expect(ok(text({ ink }))).toBe(true);

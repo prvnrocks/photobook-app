@@ -466,13 +466,15 @@ function CaptionTarget({
         <span
           dir="auto"
           lang={model.lang}
-          className={cn("block w-full whitespace-pre-line break-words", INK_TEXT.caption[ink])}
+          className={cn("block w-full whitespace-pre-line break-words", model.color ? undefined : INK_TEXT.caption[ink])}
           style={{
             fontFamily: model.fontFamily,
             textAlign: model.align,
             fontSize: `${captionSizeCqw(model)}cqw`,
             lineHeight: CAPTION_LINE_HEIGHT,
             ...model.typography,
+            // M30: the layout's caption ink role (e.g. white on a dark panel) — same as the static caption.
+            ...(model.color ? { color: model.color } : {}),
           }}
           data-testid="page-caption"
         >

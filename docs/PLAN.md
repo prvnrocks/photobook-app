@@ -449,7 +449,7 @@ export const twoVertical: Layout = {
   // optional texts: [{ bind: "chapterTitle"|"dateLabel"|"pageCaption"|"coverTitle"|"coverSubtitle",
   //                    box: {x,y,w,h}, align: "start"|"center"|"end", font: "title"|"subtitle"|"year"|"chapter"|"caption" }]  // = styles.ts TEXT_ROLES
   // M30 (D-090): binds + "chapterDescription" (pages/spreads only) | "coverLine" (covers only, with n: 0..5 = chapter index);
-  //   fonts + "masthead" | "body"; texts[].ink?: "ink"|"muted"|"accent"|"paper"; texts[].rotate may be exactly 90 / -90
+  //   fonts + "masthead" | "body"; texts[].ink?: "ink"|"muted"|"accent"|"paper"|"accentOnDark" (T3: accent = deepened for white pages, accentOnDark = vivid, for panels + photos); texts[].rotate may be exactly 90 / -90
   //   (box = the final visual rect, ≥ 4 mm inside the trim).
   // optional blocks (max 8): [{ box, fill: "panel"|"accent"|"paper"|"ink", layer: "under"|"over",
   //   points?: [[x,y] × 3..8] in % of the box, when?: <bind> }]  // flat colour; under = below photos, over = above photos, below text;

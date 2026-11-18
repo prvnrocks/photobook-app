@@ -13,10 +13,10 @@ import {
   type RenderPhotos,
 } from "@/lib/book/render";
 import type { Ink } from "@/lib/design/backgrounds";
-import type { BookDoc, Caption } from "@/lib/book/types";
+import type { BookDoc, Caption, Layout } from "@/lib/book/types";
 import { BookCover } from "./BookCover";
 import { Decorations } from "./Decoration";
-import { BackgroundLayer, Box, INK_TEXT, PageFrame, PhotoSlot, TextPanel, type BookRenderMode } from "./PageParts";
+import { BackgroundLayer, Blocks, Box, INK_TEXT, PageFrame, PhotoSlot, TextPanel, type BookRenderMode } from "./PageParts";
 
 export type { BookRenderMode } from "./PageParts";
 export type { RenderCaption, RenderPhoto, RenderPhotos } from "@/lib/book/render";
@@ -50,10 +50,15 @@ export type BookPageProps = {
   className?: string;
   /** First visible page(s): eager load + high fetch priority. Print mode is always eager. */
   priority?: boolean;
+  /**
+   * Dev contact sheets + tests only: layouts looked up before the catalogue, so a layout that is not
+   * registered in src/lib/layouts renders through this same component. Never set in the product.
+   */
+  extraLayouts?: readonly Layout[];
 };
 
 export function BookPage(props: BookPageProps) {
-  const { doc, page, mode, photos, captionLang, renderSlotOverlay, renderCaption, renderCoverTextOverlay, className, priority } =
+  const { doc, page, mode, photos, captionLang, renderSlotOverlay, renderCaption, renderCoverTextOverlay, className, priority, extraLayouts } =
     props;
   if (page === "cover") {
     return (
@@ -66,11 +71,15 @@ export function BookPage(props: BookPageProps) {
         renderTextOverlay={renderCoverTextOverlay}
         className={className}
         priority={priority}
+        extraLayouts={extraLayouts}
       />
     );
   }
 
-  const m = pageRenderModel(doc, page, photos, captionLang, { bleed: mode === "print" });
+  const m = pageRenderModel(doc, page, photos, captionLang, {
+    bleed: mode === "print",
+    ...(extraLayouts ? { extraLayouts } : {}),
+  });
   if (!m) {
     const bookBg = resolveBackground(doc, null, photos);
     return (
@@ -103,6 +112,7 @@ export function BookPage(props: BookPageProps) {
       className={className}
       data={data}
     >
+      <Blocks items={m.blocks} layer="under" />
       <Decorations items={m.decorations} layer="under" />
       {m.slots.map((slot) => (
         <PhotoSlot
@@ -113,6 +123,7 @@ export function BookPage(props: BookPageProps) {
           overlay={renderSlotOverlay?.(slot.index, owner)}
         />
       ))}
+      <Blocks items={m.blocks} layer="over" />
       <Decorations items={m.decorations} layer="over" />
       {c && (editCaption !== null || c.text) ? (
         <Box
@@ -124,13 +135,14 @@ export function BookPage(props: BookPageProps) {
             <p
               dir="auto"
               lang={c.lang}
-              className={`w-full whitespace-pre-line break-words ${INK_TEXT.caption[bg.ink]}`}
+              className={`w-full whitespace-pre-line break-words${c.color ? "" : ` ${INK_TEXT.caption[bg.ink]}`}`}
               style={{
                 fontFamily: c.fontFamily,
                 textAlign: c.align,
                 fontSize: `${captionSizeCqw(c)}cqw`,
                 lineHeight: CAPTION_LINE_HEIGHT,
                 ...c.typography,
+                ...(c.color ? { color: c.color } : {}),
               }}
               data-testid="page-caption"
             >

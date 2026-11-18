@@ -7,6 +7,7 @@ import { rgbaOf, textureLayerStyle } from "@/lib/book/background-style";
 import {
   cropBoxStyle,
   rectStyle,
+  type RenderBlock,
   type RenderSlot,
   type RenderSlotLook,
   type RenderTextPanel,
@@ -394,34 +395,103 @@ const PANEL_INK: Record<TextRole, keyof typeof INK_TEXT> = {
   subtitle: "coverSubtitle",
   year: "coverSubtitle",
   caption: "caption",
-  // M30 T1: same ink family as title / caption until the renderer task (LayoutText.ink).
+  // M30: used only when the layout sets no `ink` role (panel.color wins).
   masthead: "coverTitle",
   body: "caption",
 };
+
+/**
+ * Layout colour blocks of one layer (M30), in layout order: a flat hex fill, optionally clipped to a
+ * polygon. Print-safe (plain vector fill — no filter, shadow, gradient or blend). Never take pointer
+ * events: editor taps reach the photo underneath.
+ */
+export function Blocks({ items, layer }: { items: readonly RenderBlock[] | undefined; layer: "under" | "over" }) {
+  if (!items) return null;
+  return (
+    <>
+      {items
+        .filter((b) => b.layer === layer)
+        .map((b, i) => (
+          <div
+            key={`${layer}-${i}`}
+            aria-hidden="true"
+            className="pointer-events-none absolute"
+            style={{ ...insetStyle(b.rect), background: b.color, ...(b.clipPath ? { clipPath: b.clipPath } : {}) }}
+            data-block={b.fill}
+            data-block-layer={layer}
+          />
+        ))}
+    </>
+  );
+}
+
+/**
+ * A block's box as four insets (not left/top + width/height): a far edge given as `bottom: 0%` lands
+ * on the page edge exactly, where top + height can round a sub-pixel short and let a sliver of the
+ * photo underneath show at small page sizes.
+ */
+function insetStyle(r: Rect): CSSProperties {
+  const pct = (n: number) => `${Math.round(n * 10000) / 10000}%`;
+  return { left: pct(r.x), top: pct(r.y), right: pct(100 - r.x - r.w), bottom: pct(100 - r.y - r.h) };
+}
+
+/** Class + style of a panel's <p>: the layout's `ink` colour (M30) when set, else the ink class. */
+function panelText(panel: RenderTextPanel, ink: Ink): { className: string; style: CSSProperties } {
+  return {
+    className: `w-full whitespace-pre-line break-words${panel.color ? "" : ` ${INK_TEXT[PANEL_INK[panel.role]][ink]}`}`,
+    style: {
+      fontFamily: panel.fontFamily,
+      textAlign: panel.align,
+      fontSize: `${panel.fontSizeCqw}cqw`,
+      lineHeight: panel.lineHeight,
+      ...panel.typography,
+      ...(panel.color ? { color: panel.color } : {}),
+    },
+  };
+}
 
 /**
  * A layout text panel (M10b A9): bound doc text in its design-style font, logical alignment,
  * dir="auto" (Arabic renders right-to-left with start/end mirrored). Vertically centred in its box.
  */
 export function TextPanel({ panel, ink }: { panel: RenderTextPanel; ink: Ink }) {
+  if (panel.quarter) return <QuarterTurnTextPanel panel={panel} quarter={panel.quarter} ink={ink} />;
   if (panel.plate || panel.rotate) return <PlatedTextPanel panel={panel} ink={ink} />;
+  const text = panelText(panel, ink);
   return (
     <Box rect={panel.rect} className="flex flex-col justify-center overflow-hidden" data={{ "data-text-panel": panel.bind }}>
-      <p
-        dir="auto"
-        lang={panel.lang}
-        className={`w-full whitespace-pre-line break-words ${INK_TEXT[PANEL_INK[panel.role]][ink]}`}
-        style={{
-          fontFamily: panel.fontFamily,
-          textAlign: panel.align,
-          fontSize: `${panel.fontSizeCqw}cqw`,
-          lineHeight: panel.lineHeight,
-          ...panel.typography,
-        }}
-        data-testid={`text-${panel.bind}`}
-      >
+      <p dir="auto" lang={panel.lang} className={text.className} style={text.style} data-testid={`text-${panel.bind}`}>
         {panel.text}
       </p>
+    </Box>
+  );
+}
+
+/**
+ * M30 vertical text (date strips): the panel box is the strip as seen on the page; the text box
+ * inside it is laid out sideways (strip height wide, strip width tall, same centre) and turned a
+ * quarter about its centre, so it lands exactly on the strip. Live text, dir="auto" as everywhere.
+ */
+function QuarterTurnTextPanel({
+  panel,
+  quarter,
+  ink,
+}: {
+  panel: RenderTextPanel;
+  quarter: NonNullable<RenderTextPanel["quarter"]>;
+  ink: Ink;
+}) {
+  const text = panelText(panel, ink);
+  return (
+    <Box rect={panel.rect} data={{ "data-text-panel": panel.bind, "data-text-turn": String(quarter.deg) }}>
+      <div
+        className="absolute flex flex-col justify-center overflow-hidden"
+        style={{ ...rectStyle(quarter.inner), ...rotateStyle(quarter.deg) }}
+      >
+        <p dir="auto" lang={panel.lang} className={text.className} style={text.style} data-testid={`text-${panel.bind}`}>
+          {panel.text}
+        </p>
+      </div>
     </Box>
   );
 }
@@ -433,7 +503,7 @@ export function TextPanel({ panel, ink }: { panel: RenderTextPanel; ink: Ink }) 
  */
 function PlatedTextPanel({ panel, ink }: { panel: RenderTextPanel; ink: Ink }) {
   const plate = panel.plate;
-  const textInk = plate ? plate.ink : ink;
+  const text = panelText(panel, plate ? plate.ink : ink);
   const data: Record<`data-${string}`, string> = { "data-text-panel": panel.bind };
   if (plate) data["data-text-plate"] = plate.art.stickerId;
   return (
@@ -443,19 +513,7 @@ function PlatedTextPanel({ panel, ink }: { panel: RenderTextPanel; ink: Ink }) {
         className="absolute flex flex-col justify-center overflow-hidden"
         style={rectStyle(plate ? plate.textBox : { x: 0, y: 0, w: 100, h: 100 })}
       >
-        <p
-          dir="auto"
-          lang={panel.lang}
-          className={`w-full whitespace-pre-line break-words ${INK_TEXT[PANEL_INK[panel.role]][textInk]}`}
-          style={{
-            fontFamily: panel.fontFamily,
-            textAlign: panel.align,
-            fontSize: `${panel.fontSizeCqw}cqw`,
-            lineHeight: panel.lineHeight,
-            ...panel.typography,
-          }}
-          data-testid={`text-${panel.bind}`}
-        >
+        <p dir="auto" lang={panel.lang} className={text.className} style={text.style} data-testid={`text-${panel.bind}`}>
           {panel.text}
         </p>
       </div>

@@ -464,8 +464,13 @@ export const TextPlateSchema = z.strictObject({
   tint: HexColorSchema.optional(),
 });
 
-/** M30: text colour roles of a panel — resolved by the design style's palette / colourway. */
-export const TEXT_INKS = ["ink", "muted", "accent", "paper"] as const;
+/**
+ * M30: text colour roles of a panel — resolved by the design style's palette / colourway
+ * (render.ts styleColours). "accent" = the accent deepened for white pages (accentOnLight);
+ * "accentOnDark" = the vivid accent, for text on a `panel` / `ink` block or over a photo;
+ * "paper" = white text for the same dark surfaces.
+ */
+export const TEXT_INKS = ["ink", "muted", "accent", "paper", "accentOnDark"] as const;
 /** M30: quarter turns a text panel may use besides the small tilts (vertical date strips). */
 export const TEXT_QUARTER_TURNS = [90, -90] as const;
 export const isQuarterTurn = (deg: number | undefined): boolean => deg === 90 || deg === -90;

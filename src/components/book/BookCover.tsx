@@ -3,9 +3,9 @@
 
 import type { ReactNode } from "react";
 import { coverRenderModel, resolveCoverBackground, scaleCqw, type RenderPhotos } from "@/lib/book/render";
-import type { BookDoc } from "@/lib/book/types";
+import type { BookDoc, Layout } from "@/lib/book/types";
 import { Decorations } from "./Decoration";
-import { BackgroundLayer, Box, INK_TEXT, PageFrame, PhotoSlot, SlicedPhotoSlot, TextPanel, type BookRenderMode } from "./PageParts";
+import { BackgroundLayer, Blocks, Box, INK_TEXT, PageFrame, PhotoSlot, SlicedPhotoSlot, TextPanel, type BookRenderMode } from "./PageParts";
 
 export type BookCoverProps = {
   doc: BookDoc;
@@ -20,10 +20,12 @@ export type BookCoverProps = {
   className?: string;
   /** Load the cover photo eagerly with high fetch priority (above the fold). */
   priority?: boolean;
+  /** Dev contact sheets + tests only (see BookPageProps.extraLayouts). */
+  extraLayouts?: readonly Layout[];
 };
 
-export function BookCover({ doc, mode, photos, captionLang, renderSlotOverlay, renderTextOverlay, className, priority }: BookCoverProps) {
-  const m = coverRenderModel(doc, photos, captionLang, { bleed: mode === "print" });
+export function BookCover({ doc, mode, photos, captionLang, renderSlotOverlay, renderTextOverlay, className, priority, extraLayouts }: BookCoverProps) {
+  const m = coverRenderModel(doc, photos, captionLang, { bleed: mode === "print", ...(extraLayouts ? { extraLayouts } : {}) });
   // The cover's own colour (cover.background), else the book default background.
   const bg = resolveCoverBackground(doc, photos);
   return (
@@ -35,6 +37,7 @@ export function BookCover({ doc, mode, photos, captionLang, renderSlotOverlay, r
       className={className}
       data={{ "data-page": "cover", "data-layout": m.layoutId }}
     >
+      <Blocks items={m.blocks} layer="under" />
       <Decorations items={m.decorations} layer="under" />
       {m.slot && m.slices ? (
         <SlicedPhotoSlot slot={m.slot} slices={m.slices} mode={mode} priority={priority} overlay={renderSlotOverlay?.(0)} />
@@ -46,6 +49,7 @@ export function BookCover({ doc, mode, photos, captionLang, renderSlotOverlay, r
           overlay={renderSlotOverlay?.(0)}
         />
       ) : null}
+      <Blocks items={m.blocks} layer="over" />
       <Decorations items={m.decorations} layer="over" />
       {m.panels ? (
         <>

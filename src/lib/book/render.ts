@@ -18,6 +18,7 @@ import {
 } from "./fonts";
 import type { BookFontName } from "@/lib/book/fonts";
 import { roleFont, STYLE_TOKENS, styleTokens, type ResolvedRoleFont, type TextRole } from "@/lib/design/styles";
+import { resolveColourway } from "@/lib/design/colourways";
 import {
   plateInk,
   resolveStickerId,
@@ -33,16 +34,19 @@ import type { TEXT_BINDINGS } from "./schema";
 import { clipPathFor, innerRadiusMm, paintOrder, photoRectOf, slotRadiusMm } from "./slot-geometry";
 import type {
   Background,
+  BlockFill,
   BookDoc,
   BookFormat,
   BookPage,
   Caption,
   Crop,
+  DesignStyle,
   Layout,
   LayoutDecoration,
   LayoutSlotDef,
   Rect,
   SlotShapeKind,
+  TextInk,
 } from "./types";
 
 /** A photo as the renderer needs it: a signed URL (web copy) + the stored pixel size. */
@@ -61,6 +65,16 @@ export interface RenderOptions {
    * past 0..100 %) and the crop is computed for the extended box. Text rects never change.
    */
   bleed?: boolean;
+  /**
+   * Layouts looked up BEFORE the catalogue (getLayout). Dev contact sheets and tests only: lets a
+   * layout that is not registered in src/lib/layouts render through the same code path.
+   */
+  extraLayouts?: readonly Layout[];
+}
+
+/** The layout `id`: from `opts.extraLayouts` when given there, else the catalogue. */
+function layoutOf(id: string, opts: RenderOptions): Layout | undefined {
+  return opts.extraLayouts?.find((l) => l.id === id) ?? getLayout(id);
 }
 
 /** Format-dependent inputs of a slot: page mm for bleed + crop maths (doc.format). */
@@ -187,6 +201,8 @@ export interface RenderCaption extends RenderText {
    */
   fontSizeCqw?: number;
   typography?: RenderTypography;
+  /** M30: text colour (hex) when the layout's pageCaption panel sets `ink`; absent = the page ink class. */
+  color?: string;
 }
 
 export type TextBinding = (typeof TEXT_BINDINGS)[number];
@@ -206,13 +222,36 @@ export interface RenderTextPanel extends RenderText {
   fontSizeCqw: number;
   lineHeight: number;
   typography: RenderTypography;
-  /** M10c: degrees clockwise about the panel centre (text stays live text). */
+  /** M10c: degrees clockwise about the panel centre (text stays live text). Never a quarter turn. */
   rotate?: number;
+  /**
+   * M30 vertical text (layout rotate ±90): `rect` is the strip as seen on the page; the text is laid
+   * out in `inner` (% of the panel box: the strip's height wide, its width tall, same centre) and
+   * that box is turned `deg` clockwise about its centre (90 reads top-to-bottom, -90 bottom-to-top).
+   */
+  quarter?: { deg: 90 | -90; inner: Rect };
+  /** M30: text colour (hex) from the layout's `ink` role; absent = the page / plate ink class. */
+  color?: string;
   /**
    * M10c label plate behind the text: artwork fills the panel box; the text sits in `textBox`
    * (% of the panel box, from the plate's catalogue textBox) in the plate's ink.
    */
   plate?: { art: RenderStickerArt; textBox: Rect; ink: "dark" | "light" };
+}
+
+/**
+ * A flat colour block of the layout (M30): panel backdrop, accent bar, rule, diagonal cut. Pure
+ * decoration. Print-safe by construction: one flat hex fill and an optional vector clip-path.
+ */
+export interface RenderBlock {
+  fill: BlockFill;
+  /** Resolved hex (styleColours) — never a CSS variable or color-mix. */
+  color: string;
+  /** % of the page (spread halves: shifted into this page). In print, edge blocks run into the bleed. */
+  rect: Rect;
+  layer: "under" | "over";
+  /** polygon(...) in % of `rect` (bleed-extended like polygon slots). */
+  clipPath?: string;
 }
 
 /** Which half of a spread layout a page shows (M10b): content comes from the left page (owner). */
@@ -237,6 +276,8 @@ export interface PageRenderModel {
   texts?: RenderTextPanel[];
   /** M10c decorations on this page (absent when none). Slots are already in paint order (z). */
   decorations?: RenderDecoration[];
+  /** M30 colour blocks on this page, in layout order (absent when none). */
+  blocks?: RenderBlock[];
 }
 
 export interface CoverRenderModel {
@@ -265,6 +306,8 @@ export interface CoverRenderModel {
   slices?: Rect[];
   /** M10c decorations on the cover (absent when none). */
   decorations?: RenderDecoration[];
+  /** M30 colour blocks on the cover, in layout order (absent when none). */
+  blocks?: RenderBlock[];
 }
 
 /**
@@ -579,16 +622,30 @@ export function captionSizeCqw(c: Pick<RenderCaption, "fontSizeCqw">): number {
  * width (em). Since D-081 the renderer always passes the resolved face (panelCharEm / panelLineGrow);
  * `charEm` here is only the fallback for callers without a face (tests, tools).
  */
-const PANEL_TYPE: Record<TextRole, { maxMm: number; minMm: number; lineHeight: number; charEm: number }> = {
+const PANEL_TYPE: Record<
+  TextRole,
+  { maxMm: number; minMm: number; lineHeight: number; charEm: number; /** Shrink until no word has to break (M30 masthead). */ wholeWords?: boolean }
+> = {
   title: { maxMm: 15, minMm: 5, lineHeight: 1.1, charEm: 0.42 },
   chapter: { maxMm: 8, minMm: 3.5, lineHeight: 1.05, charEm: 0.42 },
   subtitle: { maxMm: 4.6, minMm: 2.8, lineHeight: 1.25, charEm: 0.48 },
   year: { maxMm: 4.6, minMm: 2.8, lineHeight: 1.25, charEm: 0.48 },
   caption: { maxMm: 3.85, minMm: 2.8, lineHeight: CAPTION_LINE_HEIGHT, charEm: 0.48 },
-  // M30 T1 placeholders (= title / caption) so the record compiles; the renderer task sets real sizes.
-  masthead: { maxMm: 15, minMm: 5, lineHeight: 1.1, charEm: 0.42 },
-  body: { maxMm: 3.85, minMm: 2.8, lineHeight: CAPTION_LINE_HEIGHT, charEm: 0.48 },
+  // M30 (no pre-M30 layout uses these two roles). masthead: the magazine cover title — as large as
+  // its box allows up to 40 mm (Archivo Black caps ≈ 28 mm tall), one line for a short title,
+  // wrapping at word breaks only as it shrinks. body: a ≤ 45-word chapter description in a column.
+  masthead: { maxMm: 40, minMm: 7, lineHeight: 1, charEm: 0.75, wholeWords: true },
+  body: { maxMm: 3.2, minMm: 2.8, lineHeight: 1.45, charEm: 0.6 },
 };
+
+/** Panel sizing limits of a role (mm on the page) — layout tools and tests. */
+export function panelType(role: TextRole): { maxMm: number; minMm: number; lineHeight: number } {
+  const { maxMm, minMm, lineHeight } = PANEL_TYPE[role];
+  return { maxMm, minMm, lineHeight };
+}
+
+/** Extra width a single word may need over the average-advance estimate (masthead, see panelFontMm). */
+const WORD_SLACK = 1.05;
 
 /**
  * Font size (mm) for a text panel: the largest size ≤ maxMm whose estimated wrapped height fits
@@ -606,10 +663,14 @@ export function panelFontMm(
   const t = face ? { ...base, charEm: face.charEm, lineHeight: base.lineHeight * face.lineGrow } : base;
   const paragraphs = panelParagraphs(text);
   let size = Math.min(t.maxMm, boxHmm / t.lineHeight);
+  // wholeWords: the longest word must fit one line with WORD_SLACK to spare — one short word of
+  // wide capitals ("ADVENTURE") runs up to 12 % over the face's average advance.
+  const longest = t.wholeWords ? Math.max(1, ...paragraphs.flat()) * WORD_SLACK : 0;
   while (size > t.minMm) {
-    const perLine = Math.max(1, Math.floor(boxWmm / (size * t.charEm)));
+    const fit = boxWmm / (size * t.charEm);
+    const perLine = Math.max(1, Math.floor(fit));
     const lines = wrappedLines(paragraphs, perLine);
-    if (lines * size * t.lineHeight <= boxHmm) break;
+    if (lines * size * t.lineHeight <= boxHmm && longest <= fit) break;
     size = Math.max(t.minMm, size * 0.92);
   }
   return Math.round(size * 100) / 100;
@@ -632,11 +693,13 @@ const GLYPH_EM: Record<BookFontName, { lower: number; upper: number; line?: numb
   Lalezar: { lower: 0.36, upper: 0.49, line: 1.03 },
   GreatVibes: { lower: 0.31, upper: 0.81 },
   ArefRuqaa: { lower: 0.3, upper: 0.63, line: 1.045 },
-  // M30 T2: PROVISIONAL — mean hmtx advances of the static files (Poppins = the 700 weight), not
-  // yet measured in Chromium, and no `line` growth measured (Poppins' own line metrics are 1.5 em).
-  // T3 replaces both rows with Chromium measurements before any layout relies on the fitter.
-  ArchivoBlack: { lower: 0.57, upper: 0.69 },
-  Poppins: { lower: 0.53, upper: 0.59 },
+  // M30 T3: measured in Chromium (Playwright, the book faces loaded on /dev-book-page, 100 px, mixed
+  // titles + a 45-word paragraph): Archivo Black 0.560 / caps 0.683; Poppins 700 0.521 / caps 0.581
+  // (Poppins 400: 0.506 / 0.555 — the heavier weight is used, like every row). No `line` growth:
+  // lines of Archivo Black, Poppins, Tajawal and Lalezar text measured exactly the CSS line-height at
+  // 1, 1.05, 1.1, 1.25 and 1.45 (the panel line-heights), also with digits and symbols.
+  ArchivoBlack: { lower: 0.56, upper: 0.68 },
+  Poppins: { lower: 0.52, upper: 0.58 },
 };
 /** Slack on top of the average width: real words are not average and lines don't pack perfectly. */
 const GLYPH_SAFETY = 1.1;
@@ -712,13 +775,15 @@ export function captionAlignOn(layout: Pick<Layout, "style" | "texts">, c: Pick<
  * Design styles whose text panels sit against layout artwork (accent shapes, rules, plates):
  * their side is part of the design, so it must not flip with the script (M10c G1 fix).
  */
-const SIDE_LOCKED_STYLES: ReadonlySet<string> = new Set(["geometric", "scrapbook"]);
+// M30: magazine + editorial too — their text sits on panels, beside bars and diagonal cuts.
+const SIDE_LOCKED_STYLES: ReadonlySet<string> = new Set(["geometric", "scrapbook", "magazine", "editorial"]);
 
 /**
  * CSS text-align of a layout panel's `align` on `style`. Classic / modern keep the logical value
  * (start/end follow dir="auto", markup frozen by goldens). Geometric / scrapbook use the physical
  * side the layout was drawn for (start = left, end = right) so an Arabic chapter title stays next
- * to its accent; dir="auto" still gives Arabic its shaping and word order.
+ * to its accent; dir="auto" still gives Arabic its shaping and word order. Magazine / editorial
+ * (M30) are locked the same way.
  */
 export function panelAlign(style: string | undefined, align: RenderAlign): RenderAlign {
   if (!style || !SIDE_LOCKED_STYLES.has(style)) return align;
@@ -785,26 +850,110 @@ function typographyOf(f: ReturnType<typeof roleFont>): RenderTypography {
   };
 }
 
-function boundText(doc: BookDoc, bind: TextBinding, owner: BookPage | null): string {
+function boundText(doc: BookDoc, bind: TextBinding, owner: BookPage | null, n = 0): string {
   switch (bind) {
     case "coverTitle":
       return doc.cover.title;
     case "coverSubtitle":
       return doc.cover.subtitle;
     case "chapterTitle":
-    case "dateLabel": {
+    case "dateLabel":
+    case "chapterDescription": {
       const id = owner?.chapterId;
       const ch = id ? doc.chapters.find((c) => c.id === id) : undefined;
+      if (bind === "chapterDescription") return ch?.description?.text ?? "";
       return (bind === "chapterTitle" ? ch?.title : ch?.dateLabel) ?? "";
     }
     case "pageCaption":
       return owner?.caption?.text ?? "";
-    // M30 T1: schema only — no layout uses these binds yet. Empty text = the panel is not drawn;
-    // the renderer task resolves them (chapter description; title of chapter `n`).
-    case "chapterDescription":
+    // M30: a cover line = the title of chapter `n` (doc order); no such chapter → not drawn.
     case "coverLine":
-      return "";
+      return doc.chapters[n]?.title ?? "";
   }
+}
+
+// --- Colour roles + blocks (M30) -----------------------------------------------------------------
+
+/** Every colour a layout can ask for by role, as literal hex (no CSS variables, no color-mix). */
+export interface StyleColours {
+  /** Title text on light pages; fill "ink". */
+  ink: string;
+  /** Secondary text on light pages. */
+  muted: string;
+  /** Page paper; fill "paper". */
+  paper: string;
+  /** Vivid accent: fill "accent", text ink "accentOnDark". */
+  accent: string;
+  /** Accent deepened for white pages: text ink "accent". */
+  accentOnLight: string;
+  /** Dark text-panel fill: fill "panel". */
+  panel: string;
+  /** Text on dark panels and photos: text ink "paper". */
+  onPanel: string;
+}
+
+/**
+ * Colours of `style` for a book whose stored colourway id is `colourwayId` (absent / unknown / of
+ * another style → the style's default colourway). Styles without a palette or colourways (classic,
+ * modern; geometric + scrapbook have no colourways) get neutral fallbacks — none of their layouts
+ * uses blocks or `ink`.
+ */
+export function styleColours(style: DesignStyle | null | undefined, colourwayId?: string | null): StyleColours {
+  const p = styleTokens(style).palette;
+  const cw = resolveColourway(style, colourwayId);
+  const ink = p?.ink ?? "#171717";
+  return {
+    ink,
+    muted: p?.muted ?? "#525252",
+    paper: p?.background ?? "#FFFFFF",
+    accent: cw?.accent ?? p?.accent ?? ink,
+    accentOnLight: cw?.accentOnLight ?? p?.accent ?? ink,
+    panel: cw?.panel ?? ink,
+    onPanel: cw?.onPanel ?? "#FFFFFF",
+  };
+}
+
+const FILL_COLOUR: Record<BlockFill, keyof StyleColours> = { panel: "panel", accent: "accent", paper: "paper", ink: "ink" };
+const INK_COLOUR: Record<TextInk, keyof StyleColours> = {
+  ink: "ink",
+  muted: "muted",
+  accent: "accentOnLight",
+  accentOnDark: "accent",
+  paper: "onPanel",
+};
+
+/**
+ * Blocks of `layout` visible on this page. A block with `when` is dropped when that binding has no
+ * text here (description panels collapse). In print, sides on a trim edge run into the bleed (a
+ * spread's box: only the spread's outer edges) and a polygon is carried out with them, exactly
+ * like polygon photo slots.
+ */
+function renderBlocks(
+  doc: BookDoc,
+  layout: Layout,
+  owner: BookPage | null,
+  offset: number,
+  opts: RenderOptions,
+): RenderBlock[] {
+  const out: RenderBlock[] = [];
+  if (!layout.blocks?.length) return out;
+  const page = pageMm(doc.format);
+  const colours = styleColours(layout.style, doc.style.colourway?.id);
+  for (const b of layout.blocks) {
+    if (b.when && !boundText(doc, b.when, owner).trim()) continue;
+    const full = !opts.bleed ? b.box : layout.role === "spread" ? spreadBleedRect(b.box, page).pct : bleedRect(b.box, page).pct;
+    const rect = shiftRect(full, offset);
+    if (!onPage(rect)) continue;
+    const clipPath = b.points ? clipPathFor({ kind: "polygon", points: b.points }, b.box, full, page) : undefined;
+    out.push({
+      fill: b.fill,
+      color: colours[FILL_COLOUR[b.fill]],
+      rect: { x: rect.x, y: rect.y, w: rect.w, h: rect.h },
+      layer: b.layer,
+      ...(clipPath ? { clipPath } : {}),
+    });
+  }
+  return out;
 }
 
 /** Panels of `layout` (except pageCaption) visible on this page, with non-empty bound text. */
@@ -818,22 +967,27 @@ function textPanels(
 ): RenderTextPanel[] {
   const page = pageMm(doc.format);
   const out: RenderTextPanel[] = [];
+  const colours = layout.texts?.some((t) => t.ink) ? styleColours(layout.style, doc.style.colourway?.id) : null;
   for (const t of layout.texts ?? []) {
     if (t.bind === "pageCaption" || !binds.includes(t.bind)) continue;
     const rect = shiftRect(t.box, offset);
     if (!onPage(rect)) continue;
-    const text = boundText(doc, t.bind, owner);
+    const text = boundText(doc, t.bind, owner, t.n);
     if (!text.trim()) continue;
     const f = roleFont(layout.style, t.font, text, { captionLang });
+    // M30 vertical text: the box is the strip as seen; the line runs along its height. No plate.
+    const quarter = isQuarterTurn(t.rotate);
     // Plated text sizes to the plate's text box (inside the panel box).
-    const plateDef = t.plate ? resolveStickerId(t.plate.id, doc.occasion) : undefined;
+    const plateDef = t.plate && !quarter ? resolveStickerId(t.plate.id, doc.occasion) : undefined;
     const tb = plateDef ? STICKERS[plateDef].textBox : undefined;
     const textBox: Rect = tb ? { x: tb.x, y: tb.y, w: tb.w, h: tb.h } : { x: 0, y: 0, w: 100, h: 100 };
+    const boxWmm = (rect.w / 100) * page.w * (textBox.w / 100);
+    const boxHmm = (rect.h / 100) * page.h * (textBox.h / 100);
     const sizeMm = panelFontMm(
       text,
       t.font,
-      (rect.w / 100) * page.w * (textBox.w / 100),
-      (rect.h / 100) * page.h * (textBox.h / 100) * (t.fit ?? 1),
+      quarter ? boxHmm : boxWmm,
+      (quarter ? boxWmm : boxHmm) * (t.fit ?? 1),
       { charEm: panelCharEm(f), lineGrow: panelLineGrow(f) },
     );
     out.push({
@@ -847,13 +1001,27 @@ function textPanels(
       fontSizeCqw: round4((sizeMm / page.w) * 100),
       lineHeight: PANEL_TYPE[t.font].lineHeight,
       typography: typographyOf(f),
-      ...(t.rotate ? { rotate: t.rotate } : {}),
+      ...(quarter ? { quarter: { deg: t.rotate as 90 | -90, inner: quarterInner(boxWmm, boxHmm) } } : t.rotate ? { rotate: t.rotate } : {}),
+      ...(colours && t.ink ? { color: colours[INK_COLOUR[t.ink]] } : {}),
       ...(plateDef && t.plate
         ? { plate: { art: stickerArt(plateDef, t.plate.tint), textBox, ink: plateInk(plateDef, t.plate.tint) } }
         : {}),
     });
   }
   return out;
+}
+
+/** ±90 exactly (schema.ts isQuarterTurn; repeated here so the renderer never imports zod at runtime). */
+const isQuarterTurn = (deg: number | undefined): deg is 90 | -90 => deg === 90 || deg === -90;
+
+/**
+ * The unrotated text box of a quarter-turned panel, in % of the panel box (`wMm` × `hMm` as seen):
+ * hMm wide, wMm tall, same centre — turning it ±90° lands it exactly on the panel box.
+ */
+function quarterInner(wMm: number, hMm: number): Rect {
+  const w = round4((hMm / wMm) * 100);
+  const h = round4((wMm / hMm) * 100);
+  return { x: round4((100 - w) / 2), y: round4((100 - h) / 2), w, h };
 }
 
 /** Render model of `doc.pages[pageIndex]`; null when the index is out of range. */
@@ -866,7 +1034,7 @@ export function pageRenderModel(
 ): PageRenderModel | null {
   const page = Number.isInteger(pageIndex) ? doc.pages[pageIndex] : undefined;
   if (!page) return null;
-  const layout = getLayout(page.layout);
+  const layout = layoutOf(page.layout, opts);
   if (!layout || (layout.role !== "page" && layout.role !== "spread")) {
     return { kind: "page", pageId: page.id, layoutId: page.layout, knownLayout: false, slots: [], caption: null };
   }
@@ -924,13 +1092,17 @@ export function pageRenderModel(
         fontFamily: f.fontFamily,
         ...sizing,
         typography: typographyOf(f),
+        ...(panel?.ink ? { color: styleColours(layout.style, doc.style.colourway?.id)[INK_COLOUR[panel.ink]] } : {}),
       };
     }
   }
 
-  const texts = layout.texts ? textPanels(doc, layout, owner, offset, captionLang, ["chapterTitle", "dateLabel"]) : [];
+  const texts = layout.texts
+    ? textPanels(doc, layout, owner, offset, captionLang, ["chapterTitle", "dateLabel", "chapterDescription"])
+    : [];
   // Decorations are layout artwork: drawn on orphaned right halves too (like the background).
   const decorations = layout.decorations ? renderDecorations(layout, doc.occasion, offset) : [];
+  const blocks = renderBlocks(doc, layout, owner, offset, opts);
   return {
     kind: "page",
     pageId: page.id,
@@ -941,6 +1113,7 @@ export function pageRenderModel(
     ...(half ? { spread: half } : {}),
     ...(texts.length > 0 ? { texts } : {}),
     ...(decorations.length > 0 ? { decorations } : {}),
+    ...(blocks.length > 0 ? { blocks } : {}),
   };
 }
 
@@ -969,7 +1142,7 @@ export function coverRenderModel(
   captionLang = "en",
   opts: RenderOptions = {},
 ): CoverRenderModel {
-  const layout = getLayout(doc.cover.layout);
+  const layout = layoutOf(doc.cover.layout, opts);
   const known = !!layout && layout.role === "cover";
   const rect = known ? layout.slots[0] : undefined;
   const { title, subtitle } = doc.cover;
@@ -981,9 +1154,10 @@ export function coverRenderModel(
   const slot = rect
     ? renderSlot(0, rect, doc.cover.photoId, DEFAULT_CROP, photos, { ...opts, format: doc.format, filters: doc.filters }, slices0 ? undefined : layout)
     : null;
-  const panels = known && layout.texts?.length ? textPanels(doc, layout, null, 0, captionLang, ["coverTitle", "coverSubtitle"]) : null;
+  const panels = known && layout.texts?.length ? textPanels(doc, layout, null, 0, captionLang, ["coverTitle", "coverSubtitle", "coverLine"]) : null;
   const slices = known && slot && layout.slices ? sliceWindows(layout.slices, slot.rect, doc.format, !!opts.bleed) : null;
   const decorations = known && layout.decorations ? renderDecorations(layout, doc.occasion, 0) : [];
+  const blocks = known ? renderBlocks(doc, layout, null, 0, opts) : [];
   return {
     kind: "cover",
     layoutId: doc.cover.layout,
@@ -1005,6 +1179,7 @@ export function coverRenderModel(
     ...(panels ? { panels } : {}),
     ...(slices ? { slices } : {}),
     ...(decorations.length > 0 ? { decorations } : {}),
+    ...(blocks.length > 0 ? { blocks } : {}),
   };
 }
 
