@@ -353,7 +353,7 @@ describe("M30 layout schema: blocks, ink, quarter turns, n", () => {
 
   it("blocks: strict objects, fill / layer enums, polygon 3..8 points in 0..100, max 8", () => {
     const ok = (blocks: unknown) => LayoutSchema.safeParse({ ...PAGE, blocks }).success;
-    expect([...BLOCK_FILLS]).toEqual(["panel", "accent", "paper", "ink"]);
+    expect([...BLOCK_FILLS]).toEqual(["panel", "accent", "paper", "ink", "accentOnLight", "scrim"]);
     expect(MAX_LAYOUT_BLOCKS).toBe(8);
     for (const fill of BLOCK_FILLS) for (const layer of ["under", "over"] as const) expect(ok([block({ fill, layer })])).toBe(true);
     expect(ok([block({ points: TRIANGLE, when: "chapterDescription" })])).toBe(true);

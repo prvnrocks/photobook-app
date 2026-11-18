@@ -3,14 +3,20 @@
 // titles (masthead role = Poppins 700 sentence case), small quiet text, hairlines, a vertical strip
 // with the date turned a quarter.
 //
-// Drawn in page mm (148 × 210, y down) through ./geometry. Text keeps 12 mm from the left/right
-// trim and 14 mm from top/bottom. Rules are `ink` (the default colourway's accent is near-white).
+// Drawn in page mm (148 × 210, y down) through ../geometry. Text keeps 12 mm from the left/right
+// trim and 14 mm from top/bottom. Rules, hairlines, dates and the first cover line take the colourway accent (`accentOnLight` /
+// text ink `accent` = the page ink in the default colourway).
 // Text panels centre their text vertically, so boxes are kept close to the expected text height.
 // Every chapter opener still reads as a finished page when the chapter has no description: the
 // short rule collapses with it (`when`) and the description sits where white space is natural.
 
 import type { Layout, LayoutBlock, LayoutText } from "@/lib/book/types";
-import { diagRule, hRule, poly, rect, vRule, H, W, type Pt } from "./geometry";
+import { BAR, diagRule, hRule, PORTRAIT, RULE, vRule, type Pt } from "../geometry";
+
+const { W, H, rect, poly, text, block } = PORTRAIT;
+const COVER = { role: "cover", style: "editorial", format: "A5_PORTRAIT" } as const;
+const PAGE = { role: "page", style: "editorial", format: "A5_PORTRAIT" } as const;
+const SPREAD = { role: "spread", style: "editorial", format: "A5_PORTRAIT" } as const;
 
 // --- the style's diagonal ---------------------------------------------------------------------------
 /** Slope of every big cut: rises 54 mm across the page width. */
@@ -28,7 +34,7 @@ const above = (y0: number): Pt[] => [[0, 0], [W, 0], cutLine(y0)[1], cutLine(y0)
 const ECHO = 7;
 
 // --- the Swiss grid pages: date strip + hairline on the left, photos in two 52 mm columns -----------
-const STRIP_DATE: LayoutText = { bind: "dateLabel", box: rect(12, 14, 20, 84), align: "end", font: "year", ink: "muted", rotate: -90 };
+const STRIP_DATE: LayoutText = text("dateLabel", [12, 14, 20, 84], "year", "accent", { align: "end", rotate: -90 });
 const STRIP_RULE: LayoutBlock = vRule(23, 14, 196);
 const COL1: [number, number] = [28, 80];
 const COL2: [number, number] = [84, 136];
@@ -43,19 +49,17 @@ const COL2: [number, number] = [84, 136];
 export const editorialPortraitCover: Layout = {
   id: "ed-p-cover",
   name: "Cover: diagonal photo, heavy title",
-  role: "cover",
-  style: "editorial",
-  format: "A5_PORTRAIT",
+  ...COVER,
   photoCount: 1,
   prefers: ["any"],
   slots: [poly(below(140))],
   caption: rect(12, 16, 120, 66),
-  blocks: [diagRule(...cutLine(140 - ECHO)), hRule(12, 26, 73, { when: "coverLine", mm: 0.6 })],
+  blocks: [diagRule(...cutLine(140 - ECHO)), hRule(12, 12 + BAR.len, 9, { mm: BAR.t }), hRule(12, 26, 73, { when: "coverLine", mm: RULE.t })],
   texts: [
-    { bind: "coverTitle", box: rect(12, 16, 120, 66), align: "start", font: "masthead", ink: "ink" },
-    { bind: "coverSubtitle", box: rect(128, 16, 136, 72), align: "start", font: "year", ink: "muted", rotate: 90 },
-    { bind: "coverLine", n: 0, box: rect(12, 78, 84, 84.5), align: "start", font: "subtitle", ink: "ink" },
-    { bind: "coverLine", n: 1, box: rect(12, 86, 84, 92.5), align: "start", font: "subtitle", ink: "muted" },
+    text("coverTitle", [12, 16, 120, 66], "masthead", "ink"),
+    text("coverSubtitle", [128, 16, 136, 72], "year", "accent", { rotate: 90 }),
+    text("coverLine", [12, 78, 84, 84.5], "subtitle", "accent", { n: 0 }),
+    text("coverLine", [12, 86, 84, 92.5], "subtitle", "muted", { n: 1 }),
   ],
 };
 
@@ -65,18 +69,16 @@ export const editorialPortraitCover: Layout = {
 export const editorialPortraitOneOpener: Layout = {
   id: "ed-p-one-opener",
   name: "Chapter opener: text above a diagonal photo",
-  role: "page",
-  style: "editorial",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 1,
   prefers: ["any"],
   slots: [poly(below(138))],
   caption: null,
-  blocks: [diagRule(...cutLine(138 - ECHO)), hRule(12, 26, 47, { when: "chapterDescription", mm: 0.6 })],
+  blocks: [diagRule(...cutLine(138 - ECHO)), hRule(12, 26, 47, { when: "chapterDescription", mm: RULE.t })],
   texts: [
-    { bind: "chapterTitle", box: rect(12, 14, 116, 42), align: "start", font: "masthead", ink: "ink" },
-    { bind: "chapterDescription", box: rect(12, 53, 98, 91), align: "start", font: "body", ink: "muted" },
-    { bind: "dateLabel", box: rect(128, 14, 136, 66), align: "start", font: "year", ink: "muted", rotate: 90 },
+    text("chapterTitle", [12, 14, 116, 42], "masthead", "ink"),
+    text("chapterDescription", [12, 53, 98, 91], "body", "muted"),
+    text("dateLabel", [128, 14, 136, 66], "year", "accent", { rotate: 90 }),
   ],
 };
 
@@ -85,19 +87,17 @@ const COLUMN_CAPTION = rect(84, 148, 136, 180);
 export const editorialPortraitOneColumn: Layout = {
   id: "ed-p-one-column",
   name: "Chapter opener: tall photo + text column",
-  role: "page",
-  style: "editorial",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 1,
   prefers: ["portrait"],
   slots: [rect(0, 0, 72, H)],
   caption: COLUMN_CAPTION,
-  blocks: [hRule(84, 98, 66, { when: "chapterDescription", mm: 0.6 })],
+  blocks: [hRule(84, 98, 66, { when: "chapterDescription", mm: RULE.t })],
   texts: [
-    { bind: "chapterTitle", box: rect(84, 14, 136, 60), align: "start", font: "masthead", ink: "ink" },
-    { bind: "chapterDescription", box: rect(84, 72, 136, 132), align: "start", font: "body", ink: "muted" },
-    { bind: "pageCaption", box: COLUMN_CAPTION, align: "start", font: "caption", ink: "ink" },
-    { bind: "dateLabel", box: rect(84, 189, 136, 196), align: "start", font: "year", ink: "muted" },
+    text("chapterTitle", [84, 14, 136, 60], "masthead", "ink"),
+    text("chapterDescription", [84, 72, 136, 132], "body", "muted"),
+    text("pageCaption", COLUMN_CAPTION, "caption", "ink"),
+    text("dateLabel", [84, 189, 136, 196], "year", "accent"),
   ],
 };
 
@@ -108,17 +108,15 @@ const DIAGONAL_DATE = rect(128, 138, 136, 196);
 export const editorialPortraitOneDiagonal: Layout = {
   id: "ed-p-one-diagonal",
   name: "1 photo, diagonal cut + caption",
-  role: "page",
-  style: "editorial",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 1,
   prefers: ["any"],
   slots: [poly(DIAGONAL_PHOTO)],
   caption: DIAGONAL_CAPTION,
   blocks: [diagRule(...cutLine(172 + ECHO))],
   texts: [
-    { bind: "pageCaption", box: DIAGONAL_CAPTION, align: "start", font: "caption", ink: "ink" },
-    { bind: "dateLabel", box: DIAGONAL_DATE, align: "start", font: "year", ink: "muted", rotate: -90 },
+    text("pageCaption", DIAGONAL_CAPTION, "caption", "ink"),
+    text("dateLabel", DIAGONAL_DATE, "year", "accent", { rotate: -90 }),
   ],
 };
 
@@ -126,17 +124,15 @@ export const editorialPortraitOneDiagonal: Layout = {
 export const editorialPortraitOneStrip: Layout = {
   id: "ed-p-one-strip",
   name: "1 photo, full bleed + white strip",
-  role: "page",
-  style: "editorial",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 1,
   prefers: ["portrait"],
   slots: [{ x: 0, y: 0, w: 100, h: 100 }],
   caption: null,
-  blocks: [{ box: rect(112, 0, 132, 152), fill: "paper", layer: "over" }],
+  blocks: [block(112, 0, 132, 152, "paper", "over")],
   texts: [
-    { bind: "dateLabel", box: rect(118, 12, 126, 58), align: "start", font: "year", ink: "muted", rotate: 90 },
-    { bind: "chapterTitle", box: rect(116, 64, 128, 144), align: "start", font: "chapter", ink: "ink", rotate: 90 },
+    text("dateLabel", [118, 12, 126, 58], "year", "accent", { rotate: 90 }),
+    text("chapterTitle", [116, 64, 128, 144], "chapter", "ink", { rotate: 90 }),
   ],
 };
 
@@ -150,16 +146,14 @@ const TWO_CAPTION = rect(12, 176, 100, 198);
 export const editorialPortraitTwoDiagonal: Layout = {
   id: "ed-p-two-diagonal",
   name: "2 photos, one diagonal",
-  role: "page",
-  style: "editorial",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 2,
   prefers: ["any", "any"],
   slots: [poly(above(TWO_CUT)), poly([...cutLine(TWO_CUT + TWO_GAP), [W, TWO_FOOT], [0, TWO_FOOT]])],
   caption: TWO_CAPTION,
   texts: [
-    { bind: "pageCaption", box: TWO_CAPTION, align: "start", font: "caption", ink: "ink" },
-    { bind: "dateLabel", box: rect(104, 176, 136, 183), align: "end", font: "year", ink: "muted" },
+    text("pageCaption", TWO_CAPTION, "caption", "ink"),
+    text("dateLabel", [104, 176, 136, 183], "year", "accent", { align: "end" }),
   ],
 };
 
@@ -168,9 +162,7 @@ const STACK_CAPTION = rect(100, 150, 136, 196);
 export const editorialPortraitTwoStack: Layout = {
   id: "ed-p-two-stack",
   name: "2 photos, Swiss stack + date strip",
-  role: "page",
-  style: "editorial",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 2,
   prefers: ["landscape", "portrait"],
   slots: [rect(28, 14, W, 98), rect(28, 104, 92, 196)],
@@ -178,8 +170,8 @@ export const editorialPortraitTwoStack: Layout = {
   blocks: [STRIP_RULE],
   texts: [
     STRIP_DATE,
-    { bind: "chapterTitle", box: rect(100, 104, 136, 140), align: "start", font: "chapter", ink: "ink" },
-    { bind: "pageCaption", box: STACK_CAPTION, align: "start", font: "caption", ink: "ink" },
+    text("chapterTitle", [100, 104, 136, 140], "chapter", "ink"),
+    text("pageCaption", STACK_CAPTION, "caption", "ink"),
   ],
 };
 
@@ -187,18 +179,16 @@ export const editorialPortraitTwoStack: Layout = {
 export const editorialPortraitTwoOpener: Layout = {
   id: "ed-p-two-opener",
   name: "Chapter opener: two photos above the text",
-  role: "page",
-  style: "editorial",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 2,
   prefers: ["portrait", "portrait"],
   slots: [rect(12, 14, 72, 104), rect(76, 14, 136, 104)],
   caption: null,
-  blocks: [hRule(12, 26, 147, { when: "chapterDescription", mm: 0.6 })],
+  blocks: [hRule(12, 26, 147, { when: "chapterDescription", mm: RULE.t })],
   texts: [
-    { bind: "chapterTitle", box: rect(12, 114, 120, 142), align: "start", font: "masthead", ink: "ink" },
-    { bind: "chapterDescription", box: rect(12, 153, 104, 193), align: "start", font: "body", ink: "muted" },
-    { bind: "dateLabel", box: rect(128, 114, 136, 170), align: "start", font: "year", ink: "muted", rotate: 90 },
+    text("chapterTitle", [12, 114, 120, 142], "masthead", "ink"),
+    text("chapterDescription", [12, 153, 104, 193], "body", "muted"),
+    text("dateLabel", [128, 114, 136, 170], "year", "accent", { rotate: 90 }),
   ],
 };
 
@@ -209,15 +199,13 @@ const THREE_COL_CAPTION = rect(28, 168, 124, 196);
 export const editorialPortraitThreeColumn: Layout = {
   id: "ed-p-three-column",
   name: "3 photos, tall + two stacked",
-  role: "page",
-  style: "editorial",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 3,
   prefers: ["portrait", "portrait", "portrait"],
   slots: [rect(28, 14, 86, 160), rect(90, 14, 136, 85), rect(90, 89, 136, 160)],
   caption: THREE_COL_CAPTION,
   blocks: [STRIP_RULE],
-  texts: [STRIP_DATE, { bind: "pageCaption", box: THREE_COL_CAPTION, align: "start", font: "caption", ink: "ink" }],
+  texts: [STRIP_DATE, text("pageCaption", THREE_COL_CAPTION, "caption", "ink")],
 };
 
 // A flatter diagonal shared by all three photos: the big one ends on it, the two below start 5 mm under it.
@@ -229,9 +217,7 @@ const T3_CAPTION = rect(12, 180, 100, 198);
 export const editorialPortraitThreeDiagonal: Layout = {
   id: "ed-p-three-diagonal",
   name: "3 photos under one diagonal",
-  role: "page",
-  style: "editorial",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 3,
   prefers: ["any", "portrait", "portrait"],
   slots: [
@@ -241,8 +227,8 @@ export const editorialPortraitThreeDiagonal: Layout = {
   ],
   caption: T3_CAPTION,
   texts: [
-    { bind: "pageCaption", box: T3_CAPTION, align: "start", font: "caption", ink: "ink" },
-    { bind: "dateLabel", box: rect(104, 180, 136, 187), align: "end", font: "year", ink: "muted" },
+    text("pageCaption", T3_CAPTION, "caption", "ink"),
+    text("dateLabel", [104, 180, 136, 187], "year", "accent", { align: "end" }),
   ],
 };
 
@@ -253,9 +239,7 @@ const FOUR_CAPTION = rect(COL1[0], 172, COL1[1], 196);
 export const editorialPortraitFourStagger: Layout = {
   id: "ed-p-four-stagger",
   name: "4 photos, staggered columns",
-  role: "page",
-  style: "editorial",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 4,
   prefers: ["portrait", "portrait", "portrait", "portrait"],
   slots: [
@@ -268,8 +252,8 @@ export const editorialPortraitFourStagger: Layout = {
   blocks: [STRIP_RULE],
   texts: [
     STRIP_DATE,
-    { bind: "chapterTitle", box: rect(COL2[0], 14, COL2[1], 30), align: "start", font: "chapter", ink: "ink" },
-    { bind: "pageCaption", box: FOUR_CAPTION, align: "start", font: "caption", ink: "ink" },
+    text("chapterTitle", [COL2[0], 14, COL2[1], 30], "chapter", "ink"),
+    text("pageCaption", FOUR_CAPTION, "caption", "ink"),
   ],
 };
 
@@ -278,9 +262,7 @@ const FIVE_CAPTION = rect(28, 182, 136, 198);
 export const editorialPortraitFiveGrid: Layout = {
   id: "ed-p-five-grid",
   name: "5 photos, wide + four",
-  role: "page",
-  style: "editorial",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 5,
   prefers: ["landscape", "landscape", "landscape", "landscape", "landscape"],
   slots: [
@@ -292,7 +274,7 @@ export const editorialPortraitFiveGrid: Layout = {
   ],
   caption: FIVE_CAPTION,
   blocks: [STRIP_RULE],
-  texts: [STRIP_DATE, { bind: "pageCaption", box: FIVE_CAPTION, align: "start", font: "caption", ink: "ink" }],
+  texts: [STRIP_DATE, text("pageCaption", FIVE_CAPTION, "caption", "ink")],
 };
 
 const SIX_CAPTION = rect(28, 184, 136, 198);
@@ -300,15 +282,13 @@ const SIX_CAPTION = rect(28, 184, 136, 198);
 export const editorialPortraitSixGrid: Layout = {
   id: "ed-p-six-grid",
   name: "6 photos, square grid",
-  role: "page",
-  style: "editorial",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 6,
   prefers: ["any", "any", "any", "any", "any", "any"],
   slots: [14, 70, 126].flatMap((y) => [rect(COL1[0], y, COL1[1], y + 52), rect(COL2[0], y, COL2[1], y + 52)]),
   caption: SIX_CAPTION,
   blocks: [STRIP_RULE],
-  texts: [STRIP_DATE, { bind: "pageCaption", box: SIX_CAPTION, align: "start", font: "caption", ink: "ink" }],
+  texts: [STRIP_DATE, text("pageCaption", SIX_CAPTION, "caption", "ink")],
 };
 
 // --- spreads (x 0..296 mm, fold at 148) ---------------------------------------------------------------
@@ -322,19 +302,17 @@ const PANO_CAPTION = rect(W + 84, 84, W + 136, 130);
 export const editorialPortraitSpreadPanorama: Layout = {
   id: "ed-p-spread-panorama",
   name: "Spread: panorama + title column",
-  role: "spread",
-  style: "editorial",
-  format: "A5_PORTRAIT",
+  ...SPREAD,
   photoCount: 2,
   prefers: ["landscape", "any"],
   slots: [rect(0, 0, W + 72, H), rect(W + 84, 140, W + 136, 196)],
   caption: PANO_CAPTION,
   twin: ["ed-p-one-strip", "ed-p-one-column"],
-  blocks: [hRule(W + 84, W + 98, 76, { mm: 0.6 })],
+  blocks: [hRule(W + 84, W + 98, 76, { mm: RULE.t })],
   texts: [
-    { bind: "dateLabel", box: rect(W + 84, 14, W + 136, 21), align: "start", font: "year", ink: "muted" },
-    { bind: "chapterTitle", box: rect(W + 84, 24, W + 136, 70), align: "start", font: "masthead", ink: "ink" },
-    { bind: "pageCaption", box: PANO_CAPTION, align: "start", font: "caption", ink: "ink" },
+    text("dateLabel", [W + 84, 14, W + 136, 21], "year", "accent"),
+    text("chapterTitle", [W + 84, 24, W + 136, 70], "masthead", "ink"),
+    text("pageCaption", PANO_CAPTION, "caption", "ink"),
   ],
 };
 
@@ -346,19 +324,17 @@ export const editorialPortraitSpreadPanorama: Layout = {
 export const editorialPortraitSpreadOpener: Layout = {
   id: "ed-p-spread-opener",
   name: "Spread: diagonal photo + chapter opener",
-  role: "spread",
-  style: "editorial",
-  format: "A5_PORTRAIT",
+  ...SPREAD,
   photoCount: 3,
   prefers: ["any", "portrait", "portrait"],
   slots: [poly(DIAGONAL_PHOTO), rect(W + 12, 14, W + 72, 104), rect(W + 76, 14, W + 136, 104)],
   caption: DIAGONAL_CAPTION,
   twin: ["ed-p-one-diagonal", "ed-p-two-opener"],
-  blocks: [diagRule(...cutLine(172 + ECHO)), hRule(W + 12, W + 26, 147, { when: "chapterDescription", mm: 0.6 })],
+  blocks: [diagRule(...cutLine(172 + ECHO)), hRule(W + 12, W + 26, 147, { when: "chapterDescription", mm: RULE.t })],
   texts: [
-    { bind: "pageCaption", box: DIAGONAL_CAPTION, align: "start", font: "caption", ink: "ink" },
-    { bind: "dateLabel", box: DIAGONAL_DATE, align: "start", font: "year", ink: "muted", rotate: -90 },
-    { bind: "chapterTitle", box: rect(W + 12, 114, W + 136, 142), align: "start", font: "masthead", ink: "ink" },
-    { bind: "chapterDescription", box: rect(W + 12, 153, W + 104, 193), align: "start", font: "body", ink: "muted" },
+    text("pageCaption", DIAGONAL_CAPTION, "caption", "ink"),
+    text("dateLabel", DIAGONAL_DATE, "year", "accent", { rotate: -90 }),
+    text("chapterTitle", [W + 12, 114, W + 136, 142], "masthead", "ink"),
+    text("chapterDescription", [W + 12, 153, W + 104, 193], "body", "muted"),
   ],
 };

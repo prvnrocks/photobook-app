@@ -221,6 +221,8 @@ export interface RenderTextPanel extends RenderText {
   align: RenderAlign;
   fontSizeCqw: number;
   lineHeight: number;
+  /** M30 G0: padding above / below the text (em) that keeps Arabic marks inside the box (panelLeading). */
+  padEm?: [top: number, bottom: number];
   typography: RenderTypography;
   /** M10c: degrees clockwise about the panel centre (text stays live text). Never a quarter turn. */
   rotate?: number;
@@ -245,7 +247,7 @@ export interface RenderTextPanel extends RenderText {
  */
 export interface RenderBlock {
   fill: BlockFill;
-  /** Resolved hex (styleColours) — never a CSS variable or color-mix. */
+  /** Resolved literal colour (styleColours): a hex, or the constant rgba() of fill "scrim" — never a CSS variable or color-mix. */
   color: string;
   /** % of the page (spread halves: shifted into this page). In print, edge blocks run into the bleed. */
   rect: Rect;
@@ -657,12 +659,13 @@ export function panelFontMm(
   role: TextRole,
   boxWmm: number,
   boxHmm: number,
-  face?: { charEm: number; lineGrow: number },
+  face?: { charEm: number; lineGrow: number; /** panelLeading: line-height override + ink headroom (em, top + bottom). */ lineHeight?: number; padEm?: number },
 ): number {
   const base = PANEL_TYPE[role];
-  const t = face ? { ...base, charEm: face.charEm, lineHeight: base.lineHeight * face.lineGrow } : base;
+  const t = face ? { ...base, charEm: face.charEm, lineHeight: (face.lineHeight ?? base.lineHeight) * face.lineGrow } : base;
+  const pad = face?.padEm ?? 0;
   const paragraphs = panelParagraphs(text);
-  let size = Math.min(t.maxMm, boxHmm / t.lineHeight);
+  let size = Math.min(t.maxMm, boxHmm / (t.lineHeight + pad));
   // wholeWords: the longest word must fit one line with WORD_SLACK to spare — one short word of
   // wide capitals ("ADVENTURE") runs up to 12 % over the face's average advance.
   const longest = t.wholeWords ? Math.max(1, ...paragraphs.flat()) * WORD_SLACK : 0;
@@ -670,7 +673,7 @@ export function panelFontMm(
     const fit = boxWmm / (size * t.charEm);
     const perLine = Math.max(1, Math.floor(fit));
     const lines = wrappedLines(paragraphs, perLine);
-    if (lines * size * t.lineHeight <= boxHmm && longest <= fit) break;
+    if (size * (lines * t.lineHeight + pad) <= boxHmm && longest <= fit) break;
     size = Math.max(t.minMm, size * 0.92);
   }
   return Math.round(size * 100) / 100;
@@ -710,6 +713,45 @@ const GLYPH_SAFETY = 1.1;
  */
 export function panelLineGrow(f: Pick<ResolvedRoleFont, "font">): number {
   return GLYPH_EM[f.font].line ?? 1;
+}
+
+/**
+ * Arabic ink of the faces the M30 styles set headings in (em, measured in Chromium with canvas
+ * measureText at the heaviest shipped weight): `asc` / `desc` = the font's own ascent / descent
+ * (the content area a line box centres), `inkAsc` / `inkDesc` = how far real ink reaches from the
+ * baseline — hamza and madda on alef, shadda + tanwin stacked on a tall letter, kasratan under a
+ * deep tail. Tajawal's content area is exactly 1 em, so at a tight heading line-height every mark
+ * above an alef sits OUTSIDE the line box and an `overflow-hidden` panel cut it (G0 blocker 2).
+ */
+export const ARABIC_INK: Partial<Record<BookFontName, { asc: number; desc: number; inkAsc: number; inkDesc: number }>> = {
+  Tajawal: { asc: 0.643, desc: 0.357, inkAsc: 1.065, inkDesc: 0.78 },
+  Lalezar: { asc: 0.979, desc: 0.588, inkAsc: 1.079, inkDesc: 0.628 },
+};
+/** Line-height of Arabic headings in the M30 styles: at the Latin 1.0 / 1.05 the lines touch. */
+const ARABIC_HEADING_LINE_HEIGHT = 1.3;
+
+/**
+ * Line-height and ink headroom of a panel (M30 G0). Latin text, every pre-M30 style and every
+ * small role: the role's line-height, no headroom — unchanged output. An Arabic heading (masthead /
+ * chapter role) of the magazine + editorial styles gets a looser line-height and `padEm` = padding
+ * above / below the text (em) so that the first line's marks and the last line's tails stay inside
+ * the text element, which the fitter keeps inside the box (panelFontMm `padEm`).
+ */
+export function panelLeading(
+  style: DesignStyle | null | undefined,
+  role: TextRole,
+  f: Pick<ResolvedRoleFont, "font">,
+): { lineHeight: number; padEm?: [top: number, bottom: number] } {
+  const base = PANEL_TYPE[role].lineHeight;
+  const ink = ARABIC_INK[f.font];
+  if (!ink || (role !== "masthead" && role !== "chapter") || (style !== "magazine" && style !== "editorial")) {
+    return { lineHeight: base };
+  }
+  const lineHeight = Math.max(base, ARABIC_HEADING_LINE_HEIGHT);
+  // Space the line box leaves above the baseline / below it: the content area is centred in it.
+  const half = (lineHeight - (ink.asc + ink.desc)) / 2;
+  const r = (n: number) => Math.round(Math.max(0, n) * 1000) / 1000;
+  return { lineHeight, padEm: [r(ink.inkAsc - ink.asc - half), r(ink.inkDesc - ink.desc - half)] };
 }
 
 /** Per-character width (em) the fitter uses for a resolved panel font (face, case, tracking). */
@@ -890,7 +932,17 @@ export interface StyleColours {
   panel: string;
   /** Text on dark panels and photos: text ink "paper". */
   onPanel: string;
+  /** Fill "scrim": flat translucent black over a photo, behind text set straight on it. */
+  scrim: string;
 }
+
+/**
+ * The scrim (M30 G0): one constant-alpha black, the same for every style and colourway. White text
+ * on it keeps ≥ 4:1 over a pure white photo (#FFF under 50 % black = #808080; tests). In the PDF it
+ * is a plain fill under a constant-alpha graphics state — no gradient, blur or soft mask.
+ */
+export const SCRIM_ALPHA = 0.5;
+const SCRIM = `rgba(0,0,0,${SCRIM_ALPHA})`;
 
 /**
  * Colours of `style` for a book whose stored colourway id is `colourwayId` (absent / unknown / of
@@ -910,10 +962,18 @@ export function styleColours(style: DesignStyle | null | undefined, colourwayId?
     accentOnLight: cw?.accentOnLight ?? p?.accent ?? ink,
     panel: cw?.panel ?? ink,
     onPanel: cw?.onPanel ?? "#FFFFFF",
+    scrim: SCRIM,
   };
 }
 
-const FILL_COLOUR: Record<BlockFill, keyof StyleColours> = { panel: "panel", accent: "accent", paper: "paper", ink: "ink" };
+const FILL_COLOUR: Record<BlockFill, keyof StyleColours> = {
+  panel: "panel",
+  accent: "accent",
+  paper: "paper",
+  ink: "ink",
+  accentOnLight: "accentOnLight",
+  scrim: "scrim",
+};
 const INK_COLOUR: Record<TextInk, keyof StyleColours> = {
   ink: "ink",
   muted: "muted",
@@ -940,7 +1000,7 @@ function renderBlocks(
   const page = pageMm(doc.format);
   const colours = styleColours(layout.style, doc.style.colourway?.id);
   for (const b of layout.blocks) {
-    if (b.when && !boundText(doc, b.when, owner).trim()) continue;
+    if (b.when && !boundText(doc, b.when, owner, b.n).trim()) continue;
     const full = !opts.bleed ? b.box : layout.role === "spread" ? spreadBleedRect(b.box, page).pct : bleedRect(b.box, page).pct;
     const rect = shiftRect(full, offset);
     if (!onPage(rect)) continue;
@@ -983,12 +1043,17 @@ function textPanels(
     const textBox: Rect = tb ? { x: tb.x, y: tb.y, w: tb.w, h: tb.h } : { x: 0, y: 0, w: 100, h: 100 };
     const boxWmm = (rect.w / 100) * page.w * (textBox.w / 100);
     const boxHmm = (rect.h / 100) * page.h * (textBox.h / 100);
+    const leading = panelLeading(layout.style, t.font, f);
     const sizeMm = panelFontMm(
       text,
       t.font,
       quarter ? boxHmm : boxWmm,
       (quarter ? boxWmm : boxHmm) * (t.fit ?? 1),
-      { charEm: panelCharEm(f), lineGrow: panelLineGrow(f) },
+      {
+        charEm: panelCharEm(f),
+        lineGrow: panelLineGrow(f),
+        ...(leading.padEm ? { lineHeight: leading.lineHeight, padEm: leading.padEm[0] + leading.padEm[1] } : {}),
+      },
     );
     out.push({
       bind: t.bind,
@@ -999,7 +1064,8 @@ function textPanels(
       align: panelAlign(layout.style, t.align),
       fontFamily: f.fontFamily,
       fontSizeCqw: round4((sizeMm / page.w) * 100),
-      lineHeight: PANEL_TYPE[t.font].lineHeight,
+      lineHeight: leading.lineHeight,
+      ...(leading.padEm ? { padEm: leading.padEm } : {}),
       typography: typographyOf(f),
       ...(quarter ? { quarter: { deg: t.rotate as 90 | -90, inner: quarterInner(boxWmm, boxHmm) } } : t.rotate ? { rotate: t.rotate } : {}),
       ...(colours && t.ink ? { color: colours[INK_COLOUR[t.ink]] } : {}),

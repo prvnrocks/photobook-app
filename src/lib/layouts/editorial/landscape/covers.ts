@@ -1,10 +1,12 @@
 // Editorial A5 LANDSCAPE covers (M30 T7). Minimal Swiss posters turned to the wide page (ref
 // docs/design/refs/mg-covers.jpg): white paper, one photo cut by a diagonal, a heavy sans title,
 // hairlines that echo or cross the cut, the date turned a quarter in a strip. All cover text keeps
-// ≥ 12 mm from the spine (left) edge. Drawn in page mm through ./geometry.
+// ≥ 12 mm from the spine (left) edge. Drawn in page mm through ../geometry.
 
 import type { Layout } from "@/lib/book/types";
-import { H, W, block, hairline, poly, rect, rule, text } from "./geometry";
+import { BAR, hairline, LANDSCAPE, LINE, rule } from "../geometry";
+
+const { W, H, rect, poly, block, text } = LANDSCAPE;
 
 const base = { role: "cover", style: "editorial", format: "A5_LANDSCAPE", photoCount: 1 } as const;
 
@@ -22,20 +24,22 @@ export const editorialLandscapeCover: Layout = {
   caption: rect(14, 16, 90, 72),
   blocks: [
     hairline([117, 0], [69, H]),
+    block(14, 9, 14 + BAR.len, 9 + BAR.t, LINE),
     block(184, 0, 197, H, "paper", "over"),
     rule(14, 80, "coverLine"),
   ],
   texts: [
     text("coverTitle", [14, 16, 90, 72], "masthead", "ink"),
-    text("coverLine", [14, 85, 78, 92], "subtitle", "ink", { n: 0 }),
+    text("coverLine", [14, 85, 78, 92], "subtitle", "accent", { n: 0 }),
     text("coverLine", [14, 93, 78, 100], "subtitle", "muted", { n: 1 }),
-    text("coverSubtitle", [186.5, 50, 194.5, 138], "year", "ink", { rotate: -90 }),
+    text("coverSubtitle", [186.5, 50, 194.5, 138], "year", "accent", { rotate: -90 }),
   ],
 };
 
 /**
- * Full-bleed photo, a huge white title low on the left, a white strip down the right with the date
- * turned a quarter, a light hairline rising across the photo and one small cover line above it.
+ * Full-bleed photo; a flat scrim band over its lower part carries one small cover line and the
+ * huge white title (legible on snow and sky); a white strip down the right with the date turned a
+ * quarter, and a light hairline rising across the photo above the band.
  */
 export const editorialLandscapeCoverBleed: Layout = {
   ...base,
@@ -43,15 +47,16 @@ export const editorialLandscapeCoverBleed: Layout = {
   name: "Cover: full photo, big white title, date strip",
   prefers: ["landscape"],
   slots: [{ x: 0, y: 0, w: 100, h: 100 }],
-  caption: rect(14, 72, 162, 136),
+  caption: rect(14, 83, 162, 138),
   blocks: [
     hairline([0, 62], [176, 10], { fill: "paper", layer: "over" }),
+    block(0, 66, 176, H, "scrim", "over"),
     block(176, 0, 190, H, "paper", "over"),
   ],
   texts: [
-    text("coverTitle", [14, 72, 162, 136], "masthead", "paper"),
-    text("coverLine", [14, 12, 110, 19], "subtitle", "paper", { n: 0 }),
-    text("coverSubtitle", [179, 12, 187, 100], "year", "ink", { rotate: 90 }),
+    text("coverTitle", [14, 83, 162, 138], "masthead", "paper"),
+    text("coverLine", [14, 73, 162, 80], "subtitle", "paper", { n: 0 }),
+    text("coverSubtitle", [179, 12, 187, 100], "year", "accent", { rotate: 90 }),
   ],
   autoPick: false,
 };
@@ -75,8 +80,8 @@ export const editorialLandscapeCoverCorner: Layout = {
   ],
   texts: [
     text("coverTitle", [14, 14, 118, 60], "masthead", "ink"),
-    text("coverLine", [14, 62, 96, 69], "subtitle", "muted", { n: 0 }),
-    text("coverSubtitle", [12, 92, 19, 140], "year", "ink", { rotate: -90 }),
+    text("coverLine", [14, 62, 96, 69], "subtitle", "accent", { n: 0 }),
+    text("coverSubtitle", [12, 92, 19, 140], "year", "accent", { rotate: -90 }),
   ],
   autoPick: false,
 };
@@ -90,13 +95,13 @@ export const editorialLandscapeCoverFrame: Layout = {
   slots: [rect(34, 18, 186, 84)],
   caption: rect(30, 93, 190, 124),
   blocks: [
-    block(30, 14, 190, 88, "ink", "under"),
-    block(30.35, 14.35, 189.65, 87.65, "paper", "under"),
-    block(99, 127, 111, 127.6, "ink", "under"),
+    block(30, 14, 190, 88, LINE),
+    block(30.35, 14.35, 189.65, 87.65, "paper"),
+    block(99, 127, 111, 128, LINE),
   ],
   texts: [
     text("coverTitle", [30, 93, 190, 124], "masthead", "ink", { align: "center" }),
-    text("coverSubtitle", [30, 130, 190, 138], "year", "muted", { align: "center" }),
+    text("coverSubtitle", [30, 130, 190, 138], "year", "accent", { align: "center" }),
   ],
   autoPick: false,
 };

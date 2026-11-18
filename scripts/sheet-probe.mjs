@@ -35,6 +35,8 @@ await page.goto(`${base}/dev-book-page?${query}`, { waitUntil: "networkidle" });
 await page.evaluate(async () => {
   document.querySelectorAll("nextjs-portal").forEach((e) => e.remove());
   await document.fonts.ready;
+  // Photos (`&photos=real`) decode async: without this the rows below the fold screenshot blank.
+  await Promise.all([...document.images].map((i) => i.decode().catch(() => {})));
 });
 await page.waitForTimeout(800);
 
@@ -47,7 +49,8 @@ const rows = await page.evaluate(() =>
     const rects = [...range.getClientRects()];
     const turned = !!p.closest("[data-text-turn]");
     const lines = new Set(rects.map((r) => Math.round(turned ? r.left : r.top))).size;
-    const need = lines * parseFloat(cs.lineHeight);
+    // + the ink headroom padding of Arabic headings (render.ts panelLeading)
+    const need = lines * parseFloat(cs.lineHeight) + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
     const have = box.clientHeight;
     const panel = p.closest("[data-text-panel]");
     return {

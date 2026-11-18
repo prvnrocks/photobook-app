@@ -2,7 +2,9 @@
 // panorama crosses the fold; polygon slots, hairlines and turned text stay on one page.
 
 import type { Layout } from "@/lib/book/types";
-import { H, W, hairline, poly, rect, rule, text } from "./geometry";
+import { hairline, LANDSCAPE, rule } from "../geometry";
+
+const { W, H, rect, poly, text } = LANDSCAPE;
 import { DIAGONAL_TEXT, twoNotes } from "./pages";
 
 const base = { role: "spread", style: "editorial", format: "A5_LANDSCAPE" } as const;
@@ -26,7 +28,7 @@ export const editorialLandscapeSpreadPano: Layout = {
   twin: ["ed-l-one-bleed", "ed-l-one-diagonal"],
   blocks: [rule(W + 132, DIAGONAL_TEXT.ruleY, "chapterDescription")],
   texts: [
-    text("dateLabel", right(DIAGONAL_TEXT.date), "year", "muted"),
+    text("dateLabel", right(DIAGONAL_TEXT.date), "year", "accent"),
     text("chapterTitle", right(DIAGONAL_TEXT.title), "masthead", "ink"),
     text("chapterDescription", right(DIAGONAL_TEXT.description), "body", "muted"),
     text("pageCaption", right(DIAGONAL_TEXT.caption), "caption", "ink"),

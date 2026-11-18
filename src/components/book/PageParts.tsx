@@ -444,6 +444,7 @@ function panelText(panel: RenderTextPanel, ink: Ink): { className: string; style
       textAlign: panel.align,
       fontSize: `${panel.fontSizeCqw}cqw`,
       lineHeight: panel.lineHeight,
+      ...(panel.padEm ? { paddingTop: `${panel.padEm[0]}em`, paddingBottom: `${panel.padEm[1]}em` } : {}),
       ...panel.typography,
       ...(panel.color ? { color: panel.color } : {}),
     },

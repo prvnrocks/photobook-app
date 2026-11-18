@@ -1,6 +1,6 @@
 // Magazine A5 PORTRAIT pages + spreads (M30 T4, D-090; ref docs/design/refs/mg-5.jpg = ideas only:
 // full-bleed photos, white headline boxes, dark panels with an accent heading, strips, a circle
-// inset). Pure data, drawn in page mm (148 × 210, y down) through ./geometry.
+// inset). Pure data, drawn in page mm (148 × 210, y down) through ../geometry.
 //
 // Rules of this file: text keeps ≥ 10 mm from the left/right trim (either side may be the fold) and
 // ≥ 8 mm from top/bottom; photos are separated by a 3 mm gutter; the caption never sits on a photo.
@@ -9,7 +9,11 @@
 // description (rule-built books) only ends earlier — it never shows a hole between two elements.
 
 import type { Layout, LayoutBlock, LayoutText } from "@/lib/book/types";
-import { cells, circle, G, H, M, rect, shift, W } from "./geometry";
+import { cells, G, M, PORTRAIT, shift } from "../geometry";
+
+const { W, H, rect, circle, text, block } = PORTRAIT;
+const PAGE = { role: "page", style: "magazine", format: "A5_PORTRAIT" } as const;
+const SPREAD = { role: "spread", style: "magazine", format: "A5_PORTRAIT" } as const;
 
 const FULL = rect(0, 0, W, H);
 
@@ -19,9 +23,7 @@ const FULL = rect(0, 0, W, H);
 export const magazinePortraitFull: Layout = {
   id: "mg-p-full",
   name: "1 photo, full bleed",
-  role: "page",
-  style: "magazine",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 1,
   prefers: ["portrait"],
   slots: [FULL],
@@ -44,9 +46,7 @@ const COLUMN = {
 export const magazinePortraitOneColumn: Layout = {
   id: "mg-p-one-column",
   name: "1 photo on top, heading + text columns",
-  role: "page",
-  style: "magazine",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 1,
   prefers: ["landscape"],
   slots: [rect(0, 0, W, 124)],
@@ -56,10 +56,10 @@ export const magazinePortraitOneColumn: Layout = {
     { box: COLUMN.rule, fill: "ink", layer: "under", when: "chapterDescription" },
   ],
   texts: [
-    { bind: "chapterTitle", box: COLUMN.chapter, align: "start", font: "chapter", ink: "ink" },
-    { bind: "dateLabel", box: COLUMN.date, align: "start", font: "year", ink: "accent" },
-    { bind: "pageCaption", box: COLUMN.caption, align: "start", font: "caption", ink: "muted" },
-    { bind: "chapterDescription", box: COLUMN.description, align: "start", font: "body", ink: "ink" },
+    text("chapterTitle", COLUMN.chapter, "chapter", "ink"),
+    text("dateLabel", COLUMN.date, "year", "accent"),
+    text("pageCaption", COLUMN.caption, "caption", "muted"),
+    text("chapterDescription", COLUMN.description, "body", "ink"),
   ],
 };
 
@@ -75,23 +75,21 @@ const HEADLINE = {
 export const magazinePortraitOneHeadline: Layout = {
   id: "mg-p-one-headline",
   name: "Chapter opener: photo with white headline box",
-  role: "page",
-  style: "magazine",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 1,
   prefers: ["portrait"],
   slots: [rect(0, 0, W, 172)],
   caption: HEADLINE.caption,
   blocks: [
-    { box: rect(M, 26, 78, 84), fill: "paper", layer: "over" },
-    { box: rect(M, 84, 78, 160), fill: "paper", layer: "over", when: "chapterDescription" },
-    { box: rect(16, 86, 30, 86.8), fill: "ink", layer: "over", when: "chapterDescription" },
+    block(M, 26, 78, 84, "paper", "over"),
+    block(M, 84, 78, 160, "paper", "over", "chapterDescription"),
+    block(16, 86, 30, 86.8, "ink", "over", "chapterDescription"),
   ],
   texts: [
-    { bind: "dateLabel", box: rect(16, 33, 72, 38.5), align: "start", font: "year", ink: "accent" },
-    { bind: "chapterTitle", box: rect(16, 42, 72, 78), align: "start", font: "title", ink: "ink" },
-    { bind: "chapterDescription", box: rect(16, 91, 72, 154), align: "start", font: "body", ink: "ink" },
-    { bind: "pageCaption", box: HEADLINE.caption, align: "start", font: "caption", ink: "muted" },
+    text("dateLabel", [16, 33, 72, 38.5], "year", "accent"),
+    text("chapterTitle", [16, 42, 72, 78], "title", "ink"),
+    text("chapterDescription", [16, 91, 72, 154], "body", "ink"),
+    text("pageCaption", HEADLINE.caption, "caption", "muted"),
   ],
 };
 
@@ -109,22 +107,20 @@ const PANEL = {
 export const magazinePortraitTwoPanel: Layout = {
   id: "mg-p-two-panel",
   name: "Chapter opener: tall photo + dark panel column",
-  role: "page",
-  style: "magazine",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 2,
   prefers: ["portrait", "any"],
   slots: [rect(0, 0, PANEL_X, H), rect(PANEL_L, 58, W - M, 112)],
   caption: PANEL.caption,
   blocks: [
-    { box: rect(PANEL_X, 0, W, H), fill: "panel", layer: "under" },
-    { box: rect(PANEL_L, 144, PANEL_L + 14, 144.8), fill: "accent", layer: "under", when: "chapterDescription" },
+    block(PANEL_X, 0, W, H, "panel"),
+    block(PANEL_L, 144, PANEL_L + 14, 144.8, "accent", "under", "chapterDescription"),
   ],
   texts: [
-    { bind: "dateLabel", box: rect(PANEL_L, 14, W - M, 19.5), align: "start", font: "year", ink: "paper" },
-    { bind: "chapterTitle", box: rect(PANEL_L, 23, W - M, 52), align: "start", font: "title", ink: "accentOnDark" },
-    { bind: "pageCaption", box: PANEL.caption, align: "start", font: "caption", ink: "paper" },
-    { bind: "chapterDescription", box: rect(PANEL_L, 149, W - M, 203), align: "start", font: "body", ink: "paper" },
+    text("dateLabel", [PANEL_L, 14, W - M, 19.5], "year", "paper"),
+    text("chapterTitle", [PANEL_L, 23, W - M, 52], "title", "accentOnDark"),
+    text("pageCaption", PANEL.caption, "caption", "paper"),
+    text("chapterDescription", [PANEL_L, 149, W - M, 203], "body", "paper"),
   ],
 };
 
@@ -143,9 +139,7 @@ const CIRCLE_TEXT = {
 export const magazinePortraitTwoCircle: Layout = {
   id: "mg-p-two-circle",
   name: "2 photos, circle inset on a large photo",
-  role: "page",
-  style: "magazine",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 2,
   prefers: ["landscape", "any"],
   slots: [
@@ -157,9 +151,9 @@ export const magazinePortraitTwoCircle: Layout = {
   caption: CIRCLE_TEXT.caption,
   blocks: [{ box: CIRCLE_TEXT.bar, fill: "ink", layer: "under" }],
   texts: [
-    { bind: "chapterTitle", box: CIRCLE_TEXT.chapter, align: "start", font: "chapter", ink: "ink" },
-    { bind: "dateLabel", box: CIRCLE_TEXT.date, align: "start", font: "year", ink: "accent" },
-    { bind: "pageCaption", box: CIRCLE_TEXT.caption, align: "start", font: "caption", ink: "muted" },
+    text("chapterTitle", CIRCLE_TEXT.chapter, "chapter", "ink"),
+    text("dateLabel", CIRCLE_TEXT.date, "year", "accent"),
+    text("pageCaption", CIRCLE_TEXT.caption, "caption", "muted"),
   ],
 };
 
@@ -181,19 +175,17 @@ const featureBlocks = (at: <T extends { x: number; y: number; w: number; h: numb
   { box: at(FEATURE.rule), fill: "ink", layer: "under", when: "chapterDescription" },
 ];
 const featureTexts = (at: <T extends { x: number; y: number; w: number; h: number }>(r: T) => T): LayoutText[] => [
-  { bind: "dateLabel", box: at(FEATURE.date), align: "start", font: "year", ink: "paper" },
-  { bind: "chapterTitle", box: at(FEATURE.chapter), align: "start", font: "title", ink: "accentOnDark" },
-  { bind: "pageCaption", box: at(FEATURE.caption), align: "start", font: "caption", ink: "muted" },
-  { bind: "chapterDescription", box: at(FEATURE.description), align: "start", font: "body", ink: "ink" },
+  text("dateLabel", at(FEATURE.date), "year", "paper"),
+  text("chapterTitle", at(FEATURE.chapter), "title", "accentOnDark"),
+  text("pageCaption", at(FEATURE.caption), "caption", "muted"),
+  text("chapterDescription", at(FEATURE.description), "body", "ink"),
 ];
 const same = <T,>(r: T) => r;
 
 export const magazinePortraitThreeFeature: Layout = {
   id: "mg-p-three-feature",
   name: "3 photos across a dark panel head + text",
-  role: "page",
-  style: "magazine",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 3,
   prefers: ["portrait", "portrait", "portrait"],
   slots: FEATURE.slots,
@@ -215,21 +207,19 @@ const HERO3 = {
 export const magazinePortraitThreeHero: Layout = {
   id: "mg-p-three-hero",
   name: "3 photos, hero + dark caption cell",
-  role: "page",
-  style: "magazine",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 3,
   prefers: ["landscape", "landscape", "landscape"],
   slots: [rect(0, 0, W, HERO3_Y), ...hero3Rows.map(([y0, y1]) => rect(63, y0, W, y1))],
   caption: HERO3.caption,
   blocks: [
-    { box: rect(0, HERO3_Y + G, 60, H), fill: "panel", layer: "under" },
-    { box: rect(M, 157, 24, 157.8), fill: "accent", layer: "under" },
+    block(0, HERO3_Y + G, 60, H, "panel"),
+    block(M, 157, 24, 157.8, "accent"),
   ],
   texts: [
-    { bind: "dateLabel", box: rect(M, 116, 54, 121.5), align: "start", font: "year", ink: "paper" },
-    { bind: "chapterTitle", box: rect(M, 125, 54, 153), align: "start", font: "chapter", ink: "accentOnDark" },
-    { bind: "pageCaption", box: HERO3.caption, align: "start", font: "caption", ink: "paper" },
+    text("dateLabel", [M, 116, 54, 121.5], "year", "paper"),
+    text("chapterTitle", [M, 125, 54, 153], "chapter", "accentOnDark"),
+    text("pageCaption", HERO3.caption, "caption", "paper"),
   ],
 };
 
@@ -242,9 +232,9 @@ const FOOT = {
 };
 const FOOT_BLOCKS: LayoutBlock[] = [{ box: FOOT.bar, fill: "ink", layer: "under" }];
 const FOOT_TEXTS: LayoutText[] = [
-  { bind: "chapterTitle", box: FOOT.chapter, align: "start", font: "chapter", ink: "ink" },
-  { bind: "dateLabel", box: FOOT.date, align: "start", font: "year", ink: "accent" },
-  { bind: "pageCaption", box: FOOT.caption, align: "start", font: "caption", ink: "muted" },
+  text("chapterTitle", FOOT.chapter, "chapter", "ink"),
+  text("dateLabel", FOOT.date, "year", "accent"),
+  text("pageCaption", FOOT.caption, "caption", "muted"),
 ];
 const thirds = cells(0, W, 3);
 
@@ -252,9 +242,7 @@ const thirds = cells(0, W, 3);
 export const magazinePortraitFourStrip: Layout = {
   id: "mg-p-four-strip",
   name: "4 photos, big photo + strip of three",
-  role: "page",
-  style: "magazine",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 4,
   prefers: ["landscape", "any", "any", "any"],
   slots: [rect(0, 0, W, 112), ...thirds.map(([x0, x1]) => rect(x0, 112 + G, x1, 162))],
@@ -273,21 +261,19 @@ const HERO4 = {
 export const magazinePortraitFourHero: Layout = {
   id: "mg-p-four-hero",
   name: "4 photos, tall hero + column of three, dark foot",
-  role: "page",
-  style: "magazine",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 4,
   prefers: ["portrait", "landscape", "landscape", "landscape"],
   slots: [rect(0, 0, 92, HERO4_Y), ...hero4Rows.map(([y0, y1]) => rect(92 + G, y0, W, y1))],
   caption: HERO4.caption,
   blocks: [
-    { box: rect(0, HERO4_Y + G, W, H), fill: "panel", layer: "under" },
-    { box: rect(M, 157, 24, 157.8), fill: "accent", layer: "under" },
+    block(0, HERO4_Y + G, W, H, "panel"),
+    block(M, 157, 24, 157.8, "accent"),
   ],
   texts: [
-    { bind: "chapterTitle", box: rect(M, 162, 62, 190), align: "start", font: "chapter", ink: "accentOnDark" },
-    { bind: "dateLabel", box: rect(M, 194, 62, 199.5), align: "start", font: "year", ink: "paper" },
-    { bind: "pageCaption", box: HERO4.caption, align: "start", font: "caption", ink: "paper" },
+    text("chapterTitle", [M, 162, 62, 190], "chapter", "accentOnDark"),
+    text("dateLabel", [M, 194, 62, 199.5], "year", "paper"),
+    text("pageCaption", HERO4.caption, "caption", "paper"),
   ],
 };
 
@@ -298,9 +284,7 @@ const halves = cells(0, W, 2);
 export const magazinePortraitFiveHero: Layout = {
   id: "mg-p-five-hero",
   name: "5 photos, hero + four",
-  role: "page",
-  style: "magazine",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 5,
   prefers: ["any", "landscape", "landscape", "landscape", "landscape"],
   slots: [
@@ -319,9 +303,7 @@ const hero6Rows = cells(0, 104, 2);
 export const magazinePortraitSixHero: Layout = {
   id: "mg-p-six-hero",
   name: "6 photos, hero + two + strip of three",
-  role: "page",
-  style: "magazine",
-  format: "A5_PORTRAIT",
+  ...PAGE,
   photoCount: 6,
   prefers: ["any", "any", "any", "any", "any", "any"],
   slots: [
@@ -348,22 +330,20 @@ const PANO = {
 export const magazinePortraitSpreadPanorama: Layout = {
   id: "mg-p-spread-panorama",
   name: "Panorama across both pages + headline box",
-  role: "spread",
-  style: "magazine",
-  format: "A5_PORTRAIT",
+  ...SPREAD,
   photoCount: 1,
   prefers: ["landscape"],
   slots: [rect(0, 0, 2 * W, PANO_Y)],
   caption: PANO.caption,
   twin: ["mg-p-one-column", "mg-p-full"],
   blocks: [
-    { box: rect(M, 104, 92, PANO_Y), fill: "paper", layer: "over" },
+    block(M, 104, 92, PANO_Y, "paper", "over"),
     { box: shift(rect(M, 169, 24, 169.8)), fill: "ink", layer: "under", when: "chapterDescription" },
   ],
   texts: [
-    { bind: "dateLabel", box: rect(16, 111, 86, 116.5), align: "start", font: "year", ink: "accent" },
-    { bind: "chapterTitle", box: rect(16, 120, 86, 156), align: "start", font: "title", ink: "ink" },
-    { bind: "pageCaption", box: PANO.caption, align: "start", font: "caption", ink: "muted" },
+    text("dateLabel", [16, 111, 86, 116.5], "year", "accent"),
+    text("chapterTitle", [16, 120, 86, 156], "title", "ink"),
+    text("pageCaption", PANO.caption, "caption", "muted"),
     { bind: "chapterDescription", box: shift(rect(M, 174, W - M, 202)), align: "start", font: "body", ink: "ink" },
   ],
 };
@@ -375,9 +355,7 @@ export const magazinePortraitSpreadPanorama: Layout = {
 export const magazinePortraitSpreadFeature: Layout = {
   id: "mg-p-spread-feature",
   name: "Feature opener: full photo + panel page",
-  role: "spread",
-  style: "magazine",
-  format: "A5_PORTRAIT",
+  ...SPREAD,
   photoCount: 4,
   prefers: ["portrait", "portrait", "portrait", "portrait"],
   slots: [FULL, ...FEATURE.slots.map(shift)],

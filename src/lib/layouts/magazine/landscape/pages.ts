@@ -1,5 +1,5 @@
 // Magazine A5 LANDSCAPE single pages (M30 T5, ref docs/design/refs/mg-5.jpg). Pure data, drawn in
-// page mm (210 × 148, y down) through ./geometry.
+// page mm (210 × 148, y down) through ../geometry.
 //
 // Grid: photos bleed off the trim or are separated by a 3 mm gutter; text keeps ≥ 12 mm from the
 // left / right trim (either can be the fold) and ≥ 6 mm from top / bottom. Text panels centre their
@@ -9,7 +9,10 @@
 // drawn, and each page is composed to stand without it.
 
 import type { Layout, LayoutBlock, LayoutSlotDef, LayoutText, Rect } from "@/lib/book/types";
-import { H, W, circle, rect } from "./geometry";
+import { LANDSCAPE } from "../geometry";
+
+const { W, H, rect, circle, text, block } = LANDSCAPE;
+const PAGE = { role: "page", style: "magazine", format: "A5_LANDSCAPE" } as const;
 
 const G = 3; // photo gutter (mm)
 
@@ -20,16 +23,16 @@ export const OPENER: { slot: LayoutSlotDef; blocks: LayoutBlock[]; texts: Layout
   slot: rect(0, 0, W, H),
   blocks: [
     // Headline box: stands alone when the chapter has no description…
-    { box: rect(14, 56, 112, 102), fill: "paper", layer: "over" },
-    { box: rect(14, 56, 16, 102), fill: "accent", layer: "over" },
+    block(14, 56, 112, 102, "paper", "over"),
+    block(14, 56, 16, 102, "accent", "over"),
     // …and runs on to the foot of the page under the description.
-    { box: rect(14, 102, 112, H), fill: "paper", layer: "over", when: "chapterDescription" },
-    { box: rect(14, 102, 16, H), fill: "accent", layer: "over", when: "chapterDescription" },
+    block(14, 102, 112, H, "paper", "over", "chapterDescription"),
+    block(14, 102, 16, H, "accent", "over", "chapterDescription"),
   ],
   texts: [
-    { bind: "dateLabel", box: rect(23, 62, 105, 67.5), align: "start", font: "year", ink: "accent" },
-    { bind: "chapterTitle", box: rect(23, 70, 105, 97), align: "start", font: "masthead", ink: "ink" },
-    { bind: "chapterDescription", box: rect(23, 102, 105, 142), align: "start", font: "body", ink: "muted" },
+    text("dateLabel", [23, 62, 105, 67.5], "year", "accent"),
+    text("chapterTitle", [23, 70, 105, 97], "masthead", "ink"),
+    text("chapterDescription", [23, 102, 105, 142], "body", "muted"),
   ],
 };
 
@@ -37,9 +40,7 @@ export const OPENER: { slot: LayoutSlotDef; blocks: LayoutBlock[]; texts: Layout
 export const magazineLandscapeOneOpener: Layout = {
   id: "mg-l-one-opener",
   name: "Opener: full-bleed photo + headline box",
-  role: "page",
-  style: "magazine",
-  format: "A5_LANDSCAPE",
+  ...PAGE,
   photoCount: 1,
   prefers: ["landscape"],
   slots: [OPENER.slot],
@@ -59,20 +60,18 @@ export const BAND = {
 export const magazineLandscapeOneBand: Layout = {
   id: "mg-l-one-band",
   name: "1 photo over a dark caption band",
-  role: "page",
-  style: "magazine",
-  format: "A5_LANDSCAPE",
+  ...PAGE,
   photoCount: 1,
   prefers: ["landscape"],
   slots: [rect(0, 0, W, BAND.top)],
   caption: BAND.caption,
   blocks: [
-    { box: rect(0, BAND.top, W, H), fill: "panel", layer: "under" },
-    { box: rect(14, 121, 15.2, 139), fill: "accent", layer: "under" },
+    block(0, BAND.top, W, H, "panel"),
+    block(14, 121, 15.2, 139, "accent"),
   ],
   texts: [
-    { bind: "pageCaption", box: BAND.caption, align: "start", font: "caption", ink: "paper" },
-    { bind: "dateLabel", box: BAND.date, align: "end", font: "year", ink: "accentOnDark" },
+    text("pageCaption", BAND.caption, "caption", "paper"),
+    text("dateLabel", BAND.date, "year", "accentOnDark", { align: "end" }),
   ],
 };
 
@@ -82,20 +81,18 @@ const COLUMN_CAPTION = rect(12, 76, 70, 110);
 export const magazineLandscapeOneColumn: Layout = {
   id: "mg-l-one-column",
   name: "1 photo + text column",
-  role: "page",
-  style: "magazine",
-  format: "A5_LANDSCAPE",
+  ...PAGE,
   photoCount: 1,
   prefers: ["any"],
   slots: [rect(82, 0, W, H)],
   caption: COLUMN_CAPTION,
   blocks: [
-    { box: rect(12, 69, 34, 70.4), fill: "accent", layer: "under" },
+    block(12, 69, 34, 70.4, "accent"),
   ],
   texts: [
-    { bind: "dateLabel", box: rect(12, 38, 70, 43.5), align: "start", font: "year", ink: "accent" },
-    { bind: "chapterTitle", box: rect(12, 46, 70, 65), align: "start", font: "chapter", ink: "ink" },
-    { bind: "pageCaption", box: COLUMN_CAPTION, align: "start", font: "caption", ink: "muted" },
+    text("dateLabel", [12, 38, 70, 43.5], "year", "accent"),
+    text("chapterTitle", [12, 46, 70, 65], "chapter", "ink"),
+    text("pageCaption", COLUMN_CAPTION, "caption", "muted"),
   ],
 };
 
@@ -108,21 +105,19 @@ export const magazineLandscapeOneColumn: Layout = {
 export const magazineLandscapeTwoPanel: Layout = {
   id: "mg-l-two-panel",
   name: "Opener: photo + dark panel column",
-  role: "page",
-  style: "magazine",
-  format: "A5_LANDSCAPE",
+  ...PAGE,
   photoCount: 2,
   prefers: ["any", "landscape"],
   slots: [rect(0, 0, 120, H), rect(130, 46, 198, 84)],
   caption: null,
   blocks: [
-    { box: rect(120, 0, W, H), fill: "panel", layer: "under" },
-    { box: rect(130, 90, 148, 91.2), fill: "accent", layer: "under", when: "chapterDescription" },
+    block(120, 0, W, H, "panel"),
+    block(130, 90, 148, 91.2, "accent", "under", "chapterDescription"),
   ],
   texts: [
-    { bind: "dateLabel", box: rect(130, 12, 198, 17.5), align: "start", font: "year", ink: "paper" },
-    { bind: "chapterTitle", box: rect(130, 20, 198, 41), align: "start", font: "chapter", ink: "accentOnDark" },
-    { bind: "chapterDescription", box: rect(130, 94, 198, 142), align: "start", font: "body", ink: "paper" },
+    text("dateLabel", [130, 12, 198, 17.5], "year", "paper"),
+    text("chapterTitle", [130, 20, 198, 41], "chapter", "accentOnDark"),
+    text("chapterDescription", [130, 94, 198, 142], "body", "paper"),
   ],
 };
 
@@ -132,9 +127,7 @@ const CIRCLE_CAPTION = rect(20, 120, 126, 142);
 export const magazineLandscapeTwoCircle: Layout = {
   id: "mg-l-two-circle",
   name: "2 photos, circle inset",
-  role: "page",
-  style: "magazine",
-  format: "A5_LANDSCAPE",
+  ...PAGE,
   photoCount: 2,
   prefers: ["landscape", "any"],
   slots: [
@@ -142,10 +135,10 @@ export const magazineLandscapeTwoCircle: Layout = {
     { ...circle(164, 102, 30), z: 1 },
   ],
   caption: CIRCLE_CAPTION,
-  blocks: [{ box: rect(14, 112, 15.2, 142), fill: "accent", layer: "under" }],
+  blocks: [block(14, 112, 15.2, 142, "accent")],
   texts: [
-    { bind: "dateLabel", box: rect(20, 112, 126, 117.5), align: "start", font: "year", ink: "accent" },
-    { bind: "pageCaption", box: CIRCLE_CAPTION, align: "start", font: "caption", ink: "ink" },
+    text("dateLabel", [20, 112, 126, 117.5], "year", "accent"),
+    text("pageCaption", CIRCLE_CAPTION, "caption", "ink"),
   ],
 };
 
@@ -157,15 +150,13 @@ const HERO3_CAPTION = rect(137, 118, 198, 142);
 export const magazineLandscapeThreeHero: Layout = {
   id: "mg-l-three-hero",
   name: "3 photos, hero + two stacked",
-  role: "page",
-  style: "magazine",
-  format: "A5_LANDSCAPE",
+  ...PAGE,
   photoCount: 3,
   prefers: ["any", "landscape", "landscape"],
   slots: [rect(0, 0, 128, H), rect(128 + G, 0, W, 54), rect(128 + G, 54 + G, W, 108)],
   caption: HERO3_CAPTION,
-  blocks: [{ box: rect(137, 113, 155, 114.2), fill: "accent", layer: "under" }],
-  texts: [{ bind: "pageCaption", box: HERO3_CAPTION, align: "start", font: "caption", ink: "ink" }],
+  blocks: [block(137, 113, 155, 114.2, "accent")],
+  texts: [text("pageCaption", HERO3_CAPTION, "caption", "ink")],
 };
 
 /** Parts of the feature page, shared with the feature spread (its right page is this page). */
@@ -173,13 +164,13 @@ export const FEATURE: { slots: LayoutSlotDef[]; blocks: LayoutBlock[]; texts: La
   // Three photos in a row, hanging over the lower edge of the dark panel.
   slots: [rect(14, 80, 72, 134), rect(76, 80, 134, 134), rect(138, 80, 196, 134)],
   blocks: [
-    { box: rect(0, 0, W, 104), fill: "panel", layer: "under" },
-    { box: rect(104, 14, 104.6, 68), fill: "accent", layer: "under", when: "chapterDescription" },
+    block(0, 0, W, 104, "panel"),
+    block(104, 14, 104.6, 68, "accent", "under", "chapterDescription"),
   ],
   texts: [
-    { bind: "dateLabel", box: rect(14, 14, 96, 19.5), align: "start", font: "year", ink: "paper" },
-    { bind: "chapterTitle", box: rect(14, 23, 96, 68), align: "start", font: "masthead", ink: "accentOnDark" },
-    { bind: "chapterDescription", box: rect(112, 14, 196, 68), align: "start", font: "body", ink: "paper" },
+    text("dateLabel", [14, 14, 96, 19.5], "year", "paper"),
+    text("chapterTitle", [14, 23, 96, 68], "masthead", "accentOnDark"),
+    text("chapterDescription", [112, 14, 196, 68], "body", "paper"),
   ],
 };
 
@@ -187,9 +178,7 @@ export const FEATURE: { slots: LayoutSlotDef[]; blocks: LayoutBlock[]; texts: La
 export const magazineLandscapeThreeFeature: Layout = {
   id: "mg-l-three-feature",
   name: "Feature: dark panel + three photos",
-  role: "page",
-  style: "magazine",
-  format: "A5_LANDSCAPE",
+  ...PAGE,
   photoCount: 3,
   prefers: ["any", "any", "any"],
   slots: FEATURE.slots,
@@ -207,9 +196,7 @@ const third = (W - 2 * G) / 3; // 68 mm
 export const magazineLandscapeFourStrip: Layout = {
   id: "mg-l-four-strip",
   name: "4 photos, hero + strip of three",
-  role: "page",
-  style: "magazine",
-  format: "A5_LANDSCAPE",
+  ...PAGE,
   photoCount: 4,
   prefers: ["landscape", "landscape", "landscape", "landscape"],
   slots: [
@@ -219,8 +206,8 @@ export const magazineLandscapeFourStrip: Layout = {
     rect(2 * (third + G), 80 + G, W, 126),
   ],
   caption: STRIP_CAPTION,
-  blocks: [{ box: rect(14, 131, 15.2, 143), fill: "accent", layer: "under" }],
-  texts: [{ bind: "pageCaption", box: STRIP_CAPTION, align: "start", font: "caption", ink: "ink" }],
+  blocks: [block(14, 131, 15.2, 143, "accent")],
+  texts: [text("pageCaption", STRIP_CAPTION, "caption", "ink")],
 };
 
 const GRID4_CAPTION = rect(14, 118, 112, 142);
@@ -229,9 +216,7 @@ const GRID4_CAPTION = rect(14, 118, 112, 142);
 export const magazineLandscapeFourGrid: Layout = {
   id: "mg-l-four-grid",
   name: "4 photos, hero grid + caption panel",
-  role: "page",
-  style: "magazine",
-  format: "A5_LANDSCAPE",
+  ...PAGE,
   photoCount: 4,
   prefers: ["landscape", "landscape", "landscape", "landscape"],
   slots: [
@@ -242,12 +227,12 @@ export const magazineLandscapeFourGrid: Layout = {
   ],
   caption: GRID4_CAPTION,
   blocks: [
-    { box: rect(0, 98 + G, 124, H), fill: "panel", layer: "under" },
-    { box: rect(14, 114, 32, 115.2), fill: "accent", layer: "under" },
+    block(0, 98 + G, 124, H, "panel"),
+    block(14, 114, 32, 115.2, "accent"),
   ],
   texts: [
-    { bind: "dateLabel", box: rect(14, 106, 112, 111.5), align: "start", font: "year", ink: "accentOnDark" },
-    { bind: "pageCaption", box: GRID4_CAPTION, align: "start", font: "caption", ink: "paper" },
+    text("dateLabel", [14, 106, 112, 111.5], "year", "accentOnDark"),
+    text("pageCaption", GRID4_CAPTION, "caption", "paper"),
   ],
 };
 
@@ -260,9 +245,7 @@ const fiveCol = (W - 104 - 2 * G) / 2; // 50 mm
 export const magazineLandscapeFive: Layout = {
   id: "mg-l-five",
   name: "5 photos, hero + four",
-  role: "page",
-  style: "magazine",
-  format: "A5_LANDSCAPE",
+  ...PAGE,
   photoCount: 5,
   prefers: ["portrait", "any", "any", "any", "any"],
   slots: [
@@ -273,8 +256,8 @@ export const magazineLandscapeFive: Layout = {
     rect(W - fiveCol, 56 + G, W, 115),
   ],
   caption: FIVE_CAPTION,
-  blocks: [{ box: rect(107, 124, 108.2, 142), fill: "accent", layer: "under" }],
-  texts: [{ bind: "pageCaption", box: FIVE_CAPTION, align: "start", font: "caption", ink: "ink" }],
+  blocks: [block(107, 124, 108.2, 142, "accent")],
+  texts: [text("pageCaption", FIVE_CAPTION, "caption", "ink")],
 };
 
 // --- 6 photos ---------------------------------------------------------------------------------------
@@ -286,9 +269,7 @@ const quarter = (W - 3 * G) / 4; // 50.25 mm
 export const magazineLandscapeSix: Layout = {
   id: "mg-l-six",
   name: "6 photos, hero + caption cell + row of four",
-  role: "page",
-  style: "magazine",
-  format: "A5_LANDSCAPE",
+  ...PAGE,
   photoCount: 6,
   prefers: ["landscape", "landscape", "any", "any", "any", "any"],
   slots: [
@@ -301,8 +282,8 @@ export const magazineLandscapeSix: Layout = {
   ],
   caption: SIX_CAPTION,
   blocks: [
-    { box: rect(138 + G, 43.5 + G, W, 90), fill: "panel", layer: "under" },
-    { box: rect(149, 51, 163, 52.2), fill: "accent", layer: "under" },
+    block(138 + G, 43.5 + G, W, 90, "panel"),
+    block(149, 51, 163, 52.2, "accent"),
   ],
-  texts: [{ bind: "pageCaption", box: SIX_CAPTION, align: "start", font: "caption", ink: "paper" }],
+  texts: [text("pageCaption", SIX_CAPTION, "caption", "paper")],
 };

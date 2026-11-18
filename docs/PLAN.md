@@ -451,9 +451,16 @@ export const twoVertical: Layout = {
   // M30 (D-090): binds + "chapterDescription" (pages/spreads only) | "coverLine" (covers only, with n: 0..5 = chapter index);
   //   fonts + "masthead" | "body"; texts[].ink?: "ink"|"muted"|"accent"|"paper"|"accentOnDark" (T3: accent = deepened for white pages, accentOnDark = vivid, for panels + photos); texts[].rotate may be exactly 90 / -90
   //   (box = the final visual rect, ≥ 4 mm inside the trim).
-  // optional blocks (max 8): [{ box, fill: "panel"|"accent"|"paper"|"ink", layer: "under"|"over",
-  //   points?: [[x,y] × 3..8] in % of the box, when?: <bind> }]  // flat colour; under = below photos, over = above photos, below text;
-  //   `when` hides the block while that binding's text is empty; a block with points never crosses a spread's fold.
+  // optional blocks (max 8): [{ box, fill: "panel"|"accent"|"paper"|"ink"|"accentOnLight"|"scrim", layer: "under"|"over",
+  //   points?: [[x,y] × 3..8] in % of the box, when?: <bind>, n?: 0..5 }]  // flat colour; under = below photos, over = above photos, below text;
+  //   `when` hides the block while that binding's text is empty (`n` = which cover line, only with when "coverLine");
+  //   a block with points never crosses a spread's fold.
+  //   G0 fills: "accentOnLight" = the colourway accent deepened for white pages (rules / bars on paper; = text ink "accent";
+  //   the page ink in editorial `ink`); "scrim" = flat 50 % black laid `over` a photo behind white text set on it (constant
+  //   alpha in the PDF — never a gradient, blur or soft mask). Rule: no M30 text sits straight on a photo; on a scrim only
+  //   white text; accent-coloured text only on solid dark blocks (tests/m30-g0.test.tsx).
+  //   Arabic headings (masthead / chapter roles of magazine + editorial): line-height 1.3 + ink headroom padding
+  //   (render.ts panelLeading / ARABIC_INK) so hamza / shadda are never cut; Latin output unchanged.
 };
 ```
 

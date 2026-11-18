@@ -477,7 +477,13 @@ export const isQuarterTurn = (deg: number | undefined): boolean => deg === 90 ||
 /** Max cover lines a cover can bind: `n` runs 0..COVER_LINE_MAX_N. */
 export const COVER_LINE_MAX_N = 5;
 
-export const BLOCK_FILLS = ["panel", "accent", "paper", "ink"] as const;
+/**
+ * M30 block colour roles. "accent" = the vivid accent (for dark panels / photos; near-white in the
+ * editorial default colourway); "accentOnLight" = the accent deepened for white pages (rules and
+ * bars on paper — the same colour as text ink "accent"); "scrim" = a flat translucent black laid
+ * `over` a photo behind text set straight on it (constant alpha: no gradient, blur or soft mask).
+ */
+export const BLOCK_FILLS = ["panel", "accent", "paper", "ink", "accentOnLight", "scrim"] as const;
 export const MAX_LAYOUT_BLOCKS = 8;
 /**
  * M30: a flat colour block (text panel backdrop, accent bar, rule, diagonal cut). `box` in layout
@@ -493,6 +499,8 @@ export const LayoutBlockSchema = z.strictObject({
   layer: z.enum(["under", "over"]),
   points: z.array(PolygonPointSchema).min(3).max(8).optional(),
   when: TextBindingSchema.optional(),
+  /** With `when: "coverLine"`: which cover line (chapter index) must exist. Absent = line 0. */
+  n: z.number().int().min(0).max(COVER_LINE_MAX_N).optional(),
 });
 
 export const LayoutTextSchema = z.strictObject({
@@ -614,7 +622,7 @@ export function layoutIssues(l: LayoutObject, opts: LayoutCheckOptions = {}): st
 
 /**
  * M30 rules: blocks lie inside the role's area; a block with `points` never crosses the fold of a
- * spread (plain rect blocks may, like panorama slots); `n` only with bind "coverLine";
+ * spread (plain rect blocks may, like panorama slots); `n` only with bind / when "coverLine";
  * "coverLine" only on covers; "chapterDescription" never on covers (as a text bind or a block's
  * `when`). The ±90° text safe-zone rule lives with the other text geometry in m10cLayoutIssues.
  */
@@ -629,6 +637,7 @@ function m30LayoutIssues(l: LayoutObject): string[] {
       issues.push(`block ${i}: shaped block crosses the fold`);
     }
     if (b.when !== undefined) issues.push(...bindingIssues(l, b.when, `block ${i}`));
+    if (b.n !== undefined && b.when !== "coverLine") issues.push(`block ${i}: n needs when coverLine`);
   });
   (l.texts ?? []).forEach((t, i) => {
     if (t.n !== undefined && t.bind !== "coverLine") issues.push(`text ${i}: n needs bind coverLine`);

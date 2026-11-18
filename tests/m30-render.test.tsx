@@ -282,6 +282,7 @@ describe("text ink", () => {
       accentOnLight: "#171717",
       panel: "#171717",
       onPanel: "#FFFFFF",
+      scrim: "rgba(0,0,0,0.5)",
     });
     expect(styleColours("geometric").accent).toBe(STYLE_TOKENS.geometric.palette!.accent);
   });

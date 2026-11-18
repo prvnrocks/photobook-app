@@ -1,10 +1,12 @@
 // Editorial A5 LANDSCAPE single pages (M30 T7). Minimal Swiss: 12 mm margins, white paper, photos
 // on a strict grid or cut by one diagonal, a heavy sans heading, quiet text, short ink rules and
-// the date turned a quarter in a strip at the page edge. Drawn in page mm through ./geometry.
+// the date turned a quarter in a strip at the page edge. Drawn in page mm through ../geometry.
 // Either side of a page may be the fold: text keeps ≥ 12 mm from left and right.
 
 import type { Layout, LayoutBlock, LayoutText } from "@/lib/book/types";
-import { H, W, block, hairline, poly, rect, rule, text } from "./geometry";
+import { hairline, HAIR, LANDSCAPE, LINE, rule } from "../geometry";
+
+const { W, H, rect, poly, block, text } = LANDSCAPE;
 
 const base = { role: "page", style: "editorial", format: "A5_LANDSCAPE" } as const;
 
@@ -14,7 +16,7 @@ const G = 4; // gutter between photos
 const GRID = { x0: M, x1: 186, y0: M, y1: 118 }; // photo field of the grid pages (the date strip sits right of it)
 const CAPTION = [M, 125, 160, 138] as const; // caption line under the photo field
 /** The date turned a quarter, reading downwards, right of the photo field. */
-const dateStrip = (y0 = M, y1 = 72): LayoutText => text("dateLabel", [193, y0, 200, y1], "year", "muted", { rotate: 90 });
+const dateStrip = (y0 = M, y1 = 72): LayoutText => text("dateLabel", [193, y0, 200, y1], "year", "accent", { rotate: 90 });
 /** Caption under the photo field with its short rule (the rule goes when there is no caption). */
 const captionBlocks: LayoutBlock[] = [rule(M, 121.6, "pageCaption")];
 const captionText = text("pageCaption", CAPTION, "caption", "ink");
@@ -55,7 +57,7 @@ export const editorialLandscapeOneDiagonal: Layout = {
   caption: rect(...DIAGONAL_TEXT.caption),
   blocks: [hairline([125, 0], [91, H]), rule(132, DIAGONAL_TEXT.ruleY, "chapterDescription")],
   texts: [
-    text("dateLabel", DIAGONAL_TEXT.date, "year", "muted"),
+    text("dateLabel", DIAGONAL_TEXT.date, "year", "accent"),
     text("chapterTitle", DIAGONAL_TEXT.title, "masthead", "ink"),
     text("chapterDescription", DIAGONAL_TEXT.description, "body", "muted"),
     text("pageCaption", DIAGONAL_TEXT.caption, "caption", "ink"),
@@ -76,7 +78,7 @@ export const editorialLandscapeOneWide: Layout = {
   caption: null,
   blocks: [block(182, 0, 195, 86, "paper", "over"), rule(102, 96, "chapterDescription")],
   texts: [
-    text("dateLabel", [184.5, 8, 192.5, 78], "year", "ink", { rotate: 90 }),
+    text("dateLabel", [184.5, 8, 192.5, 78], "year", "accent", { rotate: 90 }),
     text("chapterTitle", [M, 96, 90, 138], "masthead", "ink"),
     text("chapterDescription", [102, 101, 198, 138], "body", "muted"),
   ],
@@ -94,7 +96,7 @@ export const editorialLandscapeOneBleed: Layout = {
   blocks: [block(172, 0, 188, H, "paper", "over")],
   texts: [
     text("chapterTitle", [175, 12, 185, 92], "chapter", "ink", { rotate: 90 }),
-    text("dateLabel", [176.5, 98, 183.5, 136], "year", "muted", { rotate: 90, align: "end" }),
+    text("dateLabel", [176.5, 98, 183.5, 136], "year", "accent", { rotate: 90, align: "end" }),
   ],
 };
 
@@ -128,7 +130,7 @@ export const twoNotes = (dx: number) => ({
     text("chapterTitle", [dx + M, 14, dx + 106, 47], "masthead", "ink"),
     text("chapterDescription", [dx + M, 57, dx + 106, 104], "body", "muted"),
     text("pageCaption", [dx + M, 112, dx + 106, 136], "caption", "ink"),
-    text("dateLabel", [dx + 193, M, dx + 200, 72], "year", "muted", { rotate: 90 }),
+    text("dateLabel", [dx + 193, M, dx + 200, 72], "year", "accent", { rotate: 90 }),
   ],
 });
 
@@ -166,7 +168,7 @@ export const editorialLandscapeThreeRow: Layout = {
   prefers: ["portrait", "portrait", "portrait"],
   slots: [0, 1, 2].map((i) => rect(col(i, 3)[0], 46, col(i, 3)[1], 136)),
   caption: rect(132, M, GRID.x1, 38),
-  blocks: [block(M, 41.4, GRID.x1, 41.4 + 0.35, "ink", "under")],
+  blocks: [block(M, 41.4, GRID.x1, 41.4 + HAIR, LINE)],
   texts: [
     text("chapterTitle", [M, M, 124, 38], "masthead", "ink"),
     text("pageCaption", [132, M, GRID.x1, 38], "caption", "ink", { align: "end" }),
@@ -193,7 +195,7 @@ export const editorialLandscapeFourGrid: Layout = {
   texts: [
     text("chapterTitle", [M, M, 60, 42], "masthead", "ink"),
     text("pageCaption", [M, 50, 60, 92], "caption", "ink"),
-    text("dateLabel", [M, 98, 19, 136], "year", "muted", { rotate: -90 }),
+    text("dateLabel", [M, 98, 19, 136], "year", "accent", { rotate: -90 }),
   ],
 };
 
