@@ -39,7 +39,7 @@ import { PageCarousel, SpreadCarouselPlaceholder } from "./PageCarousel";
 import { cn } from "@/lib/utils";
 import { PageStrip } from "./PageStrip";
 import { SaveBanner, SaveStatus } from "./SaveStatus";
-import { autoOpenTool, EDITOR_TOOLS, visibleTools } from "./tools/registry";
+import { EDITOR_TOOLS, panelOnSelect, visibleTools } from "./tools/registry";
 import type { EditorTool } from "./tools/types";
 import { useAutosave } from "./useAutosave";
 import { useEditorStore } from "./useEditorStore";
@@ -154,7 +154,8 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
   const shown = useMemo(() => visibleTools(registry, ctx), [registry, ctx]);
   const active = shown.find((t) => t.id === activeTool) ?? null;
 
-  // Auto-open on selection (tools with openOnSelect); close a panel whose tool no longer applies.
+  // Auto-open on selection (tools with openOnSelect) unless the open tool has keepOnSelect and still
+  // applies; close a panel whose tool no longer applies.
   // "Changed" = a different thing is selected (selectionKey), not a new object for the same thing:
   // edits re-select their own slot (in-place crop, photo swap) and must not reopen another panel.
   const selKey = selectionKey(state.selection);
@@ -163,9 +164,9 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
     const changed = lastSelection.current !== selKey;
     lastSelection.current = selKey;
     if (changed) {
-      const auto = autoOpenTool(registry, ctx);
-      if (auto) {
-        setActiveTool(auto.id);
+      const next = panelOnSelect(registry, ctx, activeTool);
+      if (next) {
+        if (next.id !== activeTool) setActiveTool(next.id);
         return;
       }
     }

@@ -150,6 +150,8 @@ export const photoPickerTool: EditorTool = {
   dockOnMobile: true,
   // Desktop sidebar: tapping a photo opens the picker beside the page.
   openOnSelect: "sidebar",
+  // Tapping another photo keeps this panel open on the new photo.
+  keepOnSelect: true,
   isAvailable: (ctx) => pickerTarget(ctx) !== null,
   Panel: PhotoPickerPanel,
 };

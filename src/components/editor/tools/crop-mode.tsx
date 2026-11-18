@@ -296,6 +296,8 @@ export const cropTool: EditorTool = {
   panelTitle: "Crop photo",
   // The photo is cropped on the page itself: keep the page visible above the controls on phones.
   dockOnMobile: true,
+  // Tapping another photo keeps this panel open on the new photo.
+  keepOnSelect: true,
   isAvailable: (ctx) => cropTarget(ctx) !== null,
   Panel: CropPanel,
 };

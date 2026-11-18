@@ -7,7 +7,9 @@ import { cropTarget, CropPanel, cropTool, untilt } from "@/components/editor/too
 import { LayoutPickerPanel, layoutPickerTool, layoutTargetPage } from "@/components/editor/tools/layout-picker";
 import { LOW_RES_MESSAGE, slotIsLowRes } from "@/components/editor/tools/low-res-badge";
 import { PhotoPickerPanel, photoPickerTool, pickerTarget } from "@/components/editor/tools/photo-picker";
-import { autoOpenTool, visibleTools } from "@/components/editor/tools/registry";
+import { autoOpenTool, panelOnSelect, visibleTools } from "@/components/editor/tools/registry";
+import { photoFilterTool } from "@/components/editor/tools/photo-filter";
+import { captionEditorTool } from "@/components/editor/tools/caption-editor";
 import { cropToStyle, DEFAULT_CROP } from "@/lib/book/crop";
 import { changeLayout, replacePhoto, setCrop } from "@/lib/book/edit-ops";
 import { effectiveFocal, panCrop, pinchZoom, zoomCrop, type CropFrame } from "@/lib/editor/crop-gesture";
@@ -250,6 +252,23 @@ describe("crop in place + desktop sidebar", () => {
     expect(autoOpenTool(tools, { ...slot, sidebar: true })?.id).toBe("replace");
     expect(autoOpenTool(tools, { ...ctxWith({ kind: "cover", part: "photo" }), sidebar: true })?.id).toBe("replace");
     expect(autoOpenTool(tools, { ...ctxWith(null), sidebar: true })).toBeNull();
+  });
+
+  it("switching photos keeps an open Replace / Crop / Filter panel", () => {
+    const tools = [photoPickerTool, cropTool, photoFilterTool, layoutPickerTool, captionEditorTool];
+    const other = { ...ctxWith({ kind: "slot", pageIdx: 0, slotIdx: 0 }), sidebar: true };
+    expect(panelOnSelect(tools, other, "crop")?.id).toBe("crop");
+    expect(panelOnSelect(tools, other, "filter")?.id).toBe("filter");
+    expect(panelOnSelect(tools, other, "replace")?.id).toBe("replace");
+    // Not a keep tool → the usual auto-open (picker beside the page on desktop).
+    expect(panelOnSelect(tools, other, "layout")?.id).toBe("replace");
+    expect(panelOnSelect(tools, other, null)?.id).toBe("replace");
+    // Phones: the open photo tool still stays; nothing auto-opens otherwise.
+    const phone = ctxWith({ kind: "slot", pageIdx: 0, slotIdx: 0 });
+    expect(panelOnSelect(tools, phone, "filter")?.id).toBe("filter");
+    expect(panelOnSelect(tools, phone, null)).toBeNull();
+    // Crop doesn't apply to the cover → falls back to the picker.
+    expect(panelOnSelect(tools, { ...ctxWith({ kind: "cover", part: "photo" }), sidebar: true }, "crop")?.id).toBe("replace");
   });
 });
 

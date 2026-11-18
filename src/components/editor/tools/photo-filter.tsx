@@ -117,6 +117,8 @@ export const photoFilterTool: EditorTool = {
   panelTitle: "Photo filter",
   // Live preview: keep the page visible above the panel on phones.
   dockOnMobile: true,
+  // Tapping another photo keeps this panel open on the new photo.
+  keepOnSelect: true,
   isAvailable: (ctx) => filterTarget(ctx) !== null,
   Panel: PhotoFilterPanel,
 };

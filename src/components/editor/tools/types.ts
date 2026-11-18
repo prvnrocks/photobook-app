@@ -66,4 +66,9 @@ export interface EditorTool {
    * opens beside the page when a photo is tapped; phones keep the page full size.
    */
   openOnSelect?: boolean | "sidebar";
+  /**
+   * Keep this tool's Panel open when the user selects another thing it still applies to (e.g. Crop
+   * or Filter stays open while tapping from photo to photo) instead of auto-opening `openOnSelect`.
+   */
+  keepOnSelect?: boolean;
 }

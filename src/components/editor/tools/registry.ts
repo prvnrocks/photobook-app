@@ -92,6 +92,19 @@ export function autoOpenTool(tools: readonly EditorTool[], ctx: EditorContextVal
   );
 }
 
+/**
+ * The panel to show after the selection changes to a different thing: the open tool when it has
+ * keepOnSelect and still applies (Crop/Filter/Replace stay open from photo to photo), else the
+ * auto-open tool, else null (the shell then closes a panel that no longer applies).
+ */
+export function panelOnSelect(tools: readonly EditorTool[], ctx: EditorContextValue, openId: string | null): EditorTool | null {
+  if (openId !== null) {
+    const open = visibleTools(tools, ctx).find((t) => t.id === openId);
+    if (open?.keepOnSelect && open.Panel) return open;
+  }
+  return autoOpenTool(tools, ctx);
+}
+
 /** Big buttons in the toolbar row per selection; the rest go behind "More" (M13, ≤ 4 buttons at 375 px). */
 export const MAX_PRIMARY_TOOLS = 3;
 
