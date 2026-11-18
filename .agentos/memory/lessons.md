@@ -177,3 +177,8 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-17) A publish made while Vercel is still building runs the OLD code — after a publish-path fix, wait for "Ready" before republishing to verify (check published_doc in the DB if in doubt).
 - (2026-11-18, editor) Tapping a slot on the other page of a spread is NOT one batched update: goTo (clears selection) and select land in separate renders — selection-change logic must handle slot → none → slot.
 - (2026-11-18) With a real key in .env.local, resolveAiMode() auto-goes live for npm run dev / e2e — keep AI_MODE=replay in .env.local and the playwright webServer env; go live only per command (AI_MODE=live next start). Free key check: messages.countTokens.
+- (2026-11-18, publish) A snapshot field tied to a layout panel (chapter description) must be published only when a page shows it — test publish with the panel's page swapped or deleted. Hiding it can take one swap per page: a re-fit keeps a description layout.
+- (2026-11-18, bundle) Measure a lazy split with a real build before keeping it: two ~1–1.5 kB panels minus a lazy helper saved nothing on /books/[id]/edit. The weight is the layout catalogue + shared editor libs.
+- (2026-11-18, machine) Full vitest + next dev + 3 Playwright workers makes this Mac swap and eats disk — run gates sequentially, ≤ 2 workers, watch df.
+- (2026-11-18, e2e) A spread's description is drawn on the right half; find the page that draws it. Measure a grid in one evaluate, not several boundingBox() calls across a scroll.
+- (2026-11-18, AI) Synthetic e2e photos make the live Curator keep 1 of 12 — a live quality sample needs real photos.

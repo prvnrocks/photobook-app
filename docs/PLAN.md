@@ -271,23 +271,23 @@ Plan: `.agentos/runs/m13.md`, D-070.
 ## Milestone 30 — Magazine styles (2026-11-18)
 Goal: more album designs in a magazine look, for every occasion and travel, with AI-written titles and
 descriptions, new font styles and colours (user request 2026-11-18; references `docs/design/refs/mg-*.jpg`; D-090).
-- [ ] Two new design styles, each for A5 portrait + landscape (page layouts 1–6 photos, ≥ 2 spreads, auto cover + 3 user cover styles):
+- [x] Two new design styles, each for A5 portrait + landscape (page layouts 1–6 photos, ≥ 2 spreads, auto cover + 3 user cover styles):
       **Magazine** (bold travel-magazine: big masthead title over a full-bleed cover photo, cover lines, dark text panels,
       accent colour, full-bleed photos with text columns — ref mg-5) and **Editorial** (minimal Swiss: white pages,
       diagonal-cut photos, heavy sans titles, thin rules, vertical date strip — ref mg-covers). Layouts stay pure data.
-- [ ] New OFL fonts with Arabic partners (static, screen + print, no Type3): a heavy display sans for mastheads and a clean
+- [x] New OFL fonts with Arabic partners (static, screen + print, no Type3): a heavy display sans for mastheads and a clean
       geometric sans for headings/body; per-style font tokens. Arabic renders correctly in viewer AND PDF.
-- [ ] Colour: each new style has 5–6 accent colourways; AI picks one from the photos' colours, the user can change it in
+- [x] Colour: each new style has 5–6 accent colourways; AI picks one from the photos' colours, the user can change it in
       the editor (one undo step); stored in the doc (v2 feature), never overwritten once user-chosen.
-- [ ] AI text: chapter **descriptions** (a short original paragraph per chapter, ≤ 45 words, grounded in visible content +
+- [x] AI text: chapter **descriptions** (a short original paragraph per chapter, ≤ 45 words, grounded in visible content +
       metadata, never invented names/places, native Arabic when caption_lang = ar) written by the Caption Writer, checked by
       the Critic, shown in magazine text panels; cover lines from chapter titles. Editable in the editor; `source: ai|user`,
       user text never overwritten; counts toward the existing rewrite limits; no new AI call per build beyond the existing batches where possible; rule/AI-off albums show no description panel text (panel collapses).
-- [ ] New book / setup card offers Magazine + Editorial for every occasion; travel defaults to Magazine (other defaults unchanged).
+- [x] New book / setup card offers Magazine + Editorial for every occasion; travel defaults to Magazine (other defaults unchanged).
       Migration: books.design_style check + rls_check. Existing books byte-identical; m9/m10b/m10c/m29 goldens unchanged.
-- [ ] Contact sheets (`/dev-book-page`) for both styles × formats compared against the references; editor, viewer, PDF,
+- [x] Contact sheets (`/dev-book-page`) for both styles × formats compared against the references; editor, viewer, PDF,
       OG image; 375 px; Arabic; bundle budget measured (editor ships the layout catalogue).
-- [ ] Gate: lint/typecheck/vitest, dev e2e, live e2e (AI off + replay), ONE small live-AI build; reviewer. User signs off the
+- [x] Gate: lint/typecheck/vitest, dev e2e, live e2e (AI off + replay), ONE small live-AI build; reviewer. User signs off the
       contact sheet before deploy.
 - Out (later): painted/brush-edge art style (ref mg-covers2 — needs mask artwork), Restyle of existing books (D-063).
 
