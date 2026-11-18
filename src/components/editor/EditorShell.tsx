@@ -113,17 +113,8 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
     if (terminal) actions.setReadOnly(true);
   }, [terminal, actions]);
 
-  // A keepOnSelect panel closed by a page change (which drops the selection) — reopened on the next
-  // photo selected, e.g. tapping a photo on the other page of a spread with Filter open.
-  const parkedTool = useRef<string | null>(null);
-  const openTool = useCallback((id: string) => {
-    parkedTool.current = null;
-    setActiveTool(id);
-  }, []);
-  const closeTool = useCallback(() => {
-    parkedTool.current = null;
-    setActiveTool(null);
-  }, []);
+  const openTool = useCallback((id: string) => setActiveTool(id), []);
+  const closeTool = useCallback(() => setActiveTool(null), []);
   const setRewrites = useCallback((used: number, left: number) => setRewritesState({ used, left }), []);
   // Any edit will be saved as a user edit, after which AI runs are refused (D-037 #2).
   const editedThisSession = canUndo(state);
@@ -169,27 +160,18 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
   // edits re-select their own slot (in-place crop, photo swap) and must not reopen another panel.
   const selKey = selectionKey(state.selection);
   const lastSelection = useRef(selKey);
-  const lastPage = useRef(state.page);
   useEffect(() => {
     const changed = lastSelection.current !== selKey;
-    const pageChanged = lastPage.current !== state.page;
     lastSelection.current = selKey;
-    lastPage.current = state.page;
-    if (changed && state.selection === null) {
-      // Leaving the page dropped the selection: remember a keep tool; a deliberate deselect forgets it.
-      const keep = pageChanged && activeTool !== null && registry.some((t) => t.id === activeTool && t.keepOnSelect);
-      parkedTool.current = keep ? activeTool : null;
-    }
-    if (changed && state.selection !== null) {
-      const next = panelOnSelect(registry, ctx, activeTool ?? parkedTool.current);
-      parkedTool.current = null;
+    if (changed) {
+      const next = panelOnSelect(registry, ctx, activeTool);
       if (next) {
         if (next.id !== activeTool) setActiveTool(next.id);
         return;
       }
     }
     if (activeTool !== null && !active) setActiveTool(null);
-  }, [selKey, state.page, state.selection, registry, ctx, activeTool, active]);
+  }, [selKey, registry, ctx, activeTool, active]);
 
   // Keyboard: undo/redo, arrows to flip pages (spreads on ≥ md), Escape to close/deselect.
   const page = state.page;

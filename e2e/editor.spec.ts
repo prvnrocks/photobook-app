@@ -1616,7 +1616,7 @@ test.describe("desktop tool sidebar at 1280 × 800 (/dev-editor)", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
   });
 
-  test("Filter / Crop stay open when tapping a photo on the other page; a deselect returns to Replace", async ({ page }) => {
+  test("Filter / Crop stay open when tapping a photo on the other page; a deselect or page turn returns to Replace", async ({ page }) => {
     await page.goto("/dev-editor");
     await page.getByTestId("carousel-next").click();
     const slotOn = (i: number) => page.locator(`[data-testid="spread-page"][data-page-idx="${i}"] [data-testid="slot-target"]`).first();
@@ -1637,6 +1637,14 @@ test.describe("desktop tool sidebar at 1280 × 800 (/dev-editor)", () => {
     await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
     await slotOn(0).click();
+    await expect(page.getByTestId("editor-panel-replace")).toBeVisible();
+    // Turning the page (Next) is not a photo tap: Filter closes with the selection, the next photo
+    // tap on the new spread opens the picker.
+    await page.getByTestId("editor-tool-filter").click();
+    await expect(page.getByTestId("editor-panel-filter")).toBeVisible();
+    await page.getByTestId("carousel-next").click();
+    await expect(page.getByTestId("editor-panel-filter")).toHaveCount(0);
+    await slotOn(2).click();
     await expect(page.getByTestId("editor-panel-replace")).toBeVisible();
   });
 });

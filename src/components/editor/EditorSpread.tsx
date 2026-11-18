@@ -19,6 +19,9 @@ import { useEditor } from "./editor-context";
 import { ED_PAGE_FRAME } from "./editor-classes";
 import { EditablePage } from "./EditablePage";
 
+/** Tap targets whose own select moves the current page (slot / caption overlays in EditablePage). */
+const SELECT_TARGETS = '[data-testid="slot-target"], [data-testid="caption-target"]';
+
 /** Stacked page edges + soft drop shadow under the open book. */
 export const BOOK_SHADOW =
   "-3px 3px 0 -1px #fafaf9, -3px 3px 0 0 rgba(0,0,0,0.08), 3px 3px 0 -1px #fafaf9, 3px 3px 0 0 rgba(0,0,0,0.08), 0 12px 32px rgba(0,0,0,0.18)";
@@ -106,9 +109,13 @@ function SpreadSide({
   const active = joinedActive || (isCurrent && state.page === pageIdx);
   return (
     <div
-      // Capture: becomes the current page before the slot/caption tap selects (same page → no-op).
-      onClickCapture={() => {
-        if (state.page !== pageIdx) actions.goTo(pageIdx);
+      // Capture: a tap on this page makes it the current page (same page → no-op). A photo/caption
+      // tap skips it: its select moves the page in the same update, so a photo tool panel (Crop,
+      // Filter, Replace) stays open instead of closing on the page change first.
+      onClickCapture={(e) => {
+        if (state.page === pageIdx) return;
+        if (!state.readOnly && (e.target as Element).closest(SELECT_TARGETS)) return;
+        actions.goTo(pageIdx);
       }}
       className={cx("relative", active && !joinedActive && `z-[1] ${ACTIVE_OUTLINE}`)}
       data-testid="spread-page"
