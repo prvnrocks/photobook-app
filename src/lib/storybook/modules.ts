@@ -10,7 +10,9 @@
 // so limits, budget, replay mode and agent_steps logging keep working unchanged.
 
 import type { BookDoc } from "@/lib/book/types";
-import type { MemoryContext, Moment, PhotoAnalysis, Storybook, Chapter } from "./types";
+import type { GroundingIssue } from "@/lib/ai/story/grounding";
+import type { StoryPlan } from "@/lib/ai/story/plan";
+import type { MemoryContext, PhotoAnalysis, Storybook } from "./types";
 import type { StoryBalance } from "./balance";
 import type { MergeReport } from "./versioning";
 
@@ -38,17 +40,28 @@ export interface MemoryContextStore {
   suggest(bookId: string, photos: PhotoAnalysis[]): Promise<Omit<MemoryContext, "rev" | "updatedAt">>;
 }
 
-export type StoryPlan = { moments: Moment[]; chapters: Chapter[]; coverPhotoId: string | null; title: string; subtitle: string | null };
+/**
+ * ③ + ④ are implemented in src/lib/ai/story (Task 6) as three server functions rather than
+ * classes; these interfaces describe the same contract.
+ *   - StoryPlan (src/lib/ai/story/plan.ts) = the outline (chapters of moments, title + arc per
+ *     chapter, hero photo, which moments get a paragraph) + the page skeleton computed in code so
+ *     the 65 / 35 balance holds by construction. Plain JSON, re-validated by the writer.
+ *   - Inputs (photos, moments, memory context) are loaded by the functions themselves after the
+ *     ownership check; there is no agent_runs row — every call is logged to story_ai_calls.
+ */
+export type { StoryPlan } from "@/lib/ai/story/plan";
 
-/** ③ Reuses: Storyteller (src/lib/ai/agents/storyteller.ts, AlbumPlan moments) + rule grouping (src/lib/ai/story.ts, autolayout). */
+/** ③ planStory(): ONE Storyteller-agent call, else the deterministic rule plan (never throws for an AI failure). */
 export interface StoryPlanner {
-  plan(ctx: StoryRunContext, input: { photos: PhotoAnalysis[]; context: MemoryContext | null; pageBudget: number; narrativePages: number }): Promise<StoryPlan>;
+  plan(bookId: string): Promise<StoryPlan>;
 }
 
-/** ④ Reuses: Caption Writer + Critic + Rewriter (src/lib/ai/agents), caption-check.ts grounding rules. */
+/** ④ writeStory() / rewriteNarrativeBlock(): one call per chapter; every block passes grounding.ts or is dropped. */
 export interface StoryWriter {
-  /** Fills narrative blocks for the planned pages; returns a full draft storybook (origin "ai"). */
-  write(ctx: StoryRunContext, input: { plan: StoryPlan; photos: PhotoAnalysis[]; context: MemoryContext | null }): Promise<Storybook>;
+  /** Writes the plan (or regenerates one chapter) and appends the next version; user text is never overwritten. */
+  write(bookId: string, plan: StoryPlan, opts?: { chapterId?: string }): Promise<StoryRunResult & { issues: GroundingIssue[] }>;
+  /** `blockId` = "<bookId>/<blockId>". Stores a new version, or returns a proposal for a protected block. */
+  rewriteBlock(blockId: string, instruction: { kind: "regenerate" | "shorter" | "longer" | "simpler" | "tone"; tone?: string; note?: string }, opts?: { propose?: boolean }): Promise<{ stored: boolean; storybook: Storybook | null }>;
 }
 
 /** ⑤ Reuses: layout catalogue (src/lib/layouts), bestPageLayout / fit.ts, plan-to-doc.ts, design defaults + colourways. */

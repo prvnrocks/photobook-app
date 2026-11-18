@@ -247,3 +247,53 @@ src/lib/ai/
   fallback.ts          rule-based album (wraps src/lib/autolayout.ts)
 tests/ai/              fixture-based tests per agent + orchestrator (no live API calls)
 ```
+
+## Balanced Storybook: Story Planner + Narrative Writer (Task 6)
+
+A second, separate pipeline in `src/lib/ai/story/` for "Balanced Storybooks" (65 % photography / 35 % narrative).
+It does not touch the album pipeline above (orchestrator, agents, prompts are unchanged) and is not wired into the
+wizard or the editor yet. Three server functions, each proving book ownership first (`not_found` otherwise):
+
+| Function | Model calls | Agent / effort | Result |
+| --- | --- | --- | --- |
+| `planStory(bookId)` | 1 (re-asked once when unusable) | `storyteller` / medium | `StoryPlan` — never throws for an AI failure: `source: "ai" \| "rule"` + `fallbackReason` |
+| `writeStory(bookId, plan, { chapterId? })` | 1 per chapter + 1 closing (+ ≤ 1 repair each, effort low) | `caption_writer` / medium | new `storybook_versions` row; `{ storybook, merge, balance, issues }` |
+| `rewriteNarrativeBlock("<bookId>/<blockId>", instruction, { propose? })` | 1 (+ 1 retry) | `rewriter` / low, 15 s | new version with only that block changed, or a proposal for a protected block |
+
+- **Inputs are text only** (`inputs.ts`): kept photos as aliases `p1…` with the Task 3 description / objects / activities
+  and the date + place from metadata, moments `m1…` (stored `photo_moments`, else clustered in memory), the user's memory
+  as facts `f1…` (occasion, book title, each answer / person / place / fact / note). No image, uuid or file name is sent.
+- **Outline, then text.** The plan is chapters of consecutive moments with a title (≤ 60 chars) and a one-line arc, the
+  hero photo and the moments that get a paragraph. Chapter counts by kept photos (`plan.ts chapterCountRange`): < 10 → 1,
+  10–19 → 1–2, 20–39 → 2–4, 40–60 → 3–4, > 60 → 4–6, never more than there are moments. `ruleOutline` is the
+  deterministic fallback (AI off / refused / over limit or budget / invalid twice).
+- **65 / 35 by construction** (`skeleton.ts`, pure): page kinds and `narrativeShare` are computed in code — chapter
+  opener + intro 0.5, mixed page + paragraph 0.4, photo page with caption / pull quote 0.1, closing page 1.0 — within
+  `STORY_BALANCE.tolerance` for ≥ 10 photos, inside the 20 / 100 page limit, never a page without content.
+- **A plan is untrusted JSON**: `writeStory` re-validates it (`checkPlanAgainstBook`): same book, same photos and
+  moments, chapter rules, grounded titles / arcs, and a skeleton equal to the recomputed one → else `invalid_plan`.
+- **Grounding** (`grounding.ts`, pure — its header lists the heuristic's limits): every block returns
+  `{ blockId, text, photoRefs, factRefs }` and is rejected when it cites nothing, cites a photo outside its chapter, or
+  contains a name / place / relationship / date / age / number / milestone that is not in a CITED fact or a cited
+  photo's metadata, quoted or reported speech that is not the user's own words, a stated feeling, a stock phrase, a
+  repeated opening or 4-word sequence, the wrong script, or a length outside the hard bounds (intro / closing 30–70
+  words, paragraph 20–60, caption / pull quote 5–18). Failed blocks get ONE repair call per chapter, then are dropped
+  (the page keeps its photos, text area 0) and reported in `issues`. An ungrounded block is never stored.
+- **User text is never overwritten**: a full write is merged with `mergeAiDraft` (user blocks, user titles, locked
+  pages survive; their blocks are not even requested); `chapterId` rewrites only that chapter's AI-owned blocks on
+  unprotected pages; a rewrite of a user-written block or a locked page is `protected` unless `propose`.
+- **Versions**: `appendStorybookVersion` (optimistic, `conflict` on a concurrent append). Blocks carry `groundedIn`
+  (photo uuids) and `factRefs`; the version stores `facts` = `{ id, kind, hash }` (ids stable per book, no fact text).
+- **Limits and cost** (live only; replay is free and never refused): per book free / paid — 6 / 30 plans, 2 / 10 writes,
+  10 / 50 chapter regenerations, 20 / 200 block rewrites (`limits.ts`), the daily AI budget (pipeline + photo analysis +
+  story spend), and `maxRunCostUsd` per write (estimated before each call → `run_budget`). Every call is one
+  `story_ai_calls` row (migration 2600, service role only: kind, scope, chapter, version, model, prompt version,
+  tokens, cost, latency, error code — no text). Live calls are refused while the table is missing.
+- **Config**: `AI_STORY_MODEL` (allow-list = photo models), `AI_STORY_TIMEOUT_MS`, `AI_STORY_MAX_RETRIES`.
+  Prompt versions: `story-plan-1`, `story-write-1`, `story-rewrite-1` (`prompts.ts`, static system prompts).
+- **Replay** (`replay.ts`): deterministic, grounded synthesisers behind the service's own `ReplayTransport` (the shared
+  `tests/fixtures/ai` files belong to the album pipeline and are not read).
+- **Errors** (`StoryError.code`): `not_found`, `no_photos`, `ai_off`, `invalid_plan`, `no_story`, `invalid_instruction`,
+  `usage_unavailable`, `limit_reached`, `budget_exhausted`, `protected`, `ungrounded`, `refused`, `model_error`,
+  `invalid_result`, `conflict`. Logs carry codes only.
+
