@@ -1615,6 +1615,30 @@ test.describe("desktop tool sidebar at 1280 × 800 (/dev-editor)", () => {
     await expect(rail).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
   });
+
+  test("Filter / Crop stay open when tapping a photo on the other page; a deselect returns to Replace", async ({ page }) => {
+    await page.goto("/dev-editor");
+    await page.getByTestId("carousel-next").click();
+    const slotOn = (i: number) => page.locator(`[data-testid="spread-page"][data-page-idx="${i}"] [data-testid="slot-target"]`).first();
+    await slotOn(0).click();
+    await page.getByTestId("editor-tool-filter").click();
+    await expect(page.getByTestId("editor-panel-filter")).toBeVisible();
+    await slotOn(1).click();
+    await expect(slotOn(1)).toHaveAttribute("data-selected", "true");
+    await expect(page.getByTestId("editor-panel-filter")).toBeVisible();
+    await expect(page.getByTestId("editor-panel-replace")).toHaveCount(0);
+    await slotOn(0).click();
+    await page.getByTestId("editor-tool-crop").click();
+    await slotOn(1).click();
+    // Crop follows to page 1: its photo becomes the crop area.
+    await expect(page.locator('[data-testid="spread-page"][data-page-idx="1"] [data-testid="crop-area"]')).toBeVisible();
+    await expect(page.getByTestId("editor-panel-crop")).toBeVisible();
+    // Escape closes, Escape deselects: the next photo tap opens the picker as usual.
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await slotOn(0).click();
+    await expect(page.getByTestId("editor-panel-replace")).toBeVisible();
+  });
 });
 
 // Header "Preview" (2026-11-17): the draft in the real flipbook, full screen, beside Share.
