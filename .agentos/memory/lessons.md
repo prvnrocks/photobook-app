@@ -176,3 +176,4 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (M29) A session cut-off kills running builders: check the run report vs `git diff --stat` on resume; finished files may lack goldens/run-report entries.
 - (2026-11-17) A publish made while Vercel is still building runs the OLD code — after a publish-path fix, wait for "Ready" before republishing to verify (check published_doc in the DB if in doubt).
 - (2026-11-18, editor) Tapping a slot on the other page of a spread is NOT one batched update: goTo (clears selection) and select land in separate renders — selection-change logic must handle slot → none → slot.
+- (2026-11-18) With a real key in .env.local, resolveAiMode() auto-goes live for npm run dev / e2e — keep AI_MODE=replay in .env.local and the playwright webServer env; go live only per command (AI_MODE=live next start). Free key check: messages.countTokens.

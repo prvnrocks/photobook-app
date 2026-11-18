@@ -21,6 +21,9 @@ export default defineConfig({
   ],
   webServer: {
     command: "npm run dev",
+    // Never spend Anthropic credits from e2e: an explicit AI_MODE beats the key in .env.local
+    // (process env wins over .env files in Next).
+    env: { AI_MODE: "replay" },
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
