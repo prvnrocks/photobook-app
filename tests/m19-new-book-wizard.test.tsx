@@ -432,6 +432,32 @@ describe("new book wizard — shape, style and submit", () => {
     expect(radio("style-classic").checked).toBe(true);
   });
 
+  it("travel preselects Magazine among six cards; the user's own pick wins and survives an occasion change (M30 T12, D-090)", async () => {
+    store({ title: "", occasion: "travel", format: "A5_PORTRAIT" });
+    await mount("/books/new?step=4");
+    const ids = ["modern", "classic", "geometric", "scrapbook", "magazine", "editorial"];
+    for (const id of ids) expect($(`style-${id}`)).not.toBeNull();
+    expect(ids.filter((id) => radio(`style-${id}`).checked)).toEqual(["magazine"]);
+    // each new card draws its own art, not the Classic fallback
+    expect($("style-magazine").innerHTML).not.toBe($("style-classic").innerHTML.replaceAll("classic", "magazine"));
+    expect($("style-magazine").innerHTML).toContain("fill-primary");
+    expect($("style-editorial").innerHTML).toContain("fill-foreground/85");
+    await click(radio("style-editorial"));
+    expect(ids.filter((id) => radio(`style-${id}`).checked)).toEqual(["editorial"]);
+    await back();
+    await back();
+    await click(radio("occasion-family"));
+    await click($("wizard-continue"));
+    await click($("wizard-continue"));
+    expect(radio("style-editorial").checked).toBe(true); // not family's Scrapbook, not travel's Magazine
+    await back();
+    await back();
+    await click(radio("occasion-travel"));
+    await click($("wizard-continue"));
+    await click($("wizard-continue"));
+    expect(radio("style-editorial").checked).toBe(true);
+  });
+
   it("Continue on step 4 submits the hidden fields to createBookAction (no tone); the draft stays stored while it runs", async () => {
     let sent: FormData | null = null;
     let storedDuringSubmit: string | null = "unset";

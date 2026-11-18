@@ -106,6 +106,11 @@ export function ShapePreview({ format, className, variant = "default" }: { forma
  * geometric = a full-bleed band with a diagonal edge, a circle cut into it, a hexagon (g-*-two-circle,
  *             g-*-five-hex).
  * scrapbook = a tilted polaroid with a strip of tape and a small heart (s-*-one-polaroid).
+ * magazine  = a masthead cover: full-bleed photo, dark top bar, heavy caps title bars on a dark band,
+ *             cover-line tabs (one in the accent) and a white foot strip (mg-*-cover).
+ * editorial = a white page: heavy title bars under a short rule, a vertical date strip, a hairline
+ *             and a diagonal-cut photo (ed-*-cover).
+ * Titles are drawn as bars, not text: the styles' own display fonts are not loaded on the wizard.
  */
 export function StylePreview({
   style,
@@ -117,6 +122,8 @@ export function StylePreview({
   if (style === "modern") return <ModernPreview {...props} />;
   if (style === "geometric") return <GeometricPreview {...props} />;
   if (style === "scrapbook") return <ScrapbookPreview {...props} />;
+  if (style === "magazine") return <MagazinePreview {...props} />;
+  if (style === "editorial") return <EditorialPreview {...props} />;
   return <ClassicPreview {...props} />;
 }
 
@@ -251,6 +258,93 @@ function ScrapbookPreview({ format, className, variant = "default" }: { format: 
         className="fill-accent-strong/80"
       />
       <line x1={r1(capX1)} x2={r1(capX2)} y1={r1(capY)} y2={r1(capY)} strokeWidth="1.2" strokeLinecap="round" className={ink} />
+    </Frame>
+  );
+}
+
+/** Heavy "title" bars (flush left), one rect per line; widths as a share of `w`. */
+function TitleBars({ x, y, w, bar, gap, lines, className }: { x: number; y: number; w: number; bar: number; gap: number; lines: readonly number[]; className: string }) {
+  return (
+    <>
+      {lines.map((share, i) => (
+        <rect key={i} x={r1(x)} y={r1(y + i * (bar + gap))} width={r1(w * share)} height={r1(bar)} className={className} />
+      ))}
+    </>
+  );
+}
+
+function MagazinePreview({ format, className, variant = "default" }: { format: BookFormat } & PreviewSize) {
+  const p = PAGE[format];
+  const landscape = format === "A5_LANDSCAPE";
+  const card = variant === "card";
+  const dark = card ? "fill-primary" : "fill-foreground/70";
+  const accent = card ? "fill-accent-strong" : "fill-muted-foreground";
+  const barH = p.h * 0.075; // dark top bar (date line)
+  const bandH = p.h * (landscape ? 0.36 : 0.3); // masthead band under it
+  const footH = p.h * 0.13; // white foot strip
+  const photoY = p.y + barH + bandH;
+  const photoH = p.h - barH - bandH - footH;
+  const mx = p.w * 0.1;
+  const bar = bandH * (landscape ? 0.27 : 0.2);
+  const gap = bar * 0.5;
+  const lines = landscape ? ([0.62, 0.48] as const) : ([0.6, 0.8, 0.7] as const);
+  const titleH = lines.length * bar + (lines.length - 1) * gap;
+  const tabH = photoH * (landscape ? 0.2 : 0.15);
+  const tabW = p.w * (landscape ? 0.34 : 0.46);
+  const tabX = p.x + p.w - tabW;
+  const tabY = photoY + photoH * (landscape ? 0.3 : 0.44); // under the motif's sun
+  const footY = p.y + p.h - footH / 2;
+  return (
+    <Frame format={format} className={className} variant={variant}>
+      <rect x={p.x} y={r1(photoY - 0.5)} width={p.w} height={r1(photoH + 0.5)} className={photoClass(variant, 0)} />
+      <PhotoMotif variant={variant} x={p.x} y={photoY} w={p.w} h={photoH} />
+      {/* masthead: top bar + band, the title as heavy bars */}
+      <rect x={p.x} y={p.y} width={p.w} height={r1(barH + bandH)} className={dark} />
+      <rect x={r1(p.x + mx)} y={r1(p.y + barH * 0.5)} width={r1(p.w * 0.3)} height="0.7" className={accent} />
+      <TitleBars x={p.x + mx} y={p.y + barH + (bandH - titleH) / 2} w={p.w - 2 * mx} bar={bar} gap={gap} lines={lines} className="fill-background" />
+      {/* cover lines: dark tab, accent tab */}
+      <rect x={r1(tabX)} y={r1(tabY)} width={r1(tabW)} height={r1(tabH)} className={dark} />
+      <rect x={r1(tabX + tabW * 0.14)} y={r1(tabY + tabH * 1.35)} width={r1(tabW * 0.86)} height={r1(tabH)} className={accent} />
+      {/* white foot strip with a short rule */}
+      <rect x={p.x} y={r1(p.y + p.h - footH)} width={p.w} height={r1(footH)} className="fill-background" />
+      <line x1={r1(p.x + mx)} x2={r1(p.x + p.w * 0.5)} y1={r1(footY)} y2={r1(footY)} strokeWidth="1.2" strokeLinecap="round" className={ink} />
+      {/* the page outline again, over the full-bleed art */}
+      <rect x={p.x} y={p.y} width={p.w} height={p.h} rx="1.5" fill="none" strokeWidth="1" className="stroke-border" />
+    </Frame>
+  );
+}
+
+function EditorialPreview({ format, className, variant = "default" }: { format: BookFormat } & PreviewSize) {
+  const p = PAGE[format];
+  const landscape = format === "A5_LANDSCAPE";
+  const heavy = "fill-foreground/85";
+  const mx = p.w * 0.12;
+  // Photo: lower part of the page, its top edge rising to the right.
+  const yL = p.y + p.h * (landscape ? 0.74 : 0.62);
+  const yR = p.y + p.h * (landscape ? 0.34 : 0.4);
+  const bottom = p.y + p.h;
+  const photo = [`${p.x},${r1(yL)}`, `${p.x + p.w},${r1(yR)}`, `${p.x + p.w},${bottom}`, `${p.x},${bottom}`].join(" ");
+  const lift = p.h * 0.035; // hairline parallel to the cut, a little above it
+  const top = p.y + p.h * (landscape ? 0.14 : 0.1);
+  const bar = p.h * (landscape ? 0.075 : 0.05);
+  const gap = bar * 0.55;
+  const lines = landscape ? ([0.44, 0.34] as const) : ([0.52, 0.62, 0.44] as const);
+  const titleY = top + bar * 0.9;
+  const ruleY = titleY + lines.length * (bar + gap) + bar * 0.4;
+  const stripX = p.x + p.w - mx * 0.8;
+  // Motif box: the part of the photo that is a plain rectangle (below the cut's lowest point).
+  const motif = { x: p.x, y: yL, w: p.w, h: bottom - yL };
+  return (
+    <Frame format={format} className={className} variant={variant}>
+      <polygon points={photo} className={photoClass(variant, 0)} />
+      <PhotoMotif variant={variant} {...motif} />
+      <line x1={p.x} x2={p.x + p.w} y1={r1(yL - lift)} y2={r1(yR - lift)} strokeWidth="0.4" className={ink} />
+      {/* short heavy rule, heavy title, thin rule */}
+      <rect x={r1(p.x + mx)} y={r1(top)} width={r1(p.w * 0.16)} height="0.8" className={heavy} />
+      <TitleBars x={p.x + mx} y={titleY} w={p.w} bar={bar} gap={gap} lines={lines} className={heavy} />
+      <line x1={r1(p.x + mx)} x2={r1(p.x + mx + p.w * 0.14)} y1={r1(ruleY)} y2={r1(ruleY)} strokeWidth="0.5" className={ink} />
+      {/* vertical date strip */}
+      <line x1={r1(stripX)} x2={r1(stripX)} y1={r1(top)} y2={r1(top + p.h * (landscape ? 0.2 : 0.22))} strokeWidth="0.8" className={ink} />
     </Frame>
   );
 }

@@ -15,12 +15,17 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { PageSkeleton } from "@/components/app/Skeleton";
 import { BookFonts } from "@/components/book/BookFonts";
 import { BookPage } from "@/components/book/BookPage";
+import { StylePreview } from "@/components/books/DesignPreview";
+import { StepStyle } from "@/components/books/wizard/StepStyle";
+import { WizardBookPreview } from "@/components/books/wizard/WizardBookPreview";
+import { BookCoverStatic } from "@/components/dashboard/book-cover-art";
 import { Button } from "@/components/ui/button";
 import { CONTRAST_PAIRS, contrastRatio, PALETTE, paletteHex } from "@/lib/app/palette";
 import { devPreviewDoc, devPreviewPhotos } from "@/lib/book/dev-preview";
 import { devSampleDoc, devSamplePhotos } from "@/lib/book/dev-sample";
 import type { RenderPhotos } from "@/lib/book/render";
 import type { BookDoc } from "@/lib/book/types";
+import { DESIGN_STYLE_HINTS, DESIGN_STYLE_LABELS, FORM_DESIGN_STYLES, FORM_FORMATS } from "@/lib/design/defaults";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -422,6 +427,48 @@ export default function DevStyleBoard() {
                   <BookPage doc={modern} page={0} mode="view" photos={modernPhotos} captionLang="en" priority />
                 </div>
               </Thumb>
+            </div>
+          </div>
+        </Section>
+
+        {/* M30 T12: the six book styles as the wizard draws them (server-rendered, no client JS). */}
+        <Section kicker="09" title="Book styles">
+          <div className="flex flex-col gap-8">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6" data-testid="dev-style-previews">
+              {FORM_DESIGN_STYLES.map((id) => (
+                <div key={id} className="flex min-w-0 flex-col items-center gap-2 text-center" data-testid={`dev-style-${id}`}>
+                  <div className="flex items-end gap-2">
+                    {FORM_FORMATS.map((format) => (
+                      <StylePreview key={format} style={id} format={format} variant="card" className={format === "A5_PORTRAIT" ? "h-20 w-auto" : "h-14 w-auto"} />
+                    ))}
+                  </div>
+                  <p className="text-sm font-medium text-foreground">{DESIGN_STYLE_LABELS[id]}</p>
+                  <p className="type-small text-muted-foreground">{DESIGN_STYLE_HINTS[id]}</p>
+                </div>
+              ))}
+            </div>
+            {/* max-w ≈ the wizard's step column next to the preview aside at 1280 px. */}
+            <div className="flex max-w-[42rem] flex-col gap-10">
+              {FORM_FORMATS.map((format, i) => (
+                // A form each: radio groups are scoped per form (both steps use the wizard's field name).
+                <form key={format} className="min-w-0" data-testid={`dev-style-step-${format}`}>
+                  <StepStyle designStyle={i === 0 ? "magazine" : "editorial"} format={format} headlineId={`dev-style-step-h-${i}`} />
+                </form>
+              ))}
+            </div>
+            {/* Dashboard cover placeholders (no cover photo yet), one per style. */}
+            <div className="flex flex-wrap items-end gap-4" data-testid="dev-style-covers">
+              {FORM_DESIGN_STYLES.map((id) => (
+                <div key={id} className="flex flex-col items-center gap-2">
+                  <BookCoverStatic url={null} format="A5_PORTRAIT" designStyle={id} />
+                  <span className="type-small text-muted-foreground">{DESIGN_STYLE_LABELS[id]}</span>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" data-testid="dev-style-open-books">
+              {(["magazine", "editorial"] as const).map((id) => (
+                <WizardBookPreview key={id} title="Sea days" occasion="travel" format="A5_PORTRAIT" designStyle={id} open size="md" />
+              ))}
             </div>
           </div>
         </Section>

@@ -81,17 +81,57 @@ export function BookCoverStatic({
   );
 }
 
+/**
+ * Which placeholder art a style gets. One entry per style, so a new style is a compile error here
+ * until someone decides (M30 T12: magazine / editorial used to fall into "not classic").
+ * framed = matted photo + centred caption line · bleed = edge-to-edge block + caption line ·
+ * masthead = dark title band over a full-bleed block (magazine cover) ·
+ * diagonal = white page, heavy title bars, diagonal-cut block (editorial cover).
+ */
+type PlaceholderArt = "framed" | "bleed" | "masthead" | "diagonal";
+export const BOOK_COVER_PLACEHOLDER_ART: Record<DesignStyle, PlaceholderArt> = {
+  classic: "framed",
+  modern: "bleed",
+  geometric: "bleed",
+  scrapbook: "bleed",
+  magazine: "masthead",
+  editorial: "diagonal",
+};
+
 function CoverPlaceholder({ designStyle }: { designStyle: DesignStyle }) {
-  if (designStyle === "classic") {
+  const art = BOOK_COVER_PLACEHOLDER_ART[designStyle] ?? "bleed";
+  if (art === "framed") {
     return (
-      <span data-testid="book-cover-placeholder" className="absolute inset-0 flex flex-col items-center bg-card p-[14%]">
+      <span data-testid="book-cover-placeholder" data-art={art} className="absolute inset-0 flex flex-col items-center bg-card p-[14%]">
         <span className="block aspect-[4/3] w-full rounded-[1px] bg-secondary outline outline-1 outline-offset-2 outline-input/60" />
         <span className="mt-[18%] block h-[3px] w-1/2 rounded-full bg-border" />
       </span>
     );
   }
+  if (art === "masthead") {
+    return (
+      <span data-testid="book-cover-placeholder" data-art={art} className="absolute inset-0 flex flex-col bg-secondary">
+        <span className="flex flex-[2] flex-col justify-center gap-[10%] bg-primary ps-[14%]">
+          <span className="block h-[3px] w-[62%] bg-primary-foreground" />
+          <span className="block h-[3px] w-[46%] bg-primary-foreground" />
+        </span>
+        <span className="flex flex-[3] items-center justify-end">
+          <span className="block h-[14%] w-[42%] bg-accent-strong" />
+        </span>
+      </span>
+    );
+  }
+  if (art === "diagonal") {
+    return (
+      <span data-testid="book-cover-placeholder" data-art={art} className="absolute inset-0 flex flex-col gap-[5%] bg-card ps-[14%] pt-[16%]">
+        <span className="block h-[3px] w-[55%] bg-foreground/80" />
+        <span className="block h-[3px] w-[40%] bg-foreground/80" />
+        <span className="absolute inset-0 bg-secondary [clip-path:polygon(0_62%,100%_42%,100%_100%,0_100%)]" />
+      </span>
+    );
+  }
   return (
-    <span data-testid="book-cover-placeholder" className="absolute inset-0 flex flex-col bg-card">
+    <span data-testid="book-cover-placeholder" data-art={art} className="absolute inset-0 flex flex-col bg-card">
       <span className="block flex-[3] bg-secondary" />
       <span className="flex flex-1 items-center ps-[18%]">
         <span className="block h-[3px] w-1/2 rounded-full bg-accent-strong/40" />
@@ -103,10 +143,20 @@ function CoverPlaceholder({ designStyle }: { designStyle: DesignStyle }) {
 /**
  * Library-size placeholder (M18): an unprinted hard cover in the brand materials — Classic in cream
  * linen with a gold double frame and photo window, every other style in emerald cloth with gold foil
- * rules and a small emblem. Decorative only.
+ * rules and a small emblem. Magazine and Editorial take the emerald cloth on purpose (M30 T12): their
+ * own look needs a photo and a title, which an unprinted cover has not got. Decorative only.
  */
+const SHELF_CLOTH: Record<DesignStyle, "linen" | "emerald"> = {
+  classic: "linen",
+  modern: "emerald",
+  geometric: "emerald",
+  scrapbook: "emerald",
+  magazine: "emerald",
+  editorial: "emerald",
+};
+
 function ShelfPlaceholder({ designStyle }: { designStyle: DesignStyle }) {
-  if (designStyle === "classic") {
+  if (SHELF_CLOTH[designStyle] === "linen") {
     return (
       <span data-testid="book-cover-placeholder" className="absolute inset-0 flex flex-col items-center bg-[linear-gradient(160deg,#fbf6ea,#efe5cf)] p-[13%]">
         <span className="absolute inset-[6%] rounded-[1px] border border-[#c9a227]/60" />

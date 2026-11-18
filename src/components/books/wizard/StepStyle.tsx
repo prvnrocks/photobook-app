@@ -1,5 +1,5 @@
-// Wizard step 4 "Choose a book style" (M19 T4, D-071; M20 T4, D-072): four large cards (2×2, also at
-// 375 px), each a two-page spread of that style drawn in the chosen shape. With motion the spread is
+// Wizard step 4 "Choose a book style" (M19 T4, D-071; M20 T4, D-072; M30 T12, D-090): six large cards
+// (2 × 3 at 375 px, 3 × 2 from sm), each a two-page spread of that style drawn in the chosen shape. With motion the spread is
 // closed (one page) and slides open on hover / when selected; reduced motion shows every spread open
 // (steps-motion.css). The chosen style also tints the live preview, which opens to that spread.
 // Until the user picks, the occasion's default style is selected (D-068, effectiveStyle). Locked
@@ -17,7 +17,8 @@ export type StepStyleProps = {
   /** The style shown as selected (the user's pick, else the occasion default). */
   designStyle: FormDesignStyle;
   format: WizardFormat;
-  onStyle: (style: FormDesignStyle) => void;
+  /** Omit for a static, server-rendered demo (/dev-style): the radios are then uncontrolled. */
+  onStyle?: (style: FormDesignStyle) => void;
   headlineId: string;
   /** Defensive only — never true today (see DesignLockedNote). */
   locked?: boolean;
@@ -37,7 +38,7 @@ export function StepStyle({ designStyle, format, onStyle, headlineId, locked = f
       {locked ? <DesignLockedNote /> : null}
       <fieldset className="min-w-0" aria-describedby={error ? "wizard-style-error" : undefined}>
         <legend className="sr-only">Book style</legend>
-        <div className={locked ? "mx-auto grid w-full max-w-[18rem] grid-cols-1" : "grid grid-cols-2 gap-3 sm:gap-5"}>
+        <div className={locked ? "mx-auto grid w-full max-w-[18rem] grid-cols-1" : "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5"}>
           {options.map((id) => (
             <ChoiceCard
               key={id}
@@ -57,8 +58,9 @@ export function StepStyle({ designStyle, format, onStyle, headlineId, locked = f
                   </span>
                 </span>
               }
-              checked={designStyle === id}
-              onChange={locked ? undefined : () => onStyle(id)}
+              checked={onStyle || locked ? designStyle === id : undefined}
+              defaultChecked={onStyle || locked ? undefined : designStyle === id}
+              onChange={locked || !onStyle ? undefined : () => onStyle(id)}
               size="large"
               testId={`style-${id}`}
             />

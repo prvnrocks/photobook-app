@@ -37,7 +37,8 @@
   --pw: 14em;
   --ph: 9.9em;
 }
-/* Style tints (subtle): modern = mint, classic = warm sand, geometric = sage teal, scrapbook = rose. */
+/* Style tints (subtle): modern = mint, classic = warm sand, geometric = sage teal, scrapbook = rose,
+   magazine = deep emerald, editorial = cool grey (M30). */
 .wbp[data-style="modern"] {
   --tint: rgb(74 170 128 / 0.24);
 }
@@ -49,6 +50,12 @@
 }
 .wbp[data-style="scrapbook"] {
   --tint: rgb(194 69 122 / 0.18);
+}
+.wbp[data-style="magazine"] {
+  --tint: rgb(14 59 46 / 0.24);
+}
+.wbp[data-style="editorial"] {
+  --tint: rgb(86 98 90 / 0.2);
 }
 
 .wbp-glow {
@@ -357,7 +364,7 @@
 /* ================================ Step 4 — Style ================================================= */
 /* Two pages side by side; static = open spread. Motion: closed (one page) until hover / selected. */
 .ws-spread-box {
-  /* 375 px: low enough that both card rows clear the sticky Continue bar on the first screen. */
+  /* 375 px: low, so the first two of the three card rows clear the sticky Continue bar on the first screen. */
   --h: 5.5rem;
   --ratio: 1.4455; /* two card pages: 2 × 36.5 / 50.5 */
   display: flex;
@@ -370,12 +377,14 @@
   --h: 4.5rem;
   --ratio: 2.767; /* 2 × 50.5 / 36.5 */
 }
+/* ≥ sm: three columns (six styles, M30) — the box is as tall as a spread gets in a ~12 rem column, so
+   both rows and Continue fit one desktop screen. */
 @media (min-width: 640px) {
   .ws-spread-box {
-    --h: 12rem;
+    --h: 8.5rem;
   }
   .ws-spread-box[data-format="A5_LANDSCAPE"] {
-    --h: 8rem;
+    --h: 5rem;
   }
 }
 .ws-spread {
