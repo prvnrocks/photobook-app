@@ -176,8 +176,12 @@ Preview origin (e.g. the branch alias of a `staging` branch) that is also in the
       It adds server-only `books.album_confirmed_at` (set once by "Generate album"; the owner can neither set
       nor clear it). The M20c code selects it in `getMyBook` with no fallback, so M20c code without 2000 fails
       on every book page / action; older code never names it and keeps working after 2000.
+- [ ] **M30: push `20261118002100_design_styles_m30.sql` BEFORE deploying the M30 code** (migration first, then code).
+      It widens `books_design_style_check` to the six styles (adds `magazine`, `editorial`); nothing else changes.
+      M30 code without 2100 fails to create a magazine / editorial book (23514); older code never writes the new
+      values and keeps working after 2100. Rolling the code back later needs no DB change.
 - [ ] Supabase → SQL Editor → paste the whole of `supabase/tests/rls_check.sql` → Run. Expected: an error panel
-      starting with **`RLS OK — all 176 checks passed`** (175 before 2000, 173 before 1900) (raised on purpose; it rolls everything back). Anything
+      starting with **`RLS OK — all 177 checks passed`** (176 before 2100, 175 before 2000, 173 before 1900) (raised on purpose; it rolls everything back). Anything
       else (`RLS FAIL [...]`, permission denied) is a blocker.
 - [ ] Verify `private.auth_user_email` works (the warning emails depend on it; needs `postgres` to read
       `auth.users`):
