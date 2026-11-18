@@ -2,6 +2,8 @@
 
 import type { z } from "zod";
 import type {
+  AiObservationSchema,
+  StoryAnswerSchema,
   ChapterSchema,
   ContentSourceSchema,
   MemoryContextSchema,
@@ -31,6 +33,10 @@ export type PhotoAnalysis = z.infer<typeof PhotoAnalysisSchema>;
 export type PhotoVision = z.infer<typeof PhotoVisionSchema>;
 export type Person = z.infer<typeof PersonSchema>;
 export type MemoryContext = z.infer<typeof MemoryContextSchema>;
+/** One user answer on the story step (source is always "user"). */
+export type StoryAnswer = z.infer<typeof StoryAnswerSchema>;
+/** A model observation about one photo — never part of MemoryContext. */
+export type AiObservation = z.infer<typeof AiObservationSchema>;
 export type Moment = z.infer<typeof MomentSchema>;
 /** Story chapter. (The book doc's rendered chapter type is `Chapter` in lib/book/types.) */
 export type Chapter = z.infer<typeof ChapterSchema>;

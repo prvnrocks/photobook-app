@@ -1,13 +1,14 @@
 // Book options shown in the "new book" flow and passed to the AI pipeline (M3).
 // Pure data — safe to import from client components.
 
-export const OCCASIONS = ["wedding", "travel", "baby", "graduation", "family", "other"] as const;
+export const OCCASIONS = ["wedding", "travel", "baby", "birthday", "graduation", "family", "other"] as const;
 export type Occasion = (typeof OCCASIONS)[number];
 
 export const OCCASION_LABELS: Record<Occasion, string> = {
   wedding: "Wedding",
   travel: "Travel",
   baby: "Baby",
+  birthday: "Birthday",
   graduation: "Graduation",
   family: "Family",
   other: "Other",
@@ -27,6 +28,7 @@ export const DEFAULT_TONE: Record<Occasion, Tone> = {
   wedding: "romantic",
   travel: "fun",
   baby: "nostalgic",
+  birthday: "fun",
   graduation: "fun",
   family: "nostalgic",
   other: "minimal",

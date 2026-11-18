@@ -428,7 +428,7 @@ describe("updateBookSetupAction — ownership, validation, races", () => {
   });
 
   it.each([
-    ["occasion", { occasion: "birthday" }],
+    ["occasion", { occasion: "picnic" }],
     ["tone", { tone: "sad" }],
     ["captionLang", { captionLang: "fr" }],
     ["format", { format: "A4_PORTRAIT" }],

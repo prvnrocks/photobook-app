@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DROP_REASONS, MOODS, SCENES } from "@/lib/ai/schemas";
 import { DESIGN_STYLES } from "@/lib/book/schema";
 import {
+  AiObservationSchema,
   ChapterSchema,
   MemoryContextSchema,
   MomentSchema,
@@ -17,7 +18,7 @@ import {
 } from "@/lib/storybook/schemas";
 import { balanceOf, isBalanced, narrativePageBudget, storybookBalance } from "@/lib/storybook/balance";
 import { aiProvenance, aiRewrite, hasUserContent, isProtectedPage, mergeAiDraft, userEdit } from "@/lib/storybook/versioning";
-import type { Chapter, MemoryContext, Moment, NarrativeBlock, PhotoAnalysis, StoryPage, Storybook } from "@/lib/storybook/types";
+import type { Chapter, MemoryContext, Moment, NarrativeBlock, PhotoAnalysis, StoryAnswer, StoryPage, Storybook } from "@/lib/storybook/types";
 
 const NOW = "2026-11-19T08:00:00.000Z";
 const LATER = "2026-11-19T09:30:00.000Z";
@@ -43,11 +44,22 @@ const photo = (over: Partial<PhotoAnalysis> = {}): PhotoAnalysis => ({
   ...over,
 });
 
+const answer = (over: Partial<StoryAnswer> = {}): StoryAnswer => ({
+  questionId: "travel.companions",
+  question: "Who did you travel with?",
+  text: "My sister and the kids",
+  source: "user",
+  ...over,
+});
+
 const context = (over: Partial<MemoryContext> = {}): MemoryContext => ({
   v: 1,
   occasion: "travel",
   tone: "nostalgic",
   lang: "en",
+  storyTone: "heartfelt",
+  answers: [answer()],
+  skipped: false,
   note: "Our first trip to Oman with the kids.",
   people: [
     { name: "Aisha", relation: "my sister" },
@@ -212,6 +224,59 @@ describe("MemoryContextSchema", () => {
     expect(MemoryContextSchema.safeParse(context({ people: Array.from({ length: 21 }, (_, i) => ({ name: `P${i}`, relation: null })) })).success).toBe(false);
     expect(MemoryContextSchema.safeParse(context({ note: "x".repeat(STORY_LIMITS.noteText + 1) })).success).toBe(false);
     expect(MemoryContextSchema.safeParse(context({ avoid: Array(11).fill("x") })).success).toBe(false);
+  });
+
+  it("story step: skipped is different from not reached / unanswered", () => {
+    // not reached yet or reached and left blank: no answers, not skipped
+    const unanswered = MemoryContextSchema.safeParse(context({ storyTone: null, answers: [], skipped: false }));
+    expect(unanswered.success && unanswered.data.skipped).toBe(false);
+    // skipped on purpose: still no answers, and it says so
+    const skipped = MemoryContextSchema.safeParse(context({ storyTone: null, answers: [], skipped: true }));
+    expect(skipped.success && skipped.data.skipped).toBe(true);
+    // a skipped step never carries answers; a tone alone is fine
+    expect(messages(MemoryContextSchema.safeParse(context({ skipped: true })))).toContain("answers: a skipped step has no answers");
+    expect(MemoryContextSchema.safeParse(context({ skipped: true, answers: [], storyTone: "elegant" })).success).toBe(true);
+    // the three fields are required: an old-shape context is not silently "not skipped"
+    for (const key of ["storyTone", "answers", "skipped"] as const) {
+      const partial: Record<string, unknown> = { ...context() };
+      delete partial[key];
+      expect(MemoryContextSchema.safeParse(partial).success).toBe(false);
+    }
+  });
+
+  it("story answers: at most 2, unique question, non-blank, 1–200 code points, Arabic accepted", () => {
+    const second = answer({ questionId: "travel.special", question: "What made this trip special?", text: "The views" });
+    expect(MemoryContextSchema.safeParse(context({ answers: [answer(), second] })).success).toBe(true);
+    expect(MemoryContextSchema.safeParse(context({ answers: [answer(), second, answer({ questionId: "travel.other" })] })).success).toBe(false);
+    expect(messages(MemoryContextSchema.safeParse(context({ answers: [answer(), answer({ text: "Again" })] })))).toContain("answers: duplicate question");
+    for (const text of ["", "   ", "\n\t", "x".repeat(201), "bad \ud83d"]) {
+      expect(MemoryContextSchema.safeParse(context({ answers: [answer({ text })] })).success).toBe(false);
+    }
+    // the limit counts code points: 200 emoji are 400 UTF-16 units and still fit; 201 do not
+    expect(MemoryContextSchema.safeParse(context({ answers: [answer({ text: "x".repeat(200) })] })).success).toBe(true);
+    expect(MemoryContextSchema.safeParse(context({ answers: [answer({ text: "🎂".repeat(200) })] })).success).toBe(true);
+    expect(MemoryContextSchema.safeParse(context({ answers: [answer({ text: "🎂".repeat(201) })] })).success).toBe(false);
+    expect(MemoryContextSchema.safeParse(context({ lang: "ar", answers: [answer({ text: "مع أختي والأطفال" })] })).success).toBe(true);
+    for (const questionId of ["", "travel", "Travel.companions", "travel.companions.x", "travel.1", `travel.${"a".repeat(60)}`]) {
+      expect(MemoryContextSchema.safeParse(context({ answers: [answer({ questionId })] })).success).toBe(false);
+    }
+    expect(MemoryContextSchema.safeParse(context({ storyTone: "romantic" as never })).success).toBe(false);
+  });
+
+  it("holds only what the user said: no AI-sourced entry and no field for model output", () => {
+    expect(MemoryContextSchema.safeParse(context({ answers: [answer({ source: "ai" as never })] })).success).toBe(false);
+    const unsourced: Record<string, unknown> = { ...answer() };
+    delete unsourced.source;
+    expect(MemoryContextSchema.safeParse(context({ answers: [unsourced as never] })).success).toBe(false);
+    const observation = { photoId: ph(1), source: "ai", kind: "vision", text: "Two people on a beach." };
+    expect(AiObservationSchema.safeParse(observation).success).toBe(true);
+    expect(AiObservationSchema.safeParse({ ...observation, source: "user" }).success).toBe(false);
+    // an observation fits nowhere in the context: not as an answer, not as an extra key
+    expect(MemoryContextSchema.safeParse(context({ answers: [observation as never] })).success).toBe(false);
+    for (const key of ["observations", "ai", "vision", "aiNotes"]) {
+      expect(MemoryContextSchema.safeParse({ ...context(), [key]: [observation] }).success).toBe(false);
+    }
+    expect(MemoryContextSchema.safeParse(context({ answers: [{ ...answer(), aiSuggestion: "x" } as never] })).success).toBe(false);
   });
 
   it("the stored column value is a context or the empty object", () => {

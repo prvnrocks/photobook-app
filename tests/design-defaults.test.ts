@@ -23,6 +23,7 @@ describe("New book design defaults (D-068)", () => {
       travel: "magazine",
       graduation: "geometric",
       baby: "scrapbook",
+      birthday: "scrapbook",
       family: "scrapbook",
       other: "modern",
     });

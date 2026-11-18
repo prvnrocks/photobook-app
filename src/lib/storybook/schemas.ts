@@ -12,7 +12,8 @@ import { z } from "zod";
 import { DROP_REASONS, MOODS, SCENES } from "@/lib/ai/schemas";
 import { CAPTION_LANGS, OCCASIONS, TONES } from "@/lib/book/options";
 import { BOOK_FORMATS, DESIGN_STYLES } from "@/lib/book/schema";
-import { hasLoneSurrogate } from "@/lib/text/clip";
+import { STORY_ANSWER_MAX, STORY_QUESTIONS_MAX, STORY_TONES } from "@/lib/story/questions";
+import { codePointLength, hasLoneSurrogate } from "@/lib/text/clip";
 
 /** Bump when a stored shape changes incompatibly; older rows are migrated on read. */
 export const STORYBOOK_SCHEMA_VERSION = 1;
@@ -191,16 +192,49 @@ export const PersonSchema = z
   .strict();
 
 /**
+ * One answer the user gave on the wizard's story step ("Every memory has a story.").
+ * `question` is the server's prompt text for `questionId` at the time of answering (never client
+ * text); `text` is the user's own words or a chip the user tapped. `source` can only be "user":
+ * an unanswered question has NO entry — the AI never fills one in.
+ */
+export const StoryAnswerSchema = z
+  .object({
+    questionId: z.string().max(60).regex(/^[a-z]+\.[a-z_]+$/, "question id must look like travel.companions"),
+    question: text(200),
+    /** 1–STORY_ANSWER_MAX Unicode code points (Postgres char_length), not UTF-16 units. */
+    text: z
+      .string()
+      .min(1)
+      .refine((v) => codePointLength(v) <= STORY_ANSWER_MAX, { message: "too long" })
+      .refine((v) => v.trim().length > 0, { message: "blank" })
+      .refine((v) => !hasLoneSurrogate(v), { message: "lone surrogate" }),
+    source: z.literal("user"),
+  })
+  .strict();
+
+/**
  * What the USER tells us about the memory, so the narrative can use real names and facts instead
  * of inventing them (CLAUDE.md: never invent names/places/facts not in the metadata). Everything
  * here is user-written or user-confirmed; the AI may only quote from it.
+ *
+ * Separation rule: this object holds ONLY what the user said or confirmed. What the model sees in
+ * the photos is an AiObservation (below) and lives with the photo (PhotoVisionSchema /
+ * photos.ai), never here: the schema is strict, has no field for model output, and the only
+ * `source` it accepts is "user".
  */
 export const MemoryContextSchema = z
   .object({
     v: z.literal(STORYBOOK_SCHEMA_VERSION),
     occasion: z.enum(OCCASIONS),
+    /** The book's tone (books.tone). */
     tone: z.enum(TONES),
     lang: z.enum(CAPTION_LANGS),
+    /** The story voice the user picked on the story step; null = not chosen. */
+    storyTone: z.enum(STORY_TONES).nullable(),
+    /** Answers to the story questions. A skipped question has no entry. */
+    answers: z.array(StoryAnswerSchema).max(STORY_QUESTIONS_MAX),
+    /** True when the user chose "Skip" for the whole story step (≠ "not reached yet"). */
+    skipped: z.boolean(),
     /** "Tell us about this memory" — the user's own words. */
     note: text(STORY_LIMITS.noteText).nullable(),
     people: z.array(PersonSchema).max(STORY_LIMITS.people),
@@ -217,10 +251,27 @@ export const MemoryContextSchema = z
   })
   .strict()
   .refine((c) => unique(c.people, (p) => p.name.trim().toLowerCase()), { message: "duplicate person", path: ["people"] })
+  .refine((c) => unique(c.answers, (a) => a.questionId), { message: "duplicate question", path: ["answers"] })
+  .refine((c) => !c.skipped || c.answers.length === 0, { message: "a skipped step has no answers", path: ["answers"] })
   .refine((c) => !c.dateRange || Date.parse(c.dateRange.from) <= Date.parse(c.dateRange.to), {
     message: "dateRange.from is after dateRange.to",
     path: ["dateRange"],
   });
+
+/**
+ * The OTHER side of the separation: something the model observed in one photo. Documented here so
+ * the two cannot be confused — an AiObservation is derived from PhotoVisionSchema at read time
+ * and is never written into MemoryContext (which rejects `source: "ai"`).
+ */
+export const AiObservationSchema = z
+  .object({
+    photoId: uuid,
+    source: z.literal("ai"),
+    kind: z.literal("vision"),
+    /** What is visible — PhotoVisionSchema.description. */
+    text: text(STORY_LIMITS.factText),
+  })
+  .strict();
 
 // ---------------------------------------------------------------------------- ③ Story Planning
 

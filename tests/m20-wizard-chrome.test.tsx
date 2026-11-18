@@ -136,7 +136,7 @@ describe("wizard steps (7)", () => {
       bad({ title: undefined }),
       bad({ title: "x".repeat(121) }),
       bad({ title: "a\ud800b" }),
-      bad({ occasion: "birthday" }),
+      bad({ occasion: "picnic" }),
       bad({ occasion: undefined }),
       bad({ format: "A4_PORTRAIT" }),
       bad({ format: "a5_portrait" }),

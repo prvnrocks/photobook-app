@@ -7,6 +7,7 @@ export const DEFAULT_TITLES: Record<Occasion, string> = {
   wedding: "Our Wedding",
   travel: "Our Travels",
   baby: "Our Little One",
+  birthday: "Birthday Memories",
   graduation: "Graduation Day",
   family: "Family Moments",
   other: "Our Photobook",

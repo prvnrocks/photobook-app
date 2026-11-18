@@ -220,6 +220,7 @@ describe("createBookAction", () => {
     ["wedding", "modern"],
     ["graduation", "geometric"],
     ["baby", "scrapbook"],
+    ["birthday", "scrapbook"],
     ["other", "modern"],
   ] as const)("absent style for %s → %s (D-068)", async (occasion, designStyle) => {
     await run({ ...valid, occasion });
@@ -254,7 +255,7 @@ describe("createBookAction", () => {
   });
 
   it.each([
-    ["occasion", { occasion: "birthday" }],
+    ["occasion", { occasion: "picnic" }],
     ["occasion", { occasion: undefined }],
     ["tone", { tone: "sad" }],
     ["tone", { tone: "" }],

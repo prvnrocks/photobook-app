@@ -5,7 +5,7 @@
 // is no longer asked: the server picks it (title script: Arabic → ar, Latin → en; else memory → browser, D-072).
 // Radio names are prefixed "wizard-" so only the step-4 hidden inputs reach the create action.
 
-import { Baby, Ellipsis, Gem, GraduationCap, Plane, Users, type LucideIcon } from "lucide-react";
+import { Baby, Cake, Ellipsis, Gem, GraduationCap, Plane, Users, type LucideIcon } from "lucide-react";
 import { ChoiceCard } from "@/components/wizard/ChoiceCard";
 import { WizardHeadline } from "@/components/wizard/WizardHeadline";
 import { OCCASION_LABELS, OCCASIONS, type Occasion } from "@/lib/book/options";
@@ -16,6 +16,7 @@ const OCCASION_ICONS: Record<Occasion, LucideIcon> = {
   wedding: Gem,
   travel: Plane,
   baby: Baby,
+  birthday: Cake,
   graduation: GraduationCap,
   family: Users,
   other: Ellipsis,

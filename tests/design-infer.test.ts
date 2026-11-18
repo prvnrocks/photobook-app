@@ -153,6 +153,7 @@ describe("toneForOccasion", () => {
     ["wedding", "romantic"],
     ["travel", "fun"],
     ["baby", "nostalgic"],
+    ["birthday", "fun"],
     ["graduation", "fun"],
     ["family", "nostalgic"],
     ["other", "minimal"],
@@ -163,7 +164,7 @@ describe("toneForOccasion", () => {
   it("unknown / missing occasion → the 'other' default", () => {
     expect(toneForOccasion(null)).toBe("minimal");
     expect(toneForOccasion(undefined)).toBe("minimal");
-    expect(toneForOccasion("birthday" as never)).toBe("minimal");
+    expect(toneForOccasion("picnic" as never)).toBe("minimal");
   });
 
   it("a remembered tone wins (D-032); invalid memory is ignored", () => {

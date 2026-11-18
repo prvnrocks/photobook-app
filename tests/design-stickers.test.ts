@@ -40,14 +40,15 @@ describe("sticker catalogue (M10c T2)", () => {
     expect(neutral.filter((id) => id.startsWith("heart"))).toHaveLength(2);
     for (const id of ["star", "sparkle", "leaf-sprig", "flower", "paperclip", "photo-corner"]) expect(neutral).toContain(id);
     expect(by("seasonal").sort()).toEqual(["crescent-star", "lantern"]);
-    expect(by("accent")).toHaveLength(OCCASIONS.length);
+    // birthday (Task 5) has no dedicated accent sticker yet: it shares the neutral sparkles.
+    expect(by("accent")).toHaveLength(OCCASIONS.length - 1);
   });
 
   it("maps every occasion to its own accent sticker", () => {
     for (const o of OCCASIONS) {
       const id = ACCENT_STICKER_BY_OCCASION[o];
       expect(STICKERS[id].group).toBe("accent");
-      expect(STICKERS[id].occasion).toBe(o);
+      expect(STICKERS[id].occasion).toBe(o === "birthday" ? "other" : o);
       expect(accentStickerFor(o)).toBe(id);
     }
     expect(accentStickerFor(null)).toBe(ACCENT_STICKER_BY_OCCASION.other);

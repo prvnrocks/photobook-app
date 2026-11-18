@@ -26,6 +26,7 @@ export const DEFAULT_STYLE_BY_OCCASION: Record<Occasion, FormDesignStyle> = {
   wedding: "modern",
   travel: "magazine",
   baby: "scrapbook",
+  birthday: "scrapbook",
   graduation: "geometric",
   family: "scrapbook",
   other: "modern",

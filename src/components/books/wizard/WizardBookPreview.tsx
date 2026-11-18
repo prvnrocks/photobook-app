@@ -170,6 +170,15 @@ const EMBLEMS: Record<Occasion, React.ReactNode> = {
       <circle cx="19.3" cy="19.3" r="1.7" />
     </>
   ),
+  // cake with one candle
+  birthday: (
+    <>
+      <path d="M4.5 19.5v-6.3h15v6.3Z" />
+      <path d="M4.5 16.2c1.9 1.5 3.8 1.5 5.6 0 1.9 1.5 3.8 1.5 5.7 0 1.2 1 2.5 1.3 3.7.9" />
+      <path d="M12 13.2V9.4" />
+      <path d="M12 4.2c1 1.1 1.4 2 1.4 2.7a1.4 1.4 0 0 1-2.8 0c0-.7.4-1.6 1.4-2.7Z" />
+    </>
+  ),
   // mortarboard with tassel
   graduation: (
     <>

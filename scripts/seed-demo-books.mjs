@@ -20,7 +20,7 @@
 //   <dir>/
 //     wedding-sara/            ← one book; folder name → default title ("Wedding Sara")
 //       book.json              ← optional: {"title": "...", "captionLang": "en"|"ar",
-//       IMG_0001.HEIC             "occasion": "wedding|travel|baby|graduation|family|other",
+//       IMG_0001.HEIC             "occasion": "wedding|travel|baby|birthday|graduation|family|other",
 //       IMG_0002.jpg ...          "tone": "romantic|fun|nostalgic|minimal"}
 //     eid-2026/ ...
 //   Folders starting with "." or "_" are ignored. Photos: .jpg .jpeg .png .heic .heif .webp (1–500).
@@ -62,10 +62,10 @@ import {
 export { UsageError };
 
 // Mirrors src/lib/book/options.ts and src/lib/ai/limits.ts (tests assert they stay in sync).
-export const OCCASIONS = ["wedding", "travel", "baby", "graduation", "family", "other"];
+export const OCCASIONS = ["wedding", "travel", "baby", "birthday", "graduation", "family", "other"];
 export const TONES = ["romantic", "fun", "nostalgic", "minimal"];
 export const CAPTION_LANGS = ["en", "ar"];
-export const DEFAULT_TONE = { wedding: "romantic", travel: "fun", baby: "nostalgic", graduation: "fun", family: "nostalgic", other: "minimal" };
+export const DEFAULT_TONE = { wedding: "romantic", travel: "fun", baby: "nostalgic", birthday: "fun", graduation: "fun", family: "nostalgic", other: "minimal" };
 export const TITLE_MAX_CHARS = 120;
 export const MAX_PHOTOS_PER_BOOK = 500; // paid upload cap (books are comped before the upload)
 export const PHOTO_EXTENSIONS = [".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp"];

@@ -624,6 +624,7 @@ export const ACCENT_STICKER_BY_OCCASION: Readonly<Record<Occasion, StickerId>> =
   travel: "accent-plane",
   graduation: "accent-cap",
   baby: "accent-moon",
+  birthday: "accent-sparkles", // no dedicated birthday sticker yet
   family: "accent-house",
   other: "accent-sparkles",
 };
