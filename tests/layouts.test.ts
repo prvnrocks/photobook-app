@@ -49,6 +49,8 @@ describe("layout catalogue", () => {
       // is checked by tests/layouts-covers.test.ts.
       if (M29_COVERS.includes(layout)) return;
       // M30 covers (magazine / editorial): the masthead and cover lines sit over the photo by design.
+      // Skipped here; tests/m30-g0.test.tsx "G0 1: text on photos" replaces it (no M30 text straight
+      // on a photo — paper, a solid block or the scrim under it — and the contrast floors).
       if (layout.role === "cover" && M30_LAYOUTS.includes(layout)) return;
       for (const s of layout.slots) expect(overlaps(layout.caption, s)).toBe(false);
     });

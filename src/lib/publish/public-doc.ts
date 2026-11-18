@@ -3,7 +3,7 @@
 // viewer's chapter label "title · date" / Contents sheet (D-040). Kept: chapter `dateLabel` (a
 // coarse human label like "March 2025" the owner shares as part of the album). Dropped: `meta`
 // (generator, runId, userEdited), caption `source` (who wrote it), page background `source`
-// (who chose it), chapter description / colourway `source` (M30), chapter `place` (GPS-derived), `occasion` (except below), and any unknown keys — objects are
+// (who chose it), chapter description / colourway `source` (M30), a chapter description no page shows (M30 review), chapter `place` (GPS-derived), `occasion` (except below), and any unknown keys — objects are
 // rebuilt field by field, never spread.
 // `occasion` (optional, v2 only, 2026-11-17): kept ONLY when the book shows the occasion accent
 // sticker (a layout decoration or text plate using OCCASION_ACCENT) and it isn't "other" — the
@@ -44,6 +44,7 @@ import {
 import { usesV2Features } from "@/lib/book/doc-version";
 import { backgroundColor, captionAlignOn } from "@/lib/book/render";
 import { getLayout } from "@/lib/layouts";
+import { chaptersShowingDescription } from "@/lib/layouts/description";
 import { OCCASION_ACCENT } from "@/lib/design/stickers";
 import { CAPTION_LANGS, type CaptionLang } from "@/lib/book/options";
 import type { Background, BookDoc, BookPage, Caption } from "@/lib/book/types";
@@ -154,14 +155,20 @@ const publicCover = (doc: BookDoc) => ({
   subtitle: doc.cover.subtitle,
 });
 const publicChapters = (doc: BookDoc) => doc.chapters.map((c) => ({ id: c.id, title: c.title, dateLabel: c.dateLabel }));
-/** v2 chapters: + the description text (M30) when the chapter has one; `source` is dropped. */
-const publicChaptersV2 = (doc: BookDoc): PublicBookDocV2["chapters"] =>
-  doc.chapters.map((c) => ({
+/**
+ * v2 chapters: + the description text (M30) ONLY when a page of the chapter shows it
+ * (chaptersShowingDescription) — text the owner cannot see in the book (its page was moved to
+ * another layout or deleted) is never published. `source` is dropped.
+ */
+const publicChaptersV2 = (doc: BookDoc): PublicBookDocV2["chapters"] => {
+  const shown = chaptersShowingDescription(doc.pages);
+  return doc.chapters.map((c) => ({
     id: c.id,
     title: c.title,
     dateLabel: c.dateLabel,
-    ...(c.description ? { description: { text: c.description.text } } : {}),
+    ...(c.description && shown.has(c.id) ? { description: { text: c.description.text } } : {}),
   }));
+};
 const publicPageBase = (p: BookPage) => ({
   id: p.id,
   chapterId: p.chapterId,

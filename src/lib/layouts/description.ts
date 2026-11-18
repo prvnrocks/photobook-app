@@ -22,6 +22,26 @@ export function layoutIdShowsDescription(id: string | null | undefined): boolean
   return typeof id === "string" && layoutShowsDescription(getLayout(id));
 }
 
+/**
+ * Ids of the chapters whose description is SHOWN: the chapter has a page whose layout has a
+ * description panel. The renderer reads the description from the page that owns the layout
+ * (boundText in src/lib/book/render.ts): a single page, or a spread's LEFT half — a right half
+ * (`side: "right"`) draws its spread with the left half's chapter, so it never counts itself.
+ * A description no page shows is invisible to the owner: it is not published (public-doc.ts) and
+ * does not count as a user edit (replaceable.ts). Takes raw values (unknown fields are ignored),
+ * so it also works on an unparsed stored doc.
+ */
+export function chaptersShowingDescription(
+  pages: readonly { chapterId?: unknown; layout?: unknown; side?: unknown }[],
+): Set<string> {
+  const shown = new Set<string>();
+  for (const p of pages) {
+    if (typeof p.chapterId !== "string" || typeof p.layout !== "string" || p.side === "right") continue;
+    if (!shown.has(p.chapterId) && layoutIdShowsDescription(p.layout)) shown.add(p.chapterId);
+  }
+  return shown;
+}
+
 /** `layouts` without description layouts — or all of them when that would leave none. */
 export function preferWithoutDescription<L extends Pick<Layout, "texts">>(layouts: readonly L[]): readonly L[] {
   const plain = layouts.filter((l) => !layoutShowsDescription(l));

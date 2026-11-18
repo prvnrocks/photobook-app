@@ -12,6 +12,7 @@
 // isAiReplaceableDoc / isReplaceableDoc on the row read + `updated_at` lock in the UPDATE) so an edit that lands
 // between the read and the write is never clobbered.
 
+import { chaptersShowingDescription } from "@/lib/layouts/description";
 import { DocMetaSchema, GENERATORS, parseBookDoc } from "./schema";
 import type { BookDoc, DocMeta, Generator } from "./types";
 
@@ -84,20 +85,28 @@ export function hasUserBackgrounds(doc: unknown): boolean {
 }
 
 /**
- * True when a chapter description was written by the user (`description.source === "user"`, M30).
- * Raw read like hasUserCaptions. Editor saves also mark meta.userEdited, so this is belt and
- * braces for "AI never overwrites a user description" (D-090).
+ * True when a chapter description written by the user (`description.source === "user"`, M30) is
+ * SHOWN in the book: a page of that chapter has a description layout (chaptersShowingDescription —
+ * the same rule publish uses). A user description no page shows is invisible to the user, so it
+ * does not block an AI rebuild (M30 review). Raw read like hasUserCaptions. Editor saves also mark
+ * meta.userEdited, so this is belt and braces for "AI never overwrites a user description" (D-090).
  */
 export function hasUserDescriptions(doc: unknown): boolean {
-  if (!isPlainObject(doc) || !Array.isArray(doc.chapters)) return false;
+  if (!isPlainObject(doc) || !Array.isArray(doc.chapters) || !Array.isArray(doc.pages)) return false;
+  const shown = chaptersShowingDescription(doc.pages.filter(isPlainObject));
   return doc.chapters.some(
-    (c) => isPlainObject(c) && isPlainObject(c.description) && c.description.source === "user",
+    (c) =>
+      isPlainObject(c) &&
+      typeof c.id === "string" &&
+      shown.has(c.id) &&
+      isPlainObject(c.description) &&
+      c.description.source === "user",
   );
 }
 
 /**
  * May an AI run (build / rebuild / rule fallback written by a run) overwrite this doc?
- * isReplaceableDoc AND no user captions (D-031) AND no user backgrounds (D-068) AND no user
+ * isReplaceableDoc AND no user captions (D-031) AND no user backgrounds (D-068) AND no shown user
  * chapter descriptions (D-090). The free "Update album" relayout (D-028) keeps using
  * isReplaceableDoc: it preserves user captions and backgrounds instead of replacing the doc.
  */

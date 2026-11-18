@@ -280,4 +280,5 @@ export const EDIT_ERROR_COPY: Record<EditOpErrorCode, string> = {
   would_drop_caption: "This layout has room for one caption only. Confirm to remove the other caption.",
   layout_not_for_book: "That layout doesn't match this book's size or style.",
   invalid_colourway: "That colour isn't available for this book.",
+  no_description_area: "This book's style has no chapter descriptions.",
 };

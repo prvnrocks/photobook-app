@@ -65,6 +65,11 @@ const withColourway = (d: BookDoc, id: ColourwayId, style?: DesignStyle): BookDo
   ...d,
   style: { ...d.style, ...(style ? { designStyle: style } : {}), colourway: { id, source: "ai" } },
 });
+/** `d` with its page on a magazine description layout — a snapshot publishes only a description a page shows. */
+const onDescriptionPage = (d: BookDoc): BookDoc => ({
+  ...d,
+  pages: d.pages.map((p) => ({ ...p, layout: layoutsFor("A5_PORTRAIT", "magazine", "page").find((l) => l.photoCount === 1 && l.texts?.some((t) => t.bind === "chapterDescription"))!.id })),
+});
 
 // Real catalogue layouts as bases for the layout rules (their own data is valid).
 const plain = (l: Layout) => !l.texts?.length && !l.decorations?.length;
@@ -191,8 +196,18 @@ describe("M30 validateBookDoc: colourway belongs to the design style", () => {
     expect(validate(noStyle)).toEqual(['style.colourway: "teal" is not a classic colourway']);
   });
 
-  it("a description needs no semantic check: valid on any style", () => {
-    for (const s of ["classic", "modern", "geometric", "scrapbook"] as const) expect(validate(withDescription(docFor(s))), s).toEqual([]);
+  it("a description belongs to a style with description layouts: the four older styles reject it (also with designStyle absent)", () => {
+    for (const s of ["classic", "modern", "geometric", "scrapbook"] as const) {
+      expect(validate(withDescription(docFor(s))), s).toEqual([`chapters[0].description: ${s} books have no chapter descriptions`]);
+    }
+    const classic = withDescription(docFor("classic"), { text: "Mine.", source: "user" });
+    const noStyle: BookDoc = { ...classic, style: { background: classic.style.background, font: classic.style.font } };
+    expect(validate(noStyle)).toEqual(["chapters[0].description: classic books have no chapter descriptions"]);
+    // magazine / editorial: no description issue (the modern layouts of this fixture raise their own style issues).
+    for (const s of ["magazine", "editorial"] as const) {
+      const d = withDescription(docFor("modern"));
+      expect(validate({ ...d, style: { ...d.style, designStyle: s } }).filter((i) => i.includes("description")), s).toEqual([]);
+    }
   });
 });
 
@@ -273,7 +288,7 @@ describe("M30 public snapshot", () => {
   });
 
   it("description is published as text only, colourway as id only (source dropped)", () => {
-    const doc = withColourway(withDescription(docFor("modern"), { text: DESCRIPTION.text, source: "user" }), "coral", "magazine");
+    const doc = onDescriptionPage(withColourway(withDescription(docFor("modern"), { text: DESCRIPTION.text, source: "user" }), "coral", "magazine"));
     const pub = toPublicDoc(doc);
     expect(pub.version).toBe(2);
     if (pub.version !== 2) return;
@@ -291,7 +306,7 @@ describe("M30 public snapshot", () => {
   });
 
   it("strict: a `source` inside either field, or the fields on a v1 snapshot, reject the snapshot", () => {
-    const pub = JSON.parse(JSON.stringify(toPublicDoc(withColourway(withDescription(docFor("modern")), "coral", "magazine"))));
+    const pub = JSON.parse(JSON.stringify(toPublicDoc(onDescriptionPage(withColourway(withDescription(docFor("modern")), "coral", "magazine")))));
     expect(parsePublicDoc(pub).ok).toBe(true);
     const a = structuredClone(pub);
     a.chapters[0].description.source = "ai";

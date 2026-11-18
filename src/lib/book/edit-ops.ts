@@ -24,6 +24,7 @@
 
 import { LIMITS } from "@/lib/ai/limits";
 import { getLayout } from "@/lib/layouts";
+import { writesDescriptions } from "@/lib/layouts/description";
 import { clipCodePoints, clipText, stripLoneSurrogates } from "@/lib/text/clip";
 import { clampCrop, DEFAULT_CROP } from "./crop";
 import { isPhotoFilterId, type PhotoFilterId } from "@/lib/design/photo-filters";
@@ -55,7 +56,9 @@ export type EditOpErrorCode =
   /** The layout is for another format or design style than the book (D-063: both fixed per book). */
   | "layout_not_for_book"
   /** setColourway got an id the book's design style does not have (M30). */
-  | "invalid_colourway";
+  | "invalid_colourway"
+  /** setChapterDescription on a design style without description layouts (M30; validateBookDoc rejects such docs). */
+  | "no_description_area";
 
 export class EditOpError extends Error {
   readonly code: EditOpErrorCode;
@@ -796,7 +799,8 @@ export function setChapterTitle(doc: BookDoc, chapterId: string, title: string):
  * M30 (D-090): write the chapter's description as the user's text (≤ 400 units, clipped; source
  * "user", so the AI never replaces it). Blank text removes the description — the key goes, layout
  * panels bound to it and their `when` blocks collapse. Same user text / nothing to remove → the
- * input doc. Throws EditOpError unknown_chapter.
+ * input doc. Throws EditOpError unknown_chapter; no_description_area when the book's design style has
+ * no description layouts (the four older styles — removing is still allowed).
  */
 export function setChapterDescription(doc: BookDoc, chapterId: string, text: string): BookDoc {
   const idx = doc.chapters.findIndex((c) => c.id === chapterId);
@@ -811,6 +815,7 @@ export function setChapterDescription(doc: BookDoc, chapterId: string, text: str
     chapters[idx] = rest;
     return { ...doc, chapters };
   }
+  if (!writesDescriptions(doc.style.designStyle ?? "classic")) throw new EditOpError("no_description_area");
   if (chapter.description?.text === clean && chapter.description.source === "user") return doc;
   chapters[idx] = { ...chapter, description: { text: clean, source: "user" } };
   return { ...doc, chapters };

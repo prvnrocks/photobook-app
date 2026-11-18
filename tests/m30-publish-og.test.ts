@@ -77,9 +77,13 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 const { M30_LAYOUTS } = await import("@/lib/layouts");
 const { colourwaysFor } = await import("@/lib/design/colourways");
-const { layoutShowsDescription } = await import("@/lib/layouts/description");
+const { chaptersShowingDescription, layoutShowsDescription } = await import("@/lib/layouts/description");
 const { layoutsFor } = await import("@/lib/book/spreads");
-const { toPublicDoc } = await import("@/lib/publish/public-doc");
+const { PublicBookDocV2Schema, publicDocToRenderDoc, toPublicDoc } = await import("@/lib/publish/public-doc");
+const { hasUserDescriptions, isAiReplaceableDoc } = await import("@/lib/book/replaceable");
+const { albumEditedByUser } = await import("@/lib/review/ui");
+const { validateBookDoc } = await import("@/lib/book/schema");
+const { setChapterDescription, EditOpError } = await import("@/lib/book/edit-ops");
 const { getOgData } = await import("@/lib/db/public-books");
 const { OG_CACHE_CONTROL } = await import("@/lib/viewer/og-image");
 
@@ -134,6 +138,119 @@ describe("getOgData with an M30 cover snapshot", () => {
     expect(og.title).toBe("Eid at home");
     expect(og.coverUrl).toBe(`${SUPABASE}/storage/v1/object/sign/photos/${OWNER}/${BOOK}/${P1}/web.jpg?token=t`);
     expect(fake.signed).toEqual([`${OWNER}/${BOOK}/${P1}/web.jpg`]);
+  });
+});
+
+// M30 review: a description no page shows (its page was moved to another layout, or deleted) is
+// invisible to the owner — it must not be published and must not count as a user edit.
+describe("a chapter description is published / counts as a user edit only when a page shows it", () => {
+  const cover = M30_COVERS.find((l) => l.id === "mg-p-cover")!;
+  const shownDoc = docWithCover(cover, "Eid at home");
+  const plainId = layoutsFor(cover.format, cover.style, "page").find((p) => p.photoCount === 1 && !layoutShowsDescription(p))!.id;
+  const spread = layoutsFor(cover.format, cover.style, "spread").find((l) => layoutShowsDescription(l))!;
+  const crop = { x: 0.5, y: 0.5, zoom: 1 };
+  const withPages = (pages: BookDoc["pages"], d: BookDoc = shownDoc): BookDoc => ({ ...d, pages });
+  const swapped = withPages([{ ...shownDoc.pages[0], layout: plainId }]);
+  const deleted = withPages([]);
+  const otherChapter: BookDoc = {
+    ...shownDoc,
+    chapters: [...shownDoc.chapters, { id: "c2", title: "Home", dateLabel: "4 Nov 2026", place: null }],
+    pages: [{ ...shownDoc.pages[0], chapterId: "c2" }],
+  };
+  const asUser = (d: BookDoc): BookDoc => ({ ...d, chapters: d.chapters.map((c) => (c.description ? { ...c, description: { ...c.description, source: "user" as const } } : c)) });
+  const v2 = (d: BookDoc) => PublicBookDocV2Schema.parse(JSON.parse(JSON.stringify(toPublicDoc(d, { captionLang: "en" }))));
+
+  it("shown: the text is published (no source) and the snapshot passes its strict schema", () => {
+    const pub = v2(shownDoc);
+    expect(pub.chapters[0].description).toEqual({ text: DESCRIPTION });
+    expect(publicDocToRenderDoc(pub).chapters[0].description?.text).toBe(DESCRIPTION);
+  });
+
+  it.each([
+    ["page moved to a layout without a description panel", swapped],
+    ["description page deleted", deleted],
+    ["only a page of ANOTHER chapter has a description layout", otherChapter],
+    ["only an orphaned right half names the chapter", withPages([{ id: "pg0", chapterId: "c1", layout: spread.id, slots: [], caption: null, side: "right" }])],
+  ] as const)("not shown (%s): no description key, text absent, strict schema still passes", (_name, d) => {
+    for (const doc of [d, asUser(d)]) {
+      const raw = toPublicDoc(doc, { captionLang: "en" });
+      expect(JSON.stringify(raw)).not.toContain(DESCRIPTION);
+      const pub = PublicBookDocV2Schema.parse(JSON.parse(JSON.stringify(raw)));
+      for (const c of pub.chapters) expect("description" in c).toBe(false);
+      expect(publicDocToRenderDoc(pub).chapters.every((c) => c.description === undefined)).toBe(true);
+    }
+  });
+
+  it("a spread shows the description of its LEFT half's chapter", () => {
+    const slots = Array.from({ length: spread.photoCount }, (_, i) => ({ photoId: i === 0 ? P2 : `${P2.slice(0, -2)}${String(10 + i)}`, crop }));
+    const pages: BookDoc["pages"] = [
+      { id: "pg0", chapterId: "c1", layout: spread.id, slots, caption: null, side: "left" },
+      { id: "pg1", chapterId: "c1", layout: spread.id, slots: [], caption: null, side: "right" },
+    ];
+    expect([...chaptersShowingDescription(pages)]).toEqual(["c1"]);
+    expect(v2(withPages(pages)).chapters[0].description).toEqual({ text: DESCRIPTION });
+  });
+
+  it("chaptersShowingDescription ignores unknown layouts, pages without a chapter and junk", () => {
+    expect([...chaptersShowingDescription([{ chapterId: "c1", layout: "nope" }, { chapterId: null, layout: shownDoc.pages[0].layout }, { chapterId: 3, layout: 4 }, {}])]).toEqual([]);
+  });
+
+  it("every layout whose block depends on the description also has the description panel", () => {
+    for (const l of M30_LAYOUTS) if (l.blocks?.some((b) => b.when === "chapterDescription")) expect(layoutShowsDescription(l), l.id).toBe(true);
+  });
+
+  it("replaceable: a user description blocks an AI rebuild only while a page shows it", () => {
+    expect(hasUserDescriptions(shownDoc)).toBe(false); // the AI's
+    expect(hasUserDescriptions(asUser(shownDoc))).toBe(true);
+    expect(isAiReplaceableDoc(asUser(shownDoc))).toBe(false);
+    expect(albumEditedByUser(asUser(shownDoc))).toBe(true);
+    for (const d of [swapped, deleted, otherChapter]) {
+      expect(hasUserDescriptions(asUser(d))).toBe(false);
+      expect(isAiReplaceableDoc(asUser(d))).toBe(true);
+      expect(albumEditedByUser(asUser(d))).toBe(false);
+    }
+    expect(hasUserDescriptions({ chapters: asUser(shownDoc).chapters })).toBe(false); // no pages → nothing shown
+    expect(hasUserDescriptions({ chapters: asUser(shownDoc).chapters, pages: [null, 1, "x"] })).toBe(false);
+  });
+});
+
+// M30 review: like the colourway, a description belongs to a style with description layouts.
+describe("validateBookDoc: chapter descriptions only on magazine / editorial", () => {
+  const photoIds = new Set([P1, P2]);
+  const classic: BookDoc = {
+    version: 2,
+    format: "A5_PORTRAIT",
+    occasion: "travel",
+    cover: { layout: "cover", photoId: P1, title: "T", subtitle: "" },
+    chapters: [{ id: "c1", title: "One", dateLabel: "2026", place: null }],
+    pages: [{ id: "pg0", chapterId: "c1", layout: "full-page", slots: [{ photoId: P2, crop: { x: 0.5, y: 0.5, zoom: 1 } }], caption: null }],
+    style: { background: { kind: "color", hex: "#FFFFFF" }, designStyle: "classic", font: "Playfair" },
+  };
+  const issues = (d: BookDoc) => validateBookDoc(d, { photoIds, maxPages: 20 });
+
+  it("magazine / editorial: a description is valid, shown or not", () => {
+    for (const id of ["mg-p-cover", "ed-l-cover-frame"]) {
+      const d = docWithCover(M30_COVERS.find((l) => l.id === id)!, "T");
+      expect(issues(d)).toEqual([]);
+      expect(issues({ ...d, pages: [] })).toEqual([]);
+    }
+  });
+
+  it("an older style: valid without, one issue per described chapter (index + style only, no user text)", () => {
+    expect(issues(classic)).toEqual([]);
+    const bad: BookDoc = { ...classic, chapters: [{ ...classic.chapters[0], description: { text: DESCRIPTION, source: "user" } }] };
+    expect(issues(bad)).toEqual(["chapters[0].description: classic books have no chapter descriptions"]);
+  });
+
+  it("setChapterDescription refuses on an older style (so the editor can't build such a doc); clearing still works", () => {
+    let code: unknown = null;
+    try {
+      setChapterDescription(classic, "c1", "Mine.");
+    } catch (e) {
+      code = e instanceof EditOpError ? e.code : e;
+    }
+    expect(code).toBe("no_description_area");
+    expect(setChapterDescription(classic, "c1", " ")).toBe(classic);
   });
 });
 

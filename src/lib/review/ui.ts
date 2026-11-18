@@ -402,7 +402,7 @@ export const CONTINUE_UNSYNCED_NOTE = `Your changes aren't in the book yet — t
 
 /**
  * The album has user edits (editor save → meta.userEdited, any caption with source "user", or a
- * user-chosen background, M10c D-068, or a chapter description with source "user", M30 D-090).
+ * user-chosen background, M10c D-068, or a chapter description with source "user" that a page shows, M30 D-090).
  * Then the review screen offers only "Continue in the editor" — no Update album, no Rebuild
  * with AI (D-037 #2). Unparsable docs count as edited (docOrigin's safe side).
  */

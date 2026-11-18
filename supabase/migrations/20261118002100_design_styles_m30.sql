@@ -27,7 +27,12 @@
 -- 2100 applied. Apply → supabase/tests/rls_check.sql.
 --
 -- Rollback: redeploying older code needs no database change (it never writes
--- the new values, and reads design_style as text). Narrowing the check back to
+-- the new values, and reads design_style as text). BUT older code cannot parse
+-- a 'magazine' / 'editorial' book: its doc schema rejects the style, the M30
+-- layout ids, chapter descriptions and colourways, and the same holds for the
+-- v2 published snapshots (published_doc) of such books — their editor and
+-- public /b/[slug] links stop working until the M30 code is redeployed. Books
+-- of the four older styles are unaffected. Narrowing the check back to
 -- the four 1900 values is only possible while no book has design_style
 -- 'magazine' / 'editorial' — otherwise the re-add fails on those rows; leave
 -- the wider check in place instead.

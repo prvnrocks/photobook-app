@@ -12,6 +12,7 @@ import { LIMITS } from "@/lib/ai/limits";
 import { BACKGROUND_VEIL_MAX, BACKGROUND_VEIL_MIN, TEXTURE_IDS } from "@/lib/design/backgrounds";
 import { PHOTO_FILTER_IDS } from "@/lib/design/photo-filters";
 import { getLayout, SAFE_MM } from "@/lib/layouts";
+import { writesDescriptions } from "@/lib/layouts/description";
 import { codePointLength, hasLoneSurrogate } from "@/lib/text/clip";
 import { pageMm } from "./format";
 import {
@@ -794,7 +795,7 @@ export interface ValidateOptions {
  * count == photoCount (a spread's right half: 0 slots, no caption), spreads aligned (spreads.ts),
  * photos exist and are used at most once in pages (the cover photo may appear once more),
  * page count ≤ maxPages, chapter/page ids unique, chapterIds exist, style.colourway belongs to the
- * design style (M30), photo backgrounds (book
+ * design style and chapter descriptions only on a style with description layouts (M30), photo backgrounds (book
  * default and page overrides) use a known photo (backgroundPhotoIds, default photoIds) — a
  * background photo may also be on a page.
  * Returns [] when valid. Issue strings contain indices and layout ids only — no user data.
@@ -842,10 +843,18 @@ export function validateBookDoc(
     issues.push(`pages: ${doc.pages.length} pages exceeds limit of ${maxPages}`);
   }
 
+  // M30: chapter descriptions exist only on styles with description layouts (like the colourway
+  // above). Nothing legitimate writes one elsewhere: the AI writes them only when
+  // writesDescriptions(style), setChapterDescription refuses, and a style change (setup card) is
+  // only possible on `{}` / an untouched rule draft, which never has descriptions.
+  const describes = writesDescriptions(bookStyle);
   const chapterIds = new Set<string>();
   doc.chapters.forEach((c, i) => {
     if (chapterIds.has(c.id)) issues.push(`chapters[${i}]: duplicate chapter id`);
     chapterIds.add(c.id);
+    if (c.description !== undefined && !describes) {
+      issues.push(`chapters[${i}].description: ${bookStyle} books have no chapter descriptions`);
+    }
   });
 
   const pageIds = new Set<string>();

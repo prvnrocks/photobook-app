@@ -27,7 +27,7 @@ import { bestCoverLayout, bestPageLayout, fullPageLayout } from "@/lib/layouts/f
 import { simulateUnsupported } from "./fixtures/simulated-unsupported-style";
 
 const FORMATS = ["A5_PORTRAIT", "A5_LANDSCAPE"] as const;
-/** Real styles the code can't lay out yet (M30 T1: magazine + editorial, until their layouts ship). */
+/** Real styles without a layout catalogue. Empty since M30 T9b (every DESIGN_STYLES value is supported); kept for the next new style. */
 const UNSUPPORTED = DESIGN_STYLES.filter((s) => !(SUPPORTED_DESIGN_STYLES as readonly string[]).includes(s));
 /** Styles simulated as "no layouts" below — each one in turn. */
 const SIMULATED = ["geometric", "scrapbook"] as const;
