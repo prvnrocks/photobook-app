@@ -9,6 +9,7 @@ import { M30_DEMO_LAYOUTS, m30SheetItem, parseM30Sheet } from "@/lib/book/dev-m3
 import { LAYOUTS } from "@/lib/layouts";
 import { CoverSheet } from "./CoverSheet";
 import { LayoutSheet } from "./LayoutSheet";
+import { realSheetPhotos } from "./real-photos";
 import { SampleBook } from "./SampleBook";
 
 // `?sample=modern-portrait|modern-landscape` (M10b A9; M10c: geometric-|scrapbook-portrait|landscape[-ar]):
@@ -35,11 +36,15 @@ export default async function DevBookPagePreview({
     const layouts = sheet.style ? LAYOUTS.filter((l) => l.style === sheet.style && l.format === sheet.format) : M30_DEMO_LAYOUTS;
     const arabic = sp.ar === "1";
     const opts = { arabic, descriptions: sp.desc !== "0", colourway: typeof sp.cw === "string" ? sp.cw : null };
+    // `&photos=real`: real photographs from public/dev-photos (git-ignored; see real-photos.ts).
+    let coverNo = 0;
+    const itemPhotos = sp.photos === "real" ? layouts.map((l, i) => realSheetPhotos(i, l.role === "cover" ? coverNo++ : 0)) : undefined;
     return (
       <LayoutSheet
         title={String(sp.sheet) + (arabic ? " · Arabic" : "") + (opts.descriptions ? "" : " · no descriptions") + (opts.colourway ? ` · ${opts.colourway}` : "")}
         items={layouts.map((l) => m30SheetItem(l, opts))}
         photos={devSamplePhotos()}
+        itemPhotos={itemPhotos}
         mode={sp.mode === "edit" ? "edit" : sp.mode === "print" ? "print" : "view"}
         captionLang={arabic ? "ar" : "en"}
         extraLayouts={sheet.style ? undefined : M30_DEMO_LAYOUTS}

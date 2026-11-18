@@ -40,3 +40,6 @@ yarn-error.log*
 
 # demo tooling drafts (scripts/record-demo.mjs --draft)
 public/demo/*.draft.*
+
+# dev contact-sheet photos (/dev-book-page?sheet=…&photos=real) — downloaded locally, never committed
+public/dev-photos/
