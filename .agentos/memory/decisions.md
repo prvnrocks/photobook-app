@@ -328,3 +328,8 @@ Decision: New book form offers Modern (default for every occasion via DEFAULT_ST
 - Decision: two new design styles `magazine` (bold travel magazine, ref mg-5) and `editorial` (minimal Swiss, ref mg-covers), both formats, available for every occasion; travel defaults to Magazine (other D-068 defaults unchanged). New OFL fonts (heavy display sans + geometric sans, with Arabic partners). Per-book accent colourway (AI-suggested from photo colours, user-editable, v2 doc feature). AI chapter descriptions (≤ 45 words, Caption Writer + Critic, source ai|user, editable, existing limits). Brush/painted style (ref mg-covers2) deferred — needs mask artwork. Restyle stays out (D-063). Contact sheet signed off by the user before deploy.
 - Why: user request 2026-11-18 ("more magazine styles… titles and descriptions AI generated… different font styles with colors… continue with recommended options").
 - Alternatives rejected: one style with themes only (too little variety); three styles incl. brush (artwork + print risk); descriptions per page (cost, clutter at A5).
+
+## D-091 — M30 bundle budget: accept +11.5 kB gz on edit / viewer (2026-11-18)
+- Decision: accept /books/[id]/edit +11.5 kB gz and /b/[slug] +11.2 kB gz vs main for 67 magazine/editorial layouts, fonts tokens and colourways (planned budget was +8). Per-style lazy loading of the layout catalogue is the follow-up if the catalogue grows again.
+- Why: the whole M30 catalogue is ~9.6 kB gz and already deduplicated; only shipping fewer layouts moves it. User asked to continue with recommended options; flagged to the user at G0.
+- Alternatives rejected: cut layouts (less variety than asked); lazy-load now (touches editor/viewer/print loading paths late in the milestone).
