@@ -17,6 +17,16 @@ import { bestCoverLayout, bestPageLayout, fullPageLayout, type FitOrientation } 
 import { momentSet, rng, SET_SIZES } from "./fixtures/autolayout-sets";
 
 const FILE = join(__dirname, "fixtures", "autolayout-m10b-designs.golden.json");
+/**
+ * The album without its default photo looks (D-089, doc.filters): these goldens freeze the LAYOUT
+ * (pages, slots, crops, chapters, cover); the looks are tested in tests/photo-filters.test.ts.
+ */
+function layoutOnly<T extends { filters?: unknown }>(doc: T): T {
+  const rest = { ...doc };
+  delete rest.filters;
+  return rest;
+}
+
 const hash = (v: unknown) => createHash("sha256").update(JSON.stringify(v)).digest("hex").slice(0, 32);
 
 const DESIGNS: readonly BookDesign[] = [
@@ -46,7 +56,7 @@ function cases(design: BookDesign): Record<string, string> {
     for (const seed of [1, 2]) {
       const photos = momentSet(n, seed * 100 + n);
       for (const isPaid of [false, true]) {
-        const doc = autolayout(photos, { ...opts, isPaid });
+        const doc = layoutOnly(autolayout(photos, { ...opts, isPaid }));
         out[`auto:${n}:${seed}:${isPaid}`] = hash(doc);
         try {
           const r = relayoutDoc(doc, reviewed(photos, seed * 100 + n), { isPaid, maxPages: isPaid ? 100 : 20, captionLang: "en" });

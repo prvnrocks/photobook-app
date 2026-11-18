@@ -14,6 +14,16 @@ import { bestPageLayout, type FitOrientation } from "@/lib/layouts/fit";
 import { momentSet, rng, SET_SIZES } from "./fixtures/autolayout-sets";
 
 const FILE = join(__dirname, "fixtures", "autolayout-classic-portrait.golden.json");
+/**
+ * The album without its default photo looks (D-089, doc.filters): these goldens freeze the LAYOUT
+ * (pages, slots, crops, chapters, cover); the looks are tested in tests/photo-filters.test.ts.
+ */
+function layoutOnly<T extends { filters?: unknown }>(doc: T): T {
+  const rest = { ...doc };
+  delete rest.filters;
+  return rest;
+}
+
 const hash = (v: unknown) => createHash("sha256").update(JSON.stringify(v)).digest("hex").slice(0, 32);
 
 /** Review changes: drop ~15 % of kept photos, keep back ~half the dropped, add a few new photos. */
@@ -37,7 +47,7 @@ function cases(): Record<string, string> {
     for (const seed of [1, 2, 3]) {
       const photos = momentSet(n, seed * 100 + n);
       for (const isPaid of [false, true]) {
-        const doc = autolayout(photos, { occasion: "travel", title: null, captionLang: "en", isPaid });
+        const doc = layoutOnly(autolayout(photos, { occasion: "travel", title: null, captionLang: "en", isPaid }));
         out[`auto:${n}:${seed}:${isPaid}`] = hash(doc);
         try {
           const r = relayoutDoc(doc, reviewed(photos, seed * 100 + n), { isPaid, maxPages: isPaid ? 100 : 20, captionLang: "en" });

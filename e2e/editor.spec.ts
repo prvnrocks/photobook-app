@@ -1302,14 +1302,14 @@ test.describe("backgrounds at 375 px (/dev-editor?bg=1)", () => {
     await settle(page);
     const rowIds = () => page.getByTestId("editor-toolbar-row").locator("button").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!));
     await cur(page).locator('[data-slot-index="0"] [data-testid="slot-target"]').click();
-    await expect.poll(rowIds).toEqual(["editor-tool-replace", "editor-tool-crop", "editor-more"]);
+    await expect.poll(rowIds).toEqual(["editor-tool-replace", "editor-tool-crop", "editor-tool-filter", "editor-more"]);
     await expectRowFits(page, W);
     await shot(page, "m13-editor-375-photo");
     await page.getByTestId("editor-more").click();
     await expect(page.getByTestId("editor-tool-layout")).toBeVisible();
     await page.keyboard.press("Escape");
     // Escape on the sheet must not also clear the photo selection.
-    await expect.poll(rowIds).toEqual(["editor-tool-replace", "editor-tool-crop", "editor-more"]);
+    await expect.poll(rowIds).toEqual(["editor-tool-replace", "editor-tool-crop", "editor-tool-filter", "editor-more"]);
 
     await cur(page).getByTestId("caption-target").click();
     await expect(page.getByTestId("editor-panel-caption")).toBeVisible();
@@ -1719,6 +1719,68 @@ for (const vp of [
       await page.getByTestId("bg-reset").click();
       await expect.poll(() => bg('[data-page="cover"]')).toBe("rgb(255, 255, 255)");
       await expect(page.getByTestId("bg-reset")).toHaveCount(0);
+    });
+  });
+}
+
+// Photo filters (D-089, 2026-11-18): a look per photo, picked in the Filter tool.
+for (const vp of [
+  { name: "375 px", viewport: { width: 375, height: 812 }, mobile: true },
+  { name: "1280 px", viewport: { width: 1280, height: 800 }, mobile: false },
+]) {
+  test.describe(`photo filters at ${vp.name} (/dev-editor)`, () => {
+    test.use({ viewport: vp.viewport, hasTouch: vp.mobile, isMobile: vp.mobile });
+
+    test("Filter tool: every look on offer, a tap restyles the photo on the page and in the preview, Original removes it, undo works", async ({ page }) => {
+      await page.goto("/dev-editor?bg=1");
+      await page.getByTestId("carousel-next").click();
+      const here = '[data-testid="carousel-item"][aria-hidden="false"] [data-page="0"]';
+      const img = page.locator(`${here} [data-slot-index="0"] img`).first();
+      await expect(img).toBeVisible();
+      expect(await img.evaluate((e) => getComputedStyle(e).filter)).toBe("none");
+      await page.locator(`${here} [data-testid="slot-target"]`).first().click();
+      await page.getByTestId("editor-tool-filter").click();
+      const picker = page.getByTestId("photo-filter-picker");
+      await expect(picker).toBeVisible();
+      // Original + 15 looks, incl. the asked-for black & white, sepia and soft; tiles ≥ 44 px.
+      const options = picker.getByTestId("photo-filter-option");
+      await expect(options).toHaveCount(16);
+      for (const id of ["none", "vivid", "mono", "noir", "sepia", "soft", "golden"]) await expect(picker.locator(`[data-filter-id="${id}"]`)).toHaveCount(1);
+      await expect(picker.locator('[data-filter-id="none"]')).toHaveAttribute("aria-pressed", "true");
+      const tile = (await options.first().boundingBox())!;
+      expect(tile.width).toBeGreaterThanOrEqual(44);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+
+      await picker.locator('[data-filter-id="golden"]').click();
+      await expect(img).toHaveAttribute("data-photo-filter", "golden");
+      expect(await img.evaluate((e) => getComputedStyle(e).filter)).toBe("sepia(0.22) saturate(1.35) brightness(1.05) contrast(1.05)");
+      await expect(picker.locator('[data-filter-id="golden"]')).toHaveAttribute("aria-pressed", "true");
+      await expect(picker).toBeVisible(); // stays open to compare
+      // The stub save runs the real save validator: the stored doc keeps the filter.
+      await expect
+        .poll(() => page.evaluate(() => Object.values((window as unknown as { __devEditorLastSave?: { stored?: { filters?: Record<string, string> } } }).__devEditorLastSave?.stored?.filters ?? {})), { timeout: 10_000 })
+        .toEqual(["golden"]);
+
+      await picker.locator('[data-filter-id="mono"]').click();
+      await expect(img).toHaveAttribute("data-photo-filter", "mono");
+
+      // Preview (the real flipbook) shows the look too.
+      await page.getByTestId("editor-panel-close").click();
+      await page.getByTestId("editor-preview-open").click();
+      await page.getByTestId("editor-preview-next").click();
+      await expect(page.getByTestId("editor-preview").locator('img[data-photo-filter="mono"]').first()).toBeAttached();
+      await page.keyboard.press("Escape");
+
+      // Undo → golden again; Original → no filter at all.
+      await page.getByTestId("editor-undo").click();
+      await expect(img).toHaveAttribute("data-photo-filter", "golden");
+      // On phones a tap on the selected photo deselects it: only tap when it is not selected.
+      const target = page.locator(`${here} [data-testid="slot-target"]`).first();
+      if ((await target.getAttribute("data-selected")) !== "true") await target.click();
+      if ((await page.getByTestId("photo-filter-picker").count()) === 0) await page.getByTestId("editor-tool-filter").click();
+      await page.getByTestId("photo-filter-picker").locator('[data-filter-id="none"]').click();
+      await expect(img).not.toHaveAttribute("data-photo-filter", /.+/);
+      expect(await img.evaluate((e) => getComputedStyle(e).filter)).toBe("none");
     });
   });
 }

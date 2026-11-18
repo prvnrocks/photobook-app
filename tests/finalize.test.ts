@@ -673,7 +673,17 @@ describe("fallback album is byte-identical to the pre-M13 inline pipeline", () =
     book.caption_lang = mix === "mixed30" ? "ar" : "en";
     book.occasion = mix === "big140" ? "wedding" : "travel";
     const r = await fin(BOOK, { db, geocoder: makeGeocoder() });
-    const out = r?.wroteDoc ? `${r.pages}:${JSON.stringify(book.doc)}` : `nowrite:${r?.pages}`;
+    // Layout only: the default photo looks (D-089, doc.filters) are not part of this golden.
+    const layoutOnly = { ...(book.doc as Record<string, unknown>) };
+    delete layoutOnly.filters;
+    // …but a big album really is written with default looks, on placed photos only.
+    if (mix === "big140" && r?.wroteDoc) {
+      const filters = ((book.doc as { filters?: Record<string, string> }).filters ?? {});
+      expect(Object.keys(filters).length).toBeGreaterThan(10);
+      const json = JSON.stringify(layoutOnly);
+      for (const id of Object.keys(filters)) expect(json).toContain(`"${id}"`);
+    }
+    const out = r?.wroteDoc ? `${r.pages}:${JSON.stringify(layoutOnly)}` : `nowrite:${r?.pages}`;
     const hash = createHash("sha256").update(out).digest("hex").slice(0, 16);
     if (process.env.RECORD_FINALIZE) appendFileSync(process.env.RECORD_FINALIZE, `    ${JSON.stringify(key)}: ${JSON.stringify(hash)},\n`);
     else expect(hash).toBe(RECORDED[key]);

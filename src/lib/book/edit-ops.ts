@@ -26,6 +26,7 @@ import { LIMITS } from "@/lib/ai/limits";
 import { getLayout } from "@/lib/layouts";
 import { clipCodePoints, clipText, stripLoneSurrogates } from "@/lib/text/clip";
 import { clampCrop, DEFAULT_CROP } from "./crop";
+import { isPhotoFilterId, type PhotoFilterId } from "@/lib/design/photo-filters";
 import { styleCaptionFont } from "@/lib/design/styles";
 import { DEFAULT_ARABIC_CAPTION_FONT, defaultCaptionFont, type BookFontName } from "./fonts";
 import { BOOK_TITLE_MAX_CODE_POINTS } from "./options";
@@ -45,6 +46,8 @@ export type EditOpErrorCode =
   | "no_caption_area"
   | "page_limit"
   | "invalid_background"
+  | "invalid_filter"
+  | "unknown_photo"
   /** A spread layout was picked for a right-hand page (odd index) that is not part of a spread. */
   | "spread_needs_left_page"
   /** The change would remove a user caption; repeat with `confirmDropCaptions: true` after asking. */
@@ -783,6 +786,32 @@ export function setChapterTitle(doc: BookDoc, chapterId: string, title: string):
   const chapters: Chapter[] = doc.chapters.slice();
   chapters[idx] = { ...chapters[idx], title: clean };
   return { ...doc, chapters };
+}
+
+// ---- photo filters (D-089) -----------------------------------------------------------------------
+
+/**
+ * Give a photo a filter, or `null` for the photo as shot. The look belongs to the photo (wherever
+ * it shows). Unknown filter → "invalid_filter"; a photo that is nowhere in the book →
+ * "unknown_photo". Same filter / nothing to clear → the input doc. An empty map is dropped, so a
+ * book without other v2 features is stored as v1 again.
+ */
+export function setPhotoFilter(doc: BookDoc, photoId: string, filter: PhotoFilterId | null): BookDoc {
+  const current = doc.filters && Object.prototype.hasOwnProperty.call(doc.filters, photoId) ? doc.filters[photoId] : undefined;
+  if (filter === null) {
+    if (current === undefined) return doc;
+    const rest = { ...doc.filters };
+    delete rest[photoId];
+    if (Object.keys(rest).length > 0) return { ...doc, filters: rest };
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- drop the key
+    const { filters: _drop, ...without } = doc;
+    return without;
+  }
+  if (!isPhotoFilterId(filter)) throw new EditOpError("invalid_filter");
+  const placed = doc.cover.photoId === photoId || doc.pages.some((p) => p.slots.some((s) => s.photoId === photoId));
+  if (!placed) throw new EditOpError("unknown_photo");
+  if (current === filter) return doc;
+  return { ...doc, filters: { ...doc.filters, [photoId]: filter } };
 }
 
 // ---- backgrounds (M10a A8) -----------------------------------------------------------------------

@@ -484,7 +484,10 @@ async function renderAndStore(
 
   // Ownership: the row was inserted by create_export_job for the verified owner; photos are
   // loaded for that book AND that user only (admin client bypasses RLS).
-  const photos = await listPrintPhotoSources(exp.bookId, exp.userId, printPhotoIds(doc, allSheets(doc)));
+  const sources = await listPrintPhotoSources(exp.bookId, exp.userId, printPhotoIds(doc, allSheets(doc)));
+  // Photo filters (D-089) are baked into the print copies (no CSS filter in the print route).
+  const filters = doc.filters ?? {};
+  const photos = sources.map((p) => (Object.prototype.hasOwnProperty.call(filters, p.id) ? { ...p, filter: filters[p.id] } : p));
   timings.load = Date.now() - tStart;
   throwIfAborted(signal);
 

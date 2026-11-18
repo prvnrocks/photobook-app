@@ -84,9 +84,9 @@ describe("simple toolbar split (M13 T8)", () => {
     expect(html).toContain("Redo with AI");
   });
 
-  it("photo: Replace / Crop + More (Layout behind More)", () => {
+  it("photo: Replace / Crop / Filter + More (Layout behind More)", () => {
     const s = split(ctxFor({ selection: SLOT }));
-    expect(s.primary).toEqual(["replace", "crop"]);
+    expect(s.primary).toEqual(["replace", "crop", "filter"]);
     expect(s.more).toContain("layout");
     expect(s.more).toContain("add-page");
   });

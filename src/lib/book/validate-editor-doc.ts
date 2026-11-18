@@ -176,10 +176,19 @@ export function validateEditorDoc(input: unknown, ctx: EditorDocContext): Editor
   const issues = validateBookDoc(doc, { photoIds: new Set(ctx.photoIds), maxPages: ctx.maxPages });
   if (issues.length > 0) return { ok: false, code: "invalid_doc" };
 
+  // Photo filters (D-089): ids are schema-checked; entries for photos that are not this book's
+  // (deleted in another tab, or made up) are dropped rather than failing the save.
+  const out: BookDoc = { ...doc, meta: forcedMeta(ctx.savedDoc) };
+  if (doc.filters) {
+    const kept = Object.fromEntries(Object.entries(doc.filters).filter(([id]) => ctx.photoIds.has(id)));
+    if (Object.keys(kept).length > 0) out.filters = kept;
+    else delete out.filters;
+  }
+
   const title = clipCodePoints(doc.cover.title.trim(), BOOK_TITLE_MAX_CODE_POINTS).trim();
   return {
     ok: true,
-    doc: { ...doc, meta: forcedMeta(ctx.savedDoc) },
+    doc: out,
     pageCount: doc.pages.length,
     title: title === "" ? null : title,
     placedPhotoIds: [...placed],

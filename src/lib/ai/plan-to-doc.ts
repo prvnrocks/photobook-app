@@ -27,6 +27,7 @@
 // spread gets none) and handed to applyBackgroundSuggestions, which re-validates every pick and
 // fills anything missing or invalid with the T11 rules. An invalid pick never fails the plan.
 
+import { withDefaultFilters } from "@/lib/book/default-filters";
 import { dayRange, DEFAULT_TITLES } from "@/lib/autolayout";
 import { DEFAULT_BOOK_DESIGN, type BookDesign } from "@/lib/book/book-design";
 import { BOOK_TITLE_MAX_CODE_POINTS } from "@/lib/book/options";
@@ -353,7 +354,8 @@ export function planToDoc(rawPlan: AlbumPlan, opts: PlanToDocOptions): PlanToDoc
   const kept = new Set(photos.filter((p) => p.keep).map((p) => p.id));
   const docIssues = validateBookDoc(parsed.doc, { photoIds: kept, maxPages });
   if (docIssues.length) return { issues: docIssues.map((i) => `doc: ${i}`) };
-  return { doc: parsed.doc };
+  // Default looks on some photos (D-089) — the user changes them in the editor's Filter tool.
+  return { doc: withDefaultFilters(parsed.doc) };
 }
 
 // ---------------------------------------------------------------------------------------------

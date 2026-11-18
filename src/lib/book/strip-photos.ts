@@ -87,6 +87,19 @@ const positive = (v: number | null | undefined) => (typeof v === "number" && Num
  * missing from it counts as square (fits any slot).
  */
 export function stripPhotoFromDoc(doc: BookDoc, photoId: string, photos: readonly StripPhotoDims[] = []): StripPhotoResult {
+  // The photo's filter (D-089) goes with it: no trace of a deleted photo's id stays in the doc.
+  const res = stripSlotsAndBackgrounds(doc, photoId, photos);
+  const filters = res.doc.filters;
+  if (!filters || !Object.prototype.hasOwnProperty.call(filters, photoId)) return res;
+  const rest = { ...filters };
+  delete rest[photoId];
+  const next = { ...res.doc };
+  if (Object.keys(rest).length > 0) next.filters = rest;
+  else delete next.filters;
+  return { ...res, doc: next, changed: true };
+}
+
+function stripSlotsAndBackgrounds(doc: BookDoc, photoId: string, photos: readonly StripPhotoDims[]): StripPhotoResult {
   const onPages = doc.pages.some((p) => p.slots.some((s) => s.photoId === photoId));
   if (!onPages) return { ...nullOut(doc, photoId), reflowed: false };
   try {

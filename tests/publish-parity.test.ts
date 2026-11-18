@@ -1,5 +1,6 @@
 // M6 tester gaps: JS publish rules ↔ SQL get_published_book expiry parity, public DTO allowlist
 // on realistic (autolayout + AI-captioned + dirty) docs, cookie scoping in production, OG version.
+import { isPhotoFilterId } from "@/lib/design/photo-filters";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -9,7 +10,7 @@ vi.mock("server-only", () => ({}));
 import { autolayout, type AutoPhoto } from "@/lib/autolayout";
 import type { BookDoc } from "@/lib/book/types";
 import { accessCookieName, accessCookieOptions } from "@/lib/publish/access-cookie";
-import { parsePublicDoc, publicDocToRenderDoc, toPublicDoc } from "@/lib/publish/public-doc";
+import { parsePublicDoc, publicDocToRenderDoc, publicPhotoIds, toPublicDoc } from "@/lib/publish/public-doc";
 import { FREE_LINK_DAYS, isExpired, nextExpiry } from "@/lib/publish/rules";
 import { isValidSlug, makeSlug } from "@/lib/publish/slug";
 import { ogImagePath } from "@/lib/viewer/metadata";
@@ -115,7 +116,7 @@ function dirty(doc: BookDoc): BookDoc {
 
 /** Path-aware key allowlist: every key in the public doc must be one of these. */
 const ALLOWED: Record<string, string[]> = {
-  "": ["version", "format", "cover", "chapters", "pages", "style"],
+  "": ["version", "format", "cover", "chapters", "pages", "style", "filters"],
   cover: ["layout", "photoId", "title", "subtitle"],
   "chapters[]": ["id", "title", "dateLabel"],
   "pages[]": ["id", "chapterId", "layout", "slots", "caption"],
@@ -131,6 +132,11 @@ function checkKeys(v: unknown, path: string, bad: string[]) {
     return;
   }
   if (!v || typeof v !== "object") return;
+  if (path === "filters") {
+    // photoId → filter id (D-089): keys are photo ids (checked against the shown photos below).
+    for (const [k, x] of Object.entries(v)) if (!isPhotoFilterId(x)) bad.push(`filters.${k}`);
+    return;
+  }
   const allowed = ALLOWED[path];
   for (const [k, x] of Object.entries(v)) {
     if (!allowed || !allowed.includes(k)) bad.push(`${path}.${k}`);
@@ -144,6 +150,9 @@ describe("public doc on a realistic album", () => {
     const bad: string[] = [];
     checkKeys(pub, "", bad);
     expect(bad).toEqual([]);
+    // Filters only for photos the snapshot shows.
+    const shown = new Set(publicPhotoIds(pub));
+    for (const id of Object.keys((pub as { filters?: Record<string, string> }).filters ?? {})) expect(shown.has(id), id).toBe(true);
     // Note: autolayout chapter titles / cover subtitle are place NAMES by design (visible + editable
     // in the editor), so "Al Ain" may appear as a title; only the `place` field itself is dropped.
     const json = JSON.stringify(pub);

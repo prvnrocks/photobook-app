@@ -14,6 +14,7 @@ import {
 } from "@/lib/book/render";
 import { orientationOf, pageMm, sheetMm } from "@/lib/book/format";
 import { textureSrc, type Ink } from "@/lib/design/backgrounds";
+import { filterCss, type PhotoFilterId } from "@/lib/design/photo-filters";
 import type { TextRole } from "@/lib/design/styles";
 import { withPageAspect } from "@/lib/book/format-style";
 import type { BookFormat, Rect } from "@/lib/book/types";
@@ -175,7 +176,8 @@ export function PhotoSlot({
           loading={priority || mode === "print" ? "eager" : "lazy"}
           fetchPriority={priority ? "high" : undefined}
           className="pointer-events-none absolute block"
-          style={{ ...cropBoxStyle(slot.photo.style), maxWidth: "none" }}
+          style={{ ...cropBoxStyle(slot.photo.style), maxWidth: "none", ...screenFilter(slot.photo.filter, mode) }}
+          {...(slot.photo.filter ? { "data-photo-filter": slot.photo.filter } : {})}
         />
       ) : mode === "edit" ? (
         <div
@@ -191,6 +193,17 @@ export function PhotoSlot({
   );
 }
 
+/**
+ * Photo filter on screen (D-089): a CSS `filter` on the <img>. Never in print — a CSS filter makes
+ * Chromium rasterise the photo in the PDF; there the filter is baked into the print copy of the
+ * photo instead (lib/pdf/images.ts), from the same recipe.
+ */
+function screenFilter(id: PhotoFilterId | undefined, mode: BookRenderMode): CSSProperties {
+  if (!id || mode === "print") return {};
+  const css = filterCss(id);
+  return css ? { filter: css } : {};
+}
+
 /** The slot's photo (crop maths) or, in edit mode, the empty placeholder. */
 function SlotContent({ slot, mode, priority }: { slot: RenderSlot; mode: BookRenderMode; priority?: boolean }) {
   if (slot.photo) {
@@ -204,7 +217,8 @@ function SlotContent({ slot, mode, priority }: { slot: RenderSlot; mode: BookRen
         loading={priority || mode === "print" ? "eager" : "lazy"}
         fetchPriority={priority ? "high" : undefined}
         className="pointer-events-none absolute block"
-        style={{ ...cropBoxStyle(slot.photo.style), maxWidth: "none" }}
+        style={{ ...cropBoxStyle(slot.photo.style), maxWidth: "none", ...screenFilter(slot.photo.filter, mode) }}
+          {...(slot.photo.filter ? { "data-photo-filter": slot.photo.filter } : {})}
       />
     );
   }
@@ -352,7 +366,7 @@ export function BackgroundLayer({
           decoding="async"
           loading={priority || mode === "print" ? "eager" : "lazy"}
           className="pointer-events-none absolute inset-0 block h-full w-full object-cover"
-          style={{ maxWidth: "none" }}
+          style={{ maxWidth: "none", ...screenFilter(bg.filter, mode) }}
           data-bg="photo"
         />
       ) : null}
@@ -491,7 +505,8 @@ export function SlicedPhotoSlot({
                 loading={priority || mode === "print" ? "eager" : "lazy"}
                 fetchPriority={priority ? "high" : undefined}
                 className="pointer-events-none absolute block"
-                style={{ ...cropBoxStyle(slot.photo.style), maxWidth: "none" }}
+                style={{ ...cropBoxStyle(slot.photo.style), maxWidth: "none", ...screenFilter(slot.photo.filter, mode) }}
+                {...(slot.photo.filter ? { "data-photo-filter": slot.photo.filter } : {})}
               />
             </div>
           ) : mode === "edit" ? (

@@ -87,6 +87,7 @@
 // The result is checked with parseBookDoc + validateBookDoc; if that ever fails, a minimal
 // safe album is returned instead (the user must always get an album).
 
+import { withDefaultFilters } from "@/lib/book/default-filters";
 import { limitsFor } from "@/lib/ai/limits";
 import { assertSupportedDesign, DEFAULT_BOOK_DESIGN, type BookDesign } from "@/lib/book/book-design";
 import { orientationOf as formatOrientation } from "@/lib/book/format";
@@ -188,7 +189,8 @@ export function autolayout(photos: AutoPhoto[], opts: AutolayoutOptions): BookDo
   if (doc.pages.length > maxPages && hasSpreads(design)) {
     doc = build(kept, opts, design, maxPages, makeFiller(design, false));
   }
-  return ensureValid(doc, kept, opts, maxPages, design);
+  // Default looks on some photos (D-089) — the user changes them in the editor's Filter tool.
+  return withDefaultFilters(ensureValid(doc, kept, opts, maxPages, design));
 }
 
 function build(kept: P[], opts: AutolayoutOptions, design: BookDesign, maxPages: number, fill: Filler): BookDoc {

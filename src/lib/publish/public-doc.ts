@@ -35,6 +35,7 @@ import {
   MAX_SLOTS_V1,
   MAX_SLOTS_V2,
   PageSchema,
+  PhotoFiltersSchema,
   StyleSchema,
   StyleSchemaV1,
 } from "@/lib/book/schema";
@@ -72,6 +73,8 @@ export const PublicBookDocV1Schema = z
     style: StyleSchemaV1.strict(),
     /** Optional: absent in snapshots published before the M6 review fix. */
     captionLang: CaptionLangField,
+    /** Optional (D-089): filters of the photos this snapshot shows. */
+    filters: PhotoFiltersSchema.optional(),
   })
   .strict();
 
@@ -103,6 +106,8 @@ export const PublicBookDocV2Schema = z
     captionLang: CaptionLangField,
     /** Optional: only when the accent sticker depends on it (see header). */
     occasion: OccasionSchema.optional(),
+    /** Optional (D-089): filters of the photos this snapshot shows — never of unplaced photos. */
+    filters: PhotoFiltersSchema.optional(),
   })
   .strict();
 
@@ -221,6 +226,12 @@ export function toPublicDoc(doc: BookDoc, opts: ToPublicDocOptions = {}): Public
     };
     if (doc.occasion !== "other" && showsOccasionAccent(doc)) out.occasion = doc.occasion;
   }
+  // Photo filters (D-089), v1 and v2: only for the photos this snapshot shows.
+  if (doc.filters) {
+    const shown = new Set(publicPhotoIds(out));
+    const filters = Object.fromEntries(Object.entries(doc.filters).filter(([id]) => shown.has(id)));
+    if (Object.keys(filters).length > 0) out.filters = filters;
+  }
   if (opts.captionLang === "en" || opts.captionLang === "ar") out.captionLang = opts.captionLang;
   return out;
 }
@@ -259,6 +270,7 @@ export function publicDocToRenderDoc(pub: PublicBookDoc): BookDoc {
       format: pub.format,
       pages: pub.pages.map(page),
       style: { background: { kind: "color", hex: pub.style.background }, designStyle: DEFAULT_DESIGN_STYLE, font: pub.style.font },
+      ...(pub.filters ? { filters: { ...pub.filters } } : {}),
     };
   }
   return {
@@ -271,6 +283,7 @@ export function publicDocToRenderDoc(pub: PublicBookDoc): BookDoc {
       return out;
     }),
     style: { background: copyBackground(pub.style.background), designStyle: pub.style.designStyle, font: pub.style.font },
+    ...(pub.filters ? { filters: { ...pub.filters } } : {}),
   };
 }
 

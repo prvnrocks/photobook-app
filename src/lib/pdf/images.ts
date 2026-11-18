@@ -8,8 +8,9 @@ import "server-only";
 // Callers must have checked book ownership before planning — the admin client bypasses RLS.
 // Errors carry a code only (no storage paths, no photo data).
 
-import sharp from "sharp";
+import sharp, { type Sharp } from "sharp";
 import { PHOTOS_BUCKET } from "@/lib/db/photos";
+import { filterAffine, type FilterAffine } from "@/lib/design/photo-filter-matrix";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { PrintImagePlan, PrintImageTarget } from "./image-plan";
 import { createLimiter, printEncodeConcurrency, printImageInFlight } from "./prefetch";
@@ -57,6 +58,8 @@ export class PrintImageError extends Error {
 
 export interface PrintPhotoSource {
   id: string;
+  /** Photo filter (D-089) baked into the print copy; absent / null = as shot. */
+  filter?: string | null;
   /** photos.original_path ({user}/{book}/{photo}-original.{ext}); null → download_failed. */
   original_path: string | null;
 }
@@ -122,6 +125,7 @@ export async function encodePrintImage(
   input: Buffer,
   target: PrintImageTarget,
   quality: number = PRINT_JPEG_QUALITY,
+  filter?: string | null,
 ): Promise<Buffer> {
   try {
     const meta = await sharp(input, { limitInputPixels: PRINT_INPUT_PIXEL_LIMIT, failOn: "error" }).metadata();
@@ -130,16 +134,39 @@ export async function encodePrintImage(
     if (upright.width && upright.height && (upright.width > upright.height) !== (width > height) && width !== height) {
       [width, height] = [height, width];
     }
-    return await sharp(input, { limitInputPixels: PRINT_INPUT_PIXEL_LIMIT, failOn: "error" })
+    const base = sharp(input, { limitInputPixels: PRINT_INPUT_PIXEL_LIMIT, failOn: "error" })
       .rotate()
       .flatten({ background: "#ffffff" })
       .resize({ width, height, fit: "inside", withoutEnlargement: true })
-      .toColourspace("srgb")
-      .jpeg(quality === PRINT_JPEG_QUALITY ? PRINT_JPEG_OPTIONS : { ...PRINT_JPEG_OPTIONS, quality })
+      .toColourspace("srgb");
+    const jpeg = quality === PRINT_JPEG_QUALITY ? PRINT_JPEG_OPTIONS : { ...PRINT_JPEG_OPTIONS, quality };
+    const affine = filterAffine(filter);
+    if (!affine) return await base.jpeg(jpeg).toBuffer();
+    // Two steps so the filter runs on the final sRGB pixels, in a known order (sharp reorders
+    // operations inside one pipeline): resized raw RGB → colour transform → JPEG.
+    const { data, info } = await base.removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    return await applyPhotoFilter(sharp(data, { raw: { width: info.width, height: info.height, channels: info.channels } }), affine)
+      .jpeg(jpeg)
       .toBuffer();
   } catch {
     throw new PrintImageError("decode_failed");
   }
+}
+
+/**
+ * The photo filter as sharp operations on an sRGB image: recomb (3×3 matrix) then linear (offset,
+ * 8-bit scale), clamped by libvips on output — the same affine transform the CSS filter applies on
+ * screen (src/lib/design/photo-filters.ts). Exported for tests.
+ */
+export function applyPhotoFilter(image: Sharp, affine: FilterAffine): Sharp {
+  const m = affine.matrix;
+  return image
+    .recomb([
+      [m[0][0], m[0][1], m[0][2]],
+      [m[1][0], m[1][1], m[1][2]],
+      [m[2][0], m[2][1], m[2][2]],
+    ])
+    .linear([1, 1, 1], [affine.offset[0] * 255, affine.offset[1] * 255, affine.offset[2] * 255]);
 }
 
 type Limit = <T>(fn: () => Promise<T>) => Promise<T>;
@@ -171,7 +198,7 @@ export async function loadPrintImage(
     if (signal?.aborted) throw new PrintImageError("aborted");
     const t1 = Date.now();
     try {
-      return await encodePrintImage(input, target, opts.quality);
+      return await encodePrintImage(input, target, opts.quality, photo.filter);
     } finally {
       if (timing) timing.encodeMs += Date.now() - t1; // excludes waiting for an encode slot
     }

@@ -867,3 +867,58 @@ test("h. D-087 / D-088: the cover's own photo background → saved → Publish c
   }
   console.log(`[h] cover photo background ${coverPhotoId.slice(0, 8)} saved, published, viewed${paid ? ", PDF ok" : ""}`);
 });
+
+test("i. D-089: a photo filter on the cover photo → saved → Publish changes → the public viewer shows it → PDF still exports", async ({ browser }) => {
+  test.skip(!b1Done, "needs test f");
+  test.setTimeout(420_000);
+  const filtersOf = (d: StoredDoc | null) => ((d as unknown as { filters?: Record<string, string> } | null)?.filters ?? {});
+
+  await page.goto(`/books/${bookId}/edit`);
+  await expect(page.getByTestId("editor-shell")).toBeVisible();
+  await settle(page);
+  const coverPhoto = coverId((await bookRow()).doc);
+  expect(coverPhoto).toMatch(/^[0-9a-f-]{36}$/);
+  await cur(page).locator('[data-page="cover"] [data-testid="slot-target"]').first().click();
+  await page.getByTestId("editor-tool-filter").click();
+  const picker = page.getByTestId("photo-filter-picker");
+  await expect(picker).toBeVisible();
+  await picker.locator('[data-filter-id="noir"]').click();
+  await expect(cur(page).locator('[data-page="cover"] img[data-photo-filter="noir"]').first()).toBeAttached();
+  await expect.poll(async () => filtersOf((await bookRow()).doc)[coverPhoto!], { timeout: 20_000 }).toBe("noir");
+  await closePanel(page);
+
+  await page.getByTestId("editor-publish-changes").click();
+  await expect.poll(async () => filtersOf((await bookRow()).published_doc)[coverPhoto!], { timeout: 60_000 }).toBe("noir");
+  // The snapshot only names photos it shows.
+  const pub = (await bookRow()).published_doc as unknown as { filters: Record<string, string> };
+  const shown = JSON.stringify({ ...(pub as object), filters: undefined });
+  for (const id of Object.keys(pub.filters)) expect(shown).toContain(id);
+
+  const v = await browser.newContext({ baseURL, viewport: PHONE, hasTouch: true, isMobile: true });
+  try {
+    const vp = await v.newPage();
+    const errors: string[] = [];
+    vp.on("pageerror", (e) => errors.push(e.message));
+    expect((await vp.goto(`/b/${slug}`))?.status()).toBe(200);
+    const fb = vp.getByTestId("flipbook");
+    await expect(fb).toHaveAttribute("data-ready", "true", { timeout: 30_000 });
+    const img = fb.locator('[data-page="cover"] img[data-photo-filter="noir"]').first();
+    await expect(img).toBeAttached();
+    expect(await img.evaluate((e) => getComputedStyle(e).filter)).toContain("grayscale(1)");
+    expect(errors).toEqual([]);
+  } finally {
+    await v.close();
+  }
+
+  if (paid) {
+    const pages = (await bookRow()).doc.pages.length;
+    const file = await downloadPdf("m10a-photo-filter.pdf");
+    const ins = inspect(file);
+    const a = analyze(file);
+    expect(ins.pageCount).toBe(pages + 1);
+    // Still real photos in the PDF (DCT), not a rasterised page: the filter is baked into the print copy.
+    expect(a.pages[0].images.filter((i) => /DCT/.test(i.filter ?? "")).length).toBeGreaterThan(0);
+    expect(ins.fonts.filter((f) => f.type3 || f.subtype === "Type3").length).toBe(0);
+  }
+  console.log(`[i] photo filter noir on the cover photo saved, published, viewed${paid ? ", PDF ok" : ""}`);
+});

@@ -16,7 +16,7 @@ export function upgradeDocV1(v1: BookDocV1): BookDoc {
 
 /**
  * True when `doc` cannot be written as v1 without losing something: landscape format, a non-colour
- * book background, a book backgroundSource (M10c D5), a non-classic design style, a cover colour of its own (D-087), any page background or spread side, more slots
+ * book background, a book backgroundSource (M10c D5), a non-classic design style, a cover background of its own (D-087), any page background or spread side, more slots
  * on a page than v1 allows, a layout outside the M1–M10a classic portrait set (page or cover), or a v2-only caption
  * font (fonts-v2.ts) as book font or on a page caption. (An explicit `page.background: null` is
  * the same as absent.) Unknown layout ids are not v2 by themselves (validation rejects them).
@@ -75,6 +75,8 @@ function downgradeToV1(doc: BookDoc): BookDocV1 {
     ),
     style: { background: doc.style.background.hex, font: doc.style.font },
   };
+  // Photo filters (D-089) are not a v2 feature: a v1 doc carries them too.
+  if (doc.filters !== undefined && Object.keys(doc.filters).length > 0) v1.filters = { ...doc.filters };
   if (doc.meta !== undefined) v1.meta = { ...doc.meta };
   return v1;
 }
@@ -113,6 +115,8 @@ function normaliseV2(doc: BookDoc): BookDoc {
     },
   };
   if (doc.style.backgroundSource !== undefined) out.style.backgroundSource = doc.style.backgroundSource;
+  // Photo filters (D-089): only stored when there are any.
+  if (doc.filters !== undefined && Object.keys(doc.filters).length > 0) out.filters = { ...doc.filters };
   if (doc.meta !== undefined) out.meta = { ...doc.meta };
   return out;
 }

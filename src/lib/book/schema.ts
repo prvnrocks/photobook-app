@@ -10,6 +10,7 @@
 import { z } from "zod";
 import { LIMITS } from "@/lib/ai/limits";
 import { BACKGROUND_VEIL_MAX, BACKGROUND_VEIL_MIN, TEXTURE_IDS } from "@/lib/design/backgrounds";
+import { PHOTO_FILTER_IDS } from "@/lib/design/photo-filters";
 import { getLayout, SAFE_MM } from "@/lib/layouts";
 import { codePointLength, hasLoneSurrogate } from "@/lib/text/clip";
 import { pageMm } from "./format";
@@ -211,6 +212,18 @@ export const DocMetaSchema = z
   })
   .strict();
 
+/** Most photos a paid book can hold (AI analyses up to 500) — the cap on doc.filters entries. */
+export const MAX_FILTER_ENTRIES = 600;
+/**
+ * Photo filters (D-089): photoId → filter id (src/lib/design/photo-filters.ts). The look belongs
+ * to the photo, wherever it is placed (slot, cover, background). Absent / no entry = as shot.
+ * Unknown filter ids reject the doc. Valid in v1 and v2 docs alike (not a "v2 feature": a
+ * classic portrait book with filters is still stored as v1).
+ */
+export const PhotoFiltersSchema = z
+  .record(IdSchema, z.enum(PHOTO_FILTER_IDS))
+  .refine((r) => Object.keys(r).length <= MAX_FILTER_ENTRIES, { message: "too many photo filters" });
+
 /** The stored M1–M9 shape. Only used to read old rows and by serializeDoc's v1 output. */
 export const BookDocV1Schema = z.object({
   version: z.literal(1),
@@ -220,6 +233,7 @@ export const BookDocV1Schema = z.object({
   chapters: z.array(ChapterSchema).max(100),
   pages: z.array(PageSchemaV1).max(LIMITS.paid.maxPages),
   style: StyleSchemaV1,
+  filters: PhotoFiltersSchema.optional(),
   meta: DocMetaSchema.optional(),
 });
 
@@ -232,6 +246,7 @@ export const BookDocSchema = z.object({
   chapters: z.array(ChapterSchema).max(100),
   pages: z.array(PageSchema).max(LIMITS.paid.maxPages),
   style: StyleSchema,
+  filters: PhotoFiltersSchema.optional(),
   meta: DocMetaSchema.optional(),
 });
 
@@ -594,6 +609,7 @@ export function upgradeV1(v1: z.infer<typeof BookDocV1Schema>): z.infer<typeof B
     })),
     style: { background: { kind: "color", hex: v1.style.background }, designStyle: DEFAULT_DESIGN_STYLE, font: v1.style.font },
   };
+  if (v1.filters !== undefined && Object.keys(v1.filters).length > 0) doc.filters = { ...v1.filters };
   if (v1.meta !== undefined) doc.meta = { ...v1.meta };
   return doc;
 }

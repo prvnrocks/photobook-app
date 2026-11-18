@@ -3,6 +3,7 @@
 // produce identical output and the maths is unit-testable. Components only map this to markup.
 
 import { BACKGROUND_SWATCHES, inkFor, textureById, type Ink, type Texture } from "@/lib/design/backgrounds";
+import { isPhotoFilterId, type PhotoFilterId } from "@/lib/design/photo-filters";
 import { getLayout } from "@/lib/layouts";
 import { captionTextAttrs, isMainlyArabic } from "@/lib/review/ui";
 import { cropToStyle, DEFAULT_CROP, type CropStyle } from "./crop";
@@ -65,6 +66,20 @@ export interface RenderOptions {
 /** Format-dependent inputs of a slot: page mm for bleed + crop maths (doc.format). */
 interface SlotCtx extends RenderOptions {
   format: BookFormat;
+  /** doc.filters (D-089): photoId → filter id. */
+  filters?: BookDoc["filters"];
+}
+
+/** The photo's filter id from doc.filters, if it is a known one (own keys only). */
+function filterOf(filters: BookDoc["filters"], photoId: string | null): PhotoFilterId | undefined {
+  if (!filters || photoId === null || !Object.prototype.hasOwnProperty.call(filters, photoId)) return undefined;
+  const id = filters[photoId];
+  return isPhotoFilterId(id) ? id : undefined;
+}
+
+/** `{ url, style }` plus the photo's filter when it has one (unfiltered photos keep the M1–M10 shape). */
+function slotPhoto(url: string, style: CropStyle, filter: PhotoFilterId | undefined): NonNullable<RenderSlot["photo"]> {
+  return filter ? { url, style, filter } : { url, style };
 }
 
 export interface RenderSlot {
@@ -76,7 +91,7 @@ export interface RenderSlot {
    * null = empty slot (no photo, or the photo is not in `photos`, e.g. deleted). With a frame the
    * crop style is for the photo rect (look.frame.photo), not the whole slot box.
    */
-  photo: { url: string; style: CropStyle } | null;
+  photo: { url: string; style: CropStyle; /** Photo filter (D-089); absent = as shot. Screen: CSS filter; print: baked into the print copy. */ filter?: PhotoFilterId } | null;
   /**
    * M10c shape / tilt / frame / shadow of the slot. Absent for plain rect slots (every M1–M10b
    * layout), whose markup must stay byte-identical (goldens).
@@ -281,7 +296,7 @@ export function coverBackground(doc: Pick<BookDoc, "style"> & { cover?: Pick<Boo
 
 /** resolveBackground for the cover (its own colour, else the book default). */
 export function resolveCoverBackground(
-  doc: Pick<BookDoc, "style"> & { cover?: Pick<BookDoc["cover"], "background"> | null },
+  doc: Pick<BookDoc, "style"> & { cover?: Pick<BookDoc["cover"], "background"> | null; filters?: BookDoc["filters"] },
   photos?: RenderPhotos,
 ): ResolvedBackground {
   const own = doc.cover?.background;
@@ -305,6 +320,8 @@ export type ResolvedBackground =
       ink: Ink;
       /** URL of the background photo from the render map; undefined = not loaded (veil colour only). */
       photoSrc?: string;
+      /** The photo's filter (D-089), if any. */
+      filter?: PhotoFilterId;
     };
 
 /**
@@ -325,7 +342,7 @@ export function colorInk(hex: string): Ink {
  * screen, print-asset URL in print); a photo absent from the map renders the veil colour only.
  */
 export function resolveBackground(
-  doc: Pick<BookDoc, "style">,
+  doc: Pick<BookDoc, "style"> & { filters?: BookDoc["filters"] },
   page?: Pick<BookPage, "background"> | null,
   photos?: RenderPhotos,
 ): ResolvedBackground {
@@ -349,6 +366,8 @@ export function resolveBackground(
         baseHex,
         ink: inkFor(bg),
         ...(p?.url ? { photoSrc: p.url } : {}),
+        // The look belongs to the photo (D-089): a filtered photo is filtered as a background too.
+        ...(filterOf(doc.filters, bg.photoId) ? { filter: filterOf(doc.filters, bg.photoId) } : {}),
       };
     }
   }
@@ -395,7 +414,7 @@ function renderSlot(
     index,
     rect,
     photoId,
-    photo: { url: p.url, style: cropToStyle(p.width ?? 0, p.height ?? 0, mm.w, mm.h, crop) },
+    photo: slotPhoto(p.url, cropToStyle(p.width ?? 0, p.height ?? 0, mm.w, mm.h, crop), filterOf(ctx.filters, photoId)),
     ...(look ? { look } : {}),
   };
 }
@@ -742,7 +761,7 @@ function spreadSlot(
     index,
     rect,
     photoId,
-    photo: { url: p.url, style: cropToStyle(p.width ?? 0, p.height ?? 0, mm.w, mm.h, crop) },
+    photo: slotPhoto(p.url, cropToStyle(p.width ?? 0, p.height ?? 0, mm.w, mm.h, crop), filterOf(ctx.filters, photoId)),
     ...(look ? { look } : {}),
   };
 }
@@ -838,7 +857,7 @@ export function pageRenderModel(
   if (!layout || (layout.role !== "page" && layout.role !== "spread")) {
     return { kind: "page", pageId: page.id, layoutId: page.layout, knownLayout: false, slots: [], caption: null };
   }
-  const ctx: SlotCtx = { ...opts, format: doc.format };
+  const ctx: SlotCtx = { ...opts, format: doc.format, filters: doc.filters };
   const isSpread = layout.role === "spread";
   const { half, owner, offset } = isSpread
     ? spreadHalfOf(doc, pageIndex, page)
@@ -947,7 +966,7 @@ export function coverRenderModel(
   const slices0 = known && !!layout.slices;
   // Split-strip covers draw one photo through windows: no M10c look there.
   const slot = rect
-    ? renderSlot(0, rect, doc.cover.photoId, DEFAULT_CROP, photos, { ...opts, format: doc.format }, slices0 ? undefined : layout)
+    ? renderSlot(0, rect, doc.cover.photoId, DEFAULT_CROP, photos, { ...opts, format: doc.format, filters: doc.filters }, slices0 ? undefined : layout)
     : null;
   const panels = known && layout.texts?.length ? textPanels(doc, layout, null, 0, captionLang, ["coverTitle", "coverSubtitle"]) : null;
   const slices = known && slot && layout.slices ? sliceWindows(layout.slices, slot.rect, doc.format, !!opts.bleed) : null;

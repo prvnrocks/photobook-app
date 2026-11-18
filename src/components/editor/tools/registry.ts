@@ -33,6 +33,7 @@ import { cropTool } from "./crop-mode";
 import { layoutPickerTool } from "./layout-picker";
 import { coverStyleTool } from "./cover-style";
 import { backgroundTool } from "./background-picker";
+import { photoFilterTool } from "./photo-filter";
 import { photoPickerTool } from "./photo-picker";
 import { aiCaptionTool } from "./ai-caption";
 import { captionEditorTool, captionStyleTool } from "./caption-editor";
@@ -51,6 +52,7 @@ export type { EditorPanelProps, EditorTool, ToolScope, ToolTier } from "./types"
 export const EDITOR_TOOLS: readonly EditorTool[] = [
   photoPickerTool,
   cropTool,
+  photoFilterTool,
   layoutPickerTool,
   coverStyleTool,
   backgroundTool,
