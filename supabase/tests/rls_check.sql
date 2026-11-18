@@ -71,7 +71,9 @@
 --      only, one ok row per cache key, cascade on photo delete)
 --      and 20261120002500_photo_organize.sql (photo_quality,
 --      photo_duplicate_groups, photo_moments: owner reads own rows only, no
---      client writes, value checks).
+--      client writes, value checks)
+--      and 20261121002600_story_ai_calls.sql (story_ai_calls: service role
+--      only, kind / scope / error-code checks, no text columns).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -80,7 +82,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 184 checks passed
+--       RLS OK — all 185 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -4219,6 +4221,113 @@ begin
   exception when insufficient_privilege then null;
   end;
   reset role;
+  checks := checks + 1;
+
+  -- ===========================================================================
+  -- 2600 story ai calls: story_ai_calls (Story Planner / Narrative Writer usage log)
+  -- ===========================================================================
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  set local role service_role;
+  insert into public.story_ai_calls (user_id, book_id, run_id, kind, scope, chapter_id, storybook_version, model, prompt_version,
+                                     mode, status, input_tokens, output_tokens, cost_usd, latency_ms)
+  values (uid_a, book_a, gen_random_uuid(), 'plan', 'plan', null, null, 'claude-opus-5-5', 'story-plan-1', 'live', 'ok', 2400, 900, 0.0276, 8200),
+         (uid_a, book_a, gen_random_uuid(), 'write', 'book', 'c1', 1, 'claude-opus-5-5', 'story-write-1', 'live', 'ok', 3100, 700, 0.0264, 9100),
+         (uid_a, book_a, gen_random_uuid(), 'write', 'book', 'closing', 1, 'claude-opus-5-5', 'story-write-1', 'replay', 'ok', 0, 0, 0, 100),
+         (uid_a, book_a, gen_random_uuid(), 'rewrite', 'block', null, 2, 'claude-sonnet-5-5', 'story-rewrite-1', 'live', 'ok', 800, 90, 0.0025, 2100);
+  insert into public.story_ai_calls (user_id, book_id, run_id, kind, scope, chapter_id, storybook_version, model, prompt_version, mode, status, error)
+  values (uid_a, book_a, gen_random_uuid(), 'repair', 'chapter', 'c2', 3, 'claude-opus-5-5', 'story-write-1', 'live', 'error', 'timeout');
+  begin
+    insert into public.story_ai_calls (user_id, book_id, run_id, kind, scope, model, prompt_version, mode, status)
+    values (uid_a, book_a, gen_random_uuid(), 'caption', 'book', 'm', 'p', 'live', 'ok');
+    raise exception 'RLS FAIL [story ai calls]: unknown kind accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.story_ai_calls (user_id, book_id, run_id, kind, scope, model, prompt_version, mode, status)
+    values (uid_a, book_a, gen_random_uuid(), 'write', 'page', 'm', 'p', 'live', 'ok');
+    raise exception 'RLS FAIL [story ai calls]: unknown scope accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.story_ai_calls (user_id, book_id, run_id, kind, scope, chapter_id, model, prompt_version, mode, status)
+    values (uid_a, book_a, gen_random_uuid(), 'write', 'book', 'a chapter title', 'm', 'p', 'live', 'ok');
+    raise exception 'RLS FAIL [story ai calls]: free text accepted as chapter id';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.story_ai_calls (user_id, book_id, run_id, kind, scope, model, prompt_version, mode, status)
+    values (uid_a, book_a, gen_random_uuid(), 'write', 'book', 'm', 'p', 'live', 'error');
+    raise exception 'RLS FAIL [story ai calls]: error row without a code accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.story_ai_calls (user_id, book_id, run_id, kind, scope, model, prompt_version, mode, status, error)
+    values (uid_a, book_a, gen_random_uuid(), 'write', 'book', 'm', 'p', 'live', 'ok', 'timeout');
+    raise exception 'RLS FAIL [story ai calls]: ok row with an error code accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.story_ai_calls (user_id, book_id, run_id, kind, scope, model, prompt_version, mode, status, error)
+    values (uid_a, book_a, gen_random_uuid(), 'write', 'book', 'm', 'p', 'live', 'error', 'Some sentence of text.');
+    raise exception 'RLS FAIL [story ai calls]: free text accepted as error code';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.story_ai_calls (user_id, book_id, run_id, kind, scope, model, prompt_version, mode, status, cost_usd)
+    values (uid_a, book_a, gen_random_uuid(), 'write', 'book', 'm', 'p', 'live', 'ok', -1);
+    raise exception 'RLS FAIL [story ai calls]: negative cost accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.story_ai_calls (user_id, book_id, run_id, kind, scope, model, prompt_version, mode, status)
+    values (uid_a, book_a, gen_random_uuid(), 'write', 'book', 'm', 'p', 'batch', 'ok');
+    raise exception 'RLS FAIL [story ai calls]: unknown mode accepted';
+  exception when check_violation then null;
+  end;
+  -- the table has no column that could hold prompt or narrative text
+  if exists (
+    select 1 from information_schema.columns
+     where table_schema = 'public' and table_name = 'story_ai_calls'
+       and (data_type in ('json', 'jsonb') or column_name in ('text', 'prompt', 'content', 'output', 'input'))
+  ) then
+    raise exception 'RLS FAIL [story ai calls]: a content column exists';
+  end if;
+  reset role;
+  -- no client access at all: not even the owner
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  begin
+    select count(*) into n from public.story_ai_calls;
+    raise exception 'RLS FAIL [story ai calls]: owner can select story_ai_calls';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.story_ai_calls (user_id, book_id, run_id, kind, scope, model, prompt_version, mode, status)
+    values (uid_a, book_a, gen_random_uuid(), 'plan', 'plan', 'm', 'p', 'live', 'ok');
+    raise exception 'RLS FAIL [story ai calls]: owner can insert story_ai_calls';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    delete from public.story_ai_calls;
+    raise exception 'RLS FAIL [story ai calls]: owner can delete story_ai_calls';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  set local role anon;
+  begin
+    select count(*) into n from public.story_ai_calls;
+    raise exception 'RLS FAIL [story ai calls]: anon can select story_ai_calls';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  if not exists (select 1 from pg_class where oid = 'public.story_ai_calls'::regclass and relrowsecurity) then
+    raise exception 'RLS FAIL [story ai calls]: RLS not enabled';
+  end if;
+  if exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'story_ai_calls') then
+    raise exception 'RLS FAIL [story ai calls]: unexpected policy';
+  end if;
   checks := checks + 1;
 
   -- ---------------------------------------------------------------------------

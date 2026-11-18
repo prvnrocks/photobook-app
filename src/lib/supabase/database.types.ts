@@ -859,6 +859,83 @@ export type Database = {
         }
         Relationships: []
       }
+      story_ai_calls: {
+        Row: {
+          book_id: string
+          cache_read_tokens: number
+          cache_write_tokens: number
+          chapter_id: string | null
+          cost_usd: number
+          created_at: string
+          error: string | null
+          id: string
+          input_tokens: number
+          kind: string
+          latency_ms: number
+          mode: string
+          model: string
+          output_tokens: number
+          prompt_version: string
+          run_id: string
+          scope: string
+          status: string
+          storybook_version: number | null
+          user_id: string
+        }
+        Insert: {
+          book_id: string
+          cache_read_tokens?: number
+          cache_write_tokens?: number
+          chapter_id?: string | null
+          cost_usd?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          input_tokens?: number
+          kind: string
+          latency_ms?: number
+          mode: string
+          model: string
+          output_tokens?: number
+          prompt_version: string
+          run_id: string
+          scope: string
+          status: string
+          storybook_version?: number | null
+          user_id: string
+        }
+        Update: {
+          book_id?: string
+          cache_read_tokens?: number
+          cache_write_tokens?: number
+          chapter_id?: string | null
+          cost_usd?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          input_tokens?: number
+          kind?: string
+          latency_ms?: number
+          mode?: string
+          model?: string
+          output_tokens?: number
+          prompt_version?: string
+          run_id?: string
+          scope?: string
+          status?: string
+          storybook_version?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "story_ai_calls_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       storybook_versions: {
         Row: {
           book_id: string

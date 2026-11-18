@@ -134,6 +134,9 @@ Preview origin (e.g. the branch alias of a `staging` branch) that is also in the
 | `AI_PHOTO_CONCURRENCY` | empty (= 4) | empty | empty | no | — (1–8 parallel photo analyses) |
 | `AI_PHOTO_TIMEOUT_MS` | empty (= 30000) | empty | empty | no | — (5000–120000 ms per request) |
 | `AI_PHOTO_MAX_RETRIES` | empty (= 2) | empty | empty | no | — (0–4 retries of 429 / 5xx / timeouts) |
+| `AI_STORY_MODEL` | empty (= `claude-opus-5-5`) | empty | empty | no | — (`claude-opus-5-5` \| `claude-sonnet-5-5`; story planning / writing / block rewrites) |
+| `AI_STORY_TIMEOUT_MS` | empty (= 90000) | empty | empty | no | — (10000–180000 ms per plan / chapter request; a block rewrite is always 15000) |
+| `AI_STORY_MAX_RETRIES` | empty (= 2) | empty | empty | no | — (0–4 retries of 429 / 5xx / timeouts) |
 | `ADMIN_USER_IDS` | your uid (`:user`) | your uid | your uid | no (but not public) | Supabase → Authentication → Users. Gates `/admin/runs`, `/admin/ai-spend` and `scripts/comp-book.mjs` |
 | `MAPBOX_TOKEN` | prod token | same or dev token | dev token | **yes** | Mapbox → Account → Access tokens |
 | `STRIPE_SECRET_KEY` | `sk_live_…` / `rk_live_…` | `sk_test_…` | `sk_test_…` | **yes** | Stripe → Developers → API keys |
@@ -197,8 +200,14 @@ Preview origin (e.g. the branch alias of a `staging` branch) that is also in the
 - [ ] **Photo organiser: push `20261120002500_photo_organize.sql` BEFORE any code calls the Task 4 functions**
       (additive: `photo_quality`, `photo_duplicate_groups`, `photo_moments`; owner read-only, server-side writes;
       no photo is dropped or deleted by it). Then run `rls_check.sql` → 184.
+- [ ] **Story Planner / Narrative Writer: push `20261121002600_story_ai_calls.sql` BEFORE any code calls
+      `planStory()` / `writeStory()` / `rewriteNarrativeBlock()` live** (additive: one service-role-only table
+      `story_ai_calls` = token / cost log and the source of the per-book story limits; it stores no text). Live calls
+      are refused (`usage_unavailable`; `planStory` returns the rule plan) while it is missing. Needs 2200 (story
+      versions are stored in `storybook_versions`). Optional env: `AI_STORY_MODEL`, `AI_STORY_TIMEOUT_MS`,
+      `AI_STORY_MAX_RETRIES` (see `.env.example`). Then run `rls_check.sql` → 185.
 - [ ] Supabase → SQL Editor → paste the whole of `supabase/tests/rls_check.sql` → Run. Expected: an error panel
-      starting with **`RLS OK — all 184 checks passed`** (181 before 2500, 180 before 2400, 179 before 2300, 177 before 2200, 176 before 2100, 175 before 2000, 173 before 1900) (raised on purpose; it rolls everything back). Anything
+      starting with **`RLS OK — all 185 checks passed`** (184 before 2600, 181 before 2500, 180 before 2400, 179 before 2300, 177 before 2200, 176 before 2100, 175 before 2000, 173 before 1900) (raised on purpose; it rolls everything back). Anything
       else (`RLS FAIL [...]`, permission denied) is a blocker.
 - [ ] Verify `private.auth_user_email` works (the warning emails depend on it; needs `postgres` to read
       `auth.users`):

@@ -127,7 +127,7 @@ function effectiveTablePrivileges(): Acl {
 const sorted = (s: Set<string> | undefined) => [...(s ?? [])].sort();
 
 /** Tables with RLS on and no policies: only the service role (BYPASSRLS) touches them. */
-const SERVICE_ROLE_ONLY_TABLES = ["agent_steps", "book_unlock_attempts", "photo_analyses"];
+const SERVICE_ROLE_ONLY_TABLES = ["agent_steps", "book_unlock_attempts", "photo_analyses", "story_ai_calls"];
 
 describe("migrations: files", () => {
   it("found the migration files and parsed them", () => {
@@ -3105,9 +3105,9 @@ describe("migrations: photo quality, duplicate groups, moments (2500)", () => {
   const flat = sql.replace(/\s+/g, " ");
   const TABLES = ["photo_quality", "photo_duplicate_groups", "photo_moments"];
 
-  it("is the latest migration, purely additive, and never touches photos or storage", () => {
+  it("comes right after 2400, is purely additive, and never touches photos or storage", () => {
     expect(m, `${name} missing`).toBeDefined();
-    expect(files[files.length - 1]).toBe(name);
+    expect(files.indexOf(name)).toBe(files.indexOf("20261119002400_photo_analyses.sql") + 1); // latest until 2600
     expect(sql).not.toMatch(/\bdrop\b/);
     expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
     expect(sql).not.toMatch(/security\s+definer/);
@@ -3141,12 +3141,71 @@ describe("migrations: photo quality, duplicate groups, moments (2500)", () => {
     expect(flat).toContain("check (label_source in ('auto', 'user') and hero_source in ('auto', 'user'))");
   });
 
-  it("rls_check.sql covers 2500 and counts 184 checks; database.types.ts lists the tables", () => {
+  it("rls_check.sql covers 2500 (184 checks then; 2600 → 185); database.types.ts lists the tables", () => {
     const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
     expect(rls).toContain(name);
     for (const tag of ["photo quality", "duplicate groups", "photo moments"]) expect(rls).toContain(`RLS FAIL [${tag}]`);
-    expect(rls).toContain("RLS OK — all 184 checks passed");
     const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
     for (const t of TABLES) expect(types).toContain(`      ${t}: {`);
+  });
+});
+
+describe("migrations: story planner / narrative writer usage log (2600)", () => {
+  const name = "20261121002600_story_ai_calls.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const flat = sql.replace(/\s+/g, " ");
+
+  it("is the latest migration and purely additive", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files[files.length - 1]).toBe(name);
+    expect(sql).not.toMatch(/\bdrop\b/);
+    expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
+    expect(sql).not.toMatch(/security\s+definer/);
+    expect(sql).not.toMatch(/create\s+(or\s+replace\s+)?(function|trigger)/);
+    expect(sql).not.toMatch(/\b(update|delete\s+from|insert\s+into)\s+(public|storage)\./);
+    const altered = [...sql.matchAll(/alter\s+table\s+public\.(\w+)/g)].map((x) => x[1]);
+    expect([...new Set(altered)]).toEqual(["story_ai_calls"]);
+  });
+
+  it("service role only: RLS on, no policy, no client grant", () => {
+    expect(flat).toContain("alter table public.story_ai_calls enable row level security;");
+    expect(flat).toContain("revoke all on table public.story_ai_calls from anon, authenticated, public;");
+    expect(flat).toContain("grant all on table public.story_ai_calls to service_role;");
+    expect(sql).not.toMatch(/create\s+policy/);
+    expect(sql).not.toMatch(/to\s+(anon|authenticated)\b/);
+  });
+
+  it("kinds and scopes match the code; rows go with the book and the account", () => {
+    // read from the source text: the module itself is server-only
+    const src = readFileSync(join(process.cwd(), "src", "lib", "db", "story-ai-calls.ts"), "utf8");
+    const list = (constName: string) => JSON.parse(new RegExp(`export const ${constName} = (\\[[^\\]]*\\]) as const;`).exec(src)![1]!) as string[];
+    const STORY_CALL_KINDS = list("STORY_CALL_KINDS");
+    const STORY_CALL_SCOPES = list("STORY_CALL_SCOPES");
+    expect(STORY_CALL_KINDS).toHaveLength(4);
+    expect(flat).toContain(`check (kind in (${STORY_CALL_KINDS.map((k) => `'${k}'`).join(", ")}))`);
+    expect(flat).toContain(`check (scope in (${STORY_CALL_SCOPES.map((k) => `'${k}'`).join(", ")}))`);
+    expect(flat).toContain("book_id uuid not null references public.books (id) on delete cascade");
+    expect(flat).toContain("user_id uuid not null references auth.users (id) on delete cascade");
+    expect(flat).toContain("check (chapter_id is null or chapter_id ~ '^(c[1-9][0-9]{0,3}|closing)$')");
+  });
+
+  it("stores tokens, model, latency and cost for every call and no text at all", () => {
+    for (const col of ["input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "latency_ms"]) expect(flat).toContain(`${col} integer not null default 0`);
+    expect(flat).toContain("cost_usd numeric(10, 6) not null default 0");
+    expect(flat).toContain("check (mode in ('live', 'replay'))");
+    expect(flat).toContain("(status = 'error' and error is not null and error ~ '^[a-z_]{3,40}$')");
+    const table = flat.slice(flat.indexOf("create table public.story_ai_calls"), flat.indexOf("create index"));
+    expect(table).not.toMatch(/\bjsonb?\b/);
+    expect(table.match(/\btext\b/g)).toHaveLength(8); // kind, scope, chapter_id, model, prompt_version, mode, status, error — all checked
+  });
+
+  it("rls_check.sql covers 2600 and counts 185 checks; database.types.ts lists the table", () => {
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain(name);
+    expect(rls).toContain("RLS FAIL [story ai calls]");
+    expect(rls).toContain("RLS OK — all 185 checks passed");
+    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
+    expect(types).toMatch(/story_ai_calls: \{\s*Row: \{[\s\S]*?storybook_version: number \| null/);
   });
 });

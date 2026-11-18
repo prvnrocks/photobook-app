@@ -21,6 +21,9 @@ const REQUIRED_KEYS = [
   "AI_PHOTO_CONCURRENCY",
   "AI_PHOTO_TIMEOUT_MS",
   "AI_PHOTO_MAX_RETRIES",
+  "AI_STORY_MODEL",
+  "AI_STORY_TIMEOUT_MS",
+  "AI_STORY_MAX_RETRIES",
   "ADMIN_USER_IDS",
   "MAPBOX_TOKEN",
   "STRIPE_SECRET_KEY",
@@ -59,7 +62,7 @@ function parseEnv(text: string): Map<string, string> {
 describe(".env.example", () => {
   const env = parseEnv(readFileSync(join(process.cwd(), ".env.example"), "utf8"));
 
-  it("contains exactly the 29 expected keys", () => {
+  it("contains exactly the 32 expected keys", () => {
     expect([...env.keys()].sort()).toEqual([...REQUIRED_KEYS].sort());
   });
 
