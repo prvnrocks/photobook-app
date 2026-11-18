@@ -7,14 +7,16 @@
 import { act, useMemo, useReducer, useState, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { devEditorFixture } from "@/app/dev-editor/dev-states";
 import { BookPage } from "@/components/book/BookPage";
 import { DESCRIPTION_PLACEHOLDER } from "@/components/editor/EditablePage";
 import { panelDocksOnMobile, selectionKey } from "@/components/editor/EditorToolbar";
 import type { EditorContextValue } from "@/components/editor/editor-context";
-import { AccentColourPanel, accentColourTool, applyAccent } from "@/components/editor/tools/accent-colour";
+import { accentColourTool } from "@/components/editor/tools/accent-colour";
+import { AccentColourPanel, applyAccent } from "@/components/editor/tools/accent-colour-panel";
 import { aiDescriptionTool, chapterDescriptionTool } from "@/components/editor/tools/chapter-description";
+import { preloadLazyPanels } from "@/components/editor/tools/lazy-panel";
 import { autoOpenTool, EDITOR_TOOLS, MAX_PRIMARY_TOOLS, splitTools, visibleTools } from "@/components/editor/tools/registry";
 import { BOOK_FORMATS } from "@/lib/book/schema";
 import { m30EditorDoc } from "@/lib/book/dev-m30";
@@ -39,6 +41,10 @@ import { albumEditedByUser } from "@/lib/review/ui";
 
 // The editor registry → UpgradeSheet → UpgradeButton imports the upgrade server action (server-only).
 vi.mock("@/app/books/[id]/upgrade/actions", () => ({ startUpgradeCheckout: vi.fn() }));
+
+// The description / accent panels live in lazy chunks (tests/m30-lazy-panel.test.tsx covers the
+// loading path): load them first, so the panels below mount synchronously as before.
+beforeAll(() => preloadLazyPanels());
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
