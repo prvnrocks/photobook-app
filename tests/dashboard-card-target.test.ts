@@ -23,10 +23,19 @@ describe("bookCardStep / bookCardHref", () => {
     expect(bookCardHref({ ...base, ai_status: s, page_count: 12, photo_count: 40 })).toBe(`/books/${ID}/build`);
   });
 
-  it("built (AI or rule album), never edited → editor (D-070: review only via the chip)", () => {
-    for (const ai_status of ["done", "partial", "failed", "idle", null]) {
+  it("built by a finished AI run, never edited → editor (D-070: review only via the chip)", () => {
+    for (const ai_status of ["done", "partial", "failed"]) {
       expect(bookCardHref({ ...base, page_count: 10, photo_count: 30, ai_status })).toBe(`/books/${ID}/edit`);
     }
+  });
+
+  it("Task 5: a draft album with no AI run yet (left on Story / Design) goes back into the wizard, not the editor", () => {
+    for (const ai_status of ["idle", null]) {
+      expect(bookCardHref({ ...base, page_count: 10, photo_count: 30, ai_status })).toBe(`/books/new?book=${ID}&step=5`);
+    }
+    // …unless the user already edited it or confirmed the album: then it is theirs → editor
+    expect(bookCardHref({ ...base, page_count: 10, photo_count: 30, ai_status: "idle", user_edited: true })).toBe(`/books/${ID}/edit`);
+    expect(bookCardHref({ ...base, page_count: 10, photo_count: 30, ai_status: "idle", album_confirmed: true })).toBe(`/books/${ID}/edit`);
   });
 
   it("built and user-edited → editor", () => {
