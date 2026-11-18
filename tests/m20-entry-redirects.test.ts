@@ -1,5 +1,5 @@
 // M20 T9 (D-072): entry points into the continuous wizard. /books/[id]/upload and /books/[id]/build
-// redirect fresh books into /books/new?book=<id>&step=5|6|7 and keep the classic screens for built,
+// redirect fresh books into /books/new?book=<id>&step=3|6|7 (Task 5 order: 3 = Photos) and keep the classic screens for built,
 // edited and rebuilding books (M20b: AI off goes through the wizard's steps 6–7 too); createBookAction's `next` and the dashboard's fresh-draft
 // links point straight into the wizard. Pure decision helpers (src/lib/books/wizard-routes.ts) plus a
 // small route simulator proving the build page and the /books/new gate never redirect in a loop.
@@ -92,8 +92,11 @@ function uploadTarget(w: World): string | null {
   });
 }
 
-/** /books/new?book=&step=5|6|7 hard load: the gate as loadWizardStep computes it (wizard-data.ts). */
-function wizardGate(w: World, step: 5 | 6 | 7): WizardTarget {
+/**
+ * /books/new?book=&step=1…7 hard load: the gate as loadWizardStep computes it (wizard-data.ts) —
+ * steps 1–5 from the Photos step's reads (with the book's photo count), 6 / 7 from their own.
+ */
+function wizardGate(w: World, step: 1 | 2 | 3 | 4 | 5 | 6 | 7): WizardTarget {
   const active = w.activeReadOk ? w.active : null;
   const hasRunRead = w.runReadOk ? w.runExists || w.active !== null : step === 7 ? true : false;
   const hasRun = hasRunRead || active !== null;
@@ -107,6 +110,7 @@ function wizardGate(w: World, step: 5 | 6 | 7): WizardTarget {
     docOrigin: { generator: docOrigin(w.doc).generator, userEdited: albumEditedByUser(w.doc) },
     albumConfirmed: w.confirmed,
     aiOn: w.aiOn,
+    photoCount: step <= 5 ? w.photos : undefined,
   });
 }
 
@@ -178,8 +182,14 @@ function follow(
         url = `/books/${BOOK}/edit`;
         continue;
       }
-      const step = Number(u.searchParams.get("step")) as 5 | 6 | 7;
-      const target = wizardGate(w, step);
+      // The page (resolveBookStep): gate the asked step; when the gate moves the book to another
+      // data step it loads that one in the same request (no extra redirect).
+      let step = Number(u.searchParams.get("step")) as 1 | 2 | 3 | 4 | 5 | 6 | 7;
+      let target = wizardGate(w, step);
+      for (let j = 0; j < 2 && typeof target === "number" && target >= 6 && target !== step; j++) {
+        step = target as 6 | 7;
+        target = wizardGate(w, step);
+      }
       if (target === "editor") url = `/books/${BOOK}/edit`;
       else if (target === "classic") url = `/books/${BOOK}/build`;
       else return { screen: { kind: "wizard", step: target }, hops };
@@ -194,6 +204,7 @@ function follow(
 
 describe("wizardStepHref", () => {
   it("builds /books/new?book=<id>&step=N, &auto=1 only when asked", () => {
+    expect(wizardStepHref(BOOK, 3)).toBe(`/books/new?book=${BOOK}&step=3`);
     expect(wizardStepHref(BOOK, 5)).toBe(`/books/new?book=${BOOK}&step=5`);
     expect(wizardStepHref(BOOK, 6, { auto: true })).toBe(`/books/new?book=${BOOK}&step=6&auto=1`);
     expect(wizardStepHref(BOOK, 7, { auto: false })).toBe(`/books/new?book=${BOOK}&step=7`);
@@ -203,12 +214,13 @@ describe("wizardStepHref", () => {
 // --- upload ------------------------------------------------------------------------------------------
 
 describe("/books/[id]/upload entry", () => {
-  it("fresh book (no run, details unlocked) → wizard step 5", () => {
-    expect(uploadTarget(world())).toBe(wizardStepHref(BOOK, 5));
-    expect(uploadTarget(world({ doc: rule }))).toBe(wizardStepHref(BOOK, 5));
-    // run read error = "no run" on this page (the wizard gate agrees for step 5)
-    expect(uploadTarget(world({ runReadOk: false, activeReadOk: false }))).toBe(wizardStepHref(BOOK, 5));
-    expect(follow(world(), `/books/${BOOK}/upload`).screen).toEqual({ kind: "wizard", step: 5 });
+  it("fresh book (no run, details unlocked) → wizard step 3 (Photos)", () => {
+    expect(uploadTarget(world())).toBe(wizardStepHref(BOOK, 3));
+    expect(uploadTarget(world({ doc: rule }))).toBe(wizardStepHref(BOOK, 3));
+    // run read error = "no run" on this page (the wizard gate agrees for step 3)
+    expect(uploadTarget(world({ runReadOk: false, activeReadOk: false }))).toBe(wizardStepHref(BOOK, 3));
+    expect(follow(world(), `/books/${BOOK}/upload`).screen).toEqual({ kind: "wizard", step: 3 });
+    expect(follow(world({ photos: 0 }), `/books/${BOOK}/upload`).screen).toEqual({ kind: "wizard", step: 3 });
   });
 
   it("built (run exists / running / AI album) → classic add-more-photos screen", () => {
@@ -223,7 +235,7 @@ describe("/books/[id]/upload entry", () => {
   });
 
   it("AI off: a fresh book uses the wizard's photo step", () => {
-    expect(uploadTarget(world({ aiOn: false }))).toBe(wizardStepHref(BOOK, 5));
+    expect(uploadTarget(world({ aiOn: false }))).toBe(wizardStepHref(BOOK, 3));
   });
 });
 
@@ -327,6 +339,10 @@ describe("no redirect loops between /books/new and /books/[id]/build", () => {
     `/books/${BOOK}/build?trigger=rebuild`,
     `/books/${BOOK}/build?trigger=rebuild&auto=1`,
     `/books/${BOOK}/upload`,
+    `/books/new?book=${BOOK}&step=1`,
+    `/books/new?book=${BOOK}&step=2`,
+    `/books/new?book=${BOOK}&step=3`,
+    `/books/new?book=${BOOK}&step=4`,
     `/books/new?book=${BOOK}&step=5`,
     `/books/new?book=${BOOK}&step=6`,
     `/books/new?book=${BOOK}&step=6&auto=1`,
@@ -417,12 +433,77 @@ describe("no redirect loops between /books/new and /books/[id]/build", () => {
 describe("other entry points (one hop)", () => {
   it("dashboard: fresh drafts open the wizard directly; running builds keep /build", () => {
     const card = { id: BOOK, page_count: 0, photo_count: 0, ai_status: "idle", user_edited: false };
-    expect(bookCardHref(card)).toBe(wizardStepHref(BOOK, 5));
+    expect(bookCardHref(card)).toBe(wizardStepHref(BOOK, 3));
     expect(bookCardHref({ ...card, photo_count: 5 })).toBe(wizardStepHref(BOOK, 6));
     expect(bookCardHref({ ...card, photo_count: 5, ai_status: "planning" })).toBe(`/books/${BOOK}/build`);
     expect(bookCardHref({ ...card, page_count: 12, photo_count: 5, ai_status: "done" })).toBe(`/books/${BOOK}/edit`);
     // a fresh draft's dashboard link renders the wizard without any redirect
-    expect(follow(world(), bookCardHref(card)).hops).toHaveLength(1);
+    expect(follow(world({ photos: 0 }), bookCardHref(card))).toEqual({
+      screen: { kind: "wizard", step: 3 },
+      hops: [`/books/new?book=${BOOK}&step=3`],
+    });
+  });
+});
+
+// --- Task 5: the new step order (3 Photos, 4 Story, 5 Design) ---------------------------------------------
+
+describe("Task 5: hard loads land on the right step from the book's server state", () => {
+  const url = (n: number) => `/books/new?book=${BOOK}&step=${n}`;
+  const screen = (w: World, n: number) => follow(w, url(n)).screen;
+
+  it("no photos yet: 1–3 as asked; Story / Design (4–5) → Photos (3)", () => {
+    const w = world({ photos: 0 });
+    for (const n of [1, 2, 3]) expect(screen(w, n)).toEqual({ kind: "wizard", step: n });
+    for (const n of [4, 5]) expect(screen(w, n)).toEqual({ kind: "wizard", step: 3 });
+  });
+
+  it("photos in, no run: 3–5 as asked (open steps); 1–2 are locked → Photos (3)", () => {
+    for (const doc of [empty, rule]) {
+      const w = world({ photos: 3, doc });
+      for (const n of [3, 4, 5]) expect(screen(w, n)).toEqual({ kind: "wizard", step: n });
+      for (const n of [1, 2]) expect(screen(w, n)).toEqual({ kind: "wizard", step: 3 });
+    }
+  });
+
+  it("a book mid-wizard under the OLD numbering (5 = photos) opens somewhere sensible, never crashes", () => {
+    // Old "photos" bookmark, nothing uploaded → the new Photos step.
+    expect(screen(world({ photos: 0 }), 5)).toEqual({ kind: "wizard", step: 3 });
+    // Old "photos" bookmark with photos in → the nearest open step asked for (Design).
+    expect(screen(world({ photos: 4, doc: rule }), 5)).toEqual({ kind: "wizard", step: 5 });
+    // Old shape / style bookmarks (3 / 4) of a book without photos → Photos.
+    expect(screen(world({ photos: 0 }), 3)).toEqual({ kind: "wizard", step: 3 });
+    expect(screen(world({ photos: 0 }), 4)).toEqual({ kind: "wizard", step: 3 });
+  });
+
+  it("a running first build → 6 and a finished one → 7, whatever step (1–7) was asked", () => {
+    for (const n of [1, 2, 3, 4, 5, 6, 7]) {
+      expect(screen(world({ active: { trigger: "build" }, runExists: true, doc: rule }), n)).toEqual({ kind: "wizard", step: 6 });
+      expect(screen(world({ runExists: true, doc: ai }), n)).toEqual({ kind: "wizard", step: 7 });
+      expect(screen(world({ doc: edited }), n)).toEqual({ kind: "editor" });
+    }
+  });
+
+  it("/books/[id]/build of a fresh book with photos → step 6 (the first build), as before", () => {
+    expect(follow(world({ photos: 6, doc: rule }), `/books/${BOOK}/build`).screen).toEqual({ kind: "wizard", step: 6 });
+  });
+
+  it("the gate keeps the asked step when the photo count is unknown (old callers)", () => {
+    const base = {
+      hasRun: false,
+      active: false,
+      readError: false,
+      detailsLock: null,
+      docOrigin: { generator: "none" as const, userEdited: false },
+      albumConfirmed: false,
+    };
+    for (const requested of [1, 2, 3, 4, 5]) expect(resolveWizardStep({ ...base, requested })).toBe(requested);
+    expect(resolveWizardStep({ ...base, requested: 2, photoCount: 1 })).toBe(3);
+    expect(resolveWizardStep({ ...base, requested: 5, photoCount: 0 })).toBe(3);
+    expect(resolveWizardStep({ ...base, requested: 4, photoCount: 2 })).toBe(4);
+    // A run read error with details unlocked: still the open step (never a build POST from steps ≤ 5).
+    expect(resolveWizardStep({ ...base, readError: true, requested: 5, photoCount: 0 })).toBe(3);
+    expect(resolveWizardStep({ ...base, readError: true, requested: 4, photoCount: 3 })).toBe(4);
+    expect(resolveWizardStep({ ...base, readError: true, requested: 6, photoCount: 3 })).toBe(6);
   });
 });
 
@@ -469,7 +550,7 @@ describe("M20c: a confirmed book never lands in the wizard", () => {
         });
         expect(target).toBe("editor");
       }
-      for (const step of [5, 6, 7] as const) expect(wizardGate(w, step)).toBe("editor");
+      for (const step of [1, 2, 3, 4, 5, 6, 7] as const) expect(wizardGate(w, step)).toBe("editor");
     }
   });
 
@@ -549,6 +630,6 @@ describe("M20c: a confirmed book never lands in the wizard", () => {
     expect(bookCardHref({ ...card, page_count: 12, photo_count: 5, ai_status: "done" })).toBe(`/books/${BOOK}/edit`);
     expect(bookCardHref({ ...card, photo_count: 5, ai_status: "planning" })).toBe(`/books/${BOOK}/build`);
     // unconfirmed fresh drafts keep their wizard links
-    expect(bookCardHref({ ...card, album_confirmed: false })).toBe(wizardStepHref(BOOK, 5));
+    expect(bookCardHref({ ...card, album_confirmed: false })).toBe(wizardStepHref(BOOK, 3));
   });
 });

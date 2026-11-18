@@ -136,7 +136,7 @@ describe("quick actions", () => {
 
   it("no album yet: only Open (into the wizard's photos / sorting step, M20 T9)", () => {
     expect(lib.quickActions(empty, { paymentsEnabled: true })).toEqual([
-      { kind: "open", href: `/books/new?book=${empty.id}&step=5`, label: "Open" },
+      { kind: "open", href: `/books/new?book=${empty.id}&step=3`, label: "Open" },
     ]);
     expect(kinds({ ...empty, photo_count: 4 })).toEqual(["open"]);
     expect(lib.quickActions({ ...empty, photo_count: 4 }, { paymentsEnabled: true })[0].href).toBe(`/books/new?book=${empty.id}&step=6`);

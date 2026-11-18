@@ -53,19 +53,24 @@ const ALL: Step[] = [1, 2, 3, 4, 5, 6, 7];
 
 describe("wizard steps (7)", () => {
   it("lists the seven steps with names, icons and headlines", () => {
-    expect(WIZARD_STEPS.map((s) => s.id)).toEqual(["title", "occasion", "shape", "style", "photos", "sorting", "review"]);
-    expect(ALL.map(wizardStepName)).toEqual(["Title", "Purpose", "Shape", "Style", "Photos", "Sorting", "Review"]);
-    expect(ALL.map(wizardStepIcon)).toEqual(["pen-line", "heart", "ratio", "palette", "images", "sparkles", "book-open-check"]);
+    expect(WIZARD_STEPS.map((s) => s.id)).toEqual(["title", "occasion", "photos", "story", "design", "sorting", "review"]);
+    // Task 5 order: Title, Occasion, Photos, Story, Design, Create (the AI build), Preview.
+    expect(ALL.map(wizardStepName)).toEqual(["Title", "Occasion", "Photos", "Story", "Design", "Create", "Preview"]);
+    expect(ALL.map(wizardStepIcon)).toEqual(["pen-line", "heart", "images", "feather", "palette", "sparkles", "book-open-check"]);
+    // Short enough for the 375 px compact label ("Step N of 7 · Name") and the 7-up stepper.
+    for (const n of ALL) expect(wizardStepName(n).length).toBeLessThanOrEqual(8);
     expect(wizardHeadline(1)).toBe("Give your book a title");
     expect(wizardHeadline(2)).toBe("What's this book for?");
-    expect(wizardHeadline(3)).toBe("Choose a page shape");
-    expect(wizardHeadline(4)).toBe("Choose a book style");
-    expect(wizardHeadline(5)).toBe("Add your photos");
+    expect(wizardHeadline(3)).toBe("Add your photos");
+    expect(wizardHeadline(4)).toBe("Every memory has a story.");
+    expect(wizardHeadline(5)).toBe("Choose your book design");
     expect(wizardHeadline(6)).toBe("Sorting your photos");
-    expect(wizardHeadline(7)).toBe("Review your book");
+    expect(wizardHeadline(7)).toBe("Preview and personalize");
+    expect(wizardStepId(4)).toBe("story");
+    expect(wizardStepId(5)).toBe("design");
     expect(wizardStepId(7)).toBe("review");
     expect(WIZARD_STEP_COUNT).toBe(7);
-    expect(WIZARD_FORM_STEP_COUNT).toBe(4);
+    expect(WIZARD_FORM_STEP_COUNT).toBe(2);
     expect(WIZARD_STEP_NUMBERS).toEqual(ALL);
     expect(wizardStepLabel(3)).toBe("Step 3 of 7");
     expect(wizardStepLabel(7)).toBe("Step 7 of 7");
@@ -87,7 +92,7 @@ describe("wizard steps (7)", () => {
   it("step guards", () => {
     expect(ALL.every((s) => isWizardStep(s))).toBe(true);
     for (const bad of [0, 8, 1.5, "1", null]) expect(isWizardStep(bad)).toBe(false);
-    expect(ALL.filter(isWizardFormStep)).toEqual([1, 2, 3, 4]);
+    expect(ALL.filter(isWizardFormStep)).toEqual([1, 2]);
   });
 
   it("firstMissingStep walks the answers in order", () => {
@@ -98,8 +103,9 @@ describe("wizard steps (7)", () => {
     expect(firstMissingStep({ ...full, title: "x".repeat(121) })).toBe(1);
     expect(firstMissingStep({ ...full, title: "🌊".repeat(120) })).toBeNull();
     expect(firstMissingStep({ ...full, occasion: null })).toBe(2);
-    expect(firstMissingStep({ ...full, format: null, designStyle: null })).toBe(3);
-    expect(firstMissingStep({ ...full, designStyle: null })).toBe(4);
+    // Task 5: shape and style are no form answers any more (chosen on step 5, after the photos).
+    expect(firstMissingStep({ ...full, format: null, designStyle: null })).toBeNull();
+    expect(firstMissingStep({ ...full, designStyle: null })).toBeNull();
     expect(firstMissingStep(full)).toBeNull();
     // occasion missing wins over later gaps
     expect(firstMissingStep({ ...full, occasion: null, format: null })).toBe(2);
@@ -188,8 +194,12 @@ describe("WizardStepper", () => {
     const html = render(4);
     expect(html).toMatch(/data-testid="wizard-step-label">Step 4 of 7<\/span>/);
     expect(tagOf(html, "wizard-step-name")).toContain("sm:hidden");
-    expect(html).toMatch(/data-testid="wizard-step-name"><span aria-hidden="true"> · <\/span>Style<\/span>/);
-    for (const name of ["Title", "Purpose", "Shape", "Style", "Photos", "Sorting", "Review"]) expect(html).toContain(name);
+    expect(html).toMatch(/data-testid="wizard-step-name"><span aria-hidden="true"> · <\/span>Story<\/span>/);
+    for (const name of ["Title", "Occasion", "Photos", "Story", "Design", "Create", "Preview"]) expect(html).toContain(name);
+    // The seven names appear in the new order.
+    const order = ["Title", "Occasion", "Photos", "Story", "Design", "Create", "Preview"].map((n) => html.lastIndexOf(`>${n}<`));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(html).toContain("sm:not-sr-only");
   });
 
@@ -315,7 +325,7 @@ describe("WizardShell", () => {
     expect(html).not.toContain("wizard-band");
     expect(html).not.toContain("wizard-stepper");
     expect(html).toContain('data-testid="kid"');
-    expect(html).toContain("Choose a page shape");
+    expect(html).toContain("Add your photos");
     expect(tagOf(html, "wizard-headline")).toContain("type-display");
     expect(html).toContain('data-testid="account-menu-button"');
     expect(tagOf(html, "header-home")).toContain('href="/dashboard"');

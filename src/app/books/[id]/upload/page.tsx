@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Add photos" };
 
 // Classic "Add photos" screen for a built / edited book. M20 T9 (D-072): a fresh book (no AI run yet,
-// setup still editable — isWizardUpload) opens wizard step 5 inside /books/new instead; the wizard
+// setup still editable — isWizardUpload) opens wizard step 3 (Photos) inside /books/new instead; the wizard
 // never sends a book back here, so the redirect can't loop.
 
 function isOccasion(v: string | null): v is Occasion {

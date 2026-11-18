@@ -25,7 +25,12 @@ export type SummaryNext =
   /** Fallback: "Make my book now" → the build screen (with an optional explanation). */
   | { kind: "build"; note?: string }
   /** The book already had a build: continue there. */
-  | { kind: "continue"; href: string; label: string };
+  | { kind: "continue"; href: string; label: string }
+  /**
+   * The wizard's Photos step (Task 5): "Continue" to the Story step (`onContinue`) once the book has
+   * a photo — never a build from here.
+   */
+  | { kind: "wizard"; canContinue: boolean };
 
 type UploadSummaryProps = {
   bookId: string;
@@ -35,8 +40,8 @@ type UploadSummaryProps = {
   next: SummaryNext;
   /** resolveAiMode() !== "off" from the page (D-024): false → neutral copy. Default true. */
   aiOn?: boolean;
-  /** M20 T6 (wizard): "Make my book now" is a button calling this instead of a link to the build page. */
-  onBuild?: () => void;
+  /** Wizard (next.kind "wizard"): the Continue button calls this. */
+  onContinue?: () => void;
 };
 
 /** "Starting your book…" detail line (exported for tests). */
@@ -49,7 +54,7 @@ const readIsIos = () =>
   isIosDevice(navigator.userAgent, navigator.platform ?? "", navigator.maxTouchPoints ?? 0);
 const serverIsIos = () => false;
 
-export function UploadSummary({ bookId, summary, finalize, onAddMore, next, aiOn = true, onBuild }: UploadSummaryProps) {
+export function UploadSummary({ bookId, summary, finalize, onAddMore, next, aiOn = true, onContinue }: UploadSummaryProps) {
   const isIos = useSyncExternalStore(noSubscribe, readIsIos, serverIsIos);
   const showGpsHint = isIos && finalize !== null && finalize.photos > 0 && finalize.withGps === 0;
   const skipped = skippedLines(summary.skippedBy);
@@ -140,15 +145,17 @@ export function UploadSummary({ bookId, summary, finalize, onAddMore, next, aiOn
             description={startingCopy(aiOn)}
             data-testid="upload-auto-starting"
           />
-        ) : next.kind === "build" && onBuild ? (
-          <button
-            type="button"
-            onClick={onBuild}
-            className={cn(buttonVariants({ variant: "accent", size: "cta" }))}
-            data-testid="build-album"
-          >
-            Make my book now
-          </button>
+        ) : next.kind === "wizard" ? (
+          next.canContinue ? (
+            <button
+              type="button"
+              onClick={onContinue}
+              className={cn(buttonVariants({ variant: "accent", size: "cta" }))}
+              data-testid="upload-wizard-continue"
+            >
+              Continue
+            </button>
+          ) : null
         ) : next.kind === "build" ? (
           <Link
             href={`/books/${bookId}/build`}

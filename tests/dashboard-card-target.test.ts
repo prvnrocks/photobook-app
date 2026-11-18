@@ -5,9 +5,9 @@ const ID = "22222222-2222-4222-8222-222222222222";
 const base: BookCardState = { id: ID, page_count: 0, photo_count: 0, ai_status: "idle", user_edited: false };
 
 describe("bookCardStep / bookCardHref", () => {
-  it("no photos → upload step; href goes straight into wizard step 5 (M20 T9, one hop)", () => {
+  it("no photos → upload step; href goes straight into wizard step 3, Photos (M20 T9, one hop; Task 5 order)", () => {
     expect(bookCardStep(base)).toBe("upload");
-    expect(bookCardHref(base)).toBe(`/books/new?book=${ID}&step=5`);
+    expect(bookCardHref(base)).toBe(`/books/new?book=${ID}&step=3`);
   });
 
   it("photos but no album → build step; href = wizard step 6 (its gate moves on: run done → 7, AI off → classic)", () => {

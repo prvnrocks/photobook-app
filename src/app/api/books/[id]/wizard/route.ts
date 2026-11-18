@@ -1,5 +1,5 @@
-// GET /api/books/[id]/wizard?step=5|6|7[&auto=1] (M20 T1, D-072): data for the wizard's steps
-// 5 Photos, 6 Sorting and 7 Review, which run inside /books/new without a page jump.
+// GET /api/books/[id]/wizard?step=3|6|7[&auto=1] (M20 T1, D-072; Task 5 order): data for the wizard's
+// steps 3 Photos, 6 Create and 7 Preview, which run inside /books/new without a page jump.
 // Responses (JSON, no-store): 200 WizardStepData (src/lib/books/wizard-data.ts)
 // | 400 invalid_step | 401 unauthenticated | 404 not_found (missing / malformed / not the user's)
 // | 500 server_error | 503 { error: 'unavailable' } + Retry-After (Supabase timeout, M12).

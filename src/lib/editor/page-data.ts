@@ -13,7 +13,7 @@ import type { EditorShellData } from "./types";
  * - an AI build/rebuild is running → its progress page (only /build can tell a rebuild, which stays
  *   classic, from a first build, which it redirects into the wizard — same as the dashboard card);
  * - no album yet and never built (fresh book, M20 D-072) → straight into the wizard, one hop:
- *   no photos → step 5, photos uploaded → step 6 (the wizard's gate moves it on; AI off too, M20b);
+ *   no photos → step 3 (Photos), photos uploaded → step 6 (the wizard's gate moves it on; AI off too, M20b);
  * - no album yet otherwise (a build ran before, or the album was confirmed — M20c: a confirmed book
  *   never enters the wizard, whose gate would send it straight back here) → the classic upload /
  *   build pages.
@@ -27,7 +27,7 @@ export function editorRedirect(
   if (data.activeBuildRunId) return `/books/${id}/build`;
   if (data.docError !== "empty") return null;
   const classic = data.hasBuildRun || data.albumConfirmed === true;
-  if (data.photos.length === 0) return classic ? `/books/${id}/upload` : wizardStepHref(id, 5);
+  if (data.photos.length === 0) return classic ? `/books/${id}/upload` : wizardStepHref(id, 3);
   return classic ? `/books/${id}/build` : wizardStepHref(id, 6);
 }
 

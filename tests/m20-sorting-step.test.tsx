@@ -121,6 +121,25 @@ const flush = async (ms = 0) => {
   });
 };
 
+/** Task 5: what the Story / Design steps get from the wizard (unused on step 6). */
+const BOOK_STEP_PROPS = {
+  story: { occasion: null, value: null, onChange: () => {} },
+  design: {
+    title: "",
+    occasion: null,
+    stored: { format: "A5_PORTRAIT" as const, designStyle: "modern" as const },
+    pick: { format: null, designStyle: null },
+    onPick: () => {},
+    recommendation: null,
+    onRecommendation: () => {},
+    locked: false,
+    error: null,
+    save: async () => true,
+    buildError: null,
+  },
+  factsRef: { current: { isPaid: false, dailyCap: null, ready: null } },
+};
+
 function renderSteps(stepData: WizardStepDataMap = { 6: STEP6 }) {
   const dispatch = vi.fn();
   const updates: WizardStepDataMap[] = [];
@@ -142,6 +161,7 @@ function renderSteps(stepData: WizardStepDataMap = { 6: STEP6 }) {
         autoRef={{ current: true }}
         handoverRef={{ current: null }}
         headlineId="wizard-headline"
+        {...BOOK_STEP_PROPS}
       />,
     ),
   );

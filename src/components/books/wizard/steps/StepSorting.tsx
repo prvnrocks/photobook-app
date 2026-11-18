@@ -9,7 +9,7 @@
 // (Open my book / Try again) is drawn by BuildProgress.
 // G3: BuildProgress resumes `activeRunId`; only without one (fallback "Make my book now" / a run
 // read error) does it POST a build, and the server answers 409 already_running for a queued run.
-// M20b: `handover` = step 5's auto-start answer (maybe still on its way: the upload screen never
+// M20b: `handover` = the Design step's build-request answer (maybe still on its way: step 5 never
 // shows sorting). BuildProgress starts from it instead of POSTing, so one upload = one run, in every
 // AI mode — a rule build (AI off) that finished inside the POST plays its checklist through here.
 // not_first is re-read once (an active run → resume it; else the first run finished → Review).
@@ -40,7 +40,7 @@ export type StepSortingProps = {
   onStopped?: (reason: BuildStopReason) => void;
   /** Running again after a stop ("Try again") → the wizard dispatches buildResumed. */
   onResumed?: () => void;
-  /** M20b: step 5's auto-start answer (resolved or pending) — the run starts from it, never a 2nd POST. */
+  /** M20b: the Design step's build-request answer (resolved or pending) — the run starts from it, never a 2nd POST. */
   handover?: Promise<AutoStartOutcome> | null;
 };
 

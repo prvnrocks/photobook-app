@@ -21,10 +21,21 @@ export type ChoiceCardProps = {
   media?: ReactNode;
   /** Optional second line under the label. */
   hint?: string;
+  /**
+   * Optional small pill in the top start corner (e.g. "Recommended"). Part of the label, so it is
+   * read with the option's name; text, never colour alone.
+   */
+  badge?: string;
   /** Controlled; omit and use defaultChecked for an uncontrolled form. */
   checked?: boolean;
   defaultChecked?: boolean;
   onChange?: (value: string, event: ChangeEvent<HTMLInputElement>) => void;
+  /**
+   * Also called when the option is tapped while it is already selected (a radio fires no change
+   * then) — for groups where "shown as selected" (a default / a recommendation) and "chosen by the
+   * user" differ.
+   */
+  onPick?: (value: string) => void;
   disabled?: boolean;
   required?: boolean;
   /** "compact" = icon over label (occasion); "large" = big preview over label (shape, style). */
@@ -39,9 +50,11 @@ export function ChoiceCard({
   label,
   media,
   hint,
+  badge,
   checked,
   defaultChecked,
   onChange,
+  onPick,
   disabled,
   required,
   size = "compact",
@@ -69,6 +82,7 @@ export function ChoiceCard({
         checked={checked}
         defaultChecked={defaultChecked}
         onChange={onChange ? (e) => onChange(value, e) : undefined}
+        onClick={onPick ? () => onPick(value) : undefined}
         // A controlled radio without onChange would warn; readOnly only when nothing handles change.
         readOnly={checked !== undefined && !onChange ? true : undefined}
         disabled={disabled}
@@ -84,6 +98,14 @@ export function ChoiceCard({
           <path d="M3.5 8.5l3 3 6-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </span>
+      {badge ? (
+        <span
+          className="absolute start-2 top-2 z-[1] max-w-[calc(100%-3rem)] truncate rounded-full border border-accent-strong/70 bg-accent-strong px-2 py-0.5 text-xs leading-5 font-semibold text-accent-strong-foreground shadow-card"
+          data-testid="choice-badge"
+        >
+          {badge}
+        </span>
+      ) : null}
       {media ? (
         <span
           aria-hidden="true"

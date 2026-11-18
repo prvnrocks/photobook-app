@@ -5,7 +5,7 @@ import { albumConfirmedOf, resolveWizardStep, type WizardGateInput } from "@/lib
 
 vi.mock("server-only", () => ({}));
 
-// M20 T1 (D-072): resolveWizardStep (G2 + G3), loadWizardStep (steps 5–7) and
+// M20 T1 (D-072): resolveWizardStep (G2 + G3), loadWizardStep (steps 3, 6, 7 — Task 5 order) and
 // GET /api/books/[id]/wizard.
 
 const OWNER = "11111111-1111-4111-8111-111111111111";
@@ -269,11 +269,11 @@ describe("resolveWizardStep (G2 + G3)", () => {
 // --- parseWizardDataStep -----------------------------------------------------------------------
 
 describe("parseWizardDataStep", () => {
-  it("accepts exactly 5 / 6 / 7", () => {
-    expect(parseWizardDataStep("5")).toBe(5);
+  it("accepts exactly 3 / 6 / 7 (Task 5 order: 3 Photos, 6 Create, 7 Preview; 4–5 need no loader)", () => {
+    expect(parseWizardDataStep("3")).toBe(3);
     expect(parseWizardDataStep("6")).toBe(6);
     expect(parseWizardDataStep("7")).toBe(7);
-    for (const raw of [null, undefined, "", "4", "8", "05", "5.0", " 5", "abc", "1"]) {
+    for (const raw of [null, undefined, "", "4", "5", "8", "03", "3.0", " 3", "abc", "1", "2"]) {
       expect(parseWizardDataStep(raw)).toBeNull();
     }
   });
@@ -283,14 +283,14 @@ describe("parseWizardDataStep", () => {
 
 const BASE_KEYS = ["bookId", "title", "rawTitle", "occasion", "format", "designStyle", "captionLang", "isPaid", "aiOn", "resolved", "step"];
 
-describe("loadWizardStep — step 5 (upload page parity)", () => {
-  it("fresh book: Uploader props + base fields, resolved 5", async () => {
+describe("loadWizardStep — step 3, Photos (upload page parity)", () => {
+  it("fresh book: Uploader props + base fields, resolved 3", async () => {
     mocks.listUploadState.mockResolvedValue([
       { id: pid(1), fingerprint: "a", upload_state: "ready" },
       { id: pid(2), fingerprint: "b", upload_state: "pending" },
       { id: pid(3), fingerprint: "c", upload_state: "weird" },
     ]);
-    const d = await loadWizardStep(BOOK_ID, 5);
+    const d = await loadWizardStep(BOOK_ID, 3);
     expect(d).toEqual({
       bookId: BOOK_ID,
       title: "Eid 2026",
@@ -301,8 +301,8 @@ describe("loadWizardStep — step 5 (upload page parity)", () => {
       captionLang: "en",
       isPaid: false,
       aiOn: true,
-      resolved: 5,
-      step: 5,
+      resolved: 3,
+      step: 3,
       userId: OWNER,
       existing: [
         { id: pid(1), fingerprint: "a", upload_state: "ready" },
@@ -322,21 +322,21 @@ describe("loadWizardStep — step 5 (upload page parity)", () => {
   it("firstRun active / done; resolved follows the gate", async () => {
     mocks.getActiveRunForBook.mockResolvedValue(run());
     mocks.hasAnyRunForBook.mockResolvedValue(true);
-    expect(await loadWizardStep(BOOK_ID, 5)).toMatchObject({ firstRun: "active", resolved: 6 });
+    expect(await loadWizardStep(BOOK_ID, 3)).toMatchObject({ firstRun: "active", resolved: 6 });
     mocks.getActiveRunForBook.mockResolvedValue(null);
-    expect(await loadWizardStep(BOOK_ID, 5)).toMatchObject({ firstRun: "done", resolved: 7 });
+    expect(await loadWizardStep(BOOK_ID, 3)).toMatchObject({ firstRun: "done", resolved: 7 });
   });
 
   it("run read errors count as 'no run' for the Uploader (like the page), readError for the gate", async () => {
     mocks.hasAnyRunForBook.mockRejectedValue(new Error("x"));
     mocks.getActiveRunForBook.mockRejectedValue(new Error("x"));
-    expect(await loadWizardStep(BOOK_ID, 5)).toMatchObject({ firstRun: "none", resolved: 5 });
+    expect(await loadWizardStep(BOOK_ID, 3)).toMatchObject({ firstRun: "none", resolved: 3 });
   });
 
   it("paid book: paid limits; Arabic caption_lang passes through; AI off → aiOn false", async () => {
     mocks.aiMode = "off";
     mocks.getMyBook.mockResolvedValue(book({ is_paid: true, caption_lang: "ar", doc: ruleDraft() }));
-    const d = await loadWizardStep(BOOK_ID, 5);
+    const d = await loadWizardStep(BOOK_ID, 3);
     expect(d).toMatchObject({ isPaid: true, maxUpload: 500, captionLang: "ar", aiOn: false, hasDoc: true });
   });
 
@@ -344,16 +344,34 @@ describe("loadWizardStep — step 5 (upload page parity)", () => {
     const doc = ruleDraft();
     doc.meta.userEdited = true;
     mocks.getMyBook.mockResolvedValue(book({ doc }));
-    expect(await loadWizardStep(BOOK_ID, 5)).toMatchObject({ resolved: "editor" });
+    expect(await loadWizardStep(BOOK_ID, 3)).toMatchObject({ resolved: "editor" });
+  });
+
+  it("Task 5: `requestedStep` gates steps 1–5 from the same reads (the data stays the Photos step's)", async () => {
+    // No photos yet: 1–3 as asked, Story / Design → Photos.
+    mocks.listUploadState.mockResolvedValue([]);
+    for (const [requestedStep, resolved] of [[1, 1], [2, 2], [3, 3], [4, 3], [5, 3]] as const) {
+      expect(await loadWizardStep(BOOK_ID, 3, { requestedStep })).toMatchObject({ step: 3, resolved });
+    }
+    // Photos in (ready or still pending): 3–5 as asked, 1–2 locked → Photos.
+    mocks.listUploadState.mockResolvedValue([{ id: pid(1), fingerprint: "a", upload_state: "pending" }]);
+    for (const [requestedStep, resolved] of [[1, 3], [2, 3], [3, 3], [4, 4], [5, 5]] as const) {
+      expect(await loadWizardStep(BOOK_ID, 3, { requestedStep })).toMatchObject({ step: 3, resolved });
+    }
+    // A run wins over the asked step.
+    mocks.hasAnyRunForBook.mockResolvedValue(true);
+    expect(await loadWizardStep(BOOK_ID, 3, { requestedStep: 4 })).toMatchObject({ resolved: 7 });
+    mocks.getActiveRunForBook.mockResolvedValue(run());
+    expect(await loadWizardStep(BOOK_ID, 3, { requestedStep: 5 })).toMatchObject({ resolved: 6 });
   });
 
   it("signed out / not the owner / id mismatch → null", async () => {
     mocks.user = null;
-    expect(await loadWizardStep(BOOK_ID, 5)).toBeNull();
+    expect(await loadWizardStep(BOOK_ID, 3)).toBeNull();
     mocks.user = { id: OWNER };
     mocks.getMyBook.mockResolvedValue(null);
-    expect(await loadWizardStep(BOOK_ID, 5)).toBeNull();
-    expect(await loadWizardStep(pid(9), 5, { user: { id: OWNER }, book: book() as never })).toBeNull();
+    expect(await loadWizardStep(BOOK_ID, 3)).toBeNull();
+    expect(await loadWizardStep(pid(9), 3, { user: { id: OWNER }, book: book() as never })).toBeNull();
   });
 });
 
@@ -450,10 +468,10 @@ describe("loadWizardStep — step 7 (review page parity)", () => {
     expect(await loadWizardStep(BOOK_ID, 7)).toMatchObject({ resolved: 7 });
   });
 
-  it("M20c: loaders pass album_confirmed_at to the gate — confirmed → resolved editor on 5, 6 and 7", async () => {
+  it("M20c: loaders pass album_confirmed_at to the gate — confirmed → resolved editor on 3, 6 and 7", async () => {
     mocks.hasAnyRunForBook.mockResolvedValue(true);
     mocks.getMyBook.mockResolvedValue(book({ doc: ruleDraft(), album_confirmed_at: "2026-11-15T11:00:00.000Z" }));
-    for (const step of [5, 6, 7] as const) {
+    for (const step of [3, 6, 7] as const) {
       expect(await loadWizardStep(BOOK_ID, step), `step ${step}`).toMatchObject({ resolved: "editor" });
     }
     // same book unconfirmed → Review as before
@@ -462,7 +480,7 @@ describe("loadWizardStep — step 7 (review page parity)", () => {
     // a fresh confirmed book (no run) still never shows the wizard
     mocks.hasAnyRunForBook.mockResolvedValue(false);
     mocks.getMyBook.mockResolvedValue(book({ album_confirmed_at: "2026-11-15T11:00:00.000Z" }));
-    expect(await loadWizardStep(BOOK_ID, 5)).toMatchObject({ resolved: "editor" });
+    expect(await loadWizardStep(BOOK_ID, 3)).toMatchObject({ resolved: "editor" });
   });
 
   it("user-edited album: userEdited true, resolved editor", async () => {
@@ -502,7 +520,7 @@ describe("GET /api/books/[id]/wizard", () => {
   });
 
   it("400 for a missing / bad step", async () => {
-    for (const q of ["", "?step=4", "?step=8", "?step=five", "?step=5.0"]) {
+    for (const q of ["", "?step=4", "?step=5", "?step=8", "?step=three", "?step=3.0"]) {
       const res = await route.GET(req(q), ctx());
       expect(res.status).toBe(400);
       expect(res.headers.get("cache-control")).toBe("no-store");
@@ -512,7 +530,7 @@ describe("GET /api/books/[id]/wizard", () => {
   });
 
   it("404 for a malformed id, a missing book and someone else's book", async () => {
-    let res = await route.GET(req("?step=5", "x"), ctx("x"));
+    let res = await route.GET(req("?step=3", "x"), ctx("x"));
     expect(res.status).toBe(404);
     expect(mocks.getMyBook).not.toHaveBeenCalled();
     mocks.getMyBook.mockResolvedValue(null); // RLS hides other users' books
@@ -523,7 +541,7 @@ describe("GET /api/books/[id]/wizard", () => {
   });
 
   it("200 JSON per step, no-store; book read once; auto passes through", async () => {
-    for (const step of [5, 6, 7] as const) {
+    for (const step of [3, 6, 7] as const) {
       mocks.getMyBook.mockClear();
       const res = await route.GET(req(`?step=${step}&auto=1`), ctx());
       expect(res.status).toBe(200);
@@ -542,7 +560,7 @@ describe("GET /api/books/[id]/wizard", () => {
     ];
     for (const arrange of cases) {
       arrange();
-      const res = await route.GET(req("?step=5"), ctx());
+      const res = await route.GET(req("?step=3"), ctx());
       expect(res.status).toBe(503);
       expect(res.headers.get("retry-after")).toBe("3");
       expect(res.headers.get("cache-control")).toBe("no-store");

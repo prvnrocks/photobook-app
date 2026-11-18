@@ -3,7 +3,7 @@
 // sticky Continue bar on the first screen; the icon circle is a little smaller below sm). They rise in one after another; the
 // chosen tile glows emerald and its icon does a small wiggle (steps-motion.css). The caption language
 // is no longer asked: the server picks it (title script: Arabic → ar, Latin → en; else memory → browser, D-072).
-// Radio names are prefixed "wizard-" so only the step-4 hidden inputs reach the create action.
+// Radio names are prefixed "wizard-" so only the step-2 hidden inputs reach the create action.
 
 import { Baby, Cake, Ellipsis, Gem, GraduationCap, Plane, Users, type LucideIcon } from "lucide-react";
 import { ChoiceCard } from "@/components/wizard/ChoiceCard";

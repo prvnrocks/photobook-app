@@ -1,6 +1,6 @@
 // The wizard step headline: serif display, deep emerald, centred (as wizard.png). No hooks and no
 // client deps, usable from the server shell and from client islands. tabIndex -1 lets a client step
-// change move focus to the new headline. align="start-lg" (steps 5–7, M20 polish): start-aligned on
+// change move focus to the new headline. align="start-lg" (Photos, Create, Preview — M20 polish): start-aligned on
 // ≥ lg so the headline keeps its place when step 7 drops the preview aside and the column widens.
 
 import type { ReactNode } from "react";

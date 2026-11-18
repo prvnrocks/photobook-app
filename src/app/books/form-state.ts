@@ -1,7 +1,7 @@
 // State shapes for the books server actions (useActionState). Lives outside the
 // "use server" file because those may only export async functions.
 
-import type { WizardStep5Data } from "@/lib/books/wizard-data";
+import type { WizardStep3Data } from "@/lib/books/wizard-data";
 
 export type NewBookField = "title" | "occasion" | "tone" | "captionLang" | "format" | "designStyle";
 
@@ -12,12 +12,12 @@ export type NewBookFormState = {
   /** Success only (M19 BUG-2): the new book's id … */
   bookId?: string;
   /**
-   * … the book's step 5 URL (/books/new?book=<id>&step=5, with the one-shot &_ev=book_created when
+   * … the book's Photos-step URL (/books/new?book=<id>&step=3, with the one-shot &_ev=book_created when
    * analytics is on — the wizard reads the flash from it; no navigation goes there) …
    */
   next?: string;
-  /** … and the wizard's step-5 data for the new book (M20 T6: step 5 shows in place). */
-  step5?: WizardStep5Data;
+  /** … and the wizard's Photos-step data for the new book (M20 T6: step 3 shows in place). */
+  step3?: WizardStep3Data;
 };
 
 export const initialNewBookFormState: NewBookFormState = { ok: false };

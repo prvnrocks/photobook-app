@@ -1,36 +1,34 @@
 "use client";
-// Wizard step 5 "Add your photos" (M20 T6, D-072), shown in place inside /books/new: the headline, the
-// book title (dir="auto") and <Uploader variant="wizard"> with the T5 upload stage. Nothing here
-// navigates — Back, the auto-start answer and "Make my book now" go to the wizard's flow
-// (src/lib/books/wizard-flow.ts) through the callbacks. Loaded with next/dynamic (not in the
-// /books/new first load); NewBookWizard prefetches the chunk on idle from step 3.
+// Wizard step 3 "Add your photos" (M20 T6, D-072; Task 5 order), shown in place inside /books/new: the
+// headline, the book title (dir="auto") and <Uploader variant="wizard"> with the T5 upload stage.
+// Nothing here navigates and — since Task 5 — nothing here starts a build: when the photos are in,
+// "Continue" goes on to the Story step (the first build is requested when the Design step is left).
+// Back, Continue and the upload's busy state go to the wizard's flow (src/lib/books/wizard-flow.ts)
+// through the callbacks. In the lazy steps chunk (not in the /books/new first load).
 
 import { Uploader } from "@/components/upload/Uploader";
 import { WizardHeadline } from "@/components/wizard/WizardHeadline";
 import { wizardHeadline } from "@/lib/books/wizard-steps";
-import type { WizardStep5Data } from "@/lib/books/wizard-client";
-import type { AutoStartOutcome } from "@/lib/upload/auto-build-client";
+import type { WizardStep3Data } from "@/lib/books/wizard-client";
 
 export type StepPhotosProps = {
-  data: WizardStep5Data;
+  data: WizardStep3Data;
   /** id of the step headline (focused after a step change). */
   headlineId: string;
-  /** Back to step 4 (edit mode); shown until the first photo is picked. */
+  /** Back to step 2 (edit mode); shown until the first photo is picked. */
   onBack: () => void;
   onPhotosPicked: () => void;
-  /** The automatic first build answered with a "move on" outcome (after the success burst). */
-  onAdvance: (outcome: AutoStartOutcome) => void;
-  /** M20b: the success burst ended before the answer → step 6 now, with the pending answer. */
-  onAdvancePending: (answer: Promise<AutoStartOutcome>) => void;
-  /** Fallback "Make my book now" → step 6, where the build starts. */
-  onBuildNow: () => void;
+  /** "Continue" (the book has photos and the upload settled) → the Story step. `ready` = photos in the book. */
+  onContinue: (ready: number) => void;
+  /** An upload / finalize started (true) or settled (false): the wizard stays on this step meanwhile. */
+  onBusyChange?: (busy: boolean) => void;
 };
 
-export function StepPhotos({ data, headlineId, onBack, onPhotosPicked, onAdvance, onAdvancePending, onBuildNow }: StepPhotosProps) {
+export function StepPhotos({ data, headlineId, onBack, onPhotosPicked, onContinue, onBusyChange }: StepPhotosProps) {
   return (
     <div className="mx-auto flex w-full max-w-[40rem] min-w-0 flex-col lg:mx-0" data-testid="wizard-step-photos">
       <WizardHeadline id={headlineId} focusable align="start-lg">
-        {wizardHeadline(5)}
+        {wizardHeadline(3)}
       </WizardHeadline>
       <p className="mt-2 text-center type-small text-muted-foreground lg:text-start">
         <span dir="auto" className="break-words" data-testid="upload-book-title">
@@ -53,9 +51,8 @@ export function StepPhotos({ data, headlineId, onBack, onPhotosPicked, onAdvance
           variant="wizard"
           onBack={onBack}
           onPhotosPicked={onPhotosPicked}
-          onAdvance={onAdvance}
-          onAdvancePending={onAdvancePending}
-          onBuildNow={onBuildNow}
+          onContinue={onContinue}
+          onBusyChange={onBusyChange}
         />
       </div>
     </div>

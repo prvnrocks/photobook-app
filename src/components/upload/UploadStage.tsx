@@ -1,5 +1,5 @@
 "use client";
-// Wizard step 5 upload stage (M20 T5, D-072), rendered by <UploadProgress variant="wizard">.
+// Wizard Photos-step (step 3) upload stage (M20 T5, D-072), rendered by <UploadProgress variant="wizard">.
 //   - running: the file being uploaded hovers as a shimmering card above an open emerald book; each
 //     uploaded photo flies in and lands on a page (UploadThumbs, ≤ 12, stable slots) with a small
 //     sparkle; older photos collapse into a "+N" pile. Beside it (≥ lg) / under it: an SVG ring with

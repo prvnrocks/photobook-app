@@ -23,6 +23,13 @@ export const WIZARD_BACK_CLASS = join(
   FOCUS,
 );
 
+/** A quiet text button for a secondary action in the nav row (48 px tall, underlined: not colour alone). */
+export const WIZARD_SECONDARY_CLASS = join(
+  "inline-flex min-h-12 min-w-11 shrink-0 items-center justify-center rounded-full px-3 text-base font-medium text-primary underline decoration-success/50 underline-offset-4 transition-colors hover:bg-success-soft hover:decoration-success motion-reduce:transition-none",
+  "disabled:cursor-not-allowed disabled:opacity-60",
+  FOCUS,
+);
+
 /** The phone sticky bar (≥ sm: static, no chrome). The gutter bleed matches LIBRARY_CONTAINER's px-gutter. */
 const STICKY_BAR = join(
   "sticky bottom-0 z-20 -mx-gutter border-t border-border/80 bg-background/95 px-gutter pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-12px_20px_-18px_rgb(14_59_46/0.45)] backdrop-blur supports-[backdrop-filter]:bg-background/85",
@@ -59,6 +66,11 @@ export type WizardNavProps = {
   form?: string;
   backTestId?: string;
   continueTestId?: string;
+  /**
+   * An optional secondary action between Back and Continue (e.g. the story step's "Skip for now").
+   * Style it with WIZARD_SECONDARY_CLASS.
+   */
+  secondary?: ReactNode;
   /** Classes for the Back / Continue row (e.g. a max width). */
   className?: string;
   /** Sticky bottom bar on phones (default true). */
@@ -79,6 +91,7 @@ export function WizardNav({
   form,
   backTestId = "wizard-back",
   continueTestId = "wizard-continue",
+  secondary,
   className,
   sticky = true,
 }: WizardNavProps) {
@@ -111,6 +124,7 @@ export function WizardNav({
     >
       <div className={join("flex w-full items-center gap-3", className)}>
         {backEl}
+        {secondary}
         <button
           type={continueType}
           form={form}

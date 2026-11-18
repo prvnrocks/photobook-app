@@ -134,7 +134,7 @@ afterEach(() => {
 describe("step 7 review — summary", () => {
   it("shows the count, cover, chapters with dates and 3 caption previews; no Rebuild", () => {
     render(step7());
-    expect($("wizard-headline")?.textContent).toBe("Review your book");
+    expect($("wizard-headline")?.textContent).toBe("Preview and personalize");
     expect($("review-kept")?.textContent).toBe("AI kept 3 of 5 photos");
     expect($("review-kept-visual")?.textContent).toBe("AI kept 3 of 5 photos"); // reduced motion in jsdom: final at once
     expect($("review-cover-img")?.getAttribute("src")).toBe("https://x.test/t2.jpg");

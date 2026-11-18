@@ -9,20 +9,19 @@
 // M13 T6 (D-070): when uploads + finalize settle with ≥ 5 photos the first AI build is asked for
 // automatically (the server decides, src/lib/upload/auto-build-client.ts) and the screen moves on —
 // "Make my book now" is the fallback.
-// M19 T6 (D-071): the setup card and the /books/start hand-off are gone (setup = wizard steps 1–4).
-// variant "wizard" (step 5 of a fresh book) = the wizard.png card: big pick area, then the progress
-// card with the last three thumbnails, Pause/Resume and "Keep this tab open…"; Back (`onBack`, to
-// step 4) shows only until the first photo is picked.
+// M19 T6 (D-071): the setup card and the /books/start hand-off are gone (setup = the wizard).
+// variant "wizard" (the Photos step of a fresh book) = the wizard.png card: big pick area, then the
+// progress card with the last thumbnails, Pause/Resume and "Keep this tab open…"; Back (`onBack`, to
+// the Occasion step) shows only until the first photo is picked.
 // M20 T6 (D-072): inside the one continuous /books/new wizard the wizard variant never navigates:
-// `onAdvance` gets the auto-start answer instead of router.push (the wizard maps it with
-// wizard-flow's autoStart action → step 6 / 7 / editor), `onBack` / `onBuildNow` replace the Back and
-// "Make my book now" links, `onPhotosPicked` locks steps 1–4. The upload stage (UploadStage) stays
-// mounted while finalizing and starting (`settled`), and the wizard moves on only after both the
-// success burst (onSettled) and the auto-start answer. The classic screen is unchanged.
-// M20b: step 5 shows upload progress only, never sorting / "starting your book": once the success
-// burst has played the wizard moves on — with the answer when it's in (onAdvance), otherwise with the
-// pending answer (onAdvancePending) for step 6 to follow. Fallback answers that arrive before the
-// hand-over keep the "Make my book now" fallback here. ai_build_done { rules } is reported by step 6.
+// `onBack` replaces the Back link and `onPhotosPicked` locks steps 1–2. The upload stage
+// (UploadStage) stays mounted while finalizing (`settled`).
+// Task 5 (new wizard order: 3 Photos → 4 Story → 5 Design → 6 Create): the wizard variant NEVER asks
+// for the automatic first build any more — the build is requested when the user leaves the Design
+// step (NewBookWizard). After uploads + finalize settle it shows the summary with "Continue"
+// (`onContinue`, to the Story step); `onBusyChange` tells the wizard an upload is running (it keeps
+// the user on this step meanwhile). The M20 hand-over props (onAdvance / onAdvancePending /
+// onBuildNow) are gone with it. The classic screen still starts the first build by itself.
 import { ImagePlus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -46,7 +45,6 @@ import { limitCopy } from "@/lib/runs/stage-copy";
 import {
   AUTO_BUILD_MIN_PHOTOS,
   autoStartNext,
-  type AutoStartOutcome,
   buildHref,
   editorHref,
   requestAutoBuildSettled,
@@ -71,7 +69,7 @@ import { cn } from "@/lib/utils";
 import { WIZARD_BACK_CLASS } from "@/components/wizard/WizardNav";
 import { UploadProgress } from "./UploadProgress";
 import { UploadPickArt } from "./UploadStage";
-import { HANDOVER_GRACE_MS, SETTLE_MS, UPLOAD_PICK_WIZARD_CLASS } from "./upload-stage-model";
+import { UPLOAD_PICK_WIZARD_CLASS } from "./upload-stage-model";
 import { UploadSummary, type SummaryNext } from "./UploadSummary";
 import { UploadThumbs, useThumbStrip } from "./UploadThumbs";
 import { useWakeLock, useWarnOnLeave } from "./use-keep-awake";
@@ -93,28 +91,23 @@ export type UploaderProps = {
   dailyCap: number;
   /** resolveAiMode() !== "off" from the page (D-024): false → neutral copy, no AI claims. Default true. */
   aiOn?: boolean;
-  /** "wizard" = step 5 of the creation wizard (fresh book, M19 D-071). Default "default". */
+  /** "wizard" = the Photos step of the creation wizard (fresh book, M19 D-071): no automatic build. Default "default". */
   variant?: "default" | "wizard";
   /**
    * Wizard only (M20 T6): Back as a button, shown until the first photo is picked — the /books/new
    * wizard changes step in place.
    */
   onBack?: () => void;
-  /** Wizard only (M20 T6): the first photos of this visit were picked (the wizard locks steps 1–4). */
+  /** Wizard only (M20 T6): the first photos of this visit were picked (the wizard locks steps 1–2). */
   onPhotosPicked?: () => void;
   /**
-   * Wizard only (M20 T6): replaces router.push after the automatic first build answered with a
-   * "move on" outcome (started / already_running / not_first / user_edited). Called once, after the
-   * upload stage's success burst. Fallback outcomes (not_ready twice, limit, error…) stay here.
+   * Wizard only (Task 5): "Continue" under the results / on a return visit with photos — the wizard
+   * goes on to the Story step. `ready` = upload-finished photos of the book as this screen knows it.
+   * Never starts a build.
    */
-  onAdvance?: (outcome: AutoStartOutcome) => void;
-  /**
-   * Wizard only (M20b): the success burst played but the auto-start answer is still on its way →
-   * called once with the pending answer instead of waiting here (step 5 never shows sorting).
-   */
-  onAdvancePending?: (answer: Promise<AutoStartOutcome>) => void;
-  /** Wizard only (M20 T6): "Make my book now" calls this instead of linking to the build page. */
-  onBuildNow?: () => void;
+  onContinue?: (ready: number) => void;
+  /** Wizard only (Task 5): an upload / finalize started (true) or settled (false). */
+  onBusyChange?: (busy: boolean) => void;
 };
 
 /** Wizard helper lines under the card (exported for tests). */
@@ -156,25 +149,6 @@ export function Uploader(props: UploaderProps) {
   const autoBusyRef = useRef(false);
   /** Photos were picked on this visit (hides the wizard Back link so an upload can't be lost). */
   const [picked, setPicked] = useState(false);
-  // M20 T6 / M20b: the wizard moves on after the stage's success burst — with the auto-start answer
-  // when it's in, otherwise with the pending answer.
-  const onAdvanceRef = useRef(props.onAdvance);
-  const onAdvancePendingRef = useRef(props.onAdvancePending);
-  useEffect(() => {
-    onAdvanceRef.current = props.onAdvance;
-    onAdvancePendingRef.current = props.onAdvancePending;
-  });
-  /** The auto-start request in flight (or answered with a "move on" outcome) — what the wizard gets. */
-  const requestRef = useRef<Promise<AutoStartOutcome> | null>(null);
-  /** Its answer, once in and "move on" (fallback answers never go to the wizard). */
-  const advanceRef = useRef<AutoStartOutcome | null>(null);
-  /** When the request started: a pending request is handed over only after HANDOVER_GRACE_MS. */
-  const requestAtRef = useRef(0);
-  const advancedRef = useRef(false);
-  const burstDoneRef = useRef(false);
-  /** Last queue progress (null = the stage never showed, so there's no burst to wait for). */
-  const progressRef = useRef<QueueProgress | null>(null);
-
   const inputRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<UploadQueue | null>(null);
   const queueLoadRef = useRef<Promise<UploadQueue> | null>(null);
@@ -216,6 +190,22 @@ export function Uploader(props: UploaderProps) {
   useWakeLock((uploading && !paused) || phase === "finalizing");
   // Also while finalizing: leaving then would skip places/duplicates until the next visit.
   useWarnOnLeave(busy);
+  // Task 5: the wizard keeps the user on the Photos step while an upload runs.
+  const onBusyChangeRef = useRef(props.onBusyChange);
+  useEffect(() => {
+    onBusyChangeRef.current = props.onBusyChange;
+  });
+  const lastBusyRef = useRef(false);
+  function notifyBusy(next: boolean) {
+    if (lastBusyRef.current === next) return;
+    lastBusyRef.current = next;
+    onBusyChangeRef.current?.(next);
+  }
+  // Keyed on the phase too: a fast run can go idle → done in one commit, and the "settled" signal
+  // must still follow the "started" one sent from handleFiles.
+  useEffect(() => {
+    notifyBusy(busy);
+  }, [busy, phase]);
 
   // Leaving the screen in-app (header link) stops the queue after the current photo;
   // unfinished rows stay pending and resume on the next visit. No finalize afterwards.
@@ -269,10 +259,7 @@ export function Uploader(props: UploaderProps) {
 
   function onEvent(e: QueueEvent) {
     thumbs.onQueueEvent(e);
-    if (e.type === "progress") {
-      progressRef.current = e;
-      setProgress(e);
-    }
+    if (e.type === "progress") setProgress(e);
     else if (e.type === "limit") {
       setLimitNotice((prev) => ({ limit: e.limit, skipped: (prev?.skipped ?? 0) + e.skipped }));
     }
@@ -335,11 +322,12 @@ export function Uploader(props: UploaderProps) {
   }
 
   /**
-   * The automatic first build (D-070 (3)) once uploads + finalize settled. The server decides; this
-   * only maps its answer to the next screen (setup was saved by wizard steps 1–4, M19 D-071).
+   * The automatic first build (D-070 (3)) once uploads + finalize settled — classic screen only.
+   * The wizard's Photos step never asks (Task 5: the build starts when the Design step is left).
+   * The server decides; this only maps its answer to the next screen.
    */
   async function autoStart(ready: number, s: QueueSummary) {
-    if (firstRun !== "none" || unmountedRef.current) return;
+    if (wizard || firstRun !== "none" || unmountedRef.current) return;
     if (!shouldAutoStart({ firstRun, ready, pendingLeft: s.pendingLeft, fatal: Boolean(s.fatal), cancelled: s.cancelled })) {
       setAuto({ kind: "fallback", few: ready < AUTO_BUILD_MIN_PHOTOS && s.pendingLeft === 0 ? ready : undefined });
       return;
@@ -348,21 +336,11 @@ export function Uploader(props: UploaderProps) {
     autoBusyRef.current = true;
     setAuto({ kind: "starting" });
     const startedAt = Date.now();
-    // One promise incl. the not_ready retry; it keeps going if this screen unmounts (step 6 may
-    // be waiting for it — M20b).
-    const request = requestAutoBuildSettled(bookId);
-    // The wizard moves on after the success burst, answered or not (step 5 never shows sorting).
-    if (wizard) queueAdvance(request);
-    const outcome = await request;
+    // One promise incl. the not_ready retry.
+    const outcome = await requestAutoBuildSettled(bookId);
     if (unmountedRef.current) return;
     const next = autoStartNext(bookId, outcome, { retried: true, activeAtLoad: false });
     if (next.kind === "go") {
-      // The wizard variant never navigates: the /books/new flow maps the answer (onAdvance).
-      if (wizard) {
-        advanceRef.current = outcome;
-        tryAdvance();
-        return; // the wizard moves on (step 6 reports ai_build_done for a finished rule run)
-      }
       if (next.rules) {
         // A rule run (AI off) finished inside the request; the build screen would start another.
         track("ai_build_done", {
@@ -375,54 +353,8 @@ export function Uploader(props: UploaderProps) {
       router.push(next.href);
       return; // stay "starting" until the next screen replaces this one
     }
-    // Already handed to step 6 (pending): it follows this answer there.
-    if (wizard && advancedRef.current) return;
-    requestRef.current = null; // a fallback answer is never handed over
     setAuto({ kind: "fallback", limit: next.kind === "fallback" ? next.limit : undefined });
     autoBusyRef.current = false;
-  }
-
-  /**
-   * Hands the auto-start request to the wizard once the success burst has played (or can't): its
-   * answer when that's in (onAdvance), else the pending request itself (onAdvancePending, M20b).
-   */
-  function tryAdvance() {
-    const request = requestRef.current;
-    if (!request || advancedRef.current || unmountedRef.current) return;
-    if (!burstDoneRef.current && progressRef.current !== null) return;
-    const outcome = advanceRef.current;
-    if (outcome) {
-      const onAdvance = onAdvanceRef.current;
-      if (!onAdvance) return;
-      advancedRef.current = true;
-      onAdvance(outcome);
-      return;
-    }
-    const onPending = onAdvancePendingRef.current;
-    if (!onPending) return;
-    // A quick answer (run created, or a fallback that stays here) gets a moment to arrive first.
-    if (Date.now() - requestAtRef.current < HANDOVER_GRACE_MS) return;
-    advancedRef.current = true;
-    onPending(request);
-  }
-
-  function queueAdvance(request: Promise<AutoStartOutcome>) {
-    requestRef.current = request;
-    requestAtRef.current = Date.now();
-    advanceRef.current = null;
-    advancedRef.current = false;
-    tryAdvance();
-    setTimeout(tryAdvance, HANDOVER_GRACE_MS);
-    // Safety net: the burst normally ends within SETTLE_MS; never strand the user on a lost callback.
-    setTimeout(() => {
-      burstDoneRef.current = true;
-      tryAdvance();
-    }, SETTLE_MS + 1000);
-  }
-
-  function onStageSettled() {
-    burstDoneRef.current = true;
-    tryAdvance();
   }
 
   async function retryFinalize() {
@@ -445,7 +377,7 @@ export function Uploader(props: UploaderProps) {
     track("upload_done", { photos: s.uploaded, failed: s.failed, skipped: s.skipped });
     const ready = base + s.uploaded;
     // Show "Starting your book…" from the start of finalize (no flash of the fallback button).
-    if (shouldAutoStart({ firstRun, ready, pendingLeft: s.pendingLeft, fatal: false, cancelled: false })) {
+    if (!wizard && shouldAutoStart({ firstRun, ready, pendingLeft: s.pendingLeft, fatal: false, cancelled: false })) {
       setAuto({ kind: "starting" });
     }
     let settled = true;
@@ -456,7 +388,7 @@ export function Uploader(props: UploaderProps) {
     }
     if (unmountedRef.current) return;
     if (settled) await autoStart(ready, s);
-    else if (firstRun === "none") setAuto({ kind: "fallback" });
+    else if (firstRun === "none" && !wizard) setAuto({ kind: "fallback" });
   }
 
   async function handleFiles(files: File[]) {
@@ -467,9 +399,6 @@ export function Uploader(props: UploaderProps) {
       return;
     }
     setPicksIgnored(false);
-    burstDoneRef.current = false;
-    advanceRef.current = null;
-    requestRef.current = null;
     if (!picked) props.onPhotosPicked?.();
     setPicked(true);
     setLoadFailed(false);
@@ -493,6 +422,7 @@ export function Uploader(props: UploaderProps) {
     setLimitNotice(null);
     setPaused(false);
     setAuto({ kind: "idle" });
+    notifyBusy(true);
     setPhase("running");
     let s: QueueSummary;
     try {
@@ -582,12 +512,14 @@ export function Uploader(props: UploaderProps) {
       ? { kind: "continue", href: buildHref(bookId, false), label: "See your book being made" }
       : firstRun === "done"
         ? { kind: "continue", href: `/books/${bookId}/review`, label: "Add them to your book" }
-        : starting
-          ? { kind: "starting" }
-          : {
-              kind: "build",
-              note: auto.kind === "fallback" && auto.limit ? limitCopy(auto.limit, isPaid, props.dailyCap) : fewNote,
-            };
+        : wizard
+          ? { kind: "wizard", canContinue: readyCount > 0 }
+          : starting
+            ? { kind: "starting" }
+            : {
+                kind: "build",
+                note: auto.kind === "fallback" && auto.limit ? limitCopy(auto.limit, isPaid, props.dailyCap) : fewNote,
+              };
   const showIdleNext = showPicker && readyCount > 0 && pending === 0;
   // Wizard: the upload stage stays up through finalize and the auto start (no summary flash).
   const stageShown =
@@ -690,14 +622,14 @@ export function Uploader(props: UploaderProps) {
 
       {showIdleNext ? (
         firstRun === "none" && wizard ? (
-          // The wizard variant: step 6 starts the build in place (no link to the build page).
+          // The wizard's Photos step (return visit with photos): on to the Story step — no build here.
           <button
             type="button"
-            onClick={props.onBuildNow}
+            onClick={() => props.onContinue?.(readyCount)}
             className={cn(buttonVariants({ variant: "accent", size: "cta" }))}
-            data-testid="build-album"
+            data-testid="upload-wizard-continue"
           >
-            Make my book now
+            Continue
           </button>
         ) : firstRun === "none" ? (
           <Link
@@ -740,8 +672,8 @@ export function Uploader(props: UploaderProps) {
       ) : null}
 
       {stageShown && progress ? (
-        // Wizard: the stage stays mounted from the first photo until the wizard moves on — settled
-        // (closed book + burst + "All photos are in") while finalizing; then step 6 (M20b).
+        // Wizard: the stage stays mounted from the first photo through finalize — settled (closed
+        // book + burst + "All photos are in") while finalizing; then the summary with "Continue".
         <UploadProgress
           progress={progress}
           paused={paused}
@@ -749,7 +681,6 @@ export function Uploader(props: UploaderProps) {
           variant="wizard"
           thumbs={<UploadThumbs items={thumbs.items} />}
           settled={uploading ? undefined : true}
-          onSettled={onStageSettled}
         />
       ) : uploading && progress ? (
         <UploadProgress progress={progress} paused={paused} onTogglePause={togglePause} variant="default" />
@@ -815,7 +746,6 @@ export function Uploader(props: UploaderProps) {
       ) : null}
 
       {summary && !fatal && (phase === "done" || phase === "finalize_error") && !stageShown && !(wizard && starting) ? (
-        // Wizard (M20b): never the "Starting your book…" bar — step 6 shows the sorting.
         <UploadSummary
           bookId={bookId}
           summary={summary}
@@ -823,7 +753,7 @@ export function Uploader(props: UploaderProps) {
           onAddMore={openPicker}
           next={summaryNext}
           aiOn={aiOn}
-          onBuild={wizard ? props.onBuildNow : undefined}
+          onContinue={wizard ? () => props.onContinue?.(readyCount) : undefined}
         />
       ) : null}
 

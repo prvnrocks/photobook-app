@@ -1,4 +1,4 @@
-// M19 T6 + T7 (D-071): wizard step 5 (upload) and step 6 (sorting) — chrome choice, no setup card,
+// M19 T6 + T7 (D-071; Task 5 order): the wizard's Photos step (3, upload) and step 6 (the build) — chrome choice, no setup card,
 // thumbnail URLs revoked, truthful checklist mapping. Node environment: pure helpers directly,
 // components via renderToStaticMarkup, pages via source.
 import { existsSync, readFileSync } from "node:fs";
@@ -66,8 +66,8 @@ describe("wizard chrome choice", () => {
   });
 
   // M20 T9 (D-072): the pages no longer wear wizard chrome — fresh books are redirected into
-  // /books/new?book=<id>&step=5|6 (decision table: tests/m20-entry-redirects.test.ts).
-  it("upload page: fresh book → redirect into wizard step 5; classic screen otherwise (no wizard chrome)", () => {
+  // /books/new?book=<id>&step=3|6 (decision table: tests/m20-entry-redirects.test.ts).
+  it("upload page: fresh book → redirect into wizard step 3 (Photos); classic screen otherwise (no wizard chrome)", () => {
     const page = src("src/app/books/[id]/upload/page.tsx");
     expect(page).toContain("detailsLock: detailsLockReason({ hasRun, doc: book.doc }),");
     expect(page).toContain("if (wizardHref) redirect(wizardHref);");
@@ -89,9 +89,9 @@ describe("wizard chrome choice", () => {
   });
 });
 
-// --- step 5: upload --------------------------------------------------------------------------------
+// --- Photos step: upload --------------------------------------------------------------------------------
 
-describe("Uploader (step 5)", () => {
+describe("Uploader (Photos step)", () => {
   const props: UploaderProps = {
     bookId: BOOK, userId: "u1", isPaid: false, existing: [], maxUpload: 150, readyCount: 0, pendingCount: 0,
     hasDoc: false, firstRun: "none", dailyCap: 3,
@@ -236,7 +236,7 @@ describe("UploadStage (M20 T5)", () => {
     expect(html).toContain('data-testid="upload-burst"');
     expect(html.match(/class="up-dot"/g)).toHaveLength(18);
     expect(html).toContain(`data-testid="upload-done-hint">${UPLOAD_DONE_HINT_COPY}<`);
-    expect(html).not.toMatch(/sort/i); // step 5 never mentions sorting (M20b)
+    expect(html).not.toMatch(/sort/i); // the Photos step never mentions sorting (M20b)
     expect(html).not.toContain("upload-sorting-next");
     expect(html).not.toContain("upload-pause");
     // nothing uploaded → calm, no celebration

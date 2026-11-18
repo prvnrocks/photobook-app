@@ -13,7 +13,7 @@ vi.mock("next/navigation", async (orig) => ({
   useRouter: () => ({ refresh: vi.fn(), replace: vi.fn() }),
 }));
 
-const { StepShape } = await import("@/components/books/wizard/StepShape");
+const { ShapeChoices } = await import("@/components/books/wizard/StepShape");
 const { StepStyle } = await import("@/components/books/wizard/StepStyle");
 const { PagesSheet } = await import("@/components/editor/tools/pages");
 
@@ -26,9 +26,11 @@ function inputTag(html: string, value: string): string {
   return m[0];
 }
 
-// M19 (D-071): shape and style are wizard steps 3 and 4 (was the New book form, M10b A12).
-describe("wizard shape + style steps (M10b A12 → M19)", () => {
-  const shape = renderToStaticMarkup(<StepShape format={null} onFormat={() => {}} headlineId="h" />);
+// M19 (D-071) → Task 5: shape and style are the two parts of wizard step 5 "Design" (was steps 3 and
+// 4; before that the New book form, M10b A12). The cards are the same components; the step itself
+// (recommendation, preselection, save) is tested in tests/task5-design-step.test.tsx.
+describe("wizard shape + style cards (M10b A12 → M19 → Task 5)", () => {
+  const shape = renderToStaticMarkup(<ShapeChoices format={null} onFormat={() => {}} />);
   const style = renderToStaticMarkup(
     <StepStyle designStyle="modern" format="A5_LANDSCAPE" onStyle={() => {}} headlineId="h" />,
   );
@@ -46,7 +48,12 @@ describe("wizard shape + style steps (M10b A12 → M19)", () => {
     expect(at).toEqual([...at].sort((a, b) => a - b));
     expect(style).toMatch(/<fieldset class="min-w-0"[\s\S]*class="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5"/);
     expect(style.match(/<label[^>]*class="[^"]*\bmin-h-11 min-w-0\b/g)).toHaveLength(6);
-    expect(shape).toMatch(/<fieldset[\s\S]*class="grid grid-cols-2/);
+    expect(shape).toMatch(/<fieldset[\s\S]*class="[^"]*\bgrid grid-cols-2/);
+    // Each group is named for assistive tech (a visible legend on the Design step).
+    expect(shape).toMatch(/<legend[^>]*>Page shape<\/legend>/);
+    expect(style).toMatch(/<legend[^>]*>Book style<\/legend>/);
+    // No recommendation given → no badge, no reason line.
+    expect(shape + style).not.toContain("Recommended");
   });
 
   it("no shape is preselected; the given style is checked", () => {
@@ -79,10 +86,10 @@ describe("wizard shape + style steps (M10b A12 → M19)", () => {
     expect(style).toContain('width="45" height="31"');
   });
 
-  it("locked design shows only the current choice, read-only, with a note", () => {
-    const locked = renderToStaticMarkup(<StepShape format="A5_LANDSCAPE" onFormat={() => {}} headlineId="h" locked />);
-    expect(locked).toContain('data-testid="wizard-design-locked"');
+  it("locked design shows only the current choice, read-only (the note is the Design step's)", () => {
+    const locked = renderToStaticMarkup(<ShapeChoices format="A5_LANDSCAPE" onFormat={() => {}} locked recommended="A5_PORTRAIT" reason="x" />);
     expect(locked).not.toContain('data-testid="format-A5_PORTRAIT"');
+    expect(locked).not.toContain("Recommended");
     expect(inputTag(locked, "A5_LANDSCAPE")).toMatch(/checked=""[^>]*readOnly=""|readOnly=""[^>]*checked=""/i);
   });
 

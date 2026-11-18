@@ -1,15 +1,15 @@
-// Browser side of GET /api/books/[id]/wizard?step=5|6|7 (M20 T6, D-072): the data the wizard's steps
-// 5 Photos, 6 Sorting and 7 Review need once they run inside /books/new without a page load.
+// Browser side of GET /api/books/[id]/wizard?step=3|6|7 (M20 T6, D-072; Task 5 order): the data the
+// wizard's steps 3 Photos, 6 Create and 7 Preview need once they run inside /books/new without a page load.
 // Client-safe and tiny: fetch only, no zod, no React; the data types are erased type imports.
 // Only the book id travels; nothing about photos is logged.
 
-import type { WizardStep5Data, WizardStep6Data, WizardStep7Data, WizardStepData } from "./wizard-data";
+import type { WizardStep3Data, WizardStep6Data, WizardStep7Data, WizardStepData } from "./wizard-data";
 
-export type { WizardStep5Data, WizardStep6Data, WizardStep7Data, WizardStepData };
+export type { WizardStep3Data, WizardStep6Data, WizardStep7Data, WizardStepData };
 
-export type WizardDataStepNumber = 5 | 6 | 7;
+export type WizardDataStepNumber = 3 | 6 | 7;
 
-export type WizardDataByStep = { 5: WizardStep5Data; 6: WizardStep6Data; 7: WizardStep7Data };
+export type WizardDataByStep = { 3: WizardStep3Data; 6: WizardStep6Data; 7: WizardStep7Data };
 
 export type FetchWizardStepResult<S extends WizardDataStepNumber> =
   | { ok: true; data: WizardDataByStep[S] }

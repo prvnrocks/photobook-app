@@ -30,7 +30,7 @@ import {
 } from "@/lib/book/setup";
 import { deleteBookCompletely } from "@/lib/cleanup/delete-book";
 import type { DeleteBookActionResult } from "@/lib/dashboard/delete-book";
-import { freshBookStep5Data } from "@/lib/books/wizard-bootstrap";
+import { freshBookStep3Data } from "@/lib/books/wizard-bootstrap";
 import { wizardStepHref } from "@/lib/books/wizard-routes";
 import { hasAnyRunForBook } from "@/lib/db/agent-runs";
 import {
@@ -105,8 +105,10 @@ const FIELDS: readonly NewBookField[] = ["title", "occasion", "tone", "captionLa
  * language (D-072): a title with Arabic letters → "ar", else the remembered language, else the
  * request's Accept-Language ("ar" first → "ar", else "en")),
  * `format` + `designStyle` (D-063, fixed at creation; absent → portrait / the occasion's default
- * style, D-068). On success returns { ok, bookId, next, step5 } (next = /books/new?book=<id>&step=5, plus
- * ?_ev=book_created when analytics is on; step5 = the wizard's step-5 data for the new book, shown
+ * style, D-068 — what the wizard relies on since Task 5: it creates the book on step-2 Continue with
+ * title + occasion only, and the design is chosen on step 5 through updateBookSetupAction).
+ * On success returns { ok, bookId, next, step3 } (next = /books/new?book=<id>&step=3, plus
+ * ?_ev=book_created when analytics is on; step3 = the wizard's Photos-step data for the new book, shown
  * in place — M20 T6); signed out →
  * redirects to /login?next=/books/new.
  */
@@ -169,17 +171,17 @@ export async function createBookAction(
 
   revalidatePath("/dashboard");
   // M19 BUG-2: return instead of redirecting, so the wizard can first point its own history entry at
-  // the edit URL (/books/new?book=<id>&step=4) — browser Back from step 5 then re-opens this book
+  // the edit URL (/books/new?book=<id>&step=2) — browser Back from step 3 then re-opens this book
   // instead of an empty create wizard (duplicate drafts).
-  // M20 T6 (D-072): the wizard stays on /books/new and shows step 5 in place from `step5` (no page
+  // M20 T6 (D-072): the wizard stays on /books/new and shows step 3 in place from `step3` (no page
   // load, no extra request); `next` is only the fallback place. analytics (M9 T14): the one-shot
   // ?_ev=book_created rides on `next` only when PostHog is configured — the wizard reads it from
   // there and sends book_created itself (no navigation carries it any more).
   return {
     ok: true,
     bookId: id,
-    next: withAnalyticsFlash(wizardStepHref(id, 5), "book_created"),
-    step5: freshBookStep5Data({
+    next: withAnalyticsFlash(wizardStepHref(id, 3), "book_created"),
+    step3: freshBookStep3Data({
       bookId: id,
       userId: user.id,
       title,

@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
-// M19 T3/T4/T8 (D-071): the /books/new creation wizard, steps 1–4, in a DOM: URL step changes with
-// pushState, browser back via popstate, sessionStorage restore, missing-step redirects, style that
-// follows the occasion until picked, the create form's hidden fields, server errors jumping to their
-// step, and edit mode (prefill + save, and the server page's locked redirect).
+// M19 T3/T4/T8 (D-071), Task 5 order: the /books/new creation wizard's pre-book form — steps 1 Title
+// and 2 Occasion — in a DOM: URL step changes with pushState, browser back via popstate,
+// sessionStorage restore, missing-step redirects, the create form's hidden fields (title + occasion
+// only: the book is created on step-2 Continue with a provisional design), server errors jumping to
+// their step, and edit mode (prefill + save, and the server page's gate).
+// Shape + style moved to step 5 (Design): tests/task5-design-step.test.tsx; the story step:
+// tests/task5-story-step.test.tsx; the 3 → 7 flow: tests/m20-continuous-wizard.test.tsx.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -22,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   user: { id: "u1", email: "sara@example.com" } as { id: string; email: string } | null,
   book: null as Record<string, unknown> | null,
   hasRun: false,
+  uploadRows: [] as { id: string; fingerprint: string; upload_state: string }[],
   memory: null as { language?: string; tone?: string } | null,
   acceptLanguage: "",
 }));
@@ -41,12 +45,24 @@ vi.mock("next/headers", () => ({
   headers: async () => new Headers({ "accept-language": mocks.acceptLanguage }),
 }));
 vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: async () => mocks.user }));
-vi.mock("@/lib/db/books", () => ({ getMyBook: async () => mocks.book }));
+vi.mock("@/app/books/story-actions", () => ({
+  loadStoryAnswersAction: vi.fn(),
+  saveStoryAnswersAction: vi.fn(),
+  recommendDesignAction: vi.fn(),
+}));
+vi.mock("@/lib/ai/client", () => ({ resolveAiMode: () => "replay" }));
+vi.mock("@/lib/db/books", () => ({ getMyBook: async () => mocks.book, getBookForRun: async () => ({ ai_status: "done" }) }));
 vi.mock("@/lib/db/agent-runs", () => ({
   hasAnyRunForBook: async () => mocks.hasRun,
   getActiveRunForBook: async () => null,
+  countLiveRebuilds: async () => 0,
 }));
-// M20 T6: steps 5–7 load through the lazy WizardDataSteps chunk; plain step stubs here (tests/m20-continuous-wizard.test.tsx covers them).
+vi.mock("@/lib/db/photos", () => ({
+  listUploadState: async () => mocks.uploadRows,
+  listReviewPhotos: async () => [],
+}));
+vi.mock("@/lib/db/draft-activity", () => ({ touchWarnedDraft: async () => {} }));
+// M20 T6: steps 3–7 load through the lazy WizardDataSteps chunk; plain step stubs here (tests/m20-continuous-wizard.test.tsx covers them).
 vi.mock("@/components/books/wizard/steps/StepPhotos", () => ({
   StepPhotos: ({ data, headlineId }: { data: { bookId: string }; headlineId: string }) => (
     <div data-testid="stub-step-photos" data-book={data.bookId}>
@@ -92,7 +108,8 @@ const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 async function mount(url: string, mode: Mode = { kind: "create" }) {
   window.history.replaceState(null, "", url);
   const step = Number(new URL(window.location.href).searchParams.get("step") ?? "1");
-  const initialStep = (step >= 1 && step <= 4 ? step : 1) as 1 | 2 | 3 | 4;
+  // The server page's clamp: create mode shows the form steps (1–2) only.
+  const initialStep = (step >= 1 && step <= 7 ? (mode.kind === "create" ? Math.min(step, 2) : step) : 1) as 1 | 2 | 3;
   await act(async () => {
     root.render(
       <NewBookWizard
@@ -221,23 +238,30 @@ describe("new book wizard — steps and URL", () => {
     expect($<HTMLButtonElement>("wizard-continue").disabled).toBe(true);
   });
 
-  it("step 2: six occasion cards (3 cols), Continue disabled until one is picked, no language switch (D-072)", async () => {
+  it("step 2: seven occasion cards incl. Birthday (3 cols), Continue disabled until one is picked, no language switch (D-072)", async () => {
     await mount("/books/new");
     await click($("wizard-continue"));
-    for (const id of ["wedding", "travel", "baby", "graduation", "family", "other"]) {
+    expect($("wizard-headline").textContent).toBe("What's this book for?");
+    for (const id of ["wedding", "travel", "baby", "birthday", "graduation", "family", "other"]) {
       expect($(`occasion-${id}`)).toBeTruthy();
     }
+    expect($("occasion-grid").querySelectorAll('input[type="radio"]')).toHaveLength(7);
+    expect($("occasion-birthday").textContent).toContain("Birthday");
+    expect($("occasion-birthday").querySelector("svg")).toBeTruthy();
     expect($("occasion-grid").className).toContain("grid-cols-3"); // M20 polish: 3 columns at 375 too
-    expect($<HTMLButtonElement>("wizard-continue").disabled).toBe(true);
+    // Step 2 is the last form step: its Continue creates the book.
+    expect($<HTMLButtonElement>("create-book").disabled).toBe(true);
+    expect($("create-book").textContent).toBe("Continue");
     // The caption-language control is gone: the server picks the language.
     for (const id of ["lang-en", "lang-ar", "caption-lang"]) expect($(id)).toBeNull();
     expect(container.querySelector('input[name="wizard-captionLang"]')).toBeNull();
     expect(container.textContent).not.toContain("Captions in");
-    await click(radio("occasion-travel"));
-    expect($<HTMLButtonElement>("wizard-continue").disabled).toBe(false);
-    await click($("wizard-continue"));
-    expect(urlStep()).toBe("3");
-    expect(label()).toBe("Step 3 of 7");
+    // Shape and style are not asked before the photos any more.
+    expect(container.querySelector('input[name="wizard-format"]')).toBeNull();
+    expect(container.querySelector('input[name="wizard-designStyle"]')).toBeNull();
+    await click(radio("occasion-birthday"));
+    expect($<HTMLButtonElement>("create-book").disabled).toBe(false);
+    expect(stored()?.occasion).toBe("birthday");
   });
 
   it("title suggestion chips fill the title (44px, pressed state) and update the cover", async () => {
@@ -261,7 +285,7 @@ describe("new book wizard — steps and URL", () => {
     expect(Number($("book-title-ink").style.getPropertyValue("--ink"))).toBeGreaterThan(0.5);
   });
 
-  it("the live preview follows every choice: title, occasion emblem, shape, style + open spread", async () => {
+  it("the live preview follows the form: title, occasion emblem; closed and neutral until the design is chosen", async () => {
     await mount("/books/new");
     const previews = () => [...container.querySelectorAll<HTMLElement>('[data-testid="wizard-preview"]')];
     const attr = (name: string) => previews().map((p) => p.getAttribute(name));
@@ -281,73 +305,72 @@ describe("new book wizard — steps and URL", () => {
     await click(radio("occasion-baby"));
     expect($("wizard-preview-emblem").getAttribute("data-emblem")).toBe("baby");
     expect($("wizard-preview-summary").textContent).toContain("Baby");
-    await click($("wizard-continue"));
-    await click(radio("format-A5_LANDSCAPE"));
-    expect(attr("data-format")).toEqual(["A5_LANDSCAPE", "A5_LANDSCAPE"]);
+    // The birthday emblem (Task 5) is drawn like the others: a gold line drawing in the same box.
+    await click(radio("occasion-birthday"));
+    expect($("wizard-preview-emblem").getAttribute("data-emblem")).toBe("birthday");
+    expect($("wizard-preview-emblem").querySelector("svg")!.getAttribute("viewBox")).toBe("0 0 24 24");
+    // No style yet: the book stays closed.
     expect(attr("data-open")).toEqual(["false", "false"]);
-    await click($("wizard-continue"));
-    // step 4: opens to a spread in the occasion's default style, then follows the pick
-    expect(attr("data-open")).toEqual(["true", "true"]);
-    expect(attr("data-style")).toEqual(["scrapbook", "scrapbook"]);
-    await click(radio("style-modern"));
-    expect(attr("data-style")).toEqual(["modern", "modern"]);
-    expect($("wizard-preview-summary").textContent).toContain("Modern");
-    // back to step 3: the book closes again but keeps the picked style's tint
-    await back();
-    expect(attr("data-open")).toEqual(["false", "false"]);
-    expect(attr("data-style")).toEqual(["modern", "modern"]);
   });
 
   it("browser back (popstate) returns to the previous step; Back button uses history when it can", async () => {
     await mount("/books/new");
     await click($("wizard-continue"));
-    await click(radio("occasion-wedding"));
-    await click($("wizard-continue"));
-    expect(shownStep()).toBe("3");
-    await historyBack();
     expect(shownStep()).toBe("2");
-    expect(urlStep()).toBe("2");
-    expect(label()).toBe("Step 2 of 7");
+    await historyBack();
+    expect(shownStep()).toBe("1");
+    expect(urlStep()).toBe("1");
+    expect(label()).toBe("Step 1 of 7");
     // forward again
     await act(async () => {
       window.history.forward();
       await tick(30);
     });
-    expect(shownStep()).toBe("3");
+    expect(shownStep()).toBe("2");
     // in-page Back
     await back();
-    expect(shownStep()).toBe("2");
-    expect(urlStep()).toBe("2");
+    expect(shownStep()).toBe("1");
+    expect(urlStep()).toBe("1");
   });
 
   it("Back on a deep-linked step goes to the previous step (replace)", async () => {
-    store({ title: "T", occasion: "family", format: "A5_PORTRAIT" });
-    await mount("/books/new?step=3");
-    expect(shownStep()).toBe("3");
-    await back();
+    store({ title: "T", occasion: "family" });
+    await mount("/books/new?step=2");
     expect(shownStep()).toBe("2");
-    expect(urlStep()).toBe("2");
+    await back();
+    expect(shownStep()).toBe("1");
+    expect(urlStep()).toBe("1");
   });
 });
 
 describe("new book wizard — draft restore and missing steps", () => {
   it("restores choices from sessionStorage after a refresh", async () => {
-    store({ title: "أيام البحر", occasion: "wedding", format: "A5_LANDSCAPE" });
-    await mount("/books/new?step=3");
-    expect(shownStep()).toBe("3");
-    expect(radio("format-A5_LANDSCAPE").checked).toBe(true);
-    await back();
+    store({ title: "أيام البحر", occasion: "wedding" });
+    await mount("/books/new?step=2");
+    expect(shownStep()).toBe("2");
     expect(radio("occasion-wedding").checked).toBe(true);
     await back();
     expect($<HTMLInputElement>("book-title").value).toBe("أيام البحر");
   });
 
-  it("a step whose earlier answers are missing redirects to the first missing step", async () => {
+  it("a later step asked without a book (an old ?step=4 link) lands on the last form step, never past it", async () => {
     store({ title: "Only a title" });
     await mount("/books/new?step=4");
     expect(shownStep()).toBe("2");
     expect(urlStep()).toBe("2");
     expect(label()).toBe("Step 2 of 7");
+  });
+
+  it("a draft stored under the old order (with shape / style) still restores; ?step=5…7 clamp to step 2", async () => {
+    for (const n of [3, 5, 7]) {
+      store({ title: "Old", occasion: "travel", format: "A5_LANDSCAPE", designStyle: "classic" });
+      await mount(`/books/new?step=${n}`);
+      expect(shownStep()).toBe("2");
+      expect(urlStep()).toBe("2");
+      expect(radio("occasion-travel").checked).toBe(true);
+      act(() => root.unmount());
+      root = createRoot(container);
+    }
   });
 
   it("a visit with nothing stored starts at step 1", async () => {
@@ -370,8 +393,8 @@ describe("new book wizard — start over (M19 review)", () => {
   });
 
   it("a restored draft offers Start over (44px); it clears storage and resets to an empty step 1", async () => {
-    store({ title: "Old trip", occasion: "travel", format: "A5_LANDSCAPE" });
-    await mount("/books/new?step=3");
+    store({ title: "Old trip", occasion: "travel" });
+    await mount("/books/new?step=2");
     const btn = $<HTMLButtonElement>("wizard-start-over");
     expect(btn).toBeTruthy();
     expect(btn.type).toBe("button");
@@ -385,11 +408,11 @@ describe("new book wizard — start over (M19 review)", () => {
     expect($("wizard-start-over")).toBeNull();
     await click($("wizard-continue"));
     expect(radio("occasion-travel").checked).toBe(false);
-    expect($<HTMLButtonElement>("wizard-continue").disabled).toBe(true);
+    expect($<HTMLButtonElement>("create-book").disabled).toBe(true);
   });
 
   it("never shown in edit mode", async () => {
-    store({ title: "Old trip", occasion: "travel", format: "A5_LANDSCAPE" });
+    store({ title: "Old trip", occasion: "travel" });
     await mount(`/books/new?book=${BOOK}&step=2`, {
       kind: "edit",
       bookId: BOOK,
@@ -400,65 +423,8 @@ describe("new book wizard — start over (M19 review)", () => {
   });
 });
 
-describe("new book wizard — shape, style and submit", () => {
-  it("shape: no default; Continue disabled until a shape is picked", async () => {
-    store({ title: "", occasion: "travel" });
-    await mount("/books/new?step=3");
-    expect(radio("format-A5_PORTRAIT").checked).toBe(false);
-    expect($<HTMLButtonElement>("wizard-continue").disabled).toBe(true);
-    await click(radio("format-A5_PORTRAIT"));
-    await click($("wizard-continue"));
-    expect(shownStep()).toBe("4");
-  });
-
-  it("style follows the occasion's default until the user picks one (D-068)", async () => {
-    store({ title: "", occasion: "travel", format: "A5_LANDSCAPE" });
-    await mount("/books/new?step=4");
-    expect(radio("style-magazine").checked).toBe(true); // travel → Magazine (D-090)
-    // previews drawn in the chosen shape
-    expect($("style-modern").innerHTML).toContain('width="45" height="31"');
-    await back();
-    await back();
-    await click(radio("occasion-baby"));
-    await click($("wizard-continue"));
-    await click($("wizard-continue"));
-    expect(radio("style-scrapbook").checked).toBe(true);
-    await click(radio("style-classic"));
-    await back();
-    await back();
-    await click(radio("occasion-wedding"));
-    await click($("wizard-continue"));
-    await click($("wizard-continue"));
-    expect(radio("style-classic").checked).toBe(true);
-  });
-
-  it("travel preselects Magazine among six cards; the user's own pick wins and survives an occasion change (M30 T12, D-090)", async () => {
-    store({ title: "", occasion: "travel", format: "A5_PORTRAIT" });
-    await mount("/books/new?step=4");
-    const ids = ["modern", "classic", "geometric", "scrapbook", "magazine", "editorial"];
-    for (const id of ids) expect($(`style-${id}`)).not.toBeNull();
-    expect(ids.filter((id) => radio(`style-${id}`).checked)).toEqual(["magazine"]);
-    // each new card draws its own art, not the Classic fallback
-    expect($("style-magazine").innerHTML).not.toBe($("style-classic").innerHTML.replaceAll("classic", "magazine"));
-    expect($("style-magazine").innerHTML).toContain("fill-primary");
-    expect($("style-editorial").innerHTML).toContain("fill-foreground/85");
-    await click(radio("style-editorial"));
-    expect(ids.filter((id) => radio(`style-${id}`).checked)).toEqual(["editorial"]);
-    await back();
-    await back();
-    await click(radio("occasion-family"));
-    await click($("wizard-continue"));
-    await click($("wizard-continue"));
-    expect(radio("style-editorial").checked).toBe(true); // not family's Scrapbook, not travel's Magazine
-    await back();
-    await back();
-    await click(radio("occasion-travel"));
-    await click($("wizard-continue"));
-    await click($("wizard-continue"));
-    expect(radio("style-editorial").checked).toBe(true);
-  });
-
-  it("Continue on step 4 submits the hidden fields to createBookAction (no tone); the draft stays stored while it runs", async () => {
+describe("new book wizard — the book is created on step-2 Continue (Task 5)", () => {
+  it("step 1 Continue never creates; step 2 Continue submits title + occasion only (no shape, style, tone, language); the draft stays stored while it runs", async () => {
     let sent: FormData | null = null;
     let storedDuringSubmit: string | null = "unset";
     let release = () => {};
@@ -471,29 +437,34 @@ describe("new book wizard — shape, style and submit", () => {
         release = () => resolve({ ok: false });
       });
     });
-    // An old (pre-D-072) stored draft that still carries a caption language.
+    // An old stored draft: pre-D-072 caption language and pre-Task-5 shape / style.
     window.sessionStorage.setItem(
       WIZARD_DRAFT_STORAGE_KEY,
       JSON.stringify({
-        ...JSON.parse(serializeWizardDraft({ ...EMPTY_WIZARD_DRAFT, title: "Days by the Sea", occasion: "travel", format: "A5_LANDSCAPE" })),
+        ...JSON.parse(serializeWizardDraft({ ...EMPTY_WIZARD_DRAFT, title: "Days by the Sea", occasion: "travel", format: "A5_LANDSCAPE", designStyle: "classic" })),
         captionLang: "ar",
       }),
     );
-    await mount("/books/new?step=4");
+    await mount("/books/new?step=1");
+    await click($("wizard-continue"));
+    expect(mocks.createBookAction).not.toHaveBeenCalled();
+    expect(shownStep()).toBe("2");
     const submit = $<HTMLButtonElement>("create-book");
     expect(submit.textContent).toBe("Continue");
     await click(submit);
     expect(mocks.createBookAction).toHaveBeenCalledTimes(1);
     const fd = sent as unknown as FormData;
+    // (the visible radio group posts under its own "wizard-" name, which the action never reads)
+    expect([...fd.keys()].filter((k) => !k.startsWith("$") && !k.startsWith("wizard-")).sort()).toEqual(["occasion", "title"]);
     expect(fd.get("title")).toBe("Days by the Sea");
     expect(fd.get("occasion")).toBe("travel");
     // D-072: no caption language from the client (even from an old stored draft) — the server derives it.
     expect(fd.has("captionLang")).toBe(false);
-    expect(fd.get("format")).toBe("A5_LANDSCAPE");
-    expect(fd.get("designStyle")).toBe("magazine"); // travel default (D-090)
+    // Task 5: the design is PROVISIONAL (server defaults) — never an old draft's shape / style.
+    expect(fd.has("format")).toBe(false);
+    expect(fd.has("designStyle")).toBe(false);
     expect(fd.has("tone")).toBe(false);
-    expect(fd.getAll("designStyle")).toHaveLength(1);
-    // Cleared only on success (M19 review): a thrown action must not lose steps 1–4.
+    // Cleared only on success (M19 review): a thrown action must not lose steps 1–2.
     expect(JSON.parse(storedDuringSubmit ?? "null")?.title).toBe("Days by the Sea");
     expect($("create-book").textContent).toContain("Creating your book…");
     expect($<HTMLButtonElement>("create-book").disabled).toBe(true);
@@ -507,43 +478,58 @@ describe("new book wizard — shape, style and submit", () => {
     mocks.createBookAction.mockResolvedValue({
       ok: false,
       error: "Please check the highlighted fields.",
-      fieldErrors: { format: "Please choose a shape.", designStyle: "Please choose a style." },
+      fieldErrors: { title: "Title must be 120 characters or fewer.", occasion: "Please choose an occasion." },
     });
-    store({ title: "T", occasion: "family", format: "A5_PORTRAIT" });
-    await mount("/books/new?step=4");
+    store({ title: "T", occasion: "family" });
+    await mount("/books/new?step=2");
     await click($("create-book"));
-    await waitFor(() => expect(shownStep()).toBe("3"));
-    expect(urlStep()).toBe("3");
-    expect($("new-book-error-message").textContent).toBe("Please choose a shape.");
+    await waitFor(() => expect(shownStep()).toBe("1"));
+    expect(urlStep()).toBe("1");
+    expect($("new-book-error-message").textContent).toBe("Title must be 120 characters or fewer.");
     expect($("new-book-error").getAttribute("role")).toBe("alert");
     expect(stored()?.occasion).toBe("family");
   });
 
-  it("success: step 5 in place — the step-4 entry becomes the book's edit URL, step 5 is pushed (M19 BUG-2, M20 T6)", async () => {
+  it("an error on a field the form doesn't ask (shape / style) stays on step 2 with the message", async () => {
+    mocks.createBookAction.mockResolvedValue({
+      ok: false,
+      error: "Please check the highlighted fields.",
+      fieldErrors: { format: "Please choose a shape." },
+    });
+    store({ title: "T", occasion: "family" });
+    await mount("/books/new?step=2");
+    await click($("create-book"));
+    await waitFor(() => expect($("new-book-error")).toBeTruthy());
+    expect(shownStep()).toBe("2");
+    expect($("new-book-error-message").textContent).toBe("Please check the highlighted fields.");
+  });
+
+  it("success: step 3 (Photos) in place — the step-2 entry becomes the book's edit URL, step 3 is pushed (M19 BUG-2, M20 T6)", async () => {
     mocks.createBookAction.mockResolvedValue({
       ok: true,
       bookId: BOOK,
-      next: `/books/${BOOK}/upload?_ev=book_created`,
-      step5: { step: 5, bookId: BOOK, title: "T", resolved: 5, firstRun: "none" },
+      next: `/books/new?book=${BOOK}&step=3&_ev=book_created`,
+      step3: { step: 3, bookId: BOOK, title: "T", resolved: 3, firstRun: "none", existing: [], format: "A5_PORTRAIT", designStyle: "scrapbook" },
     });
-    store({ title: "T", occasion: "family", format: "A5_PORTRAIT" });
-    await mount("/books/new?step=4");
+    store({ title: "T", occasion: "family" });
+    await mount("/books/new?step=2");
     const before = window.history.length;
     const band = $("wizard-band");
     await click($("create-book"));
-    await waitFor(() => expect(shownStep()).toBe("5"));
+    await waitFor(() => expect(shownStep()).toBe("3"));
     await waitFor(() => expect($("stub-step-photos")).toBeTruthy());
-    // No router navigation: the same wizard (and band) shows step 5 from the action's step-5 data.
+    // No router navigation: the same wizard (and band) shows step 3 from the action's data.
     expect(mocks.push).not.toHaveBeenCalled();
     expect($("wizard-band")).toBe(band);
+    expect(label()).toBe("Step 3 of 7");
     expect($("stub-step-photos").getAttribute("data-book")).toBe(BOOK);
-    expect(window.location.pathname + window.location.search).toBe(`/books/new?book=${BOOK}&step=5`);
+    expect(window.location.pathname + window.location.search).toBe(`/books/new?book=${BOOK}&step=3`);
     expect(window.history.length).toBe(before + 1);
     expect(stored()).toBeNull();
-    // Browser Back from step 5 lands on this book's step 4 (edit mode), never an empty create wizard.
+    // Browser Back from step 3 lands on this book's step 2 (edit mode), never an empty create wizard.
     await historyBack();
-    expect(shownStep()).toBe("4");
-    expect(window.location.pathname + window.location.search).toBe(`/books/new?book=${BOOK}&step=4`);
+    expect(shownStep()).toBe("2");
+    expect(window.location.pathname + window.location.search).toBe(`/books/new?book=${BOOK}&step=2`);
     expect($("new-book-wizard").getAttribute("data-mode")).toBe("edit");
     expect($("wizard-save")).toBeTruthy();
     expect(mocks.createBookAction).toHaveBeenCalledTimes(1);
@@ -552,19 +538,23 @@ describe("new book wizard — shape, style and submit", () => {
   it("create mode remounted on a created book's entry (browser Back) reloads it — never an empty wizard", async () => {
     const reload = vi.spyOn(wizardWindow, "reload").mockImplementation(() => {});
     try {
-      await mount(`/books/new?book=${BOOK}&step=4`);
-      expect(reload).toHaveBeenCalledWith(`${window.location.origin}/books/new?book=${BOOK}&step=4`);
+      // What the server would never send (create props at an edit URL): a stale cached tree.
+      window.history.replaceState(null, "", `/books/new?book=${BOOK}&step=2`);
+      await act(async () => {
+        root.render(<NewBookWizard initialStep={2} mode={{ kind: "create" }} dashboardBack={<a href="/dashboard">Back</a>} />);
+      });
+      expect(reload).toHaveBeenCalledWith(`${window.location.origin}/books/new?book=${BOOK}&step=2`);
       expect($("new-book-wizard").getAttribute("data-reopening")).toBe("true");
       expect($("wizard-step-label")).toBeNull();
       expect($("create-book")).toBeNull();
       // The URL is left alone (no bounce to ?step=1).
-      expect(window.location.search).toBe(`?book=${BOOK}&step=4`);
+      expect(window.location.search).toBe(`?book=${BOOK}&step=2`);
     } finally {
       reload.mockRestore();
     }
   });
 
-  it("a thrown createBookAction keeps the stored draft (steps 1–4 survive a reload)", async () => {
+  it("a thrown createBookAction keeps the stored draft (steps 1–2 survive a reload)", async () => {
     // The thrown action goes to an error boundary; use a root that swallows it.
     act(() => root.unmount());
     const uncaught = vi.fn();
@@ -572,8 +562,8 @@ describe("new book wizard — shape, style and submit", () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       mocks.createBookAction.mockRejectedValue(new Error("network down"));
-      store({ title: "Kept", occasion: "family", format: "A5_PORTRAIT" });
-      await mount("/books/new?step=4");
+      store({ title: "Kept", occasion: "family" });
+      await mount("/books/new?step=2");
       // act() rethrows the error React reported; the point is what is left in storage.
       try {
         await click($("create-book"));
@@ -584,19 +574,19 @@ describe("new book wizard — shape, style and submit", () => {
         // expected: "network down"
       }
       expect(mocks.createBookAction).toHaveBeenCalledTimes(1);
-      expect(stored()).toMatchObject({ title: "Kept", occasion: "family", format: "A5_PORTRAIT" });
+      expect(stored()).toMatchObject({ title: "Kept", occasion: "family" });
     } finally {
       err.mockRestore();
     }
   });
 
-  it("a non-field error stays on step 4", async () => {
+  it("a non-field error stays on step 2", async () => {
     mocks.createBookAction.mockResolvedValue({ ok: false, error: "We couldn't create your book. Please try again." });
-    store({ title: "", occasion: "other", format: "A5_PORTRAIT" });
-    await mount("/books/new?step=4");
+    store({ title: "", occasion: "other" });
+    await mount("/books/new?step=2");
     await click($("create-book"));
     await waitFor(() => expect($("new-book-error")).toBeTruthy());
-    expect(shownStep()).toBe("4");
+    expect(shownStep()).toBe("2");
     expect($("new-book-error-message").textContent).toContain("couldn't create");
   });
 });
@@ -609,54 +599,49 @@ describe("new book wizard — edit mode (T8)", () => {
     designStyle: "classic",
   };
 
-  it("prefills from the book and ignores sessionStorage; Continue saves and shows step 5 in place", async () => {
-    store({ title: "Other draft", occasion: "baby", format: "A5_LANDSCAPE", designStyle: "scrapbook" });
-    mocks.updateBookSetupAction.mockResolvedValue({ ok: true, setup: {}, relaidOut: false });
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ step: 5, bookId: BOOK, title: "", resolved: 5, firstRun: "none" }), { status: 200 }));
+  it("prefills from the book and ignores sessionStorage; step-2 Continue saves title + occasion and shows step 3 in place", async () => {
+    store({ title: "Other draft", occasion: "baby" });
+    mocks.updateBookSetupAction.mockResolvedValue({ ok: true, setup: { format: "A5_PORTRAIT", designStyle: "classic" }, relaidOut: false });
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ step: 3, bookId: BOOK, title: "", resolved: 3, firstRun: "none", existing: [] }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
-    await mount(`/books/new?book=${BOOK}&step=4`, { kind: "edit", bookId: BOOK, draft: editDraft, designLock: null });
-    expect(shownStep()).toBe("4");
-    expect(radio("style-classic").checked).toBe(true);
+    await mount(`/books/new?book=${BOOK}&step=2`, { kind: "edit", bookId: BOOK, draft: editDraft, designLock: null });
+    expect(shownStep()).toBe("2");
+    expect(radio("occasion-graduation").checked).toBe(true);
     await back();
-    expect(radio("format-A5_PORTRAIT").checked).toBe(true);
+    expect($<HTMLInputElement>("book-title").value).toBe("");
     expect(new URL(window.location.href).searchParams.get("book")).toBe(BOOK);
-    await click(radio("format-A5_LANDSCAPE"));
     await click($("wizard-continue"));
+    await click(radio("occasion-wedding"));
     await click($("wizard-save"));
-    expect(mocks.updateBookSetupAction).toHaveBeenCalledWith(BOOK, {
-      title: null,
-      occasion: "graduation",
-      format: "A5_LANDSCAPE",
-      designStyle: "classic",
-    });
+    // Title + occasion only: the design belongs to step 5 (and is never sent from the form).
+    expect(mocks.updateBookSetupAction).toHaveBeenCalledTimes(1);
+    expect(mocks.updateBookSetupAction).toHaveBeenCalledWith(BOOK, { title: null, occasion: "wedding" });
     await waitFor(() => expect($("stub-step-photos")).toBeTruthy());
-    expect(shownStep()).toBe("5");
-    expect(urlStep()).toBe("5");
-    expect(fetchMock).toHaveBeenCalledWith(`/api/books/${BOOK}/wizard?step=5`, expect.objectContaining({ method: "GET" }));
+    expect(shownStep()).toBe("3");
+    expect(urlStep()).toBe("3");
+    expect(fetchMock).toHaveBeenCalledWith(`/api/books/${BOOK}/wizard?step=3`, expect.objectContaining({ method: "GET" }));
     expect(mocks.push).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
     // edit mode never writes the new-book draft
     expect(stored()?.title).toBe("Other draft");
   });
 
-  it("design locked: shape / style read-only with a note, and not sent", async () => {
+  it("a locked design changes nothing on the form: title + occasion are still what is saved", async () => {
     mocks.updateBookSetupAction.mockResolvedValue({ ok: true, setup: {}, relaidOut: false });
-    await mount(`/books/new?book=${BOOK}&step=3`, {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 500 })));
+    await mount(`/books/new?book=${BOOK}&step=2`, {
       kind: "edit",
       bookId: BOOK,
       draft: { ...editDraft, title: "Grad 2026" },
       designLock: "user_edited",
     });
-    expect($("wizard-design-locked")).toBeTruthy();
-    expect($("format-A5_LANDSCAPE")).toBeNull();
-    expect(radio("format-A5_PORTRAIT").checked).toBe(true);
-    await click($("wizard-continue"));
-    expect($("style-modern")).toBeNull();
+    expect($("wizard-design-locked")).toBeNull();
     await click($("wizard-save"));
     expect(mocks.updateBookSetupAction).toHaveBeenCalledWith(BOOK, {
       title: "Grad 2026",
       occasion: "graduation",
     });
+    vi.unstubAllGlobals();
   });
 
   it("a save field error jumps to its step", async () => {
@@ -665,7 +650,7 @@ describe("new book wizard — edit mode (T8)", () => {
       error: "invalid",
       fieldErrors: { title: "Title must be 120 characters or fewer." },
     });
-    await mount(`/books/new?book=${BOOK}&step=4`, { kind: "edit", bookId: BOOK, draft: editDraft, designLock: null });
+    await mount(`/books/new?book=${BOOK}&step=2`, { kind: "edit", bookId: BOOK, draft: editDraft, designLock: null });
     await click($("wizard-save"));
     await waitFor(() => expect(shownStep()).toBe("1"));
     expect($("new-book-error-message").textContent).toContain("120 characters");
@@ -678,13 +663,28 @@ describe("/books/new server page", () => {
   const wizardProps = (el: unknown) => ((el as Element).props.children as Element).props as {
     initialStep: number;
     mode: Mode;
+    initialData: { step: number; resolved: unknown; existing?: unknown[] } | null;
   };
   const run = (params: Record<string, string>) => NewBookPage({ searchParams: Promise.resolve(params) });
+  const freshBook = () => ({
+    id: BOOK,
+    title: "T",
+    occasion: "other",
+    tone: "fun",
+    caption_lang: "en",
+    doc: {},
+    format: "A5_PORTRAIT",
+    design_style: "modern",
+    is_paid: false,
+    album_confirmed_at: null,
+  });
+  const row = (n: number, upload_state = "ready") => ({ id: `p${n}`, fingerprint: `f${n}`, upload_state });
 
   beforeEach(() => {
     mocks.user = { id: "u1", email: "sara@example.com" };
     mocks.book = null;
     mocks.hasRun = false;
+    mocks.uploadRows = [];
     mocks.memory = null;
     mocks.acceptLanguage = "";
   });
@@ -696,8 +696,8 @@ describe("/books/new server page", () => {
 
   it("create: step from ?step=; no caption language from the page (D-072: the create action derives it)", async () => {
     mocks.memory = { language: "ar" };
-    let props = wizardProps(await run({ step: "3" }));
-    expect(props.initialStep).toBe(3);
+    let props = wizardProps(await run({ step: "2" }));
+    expect(props.initialStep).toBe(2);
     expect(props.mode).toEqual({ kind: "create" });
     mocks.memory = null;
     mocks.acceptLanguage = "ar-AE,ar;q=0.9";
@@ -706,23 +706,24 @@ describe("/books/new server page", () => {
     expect(props.mode).toEqual({ kind: "create" });
   });
 
+  it("create: steps 3–7 without a book clamp to the form (the book doesn't exist before step-2 Continue)", async () => {
+    for (const step of ["3", "4", "5", "6", "7"]) {
+      const props = wizardProps(await run({ step }));
+      expect(props.mode).toEqual({ kind: "create" });
+      expect(props.initialStep).toBe(2);
+      expect(props.initialData).toBeNull();
+    }
+  });
+
   it("edit: missing / foreign book → 404", async () => {
     await expect(run({ book: BOOK, step: "4" })).rejects.toThrow("NOT_FOUND");
     await expect(run({ book: "not-a-uuid" })).rejects.toThrow("NOT_FOUND");
   });
 
-  it("edit: prefills the draft from the book (null title → empty)", async () => {
-    mocks.book = {
-      id: BOOK,
-      title: null,
-      occasion: "wedding",
-      tone: "romantic",
-      caption_lang: "ar",
-      doc: {},
-      format: "A5_LANDSCAPE",
-      design_style: "scrapbook",
-    };
-    const props = wizardProps(await run({ book: BOOK, step: "4" }));
+  it("edit: prefills the draft from the book (null title → empty) — the stored design travels in the draft", async () => {
+    mocks.book = { ...freshBook(), title: null, occasion: "wedding", tone: "romantic", caption_lang: "ar", format: "A5_LANDSCAPE", design_style: "scrapbook" };
+    const props = wizardProps(await run({ book: BOOK, step: "2" }));
+    expect(props.initialStep).toBe(2);
     expect(props.mode).toEqual({
       kind: "edit",
       bookId: BOOK,
@@ -731,16 +732,40 @@ describe("/books/new server page", () => {
     });
   });
 
-  it("edit: details locked (a finished AI run) → the gate's step (7 Review), not steps 1–4", async () => {
-    mocks.book = { id: BOOK, title: "T", occasion: "other", caption_lang: "en", doc: {}, format: "A5_PORTRAIT", design_style: "modern" };
-    mocks.hasRun = true;
-    await expect(run({ book: BOOK, step: "2" })).rejects.toThrow(`REDIRECT:/books/new?book=${BOOK}&step=7`);
+  it("edit, no photos yet: 1–3 as asked; Story / Design (4–5, or an old bookmark's 5 = photos) → Photos (3)", async () => {
+    mocks.book = freshBook();
+    for (const [asked, shown] of [["1", 1], ["2", 2], ["3", 3], ["4", 3], ["5", 3]] as const) {
+      const props = wizardProps(await run({ book: BOOK, step: asked }));
+      expect(props.initialStep).toBe(shown);
+      expect(props.initialData).toMatchObject({ step: 3, existing: [] });
+    }
   });
 
-  it("create: steps 5–7 without a book clamp to the form", async () => {
-    const props = wizardProps(await run({ step: "6" }));
-    expect(props.mode).toEqual({ kind: "create" });
-    expect(props.initialStep).toBe(4);
+  it("edit, photos in and no run: 3–5 as asked (a reload keeps Story / Design); 1–2 are locked → 3", async () => {
+    mocks.book = freshBook();
+    mocks.uploadRows = [row(1), row(2, "pending")];
+    for (const [asked, shown] of [["1", 3], ["2", 3], ["3", 3], ["4", 4], ["5", 5]] as const) {
+      const props = wizardProps(await run({ book: BOOK, step: asked }));
+      expect(props.initialStep).toBe(shown);
+      // The Photos step's data comes along: it tells the client the book has photos.
+      expect(props.initialData).toMatchObject({ step: 3 });
+      expect(props.initialData?.existing).toHaveLength(2);
+    }
+  });
+
+  it("edit: a finished run → the gate's step (7 Preview) with its data, whatever step was asked — no redirect hop", async () => {
+    mocks.book = freshBook();
+    mocks.hasRun = true;
+    for (const step of ["2", "4", "5", "6", "7"]) {
+      const props = wizardProps(await run({ book: BOOK, step }));
+      expect(props.initialStep).toBe(7);
+      expect(props.initialData).toMatchObject({ step: 7, resolved: 7 });
+    }
+  });
+
+  it("edit: a confirmed or user-edited book → the editor", async () => {
+    mocks.book = { ...freshBook(), album_confirmed_at: "2026-11-15T11:00:00.000Z" };
+    await expect(run({ book: BOOK, step: "4" })).rejects.toThrow(`REDIRECT:/books/${BOOK}/edit`);
   });
 });
 

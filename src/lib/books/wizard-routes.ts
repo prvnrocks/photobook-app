@@ -1,8 +1,8 @@
-// Which entry points lead into the creation wizard (M19 T6/T7 D-071; M20 T9 D-072). Pure: no React,
-// no server imports — shared by the upload/build pages, createBookAction and their tests.
-// M20: steps 5–7 live inside /books/new (?book=<id>&step=5|6|7); /books/[id]/upload and
-// /books/[id]/build redirect fresh books there (uploadEntryRedirect / buildEntryRedirect) and keep
-// the classic screens for everything else.
+// Which entry points lead into the creation wizard (M19 T6/T7 D-071; M20 T9 D-072; Task 5 order).
+// Pure: no React, no server imports — shared by the upload/build pages, createBookAction and their tests.
+// Steps 3–7 live inside /books/new (?book=<id>&step=3…7: 3 Photos, 4 Story, 5 Design, 6 Create,
+// 7 Preview); /books/[id]/upload and /books/[id]/build redirect fresh books there
+// (uploadEntryRedirect / buildEntryRedirect) and keep the classic screens for everything else.
 
 import { docOrigin } from "@/lib/book/replaceable";
 import type { SetupLockReason } from "@/lib/book/setup";
@@ -10,7 +10,7 @@ import type { FirstRunState } from "@/lib/upload/auto-build-client";
 import { resolveWizardStep } from "./wizard-gate";
 
 /**
- * Step 5 ("Add your photos") = a fresh book: no AI run yet and its setup still editable (the old
+ * Step 3 ("Add your photos") = a fresh book: no AI run yet and its setup still editable (the old
  * setup card's rule). Adding photos to a built / edited book keeps the classic chrome.
  */
 export function isWizardUpload(firstRun: FirstRunState, detailsLock: SetupLockReason | null): boolean {
@@ -29,16 +29,16 @@ export function isWizardBuild(input: { trigger: "build" | "rebuild"; aiOn?: bool
   return !origin.userEdited && origin.generator !== "ai";
 }
 
-/** The wizard's in-place steps (5 Photos, 6 Sorting, 7 Review) for an existing book. */
-export type WizardEntryStep = 5 | 6 | 7;
+/** The wizard's in-place steps for an existing book (3 Photos, 4 Story, 5 Design, 6 Create, 7 Preview). */
+export type WizardEntryStep = 3 | 4 | 5 | 6 | 7;
 
-/** /books/new?book=<id>&step=5|6|7 (+ &auto=1: the photos step started the automatic first build). */
+/** /books/new?book=<id>&step=3…7 (+ &auto=1: the design step started the automatic first build). */
 export function wizardStepHref(bookId: string, step: WizardEntryStep, opts: { auto?: boolean } = {}): string {
   return `/books/new?book=${encodeURIComponent(bookId)}&step=${step}${opts.auto ? "&auto=1" : ""}`;
 }
 
 /**
- * /books/[id]/upload: a fresh wizard book → step 5 inside the wizard; null = classic upload screen.
+ * /books/[id]/upload: a fresh wizard book → step 3 inside the wizard; null = classic upload screen.
  * A confirmed book (M20c: "Generate album" ran) always keeps the classic screen ("add more photos").
  */
 export function uploadEntryRedirect(input: {
@@ -49,7 +49,7 @@ export function uploadEntryRedirect(input: {
   albumConfirmed: boolean;
 }): string | null {
   if (input.albumConfirmed) return null;
-  return isWizardUpload(input.firstRun, input.detailsLock) ? wizardStepHref(input.bookId, 5) : null;
+  return isWizardUpload(input.firstRun, input.detailsLock) ? wizardStepHref(input.bookId, 3) : null;
 }
 
 /** Everything /books/[id]/build knows when deciding (the reads mirror loadWizardStep(6)). */
@@ -57,7 +57,7 @@ export type BuildEntryInput = {
   bookId: string;
   /** ?trigger=rebuild ("Try AI again") → "rebuild"; anything else → "build". */
   trigger: "build" | "rebuild";
-  /** ?auto=1 — the photos step started the automatic first build. */
+  /** ?auto=1 — the wizard started the automatic first build. */
   auto: boolean;
   /** resolveAiMode() !== "off". */
   aiOn: boolean;

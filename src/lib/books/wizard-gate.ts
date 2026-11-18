@@ -4,7 +4,10 @@
 // src/lib/books/wizard-data.ts does that for GET /api/books/[id]/wizard and /books/new.
 // Also re-exported from ./wizard-routes for server callers.
 
-/** Steps of the M20 wizard: 1–4 form (Title, Purpose, Shape, Style), 5 Photos, 6 Sorting, 7 Review. */
+/**
+ * Steps of the wizard (Task 5 order): 1 Title, 2 Occasion (the pre-book form), 3 Photos, 4 Story,
+ * 5 Design, 6 Create (the first build), 7 Preview.
+ */
 export type WizardRequestStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 /**
@@ -31,7 +34,7 @@ export type WizardGateInput = {
    * behaviour (step 6 POSTs; the server answers 409 already_running + runId for a queued run).
    */
   readError: boolean;
-  /** detailsLockReason({ hasRun, doc }) — null while steps 1–4 may still change the setup. */
+  /** detailsLockReason({ hasRun, doc }) — null while steps 1–5 may still change the setup. */
   detailsLock: WizardDetailsLock | null;
   /**
    * docOrigin(books.doc).generator, and userEdited = albumEditedByUser(books.doc) (editor save,
@@ -48,6 +51,12 @@ export type WizardGateInput = {
    * rule build shows step 6 / 7 like an AI build; only a running rebuild is "classic").
    */
   aiOn?: boolean;
+  /**
+   * Photo rows of the book (ready + pending). Task 5: with photos, steps 1–2 are locked (the occasion
+   * drives the story questions) → 3; without any, Story / Design (4–5) have nothing to work on → 3.
+   * Omitted / unknown → the requested step is kept (old callers, read errors).
+   */
+  photoCount?: number;
 };
 
 /** books.album_confirmed_at → WizardGateInput.albumConfirmed (a non-empty timestamp string = confirmed). */
@@ -61,7 +70,9 @@ function clampStep(n: number): WizardRequestStep {
 }
 
 /**
- * G3 + G2 decision table (first match wins):
+ * G3 + G2 decision table (first match wins). The answer comes from the book's server state, never
+ * from the URL number alone — a link bookmarked under the old numbering (5 = photos) lands on the
+ * nearest valid step:
  *  1. user-edited album                         → "editor" (the wizard never shows an edited book)
  *  1b. album confirmed ("Generate album" ran)   → "editor" for every requested step (M20c) — also
  *                                                 over an active run: the editor's own redirect
@@ -69,27 +80,37 @@ function clampStep(n: number): WizardRequestStep {
  *                                                 (classic for a rebuild), never back here
  *  2. active run                                → 6 ("classic" for a rebuild) — resume, never
  *                                                 start a 2nd run (AI off too, M20b)
- *  3. run read error                            → requested ≤5 with details unlocked: requested
- *                                                 (the upload page's "unknown = no run");
- *                                                 otherwise 6 (today's build-page POST path)
- *  4. finished run (exists, none active)        → 7 (Review)
+ *  3. run read error                            → requested ≤5 with details unlocked: the open step
+ *                                                 (rule 6; "unknown = no run"); otherwise 6 (the
+ *                                                 build POST path: the server answers 409 for a
+ *                                                 queued run)
+ *  4. finished run (exists, none active)        → 7 (Preview)
  *  5. no run but details locked (an AI album whose run row is gone) → 7
- *  6. no run, requested ≤5                      → requested (steps 1–5 still editable)
+ *  6. no run, requested ≤5                      → the open step: 1–2 with photos → 3 (locked once a
+ *                                                 photo is in); 4–5 without photos → 3 (nothing to
+ *                                                 tell a story about / recommend from); else requested
  *  7. no run, requested ≥6                      → 6 (may start the first build via the existing
- *                                                 auto-build / build POST path; a rule run when AI off)
- * Steps 1–4 locking once a photo is picked (G2 first half) is client state — wizard-flow.ts.
+ *                                                 build POST path; a rule run when AI off)
+ * The same locks inside a session are client state — wizard-flow.ts.
  */
 export function resolveWizardStep(input: WizardGateInput): WizardTarget {
   const requested = clampStep(input.requested);
-  // M20b: the sorting step for every first build, AI on or off (only rebuilds stay classic).
+  // M20b: the build step for every first build, AI on or off (only rebuilds stay classic).
   const buildScreen: WizardTarget = 6;
 
   if (input.docOrigin.userEdited || input.detailsLock === "user_edited") return "editor";
   if (input.albumConfirmed) return "editor";
   if (input.active) return input.activeTrigger === "rebuild" ? "classic" : buildScreen;
-  if (input.readError) return requested <= 5 && input.detailsLock === null ? requested : buildScreen;
+  if (input.readError) return requested <= 5 && input.detailsLock === null ? openStep(requested, input.photoCount) : buildScreen;
   if (input.hasRun) return 7;
   if (input.detailsLock !== null) return 7;
-  if (requested <= 5) return requested;
+  if (requested <= 5) return openStep(requested, input.photoCount);
   return buildScreen;
+}
+
+/** Rule 6: steps 1–5 of a book without a run. */
+function openStep(requested: WizardRequestStep, photoCount: number | undefined): WizardRequestStep {
+  if (photoCount === undefined || !Number.isFinite(photoCount)) return requested;
+  if (photoCount > 0) return requested <= 2 ? 3 : requested;
+  return requested >= 4 ? 3 : requested;
 }

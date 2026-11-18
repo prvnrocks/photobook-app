@@ -51,8 +51,8 @@ function form(fields: Record<string, string | undefined>): FormData {
   return fd;
 }
 
-/** M20 T9: createBookAction `next` = wizard step 5 inside /books/new (no upload page hop). */
-const STEP5 = `/books/new?book=${BOOK_ID}&step=5`;
+/** M20 T9 / Task 5: createBookAction `next` = the wizard's Photos step (3) inside /books/new (no upload page hop). */
+const STEP3 = `/books/new?book=${BOOK_ID}&step=3`;
 
 const valid = { title: "Our trip", occasion: "travel", tone: "fun", captionLang: "en" };
 
@@ -83,9 +83,9 @@ beforeEach(() => {
 });
 
 describe("createBookAction", () => {
-  it("creates the book and points next at wizard step 5 (M20 T9)", async () => {
+  it("creates the book and points next at wizard step 3, Photos (M20 T9; Task 5 order)", async () => {
     const r = await run({ ...valid, format: "A5_LANDSCAPE", designStyle: "classic" });
-    expect(r.redirect).toBe(STEP5);
+    expect(r.redirect).toBe(STEP3);
     expect(mocks.createBook).toHaveBeenCalledWith({
       title: "Our trip",
       occasion: "travel",
@@ -98,17 +98,17 @@ describe("createBookAction", () => {
 
   it("success returns the new id + next instead of redirecting (M19 BUG-2)", async () => {
     const state = await createBookAction(initialNewBookFormState, form(valid));
-    expect(state).toMatchObject({ ok: true, bookId: BOOK_ID, next: STEP5 });
-    // M20 T6: the wizard's step-5 data for the new book (shown in place, no extra request).
-    expect(state.step5).toMatchObject({
-      step: 5,
+    expect(state).toMatchObject({ ok: true, bookId: BOOK_ID, next: STEP3 });
+    // M20 T6: the wizard's Photos-step data for the new book (shown in place, no extra request).
+    expect(state.step3).toMatchObject({
+      step: 3,
       bookId: BOOK_ID,
       title: "Our trip",
       rawTitle: "Our trip",
       occasion: "travel",
       captionLang: "en",
       isPaid: false,
-      resolved: 5,
+      resolved: 3,
       userId: "11111111-1111-4111-8111-111111111111",
       existing: [],
       readyCount: 0,
@@ -116,7 +116,7 @@ describe("createBookAction", () => {
       hasDoc: false,
       firstRun: "none",
     });
-    expect(state.step5?.maxUpload).toBeGreaterThan(0);
+    expect(state.step3?.maxUpload).toBeGreaterThan(0);
     expect(mocks.createBook).toHaveBeenCalledTimes(1);
   });
 
@@ -124,7 +124,7 @@ describe("createBookAction", () => {
     vi.stubEnv("NEXT_PUBLIC_POSTHOG_KEY", "phc_test");
     try {
       const state = await createBookAction(initialNewBookFormState, form(valid));
-      expect(state.next).toBe(`${STEP5}&_ev=book_created`);
+      expect(state.next).toBe(`${STEP3}&_ev=book_created`);
       expect(state.next?.match(/_ev=/g)).toHaveLength(1);
     } finally {
       vi.unstubAllEnvs();
@@ -133,7 +133,7 @@ describe("createBookAction", () => {
 
   it("revalidates the dashboard; redirect unchanged", async () => {
     const r = await run(valid);
-    expect(r.redirect).toBe(STEP5);
+    expect(r.redirect).toBe(STEP3);
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/dashboard");
   });
 
@@ -146,7 +146,7 @@ describe("createBookAction", () => {
 
   it("tone / captionLang absent, no memory → DEFAULT_TONE[occasion] + en (D-071)", async () => {
     const r = await run({ title: "", occasion: "wedding" });
-    expect(r.redirect).toBe(STEP5);
+    expect(r.redirect).toBe(STEP3);
     expect(mocks.createBook.mock.calls[0][0]).toMatchObject({
       title: null,
       occasion: "wedding",
@@ -206,13 +206,13 @@ describe("createBookAction", () => {
   it("memory read failing is best effort → defaults, book still created", async () => {
     mocks.getOwnMemoryView.mockRejectedValue(new Error("db down"));
     const r = await run({ occasion: "baby" });
-    expect(r.redirect).toBe(STEP5);
+    expect(r.redirect).toBe(STEP3);
     expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ tone: DEFAULT_TONE.baby, captionLang: "en" });
   });
 
-  it("absent shape / style (pre-M10b form) → portrait + the occasion's default style (travel → magazine, D-090)", async () => {
+  it("Task 5: the wizard sends title + occasion only → a PROVISIONAL design: portrait + the occasion's default style (travel → magazine, D-090)", async () => {
     const r = await run(valid);
-    expect(r.redirect).toBe(STEP5);
+    expect(r.redirect).toBe(STEP3);
     expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ format: "A5_PORTRAIT", designStyle: "magazine" });
   });
 
@@ -243,7 +243,7 @@ describe("createBookAction", () => {
     ["A5_LANDSCAPE", "editorial"],
   ] as const)("accepts %s + %s (M10c, D-068; M30, D-090)", async (format, designStyle) => {
     const r = await run({ ...valid, occasion: "wedding", format, designStyle });
-    expect(r.redirect).toBe(STEP5);
+    expect(r.redirect).toBe(STEP3);
     expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ format, designStyle });
   });
 
@@ -282,21 +282,21 @@ describe("createBookAction", () => {
     expect(mocks.createBook).not.toHaveBeenCalled();
 
     const ok = await run({ ...valid, title: "a".repeat(120) });
-    expect(ok.redirect).toBe(STEP5);
+    expect(ok.redirect).toBe(STEP3);
   });
 
   it("counts code points, not UTF-16 units (emoji / Arabic)", async () => {
     const r = await run({ ...valid, title: "😀".repeat(120) });
-    expect(r.redirect).toBe(STEP5);
+    expect(r.redirect).toBe(STEP3);
     const ar = await run({ ...valid, title: "رحلتنا ".repeat(10).trim() });
-    expect(ar.redirect).toBe(STEP5);
+    expect(ar.redirect).toBe(STEP3);
   });
 
   it("turns an empty / whitespace / missing title into null", async () => {
     for (const title of ["", "   ", "\n\t", undefined]) {
       mocks.createBook.mockClear();
       const r = await run({ ...valid, title });
-      expect(r.redirect).toBe(STEP5);
+      expect(r.redirect).toBe(STEP3);
       expect(mocks.createBook.mock.calls[0][0].title).toBeNull();
     }
   });

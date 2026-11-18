@@ -7,7 +7,7 @@
 //         + "Step N of 7 · Name" under it.
 // One <ol> serves both sizes (responsive classes), inside <nav aria-label>; the current item carries
 // aria-current="step". Done steps become 44 px buttons only when onStepClick is given AND
-// canGoTo(step) allows them (the flow decides — e.g. steps 1–4 lock once photos are picked).
+// canGoTo(step) allows them (the flow decides — e.g. steps 1–2 lock once photos are picked).
 // M20 polish: a clickable done step looks interactive (tooltip "Go back to Title", hover ring + name
 // underline on hover devices, focus ring); a locked done step (canGoTo says no) is a plain item with
 // "locked" for screen readers, a "… is locked now" tooltip and, on hover devices, a small lock badge —
@@ -17,7 +17,7 @@
 // ink check on gold 6.44; emerald icon on cream 10.28.
 // Hook-free, no cn/next/link: usable from the server shell and inside first-load client islands.
 
-import { BookOpenCheck, Check, Heart, Images, Lock, Palette, PenLine, Ratio, Sparkles, type LucideIcon } from "lucide-react";
+import { BookOpenCheck, Check, Heart, Images, Lock, Feather, Palette, PenLine, Sparkles, type LucideIcon } from "lucide-react";
 import { cx } from "@/lib/cx";
 import {
   WIZARD_STEP_COUNT,
@@ -33,7 +33,7 @@ import "./wizard-motion.css";
 const ICONS: Record<WizardStepIcon, LucideIcon> = {
   "pen-line": PenLine,
   heart: Heart,
-  ratio: Ratio,
+  feather: Feather,
   palette: Palette,
   images: Images,
   sparkles: Sparkles,

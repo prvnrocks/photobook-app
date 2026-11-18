@@ -1,8 +1,11 @@
 import "server-only";
-// Data for the wizard's steps 5–7 (M20 T1, D-072): steps 5 Photos, 6 Sorting and 7 Review run
-// inside /books/new and load what the classic upload / build / review pages compute, through the
-// same helpers (./step-data.ts). Served by GET /api/books/[id]/wizard?step=5|6|7 and used by the
-// /books/new page on a hard load. JSON-safe (plain objects, strings, numbers, booleans, null).
+// Data for the wizard's server-fed steps (M20 T1, D-072; Task 5 order): steps 3 Photos, 6 Create and
+// 7 Preview run inside /books/new and load what the classic upload / build / review pages compute,
+// through the same helpers (./step-data.ts). Served by GET /api/books/[id]/wizard?step=3|6|7 and used
+// by the /books/new page on a hard load. Steps 4 Story and 5 Design need no entry here: they work
+// from the book's setup (the wizard's draft) and their own server actions
+// (src/app/books/story-actions.ts); a hard load of 1–5 is gated with the step-3 reads
+// (`requestedStep`). JSON-safe (plain objects, strings, numbers, booleans, null).
 // Never carries AI descriptions or storage paths (tiles are ReviewTilePhoto; thumbs are signed URLs).
 
 import type { User } from "@supabase/supabase-js";
@@ -30,13 +33,16 @@ import {
 } from "./step-data";
 import { albumConfirmedOf, resolveWizardStep, type WizardGateInput, type WizardTarget } from "./wizard-gate";
 
-/** Steps whose data comes from the server (1–4 are the client form). */
-export const WIZARD_DATA_STEPS = [5, 6, 7] as const;
+/** Steps whose data comes from this loader (1–2 are the client form; 4–5 load through their actions). */
+export const WIZARD_DATA_STEPS = [3, 6, 7] as const;
 export type WizardDataStep = (typeof WIZARD_DATA_STEPS)[number];
 
-/** Parses `?step=` ("5" | "6" | "7" exactly) → the step, else null. */
+/** Steps 1–5 of a book without a run: all gated from the step-3 reads. */
+export type WizardOpenStep = 1 | 2 | 3 | 4 | 5;
+
+/** Parses `?step=` ("3" | "6" | "7" exactly) → the step, else null. */
 export function parseWizardDataStep(raw: string | null | undefined): WizardDataStep | null {
-  if (raw === "5") return 5;
+  if (raw === "3") return 3;
   if (raw === "6") return 6;
   if (raw === "7") return 7;
   return null;
@@ -60,9 +66,9 @@ export type WizardStepBase = {
   resolved: WizardTarget;
 };
 
-/** Step 5 — what /books/[id]/upload passes to <Uploader> (plus the base fields). */
-export type WizardStep5Data = WizardStepBase & {
-  step: 5;
+/** Step 3 — what /books/[id]/upload passes to <Uploader> (plus the base fields). */
+export type WizardStep3Data = WizardStepBase & {
+  step: 3;
   userId: string;
   existing: ExistingPhoto[];
   maxUpload: number;
@@ -105,11 +111,16 @@ export type WizardStep7Data = WizardStepBase & {
   counts: { kept: number; total: number };
 };
 
-export type WizardStepData = WizardStep5Data | WizardStep6Data | WizardStep7Data;
+export type WizardStepData = WizardStep3Data | WizardStep6Data | WizardStep7Data;
 
 export type LoadWizardStepOptions = {
   /** Step 6: ?auto=1. */
   auto?: boolean;
+  /**
+   * Step 3 only: the step the URL asked for (1–5). The data is step 3's either way; `resolved` then
+   * answers for that step (e.g. 5 asked, no photos yet → 3; 1 asked, photos in → 3).
+   */
+  requestedStep?: WizardOpenStep;
   /** Already loaded by the caller (skips the reads; ownership must have been checked with getMyBook). */
   user?: Pick<User, "id">;
   book?: MyBook;
@@ -136,9 +147,10 @@ function baseOf(book: MyBook, aiOn: boolean, resolved: WizardTarget): WizardStep
 
 function gate(
   book: MyBook,
-  requested: WizardDataStep,
+  requested: WizardDataStep | WizardOpenStep,
   runs: { hasRun: boolean; active: OwnerRun | null; readError: boolean },
   aiOn: boolean,
+  photoCount?: number,
 ): WizardTarget {
   const { generator } = docOrigin(book.doc);
   const input: WizardGateInput = {
@@ -151,6 +163,7 @@ function gate(
     docOrigin: { generator, userEdited: albumEditedByUser(book.doc) },
     albumConfirmed: albumConfirmedOf(book.album_confirmed_at),
     aiOn,
+    photoCount,
   };
   return resolveWizardStep(input);
 }
@@ -164,7 +177,7 @@ function settle<T>(p: Promise<T>): Promise<Settled<T>> {
   );
 }
 
-async function step5(book: MyBook, userId: string, aiOn: boolean): Promise<WizardStep5Data> {
+async function step3(book: MyBook, userId: string, aiOn: boolean, requested: WizardOpenStep): Promise<WizardStep3Data> {
   // Same reads as the upload page: a run read error counts as "no run" for the Uploader (the
   // server still decides: auto start → not_first); `resolved` keeps it apart as readError.
   const [rows, hasRunRead, activeRead] = await Promise.all([
@@ -178,8 +191,8 @@ async function step5(book: MyBook, userId: string, aiOn: boolean): Promise<Wizar
   const firstRun: FirstRunState = active ? "active" : hasRun ? "done" : "none";
   const limits = limitsFor(book.is_paid);
   return {
-    ...baseOf(book, aiOn, gate(book, 5, { hasRun, active, readError: !hasRunRead.ok || !activeRead.ok }, aiOn)),
-    step: 5,
+    ...baseOf(book, aiOn, gate(book, requested, { hasRun, active, readError: !hasRunRead.ok || !activeRead.ok }, aiOn, rows.length)),
+    step: 3,
     userId,
     existing,
     maxUpload: limits.maxUploadPhotos,
@@ -244,7 +257,7 @@ async function step7(book: MyBook, userId: string, aiOn: boolean): Promise<Wizar
 }
 
 /**
- * Data for wizard step 5, 6 or 7 of the signed-in user's book; null when signed out or the book
+ * Data for wizard step 3, 6 or 7 of the signed-in user's book; null when signed out or the book
  * isn't theirs (or doesn't exist). Throws on DB errors the classic page would also fail on (a
  * Supabase timeout → the route's 503).
  */
@@ -258,7 +271,7 @@ export async function loadWizardStep(
   const book = opts.book ?? (await getMyBook(bookId));
   if (!book || book.id !== bookId) return null;
   const aiOn = resolveAiMode() !== "off";
-  if (step === 5) return step5(book, user.id, aiOn);
+  if (step === 3) return step3(book, user.id, aiOn, opts.requestedStep ?? 3);
   if (step === 6) return step6(book, aiOn, opts.auto === true);
   return step7(book, user.id, aiOn);
 }

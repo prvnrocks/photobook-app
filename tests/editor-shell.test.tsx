@@ -148,7 +148,7 @@ describe("editor page data", () => {
     expect(editorRedirect({ ...base, activeBuildRunId: "r", photos: [photo] })).toBe("/books/b1/build");
   });
   it("fresh book with no album → straight into the wizard (one hop)", () => {
-    expect(editorRedirect(base)).toBe("/books/new?book=b1&step=5");
+    expect(editorRedirect(base)).toBe("/books/new?book=b1&step=3");
     expect(editorRedirect({ ...base, photos: [photo] })).toBe("/books/new?book=b1&step=6");
     expect(editorRedirect({ ...base, photos: [photo], aiMode: "replay" })).toBe("/books/new?book=b1&step=6");
   });
@@ -157,12 +157,12 @@ describe("editor page data", () => {
     expect(editorRedirect({ ...base, albumConfirmed: true, photos: [photo] })).toBe("/books/b1/build");
     expect(editorRedirect({ ...base, albumConfirmed: true, docError: null })).toBeNull();
     expect(editorRedirect({ ...base, albumConfirmed: true, activeBuildRunId: "r" })).toBe("/books/b1/build");
-    expect(editorRedirect({ ...base, albumConfirmed: false })).toBe("/books/new?book=b1&step=5");
+    expect(editorRedirect({ ...base, albumConfirmed: false })).toBe("/books/new?book=b1&step=3");
   });
   it("built before → classic upload or build pages; M20b: AI off fresh books go into the wizard too", () => {
     expect(editorRedirect({ ...base, hasBuildRun: true })).toBe("/books/b1/upload");
     expect(editorRedirect({ ...base, hasBuildRun: true, photos: [photo] })).toBe("/books/b1/build");
-    expect(editorRedirect({ ...base, aiMode: "off" })).toBe("/books/new?book=b1&step=5");
+    expect(editorRedirect({ ...base, aiMode: "off" })).toBe("/books/new?book=b1&step=3");
     expect(editorRedirect({ ...base, aiMode: "off", photos: [photo] })).toBe("/books/new?book=b1&step=6");
   });
   it("a doc (valid or invalid) opens the editor", () => {

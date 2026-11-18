@@ -3,7 +3,8 @@
 // in every AI mode (production runs AI off → rule builds).
 //   - step 6 for a rule build: truthful rule wording, the rows play through over a short minimum
 //     once the server confirmed "done" (reduced motion: at once), then "ready" → buildDone
-//   - step 6 follows step 5's hand-over (resolved or pending auto-start answer) instead of POSTing
+//   - step 6 follows the Design step's hand-over (resolved or pending build-request answer; Task 5:
+//     the request moved from the upload step to step-5 Continue) instead of POSTing
 //   - ai_build_done { rules } fires once, from step 6 (moved from the upload screen)
 //   - a failed rule run → the calm stop card without AI claims
 //   - helpers: requestAutoBuildSettled (one retry), handoverStart mapping, replay rows
@@ -119,6 +120,25 @@ const flush = async (ms = 0) => {
   });
 };
 
+/** Task 5: what the Story / Design steps get from the wizard (unused on step 6). */
+const BOOK_STEP_PROPS = {
+  story: { occasion: null, value: null, onChange: () => {} },
+  design: {
+    title: "",
+    occasion: null,
+    stored: { format: "A5_PORTRAIT" as const, designStyle: "modern" as const },
+    pick: { format: null, designStyle: null },
+    onPick: () => {},
+    recommendation: null,
+    onRecommendation: () => {},
+    locked: false,
+    error: null,
+    save: async () => true,
+    buildError: null,
+  },
+  factsRef: { current: { isPaid: false, dailyCap: null, ready: null } },
+};
+
 function renderSteps(handover: Promise<AutoStartOutcome> | null, stepData: WizardStepDataMap = { 6: STEP6_OFF }) {
   const dispatch = vi.fn();
   const handoverRef = { current: handover };
@@ -136,6 +156,7 @@ function renderSteps(handover: Promise<AutoStartOutcome> | null, stepData: Wizar
         autoRef={{ current: true }}
         handoverRef={handoverRef}
         headlineId="wizard-headline"
+        {...BOOK_STEP_PROPS}
       />,
     ),
   );
