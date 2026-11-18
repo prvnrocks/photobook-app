@@ -344,7 +344,9 @@ async function applyLayout(p: Page, layoutId: string) {
 }
 
 async function createViaForm(occasion: "travel" | "baby", expectStyle: "geometric" | "scrapbook", format: "A5_LANDSCAPE" | "A5_PORTRAIT", title: string) {
-  // M19 wizard. D-068: the occasion picks the default style — no click on the style card.
+  // M19 wizard. D-068: the occasion picks the default style — no click on the style card (baby →
+  // Scrapbook). M30 (D-090): travel now defaults to Magazine, so the Geometric book clicks its card.
+  if (occasion === "travel") return createBookViaWizard(page, { title, occasion, format, style: expectStyle, expectStyle });
   return createBookViaWizard(page, { title, occasion, format, expectStyle });
 }
 

@@ -1,14 +1,15 @@
 // M30 T3: the shared renderer draws the magazine / editorial primitives — colour blocks (fill
 // roles, under / over, polygon clip, `when`, print bleed), text ink roles, quarter-turned text,
 // the chapterDescription + coverLine bindings and the masthead / body roles. Layouts here are
-// test-only and passed through `extraLayouts` (never registered in the catalogue). The dev demo
-// layouts (src/lib/book/dev-m30.ts) are checked for validity and overflow too.
+// test-only and passed through `extraLayouts` (never registered in the catalogue). The demo
+// layouts (tests/fixtures/test-m30-demo-layouts.ts — dev layouts until T14a) are checked for
+// validity and overflow too.
 // Existing styles are proven unchanged by the m9 / m10b / m10c / m29 goldens (not regenerated).
 
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { BookPage, type BookRenderMode } from "@/components/book/BookPage";
-import { M30_DEMO_LAYOUTS, m30SheetItem, parseM30Sheet } from "@/lib/book/dev-m30";
+import { m30SheetItem, parseM30Sheet } from "@/lib/book/dev-m30";
 import { pageMm } from "@/lib/book/format";
 import {
   coverRenderModel,
@@ -25,6 +26,7 @@ import { COLOURWAYS, resolveColourway } from "@/lib/design/colourways";
 import { roleFont, STYLE_TOKENS } from "@/lib/design/styles";
 import { LAYOUTS, M30_LAYOUTS } from "@/lib/layouts";
 import { tailwindFilterClasses } from "./fixtures/no-filter";
+import { M30_DEMO_LAYOUTS } from "./fixtures/test-m30-demo-layouts";
 
 const photos: RenderPhotos = Object.fromEntries(
   Array.from({ length: 4 }, (_, i) => [`p${i}`, { url: `https://img.test/p${i}.jpg`, width: 3000, height: 2000 }]),
@@ -502,7 +504,7 @@ describe("catalogue stubs + dev sheet fixtures", () => {
     // An id the style doesn't have is ignored (cobalt is editorial-only).
     expect(m30SheetItem(pageL, { colourway: "cobalt" }).doc.style.colourway).toBeUndefined();
     expect(parseM30Sheet("magazine-landscape")).toEqual({ style: "magazine", format: "A5_LANDSCAPE" });
-    expect(parseM30Sheet("demo")).toEqual({ style: null, format: "A5_PORTRAIT" });
+    expect(parseM30Sheet("demo")).toBeNull(); // the temporary demo sheet is gone (T14a)
     expect(parseM30Sheet("geometric-portrait")).toBeNull();
   });
 

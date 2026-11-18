@@ -12,6 +12,9 @@
 // full-bleed pages, so a spread can straddle the real 20-sheet chunk boundary (lead=14 puts the
 // panorama on sheets 19 | 20); `?scale=N` (1–8, with printAssets=1) multiplies the photos' pixel
 // sizes, simulating high-res originals so the print plan reaches 300 dpi on spreads.
+// `?m30=magazine|editorial` (+ `&format=landscape`, `&ar=1`, `&desc=0`) (M30 T14a): the small M30 book
+// of the dev editor (m30EditorDoc: description pages, a spread, an accent colourway) — with
+// `?sheets=0-N` it goes through <PrintDocument> exactly as /print/[bookId] would render it.
 // 404s in production builds (incl. Vercel previews, which run NODE_ENV=production).
 
 import { notFound } from "next/navigation";
@@ -26,6 +29,7 @@ import {
   parseDevFormat,
   withDevBackgrounds,
 } from "@/lib/book/dev-preview";
+import { m30EditorDoc } from "@/lib/book/dev-m30";
 import { devSampleDoc, devSamplePhotos, parseDevSample } from "@/lib/book/dev-sample";
 import { pageMm, sheetMm, type SizeMm } from "@/lib/book/format";
 import type { BookDoc } from "@/lib/book/types";
@@ -84,14 +88,22 @@ export default async function DevPrintPreview({
   const guides = sp.guides !== "0";
   // `?sample=modern-portrait|modern-landscape` (M10c: also geometric-|scrapbook-portrait|landscape, `-ar` for Arabic) (M10b A9): the modern sample book instead of the fixture.
   const sample = parseDevSample(sp.sample);
-  const format = sample ? devSampleDoc(sample).format : parseDevFormat(sp.format);
+  const m30 = sp.m30 === "magazine" || sp.m30 === "editorial" ? sp.m30 : null;
+  const captionLang = m30 && sp.ar !== "1" ? "en" : "ar";
+  const format = m30 ? parseDevFormat(sp.format) : sample ? devSampleDoc(sample).format : parseDevFormat(sp.format);
   const bgKind = parseDevBackgrounds(sp.bg);
   const lead = sample ? intParam(sp.lead, 0, 60) : null;
-  const base = sample ? (lead ? withLeadPages(devSampleDoc(sample), lead) : devSampleDoc(sample)) : devPreviewDoc(format);
+  const base = m30
+    ? m30EditorDoc(m30, format, { arabic: sp.ar === "1", descriptions: sp.desc !== "0" })
+    : sample
+      ? lead
+        ? withLeadPages(devSampleDoc(sample), lead)
+        : devSampleDoc(sample)
+      : devPreviewDoc(format);
   const doc = bgKind ? withDevBackgrounds(base, bgKind) : base;
   const sheet = sheetMm(format);
   const trim = pageMm(format);
-  const photos = sample ? devSamplePhotos() : bgKind ? devPreviewPhotosWithBackgrounds() : devPreviewPhotos();
+  const photos = m30 || sample ? devSamplePhotos() : bgKind ? devPreviewPhotosWithBackgrounds() : devPreviewPhotos();
   if (typeof sp.sheets === "string") {
     const m = /^(\d{1,3})-(\d{1,3})$/.exec(sp.sheets);
     const sheets = m ? printSheetTargets(doc.pages.length, Number(m[1]), Number(m[2])) : null;
@@ -107,10 +119,10 @@ export default async function DevPrintPreview({
             })),
           )
         : photos;
-    return <PrintDocument doc={doc} photos={shown} captionLang="ar" sheets={sheets} />;
+    return <PrintDocument doc={doc} photos={shown} captionLang={captionLang} sheets={sheets} />;
   }
   const pick = ["full-page", "one-portrait", "two-vertical", "three-mixed"];
-  const pages = sample
+  const pages = sample || m30
     ? doc.pages.map((_p, i) => i)
     : pick.map((id) => doc.pages.findIndex((p) => p.layout === id)).filter((i) => i >= 0);
   const targets: (number | "cover")[] = ["cover", ...pages];
@@ -123,7 +135,7 @@ export default async function DevPrintPreview({
       <div className="flex flex-col items-start gap-6">
         {targets.map((t) => (
           <div key={String(t)} className="relative shadow-lg">
-            <BookPage doc={doc} page={t} mode="print" photos={photos} captionLang="ar" priority />
+            <BookPage doc={doc} page={t} mode="print" photos={photos} captionLang={captionLang} priority />
             {guides ? <Guides sheet={sheet} /> : null}
           </div>
         ))}

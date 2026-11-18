@@ -363,6 +363,8 @@ test("baseline: landing → login → new book → upload 40 → build → revie
 
   // 3. M19 creation wizard — first-time user takes the defaults, picks the required occasion + shape.
   await screen("new-book");
+  // No style click on purpose (tap count): the travel default is Magazine since M30 (D-090, was
+  // Geometric) — this walkthrough now builds a magazine book and needs migration 2100 on the DB.
   bookId = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", goto: false, press: tap });
 
   // 4. Upload — tap Choose photos; the native picker (filechooser) is excluded from taps.

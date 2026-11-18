@@ -25,7 +25,7 @@ const scale = Number(flag("scale", "2"));
 const base = flag("base", "http://localhost:3000");
 const [query, out] = args;
 if (!query) {
-  console.error('usage: node scripts/sheet-probe.mjs "sheet=demo[&ar=1][&desc=0][&cw=coral]" [out.png]');
+  console.error('usage: node scripts/sheet-probe.mjs "sheet=magazine-portrait[&ar=1][&desc=0][&cw=coral]" [out.png]');
   process.exit(2);
 }
 

@@ -2,7 +2,8 @@
  * Shared e2e helper: walk the book creation wizard on /books/new (M19 D-071, M20 D-072 — one
  * continuous 7-step wizard). Steps: 1 title (book-title) → 2 purpose (occasion-* labels; NO caption-
  * language control since M20 — the server derives it: Arabic-script title → memory →
- * Accept-Language → en) → 3 shape (format-* labels) → 4 style (style-* labels) → create-book. The
+ * Accept-Language → en) → 3 shape (format-* labels) → 4 style (style-* labels; six cards since M30,
+ * travel defaults to Magazine — D-090) → create-book. The
  * create stays on the same document: /books/new?book=<id>&step=5 (photos), then step 6 (sorting,
  * ?step=6) and step 7 (review, ?step=7) render in place; "Generate album" (wizard-generate) is the
  * one navigation, to /books/<id>/edit.
@@ -13,14 +14,21 @@ import { expect, type Locator, type Page } from "@playwright/test";
 
 export type WizardOccasion = "wedding" | "travel" | "baby" | "graduation" | "family" | "other";
 export type WizardFormat = "A5_PORTRAIT" | "A5_LANDSCAPE";
-export type WizardStyle = "modern" | "classic" | "geometric" | "scrapbook";
+/** M30 (D-090): six style cards — the four older styles + Magazine and Editorial. */
+export type WizardStyle = "modern" | "classic" | "geometric" | "scrapbook" | "magazine" | "editorial";
+/** The step-4 cards in display order (2 × 3 at 375 px, 3 × 2 from `sm`). */
+export const WIZARD_STYLES: readonly WizardStyle[] = ["modern", "classic", "geometric", "scrapbook", "magazine", "editorial"];
 
 export type WizardOptions = {
   /** Typed on step 1; "" / undefined = leave blank (allowed). */
   title?: string;
   occasion?: WizardOccasion;
   format?: WizardFormat;
-  /** Click this style on step 4; undefined = keep the occasion's default. */
+  /**
+   * Click this style on step 4; undefined = keep the occasion's default. M30 (D-090): travel now
+   * defaults to Magazine (was Geometric) — a spec that is not about the Magazine style must name its
+   * style here, or it silently starts testing magazine books (and needs migration 2100 on the DB).
+   */
   style?: WizardStyle;
   /** Assert this style is selected on step 4 before continuing (e.g. the occasion default). */
   expectStyle?: WizardStyle;

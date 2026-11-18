@@ -263,7 +263,8 @@ test.describe("M11 dev fixtures at 375 px", () => {
   test("dev-style (/dev-style)", async ({ page }) => {
     await page.goto("/dev-style");
     // The style board shows a real <PageHeader> sample, which renders its own h1 (dev-only page).
-    await audit(page, "dev-style", { h1: { count: 2, why: "style board page h1 + the PageHeader sample's h1 (dev-only)" } });
+    // M30 T12: + the two StepStyle samples (portrait + landscape), each with the wizard's step headline.
+    await audit(page, "dev-style", { h1: { count: 4, why: "style board page h1 + the PageHeader sample's h1 + the two wizard style-step samples' headlines (dev-only)" } });
   });
 
   const FIXTURES: Array<[string, string, string?]> = [

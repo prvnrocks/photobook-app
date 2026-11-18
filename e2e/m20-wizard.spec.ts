@@ -60,6 +60,7 @@ import {
   walkWizardToStyle,
   wizardContinue,
   WIZARD_STEP5_URL,
+  WIZARD_STYLES,
   wizardStepUrl,
 } from "./helpers/create-book";
 
@@ -451,7 +452,9 @@ test.describe("m20 wizard (live)", () => {
     await shot(page, 3, 375);
     await wizardContinue(page, 3);
 
-    // Step 4: graduation → Geometric preselected; pick Scrapbook.
+    // Step 4: six style cards (M30, D-090: + Magazine and Editorial), two per row at 375 px, every card
+    // inside the viewport width; graduation → Geometric preselected; pick Scrapbook.
+    await expectStyleGrid(page, 2);
     await expect(cardRadio(page, "style-geometric")).toBeChecked();
     await page.getByTestId("style-scrapbook").click();
     await expect(cardRadio(page, "style-scrapbook")).toBeChecked();
@@ -903,7 +906,7 @@ test.describe("m20 wizard (live)", () => {
     expect((await ownedBooks()).length).toBe(before);
 
     // Entry redirects for a fresh book (no photos, no run): /upload → step 5, /build → step 6.
-    const fresh = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT" });
+    const fresh = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", style: "geometric" });
     bookIds.add(fresh);
     const req = page.context().request;
     const up = await redirectOf(req, `/books/${fresh}/upload`);
@@ -942,9 +945,12 @@ test.describe("m20 wizard (live)", () => {
         title: "Desert weekend",
         occasion: "travel",
         format: "A5_PORTRAIT",
-        expectStyle: "geometric",
+        // M30 (D-090): travel → Magazine preselected (was Geometric, D-068); nothing is clicked.
+        expectStyle: "magazine",
         onStep: async (n) => {
           if (n > 1) await audit(page, `step ${n} (1280)`);
+          // M30 (D-090): six cards, three per row from `sm`.
+          if (n === 4) await expectStyleGrid(page, 3);
         },
         beforeContinue: async (n) => {
           if (n === 1) await audit(page, "step 1 (1280)");
@@ -958,7 +964,7 @@ test.describe("m20 wizard (live)", () => {
       const rowD = await bookRow(id);
       // caption_lang: Latin title → memory (book A was Arabic) → Accept-Language — logged, not asserted.
       console.log(`[e] Latin-title book caption_lang=${rowD.caption_lang} (user memory from Arabic book A)`);
-      expect(rowD).toMatchObject({ title: "Desert weekend", occasion: "travel", format: "A5_PORTRAIT", design_style: "geometric" });
+      expect(rowD).toMatchObject({ title: "Desert weekend", occasion: "travel", format: "A5_PORTRAIT", design_style: "magazine" });
       await expectWizardStep(page, 5, 30_000);
       await expect(page.getByTestId("upload-pick")).toBeVisible({ timeout: 30_000 });
       await audit(page, "step 5 (1280)");
@@ -1046,12 +1052,12 @@ test.describe("m20 wizard (live)", () => {
     const { page } = phone;
     // (b) double submit.
     const before = (await ownedBooks()).length;
-    await walkWizardToStyle(page, { title: "Double tap", occasion: "travel", format: "A5_PORTRAIT" });
+    await walkWizardToStyle(page, { title: "Double tap", occasion: "travel", format: "A5_PORTRAIT", style: "geometric" });
     await page.getByTestId("create-book").dblclick();
     await page.waitForURL(WIZARD_STEP5_URL, { timeout: 30_000 });
     await page.waitForTimeout(3_000);
     expect((await ownedBooks()).length, "dblclick on step-4 Continue").toBe(before + 1);
-    await walkWizardToStyle(page, { title: "Enter twice", occasion: "travel", format: "A5_PORTRAIT" });
+    await walkWizardToStyle(page, { title: "Enter twice", occasion: "travel", format: "A5_PORTRAIT", style: "geometric" });
     await page.getByTestId("create-book").focus();
     await page.keyboard.press("Enter");
     await page.keyboard.press("Enter");
@@ -1254,7 +1260,7 @@ test.describe("m20 wizard (live)", () => {
       // Entry redirects with AI off: a fresh book's /build → the wizard (not classic); ?trigger=rebuild
       // of the built book stays classic. HTTP only (a browser visit would start a run).
       const req = page.context().request;
-      const fresh = await createBookViaWizard(page, { title: "Fresh off", occasion: "travel", format: "A5_PORTRAIT" });
+      const fresh = await createBookViaWizard(page, { title: "Fresh off", occasion: "travel", format: "A5_PORTRAIT", style: "geometric" });
       bookIds.add(fresh);
       const freshBuild = await redirectOf(req, `/books/${fresh}/build`);
       console.log(`[i] /books/:fresh/build → ${String(freshBuild.to).replace(fresh, ":id")} (${freshBuild.status})`);
@@ -1585,6 +1591,25 @@ async function focusStops(p: Page) {
     document.getElementById("m20-focus-start")?.remove();
   });
   return out;
+}
+
+/**
+ * Step 4 (M30, D-090): exactly the six style cards in display order, laid out `perRow` to a row
+ * (2 at 375 px, 3 from `sm`), none wider than the viewport, exactly one selected.
+ */
+async function expectStyleGrid(p: Page, perRow: 2 | 3) {
+  const ids = await p.locator('[data-testid^="style-"]:not([data-testid^="style-spread-"])').evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")));
+  expect(ids).toEqual(WIZARD_STYLES.map((s) => `style-${s}`));
+  const boxes = await Promise.all(WIZARD_STYLES.map(async (s) => (await p.getByTestId(`style-${s}`).boundingBox())!));
+  const rows = [...new Set(boxes.map((b) => Math.round(b.y)))];
+  expect(rows.length, `style cards in ${6 / perRow} rows of ${perRow}`).toBe(6 / perRow);
+  const vw = p.viewportSize()!.width;
+  for (const b of boxes) {
+    expect(b.x).toBeGreaterThanOrEqual(0);
+    expect(b.x + b.width).toBeLessThanOrEqual(vw + 0.5);
+    expect(Math.min(b.width, b.height)).toBeGreaterThanOrEqual(44);
+  }
+  await expect(p.locator('input[name="wizard-designStyle"]:checked')).toHaveCount(1);
 }
 
 /** Every audit problem is collected here and asserted by "z. audit summary". */

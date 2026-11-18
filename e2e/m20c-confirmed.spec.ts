@@ -282,7 +282,8 @@ test.describe("m20c confirmed book (live)", () => {
     const page = await context.newPage();
     page.on("dialog", (d) => void d.accept());
     await page.goto("/dashboard");
-    const bookId = await createBookViaWizard(page, { title: "Back album", occasion: "travel", format: "A5_PORTRAIT" });
+    // Style named on purpose (travel defaults to Magazine since M30, D-090; this spec is about history).
+    const bookId = await createBookViaWizard(page, { title: "Back album", occasion: "travel", format: "A5_PORTRAIT", style: "geometric" });
     book2 = bookId;
     const editorPath = () => `/books/${bookId}/edit`;
     await page.getByTestId("upload-input").setInputFiles(await makeSynthetic(page, 6, 3000));

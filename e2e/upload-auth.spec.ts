@@ -132,7 +132,7 @@ async function startBookWithPhotos(picked: FileSpec[]): Promise<string> {
 }
 
 async function createBookViaUi(): Promise<string> {
-  // M19 wizard. D-068: travel defaults to Geometric; this spec covers Modern.
+  // M19 wizard. D-068 / D-090: travel defaults to Magazine (M30; Geometric before); this spec covers Modern.
   const id = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", style: "modern" });
   await expect(page.getByTestId("upload-pick")).toBeVisible();
   return id;

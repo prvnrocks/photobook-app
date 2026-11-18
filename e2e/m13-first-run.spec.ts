@@ -484,6 +484,8 @@ async function makeFixtures(p: Page, dir: string): Promise<string[]> {
 
 /** M19: walk the creation wizard (steps 1–4) → step 5 upload. Records the book id. */
 async function wizardToUpload(s: Session, opts: WizardOptions = {}): Promise<void> {
+  // No style click on purpose (tap budget): the travel default is Magazine since M30 (D-090, was
+  // Geometric) — the timed first run now builds a magazine book and needs migration 2100 on the DB.
   await createBookViaWizard(s.page, { occasion: "travel", format: "A5_PORTRAIT", goto: false, ...opts }).then((id) => {
     s.bookId = id;
     users.find((u) => u.uid === s.uid)?.bookIds.add(id);

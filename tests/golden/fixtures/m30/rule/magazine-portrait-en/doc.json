@@ -1,0 +1,402 @@
+{
+  "version": 2,
+  "format": "A5_PORTRAIT",
+  "occasion": "travel",
+  "cover": {
+    "layout": "mg-p-cover",
+    "photoId": "00000000-0000-4000-8000-000000000020",
+    "title": "Ten days across the Hajar peaks",
+    "subtitle": "Al Ain · Oct 2026"
+  },
+  "chapters": [
+    {
+      "id": "c1",
+      "title": "Dubai",
+      "dateLabel": "10 Oct 2026",
+      "place": "Dubai"
+    },
+    {
+      "id": "c2",
+      "title": "Al Ain",
+      "dateLabel": "11 Oct 2026",
+      "place": "Al Ain"
+    },
+    {
+      "id": "c3",
+      "title": "Liwa",
+      "dateLabel": "12 Oct 2026",
+      "place": "Liwa"
+    },
+    {
+      "id": "c4",
+      "title": "13 Oct 2026",
+      "dateLabel": "13 Oct 2026",
+      "place": null
+    },
+    {
+      "id": "c5",
+      "title": "14 Oct 2026",
+      "dateLabel": "14 Oct 2026",
+      "place": null
+    }
+  ],
+  "pages": [
+    {
+      "id": "p1",
+      "chapterId": "c1",
+      "layout": "mg-p-full",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000018",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    },
+    {
+      "id": "p2",
+      "chapterId": "c1",
+      "layout": "mg-p-two-circle",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000004",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        },
+        {
+          "photoId": "00000000-0000-4000-8000-000000000011",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    },
+    {
+      "id": "p3",
+      "chapterId": "c2",
+      "layout": "mg-p-full",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000010",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    },
+    {
+      "id": "p4",
+      "chapterId": "c2",
+      "layout": "mg-p-two-circle",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000024",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        },
+        {
+          "photoId": "00000000-0000-4000-8000-000000000012",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    },
+    {
+      "id": "p5",
+      "chapterId": "c2",
+      "layout": "mg-p-two-circle",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000001",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        },
+        {
+          "photoId": "00000000-0000-4000-8000-000000000019",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    },
+    {
+      "id": "p6",
+      "chapterId": "c3",
+      "layout": "mg-p-full",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000013",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    },
+    {
+      "id": "p7",
+      "chapterId": "c3",
+      "layout": "mg-p-two-circle",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000022",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        },
+        {
+          "photoId": "00000000-0000-4000-8000-000000000016",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    },
+    {
+      "id": "p8",
+      "chapterId": "c4",
+      "layout": "mg-p-full",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000005",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    },
+    {
+      "id": "p9",
+      "chapterId": "c4",
+      "layout": "mg-p-full",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000009",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    },
+    {
+      "id": "p10",
+      "chapterId": "c4",
+      "layout": "mg-p-full",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000007",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    },
+    {
+      "id": "p11",
+      "chapterId": "c4",
+      "layout": "mg-p-four-strip",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000002",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        },
+        {
+          "photoId": "00000000-0000-4000-8000-000000000023",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        },
+        {
+          "photoId": "00000000-0000-4000-8000-000000000015",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        },
+        {
+          "photoId": "00000000-0000-4000-8000-000000000014",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    },
+    {
+      "id": "p12",
+      "chapterId": "c4",
+      "layout": "mg-p-two-circle",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000025",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        },
+        {
+          "photoId": "00000000-0000-4000-8000-000000000020",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    },
+    {
+      "id": "p13",
+      "chapterId": "c4",
+      "layout": "mg-p-two-circle",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000017",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        },
+        {
+          "photoId": "00000000-0000-4000-8000-000000000021",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    },
+    {
+      "id": "p14",
+      "chapterId": "c5",
+      "layout": "mg-p-full",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000026",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    },
+    {
+      "id": "p15",
+      "chapterId": "c5",
+      "layout": "mg-p-full",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000008",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    },
+    {
+      "id": "p16",
+      "chapterId": "c5",
+      "layout": "mg-p-full",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000006",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    }
+  ],
+  "style": {
+    "background": {
+      "kind": "color",
+      "hex": "#FFFFFF"
+    },
+    "designStyle": "magazine",
+    "font": "Poppins",
+    "colourway": {
+      "id": "lime",
+      "source": "ai"
+    }
+  },
+  "meta": {
+    "generator": "rule",
+    "generatorVersion": 1,
+    "runId": null,
+    "userEdited": false
+  },
+  "filters": {
+    "00000000-0000-4000-8000-000000000018": "film",
+    "00000000-0000-4000-8000-000000000010": "film",
+    "00000000-0000-4000-8000-000000000024": "golden",
+    "00000000-0000-4000-8000-000000000013": "soft",
+    "00000000-0000-4000-8000-000000000016": "champagne",
+    "00000000-0000-4000-8000-000000000005": "champagne",
+    "00000000-0000-4000-8000-000000000023": "champagne",
+    "00000000-0000-4000-8000-000000000021": "glow",
+    "00000000-0000-4000-8000-000000000008": "soft"
+  }
+}

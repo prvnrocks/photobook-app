@@ -233,7 +233,8 @@ test.describe("analytics (live sign-up)", () => {
 
     // M19/M20: the creation wizard (title → occasion → shape → style → create); M20 stays on
     // /books/new (?book=<id>&step=5) — the book id lives in the query, which analytics never sees.
-    const bookId = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", goto: false });
+    // Style named on purpose: travel defaults to Magazine since M30 (D-090); this spec is about analytics.
+    const bookId = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", style: "geometric", goto: false });
     await expect(page).toHaveURL(new RegExp(`/books/new\\?book=${bookId}&step=5$`), { timeout: 30_000 });
     await expect.poll(() => cap.events.some((e) => e.event === "book_created"), { timeout: 20_000 }).toBe(true);
     await expect(page).not.toHaveURL(/_ev=/);

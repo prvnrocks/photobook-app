@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { BookPage } from "@/components/book/BookPage";
 import { devPreviewDoc, devPreviewPhotos } from "@/lib/book/dev-preview";
 import { devSampleDoc, devSamplePhotos, parseDevSample } from "@/lib/book/dev-sample";
-import { M30_DEMO_LAYOUTS, m30SheetItem, parseM30Sheet } from "@/lib/book/dev-m30";
+import { m30SheetItem, parseM30Sheet } from "@/lib/book/dev-m30";
 import { LAYOUTS } from "@/lib/layouts";
 import { CoverSheet } from "./CoverSheet";
 import { LayoutSheet } from "./LayoutSheet";
@@ -29,11 +29,11 @@ export default async function DevBookPagePreview({
     const style = covers[1] as "classic" | "modern" | "geometric" | "scrapbook";
     return <CoverSheet style={style} format={covers[2] === "portrait" ? "A5_PORTRAIT" : "A5_LANDSCAPE"} photos={devSamplePhotos()} />;
   }
-  // `?sheet=magazine-portrait|magazine-landscape|editorial-portrait|editorial-landscape|demo` (M30):
+  // `?sheet=magazine-portrait|magazine-landscape|editorial-portrait|editorial-landscape` (M30):
   // every registered layout of that style + format on one labelled contact sheet (LayoutSheet.tsx).
   const sheet = parseM30Sheet(sp.sheet);
   if (sheet) {
-    const layouts = sheet.style ? LAYOUTS.filter((l) => l.style === sheet.style && l.format === sheet.format) : M30_DEMO_LAYOUTS;
+    const layouts = LAYOUTS.filter((l) => l.style === sheet.style && l.format === sheet.format);
     const arabic = sp.ar === "1";
     const opts = { arabic, descriptions: sp.desc !== "0", colourway: typeof sp.cw === "string" ? sp.cw : null };
     // `&photos=real`: real photographs from public/dev-photos (git-ignored; see real-photos.ts).
@@ -47,7 +47,6 @@ export default async function DevBookPagePreview({
         itemPhotos={itemPhotos}
         mode={sp.mode === "edit" ? "edit" : sp.mode === "print" ? "print" : "view"}
         captionLang={arabic ? "ar" : "en"}
-        extraLayouts={sheet.style ? undefined : M30_DEMO_LAYOUTS}
       />
     );
   }

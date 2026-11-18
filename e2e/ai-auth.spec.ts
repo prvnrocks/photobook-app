@@ -445,7 +445,7 @@ async function createBookAt(
   base: string,
   opts: { tone?: string; lang?: "en" | "ar"; style?: "classic" | "modern" } = {},
 ): Promise<string> {
-  // M19: the creation wizard. D-068: travel defaults to Geometric; these specs cover Modern (default
+  // M19: the creation wizard. D-068 / D-090: travel defaults to Magazine (M30; Geometric before); these specs cover Modern (default
   // here) or Classic. The wizard has no tone choice (picked by the server: memory, else the occasion's
   // default) — a non-default tone is asserted as stored, then set on the row before the build.
   // M20 (D-072): no caption-language control — an Arabic-script title makes the book Arabic.

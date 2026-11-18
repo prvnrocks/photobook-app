@@ -1,6 +1,6 @@
 // Dev-only contact sheet for the M30 styles: `/dev-book-page?sheet=<magazine|editorial>-<portrait|
 // landscape>` renders EVERY registered layout of that style + format (auto cover, pages, spreads,
-// cover styles) as a grid of labelled pages; `?sheet=demo` renders the temporary demo layouts.
+// cover styles) as a grid of labelled pages.
 // Switches: `&ar=1` Arabic text, `&desc=0` no chapter descriptions, `&cw=<colourway id>`,
 // `&mode=edit` edit markup, `&mode=print` the print sheets alone (one per PDF page, print fonts),
 // `&photos=real` real photographs from public/dev-photos (real-photos.ts) instead of placeholders.
@@ -10,7 +10,6 @@ import { BookPage, type RenderPhotos } from "@/components/book/BookPage";
 import { printCss } from "@/components/print/PrintDocument";
 import { PRINT_FONT_CLASSES } from "@/components/print/print-fonts";
 import type { M30SheetItem } from "@/lib/book/dev-m30";
-import type { Layout } from "@/lib/book/types";
 
 export function LayoutSheet({
   title,
@@ -19,7 +18,6 @@ export function LayoutSheet({
   itemPhotos,
   mode,
   captionLang,
-  extraLayouts,
 }: {
   title: string;
   items: readonly M30SheetItem[];
@@ -28,8 +26,6 @@ export function LayoutSheet({
   itemPhotos?: readonly RenderPhotos[];
   mode: "view" | "edit" | "print";
   captionLang: "en" | "ar";
-  /** The demo layouts (not in the catalogue). */
-  extraLayouts?: readonly Layout[];
 }) {
   if (mode === "print") {
     // Same wrapper markup as <PrintDocument>: sheets at real size, print CSS, static print fonts.
@@ -46,7 +42,6 @@ export function LayoutSheet({
                 mode="print"
                 photos={itemPhotos?.[idx] ?? photos}
                 captionLang={captionLang}
-                extraLayouts={extraLayouts}
                 priority
               />
             )),
@@ -78,7 +73,6 @@ export function LayoutSheet({
                   mode={mode}
                   photos={itemPhotos?.[idx] ?? photos}
                   captionLang={captionLang}
-                  extraLayouts={extraLayouts}
                   priority
                 />
               ))}
