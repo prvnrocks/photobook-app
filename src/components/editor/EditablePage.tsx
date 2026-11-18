@@ -6,6 +6,9 @@
 // - Crop tool open → the selected slot IS the crop area (CropInPlace: drag / pinch / scroll on the
 //   page itself). Double-click a photo to start cropping it.
 // - Caption area → selects { caption } (placeholder "Tap to add a caption" when empty).
+// - Chapter description area (M30 magazine / editorial layouts) → selects { description }; where the
+//   chapter has no description yet a quiet "Add a few lines about this chapter" hint shows (edit
+//   mode only — nothing is drawn there in the viewer or the PDF).
 // - Cover title/subtitle area → selects { cover, text }.
 // - Tap on empty page space → clears the selection.
 // Read-only: no tap targets, static captions.
@@ -67,6 +70,7 @@ function sameSelection(a: EditorSelection, b: EditorSelection): boolean {
   if (a === null || b === null) return a === b;
   if (a.kind === "slot" && b.kind === "slot") return a.pageIdx === b.pageIdx && a.slotIdx === b.slotIdx;
   if (a.kind === "caption" && b.kind === "caption") return a.pageIdx === b.pageIdx;
+  if (a.kind === "description" && b.kind === "description") return a.pageIdx === b.pageIdx;
   if (a.kind === "cover" && b.kind === "cover") return a.part === b.part;
   return false;
 }
@@ -232,6 +236,18 @@ export function EditablePage({ page, priority }: { page: EditorPosition; priorit
                 />
               )
         }
+        renderDescription={
+          readOnly || page === "cover"
+            ? undefined
+            : (area) => (
+                <DescriptionTarget
+                  empty={area.empty}
+                  hintCqw={area.hintCqw}
+                  selected={sameSelection(selection, { kind: "description", pageIdx: area.ownerIndex })}
+                  onClick={toggle({ kind: "description", pageIdx: area.ownerIndex })}
+                />
+              )
+        }
         renderCaption={
           readOnly || page === "cover"
             ? undefined
@@ -308,6 +324,9 @@ interface SlotOverlayProps {
  * The INSET glow variant (M22 T7): the slot clips anything drawn outside the overlay.
  */
 const SELECTED_RING = "outline-4 outline-solid outline-[#0e3b2e] -outline-offset-4 ed-select-glow-inset";
+
+/** Selected chapter description: the emerald line sits just outside the text box, so no letter is covered. */
+const DESCRIPTION_RING = "outline-3 outline-solid outline-[#0e3b2e] outline-offset-2";
 
 /** Crop-in-place ring: gold dashes inside the emerald line, so "adjusting" reads differently from "selected". */
 const CROP_RING = "outline-4 outline-dashed outline-[#e3c766] -outline-offset-4";
@@ -429,6 +448,52 @@ function CoverTextTarget({
       {empty ? (
         <span className={cn("italic", ink === "light" ? "text-white/70" : "text-neutral-400")} style={{ fontSize: "4cqw" }}>
           Tap to add a title
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+/** Hint in an empty chapter description area (exported for tests). */
+export const DESCRIPTION_PLACEHOLDER = "Add a few lines about this chapter";
+
+/**
+ * Tap target over a chapter description area (M30). With text: a clear button over the rendered
+ * panel. Without: a dashed outline + hint on a white chip, readable on a white page, a dark panel
+ * or a photo alike. Only the editor draws this — the viewer and the PDF leave the area empty.
+ */
+function DescriptionTarget({
+  empty,
+  hintCqw,
+  selected,
+  onClick,
+}: {
+  empty: boolean;
+  hintCqw: number;
+  selected: boolean;
+  onClick: (e: MouseEvent) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      aria-label={empty ? DESCRIPTION_PLACEHOLDER : "Edit the text about this chapter"}
+      className={cn(
+        "absolute inset-0 flex cursor-pointer items-center justify-center rounded-sm outline-none focus-visible:ring-4 focus-visible:ring-[#0e3b2e]/60",
+        selected ? DESCRIPTION_RING : empty ? "outline-1 outline-dashed outline-neutral-400 hover:bg-black/5" : "hover:bg-black/5",
+      )}
+      data-testid="description-target"
+      data-selected={selected ? "true" : undefined}
+      data-empty={empty ? "true" : undefined}
+    >
+      {empty ? (
+        <span
+          className="max-w-full rounded-sm bg-white/85 px-[1.5cqw] py-[0.5cqw] text-center text-neutral-600 italic"
+          style={{ fontSize: `${hintCqw}cqw`, lineHeight: 1.25 }}
+          data-testid="description-placeholder"
+        >
+          {DESCRIPTION_PLACEHOLDER}
         </span>
       ) : null}
     </button>

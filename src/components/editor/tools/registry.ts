@@ -32,11 +32,13 @@ import type { EditorTool, ToolTier } from "./types";
 import { cropTool } from "./crop-mode";
 import { layoutPickerTool } from "./layout-picker";
 import { coverStyleTool } from "./cover-style";
+import { accentColourTool } from "./accent-colour";
 import { backgroundTool } from "./background-picker";
 import { photoFilterTool } from "./photo-filter";
 import { photoPickerTool } from "./photo-picker";
 import { aiCaptionTool } from "./ai-caption";
 import { captionEditorTool, captionStyleTool } from "./caption-editor";
+import { aiDescriptionTool, chapterDescriptionTool } from "./chapter-description";
 import { chapterTitleTool } from "./chapter-title";
 import { coverTextTool } from "./cover-text";
 import { addPageTool } from "./add-page";
@@ -56,6 +58,7 @@ export const EDITOR_TOOLS: readonly EditorTool[] = [
   layoutPickerTool,
   coverStyleTool,
   backgroundTool,
+  accentColourTool,
   pagesTool,
   addPageTool,
   pageMenuTool,
@@ -66,6 +69,8 @@ export const EDITOR_TOOLS: readonly EditorTool[] = [
   captionEditorTool,
   aiCaptionTool,
   captionStyleTool,
+  chapterDescriptionTool,
+  aiDescriptionTool,
   chapterTitleTool,
   coverTextTool,
 ];

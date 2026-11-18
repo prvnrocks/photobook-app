@@ -9,6 +9,9 @@
 // validator in the stub save; the stored JSON lands in window.__devEditorLastSave (M10a A8).
 // `?bg=1&bgveil=light50`: page 1 has a photo background under a white 50 % veil (M10b A4).
 // `?sample=modern-portrait|modern-landscape` (M10c: also geometric-|scrapbook-portrait|landscape, `-ar` for Arabic) swaps in a modern sample book with spreads (M10b A15).
+// `?style=magazine|editorial` (M30 T13): a small magazine / editorial book from the real catalogue —
+// chapter descriptions (pages 1 and 5–6), an empty description area (page 3), an AI-picked accent
+// colourway; with `&format=landscape`, `&ar=1` (Arabic text) and `&desc=0` (no descriptions at all).
 // `?state=readOnly|conflict|makeWithAi|aiSummary|linkExpired|paid`: named screenshot states (M22 T7,
 // ./dev-states.ts) — conflict makes one edit after load so its banner shows.
 // Upgrade sheet: enabled when the server has Stripe keys (M7 T6); `?upgrade=cancelled` → cancel notice.
@@ -22,7 +25,7 @@ import { DEV_AI_MODES, DEV_SAVE_MODES, type DevAiMode, type DevSaveMode } from "
 import { parseDevPages } from "@/lib/editor/dev-pages-fixture";
 import { isPaymentsEnabled } from "@/lib/stripe";
 import { DevEditorClient } from "./DevEditorClient";
-import { devEditorFixture, devStateSaveMode, parseDevEditorState } from "./dev-states";
+import { devEditorFixture, devStateSaveMode, parseDevEditorState, parseDevM30Style } from "./dev-states";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +43,9 @@ export default async function DevEditorPage({
   const mode = devStateSaveMode(state, (DEV_SAVE_MODES as readonly string[]).includes(String(q)) ? (q as DevSaveMode) : "ok");
   const ai = (DEV_AI_MODES as readonly string[]).includes(String(params.ai)) ? (params.ai as DevAiMode) : "off";
   const bg = params.bg === "1";
+  const m30Style = parseDevM30Style(params.style);
   const { data, summary } = devEditorFixture({
+    m30: m30Style ? { style: m30Style, arabic: params.ar === "1", descriptions: params.desc !== "0" } : null,
     mode,
     ai,
     pages: parseDevPages(params.pages),

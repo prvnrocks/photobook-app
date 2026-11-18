@@ -125,6 +125,8 @@ export function selectionKey(selection: EditorContextValue["state"]["selection"]
       return `slot:${selection.pageIdx}:${selection.slotIdx}`;
     case "caption":
       return `caption:${selection.pageIdx}`;
+    case "description":
+      return `description:${selection.pageIdx}`;
     case "cover":
       return `cover:${selection.part}`;
   }
@@ -308,12 +310,12 @@ export function EditorToolbar({ tools, sidebar = false }: { tools: EditorTool[];
 }
 
 /**
- * While editing text that sits ON the page (caption, cover title), the mobile panel is docked
+ * While editing text that sits ON the page (caption, chapter description, cover title), the mobile panel is docked
  * under the page instead of floating over it: the carousel gets shorter, the height-bound page
  * scales down, and the text being edited stays visible. Exported for tests.
  */
 export function panelDocksOnMobile(selection: EditorContextValue["state"]["selection"]): boolean {
-  return selection?.kind === "caption" || (selection?.kind === "cover" && selection.part === "text");
+  return selection?.kind === "caption" || selection?.kind === "description" || (selection?.kind === "cover" && selection.part === "text");
 }
 
 /**

@@ -70,6 +70,12 @@ export interface RenderOptions {
    * layout that is not registered in src/lib/layouts render through the same code path.
    */
   extraLayouts?: readonly Layout[];
+  /**
+   * Editor only (M30): also report where the chapter description sits (`descriptionAreas`), with or
+   * without text, so the editor can put a tap target there. Never set by the viewer or print, whose
+   * models stay exactly as before.
+   */
+  editTargets?: boolean;
 }
 
 /** The layout `id`: from `opts.extraLayouts` when given there, else the catalogue. */
@@ -256,6 +262,23 @@ export interface RenderBlock {
   clipPath?: string;
 }
 
+/**
+ * Where a layout's chapter description sits on this page (M30, editor tap target — RenderOptions
+ * editTargets). Present for every description panel on the page whose owner page belongs to a
+ * chapter, also when that chapter has no description yet (`empty`: the editor shows a hint there).
+ */
+export interface RenderDescriptionArea {
+  /** % of the page (spread halves: already shifted into this page). */
+  rect: Rect;
+  /** Index in doc.pages of the page that owns the panel (a spread's left half). */
+  ownerIndex: number;
+  chapterId: string;
+  /** The chapter has no description: nothing is drawn here in the viewer / PDF. */
+  empty: boolean;
+  /** Type size (cqw) of the editor's "add text" hint: 3.2 cqw on A5 portrait, same mm on every format. */
+  hintCqw: number;
+}
+
 /** Which half of a spread layout a page shows (M10b): content comes from the left page (owner). */
 export interface RenderSpreadHalf {
   side: "left" | "right";
@@ -278,6 +301,8 @@ export interface PageRenderModel {
   texts?: RenderTextPanel[];
   /** M10c decorations on this page (absent when none). Slots are already in paint order (z). */
   decorations?: RenderDecoration[];
+  /** M30, editor only (RenderOptions editTargets): chapter description tap areas (absent when none). */
+  descriptionAreas?: RenderDescriptionArea[];
   /** M30 colour blocks on this page, in layout order (absent when none). */
   blocks?: RenderBlock[];
 }
@@ -1077,6 +1102,29 @@ function textPanels(
   return out;
 }
 
+/** Hint size of an empty description area on A5 portrait (cqw); scaled like captions on other formats. */
+const DESCRIPTION_HINT_CQW = 3.2;
+
+/** Description panels of `layout` on this page, with or without text (editor tap targets). */
+function descriptionAreasOf(doc: BookDoc, layout: Layout, owner: BookPage, ownerIndex: number, offset: number): RenderDescriptionArea[] {
+  const chapter = owner.chapterId ? doc.chapters.find((c) => c.id === owner.chapterId) : undefined;
+  if (!chapter) return [];
+  const out: RenderDescriptionArea[] = [];
+  for (const t of layout.texts ?? []) {
+    if (t.bind !== "chapterDescription") continue;
+    const rect = shiftRect(t.box, offset);
+    if (!onPage(rect)) continue;
+    out.push({
+      rect,
+      ownerIndex,
+      chapterId: chapter.id,
+      empty: !chapter.description?.text.trim(),
+      hintCqw: scaleCqw(DESCRIPTION_HINT_CQW, textScale(doc.format)),
+    });
+  }
+  return out;
+}
+
 /** ±90 exactly (schema.ts isQuarterTurn; repeated here so the renderer never imports zod at runtime). */
 const isQuarterTurn = (deg: number | undefined): deg is 90 | -90 => deg === 90 || deg === -90;
 
@@ -1169,6 +1217,7 @@ export function pageRenderModel(
   // Decorations are layout artwork: drawn on orphaned right halves too (like the background).
   const decorations = layout.decorations ? renderDecorations(layout, doc.occasion, offset) : [];
   const blocks = renderBlocks(doc, layout, owner, offset, opts);
+  const descriptionAreas = opts.editTargets && owner ? descriptionAreasOf(doc, layout, owner, half?.ownerIndex ?? pageIndex, offset) : [];
   return {
     kind: "page",
     pageId: page.id,
@@ -1179,6 +1228,7 @@ export function pageRenderModel(
     ...(half ? { spread: half } : {}),
     ...(texts.length > 0 ? { texts } : {}),
     ...(decorations.length > 0 ? { decorations } : {}),
+    ...(descriptionAreas.length > 0 ? { descriptionAreas } : {}),
     ...(blocks.length > 0 ? { blocks } : {}),
   };
 }

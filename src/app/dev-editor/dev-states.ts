@@ -5,7 +5,8 @@
 // concatenating it into the editor's first-load chunk (M22 size trim).
 
 import type { BookFormat } from "@/lib/book/types";
-import type { DevSample } from "@/lib/book/dev-sample";
+import { m30EditorDoc, type M30SheetStyle } from "@/lib/book/dev-m30";
+import { devSamplePhotos, type DevSample } from "@/lib/book/dev-sample";
 import {
   devEditorData,
   withDevBackgroundPhotos,
@@ -58,6 +59,39 @@ export function withDevEditorState(data: EditorShellData, state: DevEditorState 
   }
 }
 
+/** `?style=magazine|editorial` (M30 T13). */
+export function parseDevM30Style(v: unknown): M30SheetStyle | null {
+  return v === "magazine" || v === "editorial" ? v : null;
+}
+
+/**
+ * `?style=magazine|editorial` (+ `&format=landscape`, `&ar=1` Arabic, `&desc=0` no descriptions):
+ * the editor on a small M30 book built from the real catalogue (m30EditorDoc) — travel book, the
+ * sp* placeholder photos as kept photos, d0 on the cover.
+ */
+export function withDevM30Book(
+  data: EditorShellData,
+  style: M30SheetStyle,
+  format: BookFormat,
+  opts: { arabic: boolean; descriptions: boolean },
+): EditorShellData {
+  const doc = m30EditorDoc(style, format, opts);
+  return {
+    ...data,
+    book: { ...data.book, title: doc.cover.title, occasion: "travel", tone: "fun", captionLang: opts.arabic ? "ar" : "en" },
+    doc,
+    photos: Object.entries(devSamplePhotos()).map(([id, p]) => ({
+      id,
+      status: "kept" as const,
+      userOverride: false,
+      width: p?.width ?? null,
+      height: p?.height ?? null,
+      webUrl: p?.url ?? null,
+      thumbUrl: p?.url ?? null,
+    })),
+  };
+}
+
 export type DevEditorFixtureOptions = {
   mode: DevSaveMode;
   ai: DevAiMode;
@@ -72,10 +106,17 @@ export type DevEditorFixtureOptions = {
   /** `?sample=…` modern sample book with spreads (M10b A15 / M10c). */
   sample: DevSample | null;
   state: DevEditorState | null;
+  /** `?style=magazine|editorial`: an M30 book (wins over `sample` and `pages`). */
+  m30?: { style: M30SheetStyle; arabic: boolean; descriptions: boolean } | null;
 };
 
 /** The dev editor's fixture data + AI summary for the query options (built on the server page). */
 export function devEditorFixture(o: DevEditorFixtureOptions): { data: EditorShellData; summary: AiSummary | null } {
+  if (o.m30) {
+    const book = withDevM30Book(devEditorData(o.mode, o.ai), o.m30.style, o.format, o.m30);
+    const d = o.paid ? { ...book, book: { ...book.book, isPaid: true, maxPages: 100 } } : book;
+    return withDevEditorState(o.published ? { ...d, publishedRev: d.docRev } : d, o.state);
+  }
   const raw = o.sample ? withDevSampleBook(devEditorData(o.mode, o.ai), o.sample) : withDevPagesData(devEditorData(o.mode, o.ai), o.pages);
   const withBg = o.bg ? withDevBackgroundPhotos(raw) : raw;
   const fixture = o.bg && o.lightVeil ? withDevLightVeilPage(withBg) : withBg;

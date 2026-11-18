@@ -4,17 +4,19 @@
 // - captionEditorTool: textarea for the selected page caption (opens on caption tap). Typing is
 //   one undo entry per panel session (coalesceKey); setCaption marks the caption source 'user'.
 // - captionStyleTool: FontPicker (each font previewed in itself) + left/center/right align.
+//   Magazine / editorial books (M30) also get their own face, Poppins ("Sans" pair with Tajawal).
 
 import { AlignCenter, AlignLeft, AlignRight, Palette, Sparkles, Type } from "lucide-react";
 import { useId, useState } from "react";
-import { CAPTION_FONTS, captionFontFamily, type CaptionFont } from "@/lib/book/fonts";
+import { BOOK_FONTS, bookFontFamily, CAPTION_FONTS, captionFontFamily, type BookFontName } from "@/lib/book/fonts";
 import { setCaption, setCaptionAlign, setCaptionFont, type CaptionAlign } from "@/lib/book/edit-ops";
-import { captionFontOf } from "@/lib/book/render";
 import {
   CAPTION_HARD_MAX,
+  captionFontOptions,
   captionInputLang,
   captionLengthInfo,
   LONG_CAPTION_HINT,
+  pickerFontOf,
 } from "@/lib/editor/caption-tools";
 import { cx } from "@/lib/cx";
 import type { EditorContextValue } from "../editor-context";
@@ -41,8 +43,10 @@ function CaptionEditorPanel({ ctx }: EditorPanelProps) {
   const { pageIdx, page } = target;
   const text = page.caption?.text ?? "";
   const info = captionLengthInfo(text);
-  const font = page.caption ? captionFontOf(page.caption, ctx.book.captionLang) : null;
-  const fontFamily = captionFontFamily(font ?? (captionInputLang(text, ctx.book.captionLang) === "ar" ? "Cairo" : "Playfair"));
+  const font = page.caption ? pickerFontOf(page.caption, captionFontOptions(ctx.state.doc.style.designStyle), ctx.book.captionLang) : null;
+  const fontFamily = font
+    ? bookFontFamily(font)
+    : captionFontFamily(captionInputLang(text, ctx.book.captionLang) === "ar" ? "Cairo" : "Playfair");
 
   const onChange = (value: string) => {
     ctx.actions.edit((d) => setCaption(d, pageIdx, value, { captionLang: ctx.book.captionLang }), {
@@ -117,12 +121,8 @@ export const captionEditorTool: EditorTool = {
 
 // ---- font + align --------------------------------------------------------------------------------
 
-const FONT_SAMPLE: Record<CaptionFont, string> = {
-  Inter: "Aa",
-  Playfair: "Aa",
-  Cairo: "أهلاً Aa",
-  Tajawal: "أهلاً Aa",
-};
+/** Tile sample: Arabic faces show Arabic + Latin, Latin faces "Aa". */
+const fontSample = (f: BookFontName) => (BOOK_FONTS[f].script === "arabic" ? "أهلاً Aa" : "Aa");
 
 const ALIGNS: { value: CaptionAlign; label: string; Icon: typeof AlignLeft }[] = [
   { value: "left", label: "Align left", Icon: AlignLeft },
@@ -134,14 +134,17 @@ export function FontPicker({
   value,
   onChange,
   disabled,
+  fonts = CAPTION_FONTS,
 }: {
-  value: CaptionFont | null;
-  onChange(font: CaptionFont): void;
+  value: BookFontName | null;
+  onChange(font: BookFontName): void;
   disabled?: boolean;
+  /** Faces to offer (captionFontOptions); default = the four classic faces. */
+  fonts?: readonly BookFontName[];
 }) {
   return (
     <div role="radiogroup" aria-label="Caption font" className="grid grid-cols-2 gap-2" data-testid="font-picker">
-      {CAPTION_FONTS.map((f) => {
+      {fonts.map((f) => {
         const selected = value === f;
         return (
           <button
@@ -152,11 +155,11 @@ export function FontPicker({
             disabled={disabled}
             onClick={() => onChange(f)}
             className={cx(selected ? TOOL_OPTION_ACTIVE : TOOL_OPTION, "flex min-h-14 flex-col items-center justify-center px-2 py-1.5")}
-            style={{ fontFamily: captionFontFamily(f) }}
+            style={{ fontFamily: bookFontFamily(f) }}
             data-testid={`font-${f}`}
           >
             <span className="text-lg leading-tight" dir="auto">
-              {FONT_SAMPLE[f]}
+              {fontSample(f)}
             </span>
             <span className="text-xs font-medium">{f}</span>
           </button>
@@ -202,11 +205,13 @@ function CaptionStylePanel({ ctx }: EditorPanelProps) {
   const { pageIdx, page } = target;
   const caption = page.caption;
   const disabled = ctx.readOnly || !caption;
+  const fonts = captionFontOptions(ctx.state.doc.style.designStyle);
   return (
     <div className="flex flex-col gap-4" data-testid="caption-style">
       {!caption ? <p className="text-sm text-muted-foreground">Write a caption first, then pick its font.</p> : null}
       <FontPicker
-        value={caption ? captionFontOf(caption, ctx.book.captionLang) : null}
+        fonts={fonts}
+        value={caption ? pickerFontOf(caption, fonts, ctx.book.captionLang) : null}
         disabled={disabled}
         onChange={(f) => ctx.actions.edit((d) => setCaptionFont(d, pageIdx, f))}
       />

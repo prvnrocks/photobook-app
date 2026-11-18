@@ -1,7 +1,7 @@
 // Pure helpers for the keep/drop review screen (M3). Safe on client and server: no imports
 // from src/lib/ai or src/lib/db (those are server-only); values are mirrored here as strings.
 
-import { docOrigin, hasUserBackgrounds, hasUserCaptions } from "@/lib/book/replaceable";
+import { docOrigin, hasUserBackgrounds, hasUserCaptions, hasUserDescriptions } from "@/lib/book/replaceable";
 import { AI_BREAK_COPY } from "@/lib/runs/stage-copy";
 
 /** Photo row as the review UI needs it (subset of db ReviewPhoto, never AI descriptions). */
@@ -402,12 +402,12 @@ export const CONTINUE_UNSYNCED_NOTE = `Your changes aren't in the book yet — t
 
 /**
  * The album has user edits (editor save → meta.userEdited, any caption with source "user", or a
- * user-chosen background, M10c D-068).
+ * user-chosen background, M10c D-068, or a chapter description with source "user", M30 D-090).
  * Then the review screen offers only "Continue in the editor" — no Update album, no Rebuild
  * with AI (D-037 #2). Unparsable docs count as edited (docOrigin's safe side).
  */
 export function albumEditedByUser(doc: unknown): boolean {
-  return docOrigin(doc).userEdited || hasUserCaptions(doc) || hasUserBackgrounds(doc);
+  return docOrigin(doc).userEdited || hasUserCaptions(doc) || hasUserBackgrounds(doc) || hasUserDescriptions(doc);
 }
 
 export const EDITED_ALBUM_COPY = {

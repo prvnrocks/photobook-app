@@ -4,6 +4,9 @@
 // POST /api/ai/rewrite (the server picks the target language), shows the result as a preview,
 // and only "Use this" changes the doc — as a 'user' caption (setCaption), so it's undoable and
 // never overwritten by AI later. The server's 429 is authoritative for the limit.
+// M30 T13: the menu itself is AiRewritePanel, shared with the chapter description's AI help
+// (./chapter-description.tsx) — one flow (options → preview → "Use this"), one set of limit /
+// AI-off / error states; a target says what text it is, which body to send and how to save.
 
 import { Loader2, Sparkles } from "lucide-react";
 import { useState } from "react";
@@ -15,6 +18,8 @@ import {
   requestRewrite,
   rewriteOptions,
   sessionBlockFor,
+  type RewriteBody,
+  type RewriteFailureKind,
   type RewriteInstruction,
   type RewriteUiState,
 } from "@/lib/editor/caption-tools";
@@ -26,13 +31,35 @@ import { selectedCaptionPage } from "./caption-editor";
 import { TOOL_AI_MARKER, TOOL_OPTION, TOOL_OPTION_ACTIVE, TOOL_SECONDARY, TOOL_WELL } from "./tool-classes";
 import type { EditorPanelProps, EditorTool } from "./types";
 
+/** Wording a target replaces (the defaults talk about captions). */
+export type AiRewriteCopy = Partial<Record<RewriteFailureKind, string>> & { empty?: string };
+
 /** Static reason the menu can't be used right now, or null. */
-export function aiMenuBlockedReason(ctx: Pick<EditorContextValue, "ai" | "state">, text: string): string | null {
-  if (ctx.ai.mode === "off") return REWRITE_FAILURE_COPY.off;
+export function aiMenuBlockedReason(ctx: Pick<EditorContextValue, "ai" | "state">, text: string, copy: AiRewriteCopy = {}): string | null {
+  if (ctx.ai.mode === "off") return copy.off ?? REWRITE_FAILURE_COPY.off;
   // A server answer earlier in this session (503 / auth / daily limit) switched ✨ off.
-  if (ctx.ai.blocked) return REWRITE_FAILURE_COPY[ctx.ai.blocked];
-  if (text.trim() === "") return "Write a caption first — AI can then rewrite it.";
+  if (ctx.ai.blocked) return copy[ctx.ai.blocked] ?? REWRITE_FAILURE_COPY[ctx.ai.blocked];
+  if (text.trim() === "") return copy.empty ?? "Write a caption first — AI can then rewrite it.";
   return null;
+}
+
+/** What the shared AI menu works on: a page caption or a chapter description. */
+export interface AiRewriteTarget {
+  /** Testid prefix: `<prefix>-menu`, `-blocked`, `-message`, `-limit`. */
+  testIdPrefix: "ai-caption" | "ai-description";
+  /** The text on screen (sent as is; the server picks the target language). */
+  text: string;
+  /** POST /api/ai/rewrite body for an instruction. */
+  body(instruction: RewriteInstruction, text: string): RewriteBody;
+  /** "Use this": save the accepted text as the user's (one edit). */
+  apply(text: string): void;
+  /** Tool to return to after "Use this". */
+  backTool: string;
+  /** Offer the "Change tone" options (captions only). */
+  tones: boolean;
+  /** CSS font-family of the preview for Latin / Arabic results. */
+  previewFont(lang: "ar" | "en"): string;
+  copy?: AiRewriteCopy;
 }
 
 // M22 T6b (D-074): emerald primary (no gold — Share is the screen's one gold), outlined emerald
@@ -76,17 +103,44 @@ function OptionButton({
 
 export function AiCaptionPanel({ ctx }: EditorPanelProps) {
   const target = selectedCaptionPage(ctx);
+  if (!target) return null;
+  const { page } = target;
+  return (
+    <AiRewritePanel
+      ctx={ctx}
+      target={{
+        testIdPrefix: "ai-caption",
+        text: page.caption?.text ?? "",
+        body: (instruction, text) => ({ bookId: ctx.book.id, pageId: page.id, instruction, text }),
+        // Pages may have moved while waiting: find the page by id.
+        apply: (accepted) =>
+          ctx.actions.edit((d) => {
+            const idx = d.pages.findIndex((p) => p.id === page.id);
+            return idx < 0 ? d : setCaption(d, idx, accepted, { captionLang: ctx.book.captionLang });
+          }),
+        backTool: "caption",
+        tones: true,
+        previewFont: (lang) => captionFontFamily(lang === "ar" ? "Cairo" : "Playfair"),
+      }}
+    />
+  );
+}
+
+export function AiRewritePanel({ ctx, target }: { ctx: EditorContextValue; target: AiRewriteTarget }) {
   const [ui, setUi] = useState<RewriteUiState>({ kind: "idle" });
   const [last, setLast] = useState<RewriteInstruction | null>(null);
   const [showUpgrade, setShowUpgrade] = useState(false);
 
-  if (!target) return null;
-  const { page } = target;
-  const text = page.caption?.text ?? "";
-  const blocked = ctx.readOnly ? "Editing is paused." : aiMenuBlockedReason(ctx, text);
+  const { text, testIdPrefix: tid } = target;
+  const copy = target.copy ?? {};
+  const failureCopy = (kind: RewriteFailureKind) => copy[kind] ?? REWRITE_FAILURE_COPY[kind];
+  const blocked = ctx.readOnly ? "Editing is paused." : aiMenuBlockedReason(ctx, text, copy);
   const loading = ui.kind === "loading";
   const limitReached = ui.kind === "limit" || ctx.ai.rewritesLeft <= 0;
-  const options = rewriteOptions(text);
+  const all = rewriteOptions(text);
+  const shorter = all.main.find((o) => o.instruction === "shorter");
+  if (shorter?.disabledReason) shorter.disabledReason = failureCopy("tooShort");
+  const options = target.tones ? all : { main: all.main, tones: [] };
 
   const run = async (instruction: RewriteInstruction) => {
     if (loading || blocked) return;
@@ -94,7 +148,7 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
     setUi({ kind: "loading", instruction });
     // Not aborted when the panel closes: a finished rewrite is counted by the server either way,
     // so the counter below must still update.
-    const result = await requestRewrite({ bookId: ctx.book.id, pageId: page.id, instruction, text });
+    const result = await requestRewrite(target.body(instruction, text));
     if (result.kind === "preview") {
       ctx.ai.setRewrites(ctx.ai.rewritesUsed + 1, nextRewritesLeft(ctx.ai.rewritesLeft, result.remaining));
     } else if (result.kind === "limit") {
@@ -112,20 +166,15 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
 
   const useThis = () => {
     if (ui.kind !== "preview") return;
-    const accepted = ui.text;
-    // Pages may have moved while waiting: find the page by id.
-    ctx.actions.edit((d) => {
-      const idx = d.pages.findIndex((p) => p.id === page.id);
-      return idx < 0 ? d : setCaption(d, idx, accepted, { captionLang: ctx.book.captionLang });
-    });
+    target.apply(ui.text);
     setUi({ kind: "idle" });
-    ctx.openTool("caption");
+    ctx.openTool(target.backTool);
   };
 
   if (blocked) {
     return (
-      <div className="flex flex-col gap-3" data-testid="ai-caption-menu" data-state="blocked">
-        <p className={cx(TOOL_WELL, "flex items-center gap-2 text-sm text-muted-foreground")} data-testid="ai-caption-blocked">
+      <div className="flex flex-col gap-3" data-testid={`${tid}-menu`} data-state="blocked">
+        <p className={cx(TOOL_WELL, "flex items-center gap-2 text-sm text-muted-foreground")} data-testid={`${tid}-blocked`}>
           <Sparkles className="size-4 shrink-0" aria-hidden="true" />
           {blocked}
         </p>
@@ -141,7 +190,7 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
   if (ui.kind === "preview") {
     const lang = ui.lang === "ar" ? "ar" : "en";
     return (
-      <div className="flex flex-col gap-3" data-testid="ai-caption-menu" data-state="preview">
+      <div className="flex flex-col gap-3" data-testid={`${tid}-menu`} data-state="preview">
         <div className="flex min-w-0 flex-col gap-2 rounded-2xl border border-[#e9dfca] bg-[#faf6ee] p-4 shadow-[0_10px_24px_-20px_rgb(14_59_46/0.5)]">
           <span aria-hidden="true" className="font-display text-3xl leading-none text-accent-text">
             “
@@ -150,7 +199,7 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
             dir="auto"
             lang={lang}
             className="min-w-0 text-base leading-snug break-words whitespace-pre-line text-foreground"
-            style={{ fontFamily: captionFontFamily(lang === "ar" ? "Cairo" : "Playfair") }}
+            style={{ fontFamily: target.previewFont(lang) }}
             data-testid="ai-preview"
           >
             {ui.text}
@@ -190,10 +239,10 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
   const shortHint = options.main.find((o) => o.instruction === "shorter")?.disabledReason ?? null;
 
   return (
-    <div className="flex flex-col gap-3" data-testid="ai-caption-menu" data-state={ui.kind}>
+    <div className="flex flex-col gap-3" data-testid={`${tid}-menu`} data-state={ui.kind}>
       {failure && failure !== "limit" ? (
-        <div role="status" className="flex flex-wrap items-center gap-2 rounded-2xl border border-warning-border bg-warning-soft px-3 py-2 text-sm text-foreground" data-testid="ai-caption-message">
-          <p className="flex-1">{REWRITE_FAILURE_COPY[failure]}</p>
+        <div role="status" className="flex flex-wrap items-center gap-2 rounded-2xl border border-warning-border bg-warning-soft px-3 py-2 text-sm text-foreground" data-testid={`${tid}-message`}>
+          <p className="flex-1">{failureCopy(failure)}</p>
           {last && (failure === "retry" || failure === "serverBusy" || failure === "error" || failure === "busy") && !limitReached ? (
             <button
               type="button"
@@ -207,7 +256,7 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
         </div>
       ) : null}
       {limitReached ? (
-        <div className={cx(TOOL_WELL, "flex flex-col gap-2 text-sm")} data-testid="ai-caption-limit">
+        <div className={cx(TOOL_WELL, "flex flex-col gap-2 text-sm")} data-testid={`${tid}-limit`}>
           <p className="font-semibold text-[#0e3b2e]">{REWRITE_FAILURE_COPY.limit}</p>
           {!ctx.book.isPaid && !showUpgrade ? (
             <button
@@ -240,21 +289,23 @@ export function AiCaptionPanel({ ctx }: EditorPanelProps) {
           {shortHint}
         </p>
       ) : null}
-      <div className="flex flex-col gap-2">
-        <p className={ED_PANEL_EYEBROW}>Change tone</p>
-        <div className="grid grid-cols-2 gap-2">
-          {options.tones.map((o) => (
-            <OptionButton
-              key={o.instruction}
-              label={o.label}
-              onClick={() => void run(o.instruction)}
-              disabled={disabled}
-              active={loading && ui.instruction === o.instruction}
-              testId={`ai-option-${o.instruction.replace(":", "-")}`}
-            />
-          ))}
+      {options.tones.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          <p className={ED_PANEL_EYEBROW}>Change tone</p>
+          <div className="grid grid-cols-2 gap-2">
+            {options.tones.map((o) => (
+              <OptionButton
+                key={o.instruction}
+                label={o.label}
+                onClick={() => void run(o.instruction)}
+                disabled={disabled}
+                active={loading && ui.instruction === o.instruction}
+                testId={`ai-option-${o.instruction.replace(":", "-")}`}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
       <p className="text-xs text-muted-foreground" data-testid="ai-rewrites-left" aria-live="polite">
         {loading ? "Writing… this can take up to a minute." : rewritesLeftLabel(ctx.ai.rewritesLeft)}
       </p>

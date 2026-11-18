@@ -31,9 +31,9 @@ import { styleCaptionFont } from "@/lib/design/styles";
 import { DEFAULT_ARABIC_CAPTION_FONT, defaultCaptionFont, type BookFontName } from "./fonts";
 import { BOOK_TITLE_MAX_CODE_POINTS } from "./options";
 import { suggestsBackgrounds } from "@/lib/design/background-suggest";
-import { BackgroundSchema } from "./schema";
+import { BackgroundSchema, CHAPTER_DESCRIPTION_MAX, STYLE_COLOURWAY_IDS } from "./schema";
 import { isSpreadLayout, layoutsFor, repairSpreads, splitSpreadAt, spreadStartOf } from "./spreads";
-import type { Background, BookDoc, BookPage, Caption, Chapter, Crop, Layout, PageBackground, Slot } from "./types";
+import type { Background, BookDoc, BookPage, Caption, Chapter, ColourwayId, Crop, Layout, PageBackground, Slot } from "./types";
 
 export type EditOpErrorCode =
   | "page_out_of_range"
@@ -53,7 +53,9 @@ export type EditOpErrorCode =
   /** The change would remove a user caption; repeat with `confirmDropCaptions: true` after asking. */
   | "would_drop_caption"
   /** The layout is for another format or design style than the book (D-063: both fixed per book). */
-  | "layout_not_for_book";
+  | "layout_not_for_book"
+  /** setColourway got an id the book's design style does not have (M30). */
+  | "invalid_colourway";
 
 export class EditOpError extends Error {
   readonly code: EditOpErrorCode;
@@ -68,6 +70,8 @@ export class EditOpError extends Error {
 export const CAPTION_MAX = 200;
 export const SUBTITLE_MAX = 120;
 export const CHAPTER_TITLE_MAX = 80;
+/** Chapter description hard cap (schema CHAPTER_DESCRIPTION_MAX, 400 units). */
+export const DESCRIPTION_MAX = CHAPTER_DESCRIPTION_MAX;
 /** Default layout for a page added with addPage() to a classic portrait book. Has a caption area. */
 export const DEFAULT_NEW_PAGE_LAYOUT = "one-portrait";
 
@@ -786,6 +790,44 @@ export function setChapterTitle(doc: BookDoc, chapterId: string, title: string):
   const chapters: Chapter[] = doc.chapters.slice();
   chapters[idx] = { ...chapters[idx], title: clean };
   return { ...doc, chapters };
+}
+
+/**
+ * M30 (D-090): write the chapter's description as the user's text (≤ 400 units, clipped; source
+ * "user", so the AI never replaces it). Blank text removes the description — the key goes, layout
+ * panels bound to it and their `when` blocks collapse. Same user text / nothing to remove → the
+ * input doc. Throws EditOpError unknown_chapter.
+ */
+export function setChapterDescription(doc: BookDoc, chapterId: string, text: string): BookDoc {
+  const idx = doc.chapters.findIndex((c) => c.id === chapterId);
+  if (idx < 0) throw new EditOpError("unknown_chapter");
+  const chapter = doc.chapters[idx];
+  const clean = safeText(text, DESCRIPTION_MAX);
+  const chapters: Chapter[] = doc.chapters.slice();
+  if (clean.trim() === "") {
+    if (chapter.description === undefined) return doc;
+    const rest: Chapter = { ...chapter };
+    delete rest.description;
+    chapters[idx] = rest;
+    return { ...doc, chapters };
+  }
+  if (chapter.description?.text === clean && chapter.description.source === "user") return doc;
+  chapters[idx] = { ...chapter, description: { text: clean, source: "user" } };
+  return { ...doc, chapters };
+}
+
+/**
+ * M30 (D-090): the user picks the book's accent colourway — stored as `{ id, source: "user" }`, so
+ * a later AI run never replaces it. Only `style.colourway` changes. Already the user's choice →
+ * the input doc. Throws EditOpError invalid_colourway for an id the book's design style does not
+ * have (every id on the four older styles).
+ */
+export function setColourway(doc: BookDoc, id: ColourwayId): BookDoc {
+  const ids: readonly string[] = STYLE_COLOURWAY_IDS[doc.style.designStyle ?? "classic"] ?? [];
+  if (!ids.includes(id)) throw new EditOpError("invalid_colourway");
+  const cur = doc.style.colourway;
+  if (cur?.id === id && cur.source === "user") return doc;
+  return { ...doc, style: { ...doc.style, colourway: { id, source: "user" } } };
 }
 
 // ---- photo filters (D-089) -----------------------------------------------------------------------

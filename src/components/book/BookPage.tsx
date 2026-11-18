@@ -10,6 +10,7 @@ import {
   pageRenderModel,
   resolveBackground,
   type RenderCaption,
+  type RenderDescriptionArea,
   type RenderPhotos,
 } from "@/lib/book/render";
 import type { Ink } from "@/lib/design/backgrounds";
@@ -19,7 +20,7 @@ import { Decorations } from "./Decoration";
 import { BackgroundLayer, Blocks, Box, INK_TEXT, PageFrame, PhotoSlot, TextPanel, type BookRenderMode } from "./PageParts";
 
 export type { BookRenderMode } from "./PageParts";
-export type { RenderCaption, RenderPhoto, RenderPhotos } from "@/lib/book/render";
+export type { RenderCaption, RenderDescriptionArea, RenderPhoto, RenderPhotos } from "@/lib/book/render";
 
 export type BookPageProps = {
   doc: BookDoc;
@@ -45,6 +46,12 @@ export type BookPageProps = {
    * doc.pages index that holds the caption (a spread's caption lives on its left page).
    */
   renderCaption?: (caption: Caption | null, model: RenderCaption, ink: Ink, ownerPage: number) => ReactNode;
+  /**
+   * Edit mode only (M30): rendered over each chapter description area of the page (absolute it
+   * with `inset-0`) — also where the chapter has no description yet (`area.empty`), so the editor
+   * can offer to add one. Never called in view / print mode.
+   */
+  renderDescription?: (area: RenderDescriptionArea) => ReactNode;
   /** Edit mode only, cover only: rendered inside the cover text area (absolute, `inset-0`). */
   renderCoverTextOverlay?: () => ReactNode;
   className?: string;
@@ -58,7 +65,7 @@ export type BookPageProps = {
 };
 
 export function BookPage(props: BookPageProps) {
-  const { doc, page, mode, photos, captionLang, renderSlotOverlay, renderCaption, renderCoverTextOverlay, className, priority, extraLayouts } =
+  const { doc, page, mode, photos, captionLang, renderSlotOverlay, renderCaption, renderDescription, renderCoverTextOverlay, className, priority, extraLayouts } =
     props;
   if (page === "cover") {
     return (
@@ -79,6 +86,7 @@ export function BookPage(props: BookPageProps) {
   const m = pageRenderModel(doc, page, photos, captionLang, {
     bleed: mode === "print",
     ...(extraLayouts ? { extraLayouts } : {}),
+    ...(mode === "edit" && renderDescription ? { editTargets: true } : {}),
   });
   if (!m) {
     const bookBg = resolveBackground(doc, null, photos);
@@ -152,6 +160,13 @@ export function BookPage(props: BookPageProps) {
         </Box>
       ) : null}
       {m.texts?.map((t, i) => <TextPanel key={i} panel={t} ink={bg.ink} />)}
+      {renderDescription
+        ? m.descriptionAreas?.map((a, i) => (
+            <Box key={`d${i}`} rect={a.rect} data={{ "data-description-area": a.empty ? "empty" : "filled" }}>
+              {renderDescription(a)}
+            </Box>
+          ))
+        : null}
     </PageFrame>
   );
 }

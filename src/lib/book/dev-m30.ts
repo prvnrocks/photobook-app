@@ -9,6 +9,8 @@
 
 import { colourwaysFor } from "@/lib/design/colourways";
 import { styleCaptionFont } from "@/lib/design/styles";
+import { layoutShowsDescription } from "@/lib/layouts/description";
+import { autoCoversFor, layoutsFor } from "./spreads";
 import type { BookDoc, BookFormat, BookPage, Chapter, DesignStyle, Layout } from "./types";
 
 // --- Demo layouts (temporary) --------------------------------------------------------------------
@@ -236,5 +238,81 @@ export function m30SheetItem(layout: Layout, opts: M30SheetOptions = {}): M30She
     layout: { id: layout.id, name: layout.name, role: layout.role, style: layout.style, format: layout.format, photoCount: layout.photoCount },
     doc,
     targets: layout.role === "cover" ? ["cover"] : layout.role === "spread" ? [0, 1] : [0],
+  };
+}
+
+// --- Editor fixture book (M30 T13) ---------------------------------------------------------------
+
+export interface M30EditorBookOptions {
+  /** Arabic title, chapter titles, descriptions and captions. */
+  arabic?: boolean;
+  /** false = no chapter has a description (a rule / AI-off album): every description area is empty. */
+  descriptions?: boolean;
+}
+
+/**
+ * A small magazine / editorial book for the dev editor (`/dev-editor?style=…`): the style's auto
+ * cover, four chapters and nine pages picked from the real catalogue by what they show —
+ *   0 description page (chapter 1, AI description) · 1 plain page
+ *   2 description page (chapter 2, NO description → the editor's "add" hint) · 3 plain page
+ *   4–5 a spread, one that shows the description when the catalogue has it (chapter 3, AI description)
+ *   6–7 plain pages · 8 plain page (chapter 4)
+ * Photos: cover `d0`, slots `sp0…` (devSamplePhotos). Colourway: the style's second one, source
+ * "ai" (as a build would stamp it). Valid for validateBookDoc.
+ */
+export function m30EditorDoc(style: M30SheetStyle, format: BookFormat, opts: M30EditorBookOptions = {}): BookDoc {
+  const t = opts.arabic ? AR : EN;
+  const withText = opts.descriptions !== false;
+  const all = layoutsFor(format, style, "page");
+  const described = all.filter((l) => layoutShowsDescription(l));
+  const plain = all.filter((l) => !layoutShowsDescription(l));
+  const spreads = layoutsFor(format, style, "spread");
+  const spread = spreads.find((l) => layoutShowsDescription(l)) ?? spreads[0];
+  const pick = (list: readonly Layout[], i: number) => list[i % list.length];
+  const order: Array<[Layout, string]> = [
+    [pick(described, 0), "c1"],
+    [pick(plain, 1), "c1"],
+    [pick(described, 1), "c2"],
+    [pick(plain, 2), "c2"],
+    [spread, "c3"],
+    [pick(plain, 3), "c3"],
+    [pick(plain, 4), "c3"],
+    [pick(plain, 5), "c4"],
+  ];
+  const font = styleCaptionFont(style, opts.arabic ? "ar" : "en");
+  let n = 0;
+  const pages: BookPage[] = [];
+  for (const [layout, chapterId] of order) {
+    const left: BookPage = {
+      id: `mp${pages.length}`,
+      chapterId,
+      layout: layout.id,
+      slots: layout.slots.map(() => ({ photoId: `sp${n++}`, crop: { x: 0.5, y: 0.5, zoom: 1 } })),
+      caption: layout.caption && pages.length % 3 !== 2 ? { text: t.caption, font, align: "center", source: "ai" } : null,
+    };
+    if (layout.role === "spread") {
+      pages.push({ ...left, side: "left" }, { id: `mp${pages.length + 1}`, chapterId, layout: layout.id, side: "right", slots: [], caption: null });
+    } else {
+      pages.push(left);
+    }
+  }
+  const chapters: Chapter[] = t.chapters.map((c, i) => ({
+    ...c,
+    ...(withText && (i === 0 || i === 2) ? { description: { text: t.description, source: "ai" as const } } : {}),
+  }));
+  const colourway = colourwaysFor(style)[1];
+  return {
+    version: 2,
+    format,
+    occasion: "travel",
+    cover: { layout: autoCoversFor(format, style)[0].id, photoId: "d0", title: t.title, subtitle: t.subtitle },
+    chapters,
+    pages,
+    style: {
+      background: { kind: "color", hex: "#FFFFFF" },
+      designStyle: style,
+      font,
+      ...(colourway ? { colourway: { id: colourway.id, source: "ai" as const } } : {}),
+    },
   };
 }

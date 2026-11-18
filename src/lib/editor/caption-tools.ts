@@ -4,7 +4,11 @@
 // and pinned to the server's versions by tests/editor-caption-tools.test.ts.
 
 import { TONES, type Tone } from "@/lib/book/options";
-import { CAPTION_MAX } from "@/lib/book/edit-ops";
+import { CAPTION_MAX, DESCRIPTION_MAX } from "@/lib/book/edit-ops";
+import { CAPTION_FONTS, isM30Font, type BookFontName } from "@/lib/book/fonts";
+import { captionFontOf } from "@/lib/book/render";
+import type { Caption, DesignStyle } from "@/lib/book/types";
+import { styleCaptionFont } from "@/lib/design/styles";
 import { isMainlyArabic } from "@/lib/review/ui";
 
 /** Soft caption length (AI rule ≤ 18 words): past this we show a gentle hint, never block. */
@@ -48,6 +52,56 @@ export function captionInputLang(text: string, captionLang: string): "ar" | "en"
   if (!/[A-Za-zÀ-ɏ]/.test(text) && captionLang === "ar") return "ar";
   return "en";
 }
+
+// ---- caption font choices ----------------------------------------------------------------------
+
+/**
+ * Faces the caption font picker offers for a book of `style`: the four classic faces, and — for
+ * the magazine / editorial styles (M30) — their own caption face first: the "Sans" pair, Poppins
+ * with Tajawal for Arabic text (the renderer switches a Latin face to its Arabic partner). The four
+ * older styles get exactly the classic list, as before: nothing changes for existing books.
+ */
+export function captionFontOptions(style: DesignStyle | null | undefined): readonly BookFontName[] {
+  const face = styleCaptionFont(style, "en");
+  return isM30Font(face) ? [face, ...CAPTION_FONTS] : CAPTION_FONTS;
+}
+
+/** The picker tile a caption's font is: its stored face when offered, else the classic face it renders as. */
+export function pickerFontOf(caption: Pick<Caption, "text" | "font">, options: readonly BookFontName[], captionLang: string): BookFontName {
+  const stored = options.find((f) => f === caption.font);
+  return stored ?? captionFontOf(caption, captionLang);
+}
+
+// ---- chapter description (M30) -----------------------------------------------------------------
+
+/** Soft description length (AI rule ≤ 45 words): past this we show a gentle hint, never block. */
+export const DESCRIPTION_SOFT_WORDS = 45;
+/** Hard cap (UTF-16 units, same as setChapterDescription's clip and the textarea maxLength). */
+export const DESCRIPTION_HARD_MAX = DESCRIPTION_MAX;
+
+export const LONG_DESCRIPTION_HINT = "A short paragraph reads best — try 45 words or fewer.";
+
+/** Word counter of the description field: "12 of 45 words · 80/400". */
+export function descriptionLengthInfo(text: string): CaptionLengthInfo {
+  const words = countWords(text);
+  const chars = text.length;
+  return {
+    words,
+    chars,
+    long: words > DESCRIPTION_SOFT_WORDS,
+    full: chars >= DESCRIPTION_HARD_MAX,
+    label: `${words} of ${DESCRIPTION_SOFT_WORDS} words · ${chars}/${DESCRIPTION_HARD_MAX}`,
+  };
+}
+
+/** ✨ wording for a chapter description, where the caption wording would name the wrong thing. */
+export const DESCRIPTION_REWRITE_COPY: Partial<Record<RewriteFailureKind, string>> & { empty: string } = {
+  empty: "Write a few lines first — AI can then rewrite them.",
+  off: "AI writing isn't switched on yet",
+  unavailable: "AI writing isn't available right now — try later",
+  tooShort: "This text is already short",
+  refused: "Can't rewrite this text",
+};
 
 // ---- ✨ rewrite --------------------------------------------------------------------------------
 
@@ -214,7 +268,22 @@ export function nextRewritesLeft(previousLeft: number, remaining: number | null)
   return remaining ?? Math.max(0, previousLeft - 1);
 }
 
-export type RewriteBody = { bookId: string; pageId: string; instruction: RewriteInstruction; text: string };
+/** ✨ on a page caption (the body the editor has always sent). */
+export type RewriteCaptionBody = { bookId: string; pageId: string; instruction: RewriteInstruction; text: string };
+/** Instructions the editor offers for a chapter description (no tone options). */
+export type DescriptionRewriteInstruction = "rewrite" | "shorter" | "translate";
+/**
+ * ✨ on a chapter description (M30 T11/T13): `target: "description"` + the chapter id — and never a
+ * `pageId` (the route's body is strict). Mirrors RewriteDescriptionBodySchema in src/lib/ai.
+ */
+export type RewriteDescriptionBody = {
+  bookId: string;
+  target: "description";
+  chapterId: string;
+  instruction: DescriptionRewriteInstruction;
+  text: string;
+};
+export type RewriteBody = RewriteCaptionBody | RewriteDescriptionBody;
 
 /**
  * POST /api/ai/rewrite with a hard timeout. Sends only the on-screen text (the server picks the

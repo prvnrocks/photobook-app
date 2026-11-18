@@ -1,7 +1,7 @@
 "use client";
 
 // Chapter title editor (M5 Task 10): renames the chapter of the page the selection is on
-// (caption or photo selected). setChapterTitle clips to 80 units.
+// (caption, photo or — M30 — chapter description selected). setChapterTitle clips to 80 units.
 
 import { BookmarkPlus } from "lucide-react";
 import { useId, useState } from "react";
@@ -12,10 +12,10 @@ import type { EditorContextValue } from "../editor-context";
 import { TOOL_HINT, TOOL_INPUT, TOOL_LABEL } from "./tool-classes";
 import type { EditorPanelProps, EditorTool } from "./types";
 
-/** Chapter of the page the current selection is on (slot or caption), or null. */
+/** Chapter of the page the current selection is on (slot, caption or chapter description), or null. */
 export function currentChapter(ctx: Pick<EditorContextValue, "state">): { chapter: Chapter; pageIdx: number } | null {
   const sel = ctx.state.selection;
-  if (sel?.kind !== "caption" && sel?.kind !== "slot") return null;
+  if (sel?.kind !== "caption" && sel?.kind !== "slot" && sel?.kind !== "description") return null;
   const page = ctx.state.doc.pages[sel.pageIdx];
   const chapter = page?.chapterId ? ctx.state.doc.chapters.find((c) => c.id === page.chapterId) : undefined;
   return chapter ? { chapter, pageIdx: sel.pageIdx } : null;
@@ -62,7 +62,7 @@ export const chapterTitleTool: EditorTool = {
   id: "chapter",
   label: "Chapter",
   icon: BookmarkPlus,
-  scopes: ["caption", "slot"],
+  scopes: ["caption", "slot", "description"],
   order: 40,
   tier: "more",
   panelTitle: "Chapter",

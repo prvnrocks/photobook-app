@@ -16,6 +16,7 @@
 import { EditOpError, type EditOpErrorCode } from "@/lib/book/edit-ops";
 import { spreadStartOf } from "@/lib/book/spreads";
 import { getLayout } from "@/lib/layouts";
+import { layoutShowsDescription } from "@/lib/layouts/description";
 import type { BookDoc } from "@/lib/book/types";
 
 export const HISTORY_CAP = 50;
@@ -26,10 +27,12 @@ export type EditorPosition = "cover" | number;
 export type EditorSelection =
   | { kind: "slot"; pageIdx: number; slotIdx: number }
   | { kind: "caption"; pageIdx: number }
+  /** M30: the chapter description panel of a page (`pageIdx` = the page that owns it: a spread's left half). */
+  | { kind: "description"; pageIdx: number }
   | { kind: "cover"; part: "photo" | "text" }
   | null;
 
-export type SelectionKind = "none" | "slot" | "caption" | "cover";
+export type SelectionKind = "none" | "slot" | "caption" | "description" | "cover";
 
 /** An edit: a pure function of the doc, normally a call into src/lib/book/edit-ops.ts. */
 export type EditOp = (doc: BookDoc) => BookDoc;
@@ -110,6 +113,11 @@ export function validSelection(doc: BookDoc, selection: EditorSelection): Editor
   if (!page) return null;
   if (selection.kind === "slot") {
     return selection.slotIdx >= 0 && selection.slotIdx < page.slots.length ? selection : null;
+  }
+  if (selection.kind === "description") {
+    // The layout must show the description and the page must belong to a chapter that still exists.
+    const inChapter = page.chapterId !== null && doc.chapters.some((c) => c.id === page.chapterId);
+    return inChapter && layoutShowsDescription(getLayout(page.layout)) ? selection : null;
   }
   return getLayout(page.layout)?.caption ? selection : null;
 }
@@ -271,4 +279,5 @@ export const EDIT_ERROR_COPY: Record<EditOpErrorCode, string> = {
   spread_needs_left_page: "Two-page layouts start on a left-hand page. Pick the page on the left.",
   would_drop_caption: "This layout has room for one caption only. Confirm to remove the other caption.",
   layout_not_for_book: "That layout doesn't match this book's size or style.",
+  invalid_colourway: "That colour isn't available for this book.",
 };
