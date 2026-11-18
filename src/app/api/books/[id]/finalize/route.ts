@@ -11,6 +11,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { isSameOrigin } from "@/lib/auth/same-origin";
 import { finalizeBook } from "@/lib/photos/finalize";
+import { ingestBookPhotos } from "@/lib/photos/ingest";
+
+type IngestSummary = { verified: number; rejected: number; pending: number };
 import { FinalizeBodySchema, MAX_BODY_BYTES, type FinalizeBody } from "@/lib/photos/finalize-body";
 import { unavailableIfTimeout } from "@/lib/http/json";
 import { isUuid } from "@/lib/uuid";
@@ -101,7 +104,17 @@ export async function POST(
       return fail(429, "rate_limited", { "retry-after": String(wait) });
     }
 
-    return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
+    // Server-side check of the stored bytes + metadata-free AI copies (idempotent, bounded,
+    // never fatal for the upload flow). finalizeBook proved ownership above.
+    let ingest: IngestSummary | null = null;
+    try {
+      const r = await ingestBookPhotos(id, user.id);
+      ingest = { verified: r.verified, rejected: r.rejected, pending: r.pending };
+    } catch {
+      console.error("[finalize] ingest failed");
+    }
+
+    return NextResponse.json({ ...result, ingest }, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     // M12: a Supabase timeout → 503 + Retry-After 10 (= the one-run-per-10-s limit); every
     // finalize step is safe to repeat, so the client simply retries.

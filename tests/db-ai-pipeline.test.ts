@@ -5,6 +5,20 @@ vi.mock("server-only", () => ({}));
 type Result = { data?: unknown; error: { code?: string; statusCode?: string; message?: string } | null; count?: number };
 
 const JPEG_SOI = vi.hoisted(() => new Uint8Array([0xff, 0xd8, 0xff]));
+/**
+ * Smallest byte sequence the AI-copy check accepts as a 512 px JPEG: SOI, one table segment
+ * carrying `tag` (kept verbatim — it is not metadata), SOF0 64×64, SOS, EOI.
+ */
+const fakeThumb = vi.hoisted(() => (tag: string) => {
+  const t = new TextEncoder().encode(tag);
+  return new Uint8Array([
+    0xff, 0xd8,
+    0xff, 0xdb, (t.length + 2) >> 8, (t.length + 2) & 0xff, ...t,
+    0xff, 0xc0, 0x00, 0x08, 0x08, 0x00, 0x40, 0x00, 0x40, 0x00,
+    0xff, 0xda, 0x00, 0x02, 0x00,
+    0xff, 0xd9,
+  ]);
+});
 
 // Records every query chain (client, table, op, payload, options, filters) and
 // resolves to the next queued result. Storage calls are recorded separately.
@@ -66,7 +80,7 @@ const fake = vi.hoisted(() => {
           state.inFlight--;
           return (
             state.downloadResults.get(path) ?? {
-              data: new Blob([JPEG_SOI, new TextEncoder().encode(`img:${path}`)]),
+              data: new Blob([fakeThumb(`img:${path}`)]),
               error: null,
             }
           );
@@ -637,7 +651,7 @@ describe("photos: curation", () => {
     expect(fake.state.maxInFlight).toBeLessThanOrEqual(photos.THUMB_DOWNLOAD_CONCURRENCY);
     expect(map.size).toBe(11);
     expect(map.has(paths[3])).toBe(false);
-    expect(Buffer.from(map.get(paths[0])!, "base64").subarray(3).toString()).toBe(`img:${paths[0]}`);
+    expect(Buffer.from(map.get(paths[0])!, "base64").toString("latin1")).toContain(`img:${paths[0]}`);
   });
 
   it("loadThumbBase64 skips thumbs over 1 MB or without the JPEG magic bytes (T16 #17)", async () => {
@@ -651,8 +665,21 @@ describe("photos: curation", () => {
       error: null,
     });
     fake.state.downloadResults.set(empty, { data: new Blob([new Uint8Array([0xff, 0xd8])]), error: null });
-    const map = await photos.loadThumbBase64([ok, png, big, empty]);
-    expect([...map.keys()]).toEqual([ok]);
+    // Task 2: only a real ≤ 512 px JPEG without metadata is sent to the model.
+    const [junk, wide, exif] = ["t/junk.jpg", "t/wide.jpg", "t/exif.jpg"];
+    fake.state.downloadResults.set(junk, { data: new Blob([JPEG_SOI, new TextEncoder().encode("<script>alert(1)</script>")]), error: null });
+    const tooWide = fakeThumb("x");
+    tooWide.set([0x02, 0x01], tooWide.indexOf(0xc0) + 6); // width 513
+    fake.state.downloadResults.set(wide, { data: new Blob([tooWide]), error: null });
+    const clean = fakeThumb("img:exif");
+    const app1 = new TextEncoder().encode("Exif\0\0GPS 24.4667N 54.3667E");
+    const withExif = new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0x00, app1.length + 2, ...app1, ...clean.subarray(2)]);
+    fake.state.downloadResults.set(exif, { data: new Blob([withExif]), error: null });
+    const map = await photos.loadThumbBase64([ok, png, big, empty, junk, wide, exif]);
+    expect([...map.keys()]).toEqual([ok, exif]);
+    const sent = Buffer.from(map.get(exif)!, "base64");
+    expect(sent.equals(Buffer.from(clean))).toBe(true); // EXIF segment removed, image bytes identical
+    expect(sent.toString("latin1")).not.toContain("GPS");
     expect(photos.THUMB_MAX_BYTES).toBe(1024 * 1024);
   });
 

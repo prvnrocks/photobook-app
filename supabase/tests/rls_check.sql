@@ -63,7 +63,10 @@
 --      unknown styles still rejected, still insert-only)
 --      and 20261119002200_storybook.sql (storybooks + storybook_versions:
 --      owner reads own rows only, no client writes, versions immutable and
---      unique per book, cascade on book delete).
+--      unique per book, cascade on book delete)
+--      and 20261119002300_photo_ingest.sql (photo_ingest: owner reads own
+--      rows only, no client writes, state / reason / hash checks, cascade on
+--      photo delete).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -72,7 +75,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 179 checks passed
+--       RLS OK — all 180 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -3866,6 +3869,88 @@ begin
      or exists (select 1 from public.storybook_versions where book_id = ds_m) then
     raise exception 'RLS FAIL [storybook versions]: book delete left story rows behind';
   end if;
+  checks := checks + 1;
+
+  -- ===========================================================================
+  -- 2300 photo ingest: photo_ingest (server-side ingestion status)
+  -- ===========================================================================
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  set local role service_role;
+  insert into public.photo_ingest (photo_id, book_id, user_id, state, fingerprint, original_format,
+                                   original_bytes, ai_copy_sha256, ai_copy_bytes)
+  values (photo_a, book_a, uid_a, 'verified', 's1:0123456789abcdef', 'jpeg', 1000, repeat('a', 64), 500);
+  reset role;
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.photo_ingest where photo_id = photo_a;
+  if n <> 1 then
+    raise exception 'RLS FAIL [photo ingest]: owner cannot read own ingest row';
+  end if;
+  begin
+    update public.photo_ingest set state = 'verified' where photo_id = photo_a;
+    raise exception 'RLS FAIL [photo ingest]: owner could update an ingest row';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.photo_ingest (photo_id, book_id, user_id, state, reason, fingerprint)
+    values (photo_m, book_a, uid_a, 'rejected', 'original_missing', 's1:0123456789abcdef');
+    raise exception 'RLS FAIL [photo ingest]: owner could insert an ingest row';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    delete from public.photo_ingest where photo_id = photo_a;
+    raise exception 'RLS FAIL [photo ingest]: owner could delete an ingest row';
+  exception when insufficient_privilege then null;
+  end;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_b, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.photo_ingest;
+  if n <> 0 then
+    raise exception 'RLS FAIL [photo ingest]: B can read A''s ingest rows';
+  end if;
+  reset role;
+  set local role anon;
+  begin
+    select count(*) into n from public.photo_ingest;
+    raise exception 'RLS FAIL [photo ingest]: anon can select photo_ingest';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  set local role service_role;
+  begin
+    update public.photo_ingest set state = 'rejected' where photo_id = photo_a;
+    raise exception 'RLS FAIL [photo ingest]: rejected without a reason accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.photo_ingest set reason = 'x' where photo_id = photo_a;
+    raise exception 'RLS FAIL [photo ingest]: verified with a reason accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.photo_ingest set ai_copy_sha256 = 'nothex' where photo_id = photo_a;
+    raise exception 'RLS FAIL [photo ingest]: bad sha256 accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.photo_ingest set ai_copy_sha256 = null where photo_id = photo_a;
+    raise exception 'RLS FAIL [photo ingest]: verified without an AI copy hash accepted';
+  exception when check_violation then null;
+  end;
+  update public.photo_ingest
+     set state = 'rejected', reason = 'original_type_mismatch', original_format = null,
+         original_bytes = null, ai_copy_sha256 = null, ai_copy_bytes = null
+   where photo_id = photo_a;
+  if not exists (select 1 from public.photo_ingest where photo_id = photo_a and state = 'rejected') then
+    raise exception 'RLS FAIL [photo ingest]: service role could not record a rejection';
+  end if;
+  -- the row goes away with the photo (service role delete: bypasses the client photo guards)
+  delete from public.photo_ingest where photo_id = photo_a;
+  insert into public.photo_ingest (photo_id, book_id, user_id, state, reason, fingerprint)
+  values (photo_a, book_a, uid_a, 'rejected', 'ai_copy_not_jpeg', 's1:0123456789abcdef');
+  reset role;
   checks := checks + 1;
 
   -- ---------------------------------------------------------------------------

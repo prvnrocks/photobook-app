@@ -6,9 +6,11 @@ vi.mock("server-only", () => ({}));
 const mocks = vi.hoisted(() => ({
   user: null as { id: string } | null,
   finalizeBook: vi.fn(),
+  ingestBookPhotos: vi.fn(),
 }));
 vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: async () => mocks.user }));
 vi.mock("@/lib/photos/finalize", () => ({ finalizeBook: mocks.finalizeBook }));
+vi.mock("@/lib/photos/ingest", () => ({ ingestBookPhotos: mocks.ingestBookPhotos }));
 
 const route = await import("@/app/api/books/[id]/finalize/route");
 const { isSameOrigin } = await import("@/lib/auth/same-origin");
@@ -42,6 +44,8 @@ let errors: string[];
 beforeEach(() => {
   mocks.user = { id: "u1" };
   mocks.finalizeBook.mockReset();
+  mocks.ingestBookPhotos.mockReset();
+  mocks.ingestBookPhotos.mockResolvedValue({ photos: 3, verified: 2, rejected: 1, skipped: 0, pending: 0, sanitized: 0, available: true });
   errors = [];
   vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
     errors.push(a.map(String).join(" "));
@@ -107,8 +111,29 @@ describe("POST /api/books/[id]/finalize", () => {
     const res = await route.POST(req(), ctx());
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
-    expect(await res.json()).toEqual(COUNTS);
+    expect(await res.json()).toEqual({ ...COUNTS, ingest: { verified: 2, rejected: 1, pending: 0 } });
     expect(mocks.finalizeBook).toHaveBeenCalledWith(ID, {}, { colors: undefined });
+    expect(mocks.ingestBookPhotos).toHaveBeenCalledWith(ID, mocks.user!.id);
+  });
+
+  it("ingestion never breaks finalize: a failure returns the counts with ingest null", async () => {
+    mocks.finalizeBook.mockResolvedValue(COUNTS);
+    mocks.ingestBookPhotos.mockRejectedValueOnce(new Error("storage down: secret/path"));
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await route.POST(req(), ctx());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ...COUNTS, ingest: null });
+    expect(JSON.stringify(err.mock.calls)).not.toContain("secret/path");
+    err.mockRestore();
+  });
+
+  it("ingestion runs only for the owner's finalized book (not for 401 / 404 / 429)", async () => {
+    mocks.ingestBookPhotos.mockClear();
+    mocks.finalizeBook.mockResolvedValue(null);
+    expect((await route.POST(req(), ctx())).status).toBe(404);
+    mocks.finalizeBook.mockResolvedValue({ rateLimited: true, retryAfterSeconds: 6 });
+    expect((await route.POST(req(), ctx())).status).toBe(429);
+    expect(mocks.ingestBookPhotos).not.toHaveBeenCalled();
   });
 
   it("429 with Retry-After when finalize is rate limited", async () => {

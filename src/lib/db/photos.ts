@@ -17,6 +17,8 @@ import "server-only";
 import { PHOTO_COLOR_RE } from "@/lib/image/color";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseTimeout, SupabaseUnavailableError } from "@/lib/supabase/deadline";
+import { prepareAiCopy } from "@/lib/photos/ingest-verify";
+import { listRejectedPhotoIds } from "@/lib/db/photo-ingest";
 import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 import { clipText } from "@/lib/text/clip";
@@ -360,7 +362,11 @@ export async function listPhotosForCuration(bookId: string): Promise<CurationPho
     .order("taken_at", { ascending: true, nullsFirst: false })
     .order("id", { ascending: true });
   if (error) throw new PhotosQueryError("list photos for curation", error.code);
-  return data;
+  // A photo the server rejected at ingestion (bytes are not the image the row claims) keeps its
+  // row but is never sent to the model: without a thumb path the Curator treats it as "not analysed".
+  const rejected = await listRejectedPhotoIds(bookId);
+  if (rejected.size === 0) return data;
+  return data.map((r) => (rejected.has(r.id) ? { ...r, thumb_path: null } : r));
 }
 
 /** Parallel downloads in loadThumbBase64. */
@@ -405,7 +411,11 @@ export async function loadThumbBase64(paths: string[]): Promise<Map<string, stri
         if (typeof data.size === "number" && data.size > THUMB_MAX_BYTES) continue;
         const bytes = new Uint8Array(await data.arrayBuffer());
         if (bytes.length > THUMB_MAX_BYTES || !isJpeg(bytes)) continue;
-        out.set(path, Buffer.from(bytes).toString("base64"));
+        // Only a validated, metadata-free copy may reach the model (≤ 512 px JPEG, no EXIF / GPS /
+        // XMP / comments) — whatever the uploader's browser stored.
+        const copy = prepareAiCopy(bytes);
+        if (!copy.ok) continue;
+        out.set(path, Buffer.from(copy.bytes).toString("base64"));
       } catch (err) {
         if (isSupabaseTimeout(err)) {
           timedOut ??= err;

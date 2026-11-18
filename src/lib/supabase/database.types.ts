@@ -418,6 +418,69 @@ export type Database = {
           },
         ]
       }
+      photo_ingest: {
+        Row: {
+          ai_copy_bytes: number | null
+          ai_copy_sanitized: boolean
+          ai_copy_sha256: string | null
+          attempts: number
+          book_id: string
+          checked_at: string
+          fingerprint: string
+          original_bytes: number | null
+          original_format: string | null
+          photo_id: string
+          reason: string | null
+          state: string
+          user_id: string
+        }
+        Insert: {
+          ai_copy_bytes?: number | null
+          ai_copy_sanitized?: boolean
+          ai_copy_sha256?: string | null
+          attempts?: number
+          book_id: string
+          checked_at?: string
+          fingerprint: string
+          original_bytes?: number | null
+          original_format?: string | null
+          photo_id: string
+          reason?: string | null
+          state: string
+          user_id: string
+        }
+        Update: {
+          ai_copy_bytes?: number | null
+          ai_copy_sanitized?: boolean
+          ai_copy_sha256?: string | null
+          attempts?: number
+          book_id?: string
+          checked_at?: string
+          fingerprint?: string
+          original_bytes?: number | null
+          original_format?: string | null
+          photo_id?: string
+          reason?: string | null
+          state?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "photo_ingest_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "photo_ingest_photo_id_fkey"
+            columns: ["photo_id"]
+            isOneToOne: true
+            referencedRelation: "photos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       photos: {
         Row: {
           ai: Json | null

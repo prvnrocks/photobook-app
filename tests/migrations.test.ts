@@ -2953,9 +2953,9 @@ describe("migrations: AI Balanced Storybook foundation (2200)", () => {
   const sql = m?.sql ?? "";
   const flat = sql.replace(/\s+/g, " ");
 
-  it("is the latest migration and purely additive (no alter of existing tables, no drop, no backfill)", () => {
+  it("comes right after 2100 and is purely additive (no alter of existing tables, no drop, no backfill)", () => {
     expect(m, `${name} missing`).toBeDefined();
-    expect(files[files.length - 1]).toBe(name);
+    expect(files.indexOf(name)).toBe(files.indexOf("20261118002100_design_styles_m30.sql") + 1); // latest until 2300
     expect(sql).not.toMatch(/\bdrop\b/);
     expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
     expect(sql).not.toMatch(/security\s+definer/);
@@ -2984,19 +2984,68 @@ describe("migrations: AI Balanced Storybook foundation (2200)", () => {
     expect(flat).toContain(`target_narrative_share numeric(3, 2) not null default ${STORY_BALANCE.narrativeShare}`);
   });
 
-  it("versions are immutable (trigger) and rls_check.sql covers 2200 with 179 checks", () => {
+  it("versions are immutable (trigger) and rls_check.sql covers 2200 (179 checks then; 2300 → 180)", () => {
     expect(flat).toContain("create trigger storybook_versions_immutable before update on public.storybook_versions");
     expect(flat).toContain("revoke all on function private.storybook_versions_immutable() from public, anon, authenticated;");
     const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
     expect(rls).toContain(name);
     expect(rls).toContain("RLS FAIL [storybooks]");
     expect(rls).toContain("RLS FAIL [storybook versions]");
-    expect(rls).toContain("RLS OK — all 179 checks passed");
   });
 
   it("database.types.ts lists both tables (hand-edited)", () => {
     const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
     expect(types).toMatch(/storybooks: \{\s*Row: \{[\s\S]*?target_narrative_share: number/);
     expect(types).toMatch(/storybook_versions: \{\s*Row: \{[\s\S]*?parent_version: number \| null/);
+  });
+});
+
+describe("migrations: server-side photo ingestion status (2300)", () => {
+  const name = "20261119002300_photo_ingest.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const flat = sql.replace(/\s+/g, " ");
+
+  it("is the latest migration and purely additive (photos, storage and existing functions untouched)", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files[files.length - 1]).toBe(name);
+    expect(sql).not.toMatch(/\bdrop\b/);
+    expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
+    expect(sql).not.toMatch(/security\s+definer/);
+    expect(sql).not.toMatch(/create\s+(or\s+replace\s+)?function/);
+    expect(sql).not.toMatch(/\b(update|delete\s+from|insert\s+into)\s+(public|storage)\./);
+    expect(sql).not.toMatch(/storage\./);
+    const altered = [...sql.matchAll(/alter\s+table\s+public\.(\w+)/g)].map((x) => x[1]);
+    expect([...new Set(altered)]).toEqual(["photo_ingest"]);
+  });
+
+  it("photo_ingest cascades with photo / book / user, owner read-only, no anon access", () => {
+    expect(flat).toContain("photo_id uuid primary key references public.photos (id) on delete cascade");
+    expect(flat).toContain("book_id uuid not null references public.books (id) on delete cascade");
+    expect(flat).toContain("user_id uuid not null references auth.users (id) on delete cascade");
+    expect(flat).toContain("revoke all on table public.photo_ingest from anon, authenticated, public;");
+    expect(flat).toContain("grant select on table public.photo_ingest to authenticated;");
+    expect(sql).not.toMatch(/for\s+(insert|update|delete|all)\s+to/);
+    expect(sql).not.toMatch(/to\s+anon\b/);
+    expect(flat).toContain("using (user_id = (select auth.uid()))");
+  });
+
+  it("checks: a rejection always has a reason code, a verified row has format + bytes + AI copy hash", async () => {
+    const { INGEST_REJECT_REASONS, AI_COPY_MAX_BYTES } = await import("@/lib/photos/ingest-verify");
+    expect(flat).toContain("(state = 'rejected' and reason is not null and reason ~ '^[a-z_]{3,40}$')");
+    for (const r of INGEST_REJECT_REASONS) expect(r).toMatch(/^[a-z_]{3,40}$/);
+    expect(flat).toContain(`check (ai_copy_bytes between 1 and ${AI_COPY_MAX_BYTES})`);
+    expect(flat).toContain("check (ai_copy_sha256 ~ '^[0-9a-f]{64}$')");
+    expect(flat).toContain("check (original_format in ('jpeg', 'png', 'webp'))");
+    expect(flat).toContain("constraint photo_ingest_verified_complete");
+  });
+
+  it("rls_check.sql covers 2300 and counts 180 checks; database.types.ts lists the table", () => {
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain(name);
+    expect(rls).toContain("RLS FAIL [photo ingest]");
+    expect(rls).toContain("RLS OK — all 180 checks passed");
+    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
+    expect(types).toMatch(/photo_ingest: \{\s*Row: \{[\s\S]*?ai_copy_sha256: string \| null/);
   });
 });
