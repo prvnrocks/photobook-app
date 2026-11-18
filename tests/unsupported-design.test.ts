@@ -27,7 +27,7 @@ import { bestCoverLayout, bestPageLayout, fullPageLayout } from "@/lib/layouts/f
 import { simulateUnsupported } from "./fixtures/simulated-unsupported-style";
 
 const FORMATS = ["A5_PORTRAIT", "A5_LANDSCAPE"] as const;
-/** Real styles the code can't lay out (none since M10c T10). */
+/** Real styles the code can't lay out yet (M30 T1: magazine + editorial, until their layouts ship). */
 const UNSUPPORTED = DESIGN_STYLES.filter((s) => !(SUPPORTED_DESIGN_STYLES as readonly string[]).includes(s));
 /** Styles simulated as "no layouts" below — each one in turn. */
 const SIMULATED = ["geometric", "scrapbook"] as const;
@@ -58,9 +58,11 @@ function expectTyped(fn: () => unknown, design: BookDesign) {
 }
 
 describe("supported designs", () => {
-  it("every design style is supported since M10c T10 (geometric + scrapbook enabled)", () => {
-    expect(UNSUPPORTED).toEqual([]);
-    expect([...SUPPORTED_DESIGN_STYLES].sort()).toEqual([...DESIGN_STYLES].sort());
+  it("every design style is supported except the M30 styles whose layouts have not shipped yet", () => {
+    // M30 T1: magazine + editorial are in the schema but not laid out. Empty this list (and restore
+    // the equality with DESIGN_STYLES) in the change that adds them to SUPPORTED_DESIGN_STYLES.
+    expect(UNSUPPORTED).toEqual(["magazine", "editorial"]);
+    expect([...SUPPORTED_DESIGN_STYLES, ...UNSUPPORTED].sort()).toEqual([...DESIGN_STYLES].sort());
   });
 
   it("an unknown style string is never supported (the check is an allowlist)", () => {

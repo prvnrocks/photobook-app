@@ -64,6 +64,8 @@ export const DESIGN_STYLE_LABELS: Record<DesignStyle, string> = {
   classic: "Classic",
   geometric: "Geometric",
   scrapbook: "Scrapbook",
+  magazine: "Magazine",
+  editorial: "Editorial",
 };
 
 export const DESIGN_STYLE_HINTS: Record<FormDesignStyle, string> = {

@@ -13,7 +13,8 @@ import { serializeDoc } from "@/lib/book/doc-version";
 import { devPreviewDoc, devPreviewPhotos } from "@/lib/book/dev-preview";
 import { devSampleDoc, devSamplePhotos } from "@/lib/book/dev-sample";
 import { setCover, setCoverLayout } from "@/lib/book/edit-ops";
-import { BOOK_FORMATS, DESIGN_STYLES } from "@/lib/book/schema";
+import { SUPPORTED_DESIGN_STYLES } from "@/lib/book/book-design";
+import { BOOK_FORMATS } from "@/lib/book/schema";
 import { autoCoversFor, coverStylesFor, layoutsFor } from "@/lib/book/spreads";
 import type { BookDoc, BookFormat, DesignStyle } from "@/lib/book/types";
 import { validateEditorDoc } from "@/lib/book/validate-editor-doc";
@@ -25,7 +26,8 @@ import { M29_COVERS } from "@/lib/layouts";
 // The editor registry → UpgradeSheet → UpgradeButton imports the upgrade server action (server-only).
 vi.mock("@/app/books/[id]/upgrade/actions", () => ({ startUpgradeCheckout: vi.fn() }));
 
-const DESIGNS = DESIGN_STYLES.flatMap((designStyle) => BOOK_FORMATS.map((format) => ({ format, designStyle })));
+// M30 T1: styles with a layout catalogue (magazine / editorial are in DESIGN_STYLES before their layouts ship).
+const DESIGNS = SUPPORTED_DESIGN_STYLES.flatMap((designStyle) => BOOK_FORMATS.map((format) => ({ format, designStyle })));
 const key = (d: { format: BookFormat; designStyle: DesignStyle }) => `${d.designStyle}/${d.format}`;
 const M29_IDS = new Set(M29_COVERS.map((l) => l.id));
 

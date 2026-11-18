@@ -93,6 +93,9 @@ export const STYLE_DEFAULT_BACKGROUND: Record<DesignStyle, Background> = {
   modern: { kind: "color", hex: "#FFFFFF" },
   geometric: { kind: "color", hex: "#FFFFFF" },
   scrapbook: { kind: "texture", textureId: "paper-cream" },
+  // M30 T1: neutral white until the styles' palettes ship (T2).
+  magazine: { kind: "color", hex: "#FFFFFF" },
+  editorial: { kind: "color", hex: "#FFFFFF" },
 };
 
 export function styleDefaultBackground(style: DesignStyle | null | undefined): Background {

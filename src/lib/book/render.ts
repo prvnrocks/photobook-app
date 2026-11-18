@@ -585,6 +585,9 @@ const PANEL_TYPE: Record<TextRole, { maxMm: number; minMm: number; lineHeight: n
   subtitle: { maxMm: 4.6, minMm: 2.8, lineHeight: 1.25, charEm: 0.48 },
   year: { maxMm: 4.6, minMm: 2.8, lineHeight: 1.25, charEm: 0.48 },
   caption: { maxMm: 3.85, minMm: 2.8, lineHeight: CAPTION_LINE_HEIGHT, charEm: 0.48 },
+  // M30 T1 placeholders (= title / caption) so the record compiles; the renderer task sets real sizes.
+  masthead: { maxMm: 15, minMm: 5, lineHeight: 1.1, charEm: 0.42 },
+  body: { maxMm: 3.85, minMm: 2.8, lineHeight: CAPTION_LINE_HEIGHT, charEm: 0.48 },
 };
 
 /**
@@ -791,6 +794,11 @@ function boundText(doc: BookDoc, bind: TextBinding, owner: BookPage | null): str
     }
     case "pageCaption":
       return owner?.caption?.text ?? "";
+    // M30 T1: schema only — no layout uses these binds yet. Empty text = the panel is not drawn;
+    // the renderer task resolves them (chapter description; title of chapter `n`).
+    case "chapterDescription":
+    case "coverLine":
+      return "";
   }
 }
 

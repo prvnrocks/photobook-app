@@ -394,6 +394,9 @@ const PANEL_INK: Record<TextRole, keyof typeof INK_TEXT> = {
   subtitle: "coverSubtitle",
   year: "coverSubtitle",
   caption: "caption",
+  // M30 T1: same ink family as title / caption until the renderer task (LayoutText.ink).
+  masthead: "coverTitle",
+  body: "caption",
 };
 
 /**

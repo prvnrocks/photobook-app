@@ -20,7 +20,10 @@ import { BOOK_FONTS, bookFontFamily, fontWeightFor, isBookFont, type BookFontNam
 import type { DesignStyle } from "@/lib/book/types";
 import type { StickerId } from "@/lib/design/stickers";
 
-export const TEXT_ROLES = ["title", "subtitle", "year", "chapter", "caption"] as const;
+// M30: "masthead" (big cover title of the magazine styles) and "body" (chapter descriptions). For
+// the four pre-M30 styles masthead = the title token and body = the caption token (none of their
+// layouts use the two roles, so nothing renders differently).
+export const TEXT_ROLES = ["title", "subtitle", "year", "chapter", "caption", "masthead", "body"] as const;
 export type TextRole = (typeof TEXT_ROLES)[number];
 
 export interface RoleFontToken {
@@ -97,6 +100,8 @@ const CLASSIC: StyleTokens = {
     year: { latin: "Playfair", arabic: "Cairo", weight: 400 },
     chapter: { latin: "Playfair", arabic: "Cairo", weight: 600 },
     caption: { latin: "Playfair", arabic: "Cairo", weight: 400 },
+    masthead: { latin: "Playfair", arabic: "Cairo", weight: 600 },
+    body: { latin: "Playfair", arabic: "Cairo", weight: 400 },
   },
 };
 
@@ -106,6 +111,8 @@ const MODERN_FONTS: Record<TextRole, RoleFontToken> = {
   year: { latin: "Cormorant", arabic: "Amiri", weight: 600 },
   chapter: { latin: "Bebas", arabic: "Lalezar", weight: 400, uppercase: true },
   caption: { latin: "Cormorant", arabic: "Amiri", weight: 400 },
+  masthead: { latin: "GreatVibes", arabic: "ArefRuqaa", weight: 400 },
+  body: { latin: "Cormorant", arabic: "Amiri", weight: 400 },
 };
 
 // Crisp drawn shadows (G1 sign-off): soft = paper lying flat, lifted = polaroid standing off the page.
@@ -122,6 +129,8 @@ const GEOMETRIC: StyleTokens = {
     year: { latin: "Bebas", arabic: "Lalezar", weight: 400, letterSpacingEm: 0.16 },
     chapter: { latin: "Bebas", arabic: "Lalezar", weight: 400, letterSpacingEm: 0.05 },
     caption: { latin: "Cormorant", arabic: "Amiri", weight: 400 },
+    masthead: { latin: "Cormorant", arabic: "Amiri", weight: 600, letterSpacingEm: 0.01 },
+    body: { latin: "Cormorant", arabic: "Amiri", weight: 400 },
   },
   palette: {
     background: "#FFFFFF",
@@ -144,6 +153,8 @@ const SCRAPBOOK: StyleTokens = {
     year: { latin: "Bebas", arabic: "Lalezar", weight: 400, letterSpacingEm: 0.12 },
     chapter: { latin: "Bebas", arabic: "Lalezar", weight: 400, letterSpacingEm: 0.03 },
     caption: { latin: "Cormorant", arabic: "Amiri", weight: 400 },
+    masthead: { latin: "Bebas", arabic: "Lalezar", weight: 400, letterSpacingEm: 0.03 },
+    body: { latin: "Cormorant", arabic: "Amiri", weight: 400 },
   },
   palette: {
     background: "#F6F0E4",
@@ -158,11 +169,25 @@ const SCRAPBOOK: StyleTokens = {
   shadows: SHADOWS,
 };
 
+const TEMP_M30_FONTS: Record<TextRole, RoleFontToken> = {
+  title: { latin: "Bebas", arabic: "Lalezar", weight: 400 },
+  subtitle: { latin: "Cormorant", arabic: "Amiri", weight: 400 },
+  year: { latin: "Bebas", arabic: "Lalezar", weight: 400 },
+  chapter: { latin: "Bebas", arabic: "Lalezar", weight: 400 },
+  caption: { latin: "Cormorant", arabic: "Amiri", weight: 400 },
+  masthead: { latin: "Bebas", arabic: "Lalezar", weight: 400 },
+  body: { latin: "Cormorant", arabic: "Amiri", weight: 400 },
+};
+
 export const STYLE_TOKENS: Record<DesignStyle, StyleTokens> = {
   classic: CLASSIC,
   modern: { id: "modern", fonts: MODERN_FONTS },
   geometric: GEOMETRIC,
   scrapbook: SCRAPBOOK,
+  // M30 T1 placeholders so the record compiles: existing faces only, no palette. T2 replaces both
+  // with the real magazine / editorial tokens (new fonts, palettes, colourways).
+  magazine: { id: "magazine", fonts: TEMP_M30_FONTS },
+  editorial: { id: "editorial", fonts: TEMP_M30_FONTS },
 };
 
 export function styleTokens(style: DesignStyle | null | undefined): StyleTokens {

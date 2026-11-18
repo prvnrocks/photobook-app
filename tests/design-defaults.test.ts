@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { OCCASIONS } from "@/lib/book/options";
+import { SUPPORTED_DESIGN_STYLES } from "@/lib/book/book-design";
 import { BOOK_FORMATS, DesignStyleSchema } from "@/lib/book/schema";
 import {
   DEFAULT_FORM_FORMAT,
@@ -37,9 +38,10 @@ describe("New book design defaults (D-068)", () => {
 
   it("the form offers all four schema styles: Modern, Classic, Geometric, Scrapbook", () => {
     expect(FORM_DESIGN_STYLES).toEqual(["modern", "classic", "geometric", "scrapbook"]);
-    expect([...FORM_DESIGN_STYLES].sort()).toEqual([...DesignStyleSchema.options].sort());
+    // M30 T1: the form offers the styles that have layouts (magazine / editorial join with their layouts).
+    expect([...FORM_DESIGN_STYLES].sort()).toEqual([...SUPPORTED_DESIGN_STYLES].sort());
     expect([...FORM_FORMATS].sort()).toEqual([...BOOK_FORMATS].sort());
-    for (const s of DesignStyleSchema.options) expect(isFormDesignStyle(s)).toBe(true);
+    for (const s of DesignStyleSchema.options) expect(isFormDesignStyle(s)).toBe((SUPPORTED_DESIGN_STYLES as readonly string[]).includes(s));
     expect(isFormDesignStyle("Modern")).toBe(false);
     expect(isFormDesignStyle(undefined)).toBe(false);
   });

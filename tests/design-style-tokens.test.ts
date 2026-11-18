@@ -20,8 +20,16 @@ const HEX = /^#[0-9A-F]{6}$/;
 
 describe("style tokens (M10c T3)", () => {
   it("classic and modern tokens are byte-identical to the frozen copies", () => {
-    expect(JSON.stringify(STYLE_TOKENS.classic)).toBe(CLASSIC_FROZEN);
-    expect(JSON.stringify(STYLE_TOKENS.modern)).toBe(MODERN_FROZEN);
+    // M30 T1 added the roles "masthead" (= title) and "body" (= caption) to every style; no
+    // pre-M30 layout uses them. The five frozen roles must stay byte-identical.
+    const frozenRoles = (s: "classic" | "modern") => {
+      const { masthead, body, ...fonts } = STYLE_TOKENS[s].fonts;
+      expect(masthead).toEqual(fonts.title);
+      expect(body).toEqual(fonts.caption);
+      return JSON.stringify({ ...STYLE_TOKENS[s], fonts });
+    };
+    expect(frozenRoles("classic")).toBe(CLASSIC_FROZEN);
+    expect(frozenRoles("modern")).toBe(MODERN_FROZEN);
   });
 
   it("classic and modern resolve without letter-spacing (render models unchanged)", () => {

@@ -5,7 +5,8 @@
 // Theme builders: `npx vitest run tests/layouts-covers.test.ts` after adding a cover.
 
 import { describe, expect, it } from "vitest";
-import { BOOK_FORMATS, DESIGN_STYLES, layoutIssues } from "@/lib/book/schema";
+import { SUPPORTED_DESIGN_STYLES } from "@/lib/book/book-design";
+import { BOOK_FORMATS, layoutIssues } from "@/lib/book/schema";
 import { autoCoversFor, coverStylesFor, layoutsFor } from "@/lib/book/spreads";
 import type { BookFormat, DesignStyle, Layout } from "@/lib/book/types";
 import { CLASSIC_PORTRAIT_LAYOUTS, LAYOUTS, M29_COVERS } from "@/lib/layouts";
@@ -28,7 +29,8 @@ import { SCRAPBOOK_PORTRAIT_COVERS } from "@/lib/layouts/scrapbook/portrait/cove
 import { TEST_FORMATS, TEST_M29_COVERS, TEST_STYLES } from "./fixtures/test-m29-covers";
 import { coverRuleIssues, LANDSCAPE_SPINE_MM } from "./helpers/cover-rules";
 
-const DESIGNS = DESIGN_STYLES.flatMap((designStyle) => BOOK_FORMATS.map((format) => ({ format, designStyle })));
+// M30 T1: styles with a layout catalogue (magazine / editorial are in DESIGN_STYLES before their layouts ship).
+const DESIGNS = SUPPORTED_DESIGN_STYLES.flatMap((designStyle) => BOOK_FORMATS.map((format) => ({ format, designStyle })));
 const key = (d: { format: BookFormat; designStyle: DesignStyle }) => `${d.designStyle}/${d.format}`;
 
 /** The 8 M29 arrays with the design each must hold. */
@@ -168,7 +170,7 @@ describe("M29 cover arrays — catalogue placement", () => {
   });
 
   it("test fixture style/format lists match the schema", () => {
-    expect([...TEST_STYLES]).toEqual([...DESIGN_STYLES]);
+    expect([...TEST_STYLES]).toEqual([...SUPPORTED_DESIGN_STYLES]);
     expect([...TEST_FORMATS]).toEqual([...BOOK_FORMATS]);
   });
 });

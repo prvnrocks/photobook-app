@@ -2773,7 +2773,9 @@ describe("migrations: Milestone 10b design columns (1900, D-063)", () => {
     const schema = readFileSync(join(process.cwd(), "src", "lib", "book", "schema.ts"), "utf8");
     const list = (re: RegExp) => [...re.exec(schema)![1]!.matchAll(/"([^"]+)"/g)].map((x) => x[1]!.toLowerCase());
     const formats = list(/BOOK_FORMATS = \[([^\]]*)\]/);
-    const styles = list(/DESIGN_STYLES = \[([^\]]*)\]/);
+    // M30 T1: magazine / editorial are added to the check by the M30 migration, not by 1900.
+    const styles = list(/DESIGN_STYLES = \[([^\]]*)\]/).filter((x) => x !== "magazine" && x !== "editorial");
+    expect(styles).toHaveLength(4);
     expect(flat).toContain(`check (format in (${formats.map((x) => `'${x}'`).join(", ")}))`);
     expect(flat).toContain(`check (design_style in (${styles.map((x) => `'${x}'`).join(", ")}))`);
   });

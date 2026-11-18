@@ -11,11 +11,15 @@ import type {
   PageBackgroundSchema,
   PageSchemaV1,
   CaptionSchema,
-  ChapterSchema,
+  ChapterDescriptionSchema,
+  ChapterSchemaV2,
+  ColourwayIdSchema,
+  ColourwaySchema,
   CoverSchemaV2,
   CropSchema,
   DocMetaSchema,
   GeneratorSchema,
+  LayoutBlockSchema,
   LayoutDecorationSchema,
   LayoutSchema,
   LayoutSlotDefSchema,
@@ -48,7 +52,12 @@ export type Slot = z.infer<typeof SlotSchema>;
 export type Crop = z.infer<typeof CropSchema>;
 export type Caption = z.infer<typeof CaptionSchema>;
 export type CaptionSource = Caption["source"];
-export type Chapter = z.infer<typeof ChapterSchema>;
+/** In-memory (v2) chapter: the v1 fields + optional M30 description. */
+export type Chapter = z.infer<typeof ChapterSchemaV2>;
+export type ChapterDescription = z.infer<typeof ChapterDescriptionSchema>;
+/** M30 accent colourway: any id (ColourwayId) and the stored `{ id, source }` (Colourway). */
+export type ColourwayId = z.infer<typeof ColourwayIdSchema>;
+export type Colourway = z.infer<typeof ColourwaySchema>;
 export type Cover = z.infer<typeof CoverSchemaV2>;
 export type DocMeta = z.infer<typeof DocMetaSchema>;
 export type Generator = z.infer<typeof GeneratorSchema>;
@@ -65,6 +74,12 @@ export type SlotFrame = z.infer<typeof SlotFrameSchema>;
 export type SlotShadow = NonNullable<LayoutSlotDef["shadow"]>;
 export type LayoutDecoration = z.infer<typeof LayoutDecorationSchema>;
 export type LayoutText = z.infer<typeof LayoutTextSchema>;
+export type TextBinding = LayoutText["bind"];
+/** M30 text colour role of a panel. */
+export type TextInk = NonNullable<LayoutText["ink"]>;
+/** M30 flat colour block of a layout (panel / bar / diagonal cut). */
+export type LayoutBlock = z.infer<typeof LayoutBlockSchema>;
+export type BlockFill = LayoutBlock["fill"];
 export type Orientation = Layout["prefers"][number];
 
 export type { CaptionLang, Occasion, Tone } from "./options";

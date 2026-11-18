@@ -424,6 +424,15 @@ Differences from v1:
   every photo, crop, caption and background; a too-small twin → smallest bigger layout of the format/style.
 - v2 features also: any spread / non-classic layout, caption fonts in `src/lib/book/fonts-v2.ts`.
 
+### Magazine styles (M30 T1, D-090)
+- `style.designStyle` also `magazine | editorial` (in the schema; not in `SUPPORTED_DESIGN_STYLES` until their layouts ship).
+- `chapters[].description?`: `{ text (1–400 chars, not blank), source: "ai" | "user" }` — AI never overwrites `user`.
+- `style.colourway?`: `{ id, source: "ai" | "user" }`. Ids: magazine `lime sunset sky coral teal gold`, editorial
+  `ink teal coral cobalt mustard forest` (`STYLE_COLOURWAY_IDS`); `validateBookDoc` rejects an id of another style and
+  any colourway on the four older styles. Absent = the style's default.
+- Both are v2 features (either one forces v2); a doc with neither serialises exactly as before.
+- Published snapshot (v2): `chapters[].description = { text }`, `style.colourway = { id }` — `source` dropped.
+
 ## Layout definition (`src/lib/layouts/two-vertical.ts`)
 ```ts
 export const twoVertical: Layout = {
@@ -439,6 +448,12 @@ export const twoVertical: Layout = {
   // spreads only: twin: ["left-single-id", "right-single-id"]; x in 0–200 %
   // optional texts: [{ bind: "chapterTitle"|"dateLabel"|"pageCaption"|"coverTitle"|"coverSubtitle",
   //                    box: {x,y,w,h}, align: "start"|"center"|"end", font: "title"|"subtitle"|"year"|"chapter"|"caption" }]  // = styles.ts TEXT_ROLES
+  // M30 (D-090): binds + "chapterDescription" (pages/spreads only) | "coverLine" (covers only, with n: 0..5 = chapter index);
+  //   fonts + "masthead" | "body"; texts[].ink?: "ink"|"muted"|"accent"|"paper"; texts[].rotate may be exactly 90 / -90
+  //   (box = the final visual rect, ≥ 4 mm inside the trim).
+  // optional blocks (max 8): [{ box, fill: "panel"|"accent"|"paper"|"ink", layer: "under"|"over",
+  //   points?: [[x,y] × 3..8] in % of the box, when?: <bind> }]  // flat colour; under = below photos, over = above photos, below text;
+  //   `when` hides the block while that binding's text is empty; a block with points never crosses a spread's fold.
 };
 ```
 

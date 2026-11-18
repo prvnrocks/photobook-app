@@ -3,7 +3,7 @@
 // viewer's chapter label "title · date" / Contents sheet (D-040). Kept: chapter `dateLabel` (a
 // coarse human label like "March 2025" the owner shares as part of the album). Dropped: `meta`
 // (generator, runId, userEdited), caption `source` (who wrote it), page background `source`
-// (who chose it), chapter `place` (GPS-derived), `occasion` (except below), and any unknown keys — objects are
+// (who chose it), chapter description / colourway `source` (M30), chapter `place` (GPS-derived), `occasion` (except below), and any unknown keys — objects are
 // rebuilt field by field, never spread.
 // `occasion` (optional, v2 only, 2026-11-17): kept ONLY when the book shows the occasion accent
 // sticker (a layout decoration or text plate using OCCASION_ACCENT) and it isn't "other" — the
@@ -27,7 +27,9 @@ import {
   BookFormatSchema,
   OccasionSchema,
   CaptionSchema,
+  ChapterDescriptionSchema,
   ChapterSchema,
+  ColourwaySchema,
   CoverSchema,
   CropSchema,
   DEFAULT_DESIGN_STYLE,
@@ -50,6 +52,10 @@ import { LIMITS } from "@/lib/ai/limits";
 const PublicCaptionSchema = CaptionSchema.pick({ text: true, font: true, align: true }).strict();
 const PublicSlotSchema = z.object({ photoId: PageSchema.shape.slots.element.shape.photoId, crop: CropSchema.strict() }).strict();
 const PublicChapterSchema = ChapterSchema.pick({ id: true, title: true, dateLabel: true }).strict();
+/** v2 chapter: + optional description WITHOUT `source` (M30). Absent in older snapshots. */
+const PublicChapterSchemaV2 = PublicChapterSchema.extend({
+  description: ChapterDescriptionSchema.pick({ text: true }).strict().optional(),
+}).strict();
 const CaptionLangField = z.enum(CAPTION_LANGS).optional();
 
 const PublicPageSchemaV1 = z
@@ -98,10 +104,16 @@ export const PublicBookDocV2Schema = z
     format: BookFormatSchema,
     /** v2 only: the cover's own background (D-087 / D-088) WITHOUT `source`, absent = book default. Strict incl. inside it. */
     cover: CoverSchema.extend({ background: BackgroundSchema.optional() }).strict(),
-    chapters: z.array(PublicChapterSchema).max(100),
+    chapters: z.array(PublicChapterSchemaV2).max(100),
     pages: z.array(PublicPageSchemaV2).max(LIMITS.paid.maxPages),
     style: z
-      .object({ background: BackgroundSchema, designStyle: DesignStyleSchema, font: StyleSchema.shape.font })
+      .object({
+        background: BackgroundSchema,
+        designStyle: DesignStyleSchema,
+        font: StyleSchema.shape.font,
+        /** M30: accent colourway id WITHOUT `source`. Absent = the style's default / older snapshots. */
+        colourway: ColourwaySchema.pick({ id: true }).strict().optional(),
+      })
       .strict(),
     captionLang: CaptionLangField,
     /** Optional: only when the accent sticker depends on it (see header). */
@@ -142,6 +154,14 @@ const publicCover = (doc: BookDoc) => ({
   subtitle: doc.cover.subtitle,
 });
 const publicChapters = (doc: BookDoc) => doc.chapters.map((c) => ({ id: c.id, title: c.title, dateLabel: c.dateLabel }));
+/** v2 chapters: + the description text (M30) when the chapter has one; `source` is dropped. */
+const publicChaptersV2 = (doc: BookDoc): PublicBookDocV2["chapters"] =>
+  doc.chapters.map((c) => ({
+    id: c.id,
+    title: c.title,
+    dateLabel: c.dateLabel,
+    ...(c.description ? { description: { text: c.description.text } } : {}),
+  }));
 const publicPageBase = (p: BookPage) => ({
   id: p.id,
   chapterId: p.chapterId,
@@ -210,7 +230,7 @@ export function toPublicDoc(doc: BookDoc, opts: ToPublicDocOptions = {}): Public
       version: 2,
       format: doc.format,
       cover: doc.cover.background ? { ...publicCover(doc), background: copyBackground(doc.cover.background) } : publicCover(doc),
-      chapters: publicChapters(doc),
+      chapters: publicChaptersV2(doc),
       pages: doc.pages.map((p) => {
         const page: PublicBookDocV2["pages"][number] = publicPageBase(p);
         if (p.caption && page.caption) page.caption.align = publicCaptionAlign(p, p.caption);
@@ -224,6 +244,7 @@ export function toPublicDoc(doc: BookDoc, opts: ToPublicDocOptions = {}): Public
         font: doc.style.font,
       },
     };
+    if (doc.style.colourway) out.style.colourway = { id: doc.style.colourway.id };
     if (doc.occasion !== "other" && showsOccasionAccent(doc)) out.occasion = doc.occasion;
   }
   // Photo filters (D-089), v1 and v2: only for the photos this snapshot shows.
@@ -255,8 +276,8 @@ export function publicDocToRenderDoc(pub: PublicBookDoc): BookDoc {
     version: 2 as const,
     occasion: pub.version === 2 ? (pub.occasion ?? "other") : ("other" as const),
     cover: { ...pub.cover, ...(pub.version === 2 && pub.cover.background ? { background: copyBackground(pub.cover.background) } : {}) },
-    chapters: pub.chapters.map((c) => ({ id: c.id, title: c.title, dateLabel: c.dateLabel, place: null })),
   };
+  const chapter = (c: { id: string; title: string; dateLabel: string }) => ({ id: c.id, title: c.title, dateLabel: c.dateLabel, place: null });
   const page = (p: PublicBookDoc["pages"][number]): BookPage => ({
     id: p.id,
     chapterId: p.chapterId,
@@ -268,6 +289,7 @@ export function publicDocToRenderDoc(pub: PublicBookDoc): BookDoc {
     return {
       ...base,
       format: pub.format,
+      chapters: pub.chapters.map(chapter),
       pages: pub.pages.map(page),
       style: { background: { kind: "color", hex: pub.style.background }, designStyle: DEFAULT_DESIGN_STYLE, font: pub.style.font },
       ...(pub.filters ? { filters: { ...pub.filters } } : {}),
@@ -276,13 +298,22 @@ export function publicDocToRenderDoc(pub: PublicBookDoc): BookDoc {
   return {
     ...base,
     format: pub.format,
+    chapters: pub.chapters.map((c) => ({
+      ...chapter(c),
+      ...(c.description ? { description: { text: c.description.text, source: "user" as const } } : {}),
+    })),
     pages: pub.pages.map((p) => {
       const out = page(p);
       if (p.background) out.background = { ...copyBackground(p.background), source: "user" };
       if (p.side !== undefined) out.side = p.side;
       return out;
     }),
-    style: { background: copyBackground(pub.style.background), designStyle: pub.style.designStyle, font: pub.style.font },
+    style: {
+      background: copyBackground(pub.style.background),
+      designStyle: pub.style.designStyle,
+      font: pub.style.font,
+      ...(pub.style.colourway ? { colourway: { id: pub.style.colourway.id, source: "user" as const } } : {}),
+    },
     ...(pub.filters ? { filters: { ...pub.filters } } : {}),
   };
 }

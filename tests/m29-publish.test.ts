@@ -12,7 +12,8 @@ import { describe, expect, it } from "vitest";
 import { serializeDoc, usesV2Features } from "@/lib/book/doc-version";
 import { EditOpError, setCoverLayout } from "@/lib/book/edit-ops";
 import { coverRenderModel } from "@/lib/book/render";
-import { BOOK_FORMATS, DESIGN_STYLES, LayoutSchema, LayoutTextSchema, parseBookDoc, validateBookDoc } from "@/lib/book/schema";
+import { SUPPORTED_DESIGN_STYLES } from "@/lib/book/book-design";
+import { BOOK_FORMATS, LayoutSchema, LayoutTextSchema, parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import { autoCoversFor, coverStylesFor, layoutsFor } from "@/lib/book/spreads";
 import type { BookDoc, BookFormat, DesignStyle, Layout } from "@/lib/book/types";
 import { validateEditorDoc } from "@/lib/book/validate-editor-doc";
@@ -29,7 +30,8 @@ interface Design {
   format: BookFormat;
   designStyle: DesignStyle;
 }
-const DESIGNS: Design[] = BOOK_FORMATS.flatMap((format) => DESIGN_STYLES.map((designStyle) => ({ format, designStyle })));
+// M30 T1: styles with a layout catalogue (magazine / editorial are in DESIGN_STYLES before their layouts ship).
+const DESIGNS: Design[] = BOOK_FORMATS.flatMap((format) => SUPPORTED_DESIGN_STYLES.map((designStyle) => ({ format, designStyle })));
 const fits = (l: Layout, d: Design) => l.format === d.format && l.style === d.designStyle;
 
 /** A valid book of design `d` (its default auto cover + one filled page). */

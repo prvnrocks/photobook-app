@@ -72,6 +72,27 @@ export const ChapterSchema = z.object({
   place: text(80).nullable(),
 });
 
+/** Chapter description length cap (UTF-16 units). The AI writes ≤ 45 words; the user may type more. */
+export const CHAPTER_DESCRIPTION_MAX = 400;
+/**
+ * M30 (D-090): a short paragraph about a chapter, shown by layout text panels bound to
+ * "chapterDescription". `source`: "ai" (Caption Writer) or "user" (typed in the editor — never
+ * overwritten by AI). Never empty or blank: no description = the key is absent (panel collapses).
+ */
+export const ChapterDescriptionSchema = z.strictObject({
+  text: z
+    .string()
+    .min(1)
+    .max(CHAPTER_DESCRIPTION_MAX)
+    .refine(wellFormed, NO_LONE_SURROGATE)
+    .refine((s) => s.trim().length > 0, { message: "blank" }),
+  source: z.enum(["ai", "user"]),
+});
+/** v2 chapter: the v1 chapter plus an optional description (a v2 feature when present). */
+export const ChapterSchemaV2 = ChapterSchema.extend({
+  description: ChapterDescriptionSchema.optional(),
+});
+
 export const CoverSchema = z.object({
   layout: IdSchema,
   photoId: IdSchema.nullable(),
@@ -137,9 +158,45 @@ export const CoverSchemaV2 = CoverSchema.extend({
 
 export const BOOK_FORMATS = ["A5_PORTRAIT", "A5_LANDSCAPE"] as const;
 export const BookFormatSchema = z.enum(BOOK_FORMATS);
-export const DESIGN_STYLES = ["classic", "modern", "geometric", "scrapbook"] as const;
+export const DESIGN_STYLES = ["classic", "modern", "geometric", "scrapbook", "magazine", "editorial"] as const;
 export const DesignStyleSchema = z.enum(DESIGN_STYLES);
 export const DEFAULT_DESIGN_STYLE = "classic" satisfies (typeof DESIGN_STYLES)[number];
+
+// --- Accent colourways (M30, D-090) --------------------------------------------------------------
+// Ids only (literals: the schema has no design imports); the colours live in src/lib/design. A
+// colourway belongs to ONE design style — validateBookDoc rejects an id of another style and any
+// colourway on a style without colourways. The same id may exist in two styles (teal, coral) with
+// different colours.
+export const MAGAZINE_COLOURWAY_IDS = ["lime", "sunset", "sky", "coral", "teal", "gold"] as const;
+export const EDITORIAL_COLOURWAY_IDS = ["ink", "teal", "coral", "cobalt", "mustard", "forest"] as const;
+/** Every colourway id of any style (deduplicated) — the shape-level enum of style.colourway.id. */
+export const COLOURWAY_IDS = [
+  "lime",
+  "sunset",
+  "sky",
+  "coral",
+  "teal",
+  "gold",
+  "ink",
+  "cobalt",
+  "mustard",
+  "forest",
+] as const;
+export const ColourwayIdSchema = z.enum(COLOURWAY_IDS);
+/** Colourway ids per design style, first = the style's default. Empty = the style has no colourways. */
+export const STYLE_COLOURWAY_IDS: Record<(typeof DESIGN_STYLES)[number], readonly (typeof COLOURWAY_IDS)[number][]> = {
+  classic: [],
+  modern: [],
+  geometric: [],
+  scrapbook: [],
+  magazine: MAGAZINE_COLOURWAY_IDS,
+  editorial: EDITORIAL_COLOURWAY_IDS,
+};
+/**
+ * style.colourway: the book's accent colourway + who chose it ("ai" = suggested from the photos'
+ * colours, may be replaced by a rebuild; "user" = picked in the editor, never replaced). Strict.
+ */
+export const ColourwaySchema = z.strictObject({ id: ColourwayIdSchema, source: z.enum(["ai", "user"]) });
 
 /** Slots per page: v1 docs keep the M1–M9 cap; v2 allows dense grids (M10b). */
 export const MAX_SLOTS_V1 = 8;
@@ -187,6 +244,11 @@ export const StyleSchema = z.object({
   /** Absent = "classic". */
   designStyle: DesignStyleSchema.optional(),
   font: FontSchema,
+  /**
+   * M30: accent colourway (magazine / editorial only — validateBookDoc). Absent = the style's
+   * default colourway. A v2 feature when present; published without `source`.
+   */
+  colourway: ColourwaySchema.optional(),
 });
 
 export const GENERATORS = ["rule", "ai"] as const;
@@ -243,7 +305,7 @@ export const BookDocSchema = z.object({
   format: BookFormatSchema,
   occasion: OccasionSchema,
   cover: CoverSchemaV2,
-  chapters: z.array(ChapterSchema).max(100),
+  chapters: z.array(ChapterSchemaV2).max(100),
   pages: z.array(PageSchema).max(LIMITS.paid.maxPages),
   style: StyleSchema,
   filters: PhotoFiltersSchema.optional(),
@@ -271,13 +333,27 @@ export const LayoutSlotSchema = RectSchema;
 export const LAYOUT_ROLES = ["cover", "page", "spread"] as const;
 
 /** Data a text panel shows. Only existing doc data — panels never hold their own text. */
-export const TEXT_BINDINGS = ["chapterTitle", "dateLabel", "pageCaption", "coverTitle", "coverSubtitle"] as const;
+/**
+ * M30: "chapterDescription" = the page's chapter description (pages / spreads only; empty when the
+ * chapter has none); "coverLine" = the title of chapter `n` (covers only; empty when there is no
+ * such chapter).
+ */
+export const TEXT_BINDINGS = [
+  "chapterTitle",
+  "dateLabel",
+  "pageCaption",
+  "coverTitle",
+  "coverSubtitle",
+  "chapterDescription",
+  "coverLine",
+] as const;
+export const TextBindingSchema = z.enum(TEXT_BINDINGS);
 /**
  * Font role of a text panel = TEXT_ROLES of src/lib/design/styles.ts (A3): the design style maps
  * each role to a face via roleFont(style, role, …). Duplicated as a literal list (schema stays
  * free of font imports); tests/book-spreads.test.ts asserts both lists are equal.
  */
-export const TEXT_FONT_ROLES = ["title", "subtitle", "year", "chapter", "caption"] as const;
+export const TEXT_FONT_ROLES = ["title", "subtitle", "year", "chapter", "caption", "masthead", "body"] as const;
 
 /** Rect for layout data: x/w may reach 200 (spreads); the per-role bound is checked on the layout. */
 const LayoutRectSchema = z.object({
@@ -388,14 +464,51 @@ export const TextPlateSchema = z.strictObject({
   tint: HexColorSchema.optional(),
 });
 
+/** M30: text colour roles of a panel — resolved by the design style's palette / colourway. */
+export const TEXT_INKS = ["ink", "muted", "accent", "paper"] as const;
+/** M30: quarter turns a text panel may use besides the small tilts (vertical date strips). */
+export const TEXT_QUARTER_TURNS = [90, -90] as const;
+export const isQuarterTurn = (deg: number | undefined): boolean => deg === 90 || deg === -90;
+/** Max cover lines a cover can bind: `n` runs 0..COVER_LINE_MAX_N. */
+export const COVER_LINE_MAX_N = 5;
+
+export const BLOCK_FILLS = ["panel", "accent", "paper", "ink"] as const;
+export const MAX_LAYOUT_BLOCKS = 8;
+/**
+ * M30: a flat colour block (text panel backdrop, accent bar, rule, diagonal cut). `box` in layout
+ * units (% of the page; spreads x 0..200); `fill` is a colour role resolved by the design style's
+ * palette / colourway (never a hex in layout data). `under` paints between background and photos,
+ * `over` above photos and below text. `points` = polygon in % of the box (absent = the whole box).
+ * `when` = the block is hidden when that binding's text is empty (e.g. a description panel
+ * collapses with its text). Never selectable, never holds a photo or text.
+ */
+export const LayoutBlockSchema = z.strictObject({
+  box: LayoutRectSchema,
+  fill: z.enum(BLOCK_FILLS),
+  layer: z.enum(["under", "over"]),
+  points: z.array(PolygonPointSchema).min(3).max(8).optional(),
+  when: TextBindingSchema.optional(),
+});
+
 export const LayoutTextSchema = z.strictObject({
-  bind: z.enum(TEXT_BINDINGS),
+  bind: TextBindingSchema,
   box: LayoutRectSchema,
   align: z.enum(["start", "center", "end"]),
   font: z.enum(TEXT_FONT_ROLES),
   plate: TextPlateSchema.optional(),
-  /** Degrees clockwise about the box centre (text stays live text). */
-  rotate: z.number().min(-SLOT_ROTATE_MAX).max(SLOT_ROTATE_MAX).optional(),
+  /**
+   * Degrees clockwise about the box centre (text stays live text): a tilt of |rotate| ≤
+   * SLOT_ROTATE_MAX, or (M30) exactly 90 / -90 for vertical text. For ±90 `box` is the FINAL
+   * visual rect (the tall strip as seen on the page); for a tilt it is the unrotated box.
+   */
+  rotate: z
+    .number()
+    .refine((r) => Math.abs(r) <= SLOT_ROTATE_MAX || isQuarterTurn(r), { message: "rotate out of range" })
+    .optional(),
+  /** M30: text colour role. Absent = today's behaviour (the renderer's default for the panel). */
+  ink: z.enum(TEXT_INKS).optional(),
+  /** M30: chapter index for bind "coverLine" (absent = 0). Only valid with "coverLine". */
+  n: z.number().int().min(0).max(COVER_LINE_MAX_N).optional(),
   /**
    * M29: share of the box height the font fitter (panelFontMm) sizes against — slack for narrow
    * columns where real word wrap needs more lines than the estimate. Omitted = 1 (pre-M29 layouts).
@@ -430,6 +543,8 @@ const LayoutObjectSchema = z.object({
   slices: z.array(LayoutRectSchema).min(2).max(8).optional(),
   /** M10c: stickers / tape / label plates (pure decoration, sticker-catalogue ids). */
   decorations: z.array(LayoutDecorationSchema).max(16).optional(),
+  /** M30: flat colour blocks (panels, bars, diagonal cuts) — see LayoutBlockSchema. */
+  blocks: z.array(LayoutBlockSchema).max(MAX_LAYOUT_BLOCKS).optional(),
   /**
    * M29 (D-080), covers only: `false` = a user-chosen cover style — never picked automatically
    * (bestCoverLayout, coverPhotoOrientation, the Storyteller catalogue use autoCoversFor in
@@ -488,7 +603,39 @@ export function layoutIssues(l: LayoutObject, opts: LayoutCheckOptions = {}): st
   if (l.role !== "spread" && l.twin) issues.push("only spreads have a twin");
   if (l.autoPick !== undefined && l.role !== "cover") issues.push("only covers may set autoPick");
   issues.push(...m10cLayoutIssues(l, opts));
+  issues.push(...m30LayoutIssues(l));
   return issues;
+}
+
+/**
+ * M30 rules: blocks lie inside the role's area; a block with `points` never crosses the fold of a
+ * spread (plain rect blocks may, like panorama slots); `n` only with bind "coverLine";
+ * "coverLine" only on covers; "chapterDescription" never on covers (as a text bind or a block's
+ * `when`). The ±90° text safe-zone rule lives with the other text geometry in m10cLayoutIssues.
+ */
+function m30LayoutIssues(l: LayoutObject): string[] {
+  const issues: string[] = [];
+  const maxX = l.role === "spread" ? 200 : 100;
+  const eps = 1e-6;
+  (l.blocks ?? []).forEach((b, i) => {
+    const { x, y, w, h } = b.box;
+    if (x + w > maxX + 1e-9 || y + h > 100 + 1e-9) issues.push(`block ${i}: outside the ${l.role} area`);
+    if (b.points && l.role === "spread" && x < 100 - eps && x + w > 100 + eps) {
+      issues.push(`block ${i}: shaped block crosses the fold`);
+    }
+    if (b.when !== undefined) issues.push(...bindingIssues(l, b.when, `block ${i}`));
+  });
+  (l.texts ?? []).forEach((t, i) => {
+    if (t.n !== undefined && t.bind !== "coverLine") issues.push(`text ${i}: n needs bind coverLine`);
+    issues.push(...bindingIssues(l, t.bind, `text ${i}`));
+  });
+  return issues;
+}
+
+function bindingIssues(l: LayoutObject, bind: (typeof TEXT_BINDINGS)[number], at: string): string[] {
+  if (bind === "coverLine" && l.role !== "cover") return [`${at}: coverLine needs a cover layout`];
+  if (bind === "chapterDescription" && l.role === "cover") return [`${at}: chapterDescription is not for covers`];
+  return [];
 }
 
 /** Layout definition. Sticker ids are format-checked only — see layoutIssues(…, { stickerIds }). */
@@ -500,7 +647,8 @@ export const LayoutSchema = makeLayoutSchema();
  * - rounded / circle / ellipse slots never touch the trim (their bleed would change the shape);
  *   circle slots are square in mm; polaroid frames only on rect / rounded slots; the frame inset
  *   leaves a photo area;
- * - rotated / plated texts: rotated box ≥ SAFE_MM inside the trim;
+ * - rotated / plated texts: rotated box ≥ SAFE_MM inside the trim (M30: a ±90° text's box is
+ *   already the final visual rect, so the box itself is checked);
  * - decorations: rotated box inside the trim;
  * - spreads: no shaped / framed / rotated slot, decoration or plated / rotated text crosses the
  *   fold (x = 100). Plain rect slots may (panoramas).
@@ -545,7 +693,7 @@ function m10cLayoutIssues(l: LayoutObject, { stickerIds, stickerKinds }: LayoutC
 
   (l.texts ?? []).forEach((t, i) => {
     if (!t.plate && !t.rotate) return;
-    const b = rotatedBoundsPct(t.box, t.rotate ?? 0, page);
+    const b = rotatedBoundsPct(t.box, isQuarterTurn(t.rotate) ? 0 : (t.rotate ?? 0), page);
     if (!insideTrim(b, SAFE_MM)) issues.push(`text ${i}: rotated/plated text outside the ${SAFE_MM} mm safe zone`);
     if (crossesFold(b)) issues.push(`text ${i}: plated text crosses the fold`);
     if (t.plate && stickerIds && !stickerIds.has(t.plate.id)) issues.push(`text ${i}: unknown plate "${t.plate.id}"`);
@@ -631,7 +779,8 @@ export interface ValidateOptions {
  * Semantic checks on a shape-valid doc: layouts exist, match role and the doc's format, slot
  * count == photoCount (a spread's right half: 0 slots, no caption), spreads aligned (spreads.ts),
  * photos exist and are used at most once in pages (the cover photo may appear once more),
- * page count ≤ maxPages, chapter/page ids unique, chapterIds exist, photo backgrounds (book
+ * page count ≤ maxPages, chapter/page ids unique, chapterIds exist, style.colourway belongs to the
+ * design style (M30), photo backgrounds (book
  * default and page overrides) use a known photo (backgroundPhotoIds, default photoIds) — a
  * background photo may also be on a page.
  * Returns [] when valid. Issue strings contain indices and layout ids only — no user data.
@@ -668,6 +817,11 @@ export function validateBookDoc(
 
   if (doc.style.background.kind === "photo" && !backgroundPhotoIds.has(doc.style.background.photoId)) {
     issues.push("style.background: unknown photo");
+  }
+
+  // M30: a colourway belongs to the book's design style (ids are schema enums — safe to echo).
+  if (doc.style.colourway !== undefined && !STYLE_COLOURWAY_IDS[bookStyle].includes(doc.style.colourway.id)) {
+    issues.push(`style.colourway: "${doc.style.colourway.id}" is not a ${bookStyle} colourway`);
   }
 
   if (doc.pages.length > maxPages) {

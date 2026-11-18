@@ -18,13 +18,16 @@ export function upgradeDocV1(v1: BookDocV1): BookDoc {
  * True when `doc` cannot be written as v1 without losing something: landscape format, a non-colour
  * book background, a book backgroundSource (M10c D5), a non-classic design style, a cover background of its own (D-087), any page background or spread side, more slots
  * on a page than v1 allows, a layout outside the M1–M10a classic portrait set (page or cover), or a v2-only caption
- * font (fonts-v2.ts) as book font or on a page caption. (An explicit `page.background: null` is
+ * font (fonts-v2.ts) as book font or on a page caption, an accent colourway or a chapter description (M30). (An explicit `page.background: null` is
  * the same as absent.) Unknown layout ids are not v2 by themselves (validation rejects them).
  */
 export function usesV2Features(doc: BookDoc): boolean {
   if (doc.format !== "A5_PORTRAIT") return true;
   if (doc.style.background.kind !== "color") return true;
   if (doc.style.backgroundSource !== undefined) return true;
+  // M30: an accent colourway or any chapter description is v2-only.
+  if (doc.style.colourway !== undefined) return true;
+  if (doc.chapters.some((c) => c.description !== undefined)) return true;
   if ((doc.style.designStyle ?? DEFAULT_DESIGN_STYLE) !== DEFAULT_DESIGN_STYLE) return true;
   if (isV2CaptionFont(doc.style.font)) return true;
   if (isV2Layout(doc.cover.layout)) return true;
@@ -63,7 +66,12 @@ function downgradeToV1(doc: BookDoc): BookDocV1 {
     format: "A5_PORTRAIT",
     occasion: doc.occasion,
     cover: { layout: doc.cover.layout, photoId: doc.cover.photoId, title: doc.cover.title, subtitle: doc.cover.subtitle },
-    chapters: doc.chapters.map((c) => ({ ...c })),
+    // Same keys in the same order as before M30; only a (necessarily undefined) `description` key is left out.
+    chapters: doc.chapters.map((c) => {
+      const v1 = { ...c };
+      delete v1.description;
+      return v1;
+    }),
     pages: doc.pages.map(
       (p): BookPageV1 => ({
         id: p.id,
@@ -95,7 +103,11 @@ function normaliseV2(doc: BookDoc): BookDoc {
       // null / absent = book default: the key is only stored when the cover has its own colour.
       ...(doc.cover.background ? { background: { ...doc.cover.background } } : {}),
     },
-    chapters: doc.chapters.map((c) => ({ ...c })),
+    chapters: doc.chapters.map((c) => {
+      const { description, ...rest } = c;
+      // M30: the key is only stored when the chapter has a description.
+      return description === undefined ? rest : { ...rest, description: { text: description.text, source: description.source } };
+    }),
     pages: doc.pages.map((p) => {
       const page: BookDoc["pages"][number] = {
         id: p.id,
@@ -115,6 +127,7 @@ function normaliseV2(doc: BookDoc): BookDoc {
     },
   };
   if (doc.style.backgroundSource !== undefined) out.style.backgroundSource = doc.style.backgroundSource;
+  if (doc.style.colourway !== undefined) out.style.colourway = { id: doc.style.colourway.id, source: doc.style.colourway.source };
   // Photo filters (D-089): only stored when there are any.
   if (doc.filters !== undefined && Object.keys(doc.filters).length > 0) out.filters = { ...doc.filters };
   if (doc.meta !== undefined) out.meta = { ...doc.meta };
