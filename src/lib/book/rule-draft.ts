@@ -3,6 +3,7 @@
 // (updateBookSetupAction): autolayout → withBookDesign → applyBackgroundSuggestions → validate.
 // Page cap = limitsFor(isPaid).maxPages in both callers (the same cap autolayout fills to).
 
+import { withSuggestedColourway } from "@/lib/design/colourway-suggest";
 import { autolayout, type AutoPhoto } from "@/lib/autolayout";
 import { limitsFor } from "@/lib/ai/limits";
 import { isSupportedDesign, withBookDesign, type BookDesign } from "@/lib/book/book-design";
@@ -67,16 +68,20 @@ export function buildRuleDraft(photos: readonly DraftPhotoRow[], input: RuleDraf
     height: p.height,
     blurScore: p.blur_score,
   }));
-  const doc = applyBackgroundSuggestions(
-    withBookDesign(
-      autolayout(auto, {
-        occasion: input.occasion,
-        title: input.title,
-        captionLang: input.captionLang,
-        isPaid: input.isPaid,
-        design: input.design,
-      }),
-      input.design,
+  // M30: + the accent colourway for magazine / editorial (colourway-suggest.ts; older styles untouched).
+  const doc = withSuggestedColourway(
+    applyBackgroundSuggestions(
+      withBookDesign(
+        autolayout(auto, {
+          occasion: input.occasion,
+          title: input.title,
+          captionLang: input.captionLang,
+          isPaid: input.isPaid,
+          design: input.design,
+        }),
+        input.design,
+      ),
+      suggest,
     ),
     suggest,
   );

@@ -2,14 +2,18 @@
 // client-safe.
 //
 // The form offers a shape (format) and a design style. Both are fixed at creation (D-063): the
-// editor only shows them (designLabel). M10c offers all four styles; each occasion picks its
-// default (D-068) until the user chooses one.
+// editor only shows them (designLabel). Every style is offered for every occasion (M10c: four;
+// M30, D-090: + Magazine and Editorial); each occasion picks its default (D-068; travel → Magazine,
+// D-090) until the user chooses one.
 
 import type { Occasion } from "@/lib/book/options";
 import type { BookFormat, DesignStyle } from "@/lib/book/types";
 
-/** Styles a user can pick on the New book form, in display order (2×2 grid on phones; D-068). */
-export const FORM_DESIGN_STYLES = ["modern", "classic", "geometric", "scrapbook"] as const satisfies readonly DesignStyle[];
+/**
+ * Styles a user can pick on the New book form, in display order (two columns on phones; D-068).
+ * The first four keep their M10c order; the M30 styles follow (D-090).
+ */
+export const FORM_DESIGN_STYLES = ["modern", "classic", "geometric", "scrapbook", "magazine", "editorial"] as const satisfies readonly DesignStyle[];
 export type FormDesignStyle = (typeof FORM_DESIGN_STYLES)[number];
 
 /** Shapes offered on the form, in display order (portrait first = default). */
@@ -17,10 +21,10 @@ export const FORM_FORMATS = ["A5_PORTRAIT", "A5_LANDSCAPE"] as const satisfies r
 
 export const DEFAULT_FORM_FORMAT: BookFormat = "A5_PORTRAIT";
 
-/** Default style per occasion (D-068, replaces D-065's all-Modern). */
+/** Default style per occasion (D-068, replaces D-065's all-Modern; travel → Magazine, D-090). */
 export const DEFAULT_STYLE_BY_OCCASION: Record<Occasion, FormDesignStyle> = {
   wedding: "modern",
-  travel: "geometric",
+  travel: "magazine",
   baby: "scrapbook",
   graduation: "geometric",
   family: "scrapbook",
@@ -73,6 +77,8 @@ export const DESIGN_STYLE_HINTS: Record<FormDesignStyle, string> = {
   classic: "Framed photos, simple captions",
   geometric: "Bold shapes, clean colour blocks",
   scrapbook: "Tilted prints, tape and stickers",
+  magazine: "Big cover title, bold colour panels",
+  editorial: "White pages, diagonal cuts, thin rules",
 };
 
 /** Read-only editor label, e.g. "A5 Landscape · Modern". */

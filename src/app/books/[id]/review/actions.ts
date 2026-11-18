@@ -6,6 +6,7 @@ import { learnFromBook } from "@/lib/ai/learn-from-book";
 import { autolayout } from "@/lib/autolayout";
 import { bookDesignOf, isSupportedDesign, isUnsupportedDesignError, withBookDesign } from "@/lib/book/book-design";
 import { applyBackgroundSuggestions, hasAiPhotoBackground } from "@/lib/design/background-suggest";
+import { withSuggestedColourway } from "@/lib/design/colourway-suggest";
 import { AUTH_UNAVAILABLE, getActionUser } from "@/lib/auth/action-user";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { CAPTION_LANGS, OCCASIONS, type CaptionLang, type Occasion } from "@/lib/book/options";
@@ -234,7 +235,8 @@ function nextDoc(
     // Fresh rule album (meta generator "rule", runId null, D-018).
     const fresh = autolayout(photos, { occasion, title: book.title, captionLang, isPaid, runId: null, design });
     // M10c T11: rule background suggestions (Modern/Geometric/Scrapbook; classic unchanged).
-    return { changed: true, doc: applyBackgroundSuggestions(withBookDesign(fresh, design), photos) };
+    // M30: + the accent colourway for magazine / editorial.
+    return { changed: true, doc: withSuggestedColourway(applyBackgroundSuggestions(withBookDesign(fresh, design), photos), photos) };
   }
   const parsed = parseBookDoc(book.doc);
   if (!parsed.ok) return "invalid"; // isReplaceableDoc already refuses this; belt and braces

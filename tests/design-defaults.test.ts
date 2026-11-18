@@ -17,10 +17,10 @@ import {
 } from "@/lib/design/defaults";
 
 describe("New book design defaults (D-068)", () => {
-  it("occasion defaults: wedding Modern, travel/graduation Geometric, baby/family Scrapbook, other Modern", () => {
+  it("occasion defaults: wedding Modern, travel Magazine (D-090), graduation Geometric, baby/family Scrapbook, other Modern", () => {
     expect(DEFAULT_STYLE_BY_OCCASION).toEqual({
       wedding: "modern",
-      travel: "geometric",
+      travel: "magazine",
       graduation: "geometric",
       baby: "scrapbook",
       family: "scrapbook",
@@ -36,9 +36,14 @@ describe("New book design defaults (D-068)", () => {
     expect(FORM_FORMATS[0]).toBe("A5_PORTRAIT");
   });
 
-  it("the form offers all four schema styles: Modern, Classic, Geometric, Scrapbook", () => {
-    expect(FORM_DESIGN_STYLES).toEqual(["modern", "classic", "geometric", "scrapbook"]);
-    // M30 T1: the form offers the styles that have layouts (magazine / editorial join with their layouts).
+  it("the form offers every schema style: Modern, Classic, Geometric, Scrapbook, Magazine, Editorial (D-090)", () => {
+    expect(FORM_DESIGN_STYLES).toEqual(["modern", "classic", "geometric", "scrapbook", "magazine", "editorial"]);
+    expect(DESIGN_STYLE_LABELS.magazine).toBe("Magazine");
+    expect(DESIGN_STYLE_LABELS.editorial).toBe("Editorial");
+    for (const s of FORM_DESIGN_STYLES) expect(DESIGN_STYLE_HINTS[s].length, s).toBeGreaterThan(10);
+    // Every style is offered for every occasion: the form has one list, not one per occasion.
+    expect([...FORM_DESIGN_STYLES].sort()).toEqual([...DesignStyleSchema.options].sort());
+    // The form offers exactly the styles that have layouts.
     expect([...FORM_DESIGN_STYLES].sort()).toEqual([...SUPPORTED_DESIGN_STYLES].sort());
     expect([...FORM_FORMATS].sort()).toEqual([...BOOK_FORMATS].sort());
     for (const s of DesignStyleSchema.options) expect(isFormDesignStyle(s)).toBe((SUPPORTED_DESIGN_STYLES as readonly string[]).includes(s));
@@ -57,7 +62,9 @@ describe("New book design defaults (D-068)", () => {
 
   it("a manual pick wins over the occasion default; null follows the occasion", () => {
     expect(effectiveStyle(null, "wedding")).toBe(DEFAULT_STYLE_BY_OCCASION.wedding);
-    expect(effectiveStyle(null, "travel")).toBe("geometric");
+    expect(effectiveStyle(null, "travel")).toBe("magazine");
+    expect(effectiveStyle("geometric", "travel")).toBe("geometric");
+    expect(effectiveStyle("editorial", "wedding")).toBe("editorial");
     expect(effectiveStyle("modern", "baby")).toBe("modern");
     expect(effectiveStyle("classic", "wedding")).toBe("classic");
     expect(effectiveStyle("classic", null)).toBe("classic");
@@ -68,5 +75,7 @@ describe("New book design defaults (D-068)", () => {
     expect(designLabel("A5_PORTRAIT", "classic")).toBe("A5 Portrait · Classic");
     expect(designLabel("A5_PORTRAIT", undefined)).toBe("A5 Portrait · Classic");
     expect(designLabel("A5_LANDSCAPE", "scrapbook")).toBe("A5 Landscape · Scrapbook");
+    expect(designLabel("A5_PORTRAIT", "magazine")).toBe("A5 Portrait · Magazine");
+    expect(designLabel("A5_LANDSCAPE", "editorial")).toBe("A5 Landscape · Editorial");
   });
 });

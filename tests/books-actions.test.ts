@@ -210,14 +210,15 @@ describe("createBookAction", () => {
     expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ tone: DEFAULT_TONE.baby, captionLang: "en" });
   });
 
-  it("absent shape / style (pre-M10b form) → portrait + the occasion's default style (travel → geometric, D-068)", async () => {
+  it("absent shape / style (pre-M10b form) → portrait + the occasion's default style (travel → magazine, D-090)", async () => {
     const r = await run(valid);
     expect(r.redirect).toBe(STEP5);
-    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ format: "A5_PORTRAIT", designStyle: "geometric" });
+    expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ format: "A5_PORTRAIT", designStyle: "magazine" });
   });
 
   it.each([
     ["wedding", "modern"],
+    ["graduation", "geometric"],
     ["baby", "scrapbook"],
     ["other", "modern"],
   ] as const)("absent style for %s → %s (D-068)", async (occasion, designStyle) => {
@@ -235,7 +236,11 @@ describe("createBookAction", () => {
     ["A5_LANDSCAPE", "geometric"],
     ["A5_PORTRAIT", "scrapbook"],
     ["A5_LANDSCAPE", "scrapbook"],
-  ] as const)("accepts %s + %s (M10c, D-068)", async (format, designStyle) => {
+    ["A5_PORTRAIT", "magazine"],
+    ["A5_LANDSCAPE", "magazine"],
+    ["A5_PORTRAIT", "editorial"],
+    ["A5_LANDSCAPE", "editorial"],
+  ] as const)("accepts %s + %s (M10c, D-068; M30, D-090)", async (format, designStyle) => {
     const r = await run({ ...valid, occasion: "wedding", format, designStyle });
     expect(r.redirect).toBe(STEP5);
     expect(mocks.createBook.mock.calls[0][0]).toMatchObject({ format, designStyle });

@@ -26,8 +26,10 @@ import { M29_COVERS } from "@/lib/layouts";
 // The editor registry → UpgradeSheet → UpgradeButton imports the upgrade server action (server-only).
 vi.mock("@/app/books/[id]/upgrade/actions", () => ({ startUpgradeCheckout: vi.fn() }));
 
-// M30 T1: styles with a layout catalogue (magazine / editorial are in DESIGN_STYLES before their layouts ship).
-const DESIGNS = SUPPORTED_DESIGN_STYLES.flatMap((designStyle) => BOOK_FORMATS.map((format) => ({ format, designStyle })));
+// The M29 styles: this file tests the M29 cover styles (M29_COVERS, dev samples, main's auto picks),
+// which the M30 styles are not part of — magazine / editorial covers are tested in tests/m30-*.test.*.
+const M29_STYLES = SUPPORTED_DESIGN_STYLES.filter((s) => s !== "magazine" && s !== "editorial");
+const DESIGNS = M29_STYLES.flatMap((designStyle) => BOOK_FORMATS.map((format) => ({ format, designStyle })));
 const key = (d: { format: BookFormat; designStyle: DesignStyle }) => `${d.designStyle}/${d.format}`;
 const M29_IDS = new Set(M29_COVERS.map((l) => l.id));
 

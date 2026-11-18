@@ -88,6 +88,7 @@ import * as booksDb from "@/lib/db/books";
 import { getUserMemoryAdmin } from "@/lib/db/memory";
 import type { BookAiStatus, BookForRun, WriteDocResult } from "@/lib/db/books";
 import * as photosDb from "@/lib/db/photos";
+import { withSuggestedColourway } from "@/lib/design/colourway-suggest";
 import { applyBackgroundSuggestions } from "@/lib/design/background-suggest";
 import { colorFromThumbBase64 } from "@/lib/image/color-server";
 import type { CurationPhotoRow, CurationWrite } from "@/lib/db/photos";
@@ -847,18 +848,17 @@ function ruleDoc(photos: CurationPhoto[], book: BookForRun, runId: string | null
     runId,
     design,
   });
+  const suggest = photos.map((p) => ({
+    id: p.id,
+    status: p.status,
+    color: p.color ?? null,
+    width: p.width,
+    height: p.height,
+    blurScore: p.blurScore,
+  }));
   // M10c T11: rule background suggestions (Modern/Geometric/Scrapbook; classic unchanged).
-  return applyBackgroundSuggestions(
-    withBookDesign(doc, design),
-    photos.map((p) => ({
-      id: p.id,
-      status: p.status,
-      color: p.color ?? null,
-      width: p.width,
-      height: p.height,
-      blurScore: p.blurScore,
-    })),
-  );
+  // M30: accent colourway for magazine / editorial (a user-chosen one of the stored doc is kept).
+  return withSuggestedColourway(applyBackgroundSuggestions(withBookDesign(doc, design), suggest), suggest, book.doc);
 }
 
 function docIssues(doc: BookDoc, photos: CurationPhoto[], book: BookForRun): string[] {
@@ -1580,6 +1580,7 @@ async function storytellerStep(c: Tick): Promise<void> {
       runId: c.runId,
       generatorVersion: STORYTELLER_PROMPT_VERSION,
       design: bookDesignOf(c.book),
+      previousDoc: c.book.doc,
     });
     if ("doc" in out) {
       c.cursor.album = { kind: "ai", plan: result.data };
@@ -1682,6 +1683,7 @@ function planDocOf(c: Tick): PlanDoc | null {
     runId: c.runId,
     generatorVersion: STORYTELLER_PROMPT_VERSION,
     design: bookDesignOf(c.book),
+    previousDoc: c.book.doc,
   });
   if (!("doc" in out)) return null;
   // Grounded titles: the Caption Writer and the Critic see the same neutral titles the book gets.
@@ -2267,6 +2269,7 @@ async function validateAndSave(c: Tick): Promise<AdvanceResult> {
       runId: c.runId,
       generatorVersion: STORYTELLER_PROMPT_VERSION,
       design: bookDesignOf(c.book),
+      previousDoc: c.book.doc,
     });
     if ("doc" in out && docIssues(out.doc, c.photos, c.book).length === 0) {
       // SF3: Storyteller titles / subtitle that fail the pre-check become neutral, then captions.

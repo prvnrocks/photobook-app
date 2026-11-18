@@ -30,8 +30,10 @@ interface Design {
   format: BookFormat;
   designStyle: DesignStyle;
 }
-// M30 T1: styles with a layout catalogue (magazine / editorial are in DESIGN_STYLES before their layouts ship).
-const DESIGNS: Design[] = BOOK_FORMATS.flatMap((format) => SUPPORTED_DESIGN_STYLES.map((designStyle) => ({ format, designStyle })));
+// The M29 styles: this file tests the M29 cover styles (M29_COVERS, dev samples, main's auto picks),
+// which the M30 styles are not part of — magazine / editorial covers are tested in tests/m30-*.test.*.
+const M29_STYLES = SUPPORTED_DESIGN_STYLES.filter((s) => s !== "magazine" && s !== "editorial");
+const DESIGNS: Design[] = BOOK_FORMATS.flatMap((format) => M29_STYLES.map((designStyle) => ({ format, designStyle })));
 const fits = (l: Layout, d: Design) => l.format === d.format && l.style === d.designStyle;
 
 /** A valid book of design `d` (its default auto cover + one filled page). */

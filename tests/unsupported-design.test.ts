@@ -58,11 +58,9 @@ function expectTyped(fn: () => unknown, design: BookDesign) {
 }
 
 describe("supported designs", () => {
-  it("every design style is supported except the M30 styles whose layouts have not shipped yet", () => {
-    // M30 T1: magazine + editorial are in the schema but not laid out. Empty this list (and restore
-    // the equality with DESIGN_STYLES) in the change that adds them to SUPPORTED_DESIGN_STYLES.
-    expect(UNSUPPORTED).toEqual(["magazine", "editorial"]);
-    expect([...SUPPORTED_DESIGN_STYLES, ...UNSUPPORTED].sort()).toEqual([...DESIGN_STYLES].sort());
+  it("every design style is supported (M30 T9b switched magazine + editorial on)", () => {
+    expect(UNSUPPORTED).toEqual([]);
+    expect([...SUPPORTED_DESIGN_STYLES].sort()).toEqual([...DESIGN_STYLES].sort());
   });
 
   it("an unknown style string is never supported (the check is an allowlist)", () => {

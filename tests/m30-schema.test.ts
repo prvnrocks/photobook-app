@@ -87,9 +87,9 @@ const TRIANGLE: [number, number][] = [
 ];
 
 describe("M30 design styles + font roles", () => {
-  it("DESIGN_STYLES gains magazine + editorial; they are not supported yet (T9b switches them on)", () => {
+  it("DESIGN_STYLES gains magazine + editorial; both are supported since T9b", () => {
     expect([...DESIGN_STYLES]).toEqual(["classic", "modern", "geometric", "scrapbook", "magazine", "editorial"]);
-    expect([...SUPPORTED_DESIGN_STYLES]).toEqual(["classic", "modern", "geometric", "scrapbook"]);
+    expect([...SUPPORTED_DESIGN_STYLES]).toEqual([...DESIGN_STYLES]);
     // Their layouts live only in the M30 arrays at the end of the catalogue (T4–T7 fill them).
     for (const l of LAYOUTS) expect(l.style === "magazine" || l.style === "editorial", l.id).toBe(M30_LAYOUTS.includes(l));
   });

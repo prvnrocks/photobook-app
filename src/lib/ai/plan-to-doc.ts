@@ -27,6 +27,7 @@
 // spread gets none) and handed to applyBackgroundSuggestions, which re-validates every pick and
 // fills anything missing or invalid with the T11 rules. An invalid pick never fails the plan.
 
+import { withSuggestedColourway } from "@/lib/design/colourway-suggest";
 import { withDefaultFilters } from "@/lib/book/default-filters";
 import { dayRange, DEFAULT_TITLES } from "@/lib/autolayout";
 import { DEFAULT_BOOK_DESIGN, type BookDesign } from "@/lib/book/book-design";
@@ -66,6 +67,11 @@ export interface PlanToDocOptions {
    * and what the plan's layouts are validated against. Omitted → classic A5 portrait.
    */
   design?: BookDesign;
+  /**
+   * M30: the stored doc this build replaces (books.doc, raw). Only read for a user-chosen accent
+   * colourway, which the new doc keeps (colourway-suggest.ts). Omitted → nothing to keep.
+   */
+  previousDoc?: unknown;
 }
 
 export type PlanToDocResult = { doc: BookDoc } | { issues: string[] };
@@ -348,8 +354,11 @@ export function planToDoc(rawPlan: AlbumPlan, opts: PlanToDocOptions): PlanToDoc
     suggestPhotosOf(photos),
     backgroundPicksOf(plan, { aliasToId, photos, design, doc: repaired }),
   );
+  // M30: accent colourway from the photos' colours (magazine / editorial only; rule, not a model
+  // pick). A user-chosen colourway of the doc being replaced is kept.
+  const coloured = withSuggestedColourway(doc, suggestPhotosOf(photos), opts.previousDoc);
 
-  const parsed = parseBookDoc(doc);
+  const parsed = parseBookDoc(coloured);
   if (!parsed.ok) return { issues: parsed.issues.map((i) => `doc: ${i}`) };
   const kept = new Set(photos.filter((p) => p.keep).map((p) => p.id));
   const docIssues = validateBookDoc(parsed.doc, { photoIds: kept, maxPages });

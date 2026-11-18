@@ -414,7 +414,7 @@ describe("new book wizard — shape, style and submit", () => {
   it("style follows the occasion's default until the user picks one (D-068)", async () => {
     store({ title: "", occasion: "travel", format: "A5_LANDSCAPE" });
     await mount("/books/new?step=4");
-    expect(radio("style-geometric").checked).toBe(true);
+    expect(radio("style-magazine").checked).toBe(true); // travel → Magazine (D-090)
     // previews drawn in the chosen shape
     expect($("style-modern").innerHTML).toContain('width="45" height="31"');
     await back();
@@ -464,7 +464,7 @@ describe("new book wizard — shape, style and submit", () => {
     // D-072: no caption language from the client (even from an old stored draft) — the server derives it.
     expect(fd.has("captionLang")).toBe(false);
     expect(fd.get("format")).toBe("A5_LANDSCAPE");
-    expect(fd.get("designStyle")).toBe("geometric");
+    expect(fd.get("designStyle")).toBe("magazine"); // travel default (D-090)
     expect(fd.has("tone")).toBe(false);
     expect(fd.getAll("designStyle")).toHaveLength(1);
     // Cleared only on success (M19 review): a thrown action must not lose steps 1–4.

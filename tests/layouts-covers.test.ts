@@ -29,8 +29,10 @@ import { SCRAPBOOK_PORTRAIT_COVERS } from "@/lib/layouts/scrapbook/portrait/cove
 import { TEST_FORMATS, TEST_M29_COVERS, TEST_STYLES } from "./fixtures/test-m29-covers";
 import { coverRuleIssues, LANDSCAPE_SPINE_MM } from "./helpers/cover-rules";
 
-// M30 T1: styles with a layout catalogue (magazine / editorial are in DESIGN_STYLES before their layouts ship).
-const DESIGNS = SUPPORTED_DESIGN_STYLES.flatMap((designStyle) => BOOK_FORMATS.map((format) => ({ format, designStyle })));
+// The M29 styles: this file tests the M29 cover styles (M29_COVERS, dev samples, main's auto picks),
+// which the M30 styles are not part of — magazine / editorial covers are tested in tests/m30-*.test.*.
+const M29_STYLES = SUPPORTED_DESIGN_STYLES.filter((s) => s !== "magazine" && s !== "editorial");
+const DESIGNS = M29_STYLES.flatMap((designStyle) => BOOK_FORMATS.map((format) => ({ format, designStyle })));
 const key = (d: { format: BookFormat; designStyle: DesignStyle }) => `${d.designStyle}/${d.format}`;
 
 /** The 8 M29 arrays with the design each must hold. */
@@ -102,7 +104,12 @@ const MAIN_AUTO_PICK: Record<string, Record<"portrait" | "landscape" | "square" 
 
 describe("M29 cover rules — every cover layout", () => {
   it("there is at least one cover per design", () => {
-    for (const d of DESIGNS) expect(coverStylesFor(d.format, d.designStyle).length, key(d)).toBeGreaterThan(0);
+    for (const designStyle of SUPPORTED_DESIGN_STYLES) {
+      for (const format of BOOK_FORMATS) {
+        expect(coverStylesFor(format, designStyle).length, key({ format, designStyle })).toBeGreaterThan(0);
+        expect(autoCoversFor(format, designStyle).length, key({ format, designStyle })).toBeGreaterThan(0);
+      }
+    }
   });
 
   for (const l of ALL_COVERS) {
@@ -179,7 +186,7 @@ describe("M29 cover arrays — catalogue placement", () => {
   });
 
   it("test fixture style/format lists match the schema", () => {
-    expect([...TEST_STYLES]).toEqual([...SUPPORTED_DESIGN_STYLES]);
+    expect([...TEST_STYLES]).toEqual([...M29_STYLES]);
     expect([...TEST_FORMATS]).toEqual([...BOOK_FORMATS]);
   });
 });

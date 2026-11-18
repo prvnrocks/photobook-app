@@ -3,7 +3,8 @@
 // the rules below. Pure and deterministic: no I/O, safe on client and server.
 //
 // Scope (D-068 / D3): Modern, Geometric and Scrapbook get suggestions. Classic stays white and is
-// never touched (classic docs stay v1, byte-identical).
+// never touched (classic docs stay v1, byte-identical). Magazine and Editorial (M30) get none
+// either: white pages are the style, their colour is the accent colourway (colourway-suggest.ts).
 //
 // Rules:
 // 1. Catalogue only. A suggestion is always a catalogue swatch (src/lib/design/backgrounds.ts),
@@ -93,7 +94,9 @@ export const STYLE_DEFAULT_BACKGROUND: Record<DesignStyle, Background> = {
   modern: { kind: "color", hex: "#FFFFFF" },
   geometric: { kind: "color", hex: "#FFFFFF" },
   scrapbook: { kind: "texture", textureId: "paper-cream" },
-  // M30 T1: neutral white until the styles' palettes ship (T2).
+  // M30 (D-090): white pages are the style — colour comes from the accent colourway
+  // (colourways.ts, colourway-suggest.ts). Not in AI_BACKGROUND_STYLES: no Storyteller or rule
+  // background suggestions, no backgroundSource, no faded photos.
   magazine: { kind: "color", hex: "#FFFFFF" },
   editorial: { kind: "color", hex: "#FFFFFF" },
 };
@@ -213,6 +216,9 @@ const hueGap = (x: number, y: number) => {
   const d = Math.abs(x - y) % 360;
   return d > 180 ? 360 - d : d;
 };
+
+/** CIELAB helpers shared with colourway-suggest.ts (same maths, same neutral threshold). */
+export const colourMaths = { toLab, chroma, hue, hueGap } as const;
 
 /** Photo colours with chroma below this vote "neutral" (style default). */
 export const NEUTRAL_CHROMA = 12;

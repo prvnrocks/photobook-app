@@ -59,6 +59,7 @@
 import { dayRange, fillPages, PANORAMA_RATIO, parseTime } from "@/lib/autolayout";
 import { dubaiDay, effectiveMaxPages, orientationOf, placeKey } from "@/lib/ai/story";
 import { getLayout } from "@/lib/layouts";
+import { layoutShowsDescription } from "@/lib/layouts/description";
 import { bestPageLayout, designFitScore, isShapeAware } from "@/lib/layouts/fit";
 import { pruneAiBackgrounds } from "@/lib/design/background-suggest";
 import { assertSupportedDesign, type BookDesign } from "./book-design";
@@ -389,6 +390,9 @@ export function removeSlotPhotos(doc: BookDoc, opts: RemoveSlotPhotosOptions): R
     });
 
     const layout = getLayout(page.layout);
+    // M30: a page that shows its chapter's description re-fits onto a layout that shows it too;
+    // every other page avoids description layouts (an empty panel leaves a hole).
+    const description = showsOwnDescription(doc, page, layout) ? ("prefer" as const) : ("avoid" as const);
     if (layout?.role === "spread" && page.side === "left") {
       const next = doc.pages[i + 1];
       const right = next && next.side === "right" && next.layout === page.layout ? next : null;
@@ -415,7 +419,7 @@ export function removeSlotPhotos(doc: BookDoc, opts: RemoveSlotPhotosOptions): R
       }
       const orients = left.map((s) => orient(s.photoId as string));
       const ratios = left.map((s) => ratioOf(photo(s.photoId as string)));
-      const smaller = bestPageLayout(orients, { preferCaption: userCaption, design, role: "spread", ratios });
+      const smaller = bestPageLayout(orients, { preferCaption: userCaption, design, role: "spread", ratios, description });
       const smallerLayout = smaller ? getLayout(smaller) : undefined;
       // Only a spread every photo fits (shape-aware for geometric / scrapbook, M10c T10); a
       // one-photo spread only for a real panorama.
@@ -448,8 +452,10 @@ export function removeSlotPhotos(doc: BookDoc, opts: RemoveSlotPhotosOptions): R
           caption: h === captionHalf ? page.caption : null,
         };
         delete src.side;
+        // The description shows once: on the first page the spread becomes.
+        const mode = firstOut ? description : "avoid";
         firstOut = false;
-        pages.push(...fitSingles(src, halves[h], design, orient, photo, nextPageId, pages[pages.length - 1]?.layout ?? null));
+        pages.push(...fitSingles(src, halves[h], design, orient, photo, nextPageId, pages[pages.length - 1]?.layout ?? null, mode));
       }
       continue;
     }
@@ -457,9 +463,16 @@ export function removeSlotPhotos(doc: BookDoc, opts: RemoveSlotPhotosOptions): R
       if (keepCaption && userCaption) pages.push(emptied());
       continue;
     }
-    pages.push(...fitSingles(page, left, design, orient, photo, nextPageId, pages[pages.length - 1]?.layout ?? null));
+    pages.push(...fitSingles(page, left, design, orient, photo, nextPageId, pages[pages.length - 1]?.layout ?? null, description));
   }
   return { pages, removed, touched };
+}
+
+/** True when `page`'s layout has a description panel and its chapter has a description to show. */
+function showsOwnDescription(doc: BookDoc, page: BookPage, layout: ReturnType<typeof getLayout>): boolean {
+  if (!layoutShowsDescription(layout) || page.chapterId === null) return false;
+  const text = doc.chapters.find((c) => c.id === page.chapterId)?.description?.text;
+  return typeof text === "string" && text.trim() !== "";
 }
 
 /** Page with a new layout and the slots left on it; caption only if it is the user's and fits. */
@@ -491,6 +504,7 @@ function fitSingles(
   photo: (id: string) => RelayoutPhoto,
   nextPageId: () => string,
   prevLayout: string | null,
+  description: "avoid" | "prefer" = "avoid",
 ): BookPage[] {
   const avoid = isShapeAware(design) ? prevLayout : null;
   // A page with the user's caption re-fits onto a layout with a caption area when one exists,
@@ -502,6 +516,7 @@ function fitSingles(
       design,
       ratios: left.map((s) => ratioOf(photo(s.photoId as string))),
       avoid,
+      description,
     },
   );
   if (layoutId) return [refit(page, layoutId, left)];

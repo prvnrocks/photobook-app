@@ -53,7 +53,7 @@ describe("wizard shape + style steps (M10b A12 → M19)", () => {
   });
 
   it("each option has a visible label; previews are decorative and enlarged", () => {
-    for (const label of [">Portrait<", ">Landscape<", ">Modern<", ">Classic<", ">Geometric<", ">Scrapbook<"]) {
+    for (const label of [">Portrait<", ">Landscape<", ">Modern<", ">Classic<", ">Geometric<", ">Scrapbook<", ">Magazine<", ">Editorial<"]) {
       expect(shape + style).toContain(label);
     }
     expect(shape).toContain("148 × 210 mm");
@@ -68,7 +68,8 @@ describe("wizard shape + style steps (M10b A12 → M19)", () => {
     expect(shape).toContain("Fits landscapes");
     expect(shape).not.toContain("wizard-preview-title");
     expect(style).toContain('class="ws-spread-box" data-format="A5_LANDSCAPE"');
-    expect(style.match(/ws-spread-page ws-spread-(left|right)/g)).toHaveLength(8);
+    // Two pages per style card: 6 styles since M30 T9b (magazine / editorial art comes with the wizard task).
+    expect(style.match(/ws-spread-page ws-spread-(left|right)/g)).toHaveLength(12);
     expect(style).toContain('viewBox="7 14 50.5 36.5"');
     // style previews are drawn in the chosen shape (landscape page box)
     expect(style).toContain('width="45" height="31"');

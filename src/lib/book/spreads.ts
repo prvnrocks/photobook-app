@@ -24,6 +24,7 @@
 // no left half (only possible from a bug) is removed — no blank filler pages are ever added.
 
 import { getLayout, LAYOUTS } from "@/lib/layouts";
+import { layoutShowsDescription } from "@/lib/layouts/description";
 import type { BookDoc, BookFormat, BookPage, DesignStyle, Layout, LayoutRole, Rect, Slot } from "./types";
 
 /** Pages a spread occupies (and counts toward the 20/100 limits). */
@@ -258,7 +259,8 @@ function splitContext(doc: BookDoc, opts: RepairSpreadsOptions): SplitContext {
     ids.add(`p${n}`);
     return `p${n}`;
   };
-  return { format: doc.format, style: doc.style.designStyle ?? CLASSIC, pick: opts.pickPageLayout, newId };
+  const described = new Set(doc.chapters.filter((c) => (c.description?.text ?? "").trim() !== "").map((c) => c.id));
+  return { format: doc.format, style: doc.style.designStyle ?? CLASSIC, pick: opts.pickPageLayout, newId, described };
 }
 
 export interface SplitSpreadAtResult {
@@ -298,6 +300,8 @@ interface SplitContext {
   style: DesignStyle;
   pick?: (req: PickPageLayoutRequest) => string | null;
   newId: () => string;
+  /** M30: ids of the chapters that have a description (their pages may use description layouts). */
+  described: ReadonlySet<string>;
 }
 
 const pageHasContent = (p: BookPage) => p.caption !== null || p.slots.some(hasPhoto);
@@ -356,7 +360,11 @@ function fillHalf(half: Half, twin: Layout | undefined, base: BookPage | null, o
   let first = true;
   do {
     const need = rest.length;
-    const layout = chooseLayout(twin, need, caption !== null, ctx);
+    // M30: a twin with a description panel is only used when the chapter has a description to
+    // show in it (else a layout without the panel, when one fits — an empty panel leaves a hole).
+    const chapterId = (base ?? owner).chapterId;
+    const plain = layoutShowsDescription(twin) && !(chapterId !== null && ctx.described.has(chapterId));
+    const layout = chooseLayout(twin, need, caption !== null, ctx, plain);
     let slots: Slot[];
     if (first && layout.id === twin?.id && half.slots.length === layout.photoCount) {
       slots = half.slots; // exact fit: keep slot order incl. empty slots
@@ -386,21 +394,33 @@ function fillHalf(half: Half, twin: Layout | undefined, base: BookPage | null, o
 }
 
 /**
- * Twin if it fits, else the picker's / default choice, else the largest layout available — always
+ * Twin if it fits (M30: unless its description panel would stay empty and a layout without one
+ * fits), else the picker's / default choice, else the largest layout available — always
  * a page layout of the doc's format AND design style (validateBookDoc rejects a page whose layout
  * style differs from doc.style.designStyle), so a too-big half overflows onto extra pages of the
  * same style instead of switching style.
  */
-function chooseLayout(twin: Layout | undefined, photoCount: number, needsCaption: boolean, ctx: SplitContext): Layout {
+function chooseLayout(twin: Layout | undefined, photoCount: number, needsCaption: boolean, ctx: SplitContext, plain = false): Layout {
   const inStyle = (l: Layout) => l.role === "page" && l.format === ctx.format && l.style === ctx.style;
   const fits = (l: Layout) => inStyle(l) && l.photoCount >= photoCount && (!needsCaption || l.caption !== null);
-  if (twin && fits(twin)) return twin;
+  if (twin && fits(twin)) {
+    if (!plain) return twin;
+    // `plain` (M30): the twin's description panel would stay empty → the smallest fitting layout
+    // without one, when the style has it (same photo count as the twin first).
+    const noPanel = (l: Layout) => fits(l) && !layoutShowsDescription(l);
+    const alt =
+      smallestFitting(layoutsFor(ctx.format, ctx.style, "page"), (l) => noPanel(l) && l.photoCount === twin.photoCount) ??
+      smallestFitting(layoutsFor(ctx.format, ctx.style, "page"), noPanel);
+    return alt ?? twin;
+  }
   if (twin && ctx.pick) {
     const picked = getLayout(ctx.pick({ format: ctx.format, style: ctx.style, photoCount, needsCaption, twin }) ?? "");
     if (picked && fits(picked)) return picked;
   }
   const pool = layoutsFor(ctx.format, ctx.style, "page");
-  const best = smallestFitting(pool, fits);
+  // M30: a layout without a description panel first (texts bound to "chapterDescription" — an
+  // empty panel leaves a hole); no-op for styles without such layouts.
+  const best = smallestFitting(pool, (l) => fits(l) && !layoutShowsDescription(l)) ?? smallestFitting(pool, fits);
   if (best) return best;
   // Nothing holds them all: the largest layout of the style (with a caption area when one is
   // needed) takes what it can; fillHalf continues on another page.

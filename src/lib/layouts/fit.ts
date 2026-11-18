@@ -23,6 +23,7 @@ import { DEFAULT_FORMAT, pageMm } from "@/lib/book/format";
 import { photoRectOf, shapePoints } from "@/lib/book/slot-geometry";
 import { autoCoversFor, layoutsFor } from "@/lib/book/spreads";
 import type { BookFormat, DesignStyle, Layout } from "@/lib/book/types";
+import { layoutShowsDescription, preferWithoutDescription } from "./description";
 
 export type FitOrientation = "portrait" | "landscape" | "square";
 
@@ -57,6 +58,23 @@ export interface BestLayoutOptions {
    * AVOID_COST_TOLERANCE of the best. Ignored for classic / modern.
    */
   avoid?: string | null;
+  /**
+   * M30 description layouts (a "chapterDescription" text panel, layouts/description.ts) — only
+   * magazine / editorial have any, so the older styles are unaffected. "avoid" (default): only
+   * layouts WITHOUT a description panel when one has the photo count (an empty panel leaves a
+   * hole); "prefer": only layouts WITH one when one exists (re-fitting a page that shows its
+   * chapter's description); "any": no filter. Applied after `preferCaption` (a user's caption wins).
+   */
+  description?: "avoid" | "prefer" | "any";
+}
+
+function descriptionPool(pool: readonly Layout[], mode: BestLayoutOptions["description"]): readonly Layout[] {
+  if (mode === "any") return pool;
+  if (mode === "prefer") {
+    const withPanel = pool.filter((l) => layoutShowsDescription(l));
+    return withPanel.length > 0 ? withPanel : pool;
+  }
+  return preferWithoutDescription(pool);
 }
 
 /**
@@ -71,7 +89,7 @@ export function bestPageLayout(orients: readonly FitOrientation[], opts: BestLay
     (l) => l.photoCount === orients.length,
   );
   const withCaption = sized.filter((l) => l.caption !== null);
-  const pool = opts.preferCaption && withCaption.length > 0 ? withCaption : sized;
+  const pool = descriptionPool(opts.preferCaption && withCaption.length > 0 ? withCaption : sized, opts.description);
   if (isShapeAware(design)) {
     const photos = orients.map((o, i) => ({ orient: o, ratio: validRatio(opts.ratios?.[i]) ?? typicalRatio(o) }));
     let bestShaped: { id: string; score: number; cost: number } | null = null;
@@ -123,11 +141,16 @@ export function bestCoverLayout(design: BookDesign = DEFAULT_DESIGN, orient: Fit
 
 /**
  * The design's full-page layout: the one-photo page layout without a caption area and the
- * largest slot (catalogue order on ties) — "full-page" for classic A5 portrait.
+ * largest slot (catalogue order on ties) — "full-page" for classic A5 portrait. M30: layouts
+ * without a description panel first (magazine landscape has no captionless one → its largest
+ * one-photo page without a description panel).
  */
 export function fullPageLayout(design: BookDesign = DEFAULT_DESIGN): string {
   assertSupportedDesign(design);
-  const singles = layoutsFor(design.format, design.designStyle, "page").filter((l) => l.photoCount === 1);
+  // M30: never a description layout when the design has another one-photo page (no-op for older styles).
+  const singles = preferWithoutDescription(
+    layoutsFor(design.format, design.designStyle, "page").filter((l) => l.photoCount === 1),
+  );
   const pool = singles.some((l) => l.caption === null) ? singles.filter((l) => l.caption === null) : singles;
   let best: Layout | undefined;
   for (const l of pool) {

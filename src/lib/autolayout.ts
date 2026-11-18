@@ -84,6 +84,14 @@
 //      share a layout when every alternative costs a miss or an extra page. The chapter opener
 //      and spreads are unchanged. relayout's fitSingles passes the page before as `avoid` to
 //      bestPageLayout (shape-aware only).
+// 11. Magazine + editorial (M30, D-090) use rule 9 as it is (not shape-aware: their slot
+//    preferences already describe the visible photo area), with one change: a rule album has no
+//    chapter descriptions, so layouts with a "chapterDescription" text panel
+//    (layouts/description.ts — a data query, never a list of ids) are left out of the filler's
+//    catalogue: singles, multi-photo pages and spreads (hasSpreads counts what is left). So
+//    magazine portrait and editorial landscape rule albums have no spreads, and a one-photo page
+//    is mg-p-full / ed-l-one-bleed. bestPageLayout / fullPageLayout apply the same preference to
+//    re-fits. No colourway here: the build writers stamp it (design/colourway-suggest.ts).
 // The result is checked with parseBookDoc + validateBookDoc; if that ever fails, a minimal
 // safe album is returned instead (the user must always get an album).
 
@@ -107,6 +115,7 @@ import {
   shapeMiss,
   slotAspectMm,
 } from "@/lib/layouts/fit";
+import { layoutShowsDescription } from "@/lib/layouts/description";
 import { styleCaptionFont } from "@/lib/design/styles";
 import { clipCodePoints, clipText } from "@/lib/text/clip";
 
@@ -542,7 +551,7 @@ function isClassicPortrait(d: BookDesign): boolean {
 }
 
 function hasSpreads(d: BookDesign): boolean {
-  return layoutsFor(d.format, d.designStyle, "spread").length > 0;
+  return catalogueOf(d).spreads.length > 0;
 }
 
 /** Rule 5 filler for classic A5 portrait, the catalogue-driven filler (rule 9) otherwise. */
@@ -693,8 +702,12 @@ interface Catalogue {
 }
 
 function catalogueOf(design: BookDesign): Catalogue {
-  const pages = layoutsFor(design.format, design.designStyle, "page");
-  const spreads = layoutsFor(design.format, design.designStyle, "spread");
+  // Rule 11: no description layouts in a rule album (no-op for styles without any).
+  const allPages = layoutsFor(design.format, design.designStyle, "page");
+  const plainPages = allPages.filter((l) => !layoutShowsDescription(l));
+  // Safety: a design whose one-photo pages all show a description keeps its whole catalogue.
+  const pages = plainPages.some((l) => l.photoCount === 1) ? plainPages : allPages;
+  const spreads = layoutsFor(design.format, design.designStyle, "spread").filter((l) => !layoutShowsDescription(l));
   const multis = new Map<number, Layout[]>();
   for (const l of pages) {
     if (l.photoCount < 2) continue;

@@ -28,8 +28,8 @@ export interface BookDesign {
 export const DEFAULT_BOOK_DESIGN: Readonly<BookDesign> = { format: DEFAULT_FORMAT, designStyle: DEFAULT_DESIGN_STYLE };
 
 // --- Supported designs (M10b A19, review S1; M10c T10) --------------------------------------------
-// Every DESIGN_STYLES value has a layout catalogue since M10c T10 (geometric + scrapbook enabled in
-// the rule-based pipeline). The machinery below stays for any style the schema/DB may accept before
+// Every DESIGN_STYLES value has a layout catalogue (M10c T10: geometric + scrapbook; M30 T9b:
+// magazine + editorial). The machinery below stays for any style the schema/DB may accept before
 // its layouts ship (and for rolled-back code meeting newer rows). Every doc WRITER that lays pages out
 // (autolayout, fillPages, relayoutDoc, planToDoc / prunePlan, photo-delete reflow, cover / full-page
 // picks) calls assertSupportedDesign first and throws the typed UnsupportedDesignError, which each
@@ -39,7 +39,8 @@ export const DEFAULT_BOOK_DESIGN: Readonly<BookDesign> = { format: DEFAULT_FORMA
 // Extend this list in the same change that ships a style's layouts (a test checks every supported
 // style × format has a cover, a one-photo page and a full-page layout).
 
-export const SUPPORTED_DESIGN_STYLES = ["classic", "modern", "geometric", "scrapbook"] as const satisfies readonly DesignStyle[];
+// M30 T9b: magazine + editorial (rule pipeline; migration 2100 widens books.design_style).
+export const SUPPORTED_DESIGN_STYLES = ["classic", "modern", "geometric", "scrapbook", "magazine", "editorial"] as const satisfies readonly DesignStyle[];
 
 export function isSupportedDesign(design: BookDesign): boolean {
   return (SUPPORTED_DESIGN_STYLES as readonly string[]).includes(design.designStyle);
