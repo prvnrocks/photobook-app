@@ -68,7 +68,10 @@
 --      rows only, no client writes, state / reason / hash checks, cascade on
 --      photo delete)
 --      and 20261119002400_photo_analyses.sql (photo_analyses: service role
---      only, one ok row per cache key, cascade on photo delete).
+--      only, one ok row per cache key, cascade on photo delete)
+--      and 20261120002500_photo_organize.sql (photo_quality,
+--      photo_duplicate_groups, photo_moments: owner reads own rows only, no
+--      client writes, value checks).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -77,7 +80,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 181 checks passed
+--       RLS OK — all 184 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -4038,6 +4041,184 @@ begin
   if exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'photo_analyses') then
     raise exception 'RLS FAIL [photo analyses]: unexpected policy';
   end if;
+  checks := checks + 1;
+
+  -- ===========================================================================
+  -- 2500 photo organize: photo_quality, photo_duplicate_groups, photo_moments
+  -- ===========================================================================
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  set local role service_role;
+  insert into public.photo_quality (photo_id, book_id, user_id, version, sharpness, exposure, composition, overall, flags)
+  values (photo_a, book_a, uid_a, 1, 71.5, 80, 62.3, 72.2, array['soft']);
+  begin
+    update public.photo_quality set overall = 100.1 where photo_id = photo_a;
+    raise exception 'RLS FAIL [photo quality]: score above 100 accepted';
+  exception when check_violation or numeric_value_out_of_range then null;
+  end;
+  begin
+    update public.photo_quality set flags = array['ugly'] where photo_id = photo_a;
+    raise exception 'RLS FAIL [photo quality]: unknown flag accepted';
+  exception when check_violation then null;
+  end;
+  reset role;
+
+  -- photo_quality: owner reads own rows; no client writes; B and anon see nothing
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.photo_quality;
+  if n < 1 then
+    raise exception 'RLS FAIL [photo quality]: owner cannot read own rows';
+  end if;
+  begin
+    insert into public.photo_quality (photo_id, book_id, user_id, version, sharpness, exposure, composition, overall) values (photo_m, book_a, uid_a, 1, 1, 1, 1, 1);
+    raise exception 'RLS FAIL [photo quality]: owner could insert';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    delete from public.photo_quality;
+    raise exception 'RLS FAIL [photo quality]: owner could delete';
+  exception when insufficient_privilege then null;
+  end;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_b, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.photo_quality;
+  if n <> 0 then
+    raise exception 'RLS FAIL [photo quality]: B can read A''s rows';
+  end if;
+  reset role;
+  set local role anon;
+  begin
+    select count(*) into n from public.photo_quality;
+    raise exception 'RLS FAIL [photo quality]: anon can select';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  checks := checks + 1;
+
+  set local role service_role;
+  insert into public.photo_duplicate_groups (book_id, user_id, group_key, kind, photo_ids, preferred_photo_id)
+  values (book_a, uid_a, photo_a, 'near', array[photo_a, photo_m], photo_a);
+  begin
+    insert into public.photo_duplicate_groups (book_id, user_id, group_key, kind, photo_ids, preferred_photo_id)
+    values (book_a, uid_a, photo_a, 'near', array[photo_a, photo_m], photo_m);
+    raise exception 'RLS FAIL [duplicate groups]: two groups with one key';
+  exception when unique_violation then null;
+  end;
+  begin
+    update public.photo_duplicate_groups set preferred_photo_id = gen_random_uuid() where book_id = book_a;
+    raise exception 'RLS FAIL [duplicate groups]: preferred photo outside the group accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.photo_duplicate_groups set photo_ids = array[photo_a] where book_id = book_a;
+    raise exception 'RLS FAIL [duplicate groups]: a group of one accepted';
+  exception when check_violation then null;
+  end;
+  update public.photo_duplicate_groups set preferred_photo_id = photo_m, preferred_source = 'user' where book_id = book_a;
+  reset role;
+
+  -- photo_duplicate_groups: owner reads own rows; no client writes; B and anon see nothing
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.photo_duplicate_groups;
+  if n < 1 then
+    raise exception 'RLS FAIL [duplicate groups]: owner cannot read own rows';
+  end if;
+  begin
+    insert into public.photo_duplicate_groups (book_id, user_id, group_key, kind, photo_ids, preferred_photo_id) values (book_a, uid_a, photo_m, 'near', array[photo_a, photo_m], photo_a);
+    raise exception 'RLS FAIL [duplicate groups]: owner could insert';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    delete from public.photo_duplicate_groups;
+    raise exception 'RLS FAIL [duplicate groups]: owner could delete';
+  exception when insufficient_privilege then null;
+  end;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_b, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.photo_duplicate_groups;
+  if n <> 0 then
+    raise exception 'RLS FAIL [duplicate groups]: B can read A''s rows';
+  end if;
+  reset role;
+  set local role anon;
+  begin
+    select count(*) into n from public.photo_duplicate_groups;
+    raise exception 'RLS FAIL [duplicate groups]: anon can select';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  begin
+    update public.photo_duplicate_groups set preferred_photo_id = photo_a where book_id = book_a;
+    raise exception 'RLS FAIL [duplicate groups]: owner could update directly';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  checks := checks + 1;
+
+  set local role service_role;
+  insert into public.photo_moments (book_id, user_id, moment_key, position, photo_ids, label, hero_photo_id, confidence, version)
+  values (book_a, uid_a, 'm:' || photo_a::text, 0, array[photo_a, photo_m], 'Scenery', photo_a, 0.9, 1);
+  begin
+    update public.photo_moments set hero_photo_id = gen_random_uuid() where book_id = book_a;
+    raise exception 'RLS FAIL [photo moments]: hero outside the moment accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.photo_moments set uncertain_reasons = array['because'] where book_id = book_a;
+    raise exception 'RLS FAIL [photo moments]: unknown uncertain reason accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.photo_moments set confidence = 1.5 where book_id = book_a;
+    raise exception 'RLS FAIL [photo moments]: confidence above 1 accepted';
+  exception when check_violation or numeric_value_out_of_range then null;
+  end;
+  begin
+    update public.photo_moments set moment_key = 'chapter 1' where book_id = book_a;
+    raise exception 'RLS FAIL [photo moments]: bad moment key accepted';
+  exception when check_violation then null;
+  end;
+  reset role;
+
+  -- photo_moments: owner reads own rows; no client writes; B and anon see nothing
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.photo_moments;
+  if n < 1 then
+    raise exception 'RLS FAIL [photo moments]: owner cannot read own rows';
+  end if;
+  begin
+    insert into public.photo_moments (book_id, user_id, moment_key, position, photo_ids, label, confidence, version) values (book_a, uid_a, 'm:' || photo_m::text, 1, array[photo_m], 'x', 0.5, 1);
+    raise exception 'RLS FAIL [photo moments]: owner could insert';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    delete from public.photo_moments;
+    raise exception 'RLS FAIL [photo moments]: owner could delete';
+  exception when insufficient_privilege then null;
+  end;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_b, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.photo_moments;
+  if n <> 0 then
+    raise exception 'RLS FAIL [photo moments]: B can read A''s rows';
+  end if;
+  reset role;
+  set local role anon;
+  begin
+    select count(*) into n from public.photo_moments;
+    raise exception 'RLS FAIL [photo moments]: anon can select';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
   checks := checks + 1;
 
   -- ---------------------------------------------------------------------------

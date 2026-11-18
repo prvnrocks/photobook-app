@@ -496,6 +496,50 @@ export type Database = {
           },
         ]
       }
+      photo_duplicate_groups: {
+        Row: {
+          book_id: string
+          group_key: string
+          id: string
+          kind: string
+          photo_ids: string[]
+          preferred_photo_id: string
+          preferred_source: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          book_id: string
+          group_key: string
+          id?: string
+          kind: string
+          photo_ids: string[]
+          preferred_photo_id: string
+          preferred_source?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          book_id?: string
+          group_key?: string
+          id?: string
+          kind?: string
+          photo_ids?: string[]
+          preferred_photo_id?: string
+          preferred_source?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "photo_duplicate_groups_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       photo_ingest: {
         Row: {
           ai_copy_bytes: number | null
@@ -552,6 +596,140 @@ export type Database = {
           },
           {
             foreignKeyName: "photo_ingest_photo_id_fkey"
+            columns: ["photo_id"]
+            isOneToOne: true
+            referencedRelation: "photos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      photo_moments: {
+        Row: {
+          book_id: string
+          confidence: number
+          date_label: string | null
+          ends_at: string | null
+          hero_photo_id: string | null
+          hero_source: string
+          id: string
+          label: string
+          label_evidence: Json
+          label_source: string
+          moment_key: string
+          photo_ids: string[]
+          place: string | null
+          position: number
+          starts_at: string | null
+          uncertain: boolean
+          uncertain_reasons: string[]
+          updated_at: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          book_id: string
+          confidence: number
+          date_label?: string | null
+          ends_at?: string | null
+          hero_photo_id?: string | null
+          hero_source?: string
+          id?: string
+          label: string
+          label_evidence?: Json
+          label_source?: string
+          moment_key: string
+          photo_ids: string[]
+          place?: string | null
+          position: number
+          starts_at?: string | null
+          uncertain?: boolean
+          uncertain_reasons?: string[]
+          updated_at?: string
+          user_id: string
+          version: number
+        }
+        Update: {
+          book_id?: string
+          confidence?: number
+          date_label?: string | null
+          ends_at?: string | null
+          hero_photo_id?: string | null
+          hero_source?: string
+          id?: string
+          label?: string
+          label_evidence?: Json
+          label_source?: string
+          moment_key?: string
+          photo_ids?: string[]
+          place?: string | null
+          position?: number
+          starts_at?: string | null
+          uncertain?: boolean
+          uncertain_reasons?: string[]
+          updated_at?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "photo_moments_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      photo_quality: {
+        Row: {
+          book_id: string
+          composition: number
+          exposure: number
+          flags: string[]
+          overall: number
+          photo_id: string
+          raw: Json
+          scored_at: string
+          sharpness: number
+          user_id: string
+          version: number
+        }
+        Insert: {
+          book_id: string
+          composition: number
+          exposure: number
+          flags?: string[]
+          overall: number
+          photo_id: string
+          raw?: Json
+          scored_at?: string
+          sharpness: number
+          user_id: string
+          version: number
+        }
+        Update: {
+          book_id?: string
+          composition?: number
+          exposure?: number
+          flags?: string[]
+          overall?: number
+          photo_id?: string
+          raw?: Json
+          scored_at?: string
+          sharpness?: number
+          user_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "photo_quality_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "photo_quality_photo_id_fkey"
             columns: ["photo_id"]
             isOneToOne: true
             referencedRelation: "photos"

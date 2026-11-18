@@ -194,8 +194,11 @@ Preview origin (e.g. the branch alias of a `staging` branch) that is also in the
       (additive: one service-role-only table `photo_analyses` = analysis cache + token / cost log). Live calls are
       refused while it is missing. Optional env: `AI_PHOTO_MODEL`, `AI_PHOTO_CONCURRENCY`, `AI_PHOTO_TIMEOUT_MS`,
       `AI_PHOTO_MAX_RETRIES` (see `.env.example`). Then run `rls_check.sql` → 181.
+- [ ] **Photo organiser: push `20261120002500_photo_organize.sql` BEFORE any code calls the Task 4 functions**
+      (additive: `photo_quality`, `photo_duplicate_groups`, `photo_moments`; owner read-only, server-side writes;
+      no photo is dropped or deleted by it). Then run `rls_check.sql` → 184.
 - [ ] Supabase → SQL Editor → paste the whole of `supabase/tests/rls_check.sql` → Run. Expected: an error panel
-      starting with **`RLS OK — all 181 checks passed`** (180 before 2400, 179 before 2300, 177 before 2200, 176 before 2100, 175 before 2000, 173 before 1900) (raised on purpose; it rolls everything back). Anything
+      starting with **`RLS OK — all 184 checks passed`** (181 before 2500, 180 before 2400, 179 before 2300, 177 before 2200, 176 before 2100, 175 before 2000, 173 before 1900) (raised on purpose; it rolls everything back). Anything
       else (`RLS FAIL [...]`, permission denied) is a blocker.
 - [ ] Verify `private.auth_user_email` works (the warning emails depend on it; needs `postgres` to read
       `auth.users`):

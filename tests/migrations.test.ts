@@ -3055,9 +3055,9 @@ describe("migrations: Photo Intelligence cache + usage log (2400)", () => {
   const sql = m?.sql ?? "";
   const flat = sql.replace(/\s+/g, " ");
 
-  it("is the latest migration and purely additive", () => {
+  it("comes right after 2300 and is purely additive", () => {
     expect(m, `${name} missing`).toBeDefined();
-    expect(files[files.length - 1]).toBe(name);
+    expect(files.indexOf(name)).toBe(files.indexOf("20261119002300_photo_ingest.sql") + 1); // latest until 2500
     expect(sql).not.toMatch(/\bdrop\b/);
     expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
     expect(sql).not.toMatch(/security\s+definer/);
@@ -3089,12 +3089,64 @@ describe("migrations: Photo Intelligence cache + usage log (2400)", () => {
     expect(flat).toContain("(status = 'error' and analysis is null and error is not null and error ~ '^[a-z_]{3,40}$')");
   });
 
-  it("rls_check.sql covers 2400 and counts 181 checks; database.types.ts lists the table", () => {
+  it("rls_check.sql covers 2400 (181 checks then; 2500 → 184); database.types.ts lists the table", () => {
     const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
     expect(rls).toContain(name);
     expect(rls).toContain("RLS FAIL [photo analyses]");
-    expect(rls).toContain("RLS OK — all 181 checks passed");
     const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
     expect(types).toMatch(/photo_analyses: \{\s*Row: \{[\s\S]*?image_sha256: string/);
+  });
+});
+
+describe("migrations: photo quality, duplicate groups, moments (2500)", () => {
+  const name = "20261120002500_photo_organize.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const flat = sql.replace(/\s+/g, " ");
+  const TABLES = ["photo_quality", "photo_duplicate_groups", "photo_moments"];
+
+  it("is the latest migration, purely additive, and never touches photos or storage", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files[files.length - 1]).toBe(name);
+    expect(sql).not.toMatch(/\bdrop\b/);
+    expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
+    expect(sql).not.toMatch(/security\s+definer/);
+    expect(sql).not.toMatch(/create\s+(or\s+replace\s+)?function/);
+    expect(sql).not.toMatch(/\b(update|delete\s+from|insert\s+into)\s+(public|storage)\./);
+    expect(sql).not.toMatch(/storage\./);
+    const altered = [...sql.matchAll(/alter\s+table\s+public\.(\w+)/g)].map((x) => x[1]);
+    expect([...new Set(altered)].sort()).toEqual([...TABLES].sort());
+  });
+
+  it("owner read-only on all three tables; cascade with the book and the account", () => {
+    for (const t of TABLES) {
+      expect(flat).toContain(`create policy "${t}_select_own" on public.${t} for select to authenticated using (user_id = (select auth.uid()));`);
+    }
+    expect(flat).toContain("revoke all on table public.photo_quality, public.photo_duplicate_groups, public.photo_moments from anon, authenticated, public;");
+    expect(flat).toContain("grant select on table public.photo_quality, public.photo_duplicate_groups, public.photo_moments to authenticated;");
+    expect(sql).not.toMatch(/for\s+(insert|update|delete|all)\s+to/);
+    expect(sql).not.toMatch(/to\s+anon\b/);
+    expect(flat.match(/references public\.books \(id\) on delete cascade/g)).toHaveLength(3);
+    expect(flat.match(/references auth\.users \(id\) on delete cascade/g)).toHaveLength(3);
+    expect(flat).toContain("photo_id uuid primary key references public.photos (id) on delete cascade");
+  });
+
+  it("DB value lists match the code (quality flags, uncertain reasons)", async () => {
+    const { QUALITY_FLAGS } = await import("@/lib/photos/quality");
+    const { UNCERTAIN_REASONS } = await import("@/lib/photos/moments");
+    expect(flat).toContain(`flags <@ array[${QUALITY_FLAGS.map((x) => `'${x}'`).join(", ")}]::text[]`);
+    expect(flat).toContain(`uncertain_reasons <@ array[${UNCERTAIN_REASONS.map((x) => `'${x}'`).join(", ")}]::text[]`);
+    expect(flat).toContain("check (preferred_photo_id = any (photo_ids))");
+    expect(flat).toContain("check (hero_photo_id is null or hero_photo_id = any (photo_ids))");
+    expect(flat).toContain("check (label_source in ('auto', 'user') and hero_source in ('auto', 'user'))");
+  });
+
+  it("rls_check.sql covers 2500 and counts 184 checks; database.types.ts lists the tables", () => {
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain(name);
+    for (const tag of ["photo quality", "duplicate groups", "photo moments"]) expect(rls).toContain(`RLS FAIL [${tag}]`);
+    expect(rls).toContain("RLS OK — all 184 checks passed");
+    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
+    for (const t of TABLES) expect(types).toContain(`      ${t}: {`);
   });
 });
