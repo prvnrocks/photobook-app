@@ -669,11 +669,12 @@ describe("clusterPhotosIntoMoments", () => {
   it("incremental: a second call after more uploads scores only the new photos and extends the moments", async () => {
     const s = server({ photos: [day1(1, 0), day1(2, 2)] });
     const first = await clusterPhotosIntoMoments(BOOK, s.deps);
-    expect(s.state.saves).toEqual([pid(1), pid(2)]);
+    expect([...s.state.saves].sort()).toEqual([pid(1), pid(2)]); // scored in parallel: order is not fixed
     expect(keysOf(first.moments)).toEqual([[1, 2]]);
     s.state.photos = [...s.state.photos, day1(3, 4), row(4, { taken_at: "2026-10-13T12:00:00+00:00", date_source: "exif" })];
     const second = await clusterPhotosIntoMoments(BOOK, s.deps);
-    expect(s.state.saves).toEqual([pid(1), pid(2), pid(3), pid(4)]); // 1 and 2 were not scored again
+    expect([...s.state.saves].sort()).toEqual([pid(1), pid(2), pid(3), pid(4)]); // 1 and 2 were not scored again
+    expect(s.state.saves).toHaveLength(4);
     expect(keysOf(second.moments)).toEqual([[1, 2, 3], [4]]);
     expect(second.moments[0]!.key).toBe(first.moments[0]!.key); // the moment kept its identity
     const third = await clusterPhotosIntoMoments(BOOK, s.deps);
