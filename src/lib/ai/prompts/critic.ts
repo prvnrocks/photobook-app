@@ -60,3 +60,39 @@ export function criticSystemText(): string {
 export function criticSystem(): SystemBlock[] {
   return cachedSystem(criticSystemText());
 }
+
+// ---------------------------------------------------------------------------------------------
+// M30 T10 — variant for the styles with chapter descriptions (magazine / editorial,
+// writesDescriptions(designStyle)). The base text above is what every other style sends and is
+// frozen byte for byte (tests/ai/prompt-freeze.test.ts); the variant is the base rules + one
+// DESCRIPTIONS section, a constant of its own → its own cached prefix. It adds NO issue type and
+// NO schema field: a description problem is reported with the existing caption issue types and
+// fix rewrite_caption, on the page that shows the description, with a detail that starts with
+// "description:" (src/lib/ai/repair.ts maps that to the Caption Writer's "m{n}:desc" key).
+
+/** v1 (M30 T10): chapter descriptions listed on their page line and judged like captions. */
+export const CRITIC_DESCRIPTIONS_PROMPT_VERSION = 1;
+
+/** What a description issue's `detail` starts with (prompt + repair.ts agree on it). */
+export const DESCRIPTION_DETAIL_PREFIX = "description:";
+
+const DESCRIPTIONS_RULES = `DESCRIPTIONS
+This book's design also prints a short paragraph about a chapter (a chapter description) on one page of that chapter. In PAGES, the line of that page ends with · description [ai] "text" (written by the Caption Writer) or · description [user] "text" (typed by the user). A page line without it shows no description.
+- Judge an [ai] description with the caption rubric points: 4 (it matches what is visible in the photos of ITS CHAPTER — all pages of that chapter, not only the page that prints it), 5 (no invented names, places, dates, numbers or facts), 6 (it does not repeat a caption, the chapter title or another description word for word) and 9 (original text). It is 25 to 45 words in 2 or 3 sentences; a longer one is too_repetitive only if it also repeats itself — length alone is checked by code.
+- Report a description problem with the same types and fix as a caption problem: caption_mismatch, caption_invented_fact, too_repetitive or caption_not_original, fix rewrite_caption, pageIndex = the page whose line shows that description. Start detail with "${DESCRIPTION_DETAIL_PREFIX}" (for example "${DESCRIPTION_DETAIL_PREFIX} mentions a beach, but the chapter's photos show a dinner indoors") so the right text is rewritten; a detail without it is about the page caption.
+- Never report issues for [user] descriptions: the user decides those.
+- ALREADY FLAGGED may list a description as "page N (description): codes"; it will be rewritten anyway.
+- The score rule applies: a caption_mismatch, caption_invented_fact or caption_not_original in a description also means a score of 6 or less.`;
+
+/** The variant's full, stable system text. */
+export function criticDescriptionsSystemText(): string {
+  return `${RULES}\n\n${DESCRIPTIONS_RULES}\n`;
+}
+
+/**
+ * System blocks for a book: the variant when its style gets AI descriptions, else the base
+ * blocks. Fresh array, identical content every call for a given flag.
+ */
+export function criticSystemFor(descriptions: boolean): SystemBlock[] {
+  return descriptions ? cachedSystem(criticDescriptionsSystemText()) : criticSystem();
+}

@@ -18,11 +18,20 @@
 // weak_cover → cover swap (best kept cover-worthy portrait/group photo, highest quality, not the
 // current cover); everything else is logged only. Captions with source "user" are never targeted.
 // Reasons and logged entries carry codes/indices only — never caption text or critique detail.
+//
+// Chapter descriptions (M30 T10, key "m{n}:desc"): a pre-check failure of a description is a
+// target like a heading's. The Critic has no description issue type (enum and schema unchanged):
+// it reports a caption-type issue on the page that prints the description, with a detail that
+// starts with "description:" (prompts/critic.ts). Such an issue — or a caption-type issue on a
+// description page that has no AI caption to blame — targets "m{n}:desc" when the chapter's
+// description is the AI's (never a user's: logged `user_description`).
 
 import type { BookDoc } from "@/lib/book/types";
 import { getLayout } from "@/lib/layouts";
+import { layoutIdShowsDescription } from "@/lib/layouts/description";
 import type { CaptionIssue } from "./caption-check";
 import { momentIdsOfChapters } from "./captions";
+import { DESCRIPTION_DETAIL_PREFIX } from "./prompts/critic";
 import { captionKey, MOMENT_ID_RE, type Critique } from "./schemas";
 import { byStoryTime, type StoryPhoto } from "./story";
 
@@ -57,6 +66,25 @@ export function pageCaptionKeys(doc: Pick<BookDoc, "chapters" | "pages">): Array
 export function pageIndexOfKey(doc: Pick<BookDoc, "chapters" | "pages">, key: string): number | null {
   const i = pageCaptionKeys(doc).indexOf(key);
   return i >= 0 ? i : null;
+}
+
+/**
+ * M30: chapter id → index (doc.pages) of the page that prints the chapter's description = the
+ * first page of the chapter whose layout has a description panel (a spread: its left half).
+ * Chapters without such a page are absent.
+ */
+export function descriptionPageIndexes(doc: Pick<BookDoc, "pages">): Map<string, number> {
+  const out = new Map<string, number>();
+  doc.pages.forEach((p, i) => {
+    if (!p.chapterId || out.has(p.chapterId) || p.side === "right") return;
+    if (layoutIdShowsDescription(p.layout)) out.set(p.chapterId, i);
+  });
+  return out;
+}
+
+/** True for a moment-level key ("m3:heading", "m3:desc") — not a page caption key. */
+export function isMomentKey(key: string): boolean {
+  return key.endsWith(":heading") || key.endsWith(":desc");
 }
 
 /** "m3:0" → "m3", "m3:heading" → "m3"; null when malformed. */
@@ -117,6 +145,7 @@ export function planRepair(
   opts: PlanRepairOptions,
 ): RepairPlan {
   const keys = pageCaptionKeys(doc);
+  const descriptionPages = descriptionPageIndexes(doc);
   const pageOfKey = new Map<string, number>();
   keys.forEach((k, i) => {
     if (k) pageOfKey.set(k, i);
@@ -144,7 +173,7 @@ export function planRepair(
     const codes = issues.map((i) => i.code);
     if (!codes.length) continue;
     const pageIndex = pageOfKey.get(key);
-    const isHeading = key.endsWith(":heading");
+    const isHeading = isMomentKey(key);
     if (!isHeading && pageIndex === undefined) {
       loggedOnly.push(`precheck@${key}:unknown_page`);
       continue;
@@ -170,8 +199,18 @@ export function planRepair(
         const pi = issue.pageIndex;
         const page = pi === null ? undefined : doc.pages[pi];
         const key = pi === null ? null : keys[pi];
+        // M30: is this issue about the chapter description printed on that page?
+        const description = pi !== null && page?.chapterId && descriptionPages.get(page.chapterId) === pi
+          ? doc.chapters.find((c) => c.id === page.chapterId)?.description
+          : undefined;
+        const saysDescription = typeof issue.detail === "string" && issue.detail.trim().toLowerCase().startsWith(DESCRIPTION_DETAIL_PREFIX);
+        const hasAiCaption = Boolean(page?.caption && page.caption.source !== "user" && isCaptionable(page));
         if (pi === null || !page || !key) {
           loggedOnly.push(`${at}:no_page`);
+        } else if (description && (saysDescription || !hasAiCaption)) {
+          const moment = momentIdOfKey(key);
+          if (description.source === "user" || !moment) loggedOnly.push(`${at}:user_description`);
+          else addTarget(captionKey(moment, "desc"), "critic", [issue.type], at);
         } else if (page.caption?.source === "user") {
           loggedOnly.push(`${at}:user_caption`);
         } else if (!page.caption || !isCaptionable(page)) {

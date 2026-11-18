@@ -6,6 +6,11 @@
 // returns it in Critique.issues[].pageIndex. repair.ts maps it to the Caption Writer's captionKey
 // ("m{n}:{k}") with pageCaptionKeys(doc).
 //
+// Chapter descriptions (M30 T10): with `descriptions: true` (magazine / editorial books) the call
+// uses the variant system prompt (prompts/critic.ts) and the PAGES line of the first page of each
+// chapter that shows the chapter's description carries it (· description [ai|user] "text"). Same
+// schema, same issue types; repair.ts tells a description issue from a caption issue.
+//
 // Privacy (D-027): input_summary has counts only; agent_steps.output = critiqueLogOutput (score,
 // issue types, pageIndex, fix — never `detail`). Captions and notes go only to the model.
 
@@ -13,10 +18,10 @@ import type { BookDoc } from "@/lib/book/types";
 import { clipText } from "@/lib/text/clip";
 import { AGENT_TIMEOUT_MS, EFFORT } from "../client";
 import type { CaptionIssue } from "../caption-check";
-import { CRITIC_PROMPT_VERSION, criticSystem } from "../prompts/critic";
-import { pageCaptionKeys } from "../repair";
+import { CRITIC_DESCRIPTIONS_PROMPT_VERSION, CRITIC_PROMPT_VERSION, criticSystemFor } from "../prompts/critic";
+import { descriptionPageIndexes, pageCaptionKeys } from "../repair";
 import { runAgentStep, type RetryOptions, type StepLogger, type StepResult } from "../run-step";
-import { CritiqueAiSchema, CritiqueStrictSchema, critiqueLogOutput, type Critique, type CritiqueAi } from "../schemas";
+import { AI_TEXT_LIMITS, captionKey, CritiqueAiSchema, CritiqueStrictSchema, critiqueLogOutput, type Critique, type CritiqueAi } from "../schemas";
 import { formatLocal, orientationOf, photoMs, type StoryBook, type StoryPhoto } from "../story";
 import type { AgentRequest, AgentTransport } from "../transport";
 
@@ -58,6 +63,11 @@ export interface CritiqueBookArgs {
   /** checkBookCaptions result (captionKey → issues); only the codes are sent. */
   precheck: ReadonlyMap<string, readonly CaptionIssue[]>;
   book: Pick<StoryBook, "occasion" | "tone" | "captionLang">;
+  /**
+   * M30: the book's style gets AI chapter descriptions (writesDescriptions(designStyle)) → variant
+   * system prompt, descriptions on their page lines. Default false = exactly the pre-M30 request.
+   */
+  descriptions?: boolean;
   transport: AgentTransport;
   logger: StepLogger;
   retry?: RetryOptions;
@@ -118,8 +128,20 @@ export function criticPhotoLine(alias: string, p: StoryPhoto | undefined): strin
 }
 
 /** The per-request user message. Throws "missing alias" when a doc photo has no alias. */
-export function buildCriticUserMessage(args: Pick<CritiqueBookArgs, "doc" | "aliasOf" | "photosById" | "metadata" | "precheck" | "book">): string {
+export function buildCriticUserMessage(
+  args: Pick<CritiqueBookArgs, "doc" | "aliasOf" | "photosById" | "metadata" | "precheck" | "book" | "descriptions">,
+): string {
   const { doc, aliasOf, photosById, metadata, precheck, book } = args;
+  // M30: page index → the chapter description that page prints (variant calls only).
+  const descriptionAt = new Map<number, { text: string; source: "ai" | "user"; momentKey: string | null }>();
+  if (args.descriptions === true) {
+    for (const [chapterId, pageIndex] of descriptionPageIndexes(doc)) {
+      const d = doc.chapters.find((c) => c.id === chapterId)?.description;
+      const pageKey = pageCaptionKeys(doc)[pageIndex];
+      const moment = pageKey ? pageKey.split(":")[0] : null;
+      if (d?.text.trim()) descriptionAt.set(pageIndex, { text: d.text, source: d.source, momentKey: moment ? captionKey(moment, "desc") : null });
+    }
+  }
   const alias = (id: string | null) => {
     if (!id) return "empty";
     const a = aliasOf.get(id);
@@ -153,7 +175,9 @@ export function buildCriticUserMessage(args: Pick<CritiqueBookArgs, "doc" | "ali
         ? `[${p.caption.source === "user" ? "user" : "ai"}] ${quoted(p.caption.text, CAPTION_CHARS)}`
         : "none";
       const chapter = p.chapterId && chapterIds.has(p.chapterId) ? p.chapterId : "?";
-      return `${i} · ${chapter} · ${p.layout} · ${p.slots.map((s) => alias(s.photoId)).join(" ")} · caption ${cap}`;
+      const d = descriptionAt.get(i);
+      const desc = d ? ` · description [${d.source}] ${quoted(d.text, AI_TEXT_LIMITS.chapterDescription)}` : "";
+      return `${i} · ${chapter} · ${p.layout} · ${p.slots.map((s) => alias(s.photoId)).join(" ")} · caption ${cap}${desc}`;
     }),
     "",
     "PHOTOS",
@@ -165,6 +189,10 @@ export function buildCriticUserMessage(args: Pick<CritiqueBookArgs, "doc" | "ali
     const codes = k ? (precheck.get(k) ?? []).map((x) => x.code) : [];
     if (codes.length) flagged.push(`page ${i}: ${[...new Set(codes)].join(", ")}`);
   });
+  for (const [i, d] of descriptionAt) {
+    const codes = d.momentKey ? (precheck.get(d.momentKey) ?? []).map((x) => x.code) : [];
+    if (codes.length) flagged.push(`page ${i} (description): ${[...new Set(codes)].join(", ")}`);
+  }
   lines.push("", "ALREADY FLAGGED", ...(flagged.length ? flagged : ["none"]));
   return lines.join("\n");
 }
@@ -192,11 +220,11 @@ export function criticScenarioMeta(doc: Pick<BookDoc, "chapters" | "pages">): Cr
 }
 
 export function buildCriticRequest(
-  args: Pick<CritiqueBookArgs, "doc" | "aliasOf" | "photosById" | "metadata" | "precheck" | "book">,
+  args: Pick<CritiqueBookArgs, "doc" | "aliasOf" | "photosById" | "metadata" | "precheck" | "book" | "descriptions">,
 ): AgentRequest<CritiqueAi> {
   return {
     agent: "critic",
-    system: criticSystem(),
+    system: criticSystemFor(args.descriptions === true),
     messages: [{ role: "user", content: buildCriticUserMessage(args) }],
     schema: CritiqueAiSchema,
     effort: EFFORT.critic,
@@ -234,6 +262,14 @@ export async function critiqueBook(args: CritiqueBookArgs): Promise<StepResult<C
       places: uniqueClean(args.metadata.places, 80).length,
       knownNames: (args.metadata.knownNames ?? []).length,
       captionLang: args.book.captionLang,
+      // M30: only on variant calls (counts and a version — never description text).
+      ...(args.descriptions === true
+        ? {
+            descriptionsPromptVersion: CRITIC_DESCRIPTIONS_PROMPT_VERSION,
+            descriptions: doc.chapters.filter((c) => c.description?.text.trim()).length,
+            userDescriptions: doc.chapters.filter((c) => c.description?.source === "user").length,
+          }
+        : {}),
     },
     request,
     strictSchema: critiqueStrictSchemaFor(doc.pages.length),

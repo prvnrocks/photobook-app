@@ -359,12 +359,15 @@ function setup(
     book?: Partial<BookForRun>;
     mode?: AiMode;
     scenarioFor?: (agent: AgentName, perAgentIndex: number) => ReplayScenario;
+    /** Instance-level replay synthesisers (win over the registered ones). */
+    synths?: Partial<Record<AgentName, import("@/lib/ai/transport-replay").ReplaySynth>>;
   } = {},
 ) {
   const db = new FakeDb(photos, opts.book);
   const perAgent = new Map<AgentName, number>();
   const replay = new ReplayTransport({
     fixturesDir: "/nonexistent-orchestrator-fixtures",
+    synths: opts.synths,
     scenarioFor: (agent) => {
       const i = perAgent.get(agent) ?? 0;
       perAgent.set(agent, i + 1);
@@ -1529,6 +1532,12 @@ describe("orchestrator — captions (M4)", () => {
     expect(Object.keys(parsed.captions)).toHaveLength(100);
     expect(parsed.album).toMatchObject({ kind: "ai", plan: { moments: expect.any(Array) } });
     expect(parsed.memory?.knownNames).toHaveLength(20);
+    // M30: + a chapter description for every moment at the pre-check cap (400 units, Arabic) still fits.
+    for (let m = 1; m <= 100; m++) cursor.descriptions[`m${m}`] = ar(400);
+    const withDescriptions = Buffer.byteLength(JSON.stringify(cursor), "utf8");
+    expect(withDescriptions - bytes).toBeGreaterThan(80_000);
+    expect(orch.cursorBytes(cursor)).toBeLessThan(orch.MAX_CURSOR_BYTES);
+    expect(Object.keys(orch.parseCursor(JSON.parse(JSON.stringify(cursor)))!.descriptions)).toHaveLength(100);
   });
 });
 
@@ -2222,5 +2231,411 @@ describe("orchestrator — database timeouts (M12)", () => {
     await expect(
       orch.releaseLease({ releaseRun: async () => Promise.reject(new AgentRunsQueryError("release run", SUPABASE_TIMEOUT)) }, "r", "t"),
     ).resolves.toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// M30 T10 — magazine / editorial AI builds with AI chapter descriptions
+
+describe("orchestrator — magazine / editorial builds with chapter descriptions (M30 T10)", async () => {
+  const { captionBatches } = await import("@/lib/ai/captions");
+  const { checkDescription } = await import("@/lib/ai/caption-check");
+  const { captionWriterReplaySynth, PLANTED_DESCRIPTION_TEXT } = await import("@/lib/ai/agents/caption-writer-replay");
+  const { CAPTION_WRITER_DESCRIPTIONS_SYSTEM_PROMPT, CAPTION_WRITER_SYSTEM_PROMPT } = await import("@/lib/ai/prompts/caption-writer");
+  const { criticDescriptionsSystemText, criticSystemText } = await import("@/lib/ai/prompts/critic");
+  const { layoutIdShowsDescription } = await import("@/lib/layouts/description");
+  const { estimateCallCostUsd } = await import("@/lib/ai/cost");
+  const { AI_MODEL } = await import("@/lib/ai/client");
+  const { captionWriterMaxTokens } = await import("@/lib/ai/agents/caption-writer");
+
+  const DESIGNS = [
+    { format: "A5_PORTRAIT", designStyle: "magazine" },
+    { format: "A5_LANDSCAPE", designStyle: "magazine" },
+    { format: "A5_PORTRAIT", designStyle: "editorial" },
+    { format: "A5_LANDSCAPE", designStyle: "editorial" },
+  ] as const;
+  const bookOf = (d: (typeof DESIGNS)[number], over: Partial<BookForRun> = {}): Partial<BookForRun> => ({ format: d.format, design_style: d.designStyle, ...over });
+  const descriptionsOf = (doc: BookDocT) => doc.chapters.map((c) => c.description);
+  /** Pages (a spread once) per chapter whose layout shows the chapter description. */
+  const descriptionPages = (doc: BookDocT) =>
+    doc.chapters.map((c) => doc.pages.filter((p) => p.chapterId === c.id && p.side !== "right" && layoutIdShowsDescription(p.layout)).length);
+  /** No description text in agent_steps, the cursor or the progress. */
+  function expectNoDescriptionText(db: FakeDb, runId: string, doc: BookDocT) {
+    const steps = JSON.stringify(db.steps.map((x) => [x.output, x.inputSummary, x.error]));
+    const run = db.run(runId);
+    const texts = doc.chapters.flatMap((c) => (c.description ? [c.description.text] : []));
+    expect(texts.length).toBeGreaterThan(0);
+    for (const t of [...texts, PLANTED_DESCRIPTION_TEXT.en, PLANTED_DESCRIPTION_TEXT.ar]) {
+      expect(steps).not.toContain(t);
+      expect(JSON.stringify(run.cursor)).not.toContain(t);
+      expect(JSON.stringify(run.progress)).not.toContain(t);
+    }
+    expect((run.cursor as { descriptions?: unknown }).descriptions).toEqual({});
+  }
+
+  for (const design of DESIGNS) {
+    it(`${design.designStyle}/${design.format}: replay build → done / ok, one description page per chapter, descriptions source "ai", no extra Caption Writer call`, async () => {
+      const { db, transport, deps } = setup(photos150().slice(0, 60), { book: bookOf(design) });
+      const s = await start(deps);
+      const { last } = await runToEnd(deps, s.runId);
+      expect(last).toMatchObject({ state: "done", aiStatus: "ok", errorCode: null });
+      expect(db.book.ai_status).toBe("done");
+      const doc = docOf(db);
+      expect(doc.meta).toMatchObject({ generator: "ai" });
+      expect(doc.style.designStyle).toBe(design.designStyle);
+      for (const id of [doc.cover.layout, ...doc.pages.map((p) => p.layout)]) {
+        expect(getLayout(id)).toMatchObject({ format: design.format, style: design.designStyle });
+      }
+      const kept = new Set(db.photos.filter((p) => p.status === "kept").map((p) => p.id));
+      expect(validateBookDoc(doc, { photoIds: kept, maxPages: 20 })).toEqual([]);
+      expect(isSpreadAligned(doc)).toBe(true);
+
+      // Every chapter opens with its one description page / spread and has an AI description.
+      expect(doc.chapters.length).toBeGreaterThanOrEqual(2);
+      expect(descriptionPages(doc)).toEqual(doc.chapters.map(() => 1));
+      const ctx = buildCaptionContext({ lang: "en", dates: db.photos.map((p) => p.taken_at) });
+      const texts = descriptionsOf(doc).map((d) => {
+        expect(d).toMatchObject({ source: "ai" });
+        expect(wordCount(d!.text)).toBeGreaterThanOrEqual(25);
+        expect(wordCount(d!.text)).toBeLessThanOrEqual(45);
+        expect(checkDescription(d!.text, ctx)).toEqual([]);
+        return d!.text;
+      });
+      expect(new Set(texts).size).toBe(texts.length);
+      // No description repeats a caption or its chapter title.
+      for (const t of texts) for (const cap of captionTexts(doc)) expect(t.toLowerCase()).not.toContain(cap.toLowerCase());
+
+      // Captions and headings as in every AI build.
+      expect(doc.pages.filter((p) => p.caption).every((p) => p.caption!.source === "ai")).toBe(true);
+      expect(captionTexts(doc).length).toBeGreaterThan(0);
+
+      // Call count: exactly one Caption Writer call per caption batch — the batching without descriptions.
+      const batchesBefore = captionBatches(doc, { lang: "en" });
+      const writers = stepsOf(db, "caption_writer:");
+      expect(writers).toHaveLength(batchesBefore.length);
+      expect(transport.count("caption_writer")).toBe(batchesBefore.length);
+      expect(writers.every((w) => /^caption_writer:\d+$/.test(w.stepKey) && w.status === "ok" && w.attempt === 1)).toBe(true);
+      expect(transport.count("critic")).toBe(1);
+      expect(transport.count("storyteller")).toBe(1);
+
+      // Each agent got this design's / the variant's cached prefix.
+      const systemOf = (agent: AgentName) => transport.requests.filter((r) => r.agent === agent).map((r) => r.system[0].text);
+      expect(systemOf("storyteller")).toEqual([storytellerSystemText(design)]);
+      expect(new Set(systemOf("caption_writer"))).toEqual(new Set([CAPTION_WRITER_DESCRIPTIONS_SYSTEM_PROMPT]));
+      expect(systemOf("critic")).toEqual([criticDescriptionsSystemText()]);
+      // The Critic saw every description on its page line.
+      const criticMsg = transport.requests.find((r) => r.agent === "critic")!.messages[0].content as string;
+      for (const t of texts) expect(criticMsg).toContain(`description [ai] "${t}"`);
+
+      // Log-safe: counts and codes only.
+      expectNoDescriptionText(db, s.runId, doc);
+      expectNoText(db, s.runId, doc);
+      expect(writers[0].inputSummary).toMatchObject({ descriptionsPromptVersion: 1 });
+      expect(writers.reduce((n, w) => n + (w.inputSummary.descriptions as number), 0)).toBe(doc.chapters.length);
+      expect(db.steps.find((x) => x.agent === "critic")!.inputSummary).toMatchObject({ descriptions: doc.chapters.length, userDescriptions: 0 });
+    });
+  }
+
+  for (const designStyle of ["magazine", "editorial"] as const) {
+    it(`${designStyle}, Arabic: native Arabic descriptions (Arabic script only) that pass the check`, async () => {
+      const { db, deps } = setup(photos150().slice(0, 60), { book: { format: "A5_PORTRAIT", design_style: designStyle, caption_lang: "ar" } });
+      const s = await start(deps);
+      const { last } = await runToEnd(deps, s.runId);
+      expect(last).toMatchObject({ state: "done", aiStatus: "ok", errorCode: null });
+      const doc = docOf(db);
+      const ctx = buildCaptionContext({ lang: "ar", dates: db.photos.map((p) => p.taken_at) });
+      expect(doc.chapters.length).toBeGreaterThanOrEqual(2);
+      for (const d of descriptionsOf(doc)) {
+        expect(d).toMatchObject({ source: "ai" });
+        expect(ARABIC.test(d!.text)).toBe(true);
+        expect(/[A-Za-z]/.test(d!.text)).toBe(false);
+        expect(wordCount(d!.text)).toBeLessThanOrEqual(45);
+        expect(checkDescription(d!.text, ctx)).toEqual([]);
+      }
+      expectNoDescriptionText(db, s.runId, doc);
+    });
+  }
+
+  it("classic book: base prompts, no description anywhere (requests unchanged)", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 60));
+    const s = await start(deps);
+    await runToEnd(deps, s.runId);
+    const doc = docOf(db);
+    expect(descriptionsOf(doc).every((d) => d === undefined)).toBe(true);
+    const systemOf = (agent: AgentName) => transport.requests.filter((r) => r.agent === agent).map((r) => r.system[0].text);
+    expect(new Set(systemOf("caption_writer"))).toEqual(new Set([CAPTION_WRITER_SYSTEM_PROMPT]));
+    expect(systemOf("critic")).toEqual([criticSystemText()]);
+    const all = JSON.stringify(transport.requests.map((r) => r.messages));
+    expect(all).not.toContain(":desc");
+    expect(all).not.toContain("description [");
+    expect(JSON.stringify(db.steps.map((x) => [x.inputSummary, x.output]))).not.toContain("escription");
+  });
+
+  it("plant_bad_caption: the planted 49-word description with an invented place is caught by the pre-check and fixed by the ONE repair", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 60), {
+      book: bookOf(DESIGNS[0]),
+      scenarioFor: (agent) => (agent === "caption_writer" || agent === "critic" ? "plant_bad_caption" : "ok"),
+    });
+    const s = await start(deps);
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok", errorCode: null });
+    const b0 = db.steps.find((x) => x.stepKey === "caption_writer:0")!;
+    const m1 = (b0.output as { moments: Array<{ descriptionWords?: number; descriptionIssues?: string[] }> }).moments[0];
+    expect(m1.descriptionWords).toBeGreaterThan(45);
+    expect([...m1.descriptionIssues!].sort()).toEqual(["too_long", "unknown_name"]);
+    const repairs = stepsOf(db, "caption_writer:repair:");
+    expect(repairs).toHaveLength(1); // one repair call for batch 0: captions + the description together
+    expect(repairs[0]).toMatchObject({ stepKey: "caption_writer:repair:0", attempt: 1, status: "ok" });
+    expect(repairs[0].inputSummary).toMatchObject({ repairTargets: 3, descriptions: 1 });
+    expect(transport.count("critic")).toBe(1);
+    const doc = docOf(db);
+    const first = doc.chapters[0].description!;
+    expect(first.source).toBe("ai");
+    expect(first.text).not.toBe(PLANTED_DESCRIPTION_TEXT.en);
+    expect(wordCount(first.text)).toBeLessThanOrEqual(45);
+    expect(descriptionsOf(doc).every((d) => d?.source === "ai")).toBe(true);
+    expectNoDescriptionText(db, s.runId, doc);
+  });
+
+  it("a description that is still 46 words after the repair is dropped (no description, panel collapses); the rest of the book is untouched", async () => {
+    const tooLong = Array.from({ length: 46 }, (_, i) => (i === 0 ? "Slow" : "light")).join(" ");
+    const { db, deps } = setup(photos150().slice(0, 60), {
+      book: bookOf(DESIGNS[2]),
+      synths: {
+        caption_writer: (meta, ctx) => {
+          const out = captionWriterReplaySynth(meta, ctx) as { moments: Array<{ momentId: string; description?: string | null }> };
+          for (const m of out.moments) if (m.momentId === "m1" && typeof m.description === "string") m.description = tooLong;
+          return out;
+        },
+      },
+    });
+    const s = await start(deps);
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok", errorCode: null });
+    expect(stepsOf(db, "caption_writer:repair:")).toHaveLength(1); // never a second repair
+    expect(JSON.stringify(stepsOf(db, "caption_writer:repair:")[0].output)).toContain('"descriptionIssues":["too_long"]');
+    const doc = docOf(db);
+    expect(doc.chapters[0].description).toBeUndefined();
+    expect(doc.chapters.slice(1).every((c) => c.description?.source === "ai")).toBe(true);
+    expect(JSON.stringify(db.book.doc)).not.toContain(tooLong);
+    expect(doc.pages.filter((p) => p.caption).length).toBeGreaterThan(0);
+  });
+
+  it("an invented name in a description is flagged (unknown_name) and repaired", async () => {
+    const invented = "We spent the afternoon by the water. Later everyone walked with Ahmed through the old streets of Lisbon until the lamps came on and the day ended.";
+    const { db, deps } = setup(photos150().slice(0, 60), {
+      book: bookOf(DESIGNS[1]),
+      synths: {
+        caption_writer: (meta, ctx) => {
+          const out = captionWriterReplaySynth(meta, ctx) as { moments: Array<{ momentId: string; description?: string | null }> };
+          if (!Array.isArray(meta.repair)) for (const m of out.moments) if (m.momentId === "m2" && typeof m.description === "string") m.description = invented;
+          return out;
+        },
+      },
+    });
+    const s = await start(deps);
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok" });
+    expect(JSON.stringify(stepsOf(db, "caption_writer:").filter((x) => !x.stepKey.includes("repair")).map((x) => x.output))).toContain('"descriptionIssues":["unknown_name"]');
+    expect(stepsOf(db, "caption_writer:repair:")).toHaveLength(1);
+    const doc = docOf(db);
+    expect(doc.chapters[1].description?.source).toBe("ai");
+    expect(JSON.stringify(db.book.doc)).not.toContain("Lisbon");
+    expect(JSON.stringify([db.steps, db.run(s.runId).cursor])).not.toContain("Lisbon");
+  });
+
+  it("the Critic's description issue (detail 'description: …') is repaired through rewrite_caption; a user-visible caption on that page is left alone", async () => {
+    let flaggedPage = -1;
+    const { db, transport, deps } = setup(photos150().slice(0, 60), {
+      book: bookOf(DESIGNS[0]),
+      synths: {
+        critic: (meta) => {
+          const pages = meta.pages as Array<{ pageIndex: number; key: string | null }>;
+          flaggedPage = pages.find((p) => p.key === "m2:0")!.pageIndex;
+          return { score: 5, issues: [{ type: "caption_invented_fact", pageIndex: flaggedPage, detail: "description: states a fact the notes do not support.", fix: "rewrite_caption" }] };
+        },
+      },
+    });
+    const s = await start(deps);
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok" });
+    const repairs = stepsOf(db, "caption_writer:repair:");
+    expect(repairs).toHaveLength(1);
+    expect(repairs[0].inputSummary).toMatchObject({ repairTargets: 1, descriptions: 1 });
+    const repairMsg = transport.requests.filter((r) => r.agent === "caption_writer").at(-1)!.messages[0].content as string;
+    expect(repairMsg).toContain("Rewrite only these: m2:desc (caption_invented_fact)");
+    const doc = docOf(db);
+    expect(layoutIdShowsDescription(doc.pages[flaggedPage].layout)).toBe(true);
+    // The repaired description replaced the first one (the replay repair text differs).
+    const criticMsg = transport.requests.find((r) => r.agent === "critic")!.messages[0].content as string;
+    expect(doc.chapters[1].description?.source).toBe("ai");
+    expect(criticMsg).not.toContain(doc.chapters[1].description!.text);
+    expect(criticMsg).toContain(doc.chapters[0].description!.text);
+  });
+
+  it("AI off → rule album without any description; Storyteller refusal → rule album without any description", async () => {
+    for (const design of DESIGNS) {
+      const off = setup(photos150().slice(0, 40), { book: bookOf(design), mode: "off" });
+      const r = await orch.startRun({ bookId: BOOK, userId: USER, trigger: "build" }, off.deps);
+      expect(r.ok).toBe(true);
+      const ruleDoc = docOf(off.db);
+      expect(ruleDoc.meta).toMatchObject({ generator: "rule" });
+      expect(descriptionsOf(ruleDoc).every((d) => d === undefined)).toBe(true);
+      expect(JSON.stringify(off.db.book.doc)).not.toContain('"description"');
+      expect(ruleDoc.pages.some((p) => layoutIdShowsDescription(p.layout))).toBe(false);
+
+      const refused = setup(photos150().slice(0, 40), { book: bookOf(design), scenarioFor: (agent) => (agent === "storyteller" ? "refusal" : "ok") });
+      const s = await start(refused.deps);
+      const { last } = await runToEnd(refused.deps, s.runId);
+      expect(last).toMatchObject({ state: "done", aiStatus: "partial" });
+      expect(docOf(refused.db).meta).toMatchObject({ generator: "rule" });
+      expect(JSON.stringify(refused.db.book.doc)).not.toContain('"description"');
+      expect(refused.transport.count("caption_writer")).toBe(0);
+    }
+  });
+
+  it("Caption Writer refusal → AI album without descriptions (nothing invented in code)", async () => {
+    const { db, deps } = setup(photos150().slice(0, 40), { book: bookOf(DESIGNS[0]), scenarioFor: (agent) => (agent === "caption_writer" ? "refusal" : "ok") });
+    const s = await start(deps);
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "partial" });
+    const doc = docOf(db);
+    expect(doc.meta).toMatchObject({ generator: "ai" });
+    expect(descriptionsOf(doc).every((d) => d === undefined)).toBe(true);
+  });
+
+  it("rebuild: a user description survives — the doc is never replaced (user_edited), no model call", async () => {
+    const first = setup(photos150().slice(0, 40), { book: bookOf(DESIGNS[0]) });
+    const s = await start(first.deps);
+    await runToEnd(first.deps, s.runId);
+    const built = docOf(first.db);
+    expect(built.chapters[0].description?.source).toBe("ai");
+    const raw = JSON.parse(JSON.stringify(first.db.book.doc)) as { chapters: Array<{ description?: { text: string; source: string } }> };
+    raw.chapters[0].description = { text: "The day we finally made it to the coast.", source: "user" };
+
+    const { db, transport, deps } = setup(photos150().slice(0, 40), { book: bookOf(DESIGNS[0], { doc: raw as unknown as Json, ai_status: "done" }) });
+    expect(await orch.startRun({ bookId: BOOK, userId: USER, trigger: "rebuild" }, deps)).toEqual({ ok: false, error: "user_edited" });
+    expect(transport.calls).toHaveLength(0);
+    expect(db.writes).not.toContain("doc");
+    expect(db.book.doc).toEqual(raw);
+
+    // An untouched AI album (AI descriptions only) is rebuilt and gets fresh AI descriptions.
+    const again = setup(photos150().slice(0, 40), { book: bookOf(DESIGNS[0], { doc: first.db.book.doc, ai_status: "done" }) });
+    const s2 = await start(again.deps, "rebuild");
+    const { last } = await runToEnd(again.deps, s2.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok" });
+    expect(descriptionsOf(docOf(again.db)).every((d) => d?.source === "ai")).toBe(true);
+  });
+
+  it("a user description typed while the run is going is never overwritten (validating refuses the write)", async () => {
+    const { db, deps } = setup(photos150().slice(0, 40), { book: bookOf(DESIGNS[2]) });
+    const prior = setup(photos150().slice(0, 40), { book: bookOf(DESIGNS[2]) });
+    const ps = await start(prior.deps);
+    await runToEnd(prior.deps, ps.runId);
+    const raw = JSON.parse(JSON.stringify(prior.db.book.doc)) as { chapters: Array<{ description?: { text: string; source: string } }> };
+    raw.chapters[0].description = { text: "Typed by me during the build.", source: "user" };
+    const s = await start(deps);
+    await orch.advance(s.runId, {}, deps);
+    db.book.doc = raw as unknown as Json;
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", errorCode: "user_edited", aiStatus: "failed" });
+    expect(db.book.doc).toEqual(raw);
+  });
+
+  it("photos removed mid-run: a chapter keeps its description only while one of its pages still shows it", async () => {
+    const { db, deps } = setup(photos150().slice(0, 40), { book: bookOf(DESIGNS[0]) });
+    const s = await start(deps);
+    let conflicts = 1;
+    let before: BookDocT | null = null;
+    const flaky: OrchestratorDeps = {
+      ...deps,
+      writeDocIfReplaceable: async (...args) => {
+        if (conflicts-- > 0) {
+          // The user removes every photo of chapter 1's description page while the run is saving.
+          before = parseBookDoc(args[1]).ok ? (args[1] as unknown as BookDocT) : null;
+          const doc = args[1] as unknown as BookDocT;
+          const opener = doc.pages.find((p) => p.chapterId === doc.chapters[0].id && layoutIdShowsDescription(p.layout))!;
+          for (const slot of opener.slots) {
+            Object.assign(db.photos.find((x) => x.id === slot.photoId)!, { user_override: true, status: "dropped", drop_reason: "user_removed" });
+          }
+          return { ok: false, reason: "conflict" };
+        }
+        return deps.writeDocIfReplaceable(...args);
+      },
+    };
+    const { last } = await runToEnd(flaky, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "ok" });
+    expect(before).not.toBeNull();
+    expect(before!.chapters.every((c) => c.description?.source === "ai")).toBe(true);
+    const doc = docOf(db);
+    const shows = descriptionPages(doc);
+    expect(shows[0]).toBe(0); // the opener is gone; the untouched pages of chapter 1 are plain
+    expect(shows.slice(1).every((n) => n === 1)).toBe(true);
+    doc.chapters.forEach((c, i) => {
+      if (shows[i] === 0) expect(c.description, `chapter ${i}`).toBeUndefined();
+      else expect(c.description).toEqual(before!.chapters[i].description);
+    });
+  });
+
+  it("D-035 run budget: the estimate of a variant call covers its larger max_tokens and its real cost; base estimates are unchanged", async () => {
+    const { db, deps } = setup(photos150().slice(0, 60), { book: bookOf(DESIGNS[0]) });
+    const s = await start(deps);
+    await runToEnd(deps, s.runId);
+    const doc = docOf(db);
+    const specs = captionBatches(doc, { lang: "en", descriptions: true });
+    const writers = stepsOf(db, "caption_writer:");
+    expect(writers).toHaveLength(specs.length);
+    let withDescriptions = 0;
+    for (const spec of specs) {
+      const descs = spec.moments.filter((m) => m.wantDescription).length;
+      const variant = orch.captionCallEstimate(spec, true);
+      const base = orch.captionCallEstimate(spec);
+      // The estimate prices the variant's full output budget…
+      expect(variant).toBeGreaterThanOrEqual(estimateCallCostUsd(AI_MODEL, { inputTokens: 0, maxOutputTokens: captionWriterMaxTokens(spec.keys.length, descs) }));
+      // …and more input (longer system prompt + description request lines).
+      expect(variant).toBeGreaterThan(base);
+      if (descs > 0) {
+        withDescriptions++;
+        expect(captionWriterMaxTokens(spec.keys.length, descs)).toBeGreaterThan(captionWriterMaxTokens(spec.keys.length));
+      }
+      // Base formula unchanged (pre-M30): 5,000 + 400 / page input, min(8,000, 3,000 + 250 / page) output.
+      expect(base).toBe(estimateCallCostUsd(AI_MODEL, { inputTokens: 5_000 + 400 * Math.max(1, spec.keys.length), maxOutputTokens: Math.min(8_000, 3_000 + 250 * Math.max(1, spec.keys.length)) }));
+      // Pessimistic: the real (replay) cost of that call is below the estimate.
+      const step = writers.find((w) => w.stepKey === `caption_writer:${spec.index}`)!;
+      expect(step.costUsd).toBeLessThanOrEqual(variant);
+      expect(step.inputTokens + step.cacheReadTokens + step.cacheWriteTokens).toBeLessThanOrEqual(5_000 + 400 * Math.max(1, spec.keys.length) + orch.CAPTION_DESCRIPTIONS_INPUT_TOKENS(descs));
+    }
+    expect(withDescriptions).toBeGreaterThan(0);
+    // Critic: the variant estimate adds the description text; the base one is unchanged.
+    const pages = doc.pages.length;
+    expect(orch.criticCallEstimate(pages, doc.chapters.length)).toBeGreaterThan(orch.criticCallEstimate(pages));
+    const critic = db.steps.find((x) => x.agent === "critic")!;
+    expect(critic.costUsd).toBeLessThanOrEqual(orch.criticCallEstimate(pages, doc.chapters.length));
+    expect(critic.inputTokens + critic.cacheReadTokens + critic.cacheWriteTokens).toBeLessThanOrEqual(4_000 + 300 * pages + orch.CRITIC_DESCRIPTIONS_INPUT_TOKENS(doc.chapters.length));
+    // The whole run stays far below the free cap.
+    expect(db.run(s.runId).total_cost_usd).toBeLessThan(1.5);
+  });
+
+  it("run budget reached before captioning → no Caption Writer call, AI album without descriptions (run_budget)", async () => {
+    const { db, transport, deps } = setup(photos150().slice(0, 40), { book: bookOf(DESIGNS[0]) });
+    const getRunCostUsd = deps.getRunCostUsd;
+    deps.getRunCostUsd = async (id) => (await getRunCostUsd(id)) + 1.49;
+    const s = await start(deps);
+    const { last } = await runToEnd(deps, s.runId);
+    expect(last).toMatchObject({ state: "done", aiStatus: "partial", errorCode: "run_budget" });
+    expect(transport.count("caption_writer")).toBe(0);
+    const doc = docOf(db);
+    expect(doc.meta).toMatchObject({ generator: "ai" });
+    expect(descriptionsOf(doc).every((d) => d === undefined)).toBe(true);
+  });
+
+  it("an in-flight pre-T10 cursor (no `descriptions` field) still parses", () => {
+    const cursor = orch.initialCursor(photos150().slice(0, 10).map(orch.toCurationPhoto), 150);
+    const stored = JSON.parse(JSON.stringify(cursor)) as Record<string, unknown>;
+    delete stored.descriptions;
+    expect(orch.parseCursor(stored)?.descriptions).toEqual({});
+    const withText = orch.parseCursor({ ...stored, descriptions: { m1: "Some text.", bogus: "x", m2: 5 } });
+    expect(withText?.descriptions).toEqual({ m1: "Some text." });
+    expect(orch.stripCursorText(withText!).descriptions).toEqual({});
   });
 });

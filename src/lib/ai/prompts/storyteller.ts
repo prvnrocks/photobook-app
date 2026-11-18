@@ -7,6 +7,8 @@
 // (dates, ids, titles, limits, photo colours) may appear here — that goes in the user message.
 // Classic texts are byte-identical to v5 (= v4 for A5 portrait): fixtures
 // tests/fixtures/ai/storyteller/system-v4-classic-portrait.txt + system-v5-classic-landscape.txt.
+// M30 T10 adds 4 more prefixes (magazine / editorial × both formats); the 8 older texts are frozen
+// byte for byte by tests/ai/prompt-freeze.test.ts.
 // Bump STORYTELLER_PROMPT_VERSION whenever this text changes meaningfully.
 
 import { DEFAULT_BOOK_DESIGN, type BookDesign } from "@/lib/book/book-design";
@@ -27,12 +29,20 @@ import { cachedSystem, type SystemBlock } from "../transport";
  * v6 (M10c T12): geometric + scrapbook prompts with shape-aware catalogue lines (slot shape, tilt,
  *     frame, overlap, text areas); background picks (BACKGROUNDS catalogue + rule 14, D-068) for
  *     modern / geometric / scrapbook, photo colour in their photo lines. Classic texts unchanged.
+ * v6 + M30 T10 (no bump: the 8 existing texts are byte-identical, tests/ai/prompt-freeze.test.ts):
+ *     magazine + editorial prompts — slot-by-slot catalogue lines that also name the text areas
+ *     ("chapter description" = a description layout), one style rule each (chapter openers that
+ *     show the description, exactly one per moment; magazine: mix hero / strip / panel pages, a
+ *     spread for the strongest panorama; editorial: white space, diagonals as accents). Plan
+ *     schema = the classic one (no background picks: these styles take none).
  */
 export const STORYTELLER_PROMPT_VERSION = 6;
 
 const isClassicPortrait = (d: BookDesign) => d.format === "A5_PORTRAIT" && d.designStyle === "classic";
 /** Styles whose catalogue lines describe every slot (shape / tilt / frame / overlap / text). */
 const isShapedStyle = (s: DesignStyle) => s === "geometric" || s === "scrapbook";
+/** M30 styles: slot-by-slot lines too (diagonal cuts, circles, text panels), own style rules. */
+const isMagazineStyle = (s: DesignStyle) => s === "magazine" || s === "editorial";
 
 function catalogueLine(l: Layout): string {
   return `- ${l.id} · "${l.name}" · ${l.photoCount} photo${l.photoCount === 1 ? "" : "s"} · slots prefer ${l.prefers.join(", ")}`;
@@ -108,6 +118,9 @@ const TEXT_WORDS: Record<string, string> = {
   pageCaption: "caption",
   coverTitle: "title",
   coverSubtitle: "subtitle",
+  // M30 (magazine / editorial only — no older layout has these bindings).
+  chapterDescription: "chapter description",
+  coverLine: "cover line",
 };
 
 function textWords(l: Layout): string {
@@ -157,7 +170,7 @@ export function backgroundCatalogue(style: DesignStyle): string {
  * the background catalogue. Geometric / scrapbook lines describe each slot.
  */
 export function layoutCatalogue(design: BookDesign = DEFAULT_BOOK_DESIGN): string {
-  const line = isShapedStyle(design.designStyle) ? shapedCatalogueLine : catalogueLine;
+  const line = isShapedStyle(design.designStyle) || isMagazineStyle(design.designStyle) ? shapedCatalogueLine : catalogueLine;
   const pages = layoutsFor(design.format, design.designStyle, "page").map(line);
   const spreads = layoutsFor(design.format, design.designStyle, "spread");
   // M29: user-only cover styles (autoPick:false) are never listed — the AI never picks them and
@@ -227,6 +240,13 @@ const GEOMETRIC_RULE =
 const SCRAPBOOK_RULE =
   " Scrapbook layouts show photos as tilted prints held with tape: polaroids (a white card with a wider bottom edge) and bordered prints, some overlapping, with small stickers; each catalogue line lists the slots in order with frame, size and preferred orientation. Tilt and frames cost a little of every photo, so prefer sharp photos with a centred subject. A slot that is partly under another one loses a corner: never put the most important photo of a page there. Layouts with the chapter title on a label are good moment openers; collages and walls suit many casual photos of one moment.";
 
+const DESCRIPTION_OPENER_RULE =
+  " A layout whose text lists chapter description has a panel for a short paragraph about the moment (another agent writes it later). Open every moment with one such layout that fits its first photos — in this style that replaces the single-photo opener of rule 9 — and use exactly one chapter-description layout per moment: with none the moment has no introduction, with two the same paragraph is printed twice.";
+
+const MAGAZINE_RULE = ` Magazine layouts look like a travel magazine: full-bleed photos, dark text panels, a headline box and an accent colour; each catalogue line lists the slots in order with shape, size and preferred orientation, and the text areas.${DESCRIPTION_OPENER_RULE} After the opener, mix hero pages (one large photo with smaller ones), strip pages (a row of photos) and panel pages (photos beside a text panel) instead of repeating one kind. Keep a spread for the strongest panorama or the best group of photos of a moment.`;
+
+const EDITORIAL_RULE = ` Editorial layouts are minimal: white pages with generous empty space, heavy titles, thin rules and a vertical date strip; some photos are cut on a diagonal (angled cut). Each catalogue line lists the slots in order with shape, size and preferred orientation, and the text areas.${DESCRIPTION_OPENER_RULE} Keep the white space: prefer layouts with few photos and do not fill page after page with grids. Diagonal layouts are accents, not the norm: at most one page in three and never on consecutive pages; an angled cut loses a corner of the photo, so put photos with a centred subject there.`;
+
 function backgroundRule(style: DesignStyle): string {
   const base =
     "14. Backgrounds: also choose backgrounds, using only ids from the BACKGROUNDS list. bookBackgroundId is the background of every page of the book: pick one that suits most photos (the colour field of the photo lines is each photo's muted main colour), or null to let the app choose. Each moment's backgroundId is the background of that moment's first page only (its other pages keep the book background): null keeps the book background. Give a few moment openers their own background when it matches that moment's photos, not every moment. When a moment starts with a spread, set its backgroundId to null (one page of a spread must not differ from the other). Never pick a background that clashes with the photos.";
@@ -242,8 +262,13 @@ function designRules(design: BookDesign): RuleParts {
   const other = portrait ? "landscape" : "portrait";
   const hasSpreads = layoutsFor(design.format, design.designStyle, "spread").length > 0;
   const style = design.designStyle;
-  const spreadRule = hasSpreads ? (isShapedStyle(style) ? SPREAD_RULE_NO_PANORAMA : SPREAD_RULE) : "";
-  const styleRule = style === "geometric" ? GEOMETRIC_RULE : style === "scrapbook" ? SCRAPBOOK_RULE : "";
+  // M30 styles: the panorama wording only when the design has a one-photo spread (data, not a list).
+  const noPanorama = isMagazineStyle(style)
+    ? !layoutsFor(design.format, style, "spread").some((l) => l.photoCount === 1)
+    : isShapedStyle(style);
+  const spreadRule = hasSpreads ? (noPanorama ? SPREAD_RULE_NO_PANORAMA : SPREAD_RULE) : "";
+  const styleRule =
+    style === "geometric" ? GEOMETRIC_RULE : style === "scrapbook" ? SCRAPBOOK_RULE : style === "magazine" ? MAGAZINE_RULE : style === "editorial" ? EDITORIAL_RULE : "";
   const backgrounds = suggestsBackgrounds(style);
   return {
     rule6: `6. Layouts: this book has ${page} pages in the ${style} style. Choose layoutId only from the catalogue below. photoIds must contain exactly as many aliases as the layout has photos. Put photos whose orientation matches the slot preference into that slot (a landscape photo in a landscape slot, portrait photos in portrait slots; square and "any" slots fit either). A single ${other} photo on a full-page layout is heavily cropped, so prefer layouts whose slots match it, or pair it with similar photos.${spreadRule}${styleRule}`,

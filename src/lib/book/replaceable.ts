@@ -84,13 +84,25 @@ export function hasUserBackgrounds(doc: unknown): boolean {
 }
 
 /**
+ * True when a chapter description was written by the user (`description.source === "user"`, M30).
+ * Raw read like hasUserCaptions. Editor saves also mark meta.userEdited, so this is belt and
+ * braces for "AI never overwrites a user description" (D-090).
+ */
+export function hasUserDescriptions(doc: unknown): boolean {
+  if (!isPlainObject(doc) || !Array.isArray(doc.chapters)) return false;
+  return doc.chapters.some(
+    (c) => isPlainObject(c) && isPlainObject(c.description) && c.description.source === "user",
+  );
+}
+
+/**
  * May an AI run (build / rebuild / rule fallback written by a run) overwrite this doc?
- * isReplaceableDoc AND no user captions (D-031) AND no user backgrounds (D-068). The free "Update
- * album" relayout (D-028) keeps using isReplaceableDoc: it preserves user captions and backgrounds
- * instead of replacing the doc.
+ * isReplaceableDoc AND no user captions (D-031) AND no user backgrounds (D-068) AND no user
+ * chapter descriptions (D-090). The free "Update album" relayout (D-028) keeps using
+ * isReplaceableDoc: it preserves user captions and backgrounds instead of replacing the doc.
  */
 export function isAiReplaceableDoc(doc: unknown): boolean {
-  return isReplaceableDoc(doc) && !hasUserCaptions(doc) && !hasUserBackgrounds(doc);
+  return isReplaceableDoc(doc) && !hasUserCaptions(doc) && !hasUserBackgrounds(doc) && !hasUserDescriptions(doc);
 }
 
 /** Copy of `doc` with `meta` set (replaced, not merged). Throws on an invalid meta (code bug). */

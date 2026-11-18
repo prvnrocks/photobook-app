@@ -22,6 +22,10 @@
 //   even-numbered moment (m2, m4, …) that opens with a single page gets the vote over its own
 //   photos, other moments null; scrapbook moments of ≥ 2 pages instead get "faded-photo" with the
 //   first photo of their second page (a kept photo of the same moment, never on the opener)
+// - chapter descriptions (M30 T10, magazine / editorial = writesDescriptions(style)): every moment
+//   OPENS with a description layout — a description spread for a moment of ≥ 8 photos that starts
+//   on a left page, else the 1-photo (≥ 3 photos) or 1-/2-photo description page — and no later
+//   page of the moment shows the description (exactly one per moment)
 // scenario "invalid" → the first page gets an extra unknown alias ("p9999"): passes both schemas
 // but fails plan validation (wrong slot count + unknown photo), exercising the retry path.
 
@@ -29,6 +33,7 @@ import { dayRange } from "@/lib/autolayout";
 import { DEFAULT_TITLES } from "@/lib/book/default-titles";
 import { DEFAULT_BOOK_DESIGN, type BookDesign } from "@/lib/book/book-design";
 import { layoutsFor } from "@/lib/book/spreads";
+import { layoutShowsDescription, preferWithoutDescription, writesDescriptions } from "@/lib/layouts/description";
 import { bestPageLayout, fitScore } from "@/lib/layouts/fit";
 import { swatchById } from "@/lib/design/backgrounds";
 import { AI_BACKGROUND_CATALOGUE, FADED_PHOTO_ID, suggestBookBackground, suggestsBackgrounds } from "@/lib/design/background-suggest";
@@ -88,8 +93,9 @@ export function fillMoment(photos: MetaPhoto[]): PlanPage[] {
 
 const isClassicPortrait = (d: BookDesign) => d.format === "A5_PORTRAIT" && d.designStyle === "classic";
 
-function designSingle(p: MetaPhoto, prev: string | null, design: BookDesign): PlanPage {
-  const singles = layoutsFor(design.format, design.designStyle, "page").filter((l) => l.photoCount === 1);
+function designSingle(p: MetaPhoto, prev: string | null, design: BookDesign, plainOnly = false): PlanPage {
+  const all = layoutsFor(design.format, design.designStyle, "page").filter((l) => l.photoCount === 1);
+  const singles = plainOnly ? preferWithoutDescription(all) : all;
   const ranked = singles.filter((l) => fitScore(l, [p.orientation]) === 1);
   const pool = ranked.length ? ranked : singles;
   const pick = pool.find((l) => l.id !== prev) ?? pool[0];
@@ -114,10 +120,22 @@ export function fillMomentDesign(photos: MetaPhoto[], design: BookDesign, startI
     prev = pg.layoutId;
     at += span;
   };
-  if (q.length >= 3) push(designSingle(q.shift() as MetaPhoto, null, design));
+  // M30: styles with AI descriptions open every moment with ONE description layout.
+  const describes = writesDescriptions(design.designStyle);
+  if (describes && q.length) {
+    const sp = !spreadUsed && at % 2 === 0 ? spreads.find((l) => layoutShowsDescription(l) && l.photoCount <= q.length) : undefined;
+    if (sp) {
+      push({ layoutId: sp.id, photoIds: q.splice(0, sp.photoCount).map((p) => p.alias) }, 2);
+      spreadUsed = true;
+    } else {
+      const take = q.length >= 3 ? 1 : q.length;
+      const id = bestPageLayout(q.slice(0, take).map((p) => p.orientation), { design, description: "prefer" });
+      if (id) push({ layoutId: id, photoIds: q.splice(0, take).map((p) => p.alias) });
+    }
+  } else if (q.length >= 3) push(designSingle(q.shift() as MetaPhoto, null, design));
   while (q.length) {
     if (!spreadUsed && at % 2 === 0) {
-      const sp = spreads.find((l) => l.photoCount <= q.length);
+      const sp = spreads.find((l) => l.photoCount <= q.length && !(describes && layoutShowsDescription(l)));
       if (sp) {
         const take = q.splice(0, sp.photoCount);
         push({ layoutId: sp.id, photoIds: take.map((p) => p.alias) }, 2);
@@ -136,7 +154,7 @@ export function fillMomentDesign(photos: MetaPhoto[], design: BookDesign, startI
       if (!best || score > best.score) best = { id, take, score };
     }
     if (!best) {
-      push(designSingle(q.shift() as MetaPhoto, prev, design));
+      push(designSingle(q.shift() as MetaPhoto, prev, design, describes));
       continue;
     }
     push({ layoutId: best.id, photoIds: q.splice(0, best.take).map((p) => p.alias) });

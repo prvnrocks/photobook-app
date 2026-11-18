@@ -48,3 +48,36 @@ Return only the structured captions.`;
 export function captionWriterSystem(): SystemBlock[] {
   return cachedSystem(CAPTION_WRITER_SYSTEM_PROMPT);
 }
+
+// ---------------------------------------------------------------------------------------------
+// M30 T10 — variant for the styles with chapter descriptions (magazine / editorial,
+// writesDescriptions(designStyle)). The base text above is what every other style sends and is
+// frozen byte for byte (tests/ai/prompt-freeze.test.ts); the variant is the base text + one
+// DESCRIPTIONS section, a constant of its own → its own cached prefix.
+
+/** v1 (M30 T10): chapter descriptions written in the batch that asks for the moment's heading. */
+export const CAPTION_WRITER_DESCRIPTIONS_PROMPT_VERSION = 1;
+
+const DESCRIPTIONS_SECTION = `DESCRIPTIONS
+This book's design prints a short paragraph about a chapter next to its photos. The structured result has one more field per moment: description.
+- A moment needs a description only when the user message has a line for it like
+  - m2:desc · chapter description wanted · photos: p3, p4, p9 "a long table set outdoors at dusk" (food, calm)
+  It lists photos of the whole moment: an alias alone refers to the notes on that moment's page lines; a photo that is on no page line carries its own note. For every other moment return description null.
+- Length: 25 to 45 words, in 2 or 3 sentences. Never more than 45 words.
+- Write about the moment as a whole: what the photos show, the setting, the mood, how it moves from its first photos to its last. Ground every sentence in the photo notes of that moment and the metadata on its moment line (date, place); do not describe things the notes do not mention.
+- Rules 1, 4, 5, 6 and 8 apply to descriptions exactly as they do to captions: original text only (no famous quotes, lyrics, poems, slogans or proverbs, nothing attributed to anyone); never invent names, places, dates, numbers or facts — a name or place only when it is in the book title, the moment's place, the photo places or the names the user typed, and prefer none; the caption language of BOOK (natural, native Arabic in Arabic script for "ar", natural English for "en"); the tone of the book; no hashtags, mentions, links or emojis, and no quotation marks around the paragraph.
+- Plain sentences in sentence case. No heading, no list, no line breaks, no date written out as a label.
+- A description must add something: do not repeat the chapter title, your heading or any page caption word for word, and do not open two descriptions the same way.
+- In a "Rewrite only these:" message a key like m2:desc asks for a new description of that moment (same rules; too_long = over 45 words; duplicate = it repeated a caption, the chapter title or another description). Return description null for every moment whose desc key is not listed.`;
+
+export const CAPTION_WRITER_DESCRIPTIONS_SYSTEM_PROMPT = `${CAPTION_WRITER_SYSTEM_PROMPT}
+
+${DESCRIPTIONS_SECTION}`;
+
+/**
+ * System blocks for a book: the variant when its style gets AI descriptions, else the base
+ * blocks. Fresh array, identical content every call for a given flag.
+ */
+export function captionWriterSystemFor(descriptions: boolean): SystemBlock[] {
+  return descriptions ? cachedSystem(CAPTION_WRITER_DESCRIPTIONS_SYSTEM_PROMPT) : captionWriterSystem();
+}

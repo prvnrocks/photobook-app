@@ -93,14 +93,23 @@ import { applyBackgroundSuggestions } from "@/lib/design/background-suggest";
 import { colorFromThumbBase64 } from "@/lib/image/color-server";
 import type { CurationPhotoRow, CurationWrite } from "@/lib/db/photos";
 import type { Json } from "@/lib/supabase/database.types";
+import { writesDescriptions } from "@/lib/layouts/description";
 import { DEADLINE_BUDGETS, isSupabaseTimeout, SupabaseUnavailableError } from "@/lib/supabase/deadline";
 import { curateBatch, needsCuration, CURATOR_PROMPT_VERSION } from "./agents/curator";
-import { captionWriterMaxTokens, writeCaptions, type WriteCaptionsResult } from "./agents/caption-writer";
+import { captionWriterMaxTokens, descriptionCountOf, writeCaptions, type WriteCaptionsResult } from "./agents/caption-writer";
 import { critiqueBook, criticMaxTokens } from "./agents/critic";
 import { MAX_RETRY_ISSUES, planAlbum } from "./agents/storyteller";
 import { buildBatches } from "./batches";
 import { isAiBudgetExhausted } from "./budget";
-import { buildCaptionContext, checkBookCaptions, CAPTION_ISSUE_CODES, type CaptionCheckContext, type CaptionIssue } from "./caption-check";
+import {
+  buildCaptionContext,
+  checkBookCaptions,
+  checkBookDescriptions,
+  CAPTION_ISSUE_CODES,
+  type CaptionCheckContext,
+  type CaptionIssue,
+  type DescriptionToCheck,
+} from "./caption-check";
 import {
   applyCaptions,
   batchIndexOfKey,
@@ -122,10 +131,11 @@ import { limitsFor } from "./limits";
 import { isEmptyMemory, sanitizeMemory } from "./memory";
 import { planToDoc, prunePlan } from "./plan-to-doc";
 import { STORYTELLER_PROMPT_VERSION } from "./prompts/storyteller";
-import { momentIdOfKey, pageCaptionKeys, planRepair } from "./repair";
+import { isMomentKey, momentIdOfKey, pageCaptionKeys, planRepair } from "./repair";
 import type { RetryOptions, StepErrorCode, StepLogger } from "./run-step";
 import {
   AlbumPlanStrictSchema,
+  captionKey,
   CRITIQUE_FIXES,
   CRITIQUE_ISSUE_TYPES,
   MOMENT_ID_RE,
@@ -197,6 +207,13 @@ export const CURSOR_SIZE_FACTOR = 1.15;
 const CAPTION_CALL_INPUT_TOKENS = (pages: number) => 5_000 + 400 * Math.max(1, pages);
 /** Rough input tokens of one Critic call (system + per page line + photo notes) — D-035 estimate. */
 const CRITIC_CALL_INPUT_TOKENS = (pages: number) => 4_000 + 300 * Math.max(1, pages);
+/**
+ * M30 (styles with chapter descriptions only): extra input tokens of a variant call — the longer
+ * system prompt (DESCRIPTIONS section, ≈ 600–700 tokens) plus, per description, the Caption
+ * Writer's request line (≤ 8 photo notes) / the Critic's page-line text (≤ 400 UTF-16 units).
+ */
+export const CAPTION_DESCRIPTIONS_INPUT_TOKENS = (descriptions: number) => 800 + 450 * Math.max(0, descriptions);
+export const CRITIC_DESCRIPTIONS_INPUT_TOKENS = (descriptions: number) => 800 + 200 * Math.max(0, descriptions);
 
 /**
  * Cursor byte limit used by the guard: env AI_MAX_CURSOR_BYTES (positive integer, never above the
@@ -429,6 +446,8 @@ export interface RunCursor {
   captions: Record<string, string>;
   /** momentId → AI heading. Stripped at finish. */
   headings: Record<string, string>;
+  /** M30: momentId → AI chapter description (passed the pre-check). Stripped at finish. */
+  descriptions: Record<string, string>;
   /** captionKey → pre-check issue codes of captions the batch rejected (codes only). */
   captionIssues: Record<string, string[]>;
   captionsDone: boolean;
@@ -453,7 +472,7 @@ const isIntArr = (v: unknown): v is number[] => Array.isArray(v) && v.every((n) 
 const isStrArr = (v: unknown): v is string[] => Array.isArray(v) && v.every((s) => typeof s === "string");
 
 const PAGE_KEY_RE = /^m[1-9]\d*:\d{1,3}$/;
-const ANY_KEY_RE = /^m[1-9]\d*:(?:\d{1,3}|heading)$/;
+const ANY_KEY_RE = /^m[1-9]\d*:(?:\d{1,3}|heading|desc)$/;
 const CODE_RE = /^[a-z_]{1,40}$/;
 
 /** Record<string, string> with keys matching `keyRe` (anything else dropped). */
@@ -552,6 +571,7 @@ export function parseCursor(raw: unknown): RunCursor | null {
     skippedSteps: isStrArr(c.skippedSteps) ? c.skippedSteps : [],
     captions: strRecord(c.captions, PAGE_KEY_RE),
     headings: strRecord(c.headings, MOMENT_ID_RE),
+    descriptions: strRecord(c.descriptions, MOMENT_ID_RE),
     captionIssues: codeRecord(c.captionIssues),
     captionsDone: c.captionsDone === true,
     criticAttempts: num("criticAttempts"),
@@ -577,6 +597,7 @@ function emptyCaptionFields(): Pick<
   | "skippedSteps"
   | "captions"
   | "headings"
+  | "descriptions"
   | "captionIssues"
   | "captionsDone"
   | "criticAttempts"
@@ -598,6 +619,7 @@ function emptyCaptionFields(): Pick<
     skippedSteps: [],
     captions: {},
     headings: {},
+    descriptions: {},
     captionIssues: {},
     captionsDone: false,
     criticAttempts: 0,
@@ -612,11 +634,11 @@ function emptyCaptionFields(): Pick<
 }
 
 /**
- * The cursor as stored once the run is over: no AI plan (titles), captions, headings, critique or
- * memory snapshot — ids, counts and codes only.
+ * The cursor as stored once the run is over: no AI plan (titles), captions, headings, chapter
+ * descriptions, critique or memory snapshot — ids, counts and codes only.
  */
 export function stripCursorText(cursor: RunCursor, album: AlbumChoice | null = cursor.album?.kind === "ai" ? { kind: "ai" } : cursor.album): RunCursor {
-  return { ...cursor, album, memory: null, captions: {}, headings: {}, critique: null };
+  return { ...cursor, album, memory: null, captions: {}, headings: {}, descriptions: {}, critique: null };
 }
 
 /** A stored cursor nobody has written yet (startRun creates runs without one). */
@@ -1152,7 +1174,7 @@ interface Tick {
   /** planDocOf() of this tick (undefined = not computed yet). */
   planDoc?: PlanDoc | null;
   /** Captions / headings as of the last successful checkpoint (restored when a cursor is too large). */
-  saved: { captions: Record<string, string>; headings: Record<string, string> };
+  saved: { captions: Record<string, string>; headings: Record<string, string>; descriptions: Record<string, string> };
 }
 
 /** Thrown by save() after it shed the caption work of an oversized cursor; loop() continues at validating. */
@@ -1219,7 +1241,7 @@ async function tick(runId: string, token: string, t0: number, budgetMs: number, 
       budgetMs,
       leaseEnd: t0 + LEASE_SECONDS * 1000,
       heavyDone: false,
-      saved: { captions: { ...cursor.captions }, headings: { ...cursor.headings } },
+      saved: { captions: { ...cursor.captions }, headings: { ...cursor.headings }, descriptions: { ...cursor.descriptions } },
     };
     if (modeChanged) return await finishWithRuleAlbum(ctx, "mode_changed");
     return await loop(ctx);
@@ -1275,9 +1297,11 @@ function shedCaptionWork(c: Tick, limit: number): boolean {
   const cur = c.cursor;
   cur.captions = { ...c.saved.captions };
   cur.headings = { ...c.saved.headings };
+  cur.descriptions = { ...c.saved.descriptions };
   if (cursorBytes(cur) > limit) {
     cur.captions = {};
     cur.headings = {};
+    cur.descriptions = {};
   }
   const pd = planDocOf(c);
   if (pd) finalizeCaptions(c, pd);
@@ -1315,7 +1339,7 @@ async function save(c: Tick, extra: RunCheckpointPatch = {}): Promise<void> {
     ...extra,
   });
   if (!ok) throw new StaleLeaseError();
-  c.saved = { captions: { ...c.cursor.captions }, headings: { ...c.cursor.headings } };
+  c.saved = { captions: { ...c.cursor.captions }, headings: { ...c.cursor.headings }, descriptions: { ...c.cursor.descriptions } };
   // Callers in a caption phase must not continue their (now dropped) work.
   if (shedFrom !== null && shedFrom !== "validating") throw new CaptionsShedSignal();
 }
@@ -1691,6 +1715,8 @@ function planDocOf(c: Tick): PlanDoc | null {
   const specs = captionBatches(out.doc, {
     lang: asCaptionLang(c.book.caption_lang),
     maxBatches: limitsFor(c.book.is_paid === true).maxCaptionBatchesPerBuild,
+    // M30: magazine / editorial ask for chapter descriptions in the batch that asks for the heading.
+    descriptions: describes(c),
   });
   c.planDoc = { doc: out.doc, photos, photosById: new Map(photos.map((p) => [p.id, p])), specs };
   return c.planDoc;
@@ -1701,6 +1727,9 @@ const sameRefs = (a: CaptionBatchRef[], b: CaptionBatchRef[]) => JSON.stringify(
 
 /** No new model call in this tick after the soft budget once a call already ran. */
 const pastSoftBudget = (c: Tick) => c.heavyDone && elapsed(c) > c.budgetMs * CAPTION_WAVE_CUTOFF;
+
+/** M30: the book's style gets AI chapter descriptions (Caption Writer / Critic variants). */
+const describes = (c: Tick) => writesDescriptions(bookDesignOf(c.book).designStyle);
 
 function captionBook(c: Tick) {
   const b = storyBookOf(c.book);
@@ -1758,16 +1787,43 @@ async function runSpentUsd(c: Tick): Promise<number> {
 
 const runCapUsd = (c: Tick) => limitsFor(c.book.is_paid === true).maxRunCostUsd;
 
-/** Pessimistic cost of one Caption Writer call over `spec` (full or repair). */
-const captionCallEstimate = (spec: CaptionBatchSpec) =>
+/**
+ * Pessimistic cost of one Caption Writer call over `spec` (full or repair). `descriptions` = the
+ * book's style writes chapter descriptions (M30): the variant's larger max_tokens and input are
+ * counted, so the D-035 run budget stays honest. Exported for tests.
+ */
+export const captionCallEstimate = (spec: CaptionBatchSpec, descriptions = false) => {
+  const descs = descriptionCountOf(spec, descriptions);
+  return estimateCallCostUsd(AI_MODEL, {
+    inputTokens: CAPTION_CALL_INPUT_TOKENS(spec.keys.length) + (descriptions ? CAPTION_DESCRIPTIONS_INPUT_TOKENS(descs) : 0),
+    maxOutputTokens: captionWriterMaxTokens(spec.keys.length, descs),
+  });
+};
+
+/** Pessimistic cost of the Critic call over a doc with `pages` pages (+ `descriptions` listed, variant only; null = base call). */
+export const criticCallEstimate = (pages: number, descriptions: number | null = null) =>
   estimateCallCostUsd(AI_MODEL, {
-    inputTokens: CAPTION_CALL_INPUT_TOKENS(spec.keys.length),
-    maxOutputTokens: captionWriterMaxTokens(spec.keys.length),
+    inputTokens: CRITIC_CALL_INPUT_TOKENS(pages) + (descriptions === null ? 0 : CRITIC_DESCRIPTIONS_INPUT_TOKENS(descriptions)),
+    maxOutputTokens: criticMaxTokens(pages),
   });
 
-/** Pessimistic cost of the Critic call over a doc with `pages` pages. */
-const criticCallEstimate = (pages: number) =>
-  estimateCallCostUsd(AI_MODEL, { inputTokens: CRITIC_CALL_INPUT_TOKENS(pages), maxOutputTokens: criticMaxTokens(pages) });
+/** M30: descriptions of the cursor in chapter order, with the titles they must not repeat. */
+function descriptionsInOrder(c: Tick, pd: PlanDoc): DescriptionToCheck[] {
+  const out: DescriptionToCheck[] = [];
+  pd.doc.chapters.forEach((ch, i) => {
+    const m = `m${i + 1}`;
+    const text = c.cursor.descriptions[m];
+    if (typeof text === "string") out.push({ key: captionKey(m, "desc"), text, titles: [ch.title, c.cursor.headings[m]] });
+  });
+  return out;
+}
+
+/** M30: whole-book description check (per text + duplicates against captions / each other). */
+function checkDescriptions(c: Tick, pd: PlanDoc): Map<string, CaptionIssue[]> {
+  const list = descriptionsInOrder(c, pd);
+  if (!list.length) return new Map();
+  return checkBookDescriptions(list, bookCaptionContext(c, pd), { captions: captionsInOrder(c, pd).map((x) => x.text) });
+}
 
 /** Captions of the cursor in book order (keys of the plan doc). */
 function captionsInOrder(c: Tick, pd: PlanDoc): Array<{ key: string; text: string }> {
@@ -1782,7 +1838,13 @@ const asIssues = (key: string, codes: readonly string[]): CaptionIssue[] =>
     .map((code) => ({ code, key }));
 
 /** Records one Caption Writer answer for `keys` / `momentIds` (missing → removed: null caption). */
-function mergeCaptionResult(c: Tick, keys: readonly string[], momentIds: readonly string[], r: WriteCaptionsResult): void {
+function mergeCaptionResult(
+  c: Tick,
+  keys: readonly string[],
+  momentIds: readonly string[],
+  r: WriteCaptionsResult,
+  descriptionMomentIds: readonly string[] = [],
+): void {
   for (const k of keys) {
     const text = r.captions.get(k);
     if (text) c.cursor.captions[k] = text;
@@ -1792,6 +1854,11 @@ function mergeCaptionResult(c: Tick, keys: readonly string[], momentIds: readonl
     const h = r.headings.get(m);
     if (h) c.cursor.headings[m] = h;
     else delete c.cursor.headings[m];
+  }
+  for (const m of descriptionMomentIds) {
+    const d = r.descriptions.get(m);
+    if (d) c.cursor.descriptions[m] = d;
+    else delete c.cursor.descriptions[m];
   }
 }
 
@@ -1855,7 +1922,7 @@ async function captionWave(c: Tick, pd: PlanDoc, indices: number[]): Promise<voi
       pushFailure(c.cursor, "caption_writer_attempts");
       continue;
     }
-    const est = captionCallEstimate(pd.specs[bi]);
+    const est = captionCallEstimate(pd.specs[bi], describes(c));
     if (spent + planned + est > cap) {
       overBudget++;
       continue;
@@ -1896,6 +1963,8 @@ async function captionWave(c: Tick, pd: PlanDoc, indices: number[]): Promise<voi
         aliasOf,
         memory: c.cursor.memory,
         otherCaptions,
+        descriptions: describes(c),
+        otherDescriptions: Object.values(c.cursor.descriptions),
         transport,
         logger: c.logger,
         retry: stepRetry(c),
@@ -1914,6 +1983,7 @@ async function captionWave(c: Tick, pd: PlanDoc, indices: number[]): Promise<voi
         spec.keys,
         spec.moments.filter((m) => m.wantHeading).map((m) => m.momentId),
         result,
+        spec.moments.filter((m) => m.wantDescription).map((m) => m.momentId),
       );
       for (const [k, list] of result.issues) {
         const codes = [...new Set(list.map((i) => i.code))];
@@ -1949,10 +2019,14 @@ async function critiquingStep(c: Tick): Promise<StepOutcome> {
   const doc = applyCaptions(pd.doc, new Map(Object.entries(c.cursor.captions)), new Map(Object.entries(c.cursor.headings)), {
     lang,
     ctx: bookCaptionContext(c, pd),
+    descriptions: new Map(Object.entries(c.cursor.descriptions)),
   });
+  const describedCount = doc.chapters.filter((ch) => ch.description).length;
 
   // Pre-check over the whole book (cross-batch duplicates / openings) + what the batches rejected.
   const precheck = checkBookCaptions(captionsInOrder(c, pd), bookCaptionContext(c, pd));
+  // M30: descriptions against the whole book (a caption of a later batch, another description).
+  for (const [k, list] of checkDescriptions(c, pd)) precheck.set(k, list);
   for (const [k, codes] of Object.entries(c.cursor.captionIssues)) {
     if (!precheck.has(k)) {
       const list = asIssues(k, codes);
@@ -1964,15 +2038,15 @@ async function critiquingStep(c: Tick): Promise<StepOutcome> {
   let score: number | null = null;
   const attempt = c.cursor.criticAttempts + 1;
   let callCritic = false;
-  if (Object.keys(c.cursor.captions).length === 0) {
-    // SF6: nothing to judge (no AI caption survived) — no Critic call, not a failure.
+  if (Object.keys(c.cursor.captions).length === 0 && describedCount === 0) {
+    // SF6: nothing to judge (no AI caption / description survived) — no Critic call, not a failure.
     await skippedStep(c, "critic", "no_captions");
   } else if (attempt > MAX_CRITIC_ATTEMPTS) {
     c.cursor.criticFailures++;
     pushFailure(c.cursor, "critic_attempts");
   } else {
     if (pastSoftBudget(c) || !callFits(c, AGENT_TIMEOUT_MS.critic)) return "yield";
-    if ((await runSpentUsd(c)) + criticCallEstimate(doc.pages.length) > runCapUsd(c)) {
+    if ((await runSpentUsd(c)) + criticCallEstimate(doc.pages.length, describes(c) ? describedCount : null) > runCapUsd(c)) {
       // D-035: no Critic over the run budget (captions stay; pre-check targets are still planned).
       c.cursor.criticFailures++;
       pushFailureOnce(c.cursor, "run_budget");
@@ -1998,6 +2072,7 @@ async function critiquingStep(c: Tick): Promise<StepOutcome> {
       },
       precheck,
       book: { occasion: book.occasion, tone: book.tone, captionLang: book.captionLang },
+      descriptions: describes(c),
       transport: needTransport(c),
       logger: c.logger,
       retry: stepRetry(c),
@@ -2027,7 +2102,7 @@ async function critiquingStep(c: Tick): Promise<StepOutcome> {
   for (const list of plan.rewrite.values()) {
     for (const t of list) {
       const m = momentIdOfKey(t.key);
-      const batch = t.key.endsWith(":heading") ? (m ? byMoment(m) : undefined) : (byKey(t.key) ?? (m ? byMoment(m) : undefined));
+      const batch = isMomentKey(t.key) ? (m ? byMoment(m) : undefined) : (byKey(t.key) ?? (m ? byMoment(m) : undefined));
       if (batch === undefined) continue;
       targets.push({ batch, key: t.key, codes: reasonCodes(t.reason) });
     }
@@ -2073,12 +2148,14 @@ async function repairingStep(c: Tick): Promise<StepOutcome> {
   return "next";
 }
 
-/** Drops a target's caption / heading (still failing → null; the Storyteller title stays). */
+/** Drops a target's caption / heading / description (still failing → null; the Storyteller title stays, the description panel collapses). */
 function dropTargets(c: Tick, targets: readonly CursorRepairTarget[]): void {
   for (const t of targets) {
+    const m = momentIdOfKey(t.key);
     if (t.key.endsWith(":heading")) {
-      const m = momentIdOfKey(t.key);
       if (m) delete c.cursor.headings[m];
+    } else if (t.key.endsWith(":desc")) {
+      if (m) delete c.cursor.descriptions[m];
     } else delete c.cursor.captions[t.key];
   }
 }
@@ -2099,7 +2176,7 @@ async function repairWave(c: Tick, pd: PlanDoc, indices: number[]): Promise<void
       c.cursor.repairBatchesDone.push(bi);
       continue;
     }
-    const est = captionCallEstimate(pd.specs[bi]);
+    const est = captionCallEstimate(pd.specs[bi], describes(c));
     if (spent + planned + est > cap) {
       // D-035: over the run budget — this batch's flagged captions become null (no repair call).
       dropTargets(c, targets);
@@ -2135,6 +2212,10 @@ async function repairWave(c: Tick, pd: PlanDoc, indices: number[]): Promise<void
         aliasOf,
         memory: c.cursor.memory,
         otherCaptions,
+        descriptions: describes(c),
+        otherDescriptions: Object.entries(c.cursor.descriptions)
+          .filter(([m]) => !allTargets.has(captionKey(m, "desc")))
+          .map(([, text]) => text),
         repairTargets: targets.map((t) => ({ key: t.key, reason: t.codes })),
         transport,
         logger: c.logger,
@@ -2147,12 +2228,13 @@ async function repairWave(c: Tick, pd: PlanDoc, indices: number[]): Promise<void
   for (const { bi, targets, result } of results.sort((x, y) => x.bi - y.bi)) {
     if (result.ok) {
       // Answers already passed the pre-check (writeCaptions → precheckBatch); others → null.
-      const pageKeys = targets.filter((t) => !t.key.endsWith(":heading")).map((t) => t.key);
-      const momentIds = targets
-        .filter((t) => t.key.endsWith(":heading"))
-        .map((t) => momentIdOfKey(t.key))
-        .filter((m): m is string => m !== null);
-      mergeCaptionResult(c, pageKeys, momentIds, result);
+      const pageKeys = targets.filter((t) => !isMomentKey(t.key)).map((t) => t.key);
+      const momentsOf = (suffix: string) =>
+        targets
+          .filter((t) => t.key.endsWith(suffix))
+          .map((t) => momentIdOfKey(t.key))
+          .filter((m): m is string => m !== null);
+      mergeCaptionResult(c, pageKeys, momentsOf(":heading"), result, momentsOf(":desc"));
     } else {
       dropTargets(c, targets);
       c.cursor.captionFailures++;
@@ -2167,14 +2249,25 @@ async function repairWave(c: Tick, pd: PlanDoc, indices: number[]): Promise<void
 function finalizeCaptions(c: Tick, pd: PlanDoc): void {
   const issues = checkBookCaptions(captionsInOrder(c, pd), bookCaptionContext(c, pd));
   for (const k of issues.keys()) delete c.cursor.captions[k];
+  // M30: a description that still fails (after the one repair) is dropped — the panel collapses.
+  for (const k of checkDescriptions(c, pd).keys()) {
+    const m = momentIdOfKey(k);
+    if (m) delete c.cursor.descriptions[m];
+  }
 }
 
 /**
  * Captions/headings of the plan doc mapped onto `target` (the doc actually saved, pruned when
  * photos were removed mid-run): a caption follows its page only when the page kept the same
- * layout and photos; a heading follows its moment (found via the moment's first photo).
+ * layout and photos; a heading and (M30) a chapter description follow their moment (found via the
+ * moment's first photo). applyCaptions writes a description only when a page of the target
+ * chapter still shows it.
  */
-function captionsForDoc(c: Tick, pd: PlanDoc, target: BookDoc): { captions: Map<string, string>; headings: Map<string, string> } {
+function captionsForDoc(
+  c: Tick,
+  pd: PlanDoc,
+  target: BookDoc,
+): { captions: Map<string, string>; headings: Map<string, string>; descriptions: Map<string, string> } {
   const sig = (p: BookDoc["pages"][number]) => `${p.layout}|${p.slots.map((s) => s.photoId ?? "").join(",")}`;
   const baseKeys = pageCaptionKeys(pd.doc);
   const keyBySig = new Map<string, string>();
@@ -2188,6 +2281,7 @@ function captionsForDoc(c: Tick, pd: PlanDoc, target: BookDoc): { captions: Map<
   });
   const captions = new Map<string, string>();
   const headings = new Map<string, string>();
+  const descriptions = new Map<string, string>();
   const targetKeys = pageCaptionKeys(target);
   target.pages.forEach((p, i) => {
     const tk = targetKeys[i];
@@ -2201,22 +2295,25 @@ function captionsForDoc(c: Tick, pd: PlanDoc, target: BookDoc): { captions: Map<
       const bm = first ? momentOfPhoto.get(first) : undefined;
       const h = bm ? c.cursor.headings[bm] : undefined;
       if (h) headings.set(tm, h);
+      const d = bm ? c.cursor.descriptions[bm] : undefined;
+      if (d) descriptions.set(tm, d);
     }
   });
-  return { captions, headings };
+  return { captions, headings, descriptions };
 }
 
 /** The AI doc to save with captions, headings and the cover swap (each only if the doc stays valid). */
 function withCaptions(c: Tick, target: BookDoc): BookDoc {
   const pd = planDocOf(c);
   if (!pd) return target;
-  const { captions, headings } = captionsForDoc(c, pd, target);
+  const { captions, headings, descriptions } = captionsForDoc(c, pd, target);
   let doc = target;
-  if (captions.size || headings.size) {
-    // applyCaptions never touches a source 'user' caption (D-031) — defensive: AI docs have none.
+  if (captions.size || headings.size || descriptions.size) {
+    // applyCaptions never touches a source 'user' caption / description (D-031) — defensive: AI docs have none.
     const next = applyCaptions(target, captions, headings, {
       lang: asCaptionLang(c.book.caption_lang),
       ctx: bookCaptionContext(c, pd),
+      descriptions,
     });
     if (docIssues(next, c.photos, c.book).length === 0) doc = next;
   }

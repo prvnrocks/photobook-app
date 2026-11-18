@@ -19,9 +19,15 @@
 // - weekday names are always allowed (not checked against the dates).
 // Known-safe capitalised words (months that occur in the dates, weekdays, holidays, family words,
 // common acronyms, "Happy Birthday"-style phrases) are not flagged (false-positive guard).
+//
+// Chapter descriptions (M30 T10, key captionKey(m, "desc")): the same per-text rules with a
+// 45-word / 400-unit cap (checkDescription) and their own book-level rule (checkBookDescriptions):
+// "duplicate" when a description equals another one, repeats a caption of ≥ 4 words verbatim or
+// repeats its chapter title / heading of ≥ 3 words verbatim. Descriptions do not take part in the
+// captions' repeated-opening count.
 
 import type { CaptionLang } from "@/lib/book/options";
-import { MAX_QUOTE_WORDS, captionKey, wordCount } from "@/lib/ai/schemas";
+import { AI_TEXT_LIMITS, MAX_CHAPTER_DESCRIPTION_WORDS, MAX_QUOTE_WORDS, captionKey, wordCount } from "@/lib/ai/schemas";
 import { hasLoneSurrogate } from "@/lib/text/clip";
 
 export { captionKey };
@@ -353,6 +359,22 @@ function hasAttribution(text: string, ctx: CaptionCheckContext): boolean {
 
 /** Per-caption issues (no book-level rules). Returns [] for a clean caption. */
 export function checkCaption(text: string, ctx: CaptionCheckContext): CaptionIssue[] {
+  return checkText(text, ctx, MAX_QUOTE_WORDS);
+}
+
+/**
+ * Per-description issues (no book-level rules): the caption rules with the description word cap
+ * (45) and the doc's length cap (400 UTF-16 units → too_long, never a silent clip). [] = clean.
+ */
+export function checkDescription(text: string, ctx: CaptionCheckContext): CaptionIssue[] {
+  const issues = checkText(text, ctx, MAX_CHAPTER_DESCRIPTION_WORDS);
+  if (typeof text === "string" && text.normalize("NFC").trim().length > AI_TEXT_LIMITS.chapterDescription && !issues.some((i) => i.code === "too_long")) {
+    issues.push({ code: "too_long" });
+  }
+  return issues;
+}
+
+function checkText(text: string, ctx: CaptionCheckContext, maxWords: number): CaptionIssue[] {
   const issues: CaptionIssue[] = [];
   const add = (code: CaptionIssueCode) => {
     if (!issues.some((i) => i.code === code)) issues.push({ code });
@@ -361,7 +383,7 @@ export function checkCaption(text: string, ctx: CaptionCheckContext): CaptionIss
 
   if (hasLoneSurrogate(text)) add("lone_surrogate");
   const t = text.normalize("NFC").trim();
-  if (wordCount(t) > MAX_QUOTE_WORDS) add("too_long");
+  if (wordCount(t) > maxWords) add("too_long");
 
   const letters = letterStats(t);
   if (letters.total === 0) add("no_letters");
@@ -444,6 +466,64 @@ export function checkBookCaptions(
       const n = (openings.get(first) ?? 0) + 1;
       openings.set(first, n);
       if (n > MAX_SAME_OPENING) push(key, "repeated_opening");
+    }
+  }
+  return out;
+}
+
+/** Shortest caption (words) whose verbatim reuse inside a description counts as a duplicate. */
+export const MIN_REPEATED_CAPTION_WORDS = 4;
+/** Shortest chapter title / heading (words) whose verbatim reuse inside its description counts. */
+export const MIN_REPEATED_TITLE_WORDS = 3;
+
+/** True when the normalised word sequence `part` occurs inside `whole` (whole words only). */
+function containsPhrase(whole: string, part: string): boolean {
+  return part !== "" && ` ${whole} `.includes(` ${part} `);
+}
+
+export interface DescriptionToCheck {
+  /** captionKey(momentId, "desc"). */
+  key: string;
+  text: string;
+  /** The chapter's title(s): the Storyteller draft and / or the Caption Writer heading. */
+  titles?: ReadonlyArray<string | null | undefined>;
+}
+
+/**
+ * Check chapter descriptions (M30). Returns only descriptions WITH issues, keyed by `key`.
+ * Per text: checkDescription. Book level ("duplicate"): equal to an earlier description of the
+ * list or to one of `otherDescriptions`; contains a caption of ≥ MIN_REPEATED_CAPTION_WORDS words
+ * verbatim; contains one of its own `titles` of ≥ MIN_REPEATED_TITLE_WORDS words verbatim
+ * (case, punctuation and tashkeel ignored — normalizeCaption).
+ */
+export function checkBookDescriptions(
+  descriptions: ReadonlyArray<DescriptionToCheck>,
+  ctx: CaptionCheckContext,
+  opts: { captions?: ReadonlyArray<string>; otherDescriptions?: ReadonlyArray<string> } = {},
+): Map<string, CaptionIssue[]> {
+  const out = new Map<string, CaptionIssue[]>();
+  const push = (key: string, code: CaptionIssueCode) => {
+    const list = out.get(key) ?? [];
+    if (!list.some((i) => i.code === code)) list.push({ code, key });
+    out.set(key, list);
+  };
+  const captions = (opts.captions ?? [])
+    .filter((c): c is string => typeof c === "string" && wordCount(c) >= MIN_REPEATED_CAPTION_WORDS)
+    .map(normalizeCaption)
+    .filter(Boolean);
+  const seen = new Set((opts.otherDescriptions ?? []).filter((d): d is string => typeof d === "string").map(normalizeCaption).filter(Boolean));
+
+  for (const { key, text, titles } of descriptions) {
+    for (const issue of checkDescription(text, ctx)) push(key, issue.code);
+    if (typeof text !== "string" || !text.trim()) continue;
+    const norm = normalizeCaption(text);
+    if (!norm) continue;
+    if (seen.has(norm)) push(key, "duplicate");
+    seen.add(norm);
+    if (captions.some((c) => containsPhrase(norm, c))) push(key, "duplicate");
+    for (const t of titles ?? []) {
+      if (typeof t !== "string" || wordCount(t) < MIN_REPEATED_TITLE_WORDS) continue;
+      if (containsPhrase(norm, normalizeCaption(t))) push(key, "duplicate");
     }
   }
   return out;

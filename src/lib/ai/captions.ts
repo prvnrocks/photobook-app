@@ -15,6 +15,14 @@
 // is captionable when the spread layout has a caption area, the RIGHT half never is. A plan entry
 // with a spread layout expands the same way, so plan keys and doc keys agree.
 //
+// Chapter descriptions (M30 T10, magazine / editorial): with `descriptions: true` a moment asks for
+// its description (wantDescription) in the SAME batch that asks for its heading — never an extra
+// call — and ONLY when one of its pages has a description layout (layoutShowsDescription) and the
+// chapter has no user description. So a chapter without a description panel never costs tokens and
+// never stores unshown text. Key: captionKey(m, "desc"). applyCaptions writes
+// chapters[i].description = { text, source: "ai" } under the same two conditions, re-checked on
+// the doc that is saved.
+//
 // Caption font: the book style's caption face (styleCaptionFont: classic Playfair/Cairo as before,
 // modern Cormorant/Amiri) — caption.font overrides the style face in the renderer.
 
@@ -23,9 +31,10 @@ import type { CaptionLang } from "@/lib/book/options";
 import { parseBookDoc } from "@/lib/book/schema";
 import type { BookDoc, Caption } from "@/lib/book/types";
 import { getLayout, hasCaptionArea } from "@/lib/layouts";
+import { layoutIdShowsDescription } from "@/lib/layouts/description";
 import { styleCaptionFont } from "@/lib/design/styles";
 import { clipText } from "@/lib/text/clip";
-import { buildCaptionContext, checkCaption, type CaptionCheckContext, type CaptionIssue } from "./caption-check";
+import { buildCaptionContext, checkCaption, checkDescription, type CaptionCheckContext, type CaptionIssue } from "./caption-check";
 import { LIMITS, MAX_CAPTION_PAGES_PER_BATCH } from "./limits";
 import { AI_TEXT_LIMITS, captionKey, MOMENT_ID_RE, wordCount, type AlbumPlan } from "./schemas";
 import { dubaiDay, photoMs } from "./story";
@@ -56,8 +65,18 @@ export interface CaptionBatchMoment {
   place: string | null;
   /** False when the moment started in an earlier batch (its heading is taken from there). */
   wantHeading: boolean;
+  /**
+   * M30: also write this moment's chapter description (only set — true — in the batch that asks
+   * for the heading, for styles with descriptions, when a page of the moment shows it).
+   */
+  wantDescription?: true;
+  /** With wantDescription: photos of the whole moment the description may draw on (≤ 8, source ids). */
+  descriptionPhotoIds?: string[];
   pages: CaptionBatchPage[];
 }
+
+/** Photo notes a description request carries at most (the description page's photos first). */
+export const MAX_DESCRIPTION_PHOTOS = 8;
 
 export interface CaptionBatchSpec {
   /** 0-based batch index (step key caption_writer:{index}). */
@@ -73,10 +92,12 @@ export interface CaptionBatchOptions {
   maxPagesPerBatch?: number;
   /** Default LIMITS.free.maxCaptionBatchesPerBuild (D-034). Pages beyond the cap get no caption. */
   maxBatches?: number;
+  /** M30: ask for chapter descriptions (pass writesDescriptions(designStyle)). Default false. */
+  descriptions?: boolean;
 }
 
 type SourcePage = { layout: string; photoIds: string[]; userCaption: boolean; bookPageIndex: number; side?: "left" | "right" };
-type SourceMoment = { momentId: string; title: string; dateLabel: string; place: string | null; pages: SourcePage[] };
+type SourceMoment = { momentId: string; title: string; dateLabel: string; place: string | null; pages: SourcePage[]; userDescription?: boolean };
 
 /**
  * Chapter id → moment id "m{n}" by chapter position (1-based). The ONE mapping used by captions,
@@ -120,7 +141,7 @@ function momentsOf(src: BookDoc | AlbumPlan): SourceMoment[] {
   src.chapters.forEach((ch, i) => {
     const id = `m${i + 1}`;
     if (momentOf.get(ch.id) !== id) return; // duplicate chapter id: first wins
-    const m: SourceMoment = { momentId: id, title: ch.title, dateLabel: ch.dateLabel, place: ch.place, pages: [] };
+    const m: SourceMoment = { momentId: id, title: ch.title, dateLabel: ch.dateLabel, place: ch.place, pages: [], userDescription: ch.description?.source === "user" };
     byMoment.set(id, m);
     out.push(m);
   });
@@ -139,6 +160,29 @@ function momentsOf(src: BookDoc | AlbumPlan): SourceMoment[] {
 }
 
 export { hasCaptionArea } from "@/lib/layouts";
+
+/** True when a page of the chapter has a layout with a description panel (a spread counts once). */
+function showsDescription(pages: ReadonlyArray<{ layout: string }>): boolean {
+  return pages.some((p) => layoutIdShowsDescription(p.layout));
+}
+
+/** Photos for a description request: the description page(s) first, then the rest, unique, capped. */
+function descriptionPhotos(pages: readonly SourcePage[]): string[] {
+  const ordered = [...pages.filter((p) => layoutIdShowsDescription(p.layout)), ...pages.filter((p) => !layoutIdShowsDescription(p.layout))];
+  const ids: string[] = [];
+  for (const p of ordered) for (const id of p.photoIds) if (!ids.includes(id) && ids.length < MAX_DESCRIPTION_PHOTOS) ids.push(id);
+  return ids;
+}
+
+/** Chapter ids of `doc` whose chapter may get an AI description written: shown by a page, not the user's. */
+export function chaptersWantingDescription(doc: Pick<BookDoc, "chapters" | "pages">): Set<string> {
+  const out = new Set<string>();
+  for (const ch of doc.chapters) {
+    if (ch.description?.source === "user") continue;
+    if (showsDescription(doc.pages.filter((p) => p.chapterId === ch.id))) out.add(ch.id);
+  }
+  return out;
+}
 
 /** Pages the Caption Writer may caption: layout with a caption area, not a user caption. */
 export function countCaptionablePages(src: BookDoc | AlbumPlan): number {
@@ -170,6 +214,10 @@ export function captionBatches(src: BookDoc | AlbumPlan, opts: CaptionBatchOptio
     const last = b.moments[b.moments.length - 1];
     if (last?.momentId === m.momentId) return last;
     const bm: CaptionBatchMoment = { momentId: m.momentId, title: m.title, dateLabel: m.dateLabel, place: m.place, wantHeading, pages: [] };
+    if (opts.descriptions === true && wantHeading && !m.userDescription && showsDescription(m.pages)) {
+      bm.wantDescription = true;
+      bm.descriptionPhotoIds = descriptionPhotos(m.pages);
+    }
     b.moments.push(bm);
     return bm;
   };
@@ -226,6 +274,12 @@ export interface ApplyCaptionsOptions {
    * knownNames, dates); default: docCaptionContext (chapter places + date-label numbers only).
    */
   ctx?: CaptionCheckContext;
+  /**
+   * M30: momentId → AI chapter description. Written as { text, source: "ai" } only when the
+   * chapter has no user description, one of its pages shows the description and the text passes
+   * checkDescription. Omitted → descriptions untouched.
+   */
+  descriptions?: ReadonlyMap<string, string>;
 }
 
 /**
@@ -325,8 +379,9 @@ export function groundStoryText(
  * Write AI captions/headings into a doc (new object; input untouched). Captions: only pages with a
  * caption area (spreads: left half only) and no user caption; font = the book style's caption face
  * (styleCaptionFont: classic Cairo for ar else Playfair), centred, source 'ai'.
- * Headings replace chapter titles only when they pass checkHeading. If the result would not parse
- * as a BookDoc, the input doc is returned unchanged.
+ * Headings replace chapter titles only when they pass checkHeading. Chapter descriptions (M30,
+ * opts.descriptions): see ApplyCaptionsOptions. If the result would not parse as a BookDoc, the
+ * input doc is returned unchanged.
  */
 export function applyCaptions(
   doc: BookDoc,
@@ -335,7 +390,8 @@ export function applyCaptions(
   opts: ApplyCaptionsOptions,
 ): BookDoc {
   const font = styleCaptionFont(doc.style.designStyle, opts.lang);
-  const ctx = headingContext(opts.ctx ?? docCaptionContext(doc, opts.lang), doc.chapters.length);
+  const baseCtx = opts.ctx ?? docCaptionContext(doc, opts.lang);
+  const ctx = headingContext(baseCtx, doc.chapters.length);
   const perChapter = new Map<string, number>();
   const momentOf = momentIdsOfChapters(doc);
 
@@ -362,7 +418,21 @@ export function applyCaptions(
     return { ...ch, title };
   });
 
-  const next: BookDoc = { ...doc, chapters, pages };
+  // M30: AI descriptions — never over a user's text, never for a chapter no page shows it on.
+  const wanting = opts.descriptions?.size ? chaptersWantingDescription({ chapters, pages }) : null;
+  const described = !wanting
+    ? chapters
+    : chapters.map((ch) => {
+        const momentId = momentOf.get(ch.id);
+        const raw = momentId ? opts.descriptions?.get(momentId) : undefined;
+        if (typeof raw !== "string" || !wanting.has(ch.id)) return ch;
+        const text = raw.replace(/\s+/g, " ").trim();
+        // baseCtx, not the heading context: chapter ordinals are not free numbers in a paragraph.
+        if (!text || checkDescription(text, baseCtx).length) return ch;
+        return { ...ch, description: { text, source: "ai" as const } };
+      });
+
+  const next: BookDoc = { ...doc, chapters: described, pages };
   const parsed = parseBookDoc(next);
   return parsed.ok ? parsed.doc : doc;
 }

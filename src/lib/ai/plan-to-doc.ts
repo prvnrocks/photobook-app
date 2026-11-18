@@ -26,6 +26,16 @@
 // only; a faded-photo alias → a KEPT photo placed in the same moment; a moment that opens with a
 // spread gets none) and handed to applyBackgroundSuggestions, which re-validates every pick and
 // fills anything missing or invalid with the T11 rules. An invalid pick never fails the plan.
+//
+// Chapter descriptions (M30 T10, magazine / editorial = writesDescriptions(style)): a "description
+// layout" has a text panel for the chapter's paragraph. The Storyteller's own in-design picks are
+// kept, with one exception: a SECOND description layout in the same moment is re-fitted to a
+// layout without the panel when one has that photo count (the same paragraph must not print
+// twice). Re-fits (another design's layout, pages that lost photos in prunePlan) use
+// bestPageLayout `description`: "prefer" for a page that showed the description or for the first
+// page of a moment that has no description page, "avoid" once the moment has one, "any" else —
+// so a moment ends with exactly one page / spread showing its description where the photo counts
+// allow. The older styles pass no mode (default "avoid" = no-op, they have no such layouts).
 
 import { withSuggestedColourway } from "@/lib/design/colourway-suggest";
 import { withDefaultFilters } from "@/lib/book/default-filters";
@@ -36,7 +46,8 @@ import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import type { BookDoc, BookPage, Chapter, Crop } from "@/lib/book/types";
 import { repairSpreads, SPREAD_PAGES } from "@/lib/book/spreads";
 import { getLayout } from "@/lib/layouts";
-import { bestCoverLayout, bestPageLayout, type FitOrientation } from "@/lib/layouts/fit";
+import { layoutIdShowsDescription, layoutShowsDescription, writesDescriptions } from "@/lib/layouts/description";
+import { bestCoverLayout, bestPageLayout, type BestLayoutOptions, type FitOrientation } from "@/lib/layouts/fit";
 import { styleCaptionFont } from "@/lib/design/styles";
 import {
   AI_BACKGROUND_CATALOGUE,
@@ -181,26 +192,61 @@ function orientResolver(aliasToId: ReadonlyMap<string, string>, photos: readonly
   };
 }
 
+type DescriptionMode = NonNullable<BestLayoutOptions["description"]>;
+
+/**
+ * bestPageLayout `description` option for a re-fit (see the header). `{}` for styles without AI
+ * descriptions, so their calls are exactly the pre-M30 ones.
+ */
+function descriptionFit(
+  describes: boolean,
+  page: { first: boolean; showsNow: boolean; shownElsewhere: boolean },
+): { description?: DescriptionMode } {
+  if (!describes) return {};
+  if (page.showsNow) return { description: "prefer" };
+  if (page.shownElsewhere) return { description: "avoid" };
+  return { description: page.first ? "prefer" : "any" };
+}
+
 /**
  * Re-fits plan entries whose layout is a known page/spread layout of ANOTHER format or design
  * style to the book's design: same photos, best layout of the same role (a spread falls back to a
  * page layout), catalogue order on ties. Entries with no layout of that photo count, unknown
- * layouts and cover layouts are left for validatePlanAgainstPhotos to report. Pure; returns the
- * SAME plan when nothing changed.
+ * layouts and cover layouts are left for validatePlanAgainstPhotos to report. Styles with AI
+ * descriptions: see the header (one description page per moment). Pure; returns the SAME plan
+ * when nothing changed.
  */
 export function fitPlanToDesign(plan: AlbumPlan, { aliasToId, photos, design = DEFAULT_BOOK_DESIGN }: FitPlanOptions): AlbumPlan {
   const orientOf = orientResolver(aliasToId, photos);
+  const describes = writesDescriptions(design.designStyle);
   let changed = false;
   const moments = plan.moments.map((m) => {
     let mChanged = false;
-    const pages = m.pages.map((pg) => {
+    const ownDescription = (pg: { layoutId: string }) => {
+      const l = getLayout(pg.layoutId);
+      return Boolean(l && l.role !== "cover" && inDesign(l, design) && layoutShowsDescription(l));
+    };
+    // Index of the page that keeps the description: the first in-design description layout.
+    const keeper = describes ? m.pages.findIndex(ownDescription) : -1;
+    let refitShows = false;
+    const pages = m.pages.map((pg, pi) => {
       const layout = getLayout(pg.layoutId);
-      if (!layout || layout.role === "cover" || inDesign(layout, design)) return pg;
+      if (!layout || layout.role === "cover") return pg;
       const orients = pg.photoIds.map(orientOf);
+      if (inDesign(layout, design)) {
+        if (!describes || pi === keeper || !layoutShowsDescription(layout)) return pg;
+        // A second description layout in this moment: the paragraph would print twice.
+        const alt = bestPageLayout(orients, { design, role: layout.role === "spread" ? "spread" : "page", description: "avoid" });
+        if (!alt || alt === pg.layoutId || layoutIdShowsDescription(alt)) return pg;
+        mChanged = true;
+        return { ...pg, layoutId: alt };
+      }
+      const mode = descriptionFit(describes, { first: pi === 0, showsNow: false, shownElsewhere: keeper >= 0 || refitShows });
       const id =
-        (layout.role === "spread" ? bestPageLayout(orients, { design, role: "spread" }) : null) ??
-        bestPageLayout(orients, { design });
+        (layout.role === "spread" ? bestPageLayout(orients, { design, role: "spread", ...mode }) : null) ??
+        bestPageLayout(orients, { design, ...mode });
       if (!id) return pg;
+      if (describes && layoutIdShowsDescription(id)) refitShows = true;
       mChanged = true;
       return { ...pg, layoutId: id };
     });
@@ -394,11 +440,17 @@ type PlanPage = AlbumPlan["moments"][number]["pages"][number];
  * no layout for that many photos (only possible for a spread that lost photos), the photos are
  * chunked over several pages of the largest page layouts so none is lost. [] = no layout at all.
  */
-function refitPages(pg: PlanPage, left: string[], orientOf: (a: string) => FitOrientation, design: BookDesign): PlanPage[] {
+function refitPages(
+  pg: PlanPage,
+  left: string[],
+  orientOf: (a: string) => FitOrientation,
+  design: BookDesign,
+  mode: { description?: DescriptionMode } = {},
+): PlanPage[] {
   const wasSpread = getLayout(pg.layoutId)?.role === "spread";
   const fit = (aliases: string[]) =>
-    (wasSpread ? bestPageLayout(aliases.map(orientOf), { design, role: "spread" }) : null) ??
-    bestPageLayout(aliases.map(orientOf), { design });
+    (wasSpread ? bestPageLayout(aliases.map(orientOf), { design, role: "spread", ...mode }) : null) ??
+    bestPageLayout(aliases.map(orientOf), { design, ...mode });
   const whole = fit(left);
   if (whole) return [{ ...pg, layoutId: whole, photoIds: left }];
   const out: PlanPage[] = [];
@@ -406,7 +458,9 @@ function refitPages(pg: PlanPage, left: string[], orientOf: (a: string) => FitOr
   while (rest.length > 0) {
     let n = rest.length;
     let id: string | null = null;
-    while (n > 0 && !(id = bestPageLayout(rest.slice(0, n).map(orientOf), { design }))) n--;
+    // Only the first chunk may take the description panel (later chunks: default "avoid").
+    const chunkMode = out.length === 0 ? mode : {};
+    while (n > 0 && !(id = bestPageLayout(rest.slice(0, n).map(orientOf), { design, ...chunkMode }))) n--;
     if (!id) return [];
     out.push({ layoutId: id, photoIds: rest.slice(0, n) });
     rest = rest.slice(n);
@@ -432,10 +486,13 @@ export function prunePlan(plan: AlbumPlan, { aliasToId, photos, design = DEFAULT
   const usable = (alias: string) => photoOf(alias)?.keep === true;
   const orientOf = orientResolver(aliasToId, photos);
 
+  const describes = writesDescriptions(design.designStyle);
   let removed = 0;
   const moments: AlbumPlan["moments"] = [];
   for (const m of plan.moments) {
     const pages: PlanPage[] = [];
+    // Description pages of this moment that stay untouched (all their photos are still kept).
+    let shown = describes && m.pages.some((pg) => layoutIdShowsDescription(pg.layoutId) && pg.photoIds.every(usable));
     for (const pg of m.pages) {
       const left = pg.photoIds.filter(usable);
       removed += pg.photoIds.length - left.length;
@@ -444,7 +501,10 @@ export function prunePlan(plan: AlbumPlan, { aliasToId, photos, design = DEFAULT
         pages.push(pg);
         continue;
       }
-      const refit = refitPages(pg, left, orientOf, design);
+      const showsNow = describes && layoutIdShowsDescription(pg.layoutId);
+      const mode = descriptionFit(describes, { first: pages.length === 0, showsNow: showsNow && !shown, shownElsewhere: shown });
+      const refit = refitPages(pg, left, orientOf, design, mode);
+      if (describes && refit.some((r) => layoutIdShowsDescription(r.layoutId))) shown = true;
       if (refit.length) pages.push(...refit);
       else removed += left.length; // no layout for this count: drop the page
     }

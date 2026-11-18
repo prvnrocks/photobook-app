@@ -9,7 +9,7 @@
 // - the AI path may use them freely once the Caption Writer writes descriptions.
 // The rule is this data query — never a list of layout ids.
 
-import { getLayout } from "./index";
+import { getLayout, LAYOUTS } from "./index";
 import type { Layout } from "@/lib/book/types";
 
 /** True when `layout` has a text panel bound to the chapter description. */
@@ -26,4 +26,21 @@ export function layoutIdShowsDescription(id: string | null | undefined): boolean
 export function preferWithoutDescription<L extends Pick<Layout, "texts">>(layouts: readonly L[]): readonly L[] {
   const plain = layouts.filter((l) => !layoutShowsDescription(l));
   return plain.length > 0 ? plain : layouts;
+}
+
+const stylesWithDescriptions = new Map<string, boolean>();
+
+/**
+ * True for a design style whose catalogue has description layouts (today: magazine, editorial) —
+ * the styles the AI writes chapter descriptions for (Caption Writer / Critic / Rewriter variants,
+ * docs/AI-AGENTS.md → "Chapter descriptions"). Derived from the layout data, never a style list.
+ */
+export function writesDescriptions(style: string | null | undefined): boolean {
+  if (typeof style !== "string") return false;
+  let hit = stylesWithDescriptions.get(style);
+  if (hit === undefined) {
+    hit = LAYOUTS.some((l) => l.style === style && layoutShowsDescription(l));
+    stylesWithDescriptions.set(style, hit);
+  }
+  return hit;
 }

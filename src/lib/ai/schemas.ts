@@ -47,6 +47,8 @@ export const AI_TEXT_LIMITS = {
   subtitle: 120,
   caption: 200,
   critiqueDetail: 300,
+  /** M30 chapter description = the doc limit (book/schema.ts CHAPTER_DESCRIPTION_MAX). */
+  chapterDescription: 400,
 } as const;
 
 export const PHOTO_ALIAS_RE = /^p[1-9]\d*$/;
@@ -200,7 +202,10 @@ export const AlbumPlanScrapbookAiSchema = z.object({
   ),
 });
 
-/** The AI-facing plan schema for a book's design style (one stable schema per style). */
+/**
+ * The AI-facing plan schema for a book's design style (one stable schema per style). Magazine and
+ * editorial (M30) use the classic schema: they take no background suggestions.
+ */
 export function albumPlanAiSchemaFor(style: string | null | undefined): z.ZodType<AlbumPlanAi> {
   if (style === "scrapbook") return AlbumPlanScrapbookAiSchema as z.ZodType<AlbumPlanAi>;
   if (style === "modern" || style === "geometric") return AlbumPlanBackgroundsAiSchema as z.ZodType<AlbumPlanAi>;
@@ -302,9 +307,57 @@ export const CaptionBatchStrictSchema = z
 export type CaptionBatchAi = z.infer<typeof CaptionBatchAiSchema>;
 export type CaptionBatch = z.infer<typeof CaptionBatchStrictSchema>;
 
-/** Stable key for one caption: "m3:0" (page caption) or "m3:heading". Used by caption-check + logs. */
-export function captionKey(momentId: string, pageIndex: number | "heading"): string {
+/**
+ * Stable key for one caption: "m3:0" (page caption), "m3:heading" or (M30) "m3:desc" = the
+ * moment's chapter description. Used by caption-check + logs.
+ */
+export function captionKey(momentId: string, pageIndex: number | "heading" | "desc"): string {
   return `${momentId}:${pageIndex}`;
+}
+
+// --- M30 T10: chapter descriptions (magazine / editorial only — writesDescriptions(style)) -------
+// A VARIANT of the batch schema with one more field per moment. The base schemas above are what
+// every other style sends and stay byte-identical (tests/ai/prompt-freeze.test.ts).
+
+/** Hard word cap of an AI chapter description (the prompt asks for 25–45 words). */
+export const MAX_CHAPTER_DESCRIPTION_WORDS = 45;
+
+export const MomentCaptionsWithDescriptionAiSchema = MomentCaptionsAiSchema.extend({
+  description: z
+    .string()
+    .nullable()
+    .describe("Chapter description: 25 to 45 words, 2 or 3 sentences, original. null when no description is asked for this moment."),
+});
+export const CaptionBatchWithDescriptionsAiSchema = z.object({ moments: z.array(MomentCaptionsWithDescriptionAiSchema) });
+
+/**
+ * Strict variant. The description is NOT clipped to the doc limit here (a paragraph cut mid-word
+ * would be saved as if it were complete): it is kept up to 3× the limit and the pre-check
+ * (checkDescription) rejects anything over 45 words / 400 units as too_long.
+ */
+export const MomentCaptionsWithDescriptionStrictSchema = z
+  .object({
+    momentId,
+    heading: storedText(AI_TEXT_LIMITS.heading),
+    pageCaptions: z.array(z.object({ pageIndex: int(0, 999), text: storedText(AI_TEXT_LIMITS.caption) })),
+    description: nullableStoredText(AI_TEXT_LIMITS.chapterDescription * 3).optional(),
+  })
+  .refine((c) => uniqueBy(c.pageCaptions, (p) => p.pageIndex), { message: "duplicate pageIndex", path: ["pageCaptions"] });
+
+export const CaptionBatchWithDescriptionsStrictSchema = z
+  .object({ moments: z.array(MomentCaptionsWithDescriptionStrictSchema).min(1).max(100) })
+  .refine((b) => uniqueBy(b.moments, (m) => m.momentId), { message: "duplicate momentId", path: ["moments"] });
+
+export type CaptionBatchWithDescriptionsAi = z.infer<typeof CaptionBatchWithDescriptionsAiSchema>;
+export type CaptionBatchWithDescriptions = z.infer<typeof CaptionBatchWithDescriptionsStrictSchema>;
+
+/** The AI-facing batch schema: the variant for styles with descriptions, else the base schema. */
+export function captionBatchAiSchemaFor(descriptions: boolean): z.ZodType<CaptionBatchAi> {
+  return descriptions ? (CaptionBatchWithDescriptionsAiSchema as z.ZodType<CaptionBatchAi>) : CaptionBatchAiSchema;
+}
+/** The strict batch schema for the same choice (the base one drops a stray `description`). */
+export function captionBatchStrictSchemaFor(descriptions: boolean): z.ZodType<CaptionBatchWithDescriptions, unknown> {
+  return descriptions ? CaptionBatchWithDescriptionsStrictSchema : (CaptionBatchStrictSchema as z.ZodType<CaptionBatchWithDescriptions, unknown>);
 }
 
 /** Whitespace word count (works for English and Arabic) — quotes must be ≤ 18 words (M4 check). */
@@ -394,6 +447,8 @@ type LooseCaptionBatch = {
     momentId: string;
     heading: string;
     pageCaptions: ReadonlyArray<{ pageIndex: number; text: string }>;
+    /** M30 variant only. */
+    description?: string | null;
   }>;
 };
 
@@ -411,12 +466,15 @@ export type CaptionLogOutput = {
     headingWords: number;
     pages: Array<{ pageIndex: number | null; words: number; issues?: string[] }>;
     headingIssues?: string[];
+    /** M30: word count of the chapter description (only when the answer carried one). */
+    descriptionWords?: number;
+    descriptionIssues?: string[];
   }>;
 };
 
 /**
  * Log-safe view of a Caption Writer output: ids, word counts, lang and (optionally) pre-check
- * issue codes keyed by captionKey(). Never includes caption text or headings.
+ * issue codes keyed by captionKey(). Never includes caption text, headings or descriptions.
  */
 export function captionLogOutput(
   batch: LooseCaptionBatch,
@@ -430,6 +488,7 @@ export function captionLogOutput(
   const moments = batch.moments.map((m) => {
     const momentId = safeMomentId(m.momentId);
     const headingIssues = codes(momentId && captionKey(momentId, "heading"));
+    const descriptionIssues = codes(momentId && captionKey(momentId, "desc"));
     return {
       momentId,
       headingWords: wordCount(typeof m.heading === "string" ? m.heading : ""),
@@ -443,6 +502,8 @@ export function captionLogOutput(
         };
       }),
       ...(headingIssues ? { headingIssues } : {}),
+      ...(typeof m.description === "string" && m.description.trim() ? { descriptionWords: wordCount(m.description) } : {}),
+      ...(descriptionIssues ? { descriptionIssues } : {}),
     };
   });
   return {

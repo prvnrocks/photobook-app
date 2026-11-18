@@ -73,6 +73,44 @@ invalid pick = rule fallback, never a retry). User choices are never overwritten
 and a stored doc with `backgroundSource: "user"` / a user page background is not AI-replaceable (replaceable.ts).
 Cost: one cache write per prefix on first use, then reads; maxTokens/effort unchanged.
 
+**Magazine + editorial (M30 T10, D-090).** 4 more Storyteller prefixes (12 in total); the 8 older texts, the base
+Caption Writer / Critic / Rewriter prompts and the base output schemas are frozen byte for byte by
+`tests/ai/prompt-freeze.test.ts` (no prompt-version bump: the existing texts did not change; version constants are not
+part of replay fixture names). Catalogue lines are the slot-by-slot kind and name the text areas — `chapter description`
+marks a *description layout* (`layoutShowsDescription`); only the auto cover is listed. One style rule each: open every
+moment with ONE description layout (exactly one per moment), magazine = mix hero / strip / panel pages + a spread for
+the strongest panorama, editorial = white space, diagonals as accents. Plan schema = the classic one (no backgrounds).
+Code (plan-to-doc): the Storyteller's in-design picks are kept, except that a second description layout in one moment
+is re-fitted without the panel; re-fits (other design, pruned pages) use `bestPageLayout({ description })` = `prefer`
+for a page that showed the description or the first page of a moment without one, `avoid` once the moment has one,
+`any` else. The replay synth opens every moment with a description page / spread.
+
+**Chapter descriptions (M30 T10).** `writesDescriptions(designStyle)` (data: the style has description layouts) turns on
+three *variants*, each a constant = base text + a `DESCRIPTIONS` section (own cached prefix), base requests untouched:
+- **Caption Writer** (`CAPTION_WRITER_DESCRIPTIONS_SYSTEM_PROMPT`, schema `CaptionBatchWithDescriptionsAiSchema` =
+  base + nullable `description` per moment): the description is written in the SAME batch that asks for the moment's
+  heading — never an extra call. Asked only for chapters that have a description page and no user description
+  (`captionBatches({ descriptions })` → `wantDescription` + ≤ 8 `descriptionPhotoIds`; the request line
+  `- m2:desc · chapter description wanted · photos: …` cites photos already on page lines by alias only). So an unshown
+  description is never requested, stored or paid for. `max_tokens` = base + 300 per description, ceiling 10k (base 8k).
+- **Pre-check** (`caption-check.ts`, key `captionKey(m, "desc")`): `checkDescription` = the caption rules with a
+  45-word / 400-unit cap (script, names, numbers, quotes, links); `checkBookDescriptions` adds `duplicate` for another
+  description, a caption of ≥ 4 words or the chapter title / heading of ≥ 3 words repeated verbatim. A failure goes
+  through the ONE repair call of its batch (same call as that batch's captions); still failing → dropped (no
+  description, the panel collapses — never a clipped or code-written text).
+- **Critic** (`criticDescriptionsSystemText()`): the PAGES line of the page that prints a description ends with
+  `· description [ai|user] "…"`. No new issue type or schema field: a description problem = an existing caption type +
+  `rewrite_caption` on that page with `detail` starting `description:`; `planRepair` maps it (or a caption-type issue on
+  a description page without an AI caption) to `m{n}:desc`. User descriptions are never targeted.
+- **Doc writer** (`applyCaptions({ descriptions })`): `chapters[i].description = { text, source: "ai" }` only when the
+  chapter has no `source: "user"` description AND a page of the saved doc still shows it (re-checked after `prunePlan`).
+  A doc with a user description is not AI-replaceable (`hasUserDescriptions`, like user captions) → a rebuild keeps it.
+  Rule / AI-off albums never get one. Run cursor: `descriptions` (momentId → text), stripped at finish like captions.
+- **Budget (D-035):** `captionCallEstimate(spec, descriptions)` / `criticCallEstimate(pages, descriptions)` add the
+  variant's larger `max_tokens` and input. Extra cost ≈ 2k input + 1–1.5k output tokens ≈ $0.03–0.04 for a 5-chapter
+  build (≈ $0.10–0.14 at 20 chapters); Caption Writer call count unchanged.
+- **Logs (D-027):** `descriptionWords`, `descriptionIssues`, counts and prompt versions only — never description text.
+
 Schemas `PhotoAnalysis`, `AlbumPlan`, `MomentCaptions` are defined in docs/PLAN.md. New ones:
 
 ```ts
@@ -101,6 +139,7 @@ UserMemoryUpdate = {
 no two near-identical photos on the same spread · every caption matches what's visible · no invented
 names/places/facts · captions not repetitive (no repeated opening words) · each chapter has 2+ pages ·
 captions are original (no well-known quote, lyric, film line, slogan or proverb → `caption_not_original`).
+Chapter descriptions (M30, magazine / editorial only): original text, 25–45 words (hard max 45) in 2–3 sentences, grounded in the chapter's photo notes + metadata, never invented names / places / facts, the book's tone, native Arabic when `caption_lang = 'ar'`, never the chapter title or a caption repeated verbatim.
 
 ### Rewriter (M5, on demand)
 
