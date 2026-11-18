@@ -40,6 +40,9 @@ export const STORY_LIMITS = {
   facts: 20,
   avoid: 10,
   tags: 8,
+  /** Task 6: memory facts one block may cite / fact ids kept with one storybook. */
+  factRefsPerBlock: 10,
+  factsPerBook: 120,
 } as const;
 
 // ---------------------------------------------------------------------------- primitives
@@ -320,10 +323,36 @@ export const NarrativeBlockSchema = z
     provenance: ProvenanceSchema,
     /** Photos this text is grounded in (the Critic checks the text against them). */
     groundedIn: z.array(uuid).max(STORY_LIMITS.photosPerPage * 2),
+    /**
+     * Memory facts this text cites (Task 6): ids of `Storybook.facts` (f1, f2 …). Absent on
+     * blocks written before Task 6 or by the user from scratch.
+     */
+    factRefs: z.array(localId("f")).max(STORY_LIMITS.factRefsPerBlock).optional(),
   })
   .strict();
 
 // ---------------------------------------------------------------------------- ⑤ Page Composition
+
+/**
+ * Where a memory fact came from (Task 6). All of them are the USER's words or choices:
+ * the book's occasion and title, a story answer, the free note, a person, a place, a fact.
+ */
+export const STORY_FACT_KINDS = ["occasion", "title", "answer", "note", "person", "place", "fact"] as const;
+
+/**
+ * One entry of the fact list a version was written from. Only a hash of the text is stored
+ * (the text itself lives in storybooks.context and can be edited or removed there): a block's
+ * `factRefs` can be traced to the fact that still hashes to the same value. Ids are stable
+ * across the versions of one book.
+ */
+export const StoryFactRefSchema = z
+  .object({
+    id: localId("f"),
+    kind: z.enum(STORY_FACT_KINDS),
+    /** First 16 hex chars of SHA-256(kind + "\n" + text). */
+    hash: z.string().regex(/^[0-9a-f]{16}$/),
+  })
+  .strict();
 
 export const STORY_PAGE_KINDS = ["cover", "chapter_opener", "photo", "mixed", "narrative", "closing"] as const;
 
@@ -380,6 +409,8 @@ export const StorybookSchema = z
     moments: z.array(MomentSchema).max(STORY_LIMITS.momentsPerBook),
     chapters: z.array(ChapterSchema).max(STORY_LIMITS.chaptersPerBook),
     pages: z.array(StoryPageSchema).max(STORY_LIMITS.pagesPerBook),
+    /** Task 6: the memory facts cited by `factRefs` of this version's blocks (hashes only). */
+    facts: z.array(StoryFactRefSchema).max(STORY_LIMITS.factsPerBook).optional(),
     createdAt: isoDateTime,
   })
   .strict()
@@ -390,6 +421,7 @@ export const StorybookSchema = z
     if (!unique(s.moments, (m) => m.id)) issue(["moments"], "duplicate moment id");
     if (!unique(s.chapters, (c) => c.id)) issue(["chapters"], "duplicate chapter id");
     if (!unique(s.pages, (p) => p.id)) issue(["pages"], "duplicate page id");
+    if (s.facts && !unique(s.facts, (f) => f.id)) issue(["facts"], "duplicate fact id");
 
     const momentIds = new Set(s.moments.map((m) => m.id));
     const chapterIds = new Set(s.chapters.map((c) => c.id));

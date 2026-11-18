@@ -13,6 +13,7 @@ import type {
   PhotoAnalysisSchema,
   PhotoVisionSchema,
   ProvenanceSchema,
+  StoryFactRefSchema,
   StoryGeneratorSchema,
   StoryPageSchema,
   StorybookSchema,
@@ -20,6 +21,7 @@ import type {
   NARRATIVE_KINDS,
   STORYBOOK_STATUSES,
   STORY_BEATS,
+  STORY_FACT_KINDS,
   STORY_PAGE_KINDS,
 } from "./schemas";
 
@@ -47,3 +49,6 @@ export type StoryPageKind = (typeof STORY_PAGE_KINDS)[number];
 export type StoryBeat = (typeof STORY_BEATS)[number];
 export type Storybook = z.infer<typeof StorybookSchema>;
 export type StorybookStatus = (typeof STORYBOOK_STATUSES)[number];
+/** One entry of a version's fact list (id, kind, hash of the user's text). */
+export type StoryFactRef = z.infer<typeof StoryFactRefSchema>;
+export type StoryFactKind = (typeof STORY_FACT_KINDS)[number];

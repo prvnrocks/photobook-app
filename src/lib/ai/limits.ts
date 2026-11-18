@@ -29,6 +29,15 @@ export const LIMITS = {
      * captions so far (run ai_status partial, error_code run_budget).
      */
     maxRunCostUsd: 1.5,
+    /**
+     * Task 6 (Balanced Storybook, src/lib/ai/story): per book, live calls only. A "write" is one
+     * writeStory() of the whole book, a "chapter regeneration" one writeStory({ chapterId }), a
+     * "block rewrite" one rewriteNarrativeBlock(). Plans are cheap (one call) but not free.
+     */
+    maxStoryPlans: 6,
+    maxStoryWrites: 2,
+    maxStoryChapterRegens: 10,
+    maxStoryBlockRewrites: 20,
   },
   paid: {
     maxUploadPhotos: 500,
@@ -41,6 +50,10 @@ export const LIMITS = {
     maxCaptionBatchesPerBuild: 10,
     maxCaptionRepairsPerBatch: 1,
     maxRunCostUsd: 6.0,
+    maxStoryPlans: 30,
+    maxStoryWrites: 10,
+    maxStoryChapterRegens: 50,
+    maxStoryBlockRewrites: 200,
   },
 } as const;
 
