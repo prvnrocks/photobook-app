@@ -323,3 +323,8 @@ Decision: New book form offers Modern (default for every occasion via DEFAULT_ST
 - Why: user asked for filters incl. black & white, sepia, soft, a vibrant/luxury feel, random defaults, changeable later (2026-11-18).
 - Alternatives rejected: filter per slot (would need every slot-copying op to carry it; the look should follow the photo); hue-rotate tints (recolour skin); making filters a v2 feature (every new classic book would stop being stored as v1).
 - Known limits: CSS clamps after each function, print once at the end (< 2 % apart on a colour grid, tested); the OG/WhatsApp card and photo-picker thumbnails show the unfiltered photo; existing books get no default looks.
+
+## D-090 — M30 magazine styles: scope + defaults (2026-11-18)
+- Decision: two new design styles `magazine` (bold travel magazine, ref mg-5) and `editorial` (minimal Swiss, ref mg-covers), both formats, available for every occasion; travel defaults to Magazine (other D-068 defaults unchanged). New OFL fonts (heavy display sans + geometric sans, with Arabic partners). Per-book accent colourway (AI-suggested from photo colours, user-editable, v2 doc feature). AI chapter descriptions (≤ 45 words, Caption Writer + Critic, source ai|user, editable, existing limits). Brush/painted style (ref mg-covers2) deferred — needs mask artwork. Restyle stays out (D-063). Contact sheet signed off by the user before deploy.
+- Why: user request 2026-11-18 ("more magazine styles… titles and descriptions AI generated… different font styles with colors… continue with recommended options").
+- Alternatives rejected: one style with themes only (too little variety); three styles incl. brush (artwork + print risk); descriptions per page (cost, clutter at A5).
