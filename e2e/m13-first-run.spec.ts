@@ -10,8 +10,9 @@
  * filechooser, excluded) → upload + finalize → automatic first build (replay, wizard step 6 with the
  * photo fan) → step 7 Review → "Generate album" → editor → Share → share screen → Send on WhatsApp
  * (wa.me stubbed). M20 (D-072): steps 1–7 are one document (/books/new?book=<id>&step=N). Asserts:
- *   - M20 re-baseline (D-072, amends M19's 4): ≤ 5 app taps counted from the step-4 Continue
- *     (Continue, Choose photos, Generate album, Share, WhatsApp) and still ≤ 4 after the photos are chosen;
+ *   - Task 5 re-baseline (was ≤ 5 / ≤ 4 after the photos, M20 D-072): ≤ 8 app taps counted from the
+ *     step-2 Continue that creates the book (Continue, Choose photos, Continue, Skip for now, Create
+ *     my book, Generate album, Share, WhatsApp) and ≤ 6 after the photos are chosen;
  *   - logs time from photos chosen to the first preview (step-6 photo fan with a loaded photo, or
  *     the first editor [data-page], each reported) and to the WhatsApp intent; asserts first
  *     preview < 60 s (M13 Done when);
@@ -600,7 +601,7 @@ test.afterAll(async () => {
   expect(runsLeft).toBe(0);
 });
 
-test("first run: landing → login → wizard → choose photos → auto build → review → editor → Share → WhatsApp (≤ 5 taps from step-4 Continue)", async ({ browser }) => {
+test("first run: landing → login → wizard → choose photos → story → design → build → review → editor → Share → WhatsApp (≤ 8 taps from the step-2 Continue)", async ({ browser }) => {
   test.setTimeout(900_000);
   const s = await newSession(browser, { analytics: ANALYTICS });
   const page = s.page;
@@ -650,8 +651,11 @@ test("first run: landing → login → wizard → choose photos → auto build �
   // Screenshot numbers: 3–4 the form, 7–8 the upload, then story / design before the build (9).
   const stepShot = { 1: 3, 2: 4, 4: 8.1, 5: 8.2 } as const;
   await wizardToUpload(s, {
+    // The shortest real walk: the preselected (recommended) shape is kept — no tap on the Design step
+    // but "Create my book".
+    format: "recommended",
     press: async (t, label) => {
-      if (/create/.test(label)) counting = true; // re-baseline: count from the step-2 Continue (it creates the book)
+      if (/create\)/.test(label)) counting = true; // re-baseline: count from the step-2 Continue (it creates the book)
       await tap(t, label);
     },
     onStep: async (n) => {
@@ -668,8 +672,8 @@ test("first run: landing → login → wizard → choose photos → auto build �
   const since = (t: number | undefined) => (t === undefined ? null : t - photosChosen);
   console.log(`[m13-run] photos chosen`);
 
-  // Upload progress → Continue → Story (Skip) → Design (shape + Create my book): four more taps
-  // since Task 5, all inside waitForSortingOrReview below.
+  // Upload progress → Continue → Story (Skip for now) → Design (Create my book, the recommended
+  // shape kept): three more taps since Task 5, all inside waitForSortingOrReview below.
   await expect(page.getByTestId("upload-pick")).toHaveCount(0);
   await expect(page.getByTestId("upload-progress")).toBeVisible({ timeout: 60_000 });
   await screen(8, "upload");
@@ -744,10 +748,13 @@ test("first run: landing → login → wizard → choose photos → auto build �
     console.log(`[m13-run] ai_build_done props=${JSON.stringify(Object.keys(build?.properties ?? {}).filter((k) => !k.startsWith("$")))} published first=${String(published?.properties.first)}`);
   }
 
-  // M20 re-baseline (D-072): ≤ 5 app taps from the step-4 Continue; still ≤ 4 after the photos were chosen.
+  // Task 5 re-baseline (was M20 / D-072: ≤ 5 from the creating Continue, ≤ 4 after the photos): the
+  // Photos, Story and Design steps each need one tap now → 8 app taps from the step-2 Continue that
+  // creates the book (Continue, Choose photos, Continue, Skip for now, Create my book, Generate album,
+  // Share, WhatsApp) and 6 after the photos were chosen. Exact on purpose: an extra tap must show up.
   const tapsAfterPhotos = taps.filter((t) => t.at > photosChosen);
-  expect(taps.length, taps.map((t) => t.label).join(" | ")).toBeLessThanOrEqual(5);
-  expect(tapsAfterPhotos.length, tapsAfterPhotos.map((t) => t.label).join(" | ")).toBeLessThanOrEqual(4);
+  expect(taps.length, taps.map((t) => t.label).join(" | ")).toBeLessThanOrEqual(8);
+  expect(tapsAfterPhotos.length, tapsAfterPhotos.map((t) => t.label).join(" | ")).toBeLessThanOrEqual(6);
 
   const firstPreview = Math.min(
     ...[s.firstPage["build-fan"], s.firstPage["review-cover"], s.firstPage.editor].filter((v): v is number => v !== undefined),
@@ -756,7 +763,7 @@ test("first run: landing → login → wizard → choose photos → auto build �
     viewport: "375x812",
     photosSelected: photoPaths.length,
     preTaps,
-    appTapsFromStep4Continue: taps.length,
+    appTapsFromCreateContinue: taps.length,
     appTapsAfterPhotos: tapsAfterPhotos.length,
     taps: taps.map((t, i) => `${i + 1}. ${t.label}`),
     routes: [...new Set(screens.map((x) => x.route)), "wa.me (WhatsApp)"],

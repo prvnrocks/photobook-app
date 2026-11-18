@@ -50,10 +50,11 @@ export type WizardOptions = {
   title?: string;
   occasion?: WizardOccasion;
   /**
-   * Clicked on step 5 (Design). Default A5_PORTRAIT — always clicked, so the shape never depends on
-   * what the recommendation makes of a spec's fixture photos.
+   * Clicked on step 5 (Design). Default A5_PORTRAIT — clicked, so the shape never depends on what
+   * the recommendation makes of a spec's fixture photos. "recommended" = no tap: keep the shape the
+   * step preselected (the shortest real walk; tap-counting specs).
    */
-  format?: WizardFormat;
+  format?: WizardFormat | "recommended";
   /**
    * Click this style on step 5; undefined = keep what is selected (the recommendation = the
    * occasion's default). M30 (D-090): travel now defaults to Magazine (was Geometric) — a spec that is
@@ -233,8 +234,12 @@ export async function chooseDesign(page: Page, opts: WizardOptions = {}): Promis
   await expectWizardStep(page, 5, 30_000);
   await opts.onStep?.(5);
   const format = opts.format ?? "A5_PORTRAIT";
-  await pressOn(opts, page.getByTestId(`format-${format}`), `Shape: ${format}`);
-  await expect(cardRadio(page, `format-${format}`)).toBeChecked();
+  if (format === "recommended") {
+    await expect(page.locator('input[name="wizard-format"]:checked')).toHaveCount(1, { timeout: 30_000 });
+  } else {
+    await pressOn(opts, page.getByTestId(`format-${format}`), `Shape: ${format}`);
+    await expect(cardRadio(page, `format-${format}`)).toBeChecked();
+  }
   if (opts.style) {
     await pressOn(opts, page.getByTestId(`style-${opts.style}`), `Style: ${opts.style}`);
     await expect(cardRadio(page, `style-${opts.style}`)).toBeChecked();
