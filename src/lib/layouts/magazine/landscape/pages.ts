@@ -139,7 +139,7 @@ export const magazineLandscapeTwoCircle: Layout = {
   prefers: ["landscape", "any"],
   slots: [
     rect(0, 0, W, 104),
-    { ...circle(164, 102, 30), frame: { kind: "border", mm: 2, hex: "#FFFFFF" }, z: 1 },
+    { ...circle(164, 102, 30), z: 1 },
   ],
   caption: CIRCLE_CAPTION,
   blocks: [{ box: rect(14, 112, 15.2, 142), fill: "accent", layer: "under" }],
