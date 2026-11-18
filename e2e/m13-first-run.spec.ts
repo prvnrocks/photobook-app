@@ -49,8 +49,6 @@ import {
   cardRadio,
   createBookViaWizard,
   waitForSortingOrReview,
-  walkWizardToStyle,
-  WIZARD_STEP5_URL,
   wizardStepUrl,
   type WizardOptions,
 } from "./helpers/create-book";
@@ -482,7 +480,7 @@ async function makeFixtures(p: Page, dir: string): Promise<string[]> {
 
 // ---- shared flow steps ---------------------------------------------------------------------------
 
-/** M19: walk the creation wizard (steps 1–4) → step 5 upload. Records the book id. */
+/** Walk the creation wizard (steps 1–2; Task 5 order) → step 3 Photos. Records the book id. Story + Design follow the upload. */
 async function wizardToUpload(s: Session, opts: WizardOptions = {}): Promise<void> {
   // No style click on purpose (tap budget): the travel default is Magazine since M30 (D-090, was
   // Geometric) — the timed first run now builds a magazine book and needs migration 2100 on the DB.
@@ -646,28 +644,32 @@ test("first run: landing → login → wizard → choose photos → auto build �
   await signIn(s, "/books/new");
   await expect(page).toHaveURL(/\/books\/new/, { timeout: 30_000 });
 
-  // 3. Wizard steps 1–4: title left blank, Travel, Portrait, the occasion's default style.
-  const stepNames = { 1: "wizard-title", 2: "wizard-occasion", 3: "wizard-shape", 4: "wizard-style" } as const;
+  // 3. Wizard steps 1–2: title left blank, Travel (the book is created on step-2 Continue). After the
+  // upload: Story (skipped) and Design (portrait, the occasion's default style) — Task 5 order.
+  const stepNames = { 1: "wizard-title", 2: "wizard-occasion", 4: "wizard-story", 5: "wizard-design" } as const;
+  // Screenshot numbers: 3–4 the form, 7–8 the upload, then story / design before the build (9).
+  const stepShot = { 1: 3, 2: 4, 4: 8.1, 5: 8.2 } as const;
   await wizardToUpload(s, {
     press: async (t, label) => {
-      if (/create/.test(label)) counting = true; // M19/M20 re-baseline: count from the step-4 Continue
+      if (/create/.test(label)) counting = true; // re-baseline: count from the step-2 Continue (it creates the book)
       await tap(t, label);
     },
     onStep: async (n) => {
-      await screen(2 + n, stepNames[n]);
+      await screen(stepShot[n], stepNames[n]);
       await audit(page, stepNames[n]);
     },
   });
 
-  // 4. Step 5: one big "Choose photos" (counted).
-  await expect(page.getByTestId("wizard-step-label")).toHaveText("Step 5 of 7");
+  // 4. Step 3: one big "Choose photos" (counted).
+  await expect(page.getByTestId("wizard-step-label")).toHaveText("Step 3 of 7");
   await screen(7, "upload-empty");
   await audit(page, "upload-empty");
   const photosChosen = await choosePhotos(s, photoPaths, tap);
   const since = (t: number | undefined) => (t === undefined ? null : t - photosChosen);
   console.log(`[m13-run] photos chosen`);
 
-  // Upload progress → auto build (no further taps).
+  // Upload progress → Continue → Story (Skip) → Design (shape + Create my book): four more taps
+  // since Task 5, all inside waitForSortingOrReview below.
   await expect(page.getByTestId("upload-pick")).toHaveCount(0);
   await expect(page.getByTestId("upload-progress")).toBeVisible({ timeout: 60_000 });
   await screen(8, "upload");
@@ -798,15 +800,19 @@ test("wizard choices variant: Wedding + Classic picked in the wizard → row + b
   const page = s.page;
   await signIn(s, "/books/new");
   await expect(page).toHaveURL(/\/books\/new/, { timeout: 30_000 });
-  // Wedding → the style follows it (Modern) until picked; then pick Classic on step 4.
-  await walkWizardToStyle(page, { occasion: "wedding", format: "A5_PORTRAIT", expectStyle: "modern", goto: false, press: (t) => t.tap() });
-  await page.getByTestId("style-classic").tap();
-  await expect(cardRadio(page, "style-classic")).toBeChecked();
-  await shot(page, "wizard-style-classic");
-  await page.getByTestId("create-book").tap();
-  await page.waitForURL(WIZARD_STEP5_URL, { timeout: 30_000 });
-  s.bookId = new URL(page.url()).searchParams.get("book") ?? "";
-  users.find((u) => u.uid === s.uid)?.bookIds.add(s.bookId);
+  // Wedding → on the Design step (5, after the upload) the style follows it (Modern) until picked;
+  // then Classic is picked there (waitForSortingOrReview below walks Story + Design).
+  await wizardToUpload(s, {
+    occasion: "wedding",
+    style: "classic",
+    press: (t) => t.tap(),
+    onStep: async (n) => {
+      if (n === 5) await expect(cardRadio(page, "style-modern")).toBeChecked();
+    },
+    beforeContinue: async (n) => {
+      if (n === 5) await shot(page, "wizard-style-classic");
+    },
+  });
   await choosePhotos(s, photoPaths.slice(0, VARIANT_PHOTOS));
 
   await waitForSortingOrReview(page, s.bookId, 300_000);

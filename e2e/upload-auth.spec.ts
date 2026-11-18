@@ -33,7 +33,7 @@ import { expect, test, type BrowserContext, type Page, type Route } from "@playw
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { parseBookDoc, validateBookDoc } from "../src/lib/book/schema";
 import { mapUploadDbError } from "../src/lib/upload/errors";
-import { cardRadio, createBookViaWizard, expectWizardStep, walkWizardToStyle, wizardContinue, WIZARD_STEP5_URL } from "./helpers/create-book";
+import { answerStory, cardRadio, continueFromPhotos, createBookViaWizard, expectWizardStep } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live signed-in upload flow");
@@ -123,7 +123,7 @@ async function bookDoc(bookId: string): Promise<unknown> {
   return data.doc;
 }
 
-/** M19: wizard (Travel + Modern) → step 5 → pick photos; the upload starts (picker hides). */
+/** Wizard (Travel; Task 5 order: the book is created on step 2) → step 3 Photos → pick photos; the upload starts (picker hides). */
 async function startBookWithPhotos(picked: FileSpec[]): Promise<string> {
   const id = await createBookViaUi();
   await page.getByTestId("upload-input").setInputFiles(picked);
@@ -132,7 +132,9 @@ async function startBookWithPhotos(picked: FileSpec[]): Promise<string> {
 }
 
 async function createBookViaUi(): Promise<string> {
-  // M19 wizard. D-068 / D-090: travel defaults to Magazine (M30; Geometric before); this spec covers Modern.
+  // Task 5: the book is created on step-2 Continue with a PROVISIONAL design (portrait + the
+  // occasion's style: travel → Magazine, D-090 — needs migration 2100). Shape / style are chosen on
+  // step 5, after the photos; this spec stops at the Photos step unless a test walks on.
   const id = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", style: "modern" });
   await expect(page.getByTestId("upload-pick")).toBeVisible();
   return id;
@@ -296,22 +298,25 @@ test.afterAll(async () => {
   expect(error).toBeNull();
 });
 
-test("wizard at 375px: steps 1–4 → step 5 upload, auto build asked; rows, storage, places, fallback album", async () => {
+test("wizard at 375px: steps 1–2 → step 3 upload, NO build asked on the Photos step; rows, storage, places, fallback album", async () => {
   book1 = await startBookWithPhotos(files);
-  // Step 5 in wizard chrome; untitled → neutral header ("Your book", no "Untitled book").
-  await expect(page.getByTestId("wizard-step-label")).toHaveText("Step 5 of 7");
+  // Step 3 (Photos) in wizard chrome; untitled → neutral header ("Your book", no "Untitled book").
+  await expect(page.getByTestId("wizard-step-label")).toHaveText("Step 3 of 7");
   await expect(page.getByTestId("upload-book-title")).toHaveText("Your book");
-  // Back to steps 1–4 is offered only before any pick.
+  // Back to steps 1–2 is offered only before any pick.
   await expect(page.getByTestId("upload-wizard-back")).toHaveCount(0);
   const setupRow = (await admin.from("books").select("occasion, tone, design_style, title").eq("id", book1).single()).data;
-  expect(setupRow).toEqual({ occasion: "travel", tone: "fun", design_style: "modern", title: null });
+  // The provisional design: the occasion's default style (the user's choice comes on step 5).
+  expect(setupRow).toEqual({ occasion: "travel", tone: "fun", design_style: "magazine", title: null });
 
   await waitForSummary();
-  // The first build was asked for automatically (the test answered 429) → fallback with the limit copy.
-  await expect(page.getByTestId("build-album")).toHaveText("Make my book now", { timeout: 30_000 });
-  await expect(page.getByTestId("upload-auto-fallback")).toContainText("free AI builds");
-  expect(autoRequests).toEqual([{ bookId: book1, auto: true }]);
-  // No run was created → still the wizard step-5 chrome on a reload (setup editable).
+  // Task 5: the Photos step never asks for the build — it offers Continue (to the Story step). The
+  // build is asked for on the Design step's Continue (covered by the Landscape + Classic test below).
+  await expect(page.getByTestId("upload-wizard-continue")).toHaveText("Continue", { timeout: 30_000 });
+  await expect(page.getByTestId("build-album")).toHaveCount(0);
+  await expect(page.getByTestId("upload-auto-fallback")).toHaveCount(0);
+  expect(autoRequests).toEqual([]);
+  // No run was created → still the wizard step-3 chrome on a reload (setup editable).
   await page.screenshot({ path: test.info().outputPath("m13-upload-setup-375.png"), fullPage: true });
 
   await expect(page.getByTestId("summary-added")).toHaveText(`${ACCEPTED} photos added`);
@@ -704,37 +709,56 @@ test("0500 column guards live: server-only columns reset, ready insert refused",
   expect(n.count).toBe(ACCEPTED);
 });
 
-// M10b A12 (D-063 / D-065): shape + style chosen on the New book form are stored on the row.
-// Needs migration 1900 (books.format / books.design_style) on the project — probed read-only;
+// M10b A12 (D-063 / D-065) → Task 5: shape + style are chosen on the wizard's Design step (5), after the
+// photos, and stored on the row when that step is left; until then the book carries a provisional
+// design. Needs migration 1900 (books.format / books.design_style) on the project — probed read-only;
 // skipped with a note when it isn't applied (never applied from here).
-test("creation wizard at 375px: Landscape + Classic → row format A5_LANDSCAPE / design_style classic", async () => {
+test("creation wizard at 375px: Landscape + Classic on the Design step → row format A5_LANDSCAPE / design_style classic; the build is asked for there", async () => {
   const probe = await admin.from("books").select("format, design_style").limit(1);
   test.skip(
     !!probe.error,
     `migration 1900 not applied on this project (${probe.error?.code ?? "?"}) — books.format/design_style missing`,
   );
+  const row = async (id: string) => {
+    const { data, error } = await admin.from("books").select("format, design_style, occasion").eq("id", id).single();
+    if (error) throw new Error(`books select failed (${error.code})`);
+    return data;
+  };
 
-  // M19 wizard: family → Scrapbook by default on step 4; pick Landscape (step 3) + Classic (step 4).
-  await walkWizardToStyle(page, { occasion: "family", format: "A5_LANDSCAPE", expectStyle: "scrapbook" });
+  // Steps 1–2 create the book: family → provisional portrait + Scrapbook (the occasion's default).
+  const id = await createBookViaWizard(page, { occasion: "family" });
+  expect(await row(id)).toEqual({ format: "A5_PORTRAIT", design_style: "scrapbook", occasion: "family" });
+  autoRequests.length = 0;
+  await page.getByTestId("upload-input").setInputFiles(files);
+  await continueFromPhotos(page);
+  expect(autoRequests).toEqual([]); // nothing asked on the Photos step
+  await answerStory(page); // "Skip for now"
+
+  // Step 5: Scrapbook is the recommended, preselected style; pick Landscape + Classic by hand.
+  await expectWizardStep(page, 5);
+  await expect(cardRadio(page, "style-scrapbook")).toBeChecked();
+  await expect(page.getByTestId("style-scrapbook").getByTestId("choice-badge")).toHaveText("Recommended");
   const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   expect(noOverflow).toBe(true);
+  await page.getByTestId("format-A5_LANDSCAPE").click();
+  await expect(cardRadio(page, "format-A5_LANDSCAPE")).toBeChecked();
   await page.getByTestId("style-classic").click();
   await expect(cardRadio(page, "style-classic")).toBeChecked();
-  // Back to step 2 and pick another occasion: the manual style is kept, so is the shape.
+  // Back to the Story step and forward again: the manual shape + style are kept (never replaced by
+  // the recommendation). Nothing is stored yet.
   await page.getByTestId("wizard-back").click();
-  await expectWizardStep(page, 3);
+  await expectWizardStep(page, 4);
+  await page.getByTestId("story-skip").click();
+  await expectWizardStep(page, 5);
   await expect(cardRadio(page, "format-A5_LANDSCAPE")).toBeChecked();
-  await page.getByTestId("wizard-back").click();
-  await expectWizardStep(page, 2);
-  await page.getByTestId("occasion-wedding").click();
-  await wizardContinue(page, 2);
-  await wizardContinue(page, 3);
   await expect(cardRadio(page, "style-classic")).toBeChecked();
+  expect(await row(id)).toEqual({ format: "A5_PORTRAIT", design_style: "scrapbook", occasion: "family" });
 
-  await page.getByTestId("create-book").click();
-  await page.waitForURL(WIZARD_STEP5_URL, { timeout: 30_000 });
-  const id = new URL(page.url()).searchParams.get("book") ?? "";
-  const { data, error } = await admin.from("books").select("format, design_style, occasion").eq("id", id).single();
-  if (error) throw new Error(`books select failed (${error.code})`);
-  expect(data).toEqual({ format: "A5_LANDSCAPE", design_style: "classic", occasion: "wedding" });
+  // Continue saves the design, then asks for the first build (this spec answers 429 → the reason
+  // shows on the step and nothing is locked).
+  await page.getByTestId("wizard-design-continue").click();
+  await expect(page.getByTestId("design-build-error")).toContainText("free AI builds", { timeout: 30_000 });
+  expect(autoRequests).toEqual([{ bookId: id, auto: true }]);
+  await expectWizardStep(page, 5);
+  expect(await row(id)).toEqual({ format: "A5_LANDSCAPE", design_style: "classic", occasion: "family" });
 });

@@ -273,16 +273,13 @@ async function createViaForm(format: "A5_LANDSCAPE" | "A5_PORTRAIT", style: "mod
 
 async function uploadAndBuild(id: string, files: { name: string; mimeType: string; buffer: Buffer }[]) {
   await page.getByTestId("upload-input").setInputFiles(files);
-  if (files.length >= 5) {
-    // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).
-    // M20: step 6 in place on /books/new?book=<id>&step=6.
-    await waitForSortingOrReview(page, id, 180_000);
-  } else {
-    // Fewer than 5 photos: no automatic build; the fallback "Make my book now" starts it.
-    await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 180_000 });
-    await page.getByTestId("build-album").click();
-    await page.waitForURL(wizardStepUrl(id), { timeout: 60_000 });
-  }
+  // Task 5 (new wizard order): the Photos step only uploads; waitForSortingOrReview walks Story
+  // (skipped) and Design (the shape + style the book was created with) and presses "Create my
+  // book" — the build starts there, for any number of photos (fewer than 5: step 6 starts it the
+  // plain way; no "Make my book now" button any more).
+  // M20: step 6 in place on /books/new?book=<id>&step=6.
+  await waitForSortingOrReview(page, id, 180_000);
+  await page.waitForURL(wizardStepUrl(id), { timeout: 60_000 });
   // M20 (D-072): step 7 (Review) → "Generate album" → the editor.
   await finishWizardToEditor(page, id, { timeout: 420_000 });
 }

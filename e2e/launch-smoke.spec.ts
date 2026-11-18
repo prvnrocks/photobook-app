@@ -42,7 +42,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { createBookViaWizard, generateAlbum, waitForReview, wizardStepUrl } from "./helpers/create-book";
+import { createBookViaWizard, finishBookSetup, generateAlbum, waitForReview, wizardStepUrl } from "./helpers/create-book";
 import { buildEvent, postEvent, signPayload } from "../scripts/stripe-signed-event.mjs";
 
 const ENABLED = process.env.E2E_AUTH === "1";
@@ -354,8 +354,10 @@ test("a. login → wizard → upload (step 5) → automatic AI build (replay, st
   bookId = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", style: "modern", goto: false });
   await page.getByTestId("upload-input").setInputFiles(await makeSynthetic(page, 6));
   await noHorizontalOverflow(page);
-  // No Build tap: once uploads + finalize settle the first build starts by itself.
-  // M20: step 6 (sorting) renders in place on /books/new?book=<id>&step=6.
+  // Task 5 (new wizard order): Photos → Continue → Story (skipped) → Design (Modern, portrait) →
+  // "Create my book" asks for the first build.
+  // M20: step 6 (the build) renders in place on /books/new?book=<id>&step=6.
+  await finishBookSetup(page);
   await page.waitForURL(wizardStepUrl(bookId, "6"), { timeout: 240_000 });
   // M19 T7 / M20 T7: the first build is wizard step 6 — a fan of the draft's photos + a 3-row checklist.
   await expect(page.getByTestId("build-photo-fan")).toBeVisible({ timeout: 30_000 });

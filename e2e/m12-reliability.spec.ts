@@ -33,7 +33,7 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { expect, test, type BrowserContext, type Page, type Route } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { createBookViaWizard, finishWizardToEditor, wizardStepUrl } from "./helpers/create-book";
+import { createBookViaWizard, finishBookSetup, finishWizardToEditor, wizardStepUrl } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live M12 reliability flow");
@@ -313,8 +313,10 @@ test("a. a held storage upload hits its budget → queue retries → upload, fin
   expect((row.doc?.pages ?? []).length).toBeGreaterThan(0); // finalize wrote the fallback album
 
   // Build continues (replay) to the editor (M13 T7).
-  await page.getByTestId("build-album").click();
-  // M20: "Make my book now" → step 6 in place (/books/new?book=<id>&step=6) → step 7 → Generate → editor.
+  // Task 5 (new wizard order): Photos → Continue → Story (skipped) → Design → "Create my book" (4
+  // photos: below the automatic-build threshold, so step 6 starts the build the plain way).
+  await finishBookSetup(page);
+  // Step 6 in place (/books/new?book=<id>&step=6) → step 7 → Generate → editor.
   await page.waitForURL(wizardStepUrl(book1), { timeout: 30_000 });
   await finishWizardToEditor(page, book1, { timeout: 240_000 });
   const runs = await runsOf(book1);
@@ -384,7 +386,8 @@ test("c. advance answers 503 once → build shows 'Taking longer than usual — 
     return route.continue();
   });
 
-  await page.getByTestId("build-album").click();
+  // Task 5: the build is asked for on the Design step's "Create my book" (after Story, skipped).
+  await finishBookSetup(page);
   await page.waitForURL(wizardStepUrl(book2, "6"), { timeout: 30_000 });
   const reconnecting = page.getByTestId("build-reconnecting");
   await expect(reconnecting).toBeVisible({ timeout: 60_000 });

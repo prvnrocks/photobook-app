@@ -231,11 +231,11 @@ test.describe("analytics (live sign-up)", () => {
     await expect.poll(() => cap.events.find((e) => e.event === "signed_up")?.properties.method, { timeout: 20_000 }).toBe("email");
     await expect(page).not.toHaveURL(/_ev=/);
 
-    // M19/M20: the creation wizard (title → occasion → shape → style → create); M20 stays on
-    // /books/new (?book=<id>&step=5) — the book id lives in the query, which analytics never sees.
+    // The creation wizard (Task 5 order: title → occasion → create); it stays on
+    // /books/new (?book=<id>&step=3, Photos) — the book id lives in the query, which analytics never sees.
     // Style named on purpose: travel defaults to Magazine since M30 (D-090); this spec is about analytics.
     const bookId = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", style: "geometric", goto: false });
-    await expect(page).toHaveURL(new RegExp(`/books/new\\?book=${bookId}&step=5$`), { timeout: 30_000 });
+    await expect(page).toHaveURL(new RegExp(`/books/new\\?book=${bookId}&step=3$`), { timeout: 30_000 });
     await expect.poll(() => cap.events.some((e) => e.event === "book_created"), { timeout: 20_000 }).toBe(true);
     await expect(page).not.toHaveURL(/_ev=/);
     await expect

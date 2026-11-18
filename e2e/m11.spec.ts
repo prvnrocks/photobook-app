@@ -37,7 +37,7 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { expect, test, type Browser, type BrowserContext, type Page, type TestInfo } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { createBookViaWizard, generateAlbum, waitForReview, wizardStepUrl } from "./helpers/create-book";
+import { createBookViaWizard, finishBookSetup, generateAlbum, waitForReview, wizardStepUrl } from "./helpers/create-book";
 
 const VIEWPORT = { width: 375, height: 812 };
 const TAB_STOPS = 6;
@@ -502,10 +502,11 @@ test.describe("M11 signed-in flow at 375 px (live)", () => {
     // M19 wizard; D-068: travel defaults to Geometric — this spec covers Modern.
     bookId = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", style: "modern" });
     await page.getByTestId("upload-input").setInputFiles(await makeSynthetic(page, 6));
-    // M20 (D-072): the wizard keeps the upload stage up through finalize (settled: "All photos are
-    // in") — no summary / "starting" card any more. M20b: after the success burst it moves on to step 6
-    // while the auto start is still held (the upload screen never shows sorting).
-    await expect(page.getByTestId("upload-settled")).toBeVisible({ timeout: 180_000 });
+    // Task 5 (new wizard order): the Photos step only uploads, then offers Continue; Story (skipped)
+    // and Design (Modern, portrait) follow, and "Create my book" asks for the build. M20b: the wizard
+    // moves on to step 6 while that request is still held.
+    await expect(page.getByTestId("upload-wizard-continue")).toBeVisible({ timeout: 180_000 });
+    await finishBookSetup(page);
     await page.waitForURL(wizardStepUrl(bookId, "6"), { timeout: 60_000 });
     await expect(page.getByTestId("wizard-step-sorting")).toBeVisible();
     await audit(page, "sorting (auto start held)", { shot: "upload-summary" });

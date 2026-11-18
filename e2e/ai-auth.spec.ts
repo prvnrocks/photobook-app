@@ -44,7 +44,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { createBookViaWizard, generateAlbum, waitForReview, walkWizardToStyle, WIZARD_STEP5_URL } from "./helpers/create-book";
+import {
+  createBookViaWizard,
+  finishBookSetup,
+  generateAlbum,
+  rememberWizardOptions,
+  waitForReview,
+  walkWizardToOccasion,
+  WIZARD_PHOTOS_URL,
+} from "./helpers/create-book";
 import { PLANTED_PRECHECK_TEXT, isPlantedMismatch } from "../src/lib/ai/agents/caption-writer-replay";
 import { buildCaptionContext, checkCaption } from "../src/lib/ai/caption-check";
 import { hasCaptionArea } from "../src/lib/ai/captions";
@@ -489,11 +497,15 @@ function armAutoGate() {
 async function uploadAndWaitSummary(files: FileSpec[], expected: number) {
   armAutoGate();
   await page.getByTestId("upload-input").setInputFiles(files);
-  // M20 (D-072): in the wizard the upload stage stays up through finalize — settled ("All photos are
-  // in"), no summary flash. M20b: after the success burst the wizard moves on to step 6 even while
-  // the auto start is held (the upload screen never shows sorting); step 6 follows the held answer.
-  await expect(page.getByTestId("upload-settled")).toBeVisible({ timeout: 180_000 });
+  // Task 5 (new wizard order): the Photos step (3) only uploads — when the upload settled it shows
+  // the summary with "Continue" and asks for NO build. Story (skipped) and Design follow; the build
+  // is asked for on the Design step's Continue (finishBookSetup, with the options the book was
+  // created with). M20b: the wizard moves on to step 6 even while that request is held; step 6
+  // follows the held answer.
+  await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 180_000 });
   await expect(page.getByTestId("finalize-error")).toHaveCount(0);
+  await expect(page.getByTestId("build-album")).toHaveCount(0);
+  await finishBookSetup(page);
   await page.waitForURL(/\/books\/new\?book=[0-9a-f-]{36}&step=6$/, { timeout: 60_000 });
   await expect(page.getByTestId("wizard-step-sorting")).toBeVisible();
   const bookId = new URL(page.url()).searchParams.get("book") ?? "";
@@ -1279,13 +1291,15 @@ test("n. memory → new book gets the remembered tone; book 2 build gets memory;
   // M19: the wizard has no tone UI / memory hint any more — the remembered tone is applied by the
   // server on create (asserted on the stored row below, even though travel's default is "fun").
   await page.goto(`${baseURL}/books/new`);
-  await walkWizardToStyle(page, { occasion: "travel", format: "A5_PORTRAIT", style: "modern", goto: false });
+  await walkWizardToOccasion(page, { occasion: "travel", goto: false });
   await expect(page.getByTestId("new-book-from-memory")).toHaveCount(0);
   await expect(page.locator('[data-testid^="tone-"]')).toHaveCount(0);
   const sw = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(sw).toBeLessThanOrEqual(VIEWPORT.width);
   await page.getByTestId("create-book").click();
-  await page.waitForURL(WIZARD_STEP5_URL, { timeout: 30_000 });
+  await page.waitForURL(WIZARD_PHOTOS_URL, { timeout: 30_000 });
+  // Shape + style are chosen on step 5 (Design), after the upload (uploadAndWaitSummary → finishBookSetup).
+  rememberWizardOptions(page, { format: "A5_PORTRAIT", style: "modern" });
   const bookM = new URL(page.url()).searchParams.get("book") ?? "";
   const stored = await admin.from("books").select("tone, caption_lang").eq("id", bookM).single();
   expect(stored.data).toEqual({ tone: "nostalgic", caption_lang: "en" });

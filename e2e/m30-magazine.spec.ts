@@ -905,14 +905,14 @@ test.describe("M30 magazine book end to end (live, E2E_AUTH=1)", () => {
       expectStyle: "magazine",
       goto: false,
       beforeContinue: async (step) => {
-        if (step !== 4) return;
+        if (step !== 5) return; // the Design step (after the upload — Task 5 order)
         for (const s of WIZARD_STYLES) await expect(page.getByTestId(`style-${s}`)).toBeVisible();
         await expect(cardRadio(page, "style-magazine")).toBeChecked();
         expect(await overflow(page)).toBeLessThanOrEqual(0);
       },
     });
     expect(await row()).toMatchObject({ design_style: "magazine", occasion: "travel", format: "A5_PORTRAIT" });
-    const wizard = await page.context().request.get(`/api/books/${bookId}/wizard?step=5`);
+    const wizard = await page.context().request.get(`/api/books/${bookId}/wizard?step=3`);
     expect(wizard.status()).toBe(200);
     const aiOn = ((await wizard.json()) as { aiOn?: boolean }).aiOn === true;
     console.log(`[a] server aiOn=${aiOn}`);
