@@ -12,7 +12,10 @@ export const V2_CAPTION_FONTS = [
   "Lalezar",
   "GreatVibes",
   "ArefRuqaa",
-] as const; // same ids as BOOK_FONTS_M10B in fonts.ts (short ids, like "Playfair"); a test keeps them equal
+  // M30 (magazine / editorial faces)
+  "ArchivoBlack",
+  "Poppins",
+] as const; // same ids as BOOK_ONLY_FONTS (M10b + M30) in fonts.ts (short ids, like "Playfair"); a test keeps them equal
 
 export type V2CaptionFont = (typeof V2_CAPTION_FONTS)[number];
 

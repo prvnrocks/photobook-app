@@ -6,6 +6,8 @@ import {
   BOOK_FONT_NAMES,
   BOOK_FONTS,
   BOOK_FONTS_M10B,
+  BOOK_FONTS_M30,
+  BOOK_ONLY_FONTS,
   bookFontFamily,
   captionFontFamily,
   CAPTION_FONTS,
@@ -22,15 +24,17 @@ const AR = "أجمل ليلة بدأت بضحكة";
 
 describe("font registry (M10b A3)", () => {
   it("covers classic + M10b faces with unique vars and const names", () => {
-    expect(BOOK_FONT_NAMES).toEqual([...CAPTION_FONTS, ...BOOK_FONTS_M10B]);
+    expect(BOOK_FONT_NAMES).toEqual([...CAPTION_FONTS, ...BOOK_FONTS_M10B, ...BOOK_FONTS_M30]);
+    expect([...BOOK_ONLY_FONTS]).toEqual([...BOOK_FONTS_M10B, ...BOOK_FONTS_M30]);
+    expect([...BOOK_FONTS_M30]).toEqual(["ArchivoBlack", "Poppins"]);
     const defs = Object.values(BOOK_FONTS);
-    expect(defs).toHaveLength(10);
+    expect(defs).toHaveLength(12);
     for (const [k, d] of Object.entries(BOOK_FONTS)) expect(d.name).toBe(k);
-    expect(new Set(defs.map((d) => d.cssVar)).size).toBe(10);
+    expect(new Set(defs.map((d) => d.cssVar)).size).toBe(12);
     const consts = defs.flatMap((d) => [d.printConst, d.screenConst]).filter(Boolean);
     expect(new Set(consts).size).toBe(consts.length);
     for (const d of defs) expect(d.printConst).toMatch(/^print[A-Z]/);
-    for (const n of BOOK_FONTS_M10B) expect(BOOK_FONTS[n].screenConst).toMatch(/^book[A-Z]/);
+    for (const n of BOOK_ONLY_FONTS) expect(BOOK_FONTS[n].screenConst).toMatch(/^book[A-Z]/);
     for (const n of CAPTION_FONTS) expect(BOOK_FONTS[n].screenConst).toBeNull();
     // doc names must pass the doc FontSchema regex
     for (const n of BOOK_FONT_NAMES) expect(n).toMatch(/^[A-Za-z0-9 ]{1,40}$/);
@@ -61,6 +65,26 @@ describe("font registry (M10b A3)", () => {
     );
   });
 
+  it("M30 faces: Latin only, one-way Arabic partners already shipped, full chains", () => {
+    expect(BOOK_FONTS.ArchivoBlack).toMatchObject({ script: "latin", partner: "Lalezar", weights: [400], italic: false });
+    expect(BOOK_FONTS.Poppins).toMatchObject({ script: "latin", partner: "Tajawal", weights: [400, 700], italic: false });
+    // the shipped Arabic faces keep their own partners (existing books unchanged)
+    expect(BOOK_FONTS.Lalezar.partner).toBe("Bebas");
+    expect(BOOK_FONTS.Tajawal.partner).toBe("Playfair");
+    expect(bookFontFamily("ArchivoBlack")).toBe(
+      'var(--font-archivo-black, "Archivo Black"), var(--font-lalezar, "Lalezar"), var(--font-cairo), var(--font-inter), sans-serif',
+    );
+    expect(bookFontFamily("Poppins")).toBe('var(--font-poppins, "Poppins"), var(--font-tajawal), var(--font-cairo), var(--font-inter), sans-serif');
+    expect(fontForText("Poppins", AR)).toBe("Tajawal");
+    expect(fontForText("ArchivoBlack", AR)).toBe("Lalezar");
+    expect(fontForText("Poppins", "Beach day")).toBe("Poppins");
+    expect(fontWeightFor("Poppins", 600)).toBe(700);
+    expect(fontWeightFor("Poppins", 400)).toBe(400);
+    expect(fontWeightFor("ArchivoBlack", 700)).toBe(400);
+    expect(isBookFont("Poppins") && isBookFont("ArchivoBlack")).toBe(true);
+    expect(isM10bFont("Poppins")).toBe(false);
+  });
+
   it("type guards, Arabic switch and weights", () => {
     expect(isBookFont("Lalezar")).toBe(true);
     expect(isBookFont("Comic Sans")).toBe(false);
@@ -74,14 +98,14 @@ describe("font registry (M10b A3)", () => {
     expect(fontWeightFor("Tajawal", 600)).toBe(700);
   });
 
-  it("screen module declares every M10b var, with book* consts, preload off, no fallback face", () => {
-    expect([...BOOK_FONT_VARS].sort()).toEqual(BOOK_FONTS_M10B.map((n) => BOOK_FONTS[n].cssVar).sort());
+  it("screen module declares every M10b + M30 var, with book* consts, preload off, no fallback face", () => {
+    expect([...BOOK_FONT_VARS].sort()).toEqual(BOOK_ONLY_FONTS.map((n) => BOOK_FONTS[n].cssVar).sort());
     const classes = BOOK_FONT_CLASSES.split(" ");
     for (const v of BOOK_FONT_VARS) expect(classes).toContain(`__variable_${v.slice(2)}`);
     const src = readFileSync(path.join(__dirname, "../src/components/book/book-fonts.ts"), "utf8");
-    for (const n of BOOK_FONTS_M10B) expect(src).toContain(`const ${BOOK_FONTS[n].screenConst} = localFont(`);
-    expect(src.match(/preload: false,/g)).toHaveLength(6);
-    expect(src.match(/adjustFontFallback: false,/g)).toHaveLength(6);
+    for (const n of BOOK_ONLY_FONTS) expect(src).toContain(`const ${BOOK_FONTS[n].screenConst} = localFont(`);
+    expect(src.match(/preload: false,/g)).toHaveLength(8);
+    expect(src.match(/adjustFontFallback: false,/g)).toHaveLength(8);
   });
 
   it("screen fonts are not loaded globally (root layout), only on book routes", () => {
@@ -141,9 +165,8 @@ describe("style tokens (M10b A3)", () => {
 });
 
 import { V2_CAPTION_FONTS } from "@/lib/book/fonts-v2";
-import { BOOK_FONTS_M10B as M10B_IDS } from "@/lib/book/fonts";
 describe("fonts-v2 version rule", () => {
-  it("lists exactly the M10b registry font ids", () => {
-    expect([...V2_CAPTION_FONTS].sort()).toEqual([...M10B_IDS].sort());
+  it("lists exactly the M10b + M30 registry font ids", () => {
+    expect([...V2_CAPTION_FONTS].sort()).toEqual([...BOOK_ONLY_FONTS].sort());
   });
 });

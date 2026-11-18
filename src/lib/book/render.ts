@@ -632,6 +632,11 @@ const GLYPH_EM: Record<BookFontName, { lower: number; upper: number; line?: numb
   Lalezar: { lower: 0.36, upper: 0.49, line: 1.03 },
   GreatVibes: { lower: 0.31, upper: 0.81 },
   ArefRuqaa: { lower: 0.3, upper: 0.63, line: 1.045 },
+  // M30 T2: PROVISIONAL — mean hmtx advances of the static files (Poppins = the 700 weight), not
+  // yet measured in Chromium, and no `line` growth measured (Poppins' own line metrics are 1.5 em).
+  // T3 replaces both rows with Chromium measurements before any layout relies on the fitter.
+  ArchivoBlack: { lower: 0.57, upper: 0.69 },
+  Poppins: { lower: 0.53, upper: 0.59 },
 };
 /** Slack on top of the average width: real words are not average and lines don't pack perfectly. */
 const GLYPH_SAFETY = 1.1;

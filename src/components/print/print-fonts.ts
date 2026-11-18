@@ -122,6 +122,26 @@ const printArefRuqaa = localFont({
   adjustFontFallback: false,
 });
 
+// --- M30 magazine / editorial faces (D-090): static TTFs from github.com/google/fonts
+// (ofl/archivoblack, ofl/poppins), lossless woff2, unmodified. No Reserved Font Name.
+
+const printArchivoBlack = localFont({
+  variable: "--font-archivo-black",
+  src: [{ path: "./fonts/ArchivoBlack-400.woff2", weight: "400", style: "normal" }],
+  display: "block",
+  adjustFontFallback: false,
+});
+
+const printPoppins = localFont({
+  variable: "--font-poppins",
+  src: [
+    { path: "./fonts/Poppins-400.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/Poppins-700.woff2", weight: "700", style: "normal" },
+  ],
+  display: "block",
+  adjustFontFallback: false,
+});
+
 /** Classes that point the renderer's font variables at the static print fonts. */
 export const PRINT_FONT_CLASSES = [
   printInter.variable,
@@ -134,6 +154,8 @@ export const PRINT_FONT_CLASSES = [
   printLalezar.variable,
   printGreatVibes.variable,
   printArefRuqaa.variable,
+  printArchivoBlack.variable,
+  printPoppins.variable,
 ].join(" ");
 
 /** Variables re-declared by PRINT_FONT_CLASSES (must cover every BOOK_FONTS cssVar). */
@@ -148,4 +170,6 @@ export const PRINT_FONT_VARS = [
   "--font-lalezar",
   "--font-great-vibes",
   "--font-aref-ruqaa",
+  "--font-archivo-black",
+  "--font-poppins",
 ] as const;

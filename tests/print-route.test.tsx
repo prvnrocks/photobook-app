@@ -366,7 +366,7 @@ describe("print fonts (static instances, Type0 in the PDF)", () => {
     // const names = CSS family names: unique and print-prefixed (never merge with screen faces)
     for (const f of Object.values(BOOK_FONTS)) expect(loader).toContain(`const ${f.printConst} = localFont(`);
     const classes = PRINT_FONT_CLASSES.split(" ");
-    expect(classes).toHaveLength(10);
+    expect(classes).toHaveLength(12);
     for (const v of PRINT_FONT_VARS) expect(classes).toContain(`__variable_${v.slice(2)}`);
   });
 
@@ -395,6 +395,7 @@ describe("print fonts (static instances, Type0 in the PDF)", () => {
     expect(woff2).toEqual([
       "Amiri-400.woff2",
       "Amiri-700.woff2",
+      "ArchivoBlack-400.woff2",
       "ArefRuqaa-400.woff2",
       "ArefRuqaa-700.woff2",
       "BebasNeue-400.woff2",
@@ -409,6 +410,8 @@ describe("print fonts (static instances, Type0 in the PDF)", () => {
       "Lalezar-400.woff2",
       "PlayfairDisplay-400.woff2",
       "PlayfairDisplay-600.woff2",
+      "Poppins-400.woff2",
+      "Poppins-700.woff2",
       "Tajawal-400.woff2",
       "Tajawal-700.woff2",
     ]);
@@ -431,7 +434,7 @@ describe("print fonts (static instances, Type0 in the PDF)", () => {
   );
 
   it("each family ships its SIL OFL 1.1 licence", () => {
-    for (const fam of ["Cairo", "Inter", "PlayfairDisplay", "Tajawal", "Amiri", "ArefRuqaa", "BebasNeue", "CormorantGaramond", "GreatVibes", "Lalezar"]) {
+    for (const fam of ["Cairo", "Inter", "PlayfairDisplay", "Tajawal", "Amiri", "ArefRuqaa", "BebasNeue", "CormorantGaramond", "GreatVibes", "Lalezar", "ArchivoBlack", "Poppins"]) {
       expect(files).toContain(`OFL-${fam}.txt`);
       expect(readFileSync(path.join(FONT_DIR, `OFL-${fam}.txt`), "utf8")).toContain("SIL Open Font License, Version 1.1");
     }

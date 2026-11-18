@@ -73,7 +73,30 @@ const bookArefRuqaa = localFont({
   adjustFontFallback: false,
 });
 
-/** Classes declaring the M10b font variables (screen). Apply on a book-screen wrapper. */
+// --- M30 magazine / editorial faces (D-090): Archivo Black 400 (masthead) and Poppins 400/700
+// (headings + body). Latin only — their Arabic partners (Lalezar above, Tajawal from the root
+// layout) come next in every chain (bookFontFamily). Same static files as print.
+
+const bookArchivoBlack = localFont({
+  variable: "--font-archivo-black",
+  src: [{ path: "../print/fonts/ArchivoBlack-400.woff2", weight: "400", style: "normal" }],
+  display: "swap",
+  preload: false,
+  adjustFontFallback: false,
+});
+
+const bookPoppins = localFont({
+  variable: "--font-poppins",
+  src: [
+    { path: "../print/fonts/Poppins-400.woff2", weight: "400", style: "normal" },
+    { path: "../print/fonts/Poppins-700.woff2", weight: "700", style: "normal" },
+  ],
+  display: "swap",
+  preload: false,
+  adjustFontFallback: false,
+});
+
+/** Classes declaring the M10b + M30 font variables (screen). Apply on a book-screen wrapper. */
 export const BOOK_FONT_CLASSES = [
   bookCormorant.variable,
   bookAmiri.variable,
@@ -81,9 +104,11 @@ export const BOOK_FONT_CLASSES = [
   bookLalezar.variable,
   bookGreatVibes.variable,
   bookArefRuqaa.variable,
+  bookArchivoBlack.variable,
+  bookPoppins.variable,
 ].join(" ");
 
-/** Variables declared by BOOK_FONT_CLASSES (must cover every M10b registry entry). */
+/** Variables declared by BOOK_FONT_CLASSES (must cover every M10b + M30 registry entry). */
 export const BOOK_FONT_VARS = [
   "--font-cormorant",
   "--font-amiri",
@@ -91,4 +116,6 @@ export const BOOK_FONT_VARS = [
   "--font-lalezar",
   "--font-great-vibes",
   "--font-aref-ruqaa",
+  "--font-archivo-black",
+  "--font-poppins",
 ] as const;

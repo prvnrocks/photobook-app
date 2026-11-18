@@ -68,13 +68,24 @@ export function captionFontFamily(font: string): string {
 
 export type FontScript = "latin" | "arabic";
 /** Font pair ids. `classic` = the M5 faces (Playfair/Inter + Cairo/Tajawal). */
-export type FontPairId = "classic" | "serif" | "display" | "script";
+export type FontPairId = "classic" | "serif" | "display" | "script" | "sans";
 
 /** The M10b OFL faces (doc font names). */
 export const BOOK_FONTS_M10B = ["Cormorant", "Amiri", "Bebas", "Lalezar", "GreatVibes", "ArefRuqaa"] as const;
 export type M10bFont = (typeof BOOK_FONTS_M10B)[number];
-export type BookFontName = CaptionFont | M10bFont;
-export const BOOK_FONT_NAMES: readonly BookFontName[] = [...CAPTION_FONTS, ...BOOK_FONTS_M10B];
+/**
+ * The M30 OFL faces of the magazine / editorial styles (D-090). Latin only; their Arabic partners
+ * are faces already shipped: Archivo Black (heavy masthead) → Lalezar, Poppins (geometric sans,
+ * headings + body) → Tajawal. The partnership is one-way: Lalezar and Tajawal keep their own
+ * partners (Bebas, Playfair), so nothing changes for existing books.
+ */
+export const BOOK_FONTS_M30 = ["ArchivoBlack", "Poppins"] as const;
+export type M30Font = (typeof BOOK_FONTS_M30)[number];
+/** Faces loaded only on book screens + print (not by the root layout). All are doc-v2 font names. */
+export const BOOK_ONLY_FONTS = [...BOOK_FONTS_M10B, ...BOOK_FONTS_M30] as const;
+export type BookOnlyFont = (typeof BOOK_ONLY_FONTS)[number];
+export type BookFontName = CaptionFont | BookOnlyFont;
+export const BOOK_FONT_NAMES: readonly BookFontName[] = [...CAPTION_FONTS, ...BOOK_ONLY_FONTS];
 
 export interface BookFontDef {
   name: BookFontName;
@@ -114,10 +125,15 @@ export const BOOK_FONTS: Record<BookFontName, BookFontDef> = {
   // M10b script pair (Aref Ruqaa: Reserved Font Name "EURM10" — ship unmodified, never subset/rename)
   GreatVibes: { name: "GreatVibes", label: "Great Vibes", cssVar: "--font-great-vibes", screenConst: "bookGreatVibes", printConst: "printGreatVibes", script: "latin", pair: "script", partner: "ArefRuqaa", generic: "serif", weights: [400], italic: false },
   ArefRuqaa: { name: "ArefRuqaa", label: "Aref Ruqaa", cssVar: "--font-aref-ruqaa", screenConst: "bookArefRuqaa", printConst: "printArefRuqaa", script: "arabic", pair: "script", partner: "GreatVibes", generic: "serif", weights: [400, 700], italic: false },
+  // M30 magazine / editorial faces (Latin only; Arabic partners are the shipped Lalezar / Tajawal)
+  ArchivoBlack: { name: "ArchivoBlack", label: "Archivo Black", cssVar: "--font-archivo-black", screenConst: "bookArchivoBlack", printConst: "printArchivoBlack", script: "latin", pair: "display", partner: "Lalezar", generic: "sans-serif", weights: [400], italic: false },
+  Poppins: { name: "Poppins", label: "Poppins", cssVar: "--font-poppins", screenConst: "bookPoppins", printConst: "printPoppins", script: "latin", pair: "sans", partner: "Tajawal", generic: "sans-serif", weights: [400, 700], italic: false },
 };
 
 /** Caption font pairs offered by the editor (D-065): Latin face + its Arabic partner. */
-export const FONT_PAIRS: Record<Exclude<FontPairId, "classic">, { label: string; latin: M10bFont; arabic: M10bFont }> = {
+// (M30: no "sans" pair here yet — Poppins / Tajawal crosses the classic list, so offering it in the
+// editor is T13's change, not pure data.)
+export const FONT_PAIRS: Record<Exclude<FontPairId, "classic" | "sans">, { label: string; latin: M10bFont; arabic: M10bFont }> = {
   serif: { label: "Serif", latin: "Cormorant", arabic: "Amiri" },
   display: { label: "Display", latin: "Bebas", arabic: "Lalezar" },
   script: { label: "Script", latin: "GreatVibes", arabic: "ArefRuqaa" },
@@ -129,6 +145,15 @@ export function isBookFont(v: unknown): v is BookFontName {
 
 export function isM10bFont(v: unknown): v is M10bFont {
   return typeof v === "string" && (BOOK_FONTS_M10B as readonly string[]).includes(v);
+}
+
+export function isM30Font(v: unknown): v is M30Font {
+  return typeof v === "string" && (BOOK_FONTS_M30 as readonly string[]).includes(v);
+}
+
+/** A face declared only on book screens + print (M10b pairs, M30 faces). */
+export function isBookOnlyFont(v: unknown): v is BookOnlyFont {
+  return typeof v === "string" && (BOOK_ONLY_FONTS as readonly string[]).includes(v);
 }
 
 /** The face to use for `text`: the Arabic partner when the text is mainly Arabic and `font` is Latin. */
@@ -143,8 +168,8 @@ export function fontWeightFor(font: BookFontName, wanted: number): number {
   return ws.reduce((best, w) => (Math.abs(w - wanted) < Math.abs(best - wanted) ? w : best), ws[0]);
 }
 
-// M10b faces are declared only on book screens + print. A var() that is undefined makes the whole
-// font-family declaration invalid (the element would lose every fallback), so each M10b var
+// M10b / M30 faces are declared only on book screens + print. A var() that is undefined makes the whole
+// font-family declaration invalid (the element would lose every fallback), so each such var
 // carries a fallback family name: elsewhere it resolves to a name that simply doesn't match.
 function fontVarRef(f: BookFontName): string {
   const def = BOOK_FONTS[f];
@@ -153,11 +178,12 @@ function fontVarRef(f: BookFontName): string {
 
 /**
  * CSS `font-family` for any registry face. Classic faces return exactly captionFontFamily()
- * (byte-identical goldens). M10b faces: face → partner → Cairo → Inter → generic. Unknown names
- * fall back to the classic default.
+ * (byte-identical goldens). M10b + M30 faces: face → partner → Cairo → Inter → generic (Poppins →
+ * Tajawal → Cairo → Inter; Archivo Black → Lalezar → Cairo → Inter). Unknown names fall back to the
+ * classic default.
  */
 export function bookFontFamily(font: string): string {
-  if (!isM10bFont(font)) return captionFontFamily(font);
+  if (!isBookOnlyFont(font)) return captionFontFamily(font);
   const def = BOOK_FONTS[font];
   const chain: BookFontName[] = [font, def.partner, "Cairo", "Inter"];
   return [...chain.map(fontVarRef), def.generic].join(", ");

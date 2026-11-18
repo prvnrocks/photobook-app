@@ -2,15 +2,17 @@
 // font-family chains (bookFontFamily), plus the modern style roles. `?mode=print` wraps it in the
 // print font classes with A5 @page CSS for page.pdf checks (Type0 only, Arabic in the Arabic face);
 // default = screen faces (<BookFonts>). `?sheet=m10c` shows only the M10c Geometric + Scrapbook
-// specimen (m10c-specimen.tsx, docs/design/m10c-type.png). 404s in production builds.
+// specimen (m10c-specimen.tsx, docs/design/m10c-type.png); `?sheet=m30` only the M30 faces, roles
+// and colourways (m30-specimen.tsx, docs/design/m30-fonts.png). 404s in production builds.
 
 import { notFound } from "next/navigation";
 import type { CSSProperties } from "react";
 import { BookFonts } from "@/components/book/BookFonts";
 import { PRINT_FONT_CLASSES } from "@/components/print/print-fonts";
-import { BOOK_FONT_NAMES, BOOK_FONTS, bookFontFamily, type BookFontName } from "@/lib/book/fonts";
+import { BOOK_FONT_NAMES, BOOK_FONTS, bookFontFamily, isM10bFont, type BookFontName } from "@/lib/book/fonts";
 import { roleFont, TEXT_ROLES } from "@/lib/design/styles";
 import { M10cSpecimen } from "./m10c-specimen";
+import { M30Specimen } from "./m30-specimen";
 
 export const dynamic = "force-dynamic";
 
@@ -56,10 +58,14 @@ export default async function DevFonts({ searchParams }: { searchParams: Promise
     ...BOOK_FONTS[f].weights.map((w) => ({ f, w, italic: false })),
     ...(BOOK_FONTS[f].italic ? [{ f, w: 400, italic: true }] : []),
   ]);
-  const m10b = faces.filter((x) => BOOK_FONTS[x.f].screenConst);
+  const onlyM30 = sp.sheet === "m30";
+  const m10b = faces.filter((x) => isM10bFont(x.f));
   const classic = faces.filter((x) => !BOOK_FONTS[x.f].screenConst);
   const specimen = <M10cSpecimen Sheet={Sheet} />;
-  const sheets = onlyM10c ? (
+  const m30 = <M30Specimen Sheet={Sheet} />;
+  const sheets = onlyM30 ? (
+    m30
+  ) : onlyM10c ? (
     specimen
   ) : (
     <>
@@ -101,6 +107,7 @@ export default async function DevFonts({ searchParams }: { searchParams: Promise
         ))}
       </Sheet>
       {specimen}
+      {m30}
     </>
   );
   if (print) {

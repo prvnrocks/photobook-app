@@ -14,6 +14,13 @@
 // No new fonts (D-068). Every face ends in an Arabic chain (bookFontFamily). Letter-spacing is a
 // Latin-only token: Arabic text never gets letter-spacing (it breaks joining) and new styles use no
 // uppercase transform (Bebas is caps by design; Arabic has no case).
+// magazine (M30, D-090) = bold travel magazine (ref mg-5): masthead Archivo Black caps / Lalezar,
+//           title + chapter Poppins 700 / Tajawal 700, subtitle + date Poppins 400 tracked,
+//           captions + chapter descriptions (body) Poppins 400 / Tajawal 400.
+// editorial (M30, D-090) = minimal Swiss (ref mg-covers): masthead + title + chapter Poppins 700 in
+//           sentence case / Tajawal 700, everything else Poppins 400 / Tajawal 400.
+// Both use `uppercaseLatin` / `letterSpacingEm`, which roleFont applies to Latin text only. Their
+// accent colours are per book: src/lib/design/colourways.ts (palette.accent = the default one).
 
 import { isMainlyArabic } from "@/lib/review/ui";
 import { BOOK_FONTS, bookFontFamily, fontWeightFor, isBookFont, type BookFontName } from "@/lib/book/fonts";
@@ -35,6 +42,11 @@ export interface RoleFontToken {
   weight: 400 | 600 | 700;
   italic?: boolean;
   uppercase?: boolean;
+  /**
+   * M30: uppercase ONLY when the resolved face and the text are Latin (never on Arabic text or an
+   * Arabic face). `uppercase` (modern chapter) is unconditional and frozen by the m10b goldens.
+   */
+  uppercaseLatin?: boolean;
   /** Tracking in em, applied ONLY when the resolved face is a Latin face (never on Arabic). */
   letterSpacingEm?: number;
 }
@@ -169,14 +181,55 @@ const SCRAPBOOK: StyleTokens = {
   shadows: SHADOWS,
 };
 
-const TEMP_M30_FONTS: Record<TextRole, RoleFontToken> = {
-  title: { latin: "Bebas", arabic: "Lalezar", weight: 400 },
-  subtitle: { latin: "Cormorant", arabic: "Amiri", weight: 400 },
-  year: { latin: "Bebas", arabic: "Lalezar", weight: 400 },
-  chapter: { latin: "Bebas", arabic: "Lalezar", weight: 400 },
-  caption: { latin: "Cormorant", arabic: "Amiri", weight: 400 },
-  masthead: { latin: "Bebas", arabic: "Lalezar", weight: 400 },
-  body: { latin: "Cormorant", arabic: "Amiri", weight: 400 },
+// M30 (D-090). Faces: Archivo Black → Lalezar, Poppins → Tajawal (400 / 700 both shipped). White
+// pages; `accent` is the default colourway's accentOnLight (lime / ink — a test keeps them equal);
+// the per-book accent and the dark panel colours come from src/lib/design/colourways.ts.
+const MAGAZINE: StyleTokens = {
+  id: "magazine",
+  fonts: {
+    title: { latin: "Poppins", arabic: "Tajawal", weight: 700 },
+    subtitle: { latin: "Poppins", arabic: "Tajawal", weight: 400, letterSpacingEm: 0.06 },
+    year: { latin: "Poppins", arabic: "Tajawal", weight: 400, letterSpacingEm: 0.14 },
+    chapter: { latin: "Poppins", arabic: "Tajawal", weight: 700 },
+    caption: { latin: "Poppins", arabic: "Tajawal", weight: 400 },
+    masthead: { latin: "ArchivoBlack", arabic: "Lalezar", weight: 400, uppercaseLatin: true },
+    body: { latin: "Poppins", arabic: "Tajawal", weight: 400 },
+  },
+  palette: {
+    background: "#FFFFFF",
+    ink: "#1B1C1F",
+    muted: "#5E636B",
+    accent: "#566B00",
+    frame: "#FFFFFF",
+    plate: { id: "plate-label", tint: "#26282B" },
+    tape: "#E9D9B6",
+    stickerTints: ["#26282B", "#B9D531", "#FF8A3D", "#4FC3F7"],
+  },
+  shadows: SHADOWS,
+};
+
+const EDITORIAL: StyleTokens = {
+  id: "editorial",
+  fonts: {
+    title: { latin: "Poppins", arabic: "Tajawal", weight: 700 },
+    subtitle: { latin: "Poppins", arabic: "Tajawal", weight: 400 },
+    year: { latin: "Poppins", arabic: "Tajawal", weight: 400 },
+    chapter: { latin: "Poppins", arabic: "Tajawal", weight: 700 },
+    caption: { latin: "Poppins", arabic: "Tajawal", weight: 400 },
+    masthead: { latin: "Poppins", arabic: "Tajawal", weight: 700 },
+    body: { latin: "Poppins", arabic: "Tajawal", weight: 400 },
+  },
+  palette: {
+    background: "#FFFFFF",
+    ink: "#111111",
+    muted: "#5E636B",
+    accent: "#111111",
+    frame: "#FFFFFF",
+    plate: { id: "plate-label", tint: "#111111" },
+    tape: "#E9D9B6",
+    stickerTints: ["#111111", "#0E6F6E", "#C22F45", "#8A6200"],
+  },
+  shadows: SHADOWS,
 };
 
 export const STYLE_TOKENS: Record<DesignStyle, StyleTokens> = {
@@ -184,10 +237,8 @@ export const STYLE_TOKENS: Record<DesignStyle, StyleTokens> = {
   modern: { id: "modern", fonts: MODERN_FONTS },
   geometric: GEOMETRIC,
   scrapbook: SCRAPBOOK,
-  // M30 T1 placeholders so the record compiles: existing faces only, no palette. T2 replaces both
-  // with the real magazine / editorial tokens (new fonts, palettes, colourways).
-  magazine: { id: "magazine", fonts: TEMP_M30_FONTS },
-  editorial: { id: "editorial", fonts: TEMP_M30_FONTS },
+  magazine: MAGAZINE,
+  editorial: EDITORIAL,
 };
 
 export function styleTokens(style: DesignStyle | null | undefined): StyleTokens {
@@ -198,7 +249,8 @@ export function styleTokens(style: DesignStyle | null | undefined): StyleTokens 
  * The caption face a generator (rule autolayout, AI Storyteller/Caption Writer) writes into
  * doc.style.font and AI caption.font for a book of `style` (M10b A11): the style's caption token,
  * Arabic face when the book's caption language is Arabic. Classic → Playfair / Cairo, exactly as
- * before M10b (classic docs stay byte-identical); modern → Cormorant / Amiri. caption.font overrides
+ * before M10b (classic docs stay byte-identical); modern → Cormorant / Amiri; magazine + editorial
+ * (M30) → Poppins / Tajawal. caption.font overrides
  * the style's face in the renderer, so a modern book must never get the classic faces here.
  */
 export function styleCaptionFont(style: DesignStyle | null | undefined, captionLang: string | null | undefined): BookFontName {
@@ -242,13 +294,15 @@ export function roleFont(
   const italic = !!token.italic && BOOK_FONTS[font].italic;
   // Tracking only when both the face and the text are Latin: an Arabic face, or Arabic text in a
   // Latin face (e.g. a mixed caption), never gets letter-spacing (it breaks Arabic joining).
-  const track = token.letterSpacingEm && BOOK_FONTS[font].script === "latin" && !arabic && !/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text);
+  const latinOnly = BOOK_FONTS[font].script === "latin" && !arabic && !/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text);
+  const track = token.letterSpacingEm && latinOnly;
+  const upper = token.uppercase || (token.uppercaseLatin && latinOnly);
   return {
     font,
     fontFamily: bookFontFamily(font),
     fontWeight: fontWeightFor(font, token.weight),
     fontStyle: italic ? "italic" : "normal",
-    ...(token.uppercase ? { textTransform: "uppercase" as const } : {}),
+    ...(upper ? { textTransform: "uppercase" as const } : {}),
     ...(track ? { letterSpacing: `${token.letterSpacingEm}em` } : {}),
   };
 }
