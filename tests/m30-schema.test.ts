@@ -31,7 +31,7 @@ import { pageMm } from "@/lib/book/format";
 import { layoutsFor } from "@/lib/book/spreads";
 import type { BookDoc, ChapterDescription, ColourwayId, DesignStyle, Layout, LayoutBlock, LayoutText } from "@/lib/book/types";
 import { STYLE_TOKENS, TEXT_ROLES } from "@/lib/design/styles";
-import { LAYOUTS, SAFE_MM } from "@/lib/layouts";
+import { LAYOUTS, M30_LAYOUTS, SAFE_MM } from "@/lib/layouts";
 import { parsePublicDoc, publicDocToRenderDoc, toPublicDoc } from "@/lib/publish/public-doc";
 import { representativeDocV1 } from "./golden/m9-inputs";
 
@@ -87,10 +87,11 @@ const TRIANGLE: [number, number][] = [
 ];
 
 describe("M30 design styles + font roles", () => {
-  it("DESIGN_STYLES gains magazine + editorial; they are not supported (no layouts) yet", () => {
+  it("DESIGN_STYLES gains magazine + editorial; they are not supported yet (T9b switches them on)", () => {
     expect([...DESIGN_STYLES]).toEqual(["classic", "modern", "geometric", "scrapbook", "magazine", "editorial"]);
     expect([...SUPPORTED_DESIGN_STYLES]).toEqual(["classic", "modern", "geometric", "scrapbook"]);
-    expect(LAYOUTS.some((l) => l.style === "magazine" || l.style === "editorial")).toBe(false);
+    // Their layouts live only in the M30 arrays at the end of the catalogue (T4–T7 fill them).
+    for (const l of LAYOUTS) expect(l.style === "magazine" || l.style === "editorial", l.id).toBe(M30_LAYOUTS.includes(l));
   });
 
   it("font roles: masthead + body in both lists; pre-M30 styles map masthead → title, body → caption", () => {
@@ -103,8 +104,8 @@ describe("M30 design styles + font roles", () => {
     for (const s of DESIGN_STYLES) for (const r of TEXT_ROLES) expect(STYLE_TOKENS[s].fonts[r], `${s}/${r}`).toBeDefined();
   });
 
-  it("no shipped layout uses the new roles, bindings, ink, blocks or quarter turns (no render change)", () => {
-    for (const l of LAYOUTS) {
+  it("no pre-M30 layout uses the new roles, bindings, ink, blocks or quarter turns (no render change)", () => {
+    for (const l of LAYOUTS.filter((x) => !M30_LAYOUTS.includes(x))) {
       expect(l.blocks, l.id).toBeUndefined();
       for (const t of l.texts ?? []) {
         expect(["masthead", "body"], l.id).not.toContain(t.font);

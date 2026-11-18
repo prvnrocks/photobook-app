@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { LayoutSchema } from "@/lib/book/schema";
 import type { Rect } from "@/lib/book/types";
 import { pageMm } from "@/lib/book/format";
-import { COVER_LAYOUT_ID, getLayout, LAYOUT_IDS, LAYOUTS, layoutsByRole, M29_COVERS } from "@/lib/layouts";
+import { COVER_LAYOUT_ID, getLayout, LAYOUT_IDS, LAYOUTS, layoutsByRole, M29_COVERS, M30_LAYOUTS } from "@/lib/layouts";
 
 /** Spread rects run 0..200 % across both pages (lib/book/schema.ts). */
 const inside = (r: Rect, maxX = 100) => r.x >= 0 && r.y >= 0 && r.x + r.w <= maxX + 1e-9 && r.y + r.h <= 100 + 1e-9;
@@ -48,6 +48,8 @@ describe("layout catalogue", () => {
       // M29 covers: the caption box is only the edit-mode tap target; text-over-photo (plates only)
       // is checked by tests/layouts-covers.test.ts.
       if (M29_COVERS.includes(layout)) return;
+      // M30 covers (magazine / editorial): the masthead and cover lines sit over the photo by design.
+      if (layout.role === "cover" && M30_LAYOUTS.includes(layout)) return;
       for (const s of layout.slots) expect(overlaps(layout.caption, s)).toBe(false);
     });
 

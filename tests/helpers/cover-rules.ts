@@ -13,6 +13,10 @@
 // - no text box overlaps the visible photo area (slices when present, the polygon of an unrotated
 //   polygon / hexagon / diamond slot, else the slot's rotated bounds) unless it sits on a plate;
 // - M29 only: autoPick false, id contains "-cover-", name starts "Cover: ".
+// - M30 (`m30: true`, magazine / editorial covers): text is drawn over the photo by design (ink
+//   roles "paper" / "accentOnDark"), so the over-the-photo rule is off; besides the one coverTitle +
+//   one coverSubtitle a cover may bind coverLine (each `n` once). Their user-chosen cover styles
+//   (the *_COVERS arrays) also pass `m29: true` for the naming + autoPick rules.
 // Catalogue-level rules (unique ids, format/style of each array, ≥ 1 auto cover per design) live in
 // the test file.
 
@@ -45,7 +49,8 @@ export function coverTexts(l: Layout): CoverText[] {
   if (l.texts && l.texts.length > 0) {
     return l.texts.map((t, i) => ({
       label: `text ${i} (${t.bind})`,
-      bounds: rotatedBoundsPct(t.box, t.rotate ?? 0, page),
+      // M30: a ±90° text's box is already the final visual rect.
+      bounds: rotatedBoundsPct(t.box, Math.abs(t.rotate ?? 0) === 90 ? 0 : (t.rotate ?? 0), page),
       plated: t.plate !== undefined,
     }));
   }
@@ -95,7 +100,7 @@ export function overlapsPhoto(l: Layout, b: BoundsPct): boolean {
 }
 
 /** Every rule this cover breaks ([] = OK). `m29` adds the M29-only rules. */
-export function coverRuleIssues(l: Layout, opts: { m29: boolean }): string[] {
+export function coverRuleIssues(l: Layout, opts: { m29: boolean; m30?: boolean }): string[] {
   const out: string[] = [];
   const at = (msg: string) => out.push(`${l.id}: ${msg}`);
   const parsed = LayoutSchema.safeParse(l);
@@ -109,8 +114,10 @@ export function coverRuleIssues(l: Layout, opts: { m29: boolean }): string[] {
     const binds = l.texts.map((t) => t.bind);
     if (binds.filter((b) => b === "coverTitle").length !== 1) at("needs exactly one coverTitle text");
     if (binds.filter((b) => b === "coverSubtitle").length !== 1) at("needs exactly one coverSubtitle text");
-    const other = binds.filter((b) => b !== "coverTitle" && b !== "coverSubtitle");
+    const other = binds.filter((b) => b !== "coverTitle" && b !== "coverSubtitle" && !(opts.m30 && b === "coverLine"));
     if (other.length) at(`cover texts may only bind coverTitle/coverSubtitle (got ${other.join(", ")})`);
+    const lines = l.texts.filter((t) => t.bind === "coverLine").map((t) => t.n ?? 0);
+    if (new Set(lines).size !== lines.length) at("each coverLine n may be used once");
   } else if (opts.m29) {
     at("M29 covers need coverTitle + coverSubtitle text boxes");
   } else if (!l.caption) {
@@ -127,7 +134,7 @@ export function coverRuleIssues(l: Layout, opts: { m29: boolean }): string[] {
     if (l.format === "A5_LANDSCAPE" && left < LANDSCAPE_SPINE_MM - MM_TOL) {
       at(`${t.label} is less than ${LANDSCAPE_SPINE_MM} mm from the spine edge`);
     }
-    if (!t.plated && overlapsPhoto(l, t.bounds)) at(`${t.label} overlaps the photo (only plated text may)`);
+    if (!opts.m30 && !t.plated && overlapsPhoto(l, t.bounds)) at(`${t.label} overlaps the photo (only plated text may)`);
   }
 
   if (opts.m29) {

@@ -9,7 +9,7 @@ import { SUPPORTED_DESIGN_STYLES } from "@/lib/book/book-design";
 import { BOOK_FORMATS, layoutIssues } from "@/lib/book/schema";
 import { autoCoversFor, coverStylesFor, layoutsFor } from "@/lib/book/spreads";
 import type { BookFormat, DesignStyle, Layout } from "@/lib/book/types";
-import { CLASSIC_PORTRAIT_LAYOUTS, LAYOUTS, M29_COVERS } from "@/lib/layouts";
+import { CLASSIC_PORTRAIT_LAYOUTS, LAYOUTS, M29_COVERS, M30_COVERS, M30_LAYOUTS } from "@/lib/layouts";
 import { CLASSIC_LANDSCAPE_LAYOUTS } from "@/lib/layouts/classic/landscape";
 import { CLASSIC_LANDSCAPE_COVERS } from "@/lib/layouts/classic/landscape/covers-m29";
 import { CLASSIC_PORTRAIT_COVERS } from "@/lib/layouts/classic/portrait/covers-m29";
@@ -58,6 +58,10 @@ const PRE_M29: readonly Layout[] = [
 ];
 
 const M29_IDS = new Set(M29_COVERS.map((l) => l.id));
+// M30 (magazine / editorial): appended after the M29 covers; their user-chosen cover styles follow
+// the M29 naming + autoPick rules, and their text may sit over the photo (cover-rules `m30`).
+const M30_COVER_STYLE_IDS = new Set(M30_COVERS.map((l) => l.id));
+const M30_IDS = new Set(M30_LAYOUTS.map((l) => l.id));
 const ALL_COVERS = LAYOUTS.filter((l) => l.role === "cover");
 
 /** What main (673fb76) returned — never regenerate: M29 covers must not change the auto pick. */
@@ -103,7 +107,7 @@ describe("M29 cover rules — every cover layout", () => {
 
   for (const l of ALL_COVERS) {
     it(`${l.id}: one photo, cover texts inside the safe zone, off the spine, not over the photo`, () => {
-      expect(coverRuleIssues(l, { m29: M29_IDS.has(l.id) })).toEqual([]);
+      expect(coverRuleIssues(l, { m29: M29_IDS.has(l.id) || M30_COVER_STYLE_IDS.has(l.id), m30: M30_IDS.has(l.id) })).toEqual([]);
     });
   }
 
@@ -150,8 +154,13 @@ describe("M29 cover arrays — catalogue placement", () => {
   it("M29_COVERS = the 8 arrays in order, appended after every pre-M29 layout (frozen prefix unchanged)", () => {
     expect(M29_COVERS).toEqual(M29_ARRAYS.flatMap((a) => a.list));
     expect(LAYOUTS.slice(0, PRE_M29.length)).toEqual(PRE_M29);
-    expect(LAYOUTS.slice(PRE_M29.length)).toEqual(M29_COVERS);
-    expect(LAYOUTS).toHaveLength(PRE_M29.length + M29_COVERS.length);
+    expect(LAYOUTS.slice(PRE_M29.length, PRE_M29.length + M29_COVERS.length)).toEqual(M29_COVERS);
+    // M30: the magazine + editorial catalogues come after everything older (append-only).
+    expect(LAYOUTS.slice(PRE_M29.length + M29_COVERS.length)).toEqual([...M30_LAYOUTS]);
+    expect(LAYOUTS).toHaveLength(PRE_M29.length + M29_COVERS.length + M30_LAYOUTS.length);
+    for (const l of M30_LAYOUTS) expect(["magazine", "editorial"], l.id).toContain(l.style);
+    for (const l of [...PRE_M29, ...M29_COVERS]) expect(["magazine", "editorial"], l.id).not.toContain(l.style);
+    for (const l of M30_COVERS) expect(l.role, l.id).toBe("cover");
   });
 
   it("layout ids are unique across the whole catalogue", () => {
@@ -160,7 +169,7 @@ describe("M29 cover arrays — catalogue placement", () => {
   });
 
   it("autoPick:false is set on every M29 cover and on nothing else", () => {
-    for (const l of LAYOUTS) expect(l.autoPick === false, l.id).toBe(M29_IDS.has(l.id));
+    for (const l of LAYOUTS) expect(l.autoPick === false, l.id).toBe(M29_IDS.has(l.id) || M30_COVER_STYLE_IDS.has(l.id));
   });
 
   it("schema: autoPick is allowed only on covers", () => {

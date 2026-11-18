@@ -61,15 +61,20 @@ export const M29_COVERS: readonly Layout[] = [
  * style/format directory exports its layouts (auto cover, pages, spreads) and its user-chosen cover
  * styles (autoPick: false); all layouts of the four directories first, then all cover styles.
  */
+/** The user-chosen M30 cover styles (autoPick: false), like M29_COVERS. */
+export const M30_COVERS: readonly Layout[] = [
+  ...MAGAZINE_PORTRAIT_COVERS,
+  ...MAGAZINE_LANDSCAPE_COVERS,
+  ...EDITORIAL_PORTRAIT_COVERS,
+  ...EDITORIAL_LANDSCAPE_COVERS,
+];
+
 export const M30_LAYOUTS: readonly Layout[] = [
   ...MAGAZINE_PORTRAIT_LAYOUTS,
   ...MAGAZINE_LANDSCAPE_LAYOUTS,
   ...EDITORIAL_PORTRAIT_LAYOUTS,
   ...EDITORIAL_LANDSCAPE_LAYOUTS,
-  ...MAGAZINE_PORTRAIT_COVERS,
-  ...MAGAZINE_LANDSCAPE_COVERS,
-  ...EDITORIAL_PORTRAIT_COVERS,
-  ...EDITORIAL_LANDSCAPE_COVERS,
+  ...M30_COVERS,
 ];
 
 /** Every layout of every format and style (M10b). Format/style-aware code uses layoutsFor() in lib/book/spreads. */
