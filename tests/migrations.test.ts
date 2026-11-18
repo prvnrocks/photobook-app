@@ -2850,10 +2850,9 @@ describe("migrations: Milestone 20c album confirmed marker (2000, D-072)", () =>
   const fn = (n: string) => fns.find((x) => x.name === n);
   const raw = m ? readFileSync(join(MIGRATIONS_DIR, name), "utf8") : "";
 
-  it("exists right after 1900, is the latest migration, additive only, migration-first header", () => {
+  it("exists right after 1900 (latest until 2100), additive only, migration-first header", () => {
     expect(m, `${name} missing`).toBeDefined();
     expect(files.indexOf(name)).toBe(files.indexOf("20261115001900_design.sql") + 1);
-    expect(files.at(-1)).toBe(name);
     expect(sql).not.toMatch(/\bdrop\b/);
     expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
     expect(sql).not.toMatch(/\bcreate\s+(policy|table|trigger)\b/);
@@ -2884,15 +2883,67 @@ describe("migrations: Milestone 20c album confirmed marker (2000, D-072)", () =>
     expect(flat).toContain("revoke all on function private.protect_book_columns() from public, anon, authenticated;");
   });
 
-  it("rls_check.sql covers 2000 and counts 176 checks", () => {
+  it("rls_check.sql covers 2000 (176 checks then; 2100 → 177)", () => {
     const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
     expect(rls).toContain(name);
     expect(rls).toContain("RLS FAIL [album confirmed]");
-    expect(rls).toContain("RLS OK — all 176 checks passed");
   });
 
   it("database.types.ts: books.album_confirmed_at (hand-edited)", () => {
     const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
     expect(types).toMatch(/books: \{\s*Row: \{[\s\S]*?album_confirmed_at: string \| null\n[\s\S]*?\}\s*Insert: \{[\s\S]*?album_confirmed_at\?: string \| null[\s\S]*?\}\s*Update: \{[\s\S]*?album_confirmed_at\?: string \| null/);
+  });
+});
+
+describe("migrations: Milestone 30 design styles magazine + editorial (2100, D-090)", () => {
+  const name = "20261118002100_design_styles_m30.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const flat = sql.replace(/\s+/g, " ").trim();
+  const raw = m ? readFileSync(join(MIGRATIONS_DIR, name), "utf8") : "";
+  const schema = readFileSync(join(process.cwd(), "src", "lib", "book", "schema.ts"), "utf8");
+  const designStyles = [.../DESIGN_STYLES = \[([^\]]*)\]/.exec(schema)![1]!.matchAll(/"([^"]+)"/g)].map((x) => x[1]!);
+
+  it("exists right after 2000, is the latest migration, migration-first header with a rollback note", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files.indexOf(name)).toBe(files.indexOf("20261115002000_album_confirmed.sql") + 1);
+    expect(files.at(-1)).toBe(name);
+    expect(raw).toContain("D-090");
+    expect(raw).toContain("additive: apply BEFORE code");
+    expect(raw).toMatch(/Rollback:[\s\S]*never writes\s+(?:--\s+)?the new values/);
+  });
+
+  it("is exactly one statement: drop + re-add books_design_style_check atomically", () => {
+    const stmts = flat.split(";").map((s) => s.trim()).filter(Boolean);
+    expect(stmts).toHaveLength(1);
+    expect(stmts[0]).toMatch(
+      /^alter table public\.books drop constraint books_design_style_check, add constraint books_design_style_check check \(design_style in \([^)]*\)\)$/,
+    );
+    expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
+    expect(sql).not.toMatch(/\bnot\s+valid\b/);
+  });
+
+  it("the constraint list equals src/lib/book/schema.ts DESIGN_STYLES", () => {
+    expect(designStyles).toEqual(["classic", "modern", "geometric", "scrapbook", "magazine", "editorial"]);
+    const listed = [.../check \(design_style in \(([^)]*)\)\)/.exec(flat)![1]!.matchAll(/'([^']+)'/g)].map((x) => x[1]!);
+    expect(listed).toEqual([...designStyles]);
+  });
+
+  it("the latest books_design_style_check across all migrations is the 2100 one (a superset of 1900)", () => {
+    const defs = matchesAll(/constraint\s+books_design_style_check\s+check\s*\(\s*design_style\s+in\s*\(([^)]*)\)\s*\)/).map((d) =>
+      [...d[1]!.matchAll(/'([^']+)'/g)].map((x) => x[1]!),
+    );
+    expect(defs).toHaveLength(2);
+    expect(defs[1]).toEqual([...designStyles]);
+    for (const old of defs[0]!) expect(defs[1]).toContain(old);
+  });
+
+  it("rls_check.sql covers 2100, counts 177 checks, and its backfill check names every style", () => {
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain(name);
+    expect(rls).toContain("RLS FAIL [design styles m30]");
+    expect(rls).toContain("RLS OK — all 177 checks passed");
+    expect(rls).toContain(`doc -> 'style' ->> 'designStyle' in (${designStyles.map((x) => `'${x}'`).join(", ")})`);
+    expect(rls).toContain(`array[${[...designStyles].sort().map((x) => `'${x}'`).join(", ")}]`);
   });
 });

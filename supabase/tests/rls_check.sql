@@ -57,7 +57,10 @@
 --      data)
 --      and 20261115002000_album_confirmed.sql (server-only
 --      books.album_confirmed_at: forced null on insert, owner can neither set
---      nor clear it, service role can).
+--      nor clear it, service role can)
+--      and 20261118002100_design_styles_m30.sql (books_design_style_check
+--      widened to six styles: owner may insert 'magazine' / 'editorial',
+--      unknown styles still rejected, still insert-only).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -66,7 +69,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 176 checks passed
+--       RLS OK — all 177 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -232,6 +235,7 @@ declare
   dg_b        uuid;
   dg_ord      uuid;
   ds_b        uuid;
+  ds_m        uuid;
   ds_p        uuid;
   ac_b        uuid;
   r          record;
@@ -3537,7 +3541,7 @@ begin
   -- its columns (1900 copied them; afterwards the columns are the authority, D-063)
   select count(*) into n from public.books
    where (doc ->> 'format' in ('A5_PORTRAIT', 'A5_LANDSCAPE') and doc ->> 'format' <> format)
-      or (doc -> 'style' ->> 'designStyle' in ('classic', 'modern', 'geometric', 'scrapbook')
+      or (doc -> 'style' ->> 'designStyle' in ('classic', 'modern', 'geometric', 'scrapbook', 'magazine', 'editorial')
           and doc -> 'style' ->> 'designStyle' <> design_style);
   if n <> 0 then
     raise exception 'RLS FAIL [design backfill]: % books whose doc format / designStyle differs from the columns', n;
@@ -3671,6 +3675,71 @@ begin
   end if;
   if not exists (select 1 from public.books where id = ac_b and album_confirmed_at is not null) then
     raise exception 'RLS FAIL [album confirmed]: owner cleared album_confirmed_at';
+  end if;
+  checks := checks + 1;
+
+  -- ===========================================================================
+  -- 2100 design styles m30: books_design_style_check allows the six styles of
+  -- src/lib/book/schema.ts DESIGN_STYLES (D-090)
+  -- ===========================================================================
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  -- the constraint is there, validated, and lists exactly the six styles
+  select count(*) into n
+    from pg_constraint as c,
+         lateral (select array_agg(x[1] order by x[1]) as vals
+                    from regexp_matches(pg_get_constraintdef(c.oid), '''([a-z_]+)''', 'g') as x) as v
+   where c.conrelid = 'public.books'::regclass
+     and c.conname = 'books_design_style_check'
+     and c.contype = 'c'
+     and c.convalidated
+     and v.vals = array['classic', 'editorial', 'geometric', 'magazine', 'modern', 'scrapbook'];
+  if n <> 1 then
+    raise exception 'RLS FAIL [design styles m30]: books_design_style_check missing, not validated or not the six styles';
+  end if;
+
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  -- owner chooses the new styles on insert
+  insert into public.books (user_id, title, design_style)
+  values (uid_a, 'RLS design magazine', 'magazine')
+  returning id, design_style into r;
+  ds_m := r.id;
+  if r.design_style is distinct from 'magazine' then
+    raise exception 'RLS FAIL [design styles m30]: owner could not insert design_style magazine';
+  end if;
+  insert into public.books (user_id, title, design_style)
+  values (uid_a, 'RLS design editorial', 'editorial')
+  returning design_style into r;
+  if r.design_style is distinct from 'editorial' then
+    raise exception 'RLS FAIL [design styles m30]: owner could not insert design_style editorial';
+  end if;
+  -- still an enum: unknown / wrong-case values rejected
+  begin
+    insert into public.books (user_id, title, design_style) values (uid_a, 'RLS design bad', 'baroque');
+    raise exception 'RLS FAIL [design styles m30]: unknown design_style accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.books (user_id, title, design_style) values (uid_a, 'RLS design bad', 'Magazine');
+    raise exception 'RLS FAIL [design styles m30]: wrong-case design_style accepted';
+  exception when check_violation then null;
+  end;
+  -- still insert-only for the owner (D-063): neither away from nor onto a new style
+  update public.books set design_style = 'classic' where id = ds_m;
+  update public.books set design_style = 'editorial' where id = ds_b;
+  reset role;
+  if not exists (select 1 from public.books where id = ds_m and design_style = 'magazine')
+     or not exists (select 1 from public.books where id = ds_b and design_style = 'classic') then
+    raise exception 'RLS FAIL [design styles m30]: owner changed design_style after insert';
+  end if;
+  -- service role may write the new values
+  set local role service_role;
+  update public.books set design_style = 'editorial' where id = ds_m;
+  reset role;
+  if not exists (select 1 from public.books where id = ds_m and design_style = 'editorial') then
+    raise exception 'RLS FAIL [design styles m30]: service role could not write design_style editorial';
   end if;
   checks := checks + 1;
 
