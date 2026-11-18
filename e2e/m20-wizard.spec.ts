@@ -1600,7 +1600,16 @@ async function focusStops(p: Page) {
 async function expectStyleGrid(p: Page, perRow: 2 | 3) {
   const ids = await p.locator('[data-testid^="style-"]:not([data-testid^="style-spread-"])').evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")));
   expect(ids).toEqual(WIZARD_STYLES.map((s) => `style-${s}`));
-  const boxes = await Promise.all(WIZARD_STYLES.map(async (s) => (await p.getByTestId(`style-${s}`).boundingBox())!));
+  // One evaluate = one frame: six separate boundingBox() calls can straddle the step's scroll into
+  // view and report cards of one row at different y (seen on the AI-off server, T14b).
+  const boxes = await p.evaluate(
+    (ids) =>
+      ids.map((id) => {
+        const r = document.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      }),
+    WIZARD_STYLES.map((s) => `style-${s}`),
+  );
   const rows = [...new Set(boxes.map((b) => Math.round(b.y)))];
   expect(rows.length, `style cards in ${6 / perRow} rows of ${perRow}`).toBe(6 / perRow);
   const vw = p.viewportSize()!.width;

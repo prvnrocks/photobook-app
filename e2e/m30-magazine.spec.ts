@@ -55,7 +55,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { colourwaysFor } from "../src/lib/design/colourways";
 import { getLayout } from "../src/lib/layouts";
-import { layoutIdShowsDescription } from "../src/lib/layouts/description";
+import { chaptersShowingDescription, layoutIdShowsDescription } from "../src/lib/layouts/description";
 import { cardRadio, createBookViaWizard, finishWizardToEditor, waitForSortingOrReview, WIZARD_STYLES } from "./helpers/create-book";
 
 type M30Style = "magazine" | "editorial";
@@ -122,6 +122,19 @@ async function goToPosition(page: Page, pos: number) {
     await settle(page);
   }
   throw new Error(`page position ${pos} not reached`);
+}
+
+/**
+ * Doc position of the editor page that DRAWS the description panel of the layout owned by position
+ * `owner`: the owner itself, or — for a spread whose panel sits on the right half — `owner + 1`.
+ * Leaves the carousel on that page.
+ */
+async function descriptionPosition(page: Page, owner: number, spread: boolean): Promise<number> {
+  for (const pos of spread ? [owner, owner + 1] : [owner]) {
+    await goToPosition(page, pos);
+    if ((await editorPage(page, pos).locator(DESCRIPTION).count()) > 0) return pos;
+  }
+  throw new Error(`no description panel drawn for the layout at position ${owner}`);
 }
 
 /** Open a tool that sits behind More on phones (desktop: the sidebar rail has every tool). */
@@ -953,8 +966,11 @@ test.describe("M30 magazine book end to end (live, E2E_AUTH=1)", () => {
       for (const c of described) expect(descPages.filter(({ p }) => p.chapterId === c.id), `chapter ${c.id}`).toHaveLength(1);
       const first = descPages.find(({ p }) => described.some((c) => c.id === p.chapterId))!;
       const chapter = described.find((c) => c.id === first.p.chapterId)!;
-      await goToPosition(page, first.i);
-      const pg = editorPage(page, first.i);
+      // A spread layout is owned by its LEFT half (first.i) but may draw the description panel on
+      // the right half (mg-p-spread-feature): on a phone that is the next carousel item.
+      const descPos = await descriptionPosition(page, first.i, first.p.side === "left");
+      console.log(`[a] description layout=${first.p.layout} owner position=${first.i} drawn at=${descPos}`);
+      const pg = editorPage(page, descPos);
       await expect(pg.locator(DESCRIPTION)).toHaveText(chapter.description!.text);
       await pg.getByTestId("description-target").click();
       const input = page.getByTestId("description-input");
@@ -1071,6 +1087,78 @@ test.describe("M30 magazine book end to end (live, E2E_AUTH=1)", () => {
         expect(Math.abs((p.mediaBox?.hMm ?? 0) - 216), `page ${p.n} height`).toBeLessThanOrEqual(0.5);
       }
       if (aiOn) expect(r.pages.some((p) => p.text.replace(/\s+/g, " ").includes("Edited by hand"))).toBe(true);
+      // pdf-analyze (same checks as the /dev-print part): no soft masks on images or graphics states.
+      const analysed = analyzePdf(pdfPath);
+      expect(analysed).toHaveLength(r.pageCount);
+      const softMasks = analysed.flatMap((p) => [...p.images.filter((i) => i.smask).map(() => `page ${p.page} image smask`), ...p.gstates.filter((g) => g.smask).map(() => `page ${p.page} gstate smask`)]);
+      const imageFilters = [...new Set(analysed.flatMap((p) => p.images.map((i) => String((i as { filter?: unknown }).filter))))];
+      console.log(
+        `[d] pdf-analyze softMasks=${softMasks.length} constAlphaGstates=${analysed.reduce((n, p) => n + p.gstates.filter((g) => !g.smask).length, 0)} forms=${analysed.reduce((n, p) => n + p.forms, 0)} tgroups=${analysed.reduce((n, p) => n + p.tgroups, 0)} patterns=${analysed.reduce((n, p) => n + p.patterns.length, 0)} imageFilters=${JSON.stringify(imageFilters)}`,
+      );
+      expect(softMasks).toEqual([]);
+    }
+
+    // 7. Review round 1 blocker (dcc89bc), through the real publish path: swap the description page
+    //    to a layout WITHOUT a description panel → Publish changes → the description stays in the
+    //    owner's doc but is neither in the snapshot nor in the public /b/[slug] payload.
+    if (aiOn) {
+      const mine = "Edited by hand: the road, the tea, the long way home.";
+      const before = await row();
+      const owner = before.doc.pages.findIndex((p) => p.side !== "right" && layoutIdShowsDescription(p.layout));
+      expect(owner).toBeGreaterThanOrEqual(0);
+      const chapterId = before.doc.pages[owner].chapterId!;
+      const anonReq = await browser.newContext({ baseURL });
+      try {
+        const live = await anonReq.request.get(`/b/${slug}`);
+        expect(live.status()).toBe(200);
+        expect(await live.text(), "published description is in the public payload before the swap").toContain(mine);
+
+        await page.goto(`/books/${bookId}/edit`);
+        await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 30_000 });
+        // Splitting a spread re-fits its right half, and a re-fit keeps a description layout while the
+        // chapter has a description (mg-p-spread-feature → mg-p-full + mg-p-three-feature): swap every
+        // page that still shows it, one Layout pick each.
+        for (let round = 0; round < 4; round++) {
+          const pages = (await row()).doc.pages;
+          const at = pages.findIndex((p) => p.chapterId === chapterId && p.side !== "right" && layoutIdShowsDescription(p.layout));
+          if (at < 0) break;
+          await goToPosition(page, at);
+          if ((await page.getByTestId("layout-picker").count()) === 0) await page.getByTestId("editor-tool-layout").click();
+          const picker = page.getByTestId("layout-picker");
+          await expect(picker).toBeVisible();
+          const optionIds = await picker
+            .locator('[data-testid="layout-option"][data-role="page"]:not([data-disabled]):not([aria-pressed="true"])')
+            .evaluateAll((els) => els.map((e) => e.getAttribute("data-layout-id") ?? ""));
+          const plain = optionIds.find((id) => !layoutIdShowsDescription(id));
+          console.log(`[e] swap ${round + 1}: position=${at} from=${pages[at].layout} options=${optionIds.length} to=${plain ?? "-"}`);
+          expect(plain, "an enabled one-page layout without a description panel").toBeTruthy();
+          await picker.locator(`[data-testid="layout-option"][data-layout-id="${plain}"]`).click();
+          await expect.poll(async () => (await row()).doc.pages[at]?.layout, { timeout: 20_000 }).toBe(plain);
+          await waitSaved(page, 20_000);
+        }
+        expect(chaptersShowingDescription((await row()).doc.pages).has(chapterId)).toBe(false);
+        // The owner's doc keeps the text (swap back → it is shown again).
+        expect((await row()).doc.chapters.find((c) => c.id === chapterId)?.description).toEqual({ text: mine, source: "user" });
+        // Not published yet: viewers still get the old snapshot.
+        expect(await (await anonReq.request.get(`/b/${slug}`)).text()).toContain(mine);
+
+        await expect(page.getByTestId("editor-publish-changes")).toHaveText("Publish changes", { timeout: 30_000 });
+        await page.getByTestId("editor-done").click();
+        await expect(page.getByTestId("publish-message")).toHaveText("Changes published", { timeout: 30_000 });
+        const after = await row();
+        expect(after.slug).toBe(slug);
+        const snap = JSON.stringify(after.published_doc);
+        expect(snap).not.toContain("Edited by hand");
+        expect(snap).not.toContain('"description"');
+        const res = await anonReq.request.get(`/b/${slug}`);
+        expect(res.status()).toBe(200);
+        const html = await res.text();
+        console.log(`[e] after republish: snapshot has description=${snap.includes('"description"')} public payload has text=${html.includes("Edited by hand")} bytes=${html.length}`);
+        expect(html).not.toContain("Edited by hand");
+        expect(html).not.toContain("the long way home");
+      } finally {
+        await anonReq.close();
+      }
     }
     await context.close();
   });
