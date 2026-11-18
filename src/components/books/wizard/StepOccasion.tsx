@@ -1,6 +1,6 @@
-// Wizard step 2 "What's this book for?" (M19 T3, D-071; M20 T4, D-072): six occasion tiles with big
-// icons in emerald circles (3 columns everywhere — M20 polish: at 375 px all six fit above the
-// sticky Continue bar on the first screen; the icon circle is a little smaller below sm). They rise in one after another; the
+// Wizard step 2 "What's this book for?" (M19 T3, D-071; M20 T4, D-072; Task 5: + Birthday): seven
+// occasion tiles with big icons in emerald circles (3 columns everywhere, the seventh centred in its
+// own row — at 375 px the first six fit above the sticky Continue bar on the first screen; the icon circle is a little smaller below sm). They rise in one after another; the
 // chosen tile glows emerald and its icon does a small wiggle (steps-motion.css). The caption language
 // is no longer asked: the server picks it (title script: Arabic → ar, Latin → en; else memory → browser, D-072).
 // Radio names are prefixed "wizard-" so only the step-2 hidden inputs reach the create action.
@@ -45,7 +45,12 @@ export function StepOccasion({ occasion, onOccasion, headlineId, error }: StepOc
           {OCCASIONS.map((id, i) => {
             const Icon = OCCASION_ICONS[id];
             return (
-              <div key={id} className="ws-rise flex min-w-0" style={{ "--i": i } as React.CSSProperties}>
+              <div
+                key={id}
+                // Seven cards in three columns: the last one sits alone — centre it.
+                className={i === OCCASIONS.length - 1 && OCCASIONS.length % 3 === 1 ? "ws-rise col-start-2 flex min-w-0" : "ws-rise flex min-w-0"}
+                style={{ "--i": i } as React.CSSProperties}
+              >
                 <ChoiceCard
                   name="wizard-occasion"
                   value={id}
