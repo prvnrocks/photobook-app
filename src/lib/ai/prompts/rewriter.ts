@@ -46,3 +46,33 @@ Return only the structured result with the new caption text.`;
 export function rewriterSystem(): SystemBlock[] {
   return cachedSystem(REWRITER_SYSTEM_PROMPT);
 }
+
+// ---------------------------------------------------------------------------------------------
+// M30 T11 — variant for ✨ on a CHAPTER DESCRIPTION (magazine / editorial books). The base text
+// above is what every caption rewrite sends and is frozen byte for byte
+// (tests/ai/prompt-freeze.test.ts); the variant is the base text + one DESCRIPTIONS section, a
+// constant of its own → its own cached prefix. Only description rewrites use it.
+
+/** v1 (M30 T11): rewrite / shorter / translate / tone for a chapter description (≤ 45 words). */
+export const REWRITER_DESCRIPTIONS_PROMPT_VERSION = 1;
+
+const DESCRIPTIONS_SECTION = `DESCRIPTIONS
+Some books also print a short paragraph about a chapter (a chapter description). When TASK has the line "target: chapter description", the text to change is that paragraph, not a page caption, and the user message is built a little differently:
+- CHAPTER: the chapter's title, date label and place (or null). The title was written by an earlier model: never take names from it.
+- CHAPTER PHOTOS instead of PAGE PHOTOS: notes about photos of the whole chapter.
+- CURRENT DESCRIPTION instead of CURRENT CAPTION: the paragraph to change, as a quoted string.
+The instructions, rules 1 and 3 to 6 and the safety note apply to the description exactly as they do to a caption (read "caption" as "description"), with these differences:
+- Length (this replaces rule 2): 25 to 45 words in 2 or 3 sentences, and never more than 45 words. For shorter: clearly fewer words than the current description, in one or two sentences; it may go below 25 words.
+- It stays a paragraph about the chapter as a whole, grounded in the chapter's photo notes and the current description. Plain sentences in sentence case: no heading, no list, no line breaks, no emojis.
+- Do not repeat the chapter title or any caption of the book word for word.
+- Check codes: too_long = over 45 words; duplicate = it repeated the chapter title, a caption or another chapter's description word for word. The other codes mean what rule 7 says.
+- The structured result is still one field: text = the new description only.`;
+
+export const REWRITER_DESCRIPTIONS_SYSTEM_PROMPT = `${REWRITER_SYSTEM_PROMPT}
+
+${DESCRIPTIONS_SECTION}`;
+
+/** System blocks for a rewrite target: the variant for a chapter description, else the base blocks. */
+export function rewriterSystemFor(description: boolean): SystemBlock[] {
+  return description ? cachedSystem(REWRITER_DESCRIPTIONS_SYSTEM_PROMPT) : rewriterSystem();
+}

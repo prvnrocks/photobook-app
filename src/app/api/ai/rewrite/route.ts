@@ -1,8 +1,17 @@
-// POST /api/ai/rewrite (M5 Task 7, D-037 #1/#6/#8): ✨ rewrite ONE caption.
-// Body: { bookId: uuid, pageId: string, instruction: RewriteInstruction, text: 1..200 code points }
+// POST /api/ai/rewrite (M5 Task 7, D-037 #1/#6/#8): ✨ rewrite ONE caption — or (M30 T11) ONE
+// chapter description.
+// Body, caption:     { bookId: uuid, pageId: string, instruction: RewriteInstruction, text: 1..200 code points }
+// Body, description: { bookId: uuid, target: "description", chapterId: string, instruction, text: 1..400 code points }
 // (instruction: rewrite | shorter | translate | tone:<Tone>).
 // The route never writes the doc: the editor shows the result and, if the user accepts it,
-// saves it as a `user` caption through PUT /api/books/[id]/doc (D-037 #1).
+// saves it as a `user` caption / `{ text, source: "user" }` description through
+// PUT /api/books/[id]/doc (D-037 #1).
+//
+// A description rewrite is the SAME kind of run: same create_rewrite_run_capped call, so it
+// counts toward maxCaptionRewrites and the per-user daily ceiling exactly like a caption rewrite,
+// with the same 409 / 429 / 502 / 503 answers; effort low; result ≤ 45 words (pre-checked). Its
+// context (chapter, photo notes of the chapter, the book's captions and other descriptions) is
+// read from the SAVED doc. Only books whose style has description layouts accept it (else 400).
 //
 // Server-side only: book ownership (getMyBook, RLS), paid status → cap (books.is_paid), the
 // page's photo notes from the SAVED doc (admin read after the ownership check, never from the
@@ -16,8 +25,9 @@
 //
 // Responses (all no-store):
 //   200 { text, lang, remaining }   remaining = cap − successful rewrites (null if the count failed)
-//   400 { error: 'invalid_body' } (also: body over REWRITE_MAX_BODY_BYTES)
-//   400 { error: 'too_short' }      — instruction 'shorter' on a caption of ≤ 3 words
+//   400 { error: 'invalid_body' } (also: body over REWRITE_MAX_BODY_BYTES; a description rewrite
+//                                    on a book whose style has no chapter descriptions)
+//   400 { error: 'too_short' }      — instruction 'shorter' on a caption / description of ≤ 3 words
 //   401 { error: 'unauthenticated' }   403 { error: 'forbidden' }
 //   404 { error: 'not_found' }      409 { error: 'already_running' }
 //   429 { error: 'limit', remaining: 0 }   — per-book cap of successful rewrites
@@ -39,6 +49,8 @@ import { limitsFor } from "@/lib/ai/limits";
 import { sanitizeMemory } from "@/lib/ai/memory";
 import { analysisOf } from "@/lib/ai/orchestrator";
 import {
+  chapterRewriteContext,
+  isDescriptionRewrite,
   isTooShortToShorten,
   pagePhotoIds,
   REWRITE_MAX_BODY_BYTES,
@@ -55,6 +67,7 @@ import { createRewriteRun, finishRewriteRun, getRewritesUsed, isMissingRpcError,
 import { getMyBook } from "@/lib/db/books";
 import { getUserMemoryAdmin } from "@/lib/db/memory";
 import { getPhotoNotesAdmin } from "@/lib/db/photo-notes";
+import { writesDescriptions } from "@/lib/layouts/description";
 import { readBodyWithLimit } from "@/lib/http/body";
 import { errorCodeOf, json, unavailableIfTimeout } from "@/lib/http/json";
 
@@ -86,11 +99,15 @@ export async function POST(request: NextRequest) {
     }
     const parsed = RewriteBodySchema.safeParse(body);
     if (!parsed.success) return json({ error: "invalid_body" }, 400);
-    const { bookId, pageId, instruction, text } = parsed.data;
+    const data = parsed.data;
+    const { bookId, instruction, text } = data;
+    const description = isDescriptionRewrite(data);
     if (instruction === "shorter" && isTooShortToShorten(text)) return json({ error: "too_short" }, 400);
 
     const book = await getMyBook(bookId);
     if (!book) return json({ error: "not_found" }, 404);
+    // M30 T11: chapter descriptions exist only in styles with description layouts.
+    if (description && !writesDescriptions(book.design_style)) return json({ error: "invalid_body" }, 400);
 
     const mode = resolveAiMode();
     const transport = mode === "off" ? null : getTransport(mode);
@@ -101,7 +118,8 @@ export async function POST(request: NextRequest) {
     // Server-side context (never from the client).
     const savedDoc = parseBookDoc(book.doc);
     const doc = savedDoc.ok ? savedDoc.doc : null;
-    const photoIds = pagePhotoIds(doc, pageId) ?? [];
+    const chapterCtx = description ? chapterRewriteContext(doc, data.chapterId) : null;
+    const photoIds = description ? (chapterCtx?.photoIds ?? []) : (pagePhotoIds(doc, data.pageId) ?? []);
     const occasion = pick<Occasion>(book.occasion, OCCASIONS, "other");
     const captionLang = pick<CaptionLang>(book.caption_lang, CAPTION_LANGS, "en");
     const [notes, memory] = await Promise.all([loadNotes(book.id, photoIds), loadMemory(user.id)]);
@@ -156,6 +174,14 @@ export async function POST(request: NextRequest) {
           doc: { chapters: doc?.chapters ?? [] },
           pagePhotos: notes,
           memory,
+          ...(description
+            ? {
+                target: "description" as const,
+                chapter: chapterCtx?.chapter ?? null,
+                captions: chapterCtx?.captions ?? [],
+                otherDescriptions: chapterCtx?.otherDescriptions ?? [],
+              }
+            : {}),
         },
       });
       ok = result.ok;

@@ -564,6 +564,18 @@ export const RewriteOutputAiSchema = z.object({
 
 export const RewriteOutputStrictSchema = z.object({ text: storedText(AI_TEXT_LIMITS.caption) });
 
+/** What ✨ rewrites: a page caption (default) or (M30 T11) a chapter description. */
+export const REWRITE_TARGETS = ["caption", "description"] as const;
+export type RewriteTarget = (typeof REWRITE_TARGETS)[number];
+
+// M30 T11: output of a chapter-description rewrite — a VARIANT; the caption schemas above stay
+// byte-identical. Not clipped to the doc limit (see MomentCaptionsWithDescriptionStrictSchema):
+// the pre-check rejects anything over 45 words / 400 units.
+export const RewriteDescriptionOutputAiSchema = z.object({
+  text: z.string().describe("The new chapter description only: original, at most 45 words, in the target language."),
+});
+export const RewriteDescriptionOutputStrictSchema = z.object({ text: storedText(AI_TEXT_LIMITS.chapterDescription * 3) });
+
 export type RewriteOutputAi = z.infer<typeof RewriteOutputAiSchema>;
 export type RewriteOutput = z.infer<typeof RewriteOutputStrictSchema>;
 

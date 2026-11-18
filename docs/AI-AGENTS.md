@@ -157,6 +157,20 @@ Replay (`rewriter-replay.ts`) answers from tone pools in the target script, actu
 The route (`/api/ai/rewrite`) owns limits: one `agent_runs` row per rewrite (trigger `rewrite`), only `ok` counts
 (D-037 #6).
 
+**Chapter description rewrite (M30 T11).** The same route, agent and run kind rewrite a chapter description:
+`rewriteCaption({ input: { target: "description", chapter, captions, otherDescriptions, … } })`. Request body
+`{ bookId, target: "description", chapterId, instruction, text }` (text ≤ 400 code points; instructions as for captions;
+the caption body `{ bookId, pageId, instruction, text }` is unchanged) → 200 `{ text, lang, remaining }` with ≤ 45 words.
+It is created by the same `create_rewrite_run_capped` call, so it counts toward `maxCaptionRewrites` and the 24 h
+ceiling exactly like a caption rewrite, with the same 409 / 429 / 502 / 503 codes (400 `invalid_body` also when the
+book's style has no chapter descriptions; 400 `too_short` for `shorter` on ≤ 3 words). Variant constants only:
+`REWRITER_DESCRIPTIONS_SYSTEM_PROMPT` (base text + `DESCRIPTIONS` section), `RewriteDescriptionOutputAiSchema`,
+`max_tokens` 3000 (captions 2000), effort low. Context from the SAVED doc (`chapterRewriteContext`): the chapter line,
+notes of ≤ 8 photos of the chapter (description page first); the book's captions and the other descriptions feed the
+code check only. Pre-check = the build's (`checkBookDescriptions`: 45 words / 400 units, script, names, numbers, no
+verbatim caption / chapter title / other description) + `unchanged` / `not_shorter`; one retry, then
+`rewrite_unusable`. The route never writes the doc — the editor saves an accepted result as `{ text, source: "user" }`.
+
 Rewrite runs vs build runs (M5 review B1/S1): `create_rewrite_run_capped` (0900) inserts rewrite runs in state
 `rewriting` (never `queued`; a check constraint ties `rewriting` ⇔ active rewrite), fails this book's unfinished
 rewrite runs older than 5 min (`error_code 'stale'`), and enforces max 1 in flight per book, a per-user 24 h

@@ -508,3 +508,193 @@ describe("POST /api/ai/rewrite", () => {
     expect(mocks.getMyBook).toHaveBeenCalledTimes(1);
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// M30 T11 — ✨ on a chapter description: same route, same run kind, same limits.
+
+describe("POST /api/ai/rewrite — chapter description (M30 T11)", async () => {
+  const { planToDoc } = await import("@/lib/ai/plan-to-doc");
+  const { applyCaptions } = await import("@/lib/ai/captions");
+  const { serializeDoc } = await import("@/lib/book/doc-version");
+  const { wordCount } = await import("@/lib/ai/schemas");
+  const { REWRITER_DESCRIPTIONS_SYSTEM_PROMPT, REWRITER_SYSTEM_PROMPT } = await import("@/lib/ai/prompts/rewriter");
+  const { RewriteDescriptionOutputAiSchema, RewriteOutputAiSchema } = await import("@/lib/ai/schemas");
+  const { REWRITER_DESCRIPTION_MAX_TOKENS } = await import("@/lib/ai/agents/rewriter");
+
+  const SECRET_DESCRIPTION =
+    "Zebra picnic wonderland stretched across the whole afternoon by the old pier. Everyone stayed close, nobody hurried, and the light went soft and gold before the last plates were cleared away from the long table.";
+  const OTHER = "The second day began slowly, with coffee on the steps and nowhere to be. By noon the whole street was awake and we simply followed it.";
+  const pid = (n: number) => `44444444-4444-4444-8444-${String(n).padStart(12, "0")}`;
+
+  /** A saved magazine doc: 2 chapters, each opening with a description page; chapter 1 has an AI description. */
+  function magazineDoc() {
+    const photos = Array.from({ length: 6 }, (_, i) => ({ id: pid(i + 1), width: 1200, height: 1600, takenAt: null, place: null, keep: true, analysis: null }));
+    const aliasToId = new Map(photos.map((p, i) => [`p${i + 1}`, p.id]));
+    const built = planToDoc(
+      {
+        title: "Our summer",
+        subtitle: "",
+        coverPhotoId: "p1",
+        moments: [
+          { id: "m1", title: "Beach day", dateLabel: "", place: null, pages: [{ layoutId: "mg-p-two-panel", photoIds: ["p1", "p2"] }, { layoutId: "mg-p-full", photoIds: ["p3"] }] },
+          { id: "m2", title: "Old town", dateLabel: "", place: null, pages: [{ layoutId: "mg-p-one-headline", photoIds: ["p4"] }, { layoutId: "mg-p-two-circle", photoIds: ["p5", "p6"] }] },
+        ],
+      },
+      { aliasToId, photos, book: { occasion: "travel", tone: "nostalgic", captionLang: "en", title: null, isPaid: false, maxPages: 20 }, runId: null, generatorVersion: 6, design: { format: "A5_PORTRAIT", designStyle: "magazine" } },
+    );
+    if (!("doc" in built)) throw new Error(built.issues.join("; "));
+    const doc = applyCaptions(built.doc, new Map([["m2:1", "Narrow streets and warm stone"]]), new Map(), { lang: "en", descriptions: new Map([["m2", OTHER]]) });
+    expect(doc.chapters[1].description).toEqual({ text: OTHER, source: "ai" });
+    return JSON.parse(JSON.stringify(serializeDoc(doc)));
+  }
+  const magazineBook = (o: Record<string, unknown> = {}) => bookRow({ doc: magazineDoc(), design_style: "magazine", format: "A5_PORTRAIT", occasion: "travel", ...o });
+  const DESC_BODY = { bookId: BOOK, target: "description", chapterId: "c1", instruction: "rewrite", text: SECRET_DESCRIPTION };
+
+  beforeEach(() => {
+    mocks.getMyBook.mockResolvedValue(magazineBook());
+  });
+
+  it("200 { text, lang, remaining }: ≤ 45 words, variant prompt + schema, effort low; the run is an ordinary rewrite run", async () => {
+    const r = await read(await call(DESC_BODY));
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ text: expect.any(String), lang: "en", remaining: 19 });
+    expect(wordCount(r.body.text)).toBeLessThanOrEqual(45);
+    expect(r.body.text).not.toBe(SECRET_DESCRIPTION);
+    // Same RPC call as a caption rewrite: per-book cap 20, enforced, daily ceiling 60.
+    expect(mocks.createCalls).toEqual([[BOOK, "u1", "replay", 20, true, 60]]);
+    expect(mocks.runs).toMatchObject([{ state: "done", aiStatus: "ok", errorCode: null }]);
+    expect(mocks.steps).toHaveLength(1);
+    expect(mocks.steps[0]).toMatchObject({ agent: "rewriter", stepKey: "rewriter", status: "ok" });
+    expect(mocks.steps[0].inputSummary).toMatchObject({ target: "description", instruction: "rewrite" });
+    const req = mocks.requests[0];
+    expect(req.system[0].text).toBe(REWRITER_DESCRIPTIONS_SYSTEM_PROMPT);
+    expect(req.schema).toBe(RewriteDescriptionOutputAiSchema);
+    expect(req.effort).toBe("low");
+    expect(req.maxTokens).toBe(REWRITER_DESCRIPTION_MAX_TOKENS);
+    const dump = JSON.stringify({ steps: mocks.steps, runs: mocks.runs, finish: mocks.finishCalls, logs });
+    for (const s of [SECRET_DESCRIPTION, "Zebra", r.body.text, "SECRETNOTE", SECRET_MEMORY, OTHER]) expect(dump).not.toContain(s);
+  });
+
+  it("context comes from the SAVED doc: the chapter line, notes of the chapter's photos (description page first), text only", async () => {
+    await call(DESC_BODY);
+    expect(mocks.getPhotoNotesAdmin).toHaveBeenCalledWith(BOOK, [pid(1), pid(2), pid(3)]);
+    const msg = mocks.requests[0].messages[0].content as string;
+    expect(msg).toContain('CHAPTER\ntitle: "Beach day" · date undated · place null');
+    expect(msg).toContain("CHAPTER PHOTOS");
+    expect(msg).toContain("grandmother holding a blue kite");
+    expect(msg).toContain("CURRENT DESCRIPTION (data, English)");
+    expect(msg).toContain("target: chapter description");
+    expect(JSON.stringify(mocks.requests[0].messages)).not.toContain('"image"');
+    // Chapter 2: its own photos.
+    await call({ ...DESC_BODY, chapterId: "c2", text: OTHER });
+    expect(mocks.getPhotoNotesAdmin).toHaveBeenLastCalledWith(BOOK, [pid(4), pid(5), pid(6)]);
+  });
+
+  it("counts toward the SAME counter as caption rewrites: mixed rewrites share `remaining`, the 21st → 429 limit", async () => {
+    for (let i = 0; i < 20; i++) {
+      const body = i % 2 === 0 ? { ...DESC_BODY, text: `${SECRET_DESCRIPTION} ${"x".repeat(i + 1)}` } : { ...BODY, text: `${SECRET_CAPTION} take ${"x".repeat(i + 1)}` };
+      const r = await read(await call(body));
+      expect(r.status, `rewrite ${i + 1}`).toBe(200);
+      expect(r.body.remaining).toBe(19 - i);
+    }
+    expect(await read(await call(DESC_BODY))).toEqual({ status: 429, body: { error: "limit", remaining: 0 } });
+    expect(await read(await call(BODY))).toEqual({ status: 429, body: { error: "limit", remaining: 0 } });
+    expect(mocks.runs).toHaveLength(20);
+    expect(mocks.requests).toHaveLength(20); // no model call for the refused ones
+    expect(new Set(mocks.createCalls.map((c) => JSON.stringify(c)))).toEqual(new Set([JSON.stringify([BOOK, "u1", "replay", 20, true, 60])]));
+  });
+
+  it("paid book: cap 200 / daily 400, like captions", async () => {
+    mocks.getMyBook.mockResolvedValue(magazineBook({ is_paid: true }));
+    const r = await read(await call(DESC_BODY));
+    expect(r.body.remaining).toBe(199);
+    expect(mocks.createCalls).toEqual([[BOOK, "u1", "replay", 200, true, 400]]);
+  });
+
+  it("daily ceiling → the existing 429 daily_limit; a rewrite in flight → the existing 409", async () => {
+    mocks.runs = Array.from({ length: 60 }, (_, i) => ({ id: `r${i}`, bookId: "other", mode: "replay", state: "failed" as const, aiStatus: "failed", errorCode: "refusal" }));
+    expect(await read(await call(DESC_BODY))).toEqual({ status: 429, body: { error: "daily_limit" } });
+    expect(mocks.requests).toHaveLength(0);
+    mocks.runs = [{ id: "busy", bookId: BOOK, mode: "replay", state: "queued", aiStatus: null, errorCode: null }];
+    expect(await read(await call(DESC_BODY))).toEqual({ status: 409, body: { error: "already_running" } });
+    expect(mocks.requests).toHaveLength(0);
+  });
+
+  it("failed description rewrites are not counted (502), exactly like captions", async () => {
+    const { ReplayTransport } = await import("@/lib/ai/transport-replay");
+    mocks.transport = new ReplayTransport({ scenario: "refusal", fixturesDir: "/nonexistent" });
+    expect(await read(await call(DESC_BODY))).toEqual({ status: 502, body: { error: "refusal", retryable: false } });
+    expect(mocks.runs).toMatchObject([{ state: "failed", aiStatus: "failed", errorCode: "refusal" }]);
+    mocks.transport = null;
+    expect((await read(await call(DESC_BODY))).body.remaining).toBe(19);
+  });
+
+  it("a model answer over 45 words twice → 502 rewrite_unusable, never returned, not counted", async () => {
+    const { ReplayTransport } = await import("@/lib/ai/transport-replay");
+    const long = Array.from({ length: 46 }, (_, i) => (i === 0 ? "Slow" : "light")).join(" ");
+    mocks.transport = new ReplayTransport({ scenario: "ok", fixturesDir: "/nonexistent", synths: { rewriter: () => ({ text: long }) } });
+    expect(await read(await call(DESC_BODY))).toEqual({ status: 502, body: { error: "rewrite_unusable", retryable: false } });
+    expect(mocks.steps.map((s) => s.attempt)).toEqual([1, 2]);
+    expect(mocks.runs).toMatchObject([{ aiStatus: "failed", errorCode: "rewrite_unusable" }]);
+  });
+
+  it("shorter: fewer words; on ≤ 3 words → 400 too_short before any run; translate → Arabic script, lang 'ar'", async () => {
+    const shorter = await read(await call({ ...DESC_BODY, instruction: "shorter" }));
+    expect(shorter.status).toBe(200);
+    expect(wordCount(shorter.body.text)).toBeLessThan(wordCount(SECRET_DESCRIPTION));
+    expect(await read(await call({ ...DESC_BODY, instruction: "shorter", text: "Slow sunny lunch" }))).toEqual({ status: 400, body: { error: "too_short" } });
+    const ar = await read(await call({ ...DESC_BODY, instruction: "translate" }));
+    expect(ar.status).toBe(200);
+    expect(ar.body.lang).toBe("ar");
+    expect(/[؀-ۿ]/.test(ar.body.text)).toBe(true);
+    expect(wordCount(ar.body.text)).toBeLessThanOrEqual(45);
+    expect(mocks.runs).toHaveLength(2);
+  });
+
+  it("400 invalid_body: malformed description bodies, and a book whose style has no chapter descriptions — no run, no model call", async () => {
+    for (const bad of [
+      { ...DESC_BODY, pageId: "pg1" },
+      { ...DESC_BODY, chapterId: "" },
+      { ...DESC_BODY, target: "heading" },
+      { ...DESC_BODY, text: "x".repeat(401) },
+      { bookId: BOOK, target: "description", instruction: "rewrite", text: SECRET_DESCRIPTION },
+    ]) {
+      expect(await read(await call(bad))).toEqual({ status: 400, body: { error: "invalid_body" } });
+    }
+    for (const design_style of ["classic", "modern", null]) {
+      mocks.getMyBook.mockResolvedValue(bookRow({ design_style }));
+      expect(await read(await call(DESC_BODY)), String(design_style)).toEqual({ status: 400, body: { error: "invalid_body" } });
+    }
+    expect(mocks.createCalls).toHaveLength(0);
+    expect(mocks.requests).toHaveLength(0);
+  });
+
+  it("a chapter that is not in the saved doc → still 200, without chapter notes; 404 / 503 as for captions", async () => {
+    const r = await read(await call({ ...DESC_BODY, chapterId: "c-new" }));
+    expect(r.status).toBe(200);
+    expect(mocks.getPhotoNotesAdmin).not.toHaveBeenCalled();
+    expect(mocks.requests[0].messages[0].content).toContain("title: null · date undated · place null");
+    mocks.getMyBook.mockResolvedValue(null);
+    expect(await read(await call(DESC_BODY))).toEqual({ status: 404, body: { error: "not_found" } });
+    mocks.getMyBook.mockResolvedValue(magazineBook());
+    vi.stubEnv("AI_MODE", "off");
+    expect(await read(await call(DESC_BODY))).toEqual({ status: 503, body: { error: "ai_off" } });
+  });
+
+  it("caption rewrites in a magazine book still use the base prompt and schema", async () => {
+    const r = await read(await call({ bookId: BOOK, pageId: "p1", instruction: "rewrite", text: SECRET_CAPTION }));
+    expect(r.status).toBe(200);
+    expect(mocks.requests[0].system[0].text).toBe(REWRITER_SYSTEM_PROMPT);
+    expect(mocks.requests[0].schema).toBe(RewriteOutputAiSchema);
+    expect(mocks.steps[0].inputSummary).not.toHaveProperty("target");
+    expect(wordCount(r.body.text)).toBeLessThanOrEqual(18);
+  });
+
+  it("never writes the doc", async () => {
+    const before = JSON.stringify(magazineDoc());
+    const book = magazineBook();
+    mocks.getMyBook.mockResolvedValue(book);
+    await call(DESC_BODY);
+    expect(JSON.stringify(book.doc)).toBe(before);
+  });
+});

@@ -10,11 +10,16 @@
 // - "tone:<Tone>": a line from that tone's pool; "rewrite"/"translate": the book tone's pool.
 // - The pick depends on (instruction, lang, tone, inputHash, attempt), so a retry (attempt 2)
 //   returns a different line. Every line passes the pre-check (no names, no digits, sentence case).
+// - meta.target "description" (M30 T11): a chapter description in the target script — the Caption
+//   Writer replay's 2-sentence paragraphs (26–38 words) for rewrite / translate / tone; for
+//   "shorter" a one-sentence or shorter line with fewer words AND code points than the input
+//   (else the shortest line → not_shorter). Never over 45 words.
 // - scenario "invalid" → an object of the wrong shape (fails the AI schema → parse_failed).
 
 import type { CaptionLang, Tone } from "@/lib/book/options";
 import { wordCount } from "../schemas";
 import type { ReplaySynth } from "../transport-replay";
+import { replayDescription } from "./caption-writer-replay";
 import type { RewriterScenarioMeta } from "./rewriter";
 
 /** Pools per language and tone: distinct lines, ≤ 9 words, no capitals after the first word. */
@@ -39,6 +44,37 @@ export const SHORT_POOL: Readonly<Record<CaptionLang, readonly string[]>> = {
   ar: ["معاً", "فرح خالص", "نحن ببساطة", "ضوء ذهبي", "جنباً إلى جنب", "ما زلنا نبتسم"],
 };
 
+/** Short chapter descriptions for "shorter" (one sentence, 6–13 words; no names, no digits). */
+export const SHORT_DESCRIPTION_POOL: Readonly<Record<CaptionLang, readonly string[]>> = {
+  en: [
+    "A slow, easy stretch of the day, with everyone close and nothing to rush for.",
+    "Quiet hours in good company, kept exactly as they were.",
+    "Small moments, unhurried and warm, worth a second look.",
+    "An easy afternoon that nobody wanted to end.",
+    "Good company and soft light, nothing more needed.",
+  ],
+  ar: [
+    "وقت هادئ من اليوم، والجميع قريبون ولا شيء يدعو إلى العجلة.",
+    "ساعات هادئة مع صحبة طيبة، بقيت كما كانت تمامًا.",
+    "لحظات صغيرة دافئة بلا استعجال تستحق نظرة ثانية.",
+    "عصر جميل لم يرغب أحد في أن ينتهي.",
+    "صحبة طيبة وضوء ناعم ولا شيء أكثر.",
+  ],
+};
+
+/** A replay chapter description for a rewrite (M30 T11). */
+function descriptionRewrite(meta: Partial<RewriterScenarioMeta>, lang: CaptionLang, seed: number): string {
+  if (meta.instruction === "shorter") {
+    const words = num(meta.inputWords, 0);
+    const chars = num(meta.inputChars, 0);
+    const all = SHORT_DESCRIPTION_POOL[lang];
+    const fits = all.filter((l) => wordCount(l) < words && cp(l) < chars);
+    if (fits.length === 0) return [...all].sort((a, b) => cp(a) - cp(b))[0];
+    return fits[seed % fits.length];
+  }
+  return replayDescription(`m${(seed % 70) + 1}`, lang);
+}
+
 const TONES_ORDER: readonly Tone[] = ["romantic", "fun", "nostalgic", "minimal"];
 const cp = (s: string) => Array.from(s).length;
 const num = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
@@ -50,6 +86,7 @@ export const rewriterReplaySynth: ReplaySynth = (raw, ctx) => {
   const tone: Tone = TONES_ORDER.includes(meta.tone as Tone) ? (meta.tone as Tone) : "minimal";
   const attempt = Math.max(1, Math.trunc(num(meta.attempt, 1)));
   const seed = Math.abs(Math.trunc(num(meta.inputHash, 0))) + (attempt - 1);
+  if (meta.target === "description") return { text: descriptionRewrite(meta, lang, seed) };
 
   if (meta.instruction === "shorter") {
     const words = num(meta.inputWords, 0);
