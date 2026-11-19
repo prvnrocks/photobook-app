@@ -19,7 +19,7 @@ import { createClient } from "@/lib/supabase/server";
 import { clipText } from "@/lib/text/clip";
 import { isUuid } from "@/lib/uuid";
 
-export type RunTrigger = "build" | "rebuild" | "rewrite";
+export type RunTrigger = "build" | "rebuild" | "rewrite" | "storybook";
 export type RunMode = "live" | "replay" | "rule";
 export type RunState =
   | "queued"
@@ -29,6 +29,11 @@ export type RunState =
   | "critiquing"
   | "repairing"
   | "validating"
+  // Task 8 storybook runs (migration 2800): the four stages of a storybook job
+  | "discovering"
+  | "organizing"
+  | "writing"
+  | "designing"
   | "done"
   | "failed";
 export type RunAiStatus = "ok" | "partial" | "failed";
@@ -50,6 +55,18 @@ export function isBuildRunTrigger(trigger: unknown): trigger is BuildRunTrigger 
 
 /** State of an in-flight rewrite run (0900): never 'queued', so it can't pass for a fresh build. */
 export const REWRITE_RUN_STATE = "rewriting";
+
+/**
+ * Task 8 (migration 2800): a storybook generation job. Shares the table, the lease RPCs and the
+ * one-active-run-per-book index with builds, but has its own states (discovering / organizing /
+ * writing / designing — never 'queued') and its own lookups below; every BUILD lookup keeps
+ * filtering by BUILD_RUN_TRIGGERS, so the album machinery never sees a storybook run.
+ */
+export const STORYBOOK_RUN_TRIGGER = "storybook";
+
+export function isStoryRunTrigger(trigger: unknown): trigger is "storybook" {
+  return trigger === STORYBOOK_RUN_TRIGGER;
+}
 
 export class AgentRunsQueryError extends Error {
   readonly code: string | undefined;
@@ -784,4 +801,107 @@ export async function getRewritesUsed(bookId: string, client?: RlsClient): Promi
     .eq("ai_status", "ok");
   if (error) throw new AgentRunsQueryError("count rewrites", error.code);
   return count ?? 0;
+}
+
+// ---------------------------------------------------------------------------
+// Task 8: storybook generation jobs (trigger 'storybook', migration 2800)
+
+/** The storybook run if it belongs to the signed-in user (RLS, owner columns only), else null. */
+export async function getStoryRunForOwner(runId: string): Promise<OwnerRun | null> {
+  if (!isUuid(runId)) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("agent_runs")
+    .select(OWNER_RUN_COLUMNS)
+    .eq("id", runId)
+    .eq("trigger", STORYBOOK_RUN_TRIGGER)
+    .maybeSingle();
+  if (error) throw new AgentRunsQueryError("load story run", error.code);
+  return data;
+}
+
+/** Newest storybook run of the book visible to the signed-in user (any state), or null. RLS. */
+export async function getLatestStoryRunForBook(bookId: string): Promise<OwnerRun | null> {
+  if (!isUuid(bookId)) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("agent_runs")
+    .select(OWNER_RUN_COLUMNS)
+    .eq("book_id", bookId)
+    .eq("trigger", STORYBOOK_RUN_TRIGGER)
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new AgentRunsQueryError("load latest story run", error.code);
+  return data;
+}
+
+/**
+ * Newest build / rebuild / storybook run of the book (RLS, owner columns), or null — tells whether
+ * the book's last job was a storybook (Task 8 flow) or an album build (old flow).
+ */
+export async function getLatestBookRun(bookId: string): Promise<OwnerRun | null> {
+  if (!isUuid(bookId)) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("agent_runs")
+    .select(OWNER_RUN_COLUMNS)
+    .eq("book_id", bookId)
+    .in("trigger", [...BUILD_RUN_TRIGGERS, STORYBOOK_RUN_TRIGGER])
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new AgentRunsQueryError("load latest run", error.code);
+  return data;
+}
+
+/**
+ * The newest FINISHED storybook run of the book other than `exceptRunId` (admin, incl. its
+ * cursor) — a failed / cancelled one is resumed by the next run's first tick ("Try again" keeps
+ * finished stages). Callers check ownership first.
+ */
+export async function getPreviousStoryRun(
+  bookId: string,
+  exceptRunId: string,
+): Promise<Pick<RunForTick, "id" | "state" | "cursor" | "error_code" | "started_at"> | null> {
+  if (!isUuid(bookId) || !isUuid(exceptRunId)) return null;
+  const { data, error } = await createAdminClient()
+    .from("agent_runs")
+    .select("id, state, cursor, error_code, started_at")
+    .eq("book_id", bookId)
+    .eq("trigger", STORYBOOK_RUN_TRIGGER)
+    .neq("id", exceptRunId)
+    .in("state", [...ACTIVE_RUN_EXCLUDED_STATES])
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new AgentRunsQueryError("load previous story run", error.code);
+  return data;
+}
+
+/**
+ * "Stop" (Task 8): marks an unfinished storybook run failed with error_code 'cancelled' and
+ * clears its lease AND lease token, so the tick that may be running loses its next checkpoint
+ * (stale lease → it stops without another model call or doc write). `progress` is the stopped
+ * snapshot to show. Returns true when the run was still active. Admin client — the route checked
+ * ownership with getStoryRunForOwner.
+ */
+export async function cancelStoryRunRow(runId: string, progress: Json): Promise<boolean> {
+  if (!isUuid(runId)) throw new AgentRunsQueryError("cancel story run", "invalid_id");
+  const { data, error } = await createAdminClient()
+    .from("agent_runs")
+    .update({
+      state: "failed",
+      error_code: "cancelled",
+      finished_at: new Date().toISOString(),
+      lease_until: null,
+      lease_token: null,
+      progress,
+    })
+    .eq("id", runId)
+    .eq("trigger", STORYBOOK_RUN_TRIGGER)
+    .not("state", "in", `(${ACTIVE_RUN_EXCLUDED_STATES.join(",")})`)
+    .select("id");
+  if (error) throw new AgentRunsQueryError("cancel story run", error.code);
+  return (data?.length ?? 0) === 1;
 }
