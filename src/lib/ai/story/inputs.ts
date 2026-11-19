@@ -207,7 +207,7 @@ export function buildStoryInputs(args: {
 
 /** Grounding view of one photo. */
 export function groundingPhoto(p: StoryPhoto): GroundingPhoto {
-  return { place: p.place, dateLabel: p.dateLabel, evidence: [p.description ?? "", ...p.objects, ...p.activities].join(" . ") };
+  return { place: p.place, dateLabel: p.dateLabel, evidence: [p.description ?? "", ...p.objects, ...p.activities].join(" . "), objects: p.objects };
 }
 export function groundingFacts(facts: readonly StoryFact[]): Map<string, GroundingFact> {
   return new Map(facts.map((f) => [f.id, { kind: f.kind, text: f.text }]));

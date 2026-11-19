@@ -17,7 +17,8 @@
 //   1. English names are found by capitalisation. A name written in lower case ("sara") is only
 //      caught when it is a person the user listed and the block did not cite that fact.
 //   2. A capitalised word at the START of a sentence is accepted when it is a common opening
-//      word (SENTENCE_STARTERS) or occurs in the cited photos' descriptions. A name that is
+//      word (SENTENCE_STARTERS), a gerund ("Taking …", v2) or occurs in the cited photos'
+//      descriptions. A name that is
 //      also such a word ("Will", "Rose" in a description) passes; an uncommon opening word is
 //      rejected (false positive → one repair).
 //   3. Arabic has no capitals: invented Arabic names and place names CANNOT be detected. For
@@ -35,6 +36,19 @@
 //   7. Paraphrased famous quotes or lyrics are not detected; only quotation marks, reported
 //      speech verbs and a list of stock phrases are.
 //   8. Repetition compares exact normalised word sequences; a paraphrase is not a repetition.
+//      v2 adds a content-word overlap check between blocks of the same chapter (near_duplicate)
+//      and a "repeated beat" check ("again", "another round" used twice in a chapter).
+//   9. Narrative quality (v2, English only — Arabic is not checked): `inventory` = a sentence
+//      that lists what is in the frame (≥ 4 concrete things, or ≥ 3 short comma / "and" items
+//      that each name one). "Concrete" = a head
+//      noun of the vision objects of the chapter's photos, a clothing / furnishing word, or a
+//      colour / material word that is not attached to such a noun. `gendered_word` = he / she /
+//      man / woman … when the user's own facts give no such word for anyone: gender is never
+//      inferred from a photo.
+//  10. Light narrative framing is allowed (v2): for a first-person narrator, "we wanted / we
+//      enjoyed / we couldn't wait" in the narrator's own voice is not rejected as a stated
+//      feeling; feelings of anyone else, and strong feelings (happy, proud, loved …), still need a
+//      fact.
 
 import type { NarrativeKind } from "@/lib/storybook/types";
 
@@ -71,6 +85,9 @@ export const GROUNDING_ISSUE_CODES = [
   "too_long",
   "wrong_script",
   "avoided_topic", // something the user asked not to mention
+  "inventory", // a list of visible things instead of narrative (v2)
+  "gendered_word", // he / she / man / woman … not given by the user (v2)
+  "near_duplicate", // says what another block of the chapter already said (v2)
   // rewrite only
   "unchanged",
   "not_shorter",
@@ -91,6 +108,8 @@ export type GroundingPhoto = {
   dateLabel: string | null;
   /** What the vision model saw: description + objects + activities, as one string. */
   evidence: string;
+  /** The vision model's object list (v2 inventory check: what counts as a concrete thing). */
+  objects?: readonly string[];
 };
 export type GroundingFact = { kind: string; text: string };
 
@@ -106,6 +125,10 @@ export type GroundingContext = {
   otherTexts: readonly string[];
   /** Things the user asked not to mention. */
   avoid?: readonly string[];
+  /** Point of view of the book (v2: light first-person framing is allowed). */
+  narrator?: "first_singular" | "first_plural" | "third";
+  /** Accepted texts of the SAME chapter (v2 near-duplicate check). */
+  chapterTexts?: readonly string[];
 };
 
 export type BlockDraft = { blockId: string; kind: NarrativeKind; text: string; photoRefs: readonly string[]; factRefs: readonly string[] };
@@ -520,7 +543,11 @@ type ScanInput = {
   uncitedNames: ReadonlySet<string>;
   /** Things the user asked not to mention. */
   avoid: readonly string[];
+  narrator?: GroundingContext["narrator"];
 };
+
+/** First-person light framing in the narrator's own voice (v2): not a stated feeling. */
+const LIGHT_FIRST_PERSON = /^(?:i|we|both of us|all of us|the two of us|each of us)\s+(?:(?:all|both|just|really|still)\s+)?(?:wanted|enjoyed|couldn['’]?t wait|could not wait)$/i;
 
 function scan(input: ScanInput): Found[] {
   const { text, trusted, evidence } = input;
@@ -549,7 +576,9 @@ function scan(input: ScanInput): Found[] {
 
     // names: capitalised Latin words
     if (t.cap && LATIN_LETTER.test(t.raw) && !known && !CAP_ALLOW.has(t.norm) && !c.month && !c.weekday) {
-      const ordinary = t.initial && (SENTENCE_STARTERS.has(t.norm) || hasToken(evidence, t.norm));
+      // v2: a gerund opening ("Taking a seat …", "Wandering …") is an ordinary word, not a name
+      const gerund = /^[a-z]{3,}ing$/.test(t.norm) && t.norm.length >= 6;
+      const ordinary = t.initial && (SENTENCE_STARTERS.has(t.norm) || hasToken(evidence, t.norm) || gerund);
       // category words are reported under their own code, not as a name as well
       const categorised = !!(c.rel || c.milestone || c.season || c.duration || c.num || c.speech) && t.initial;
       if (!ordinary && !categorised) add("ungrounded_name", "proper_noun");
@@ -582,9 +611,11 @@ function scan(input: ScanInput): Found[] {
   if (/[“”"«»„‹›]/u.test(rest)) add("quoted_speech", "quotation");
 
   // feelings stated as fact
+  const firstPerson = input.narrator === "first_plural" || input.narrator === "first_singular";
   for (const re of [FEELING_STATE, FEELING_STATE_I, FEELING_VERB, FEELING_VERB_I, FEELING_NOUN]) {
     const m = re.exec(text);
     if (!m) continue;
+    if (firstPerson && (re === FEELING_VERB || re === FEELING_VERB_I) && LIGHT_FIRST_PERSON.test(m[0].trim())) continue;
     const word = normalizeToken(m[1]!.split(/\s+/).pop()!);
     if (!hasToken(trusted, word)) add("stated_feeling", "feeling");
   }
@@ -657,6 +688,145 @@ function repetitionIssue(text: string, others: readonly string[], exempt: Vocab)
   return null;
 }
 
+// ---------------------------------------------------------------------------- narrative quality (v2)
+
+/** Clothing / furnishing / fixture words: concrete things a photo inventory lists. */
+const CONCRETE_WORDS = new Set(
+  (
+    "shirt shirts shirted tshirt sweatshirt sweatshirts hoodie hoodies jacket jackets coat coats dress dresses skirt skirts trousers pants jeans shorts sleeve sleeves collar " +
+    "sneakers sneaker shoes shoe boots sandals heels socks cap caps hat hats sunglasses scarf scarves headscarf abaya kandura bag bags backpack handbag watch bracelet necklace earrings ring " +
+    "chair chairs table tables stool stools bench benches sofa couch cushion cushions lamp lamps fan fans ceiling door doors doorway window windows shutter shutters wall walls column columns " +
+    "arch arches pillar pillars sign signs logo label labels straw straws cup cups mug mugs glass glasses bottle bottles plate plates tray menu napkin paving pavement floor tiles curtain curtains shelf shelves"
+  ).split(" "),
+);
+const COLOUR_WORDS = new Set(
+  "red orange yellow green blue teal turquoise purple violet pink brown beige black white grey gray navy maroon olive khaki cream golden silver amber sandy bright pale dark".split(" "),
+);
+const MATERIAL_WORDS = new Set("wooden stone metal metallic glass brick marble leather denim printed striped patterned checked tiled painted".split(" "));
+const MALE_WORDS = new Set("he him his himself man men boy boys guy guys gentleman gentlemen husband father dad daddy son brother grandfather grandpa uncle nephew groom boyfriend fiance".split(" "));
+const FEMALE_WORDS = new Set("she her hers herself woman women girl girls lady ladies wife mother mum mom mommy daughter sister grandmother grandma aunt niece bride girlfriend fiancee".split(" "));
+const GENDERED_TEXT = new Set("he him his himself she her hers herself man men woman women boy boys girl girls guy guys lady ladies gentleman gentlemen".split(" "));
+const STOP_WORDS = new Set(
+  (
+    "the and but for with from into onto over under above below beside between among around across along through behind beyond before after during until since near inside outside within without " +
+    "this that these those there here its our ours their theirs his her hers your yours you they them she him who whom which what when where while then than also just only even still very more most " +
+    "was were are has have had did does doing done been being will would could should can may might must not nor yet one two each every all both some any such another other "
+  ).split(" "),
+);
+const REPEAT_BEAT = /(?<![\p{L}])(?:again|another round|one more (?:time|round|try|photo|shot|pose|picture)|once more|yet another)(?![\p{L}])/iu;
+
+export const INVENTORY_LIMITS = {
+  /** Concrete things in one sentence that make it a list. */
+  perSentence: 4,
+  /** Short comma / "and" items in a row that name a thing each. */
+  listItems: 3,
+  /** Words of an item to count as a list item. */
+  itemWords: 6,
+  /** Content-word overlap with another block of the chapter that counts as saying the same … */
+  overlap: 0.45,
+  /** … together with this much overlap of adjacent content-word pairs. */
+  pairOverlap: 0.15,
+} as const;
+
+const singular = (n: string) => (n.length > 3 && n.endsWith("es") && /(?:ch|sh|x|s)es$/.test(n) ? n.slice(0, -2) : stem(n));
+
+function concreteSet(objects: readonly string[]): Set<string> {
+  const out = new Set<string>();
+  for (const w of CONCRETE_WORDS) out.add(singular(w));
+  for (const o of objects) {
+    const toks = tokenize(o).map((t) => t.norm);
+    const head = toks[toks.length - 1];
+    if (head && head.length >= 3 && !COLOUR_WORDS.has(head) && !MATERIAL_WORDS.has(head)) out.add(singular(head));
+  }
+  return out;
+}
+
+/** Concrete mentions of one stretch of text: nouns, plus colour / material words not attached to one. */
+function mentions(words: readonly string[], concrete: ReadonlySet<string>): number {
+  let n = 0;
+  words.forEach((w, i) => {
+    if (concrete.has(singular(w))) n++;
+    else if (COLOUR_WORDS.has(w) || MATERIAL_WORDS.has(w)) {
+      const next = words[i + 1];
+      if (!next || !(concrete.has(singular(next)) || COLOUR_WORDS.has(next) || MATERIAL_WORDS.has(next))) n++;
+    }
+  });
+  return n;
+}
+
+const sentencesOf = (text: string) => text.split(/(?<=[.!?…])\s+/u).filter((x) => x.trim());
+const normsOf = (s: string) => tokenize(s).map((t) => t.norm);
+
+/** "list" / "sentence" when the block reads as an inventory of the frame, else null. English only. */
+export function inventoryIssue(text: string, kind: NarrativeKind, objects: readonly string[]): string | null {
+  const concrete = concreteSet(objects);
+  let total = 0;
+  for (const sentence of sentencesOf(text)) {
+    const words = normsOf(sentence);
+    const m = mentions(words, concrete);
+    total += m;
+    if (m >= INVENTORY_LIMITS.perSentence) return "sentence";
+    let run = 0;
+    for (const item of sentence.split(/[,;:]|\s(?:and|with)\s/u)) {
+      const iw = normsOf(item);
+      if (iw.length > 0 && iw.length <= INVENTORY_LIMITS.itemWords && mentions(iw, concrete) > 0) {
+        run++;
+        if (run >= INVENTORY_LIMITS.listItems) return "list";
+      } else run = 0;
+    }
+  }
+  // a caption / pull quote is one line: as many concrete things as a list sentence is a list
+  return (kind === "caption" || kind === "pull_quote") && total >= INVENTORY_LIMITS.perSentence ? "sentence" : null;
+}
+
+/** "he" / "she" … in the text when no fact of the user gives a word of that gender. English only. */
+export function genderedIssue(text: string, facts: Iterable<GroundingFact>): boolean {
+  const given = new Set<string>();
+  for (const f of facts) for (const t of tokenize(f.text)) given.add(t.norm);
+  const male = [...given].some((w) => MALE_WORDS.has(w));
+  const female = [...given].some((w) => FEMALE_WORDS.has(w));
+  for (const t of tokenize(text)) {
+    if (!GENDERED_TEXT.has(t.norm)) continue;
+    if (MALE_WORDS.has(t.norm) && !male) return true;
+    if (FEMALE_WORDS.has(t.norm) && !female) return true;
+  }
+  return false;
+}
+
+/** Content words in order (no function words, singular). */
+function contentSeq(text: string): string[] {
+  return tokenize(text)
+    .map((t) => t.norm)
+    .filter((n) => n.length >= 3 && !STOP_WORDS.has(n))
+    .map(singular);
+}
+function overlapOf<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): number {
+  let inter = 0;
+  for (const x of a) if (b.has(x)) inter++;
+  return a.size + b.size - inter === 0 ? 0 : inter / (a.size + b.size - inter);
+}
+const pairsOf = (seq: readonly string[]) => new Set(seq.slice(1).map((w, i) => `${seq[i]} ${w}`));
+
+/**
+ * "overlap" when the block says what another block of the chapter said (the same content words
+ * AND some of the same word pairs — the same things said the same way), "beat" for a repeated beat
+ * ("again", "another round") in two blocks of a chapter.
+ */
+export function nearDuplicateIssue(text: string, chapterTexts: readonly string[]): string | null {
+  const seq = contentSeq(text);
+  const own = new Set(seq);
+  const ownPairs = pairsOf(seq);
+  const beat = REPEAT_BEAT.test(text);
+  for (const other of chapterTexts) {
+    if (beat && REPEAT_BEAT.test(other)) return "beat";
+    const oSeq = contentSeq(other);
+    const o = new Set(oSeq);
+    if (own.size < 5 || o.size < 5) continue;
+    if (overlapOf(own, o) >= INVENTORY_LIMITS.overlap && overlapOf(ownPairs, pairsOf(oSeq)) >= INVENTORY_LIMITS.pairOverlap) return "overlap";
+  }
+  return null;
+}
+
 /**
  * All grounding issues of one block. Empty array = accepted. The block is checked against the
  * sources it CITES: a name that is in the memory facts but not in a cited fact is rejected.
@@ -701,12 +871,21 @@ export function checkBlock(block: BlockDraft, ctx: GroundingContext): GroundingI
   const citedSet = new Set(citedFacts);
   const uncitedNames = new Set<string>();
   for (const f of ctx.facts.values()) if (!citedSet.has(f)) for (const w of personNameWords(f)) uncitedNames.add(w);
-  for (const f of scan({ text, lang: ctx.lang, trusted, evidence, quotable: citedFacts.map((x) => x.text), uncitedNames, avoid: ctx.avoid ?? [] })) push(f.code, f.detail);
+  for (const f of scan({ text, lang: ctx.lang, trusted, evidence, quotable: citedFacts.map((x) => x.text), uncitedNames, avoid: ctx.avoid ?? [], narrator: ctx.narrator })) push(f.code, f.detail);
   if (scriptIssue(text, ctx.lang, trusted)) push("wrong_script");
 
   // 4. repetition across the storybook
   const rep = repetitionIssue(text, ctx.otherTexts, trusted);
   if (rep) push("repetition", rep);
+
+  // 5. narrative quality (v2): no inventories, no inferred gender, no near-duplicates in a chapter
+  if (ctx.lang === "en") {
+    const inv = inventoryIssue(text, block.kind, [...ctx.photos.values()].flatMap((p) => p.objects ?? []));
+    if (inv) push("inventory", inv);
+    if (genderedIssue(text, ctx.facts.values())) push("gendered_word", "pronoun");
+  }
+  const dup = nearDuplicateIssue(text, ctx.chapterTexts ?? []);
+  if (dup) push("near_duplicate", dup);
   return issues;
 }
 

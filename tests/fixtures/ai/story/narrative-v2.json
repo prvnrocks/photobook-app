@@ -1,0 +1,18 @@
+{
+  "_note": "Synthetic writer outputs (invented for tests, no user content). 'inventory' = v1-style object lists the v2 lint must reject; 'narrative' = v2-style storytelling it must accept.",
+  "objects": ["bench", "palm tree", "umbrella", "towel", "cooler", "sandals", "cup", "table", "lantern", "door"],
+  "inventory": [
+    "Here a bench sits beneath tall palm trees and a striped umbrella, a cup held in a hand, a wooden door behind and a lantern above.",
+    "One towel is red, another blue, both folded, laid out beside a cooler, a pair of sandals and a small table.",
+    "Later the umbrella goes up beside the bench, towel spread out, sandals kicked off on the sand."
+  ],
+  "narrative": [
+    "We got there before the crowd and claimed the bench under the palms. Nobody was in a hurry; the morning was ours, and the first photos came out of that slow start.",
+    "The coffee came first, then the plan for the day, which mostly meant staying exactly where we were for a while longer.",
+    "By the time the light turned soft, we had stopped counting the photos and just stayed a little longer."
+  ],
+  "paraphrase": [
+    "We tried the same pose by the lantern, laughing as the light kept shifting across the old door and the frame.",
+    "Once more we tried the same pose by the lantern, laughing while the light kept shifting over the old door."
+  ]
+}

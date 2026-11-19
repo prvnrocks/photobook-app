@@ -290,7 +290,24 @@ wizard or the editor yet. Three server functions, each proving book ownership fi
   `story_ai_calls` row (migration 2600, service role only: kind, scope, chapter, version, model, prompt version,
   tokens, cost, latency, error code — no text). Live calls are refused while the table is missing.
 - **Config**: `AI_STORY_MODEL` (allow-list = photo models), `AI_STORY_TIMEOUT_MS`, `AI_STORY_MAX_RETRIES`.
-  Prompt versions: `story-plan-1`, `story-write-1`, `story-rewrite-1` (`prompts.ts`, static system prompts).
+  Prompt versions: `story-plan-2`, `story-write-2`, `story-rewrite-2` (`prompts.ts`, static system prompts, frozen by
+  `tests/ai/prompt-freeze.test.ts`).
+- **v2 narrative (2026-11-19)**: live v1 output read as object inventories with repeated beats and an inferred "he".
+  v2 prompts ask for a story arc built on the user's answers (opening → what happened in order → closing beat), ONE
+  visual anchor per paragraph, light framing that follows from what happened ("the coffee came first"), never a
+  gender the user did not give; the writer gets its place in the book ("chapter 1 of 3: the opening"), the openings
+  already used, and photo notes without object lists. Grounding v2 adds `inventory` (≥ 4 concrete things in a
+  sentence or ≥ 3 short comma items naming one each; English only), `gendered_word` (he / she / man / woman … absent
+  from every user fact) and `near_duplicate` (same content words AND word pairs as another block of the chapter, or a
+  repeated "again" beat); first-person "we wanted / enjoyed / couldn't wait" is no longer a stated feeling; gerund
+  openings ("Taking a seat …") are not names. Hard rules (names, places, dates, events, relationships, speech)
+  unchanged. Live eval on one real 60-photo book (dry run, stored analyses): 5 → 14 stored blocks, 1 → 3 AI chapters,
+  ~$0.24 for plan + write.
+- **Photo filters + scenes (Task 4 v2)**: before planning, the storybook job sets aside non-preferred duplicates,
+  burst-like similar shots (`src/lib/photos/filter.ts`) and clearly blurry photos (book-relative, `bookBlurryIds`) as
+  `photos.status = 'dropped'` + `drop_reason` `duplicate` / `similar` / `blurry` — never a `user_override` photo,
+  restorable from "Left out by AI"; step 6 shows the real counts. One long visit is split into scenes at gaps that are
+  long for the set (moments v2), labelled by setting ("At the café"), never by one object.
 - **Replay** (`replay.ts`): deterministic, grounded synthesisers behind the service's own `ReplayTransport` (the shared
   `tests/fixtures/ai` files belong to the album pipeline and are not read).
 - **Errors** (`StoryError.code`): `not_found`, `no_photos`, `ai_off`, `invalid_plan`, `no_story`, `invalid_instruction`,

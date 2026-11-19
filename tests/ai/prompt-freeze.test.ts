@@ -15,6 +15,7 @@ import { CAPTION_WRITER_SYSTEM_PROMPT, captionWriterSystem } from "@/lib/ai/prom
 import { criticSystem, criticSystemText } from "@/lib/ai/prompts/critic";
 import { REWRITER_SYSTEM_PROMPT, rewriterSystem } from "@/lib/ai/prompts/rewriter";
 import { storytellerSystem, storytellerSystemText } from "@/lib/ai/prompts/storyteller";
+import * as StoryPrompts from "@/lib/ai/story/prompts";
 import {
   albumPlanAiSchemaFor,
   AlbumPlanAiSchema,
@@ -123,5 +124,38 @@ describe("prompt + schema freeze (pre-M30 styles)", () => {
     expect(albumPlanAiSchemaFor("modern")).toBe(AlbumPlanBackgroundsAiSchema);
     expect(albumPlanAiSchemaFor("geometric")).toBe(AlbumPlanBackgroundsAiSchema);
     expect(albumPlanAiSchemaFor("scrapbook")).toBe(AlbumPlanScrapbookAiSchema);
+  });
+});
+
+// Storybook prompts (Task 6 → v2, 2026-11-19): the planner / writer / rewriter system texts and
+// their output schemas are frozen too. v1 → v2 was an intended change (narrative instead of
+// inventories, no inferred gender, light framing) with the versions bumped to story-plan-2 /
+// story-write-2 / story-rewrite-2 so stored versions, story_ai_calls rows and replays never mix.
+// A new change: bump the version constant in src/lib/ai/story/prompts.ts and re-record these.
+const STORY_PROMPTS: Record<string, { version: string; system: string; schema: string }> = {
+  planner: { version: "story-plan-2", system: "af2ac47f220b750b3c66f3d00c590ff7021e0a6b44cb1e996e2872cac3c6525d", schema: "00efab4b3f1dd47f287454a46fd485f1814a471005014146f8ebd09364d4584a" },
+  writer: { version: "story-write-2", system: "1c027a463593aa4451d4addb9852522547321a2f8b5c4debf1ea4ea2529af47f", schema: "c7233b3f34b51e8eda3a82fbe70a8bcdede446ba6bc817fd0ac7387636782eac" },
+  rewriter: { version: "story-rewrite-2", system: "2a5540298905955d8c21b935265b29a0c10badeb74f0e88ec5731d530dd01c6a", schema: "d77f0265b840e30177fafcdd4a3ad0a714f00aa9b4c5766a9a9fcd920e6b5f33" },
+};
+
+describe("storybook prompt freeze (v2)", () => {
+  const current = {
+    planner: { version: StoryPrompts.STORY_PLANNER_PROMPT_VERSION, system: StoryPrompts.STORY_PLANNER_SYSTEM_PROMPT, schema: schemaJson(StoryPrompts.StoryPlanAiSchema) },
+    writer: { version: StoryPrompts.STORY_WRITER_PROMPT_VERSION, system: StoryPrompts.STORY_WRITER_SYSTEM_PROMPT, schema: schemaJson(StoryPrompts.StoryBlocksAiSchema) },
+    rewriter: { version: StoryPrompts.STORY_REWRITER_PROMPT_VERSION, system: StoryPrompts.STORY_REWRITER_SYSTEM_PROMPT, schema: schemaJson(StoryPrompts.StoryRewriteAiSchema) },
+  } as const;
+  it.each(Object.keys(STORY_PROMPTS) as (keyof typeof current)[])("%s: version, system text and schema are the recorded v2", (agent) => {
+    expect(current[agent].version).toBe(STORY_PROMPTS[agent]!.version);
+    expect(sha(current[agent].system)).toBe(STORY_PROMPTS[agent]!.system);
+    expect(sha(current[agent].schema)).toBe(STORY_PROMPTS[agent]!.schema);
+  });
+  it("the v2 texts carry the narrative rules (one anchor, no inferred gender, light framing) and keep the hard source rules", () => {
+    const w = current.writer.system;
+    expect(w).toContain("ONE ANCHOR");
+    expect(w).toContain("Never infer anyone's gender");
+    expect(w).toContain("light narrative framing");
+    expect(w).toContain("A person may be named only when the name appears in a FACT");
+    expect(w).toContain("Never write dialogue or quotation marks");
+    expect(w).not.toContain("Concrete over general");
   });
 });

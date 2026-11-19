@@ -489,7 +489,17 @@ type WriteContext = {
 };
 
 function groundingContext(w: WriteContext, allowed: readonly StoryPhoto[]): GroundingContext {
-  return { lang: w.inputs.lang, photos: new Map(allowed.map((p) => [p.alias, groundingPhoto(p)])), bookPhotos: w.bookAliases, facts: groundingFacts(w.inputs.facts), otherTexts: w.bookTexts, avoid: w.inputs.avoid };
+  return { lang: w.inputs.lang, photos: new Map(allowed.map((p) => [p.alias, groundingPhoto(p)])), bookPhotos: w.bookAliases, facts: groundingFacts(w.inputs.facts), otherTexts: w.bookTexts, avoid: w.inputs.avoid, narrator: w.inputs.narrator };
+}
+
+/** First three words of every text already in the book, de-duplicated (at most 60). */
+function openingsOf(texts: readonly string[]): string[] {
+  const out = new Set<string>();
+  for (const t of texts) {
+    const words = t.trim().split(/\s+/).slice(0, 3).join(" ").replace(/[,.;:!?…،]+$/u, "");
+    if (words) out.add(words);
+  }
+  return [...out].slice(0, 60);
 }
 
 type SlotsOutcome =
@@ -503,7 +513,7 @@ type SlotsOutcome =
  */
 async function writeSlots(
   w: WriteContext,
-  a: { chapterId: string | null; scopeId: string; slots: readonly Slot[]; promptPhotos: readonly StoryPhoto[]; allowed: readonly StoryPhoto[]; alreadyWritten: readonly { label: string; text: string }[] },
+  a: { chapterId: string | null; scopeId: string; slots: readonly Slot[]; promptPhotos: readonly StoryPhoto[]; allowed: readonly StoryPhoto[]; alreadyWritten: readonly { label: string; text: string }[]; chapterTexts?: readonly string[] },
 ): Promise<SlotsOutcome> {
   const { s, inputs, plan } = w;
   const ctx = groundingContext(w, a.allowed);
@@ -512,7 +522,7 @@ async function writeSlots(
     chapterId: a.scopeId,
     promptVersion: STORY_WRITER_PROMPT_VERSION,
     system: STORY_WRITER_SYSTEM_PROMPT,
-    userText: writerUserText({ inputs, plan, chapterId: a.chapterId, slots, photos: a.promptPhotos, alreadyWritten: written, repair }),
+    userText: writerUserText({ inputs, plan, chapterId: a.chapterId, slots, photos: a.promptPhotos, alreadyWritten: written, repair, usedOpenings: openingsOf(w.bookTexts) }),
     schema: StoryBlocksAiSchema,
     strictSchema: StoryBlocksStrictSchema,
     toLogOutput: blocksLogOutput,
@@ -528,11 +538,13 @@ async function writeSlots(
   if (!result.ok) return { ok: false, error: failureOf(result) };
 
   const accepted = new Map<string, Accepted>();
+  /** Accepted texts of this chapter so far (v2 near-duplicate check), plus its protected pages' texts. */
+  const chapterTexts: string[] = [...(a.chapterTexts ?? [])];
   const check = (slot: Slot, blocks: readonly StoryBlockOutput[]): GroundingIssue[] => {
     const out = blocks.find((b) => b.blockId === slot.blockId);
     if (!out) return [{ blockId: slot.blockId, code: "empty", detail: "missing" }];
     const draft: BlockDraft = { blockId: slot.blockId, kind: slot.kind, text: out.text, photoRefs: out.photoRefs, factRefs: out.factRefs };
-    const issues = checkBlock(draft, ctx);
+    const issues = checkBlock(draft, { ...ctx, chapterTexts });
     if (issues.length === 0) {
       accepted.set(slot.blockId, {
         kind: slot.kind,
@@ -541,6 +553,7 @@ async function writeSlots(
         factRefs: out.factRefs.slice(0, MAX_FACT_REFS),
       });
       w.bookTexts.push(out.text);
+      chapterTexts.push(out.text);
     }
     return issues;
   };
@@ -852,7 +865,8 @@ async function writeStoryImpl(bookId: string, storyPlan: StoryPlan, opts: { chap
     let accepted = new Map<string, Accepted>();
     const issues: GroundingIssue[] = [];
     if (slots.length > 0) {
-      const outcome = await writeSlots(w, { chapterId: chapter.id, scopeId: chapter.id, slots, promptPhotos: allowed, allowed, alreadyWritten: earlier });
+      const kept = current.pages.filter((p) => p.chapterId === chapter.id && !rewriting.has(p.id)).flatMap((p) => p.blocks.map((b) => b.text));
+      const outcome = await writeSlots(w, { chapterId: chapter.id, scopeId: chapter.id, slots, promptPhotos: allowed, allowed, alreadyWritten: earlier, chapterTexts: kept });
       if (!outcome.ok) throw outcome.error ?? new StoryError("budget_exhausted", "run_budget");
       accepted = outcome.accepted;
       issues.push(...outcome.issues);
@@ -970,7 +984,7 @@ async function writeStoryImpl(bookId: string, storyPlan: StoryPlan, opts: { chap
     newThisCall++;
     attempted++;
     written++;
-    const outcome = await writeSlots(w, { ...g, alreadyWritten: earlier });
+    const outcome = await writeSlots(w, { ...g, alreadyWritten: earlier, chapterTexts: protectedPages.filter((p) => g.chapterId !== null && p.chapterId === g.chapterId).flatMap((p) => p.blocks.map((b) => b.text)) });
     if (!outcome.ok) {
       if (outcome.error) {
         lastError = outcome.error;
@@ -1135,6 +1149,8 @@ export async function rewriteNarrativeBlock(blockId: string, instruction: Rewrit
     facts: groundingFacts(inputs.facts),
     otherTexts: current.pages.flatMap((p) => p.blocks.filter((b) => b.id !== block.id).map((b) => b.text)),
     avoid: inputs.avoid,
+    narrator: inputs.narrator,
+    chapterTexts: current.pages.filter((p) => p.chapterId === page.chapterId).flatMap((p) => p.blocks.filter((b) => b.id !== block.id).map((b) => b.text)),
   };
   const words = countWords(block.text);
   const bounds = WORD_BOUNDS[block.kind];

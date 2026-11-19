@@ -68,7 +68,7 @@ describe("story config", () => {
     expect(STORY_WRITER_SYSTEM_PROMPT).toMatch(/35–65 words/);
     expect(STORY_WRITER_SYSTEM_PROMPT).toMatch(/25–55 words/);
     expect(STORY_WRITER_SYSTEM_PROMPT).toMatch(/caption: [^\n]*5–18 words/);
-    expect([STORY_PLANNER_PROMPT_VERSION, STORY_WRITER_PROMPT_VERSION, STORY_REWRITER_PROMPT_VERSION]).toEqual(["story-plan-1", "story-write-1", "story-rewrite-1"]);
+    expect([STORY_PLANNER_PROMPT_VERSION, STORY_WRITER_PROMPT_VERSION, STORY_REWRITER_PROMPT_VERSION]).toEqual(["story-plan-2", "story-write-2", "story-rewrite-2"]);
   });
 });
 
@@ -107,7 +107,7 @@ describe("planStory", () => {
     expect(isBalanced(plan.skeleton.balance)).toBe(true);
     // usage: one row, tokens and cost, no text
     expect(w.records).toEqual([
-      { userId: USER, bookId: BOOK, runId: pid(901), kind: "plan", scope: "plan", chapterId: null, storybookVersion: null, model: "claude-opus-5-5", promptVersion: "story-plan-1", mode: "live", usage: { input: 1800, output: 600, cacheRead: 1500, cacheWrite: 0 }, costUsd: costUsd("claude-opus-5-5", { input: 1800, output: 600, cacheRead: 1500, cacheWrite: 0 }), latencyMs: 2345, status: "ok" },
+      { userId: USER, bookId: BOOK, runId: pid(901), kind: "plan", scope: "plan", chapterId: null, storybookVersion: null, model: "claude-opus-5-5", promptVersion: "story-plan-2", mode: "live", usage: { input: 1800, output: 600, cacheRead: 1500, cacheWrite: 0 }, costUsd: costUsd("claude-opus-5-5", { input: 1800, output: 600, cacheRead: 1500, cacheWrite: 0 }), latencyMs: 2345, status: "ok" },
     ]);
   });
 
@@ -117,7 +117,7 @@ describe("planStory", () => {
     const plan = await planStory(BOOK, w.deps);
     const text = userText(w.requests[0]!);
     expect(text).toContain("TONE: plain and warm");
-    expect(text).toContain("no description available");
+    expect(text).toContain("no note available");
     expect(text).toContain("(the user gave no facts");
     expect(plan.photoCount).toBe(12);
     expect(plan.contextRev).toBeNull();
@@ -325,7 +325,7 @@ describe("writeStory", () => {
     const s = result.storybook;
     expect(StorybookSchema.safeParse(s).success).toBe(true);
     expect(s).toMatchObject({ bookId: BOOK, version: 1, parentVersion: null, origin: "ai", lang: "en", contextRev: 3, target: { photoShare: 0.65, narrativeShare: 0.35 } });
-    expect(s.generator).toEqual({ pipeline: "balanced-storybook-1", model: "claude-opus-5-5", prompts: { planner: "story-plan-1", writer: "story-write-1" } });
+    expect(s.generator).toEqual({ pipeline: "balanced-storybook-1", model: "claude-opus-5-5", prompts: { planner: "story-plan-2", writer: "story-write-2" } });
     expect(result.merge).toBeNull();
     expect(result.issues).toEqual([]);
     expect(result.balance).toEqual(storybookBalance(s));
@@ -372,7 +372,7 @@ describe("writeStory", () => {
       ["write", "book", "closing", 1, "ok"],
     ]);
     for (const r of w.records) {
-      expect(r).toMatchObject({ userId: USER, bookId: BOOK, runId: pid(901), mode: "live", model: "claude-opus-5-5", promptVersion: "story-write-1", latencyMs: 2345, usage: { input: 1800, output: 600, cacheRead: 1500, cacheWrite: 0 } });
+      expect(r).toMatchObject({ userId: USER, bookId: BOOK, runId: pid(901), mode: "live", model: "claude-opus-5-5", promptVersion: "story-write-2", latencyMs: 2345, usage: { input: 1800, output: 600, cacheRead: 1500, cacheWrite: 0 } });
       expect(r.costUsd).toBe(costUsd("claude-opus-5-5", r.usage));
       expect(r.costUsd).toBeGreaterThan(0);
       expect(Object.keys(r).sort()).toEqual(["bookId", "chapterId", "costUsd", "kind", "latencyMs", "mode", "model", "promptVersion", "runId", "scope", "status", "storybookVersion", "usage", "userId"]);
@@ -759,9 +759,9 @@ describe("rewriteNarrativeBlock", () => {
     // everything else identical
     const strip = (x: Storybook) => ({ ...x, version: 0, parentVersion: 0, origin: "", generator: null, createdAt: "", facts: null, pages: x.pages.map((p) => ({ ...p, blocks: p.blocks.map((b) => (b.id === target.id ? null : b)) })) });
     expect(strip(s)).toEqual(strip(w.storybook));
-    expect(s.generator.prompts).toEqual({ planner: "story-plan-1", writer: "story-write-1", rewriter: "story-rewrite-1" });
+    expect(s.generator.prompts).toEqual({ planner: "story-plan-2", writer: "story-write-2", rewriter: "story-rewrite-2" });
     expect(w.versions).toHaveLength(2);
-    expect(w.records.at(-1)).toMatchObject({ kind: "rewrite", scope: "block", storybookVersion: 2, promptVersion: "story-rewrite-1", status: "ok" });
+    expect(w.records.at(-1)).toMatchObject({ kind: "rewrite", scope: "block", storybookVersion: 2, promptVersion: "story-rewrite-2", status: "ok" });
   });
 
   it("accepts the composite id and a plain id with opts.bookId; anything else is not_found", async () => {
@@ -911,5 +911,37 @@ describe("configuration reaches the request", () => {
     expect(w.requests).toHaveLength(1);
     expect(w.requests[0]).toMatchObject({ model: "claude-sonnet-5-5", timeoutMs: 20_000 });
     expect(w.records[0]).toMatchObject({ model: "claude-sonnet-5-5", status: "error", error: "server_error" });
+  });
+});
+
+describe("writeStory v2: a story, not an inventory", () => {
+  it("the writer request carries the chapter's place in the book and no object lists (they invited inventories)", async () => {
+    const w = await planned();
+    await writeStory(BOOK, w.plan, {}, w.deps);
+    const first = userText(w.requests[0]!);
+    expect(first).toContain("WHERE THIS CHAPTER SITS\nchapter 1 of 3: the opening");
+    expect(first).not.toMatch(/objects: /);
+    expect(first).toMatch(/seen: /);
+    expect(userText(w.requests[3]!)).toContain("the closing page: the last beat of the whole story");
+    expect(w.requests[0]!.system).toBeDefined();
+  });
+
+  it("an inventory paragraph and an inferred 'he' go to the ONE repair call with their codes; still wrong → dropped and reported", async () => {
+    const w = await planned();
+    const listy = (_r: AgentRequest<unknown>, good: unknown) => {
+      const g = structuredClone(good) as Blocks;
+      g.blocks[0]!.text = `${g.blocks[0]!.text} A chair, a cup, a lamp and a door fill the frame.`;
+      g.blocks[1]!.text = `Later he walks along the beach near the water while the afternoon slows down around everyone there and nobody hurries back.`;
+      return g;
+    };
+    const script = world({ script: { 0: listy, 1: listy } });
+    const result = await writeStory(BOOK, w.plan, {}, { ...w.deps, transport: script.deps.transport, record: w.deps.record });
+    const repair = userText(script.requests[1]!);
+    expect(repair).toMatch(/b1: [a-z_, ]*inventory/);
+    expect(repair).toMatch(/b2: [a-z_, ]*gendered_word/);
+    expect(result.issues.map((i) => [i.blockId, i.code])).toEqual(expect.arrayContaining([["b1", "inventory"], ["b2", "gendered_word"]]));
+    const stored = blocksOf(result.storybook).map((b) => b.id);
+    expect(stored).not.toContain("b1");
+    expect(stored).not.toContain("b2");
   });
 });
