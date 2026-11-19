@@ -735,3 +735,69 @@ describe("clusterPhotosIntoMoments", () => {
     expect(r.candidates.find((c) => c.photoId === pid(2))).toMatchObject({ role: "alternate", reason: "dropped" });
   });
 });
+
+// Perf fix (story-export-readiness): the quality scores of a call are stored in ONE write.
+describe("clusterPhotosIntoMoments: one write for the batch's quality scores", () => {
+  const setupBook = () => {
+    const photos = [1, 2, 3, 4, 5, 6, 7].map((n) => row(n, { taken_at: `2026-10-12T1${n}:00:00+00:00`, date_source: "exif" }));
+    return server({ photos, blurry: new Set([pid(2), pid(5)]) });
+  };
+  /** The same server with saveQualities: one write of many rows, recorded. */
+  const bulkOf = (s: ReturnType<typeof server>, fail = false) => {
+    const writes: string[][] = [];
+    const saveQualities: NonNullable<OrganizeDeps["saveQualities"]> = async (rows) => {
+      writes.push(rows.map((r) => r.key.photoId));
+      if (fail) throw new Error("down");
+      for (const { key, q } of rows) s.state.quality = [...s.state.quality.filter((x) => x.photoId !== key.photoId), { ...q, photoId: key.photoId }];
+    };
+    return { writes, deps: { ...s.deps, saveQualities } };
+  };
+
+  it("same result and the same stored scores as one write per photo", async () => {
+    const before = setupBook();
+    const expected = await clusterPhotosIntoMoments(BOOK, before.deps);
+    const now = setupBook();
+    const bulk = bulkOf(now);
+    const got = await clusterPhotosIntoMoments(BOOK, bulk.deps);
+    expect(got).toEqual(expected);
+    expect(bulk.writes).toHaveLength(1);
+    expect([...bulk.writes[0]!].sort()).toEqual([1, 2, 3, 4, 5, 6, 7].map(pid));
+    expect(now.state.saves).toEqual([]); // no per-photo write
+    const byId = (q: StoredQuality[]) => [...q].sort((a, b) => a.photoId.localeCompare(b.photoId));
+    expect(byId(now.state.quality)).toEqual(byId(before.state.quality));
+  });
+
+  it("copies this tick already read (photo analysis) are scored without downloading them again — same scores", async () => {
+    const before = setupBook();
+    const expected = await clusterPhotosIntoMoments(BOOK, before.deps);
+    const now = setupBook();
+    const kept = new Map<string, string>();
+    for (const n of [1, 2, 3]) kept.set(`${USER}/${BOOK}/${pid(n)}-thumb.jpg`, (await before.deps.loadAiCopy!(`${USER}/${BOOK}/${pid(n)}-thumb.jpg`))!);
+    const got = await clusterPhotosIntoMoments(BOOK, { ...now.deps, aiCopyCache: { get: (p) => kept.get(p), set: () => {} } });
+    expect(got).toEqual(expected);
+    expect(now.state.loads.map((p) => p.split("/")[2]!.slice(0, 36)).sort()).toEqual([4, 5, 6, 7].map(pid));
+  });
+
+  it("if the one write fails, each photo is stored on its own (same result); a photo whose own write fails stays unscored", async () => {
+    const before = setupBook();
+    const expected = await clusterPhotosIntoMoments(BOOK, before.deps);
+    const now = setupBook();
+    const bulk = bulkOf(now, true);
+    const got = await clusterPhotosIntoMoments(BOOK, bulk.deps);
+    expect(got).toEqual(expected);
+    expect([...now.state.saves].sort()).toEqual([1, 2, 3, 4, 5, 6, 7].map(pid));
+
+    const again = setupBook();
+    const flaky = bulkOf(again, true);
+    const save = again.deps.saveQuality!;
+    const partial = await clusterPhotosIntoMoments(BOOK, {
+      ...flaky.deps,
+      saveQuality: async (key, q) => {
+        if (key.photoId === pid(3)) throw new Error("down");
+        return save(key, q);
+      },
+    });
+    expect(partial.pending.quality).toBe(1);
+    expect(partial.quality.find((q) => q.photoId === pid(3))?.basis).not.toBe("pixels");
+  });
+});

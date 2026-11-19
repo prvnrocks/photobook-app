@@ -371,6 +371,8 @@ export async function listPhotosForCuration(bookId: string): Promise<CurationPho
 
 /** Parallel downloads in loadThumbBase64. */
 export const THUMB_DOWNLOAD_CONCURRENCY = 5;
+/** Upper bound for a caller-chosen concurrency (a photo-analysis batch reads its ≤ 8 copies at once). */
+export const THUMB_DOWNLOAD_MAX_CONCURRENCY = 8;
 
 /** Thumbs are ~512 px JPEGs (≈30–150 KB); anything bigger isn't one of ours (T16 #17). */
 export const THUMB_MAX_BYTES = 1024 * 1024;
@@ -390,7 +392,7 @@ function isJpeg(bytes: Uint8Array): boolean {
  * downloads stop and a SupabaseUnavailableError is thrown, so the AI tick fails fast and the
  * run resumes later (photos are not marked "not analysed" because Storage was slow).
  */
-export async function loadThumbBase64(paths: string[]): Promise<Map<string, string>> {
+export async function loadThumbBase64(paths: string[], opts: { concurrency?: number } = {}): Promise<Map<string, string>> {
   const unique = [...new Set(paths.filter((p) => typeof p === "string" && p !== ""))];
   const out = new Map<string, string>();
   if (unique.length === 0) return out;
@@ -426,7 +428,7 @@ export async function loadThumbBase64(paths: string[]): Promise<Map<string, stri
     }
   };
   await Promise.all(
-    Array.from({ length: Math.min(THUMB_DOWNLOAD_CONCURRENCY, unique.length) }, worker),
+    Array.from({ length: Math.min(Math.max(1, Math.min(THUMB_DOWNLOAD_MAX_CONCURRENCY, opts.concurrency ?? THUMB_DOWNLOAD_CONCURRENCY)), unique.length) }, worker),
   );
   if (timedOut) {
     if (timedOut instanceof SupabaseUnavailableError) throw timedOut;

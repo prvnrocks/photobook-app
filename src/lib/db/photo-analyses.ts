@@ -69,6 +69,30 @@ export async function loadOwnPhoto(photoId: string): Promise<OwnPhoto | null> {
   return { ...row, bookIsPaid: book?.is_paid === true };
 }
 
+/**
+ * loadOwnPhoto for several ids in ONE RLS read (photo analysis batches). Same columns, same rule:
+ * ids that are malformed, missing or not the caller's are simply absent from the map.
+ */
+export async function loadOwnPhotos(photoIds: readonly string[]): Promise<Map<string, OwnPhoto>> {
+  const ids = [...new Set(photoIds.filter((id) => isUuid(id)))];
+  const out = new Map<string, OwnPhoto>();
+  if (ids.length === 0) return out;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("photos")
+    .select(
+      "id, user_id, book_id, upload_state, thumb_path, width, height, taken_at, date_source, lat, lng, place, blur_score, dup_group, color, ai, status, drop_reason, user_override, books!inner(is_paid)",
+    )
+    .in("id", ids);
+  if (error) throw new PhotoAnalysesError("load photos", error.code);
+  for (const d of data ?? []) {
+    const { books, ...row } = d as typeof d & { books: { is_paid: boolean } | { is_paid: boolean }[] };
+    const book = Array.isArray(books) ? books[0] : books;
+    out.set(row.id, { ...row, bookIsPaid: book?.is_paid === true });
+  }
+  return out;
+}
+
 export type CacheKey = { userId: string; imageSha256: string; model: string; promptVersion: string };
 
 export type CachedAnalysis = { analysis: unknown; model: string; promptVersion: string };
@@ -89,6 +113,31 @@ export async function getCachedAnalysis(key: CacheKey): Promise<CachedAnalysis |
     throw new PhotoAnalysesError("read analysis cache", error.code);
   }
   return data ? { analysis: data.analysis, model: data.model, promptVersion: data.prompt_version } : null;
+}
+
+/**
+ * getCachedAnalysis for several images of ONE user / model / prompt version in one read:
+ * sha → stored analysis (misses are absent), or `"unavailable"` while migration 2400 is missing.
+ * The cache key is unique for 'ok' rows (photo_analyses_cache_key_idx), so a sha has ≤ 1 row.
+ */
+export async function getCachedAnalyses(key: Omit<CacheKey, "imageSha256">, imageSha256s: readonly string[]): Promise<Map<string, CachedAnalysis> | "unavailable"> {
+  const shas = [...new Set(imageSha256s)];
+  const out = new Map<string, CachedAnalysis>();
+  if (shas.length === 0) return out;
+  const { data, error } = await createAdminClient()
+    .from("photo_analyses")
+    .select("image_sha256, analysis, model, prompt_version")
+    .eq("user_id", key.userId)
+    .in("image_sha256", shas)
+    .eq("model", key.model)
+    .eq("prompt_version", key.promptVersion)
+    .eq("status", "ok");
+  if (error) {
+    if (missingTable(error.code)) return "unavailable";
+    throw new PhotoAnalysesError("read analysis cache", error.code);
+  }
+  for (const r of data ?? []) out.set(r.image_sha256, { analysis: r.analysis, model: r.model, promptVersion: r.prompt_version });
+  return out;
 }
 
 export type CallRecord = {

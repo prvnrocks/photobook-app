@@ -43,6 +43,7 @@ import { getMyBook, type MyBook } from "@/lib/db/books";
 import { listPhotosForOrganize, listVision, type OrganizePhotoRow } from "@/lib/db/photo-organize";
 import { getCurrentStorybook } from "@/lib/db/storybooks";
 import { ensureGrantPageLimit, getBookEntitlement, type BookEntitlement } from "@/lib/entitlements";
+import { newAiCopyCache, type AiCopyCache } from "@/lib/photos/ai-copy-cache";
 import { clusterPhotosIntoMoments, OrganizeError } from "@/lib/photos/organize";
 import { userOwnedElements } from "@/lib/storybook/compose";
 import {
@@ -97,7 +98,11 @@ const STOP_ANALYSIS = new Set(["budget_exhausted", "ai_off", "cache_unavailable"
 export type StoryRunBook = Pick<MyBook, "id" | "is_paid" | "doc" | "format" | "design_style"> & { user_id: string };
 
 export interface StoryRunDeps {
-  getBook(bookId: string): Promise<StoryRunBook | null>;
+  /**
+   * The signed-in owner's book. `userId` = the signed-in user the caller already read for this
+   * request (the advance route); the book is still read with the user's session (RLS).
+   */
+  getBook(bookId: string, userId?: string): Promise<StoryRunBook | null>;
   listPhotos(bookId: string, userId: string): Promise<OrganizePhotoRow[]>;
   listVision(bookId: string, userId: string): Promise<Map<string, unknown>>;
   getCurrentStorybook(bookId: string, userId: string): Promise<Storybook | null>;
@@ -108,8 +113,10 @@ export interface StoryRunDeps {
   getRunForTick(runId: string): Promise<RunForTick | null>;
   getPreviousStoryRun: typeof agentRunsDb.getPreviousStoryRun;
   cancelStoryRunRow(runId: string, progress: Json): Promise<boolean>;
-  analyzePhotos(photoIds: readonly string[]): Promise<AnalyzePhotosResult[]>;
-  clusterPhotosIntoMoments(bookId: string): Promise<{ moments: readonly unknown[]; pending: { quality: number } }>;
+  /** `opts.aiCopyCache`: this tick's memory of the AI copies read (the quality stage reuses them). */
+  analyzePhotos(photoIds: readonly string[], opts?: { bookId: string; aiCopyCache?: AiCopyCache }): Promise<AnalyzePhotosResult[]>;
+  /** `ownerId`: the book's owner as proved by this tick's getBook (skips re-reading it). */
+  clusterPhotosIntoMoments(bookId: string, ownerId?: string, aiCopyCache?: AiCopyCache): Promise<{ moments: readonly unknown[]; pending: { quality: number } }>;
   planStory(bookId: string, opts: { rule: boolean; maxPages?: number }): Promise<StoryPlan>;
   writeStoryStep: typeof writeStoryStep;
   composeStorybookPages(bookId: string, opts: { rule: boolean; beforeSave: () => Promise<boolean>; maxPages?: number }): Promise<{ pages: number; warnings: number; ai: ComposeAiStatus; saved: boolean }>;
@@ -129,7 +136,11 @@ export interface StoryRunDeps {
 
 export function defaultStoryRunDeps(): StoryRunDeps {
   return {
-    getBook: async (bookId) => {
+    getBook: async (bookId, userId) => {
+      if (userId) {
+        const book = await getMyBook(bookId);
+        return book ? { ...book, user_id: userId } : null;
+      }
       const [user, book] = await Promise.all([getCurrentUser(), getMyBook(bookId)]);
       return user && book ? { ...book, user_id: user.id } : null;
     },
@@ -143,8 +154,9 @@ export function defaultStoryRunDeps(): StoryRunDeps {
     getRunForTick: agentRunsDb.getRunForTick,
     getPreviousStoryRun: agentRunsDb.getPreviousStoryRun,
     cancelStoryRunRow: agentRunsDb.cancelStoryRunRow,
-    analyzePhotos: (ids) => analyzePhotos(ids),
-    clusterPhotosIntoMoments: (bookId) => clusterPhotosIntoMoments(bookId),
+    analyzePhotos: (ids, opts) => analyzePhotos(ids, opts ? { bookHint: opts.bookId, aiCopyCache: opts.aiCopyCache } : {}),
+    clusterPhotosIntoMoments: (bookId, ownerId, aiCopyCache) =>
+      clusterPhotosIntoMoments(bookId, { ...(ownerId ? { ownerOf: async (id: string) => (id === bookId ? ownerId : null) } : {}), ...(aiCopyCache ? { aiCopyCache } : {}) }),
     planStory: (bookId, opts) => planStory(bookId, { ...(opts.rule ? { mode: "off" as const } : {}), ...(opts.maxPages ? { planMaxPages: opts.maxPages } : {}) }),
     writeStoryStep,
     composeStorybookPages: async (bookId, opts) => {
@@ -549,30 +561,86 @@ type Ctx = {
    * one tick don't re-read the same rows (the next tick reads them fresh).
    */
   analysisRows?: { photos: OrganizePhotoRow[]; analysed: Set<string> };
+  /**
+   * The last successful checkpoint of this tick (it proved the lease) and what it wrote. `fresh`
+   * stays true only while nothing but local code ran since: ANY other dependency call (a read, a
+   * model call, the composer…) clears it (watchDeps). A lease check while fresh is skipped — the
+   * checkpoint just proved it, with no await in between — and so is a closing save that would
+   * write the same thing again. Every save still writes.
+   */
+  lease?: { fresh: boolean; wrote: string | null };
+  /** This tick's AI copies read by the analysis, reused by the quality stage (dropped with the tick). */
+  aiCopies?: AiCopyCache;
 };
+
+const leaseFresh = (ctx: Ctx) => ctx.lease?.fresh === true;
+
+/** `deps` with every call except checkpointRun / now marking the tick's lease proof as not fresh. */
+function watchDeps(deps: StoryRunDeps, onCall: () => void): StoryRunDeps {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(deps)) {
+    if (typeof value !== "function" || key === "checkpointRun" || key === "now") {
+      out[key] = value;
+      continue;
+    }
+    const fn = value as (...args: unknown[]) => unknown;
+    out[key] = (...args: unknown[]) => {
+      onCall();
+      return fn.apply(deps, args);
+    };
+  }
+  return out as unknown as StoryRunDeps;
+}
 
 const overBudget = (ctx: Ctx) => ctx.worked && ctx.deps.now() - ctx.t0 >= ctx.budgetMs;
 
 async function save(ctx: Ctx, extra: RunCheckpointPatch = {}): Promise<void> {
-  const ok = await ctx.deps.checkpointRun(ctx.run.id, ctx.token, {
+  const patch: RunCheckpointPatch = {
     state: ctx.state,
     cursor: ctx.cursor as unknown as Json,
     progress: storyProgressOf(ctx.cursor, ctx.state, ctx.mode) as unknown as Json,
     ...extra,
-  });
+  };
+  const ok = await ctx.deps.checkpointRun(ctx.run.id, ctx.token, patch);
   if (!ok) throw new StaleLease();
+  ctx.lease = { fresh: true, wrote: JSON.stringify(patch) };
 }
 
-/** True while this tick still holds the lease (a Stop clears the token). */
-async function stillOurs(ctx: Ctx): Promise<boolean> {
-  return ctx.deps.checkpointRun(ctx.run.id, ctx.token, {});
+/** The tick's closing save — skipped when the last checkpoint wrote exactly this a moment ago. */
+async function saveFinal(ctx: Ctx): Promise<void> {
+  if (leaseFresh(ctx) && ctx.lease!.wrote !== null) {
+    const patch: RunCheckpointPatch = { state: ctx.state, cursor: ctx.cursor as unknown as Json, progress: storyProgressOf(ctx.cursor, ctx.state, ctx.mode) as unknown as Json };
+    if (JSON.stringify(patch) === ctx.lease!.wrote) return;
+  }
+  await save(ctx);
+}
+
+/**
+ * True while this tick still holds the lease (a Stop clears the token). `force`: always ask the
+ * database (the composer's last check right before it writes the doc).
+ */
+async function stillOurs(ctx: Ctx, force = false): Promise<boolean> {
+  if (!force && leaseFresh(ctx)) return true;
+  const ok = await ctx.deps.checkpointRun(ctx.run.id, ctx.token, {});
+  if (ok) ctx.lease = { fresh: true, wrote: ctx.lease?.wrote ?? null };
+  return ok;
 }
 
 function note(ctx: Ctx, n: OutcomeNote): void {
   if (!ctx.cursor.notes.includes(n)) ctx.cursor.notes.push(n);
 }
 
-export async function advanceStoryRun(runId: string, opts: { budgetMs?: number } = {}, deps: StoryRunDeps = defaultStoryRunDeps()): Promise<StoryAdvanceResult> {
+/**
+ * What the advance route already read for this request: the signed-in user and their storybook
+ * run (RLS read, trigger storybook). With it the tick skips its own pre-claim read and reads the
+ * book while it claims the lease. The run row read AFTER the claim stays the one the tick works
+ * from (the claim is authoritative).
+ */
+export type StoryTickOwner = { userId: string; run: Pick<RunForTick, "id" | "book_id" | "state" | "progress" | "ai_status" | "error_code" | "mode" | "trigger"> };
+
+type AdvanceOpts = { budgetMs?: number; owner?: StoryTickOwner };
+
+export async function advanceStoryRun(runId: string, opts: AdvanceOpts = {}, deps: StoryRunDeps = defaultStoryRunDeps()): Promise<StoryAdvanceResult> {
   if (!storyTimingOn()) return advanceStoryRunInner(runId, opts, deps, null);
   // STORY_TICK_TIMING=1 (local measurement): one content-free line per tick (./tick-timing.ts).
   const timer = newTickTimer();
@@ -587,11 +655,16 @@ export async function advanceStoryRun(runId: string, opts: { budgetMs?: number }
 /** Filled in by a tick when STORY_TICK_TIMING is on (stage names only). */
 type TickTrace = { from: StoryRunState | null; end: "budget" | "stage_change" | "unit_stop" | "done" | null };
 
-async function advanceStoryRunInner(runId: string, opts: { budgetMs?: number }, deps: StoryRunDeps, trace: TickTrace | null): Promise<StoryAdvanceResult> {
-  const pre = await deps.getRunForTick(runId);
+async function advanceStoryRunInner(runId: string, opts: AdvanceOpts, deps: StoryRunDeps, trace: TickTrace | null): Promise<StoryAdvanceResult> {
+  const owner = opts.owner && opts.owner.run.id === runId ? opts.owner : null;
+  const pre = owner ? owner.run : await deps.getRunForTick(runId);
   if (!pre || !agentRunsDb.isStoryRunTrigger(pre.trigger)) return { notFound: true };
   if (pre.state === "done" || pre.state === "failed") return { view: viewOf(pre) };
   const t0 = deps.now();
+  // The book is read (RLS, the owner's session) while the lease is claimed; the tick only uses it
+  // when it is the claimed run's book.
+  const early = owner?.run.book_id ? { bookId: owner.run.book_id, book: deps.getBook(owner.run.book_id, owner.userId) } : null;
+  early?.book.catch(() => undefined); // awaited (and its error surfaced) by the tick
   const token = await deps.claimRun(runId, STORY_LEASE_SECONDS);
   if (!token) {
     const run = await deps.getRunForTick(runId);
@@ -601,7 +674,7 @@ async function advanceStoryRunInner(runId: string, opts: { budgetMs?: number }, 
   }
   let stale = false;
   try {
-    const out = await tick(runId, token, t0, opts.budgetMs ?? STORY_TICK_BUDGET_MS, deps, trace);
+    const out = await tick(runId, token, t0, opts.budgetMs ?? STORY_TICK_BUDGET_MS, deps, trace, early);
     if ("leased" in out) stale = true;
     return out;
   } finally {
@@ -609,14 +682,22 @@ async function advanceStoryRunInner(runId: string, opts: { budgetMs?: number }, 
   }
 }
 
-async function tick(runId: string, token: string, t0: number, budgetMs: number, deps: StoryRunDeps, trace: TickTrace | null = null): Promise<StoryAdvanceResult> {
+async function tick(
+  runId: string,
+  token: string,
+  t0: number,
+  budgetMs: number,
+  deps: StoryRunDeps,
+  trace: TickTrace | null = null,
+  early: { bookId: string; book: Promise<StoryRunBook | null> } | null = null,
+): Promise<StoryAdvanceResult> {
   const run = await deps.getRunForTick(runId);
   if (!run || !agentRunsDb.isStoryRunTrigger(run.trigger)) return { notFound: true };
   if (run.state === "done" || run.state === "failed") return { view: viewOf(run) };
   const state: StoryRunState = isStoryRunState(run.state) ? run.state : "discovering";
   let ctx: Ctx | null = null;
   try {
-    const book = run.book_id ? await deps.getBook(run.book_id) : null;
+    const book = run.book_id ? await (early && early.bookId === run.book_id ? early.book : deps.getBook(run.book_id)) : null;
     if (!book || !run.user_id || book.user_id !== run.user_id) throw new RunFailure("not_found", state === "done" || state === "failed" ? "discovering" : state);
     let cursor = parseStoryCursor(run.cursor);
     let stage: StoryRunState = state;
@@ -653,7 +734,11 @@ async function tick(runId: string, token: string, t0: number, budgetMs: number, 
       }
       cursor.initialized = true;
     }
-    ctx = { deps, run, token, bookId: book.id, userId: book.user_id, mode: run.mode, cursor, state: stage, t0, budgetMs, worked: false, trace };
+    const tickCtx: Ctx = { deps, run, token, bookId: book.id, userId: book.user_id, mode: run.mode, cursor, state: stage, t0, budgetMs, worked: false, trace };
+    tickCtx.deps = watchDeps(deps, () => {
+      if (tickCtx.lease) tickCtx.lease.fresh = false;
+    });
+    ctx = tickCtx;
     if (trace) trace.from = stage;
     return await loop(ctx);
   } catch (e) {
@@ -728,7 +813,7 @@ async function loop(ctx: Ctx): Promise<StoryAdvanceResult> {
     }
     break;
   }
-  await save(ctx);
+  await saveFinal(ctx);
   return { view: viewOf({ ...ctx.run, state: ctx.state, progress: storyProgressOf(ctx.cursor, ctx.state, ctx.mode) as unknown as Json, ai_status: null, error_code: null }) };
 }
 
@@ -756,7 +841,11 @@ async function discover(ctx: Ctx): Promise<boolean> {
     }
     if (!(await stillOurs(ctx))) throw new StaleLease();
     const batch = pending.slice(0, Math.max(1, ctx.deps.analysisBatch()));
-    const results = await ctx.deps.analyzePhotos(batch.map((p) => p.id));
+    ctx.aiCopies ??= newAiCopyCache();
+    const results = await ctx.deps.analyzePhotos(
+      batch.map((p) => p.id),
+      { bookId: ctx.bookId, aiCopyCache: ctx.aiCopies },
+    );
     ctx.worked = true;
     for (const r of results) {
       if (r.ok) {
@@ -785,7 +874,7 @@ async function discover(ctx: Ctx): Promise<boolean> {
     if (!(await stillOurs(ctx))) throw new StaleLease();
     let res: Awaited<ReturnType<StoryRunDeps["clusterPhotosIntoMoments"]>>;
     try {
-      res = await ctx.deps.clusterPhotosIntoMoments(ctx.bookId);
+      res = await ctx.deps.clusterPhotosIntoMoments(ctx.bookId, ctx.userId, ctx.aiCopies);
     } catch (e) {
       if (e instanceof OrganizeError && e.code === "not_found") throw new RunFailure("not_found", "discovering");
       throw e;
@@ -812,7 +901,7 @@ async function organize(ctx: Ctx): Promise<boolean> {
     return true;
   }
   if (c.moments === null) {
-    const res = await ctx.deps.clusterPhotosIntoMoments(ctx.bookId);
+    const res = await ctx.deps.clusterPhotosIntoMoments(ctx.bookId, ctx.userId, ctx.aiCopies);
     c.moments = res.moments.length;
   }
   // Reserve the call BEFORE making it (a dead tick counts): after MAX_PLAN_ATTEMPTS, the rule planner.
@@ -976,7 +1065,7 @@ async function design(ctx: Ctx): Promise<boolean> {
   if (c.compose.attempts > MAX_COMPOSE_ATTEMPTS) throw new RunFailure("conflict", "designing");
   await save(ctx);
   try {
-    const r = await ctx.deps.composeStorybookPages(ctx.bookId, { rule: ctx.mode === "rule", beforeSave: () => stillOurs(ctx), ...(c.tier === "preview" && c.previewPages ? { maxPages: c.previewPages } : {}) });
+    const r = await ctx.deps.composeStorybookPages(ctx.bookId, { rule: ctx.mode === "rule", beforeSave: () => stillOurs(ctx, true), ...(c.tier === "preview" && c.previewPages ? { maxPages: c.previewPages } : {}) });
     ctx.worked = true;
     if (!r.saved) throw new StaleLease(); // stopped (or lease lost) right before the save: nothing written
     c.compose = { attempts: c.compose.attempts, done: true, pages: r.pages, warnings: r.warnings, ai: r.ai };

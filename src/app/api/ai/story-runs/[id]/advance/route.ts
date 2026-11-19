@@ -36,7 +36,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!owned) return json({ error: "not_found" }, 404);
     // STORY_TICK_TIMING=1 (local measurement): auth + rate limit + ownership time before the tick.
     if (storyTimingOn()) console.info(`[story-timing] route prelude=${Math.round(performance.now() - t0)}`);
-    const result = await advanceStoryRun(owned.id, { budgetMs: STORY_TICK_BUDGET_MS });
+    // The user and the run row read above are handed to the tick (no second read of either).
+    const result = await advanceStoryRun(owned.id, { budgetMs: STORY_TICK_BUDGET_MS, owner: { userId: user.id, run: owned } });
     if ("notFound" in result) return json({ error: "not_found" }, 404);
     if ("leased" in result) return json({ leased: true }, 202, { "retry-after": "2" });
     return json(result.view);

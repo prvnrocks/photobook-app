@@ -144,7 +144,8 @@ describe("GET / advance / cancel", () => {
     mocks.advanceStoryRun.mockResolvedValueOnce({ view: VIEW });
     let res = await advanceRoute.POST(post(`/api/ai/story-runs/${RUN}/advance`), ctx(RUN));
     expect(res.status).toBe(200);
-    expect(mocks.advanceStoryRun).toHaveBeenCalledWith(RUN, { budgetMs: 40_000 });
+    // the route hands the user and the run row it already read to the tick (no second read)
+    expect(mocks.advanceStoryRun).toHaveBeenCalledWith(RUN, { budgetMs: 40_000, owner: { userId: mocks.user!.id, run: row("writing") } });
     mocks.advanceStoryRun.mockResolvedValueOnce({ leased: true });
     res = await advanceRoute.POST(post(`/api/ai/story-runs/${RUN}/advance`), ctx(RUN));
     expect(res.status).toBe(202);

@@ -15,7 +15,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db/books", () => ({ getMyBook: vi.fn(async () => null), saveDocIfRev: vi.fn() }));
 vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: vi.fn(async () => null) }));
 vi.mock("@/lib/db/photo-analyses", () => ({ getTodayPhotoAnalysisSpendUsd: vi.fn(async () => 0), dubaiDayStart: () => "" }));
-vi.mock("@/lib/db/photo-organize", () => ({ listPhotosForOrganize: vi.fn(), listVision: vi.fn(), listMoments: vi.fn(), listDuplicateGroups: vi.fn(), listQuality: vi.fn(), saveQuality: vi.fn(), listImageHashes: vi.fn(), replaceDuplicateGroups: vi.fn(), replaceMoments: vi.fn() }));
+vi.mock("@/lib/db/photo-organize", () => ({ listPhotosForOrganize: vi.fn(), listVision: vi.fn(), listMoments: vi.fn(), listDuplicateGroups: vi.fn(), listQuality: vi.fn(), saveQuality: vi.fn(), saveQualities: vi.fn(), listImageHashes: vi.fn(), replaceDuplicateGroups: vi.fn(), replaceMoments: vi.fn() }));
 vi.mock("@/lib/db/story-ai-calls", () => ({ countStoryRuns: vi.fn(), getTodayStorySpendUsd: vi.fn(async () => 0), recordStoryCall: vi.fn(), storyUsageAvailable: vi.fn(async () => false) }));
 vi.mock("@/lib/db/storybooks", () => ({ appendStorybookVersion: vi.fn(), getCurrentStorybook: vi.fn(), getMemoryContext: vi.fn() }));
 vi.mock("@/lib/ai/budget", () => ({ checkDailyAiBudget: vi.fn(async () => ({ allowed: true, reason: "no_budget" })) }));

@@ -26,12 +26,14 @@ import {
   replaceDuplicateGroups,
   replaceMoments,
   saveQuality,
+  saveQualities,
   setDuplicatePreference,
   type OrganizePhotoRow,
   type StoredMoment,
   type StoredQuality,
 } from "@/lib/db/photo-organize";
 import { loadThumbBase64 } from "@/lib/db/photos";
+import type { AiCopyCache } from "./ai-copy-cache";
 import { PhotoVisionSchema } from "@/lib/storybook/schemas";
 import { detectDuplicates, type DetectDuplicatesOptions, type DupPhoto, type DuplicateGroup } from "./duplicates";
 import { MOMENTS_VERSION, clusterMoments, rankCandidates, type MomentOptions, type MomentPhoto, type MomentVision } from "./moments";
@@ -59,9 +61,13 @@ export type OrganizeDeps = {
   loadPhoto?: (photoId: string) => Promise<OwnPhoto | null>;
   /** Validated analysis copy as base64, or null. */
   loadAiCopy?: (thumbPath: string) => Promise<string | null>;
+  /** Copies this storybook tick already read (photo analysis): used instead of downloading them again. */
+  aiCopyCache?: AiCopyCache;
   listPhotos?: typeof listPhotosForOrganize;
   listQuality?: typeof listQuality;
   saveQuality?: typeof saveQuality;
+  /** Several scores in one write (clusterPhotosIntoMoments). Default saveQualities unless only saveQuality is injected. */
+  saveQualities?: typeof saveQualities;
   listImageHashes?: typeof listImageHashes;
   listVision?: typeof listVision;
   listDuplicateGroups?: typeof listDuplicateGroups;
@@ -109,12 +115,26 @@ export async function analyzePhotoQuality(photoId: string, deps: OrganizeDeps = 
 }
 
 async function scoreOne(photo: { id: string; thumb_path: string | null }, bookId: string, userId: string, deps: OrganizeDeps): Promise<QualityScores> {
-  if (!photo.thumb_path) throw new OrganizeError("no_ai_copy");
-  const base64 = await (deps.loadAiCopy ?? defaultLoadAiCopy)(photo.thumb_path);
-  if (!base64) throw new OrganizeError("no_ai_copy");
-  const scores = await scoreAiCopy(base64);
+  const scores = await measureOne(photo, deps);
   await (deps.saveQuality ?? saveQuality)({ photoId: photo.id, bookId, userId }, scores);
   return scores;
+}
+
+/** Reads and scores one photo's analysis copy (no write). */
+async function measureOne(photo: { id: string; thumb_path: string | null }, deps: OrganizeDeps): Promise<QualityScores> {
+  if (!photo.thumb_path) throw new OrganizeError("no_ai_copy");
+  const base64 = deps.aiCopyCache?.get(photo.thumb_path) ?? (await (deps.loadAiCopy ?? defaultLoadAiCopy)(photo.thumb_path));
+  if (!base64) throw new OrganizeError("no_ai_copy");
+  return scoreAiCopy(base64);
+}
+
+/** Runs `fn` over `items` with at most `n` in flight. */
+async function eachLimited<T>(items: readonly T[], n: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) await fn(items[next++]!);
+  };
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, worker));
 }
 
 const toQuality = (q: StoredQuality): PhotoQuality => ({
@@ -215,19 +235,44 @@ export async function clusterPhotosIntoMoments(bookId: string, deps: OrganizeDep
   const quality = new Map<string, PhotoQuality>(storedQuality.filter((q) => q.version === QUALITY_VERSION).map((q) => [q.photoId, toQuality(q)]));
   const missing = photos.filter((p) => !quality.has(p.id) && p.thumb_path);
   const batch = missing.slice(0, Math.max(0, deps.maxQualityPerRun ?? QUALITY_MAX_PER_RUN));
-  let next = 0;
-  const worker = async () => {
-    while (next < batch.length) {
-      const p = batch[next++]!;
+  // A photo counts as scored only once its scores are stored (unchanged). The scores of the batch
+  // are stored in ONE write instead of one per photo; if that write fails, each photo is stored on
+  // its own as before, and a photo whose write fails stays unscored.
+  const bulkSave = deps.saveQualities ?? (deps.saveQuality ? null : saveQualities);
+  if (!bulkSave) {
+    await eachLimited(batch, QUALITY_CONCURRENCY, async (p) => {
       try {
         const scores = await scoreOne(p, bookId, userId, deps);
         quality.set(p.id, toQuality({ ...scores, photoId: p.id }));
       } catch {
         // unscored: the provisional value below is used; a later call tries again
       }
+    });
+  } else {
+    const scored: { p: (typeof batch)[number]; scores: QualityScores }[] = [];
+    await eachLimited(batch, QUALITY_CONCURRENCY, async (p) => {
+      try {
+        scored.push({ p, scores: await measureOne(p, deps) });
+      } catch {
+        // unscored (no copy / undecodable): provisional below; a later call tries again
+      }
+    });
+    let stored = false;
+    try {
+      await bulkSave(scored.map(({ p, scores }) => ({ key: { photoId: p.id, bookId, userId }, q: scores })));
+      stored = true;
+    } catch {
+      // fall back to one write per photo
     }
-  };
-  await Promise.all(Array.from({ length: Math.min(QUALITY_CONCURRENCY, batch.length) }, worker));
+    await eachLimited(scored, QUALITY_CONCURRENCY, async ({ p, scores }) => {
+      try {
+        if (!stored) await (deps.saveQuality ?? saveQuality)({ photoId: p.id, bookId, userId }, scores);
+        quality.set(p.id, toQuality({ ...scores, photoId: p.id }));
+      } catch {
+        // unscored: a later call tries again
+      }
+    });
+  }
   let pendingQuality = 0;
   for (const p of photos) {
     if (quality.has(p.id)) continue;

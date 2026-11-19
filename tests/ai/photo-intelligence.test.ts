@@ -545,3 +545,256 @@ describe("analyzePhotos", () => {
     expect(await analyzePhotos([], world().deps)).toEqual([]);
   });
 });
+
+// Perf fix (story-export-readiness): analyzePhotos makes the reads that are the same for every photo
+// of a batch ONCE (photo rows, the book's rejected ids, AI copies, cache lookups). These tests prove
+// it changes nothing: same results, same photo_analyses rows, same ledger events, same model calls.
+describe("analyzePhotos: per-batch reads give the same results as photo-by-photo", () => {
+  type Rec = { kind: string; arg?: unknown };
+  const copyOf = (n: number) => Buffer.from(`bytes:${n}`).toString("base64");
+  const pathOf = (n: number) => `${USER}/${BOOK}/${pid(n)}-thumb.jpg`;
+
+  /** One shared fake database + the two ways of reading it (single-photo deps vs bulk deps). */
+  function fakeDb(opts: { cachedPhotos?: number[]; overSpendCap?: (spent: number) => boolean; costPerCall?: number } = {}) {
+    const rows: Record<string, OwnPhoto> = {};
+    const add = (n: number, over: Partial<OwnPhoto> = {}) => (rows[pid(n)] = photo({ id: pid(n), thumb_path: pathOf(n), ...over }));
+    add(1);
+    add(2); // cached before the batch
+    add(3, { upload_state: "pending" }); // not ready
+    add(4); // rejected by ingestion
+    // pid(5): missing / someone else's
+    add(6, { thumb_path: pathOf(1) }); // the SAME image as photo 1 (one model call, then a cache hit)
+    add(7); // no valid AI copy
+    add(8);
+    add(9);
+    const rejected = new Set([pid(4)]);
+    const copies = new Map<string, string>([1, 2, 3, 4, 8, 9].map((n) => [pathOf(n), copyOf(n)]));
+    const sha = (b64: string) => createHash("sha256").update(Buffer.from(b64, "base64")).digest("hex");
+    const cache = new Map<string, unknown>();
+    const k = (key: { userId: string; imageSha256: string; model: string; promptVersion: string }) => `${key.userId}|${key.imageSha256}|${key.model}|${key.promptVersion}`;
+    for (const n of opts.cachedPhotos ?? [2]) cache.set(k({ userId: USER, imageSha256: sha(copyOf(n)), model: CONFIG.model, promptVersion: PHOTO_PROMPT_VERSION }), { ...GOOD, scene: "landscape", orientation: "landscape", atmosphere: { label: "calm", interpretation: true }, model: CONFIG.model, promptVersion: PHOTO_PROMPT_VERSION });
+    const log: Rec[] = [];
+    const records: CallRecord[] = [];
+    const ledger: unknown[] = [];
+    let spent = 0;
+    const requests: string[] = [];
+    const transport: AgentTransport = {
+      kind: "live",
+      async parse<T>(req: AgentRequest<T>): Promise<AgentResponse<T>> {
+        requests.push(String(req.scenarioMeta?.seed));
+        log.push({ kind: "call" });
+        await new Promise((r) => setTimeout(r, 1));
+        return { parsed: GOOD as T, stopReason: "end_turn", stopCategory: null, usage: { input: 900, output: 150, cacheRead: 600, cacheWrite: 0 }, model: req.model ?? CONFIG.model, latencyMs: 1234 };
+      },
+    };
+    const shared: PhotoIntelligenceDeps = {
+      record: async (rec) => {
+        records.push(rec);
+        if (rec.status === "ok") cache.set(k(rec), rec.analysis);
+      },
+      meter: {
+        record: async (ev) => {
+          ledger.push(ev);
+          spent += ev.costUsd;
+        },
+      },
+      countAnalysed: async () => 0,
+      budgetExhausted: async () => false,
+      overSpendCap: async () => {
+        const over = opts.overSpendCap ? opts.overSpendCap(spent) : false;
+        log.push({ kind: over ? "cap:over" : "cap:ok" });
+        return over;
+      },
+      mode: "live",
+      transport,
+      config: CONFIG,
+      now: () => 0,
+      sleep: async () => {},
+    };
+    const single: PhotoIntelligenceDeps = {
+      ...shared,
+      loadPhoto: async (id) => rows[id] ?? null,
+      isRejected: async (p) => rejected.has(p.id),
+      loadAiCopy: async (path) => copies.get(path) ?? null,
+      getCached: async (key) => {
+        const hit = cache.get(k(key));
+        return hit ? { analysis: hit, model: key.model, promptVersion: key.promptVersion } : null;
+      },
+    };
+    const calls = { loadPhotos: 0, listRejected: 0, loadAiCopies: 0, getCachedMany: 0 };
+    const bulk: PhotoIntelligenceDeps = {
+      ...shared,
+      loadPhotos: async (ids) => {
+        calls.loadPhotos++;
+        return new Map(ids.filter((id) => rows[id]).map((id) => [id, rows[id]!]));
+      },
+      listRejected: async () => {
+        calls.listRejected++;
+        log.push({ kind: "rejected-read" });
+        return new Set(rejected);
+      },
+      loadAiCopies: async (paths) => {
+        calls.loadAiCopies++;
+        return new Map(paths.filter((p) => copies.has(p)).map((p) => [p, copies.get(p)!]));
+      },
+      getCachedMany: async (key, shas) => {
+        calls.getCachedMany++;
+        const out = new Map<string, { analysis: unknown; model: string; promptVersion: string }>();
+        for (const s of shas) {
+          const hit = cache.get(k({ ...key, imageSha256: s }));
+          if (hit) out.set(s, { analysis: hit, model: key.model, promptVersion: key.promptVersion });
+        }
+        return out;
+      },
+    };
+    return { single, bulk, calls, records, ledger, requests, log, rejected, spent: () => spent };
+  }
+
+  /** The reference: every photo analysed on its own, one after another (the old per-photo reads). */
+  async function photoByPhoto(ids: string[], deps: PhotoIntelligenceDeps) {
+    const out: unknown[] = [];
+    let stop: string | null = null;
+    for (const photoId of ids) {
+      if (stop) {
+        out.push({ photoId, ok: false, error: stop, retryable: false });
+        continue;
+      }
+      try {
+        out.push({ photoId, ok: true, analysis: await analyzePhoto(photoId, deps) });
+      } catch (e) {
+        const err = e as PhotoIntelligenceError;
+        if (err.code === "budget_exhausted" || err.code === "ai_off" || err.code === "cache_unavailable") stop = err.code;
+        out.push({ photoId, ok: false, error: err.code, retryable: err.retryable });
+      }
+    }
+    return out;
+  }
+
+  const IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9].map(pid);
+
+  it("(a) same results, photo_analyses rows, ledger events and model calls as photo-by-photo — with ONE read of each kind per batch", async () => {
+    const ref = fakeDb();
+    const expected = await photoByPhoto(IDS, ref.single);
+    const now = fakeDb();
+    const got = await analyzePhotos(IDS, { ...now.bulk, config: { ...CONFIG, concurrency: 1 } });
+
+    expect(got).toEqual(expected);
+    expect(got.map((r) => (r.ok ? "ok" : r.error))).toEqual(["ok", "ok", "not_ready", "rejected", "not_found", "ok", "no_ai_copy", "ok", "ok"]);
+    expect(now.records).toEqual(ref.records);
+    expect(now.ledger).toEqual(ref.ledger);
+    expect(now.requests).toEqual(ref.requests);
+    // photo 1, 8, 9 are new images; 2 was cached; 6 is photo 1's image → a cache hit, no second call
+    expect(now.requests).toHaveLength(3);
+    expect(now.records.map((r) => r.photoId)).toEqual([pid(1), pid(8), pid(9)]);
+    // + a fresh rejected check before each live call; + a fresh cache look-up for photo 6 (its
+    // image was analysed earlier in this batch, so the batch's read is out of date for it)
+    expect(now.calls).toEqual({ loadPhotos: 1, listRejected: 1 + 3, loadAiCopies: 1, getCachedMany: 1 + 1 });
+  });
+
+  it("(a) with parallel workers the same rows and ledger events come out (order aside)", async () => {
+    const ref = fakeDb();
+    await photoByPhoto(IDS, ref.single);
+    const now = fakeDb();
+    const got = await analyzePhotos(IDS, { ...now.bulk, config: { ...CONFIG, concurrency: 4 } });
+    // Which of two photos with the SAME image starts the one shared call is a race with parallel
+    // workers (before and after this change), so rows / events are compared without the photo id.
+    const sortBy = (xs: readonly unknown[]) =>
+      xs
+        .map((x) => {
+          const rest = { ...(x as Record<string, unknown>) };
+          delete rest.photoId;
+          delete rest.runId;
+          return JSON.stringify(rest);
+        })
+        .sort();
+    expect(got.map((r) => (r.ok ? "ok" : r.error))).toEqual(["ok", "ok", "not_ready", "rejected", "not_found", "ok", "no_ai_copy", "ok", "ok"]);
+    expect(sortBy(now.records)).toEqual(sortBy(ref.records));
+    expect(sortBy(now.ledger)).toEqual(sortBy(ref.ledger));
+    expect(now.requests).toHaveLength(3);
+  });
+
+  it("(a) a failing bulk read falls back to the single-photo read (same results)", async () => {
+    const ref = fakeDb();
+    const expected = await photoByPhoto(IDS, ref.single);
+    const now = fakeDb();
+    const broken: PhotoIntelligenceDeps = {
+      ...now.bulk,
+      loadPhotos: async () => {
+        throw new Error("down");
+      },
+      // the fallbacks the batch uses when its bulk read failed
+      loadPhoto: now.single.loadPhoto,
+    };
+    const got = await analyzePhotos(IDS, { ...broken, config: { ...CONFIG, concurrency: 1 } });
+    expect(got).toEqual(expected);
+    expect(now.records).toEqual(ref.records);
+  });
+
+  it("(b) the spend cap is checked before EVERY live call inside a batch: it stops at the same call as photo-by-photo, never later", async () => {
+    const cost = costUsd("claude-opus-5-5", { input: 900, output: 150, cacheRead: 600, cacheWrite: 0 });
+    const cap = (spent: number) => spent >= cost * 1.5; // over after the 2nd paid call
+    const ids = [1, 8, 9, 2].map(pid); // three new images, then a cached one
+    const ref = fakeDb({ overSpendCap: cap });
+    const expected = await photoByPhoto(ids, ref.single);
+    for (const concurrency of [1, 3]) {
+      // the reference for parallel workers: the per-photo reads (injected single deps) with the same concurrency
+      const old = fakeDb({ overSpendCap: cap });
+      await analyzePhotos(ids, { ...old.single, config: { ...CONFIG, concurrency } });
+      const now = fakeDb({ overSpendCap: cap });
+      const got = await analyzePhotos(ids, { ...now.bulk, config: { ...CONFIG, concurrency } });
+      if (concurrency === 1) {
+        expect(got).toEqual(expected);
+        expect(now.ledger).toEqual(ref.ledger);
+      }
+      expect(now.requests.length).toBeLessThanOrEqual(old.requests.length);
+      expect(now.spent()).toBeLessThanOrEqual(old.spent());
+      expect(now.ledger.length).toBeLessThanOrEqual(old.ledger.length);
+      // every model call was preceded by its own passed cap check
+      let passed = 0;
+      for (const e of now.log) {
+        if (e.kind === "cap:ok") passed++;
+        if (e.kind === "call") expect(passed-- > 0).toBe(true);
+      }
+    }
+    expect(expected.map((r) => ((r as { ok: boolean }).ok ? "ok" : (r as { error: string }).error))).toEqual(["ok", "ok", "budget_exhausted", "budget_exhausted"]);
+    expect(ref.requests).toHaveLength(2);
+  });
+
+  it("the batch keeps its AI copies in the tick's memory, and a book hint reads the rejected ids once, alongside the photo rows", async () => {
+    const db = fakeDb();
+    const kept = new Map<string, string>();
+    const got = await analyzePhotos(IDS, { ...db.bulk, mode: "replay", bookHint: BOOK, aiCopyCache: { get: (p) => kept.get(p), set: (p, b) => void kept.set(p, b) }, config: { ...CONFIG, concurrency: 2 } });
+    expect(got.map((r) => (r.ok ? "ok" : r.error))).toEqual(["ok", "ok", "not_ready", "rejected", "not_found", "ok", "no_ai_copy", "ok", "ok"]);
+    expect(db.calls.listRejected).toBe(1);
+    expect([...kept.keys()].sort()).toEqual([1, 2, 8, 9].map(pathOf).sort()); // the copies read (not the rejected / not-ready ones)
+    expect(kept.get(pathOf(8))).toBe(copyOf(8));
+  });
+
+  it("(c) rejected ids are read once per batch, so a photo rejected between batches is seen by the next one", async () => {
+    const db = fakeDb();
+    const deps = { ...db.bulk, mode: "replay" as const, config: { ...CONFIG, concurrency: 2 } };
+    const first = await analyzePhotos([pid(1), pid(8)], deps);
+    expect(first.every((r) => r.ok)).toBe(true);
+    expect(db.calls.listRejected).toBe(1);
+    db.rejected.add(pid(9)); // ingestion rejects photo 9 while the run is between batches
+    const second = await analyzePhotos([pid(9), pid(2)], deps);
+    expect(second.map((r) => (r.ok ? "ok" : r.error))).toEqual(["rejected", "ok"]);
+    expect(db.calls.listRejected).toBe(2);
+  });
+
+  it("(c) a photo rejected WHILE its batch runs is never sent to the model (fresh check right before each live call)", async () => {
+    const db = fakeDb();
+    const parse = db.bulk.transport!.parse.bind(db.bulk.transport);
+    const transport: AgentTransport = {
+      kind: "live",
+      async parse<T>(req: AgentRequest<T>) {
+        db.rejected.add(pid(9)); // lands during photo 8's call
+        return parse(req);
+      },
+    };
+    const got = await analyzePhotos([pid(8), pid(9)], { ...db.bulk, transport, config: { ...CONFIG, concurrency: 1 } });
+    expect(got.map((r) => (r.ok ? "ok" : r.error))).toEqual(["ok", "rejected"]);
+    expect(db.requests).toHaveLength(1);
+    expect(db.records.map((r) => r.photoId)).toEqual([pid(8)]);
+  });
+});

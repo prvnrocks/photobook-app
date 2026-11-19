@@ -102,6 +102,31 @@ export async function saveQuality(key: { photoId: string; bookId: string; userId
   if (error) throw new PhotoOrganizeError("save quality", error.code);
 }
 
+/** saveQuality for several photos in ONE upsert (same rows, same conflict key). Throws on any error. */
+export async function saveQualities(rows: readonly { key: { photoId: string; bookId: string; userId: string }; q: QualityScores }[]): Promise<void> {
+  if (rows.length === 0) return;
+  const scoredAt = new Date().toISOString();
+  const { error } = await createAdminClient()
+    .from("photo_quality")
+    .upsert(
+      rows.map(({ key, q }) => ({
+        photo_id: key.photoId,
+        book_id: key.bookId,
+        user_id: key.userId,
+        version: q.version,
+        sharpness: q.sharpness,
+        exposure: q.exposure,
+        composition: q.composition,
+        overall: q.overall,
+        flags: [...q.flags],
+        raw: q.raw as unknown as Json,
+        scored_at: scoredAt,
+      })),
+      { onConflict: "photo_id" },
+    );
+  if (error) throw new PhotoOrganizeError("save qualities", error.code);
+}
+
 /** photoId → SHA-256 of its analysis copy, for photos the server verified (photo_ingest). */
 export async function listImageHashes(bookId: string, userId: string): Promise<Map<string, string>> {
   const { data, error } = await createAdminClient().from("photo_ingest").select("photo_id, ai_copy_sha256").eq("book_id", bookId).eq("user_id", userId).eq("state", "verified");

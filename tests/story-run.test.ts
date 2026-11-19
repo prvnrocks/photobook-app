@@ -629,3 +629,120 @@ describe("storybook job: free preview without a full entitlement (Task 9)", () =
     expect(full.chapters.length).toBe(previewCursor.plan!.chapters.length);
   });
 });
+
+// Perf fix (story-export-readiness): fewer round trips per tick without weakening the lease.
+describe("storybook job: per-tick setup and checkpoints", () => {
+  const ownerOf = (table: ReturnType<typeof runsTable>, runId: string) => {
+    const r = table.rows.get(runId)!;
+    return { userId: USER, run: { id: r.id, book_id: r.book_id, state: r.state, progress: r.progress, ai_status: r.ai_status, error_code: r.error_code, mode: r.mode, trigger: r.trigger } };
+  };
+
+  it("with the route's user + run row: no pre-claim read, the book is read with the user id, the claimed row is still read once", async () => {
+    const { deps, table } = await setup();
+    const getBook = vi.fn(deps.getBook);
+    const d = { ...deps, getBook };
+    const runId = await start(d);
+    table.get.mockClear();
+    getBook.mockClear();
+    const r = await advanceStoryRun(runId, { budgetMs: 0, owner: ownerOf(table, runId) }, d);
+    expect("view" in r).toBe(true);
+    expect(table.get).toHaveBeenCalledTimes(1); // only the authoritative read after the claim
+    expect(getBook).toHaveBeenCalledTimes(1);
+    expect(getBook).toHaveBeenCalledWith(BOOK, USER);
+    // and the whole job still finishes the same way with the owner passed on every tick
+    for (let i = 0; i < 80; i++) {
+      const out = await advanceStoryRun(runId, { budgetMs: 0, owner: ownerOf(table, runId) }, d);
+      if ("view" in out && out.view.done) break;
+    }
+    expect(table.rows.get(runId)).toMatchObject({ state: "done" });
+  });
+
+  it("the claim stays authoritative: a run the route saw active but that finished meanwhile is not ticked", async () => {
+    const { deps, table } = await setup();
+    const runId = await start(deps);
+    const stale = ownerOf(table, runId); // read by the route …
+    await cancelStoryRun(runId, deps); // … then the user stops it in another tab
+    const analyze = deps.analyzePhotos as ReturnType<typeof vi.fn>;
+    analyze.mockClear();
+    const r = await advanceStoryRun(runId, { budgetMs: 0, owner: stale }, deps);
+    expect("view" in r && r.view.state).toBe("failed");
+    expect(analyze).not.toHaveBeenCalled();
+    expect(table.claim).toHaveBeenCalled(); // refused by the claim (state failed)
+  });
+
+  it("an owner for another run id is ignored (the tick reads its own run)", async () => {
+    const { deps, table } = await setup();
+    const runId = await start(deps);
+    const other = { ...ownerOf(table, runId), run: { ...ownerOf(table, runId).run, id: "00000000-0000-4000-8000-00000000ffff", state: "done" } };
+    table.get.mockClear();
+    const r = await advanceStoryRun(runId, { budgetMs: 0, owner: other }, deps);
+    expect("view" in r && r.view.state).toBe("discovering");
+    expect(table.get).toHaveBeenCalledTimes(2);
+  });
+
+  it("stage 1 in one tick: a checkpoint after EVERY analysis batch, but no lease re-check right after one", async () => {
+    const { deps, table } = await setup();
+    const runId = await start(deps);
+    table.checkpoint.mockClear();
+    const r = await advanceStoryRun(runId, { budgetMs: 1e9 }, deps);
+    expect("view" in r && r.view.state).toBe("organizing");
+    const patches = table.checkpoint.mock.calls.map((c) => c[2] as RunCheckpointPatch);
+    const checks = patches.filter((p) => Object.keys(p).length === 0).length;
+    const writes = patches.filter((p) => Object.keys(p).length > 0);
+    const batches = (deps.analyzePhotos as ReturnType<typeof vi.fn>).mock.calls.length;
+    expect(batches).toBe(3); // 24 photos, 8 per batch
+    expect(checks).toBe(1); // before the first batch only: every later check follows a checkpoint directly
+    // one write per batch + analysis done + quality + the stage change (no duplicate closing save)
+    expect(writes).toHaveLength(batches + 3);
+    const last = writes[writes.length - 1]!;
+    expect(last.state).toBe("organizing");
+  });
+
+  it("a Stop during a batch's model work is still caught before the next batch (the lease is re-checked after any other call)", async () => {
+    const { deps, table } = await setup();
+    const runId = await start(deps);
+    const analyze = deps.analyzePhotos;
+    let n = 0;
+    const d: StoryRunDeps = {
+      ...deps,
+      analyzePhotos: vi.fn(async (ids: readonly string[]) => {
+        const out = await analyze(ids);
+        if (++n === 1) await cancelStoryRun(runId, deps); // Stop lands while batch 1 runs
+        return out;
+      }),
+    };
+    const r = await advanceStoryRun(runId, { budgetMs: 1e9 }, d);
+    expect(r).toEqual({ leased: true });
+    expect(d.analyzePhotos).toHaveBeenCalledTimes(1); // no second batch
+    expect(table.rows.get(runId)).toMatchObject({ state: "failed", error_code: "cancelled" });
+  });
+
+  it("the composer's last check before it writes the doc always asks the database", async () => {
+    let beforeSaveChecks = 0;
+    const s = await setup({
+      compose: vi.fn(async (_b: string, opts: { rule: boolean; beforeSave: () => Promise<boolean> }) => {
+        const n = s.table.checkpoint.mock.calls.length;
+        const saved = await opts.beforeSave();
+        if (s.table.checkpoint.mock.calls.length === n + 1) beforeSaveChecks++;
+        return { pages: 18, warnings: 0, ai: "used" as const, saved };
+      }),
+    });
+    const runId = await start(s.deps);
+    await drive(s.deps, runId);
+    expect(beforeSaveChecks).toBe(1);
+  });
+});
+
+describe("storybook job: one tick reads each AI copy once", () => {
+  it("the analysis batches and the quality stage of one tick share the tick's AI copy memory (and the book id hint)", async () => {
+    const { deps } = await setup();
+    const runId = await start(deps);
+    await advanceStoryRun(runId, { budgetMs: 1e9 }, deps);
+    const batches = (deps.analyzePhotos as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[1] as { bookId: string; aiCopyCache: unknown });
+    const cluster = (deps.clusterPhotosIntoMoments as ReturnType<typeof vi.fn>).mock.calls;
+    expect(batches.length).toBeGreaterThan(1);
+    expect(batches.every((b) => b.bookId === BOOK && b.aiCopyCache === batches[0]!.aiCopyCache)).toBe(true);
+    expect(cluster).toHaveLength(1);
+    expect(cluster[0]).toEqual([BOOK, USER, batches[0]!.aiCopyCache]);
+  });
+});
