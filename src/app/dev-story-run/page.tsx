@@ -6,6 +6,8 @@
 //   /dev-story-run?state=cancelled   stopped by the user at stage 3 + "Continue my story"
 //   /dev-story-run?state=starting    the start request is out (skeleton rows)
 //   /dev-story-run?state=rule        finished without AI (the honest outcome line)
+//   &photos=N (1–12)                the user's photos above the stages (public/dev-photos, git-ignored;
+//                                   tiles stay grey where a file is missing), "Your 40 photos"
 // Try again / Stop answer from local stubs (running → cancelled, Try again → running again).
 // 404s in production builds (incl. Vercel previews, which run NODE_ENV=production).
 
@@ -23,5 +25,6 @@ export default async function DevStoryRunPage({ searchParams }: { searchParams: 
   const sp = await searchParams;
   const raw = typeof sp.state === "string" ? sp.state : "running";
   const state = (STATES as readonly string[]).includes(raw) ? (raw as DevStoryRunState) : "running";
-  return <DevStoryRunClient state={state} />;
+  const n = typeof sp.photos === "string" && /^\d{1,2}$/.test(sp.photos) ? Math.min(12, Number(sp.photos)) : 0;
+  return <DevStoryRunClient state={state} photos={n} />;
 }

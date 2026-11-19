@@ -1,6 +1,8 @@
 // Client-driven run loop (D-022): call advance until the run is done. Pure apart from the
 // injected advance/sleep, so it is unit-tested without a browser.
-//   200 tick      → report, continue (immediately; tiny gap guards a tight loop)
+//   200 tick      → report, continue: at once when the tick moved the run on (its answer differs
+//                   from the previous one — the server did work, so waiting only delays the user);
+//                   a tick that changed nothing gets a tiny gap (guards a tight loop)
 //   202 leased    → another tab/tick holds the lease: wait Retry-After, retry (not a failure)
 //   network / 5xx → back off 2 s, 4 s, 8 s, 16 s; after MAX_TRANSIENT_TRIES in a row → error
 //   503 unavailable (M12: Supabase timeout) → transient too; waits max(back-off, Retry-After)
@@ -41,8 +43,17 @@ export type SleepFn = (ms: number, signal?: AbortSignal) => Promise<void>;
 export const MAX_TRANSIENT_TRIES = 5;
 export const BACKOFF_BASE_MS = 2_000;
 export const BACKOFF_MAX_MS = 16_000;
-/** Pause between two successful, not-done ticks. */
+/** Pause after a successful, not-done tick that reported no change (a progressing tick goes on at once). */
 export const TICK_GAP_MS = 250;
+
+/** Two tick answers are the same when their JSON is (same server code → same key order). */
+function tickKey(tick: unknown): string {
+  try {
+    return JSON.stringify(tick) ?? "";
+  } catch {
+    return "";
+  }
+}
 /**
  * Client deadline per advance request. Ticks are budgeted at 40 s (a Storyteller tick may hold
  * the lease longer — then the retry gets 202 and waits for it).
@@ -206,6 +217,8 @@ export async function driveRun<T extends TickLike = RunTick>(opts: DriveOptions<
   const sleep: SleepFn = (ms, s) => wakeableSleep(rawSleep, ms, s, waker);
   let failures = 0;
   let timeouts = 0;
+  /** The previous tick's answer (null = none yet): an unchanged answer is the only reason to pause. */
+  let lastTick: string | null = null;
   // Coming back (visible / online) is a fresh start for the transient-failure budget.
   const unsubscribeReset = waker?.subscribe(() => {
     failures = 0;
@@ -236,7 +249,12 @@ export async function driveRun<T extends TickLike = RunTick>(opts: DriveOptions<
         failures = 0;
         onTick?.(out.tick);
         if (out.tick.done) return { kind: "done", tick: out.tick };
-        await sleep(TICK_GAP_MS, signal);
+        {
+          const key = tickKey(out.tick);
+          const progressed = key !== lastTick;
+          lastTick = key;
+          if (!progressed) await sleep(TICK_GAP_MS, signal);
+        }
         return null;
       case "leased":
         await sleep(out.retryAfterMs, signal);

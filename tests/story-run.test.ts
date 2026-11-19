@@ -258,6 +258,40 @@ describe("storybook job: ticks", () => {
     expect(parseStoryCursor(row.cursor)!.write.state!.groups).toEqual({});
   });
 
+  it("stage 1 reads the photos + analyses ONCE per tick: later batches of the same tick work from the first read", async () => {
+    const { deps, vision } = await setup();
+    const listPhotos = vi.fn(deps.listPhotos);
+    const listVision = vi.fn(deps.listVision);
+    let retried = false;
+    const analyze = deps.analyzePhotos;
+    const d: StoryRunDeps = {
+      ...deps,
+      listPhotos,
+      listVision,
+      // the first photo fails once (retryable): it is sent again in a later batch of the same tick
+      analyzePhotos: vi.fn(async (ids: readonly string[]) => {
+        if (!retried) {
+          retried = true;
+          const [first, ...rest] = ids;
+          const ok = await analyze(rest);
+          return [{ photoId: first!, ok: false as const, error: "model_error", retryable: true } as unknown as AnalyzePhotosResult, ...ok];
+        }
+        return analyze(ids);
+      }),
+    };
+    const runId = await start(d);
+    listPhotos.mockClear(); // start checks the photos too
+    const r = await advanceStoryRun(runId, { budgetMs: 1e9 }, d);
+    expect("view" in r && r.view.state).toBe("organizing"); // stage 1 done in one tick, the tick ends on the stage change
+    expect(listPhotos).toHaveBeenCalledTimes(1);
+    expect(listVision).toHaveBeenCalledTimes(1);
+    const sent = (d.analyzePhotos as ReturnType<typeof vi.fn>).mock.calls.flatMap((c) => c[0] as string[]);
+    expect(sent).toHaveLength(25); // 24 photos + the one retry, nothing analysed twice after success
+    expect(new Set(sent).size).toBe(24);
+    expect(vision.size).toBe(24);
+    expect("view" in r && r.view.progress.stages.discovering).toMatchObject({ status: "done", done: 24, total: 24 });
+  });
+
   it("progress never carries a percentage (no %, no ratio field) at any point", async () => {
     const { deps, table } = await setup();
     const runId = await start(deps);

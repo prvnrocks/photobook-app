@@ -30,7 +30,7 @@ const writing = (done: number) => view("writing", {}, { discovering: { status: "
 
 const data = (story: StoryRunView | null, over: Partial<WizardStep6Data> = {}): WizardStep6Data => ({
   step: 6, bookId: BOOK, title: "T", rawTitle: "T", occasion: "travel", format: "A5_PORTRAIT", designStyle: "classic", captionLang: "en",
-  isPaid: false, aiOn: true, resolved: 6, story, activeRunId: null, hasDoc: false, readError: false, trigger: "build", dailyCap: 3, auto: false, fanUrls: [], ...over,
+  isPaid: false, aiOn: true, resolved: 6, story, activeRunId: null, hasDoc: false, readError: false, trigger: "build", dailyCap: 3, auto: false, fanUrls: [], storyPhotos: { urls: [], total: 0 }, ...over,
 });
 
 const never = <T,>() => new Promise<T>(() => {});
@@ -99,6 +99,38 @@ describe("step 6: the generation screen", () => {
     expect(a.advance).toHaveBeenCalledWith(RUN, expect.anything());
   });
 
+  it("the user's own photos show while the job runs: decorative tiles + one short summary; no %, no progressbar", async () => {
+    const urls = Array.from({ length: 12 }, (_, i) => `https://signed.example/thumb-${i}.jpg?token=t`);
+    render(data(writing(1), { storyPhotos: { urls, total: 40 } }), api());
+    const strip = $("story-photos")!;
+    expect(strip).not.toBeNull();
+    const tiles = strip.querySelectorAll('[data-testid="story-photo"]');
+    expect(tiles).toHaveLength(12);
+    expect([...strip.querySelectorAll("img")].map((i) => i.getAttribute("src"))).toEqual(urls);
+    expect([...strip.querySelectorAll("img")].every((i) => i.getAttribute("alt") === "")).toBe(true);
+    // the grid is hidden from screen readers; the caption is the summary they get
+    expect(strip.querySelector('[aria-hidden="true"]')!.contains(tiles[0])).toBe(true);
+    expect($("story-photos-summary")!.textContent).toBe("Your 40 photos");
+    expect($("story-photos-summary")!.closest('[aria-hidden="true"]')).toBeNull();
+    // two rows of five at 375 px; the last two only from `sm`
+    expect([...tiles].map((t) => t.className.includes("hidden sm:block"))).toEqual([...Array(10).fill(false), true, true]);
+    // reduced motion: the fade-in is motion-safe only, nothing else moves
+    expect([...tiles].every((t) => /motion-safe:animate-in/.test(t.className) && !/(^|\s)animate-(spin|pulse|bounce)/.test(t.className))).toBe(true);
+    // nothing fabricated: no picks highlighted, no percentage, no progressbar
+    expect(strip.querySelector("[data-picked]")).toBeNull();
+    expect(host.textContent).not.toContain("%");
+    expect(host.querySelector('[role="progressbar"]')).toBeNull();
+    expect(host.querySelector("progress")).toBeNull();
+    // the photos come before the stage rows
+    expect(strip.compareDocumentPosition($("story-stages")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("no photos in the step data (none signed / a read error) → no photo strip, the stages alone", () => {
+    render(data(writing(1)), api());
+    expect($("story-photos")).toBeNull();
+    expect($("story-stages")).not.toBeNull();
+  });
+
   it("no job yet → starts exactly once (StrictMode double effects included), then follows the server's run id", async () => {
     const a = api();
     render(data(null), a, vi.fn(), { strict: true });
@@ -109,16 +141,40 @@ describe("step 6: the generation screen", () => {
 
   it("ticks move the rows only with what the server reports, chapter by chapter, then the editor opens", async () => {
     const ticks = [writing(2), view("writing", {}, { writing: { status: "running", done: 3, chapters: 3, closing: true } }), view("done", {}, { designing: { status: "done", pages: 18 } })];
-    const a = api({ advance: vi.fn(async () => ({ kind: "tick" as const, tick: ticks.shift() ?? never() })) as never });
+    // each advance answers only when the test releases it, so every server answer can be seen
+    const pending: (() => void)[] = [];
+    const a = api({
+      advance: vi.fn(() => new Promise((resolve) => pending.push(() => resolve({ kind: "tick" as const, tick: ticks.shift()! })))) as never,
+    });
+    const release = async () => {
+      await wait(0);
+      await act(async () => pending.shift()!());
+      await wait(0);
+    };
     const { onDone } = render(data(writing(1)), a);
-    await wait(10);
-    expect(["Chapter 3 of 3", "Closing words"]).toContain($("story-stage-writing-detail")?.textContent);
-    await wait(700);
+    await release();
+    expect($("story-stage-writing-detail")?.textContent).toBe("Chapter 3 of 3");
+    await release();
+    expect($("story-stage-writing-detail")?.textContent).toBe("Closing words");
+    await release();
     expect($("story-done")).not.toBeNull();
     expect($("story-live")!.textContent).toBe("Your story is ready.");
     expect(onDone).not.toHaveBeenCalled();
     await wait(STORY_READY_MS + 50);
     expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it("a tick that moved the job on is followed by the next advance at once (no fixed wait in between)", async () => {
+    vi.useFakeTimers();
+    const ticks = [writing(2), view("writing", {}, { writing: { status: "running", done: 3, chapters: 3, closing: true } }), view("done", {}, { designing: { status: "done", pages: 18 } })];
+    const advance = vi.fn(async () => ({ kind: "tick" as const, tick: ticks.shift() ?? never() }));
+    render(data(writing(1)), api({ advance: advance as never }));
+    // only microtasks run: no timer is advanced, yet all three ticks were asked for
+    await act(async () => {
+      for (let i = 0; i < 20; i++) await Promise.resolve();
+    });
+    expect(advance).toHaveBeenCalledTimes(3);
+    expect($("story-done")).not.toBeNull();
   });
 
   it("Stop: one cancel for repeated taps; the stopped card says why and offers to continue (a NEW job)", async () => {

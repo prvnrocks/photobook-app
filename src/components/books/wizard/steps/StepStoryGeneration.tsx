@@ -6,10 +6,12 @@
 // (the server answers already_running for a second start, so repeated loads never make two).
 // Finished → straight into the editor (step 7 Preview is only for books made by the old album flow).
 // Stopped / failed → the plain reason + Try again (a new job that continues from where it stopped).
+// While it runs, the user's own photos (data.storyPhotos, signed thumbs) sit above the stages.
 
 import { useEffect, useRef } from "react";
 import { WizardHeadline } from "@/components/wizard/WizardHeadline";
 import { WIZARD_SECONDARY_CLASS } from "@/components/wizard/WizardNav";
+import { StoryPhotoStrip } from "@/components/story/StoryPhotoStrip";
 import { StoryProgress } from "@/components/story/StoryProgress";
 import { useStoryRun, type StoryRunApi } from "@/components/story/useStoryRun";
 import type { WizardStep6Data } from "@/lib/books/wizard-client";
@@ -60,6 +62,11 @@ export function StepStoryGeneration({ data, headlineId, onDone, handover = null,
       <p className="mt-2 text-center text-base text-muted-foreground lg:text-start" data-testid="story-intro">
         We&rsquo;re making the first draft of your book from your photos. You can change everything afterwards.
       </p>
+      {data.storyPhotos?.urls.length ? (
+        <div className="mt-5 flex min-w-0 flex-col sm:mt-6">
+          <StoryPhotoStrip urls={data.storyPhotos.urls} total={data.storyPhotos.total} />
+        </div>
+      ) : null}
       <div className="mt-5 flex min-w-0 flex-col sm:mt-6">
         <StoryProgress phase={phase} busy={busy} onStop={stop} onTryAgain={tryAgain} bookLink={phase.kind === "stopped" || phase.kind === "error" ? bookLink : null} />
       </div>

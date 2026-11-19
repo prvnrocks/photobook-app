@@ -65,6 +65,7 @@ import { isSupabaseTimeout, SupabaseUnavailableError } from "@/lib/supabase/dead
 import { composeStorybookPages, ComposeError, type ComposeAiStatus } from "./compose";
 import { StoryPlanSchema, type StoryPlan } from "./plan";
 import { previewSelection } from "./preview";
+import { newTickTimer, storyTimingOn, timeDeps } from "./tick-timing";
 import { newStoryWriteState, planStory, StoryError, storyWriteGroups, StoryWriteStateSchema, writeStoryStep, type StoryWriteState } from "./service";
 
 // ---------------------------------------------------------------------------------------------
@@ -540,6 +541,14 @@ type Ctx = {
   budgetMs: number;
   /** A unit of work (batch / plan / chapter / compose) already ran in this tick. */
   worked: boolean;
+  /** STORY_TICK_TIMING only: why the tick ended. */
+  trace: TickTrace | null;
+  /**
+   * Stage 1, this tick only: the story photos (with a thumb) and the ids with a stored analysis,
+   * read once at the first batch and kept current from each batch's results — so the batches of
+   * one tick don't re-read the same rows (the next tick reads them fresh).
+   */
+  analysisRows?: { photos: OrganizePhotoRow[]; analysed: Set<string> };
 };
 
 const overBudget = (ctx: Ctx) => ctx.worked && ctx.deps.now() - ctx.t0 >= ctx.budgetMs;
@@ -564,6 +573,21 @@ function note(ctx: Ctx, n: OutcomeNote): void {
 }
 
 export async function advanceStoryRun(runId: string, opts: { budgetMs?: number } = {}, deps: StoryRunDeps = defaultStoryRunDeps()): Promise<StoryAdvanceResult> {
+  if (!storyTimingOn()) return advanceStoryRunInner(runId, opts, deps, null);
+  // STORY_TICK_TIMING=1 (local measurement): one content-free line per tick (./tick-timing.ts).
+  const timer = newTickTimer();
+  const trace: TickTrace = { from: null, end: null };
+  const t = performance.now();
+  const out = await advanceStoryRunInner(runId, opts, timeDeps(deps, timer), trace);
+  const to = "view" in out ? out.view.state : "leased" in out ? "leased" : "not_found";
+  console.info(timer.line({ ms: Math.round(performance.now() - t), from: trace.from ?? "-", to, end: trace.end ?? ("view" in out && out.view.done ? "finished" : "early") }));
+  return out;
+}
+
+/** Filled in by a tick when STORY_TICK_TIMING is on (stage names only). */
+type TickTrace = { from: StoryRunState | null; end: "budget" | "stage_change" | "unit_stop" | "done" | null };
+
+async function advanceStoryRunInner(runId: string, opts: { budgetMs?: number }, deps: StoryRunDeps, trace: TickTrace | null): Promise<StoryAdvanceResult> {
   const pre = await deps.getRunForTick(runId);
   if (!pre || !agentRunsDb.isStoryRunTrigger(pre.trigger)) return { notFound: true };
   if (pre.state === "done" || pre.state === "failed") return { view: viewOf(pre) };
@@ -577,7 +601,7 @@ export async function advanceStoryRun(runId: string, opts: { budgetMs?: number }
   }
   let stale = false;
   try {
-    const out = await tick(runId, token, t0, opts.budgetMs ?? STORY_TICK_BUDGET_MS, deps);
+    const out = await tick(runId, token, t0, opts.budgetMs ?? STORY_TICK_BUDGET_MS, deps, trace);
     if ("leased" in out) stale = true;
     return out;
   } finally {
@@ -585,7 +609,7 @@ export async function advanceStoryRun(runId: string, opts: { budgetMs?: number }
   }
 }
 
-async function tick(runId: string, token: string, t0: number, budgetMs: number, deps: StoryRunDeps): Promise<StoryAdvanceResult> {
+async function tick(runId: string, token: string, t0: number, budgetMs: number, deps: StoryRunDeps, trace: TickTrace | null = null): Promise<StoryAdvanceResult> {
   const run = await deps.getRunForTick(runId);
   if (!run || !agentRunsDb.isStoryRunTrigger(run.trigger)) return { notFound: true };
   if (run.state === "done" || run.state === "failed") return { view: viewOf(run) };
@@ -629,7 +653,8 @@ async function tick(runId: string, token: string, t0: number, budgetMs: number, 
       }
       cursor.initialized = true;
     }
-    ctx = { deps, run, token, bookId: book.id, userId: book.user_id, mode: run.mode, cursor, state: stage, t0, budgetMs, worked: false };
+    ctx = { deps, run, token, bookId: book.id, userId: book.user_id, mode: run.mode, cursor, state: stage, t0, budgetMs, worked: false, trace };
+    if (trace) trace.from = stage;
     return await loop(ctx);
   } catch (e) {
     if (e instanceof StaleLease) return { leased: true };
@@ -662,26 +687,43 @@ async function fail(deps: StoryRunDeps, run: RunForTick, token: string, cursor: 
 }
 
 async function loop(ctx: Ctx): Promise<StoryAdvanceResult> {
+  const end = (why: NonNullable<TickTrace["end"]>) => {
+    if (ctx.trace) ctx.trace.end = why;
+  };
   for (;;) {
-    if (overBudget(ctx)) break;
+    if (overBudget(ctx)) {
+      end("budget");
+      break;
+    }
     const before = ctx.state;
     // A stage change ends the tick, so the client shows the new stage
     // BEFORE the next tick starts its (possibly long) model call.
     const changed = () => ctx.state !== before;
+    const after = (more: boolean) => end(more && changed() ? "stage_change" : "unit_stop");
     if (ctx.state === "discovering") {
-      if ((await discover(ctx)) && !changed()) continue;
+      const more = await discover(ctx);
+      if (more && !changed()) continue;
+      after(more);
       break;
     }
     if (ctx.state === "organizing") {
-      if ((await organize(ctx)) && !changed()) continue;
+      const more = await organize(ctx);
+      if (more && !changed()) continue;
+      after(more);
       break;
     }
     if (ctx.state === "writing") {
-      if ((await write(ctx)) && !changed()) continue;
+      const more = await write(ctx);
+      if (more && !changed()) continue;
+      after(more);
       break;
     }
     if (ctx.state === "designing") {
-      if (await design(ctx)) return finish(ctx);
+      if (await design(ctx)) {
+        end("done");
+        return finish(ctx);
+      }
+      end("unit_stop");
       break;
     }
     break;
@@ -696,8 +738,12 @@ async function loop(ctx: Ctx): Promise<StoryAdvanceResult> {
 async function discover(ctx: Ctx): Promise<boolean> {
   const c = ctx.cursor;
   if (ctx.mode !== "rule" && !c.analysis.done) {
-    const [rows, vision] = await Promise.all([ctx.deps.listPhotos(ctx.bookId, ctx.userId), ctx.deps.listVision(ctx.bookId, ctx.userId)]);
-    const photos = storyPhotos(rows).filter((r) => r.thumb_path);
+    if (!ctx.analysisRows) {
+      const [rows, vision] = await Promise.all([ctx.deps.listPhotos(ctx.bookId, ctx.userId), ctx.deps.listVision(ctx.bookId, ctx.userId)]);
+      const photos = storyPhotos(rows).filter((r) => r.thumb_path);
+      ctx.analysisRows = { photos, analysed: new Set(photos.filter((p) => vision.has(p.id)).map((p) => p.id)) };
+    }
+    const { photos, analysed: vision } = ctx.analysisRows;
     const failed = new Set(c.analysis.failed);
     c.analysis.total = photos.length;
     c.analysis.analysed = photos.filter((p) => vision.has(p.id)).length;
@@ -715,6 +761,7 @@ async function discover(ctx: Ctx): Promise<boolean> {
     for (const r of results) {
       if (r.ok) {
         c.analysis.analysed++;
+        vision.add(r.photoId);
         delete c.analysis.retries[r.photoId];
         continue;
       }

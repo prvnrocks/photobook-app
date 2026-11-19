@@ -63,6 +63,7 @@ vi.mock("@/lib/db/agent-runs", () => ({
 vi.mock("@/lib/db/photos", () => ({
   listUploadState: async () => mocks.uploadRows,
   listReviewPhotos: async () => [],
+  listStoryStripThumbs: async () => ({ urls: [], total: 0 }),
 }));
 vi.mock("@/lib/db/draft-activity", () => ({ touchWarnedDraft: async () => {} }));
 // M20 T6: steps 3–7 load through the lazy WizardDataSteps chunk; plain step stubs here (tests/m20-continuous-wizard.test.tsx covers them).

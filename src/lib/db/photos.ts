@@ -618,6 +618,34 @@ export async function listReviewPhotos(bookId: string, onlyIds?: readonly string
   }));
 }
 
+/**
+ * Task 8 follow-up — the photos shown on wizard step 6 while the storybook job runs: the first
+ * `limit` kept, upload-ready photos of the book (date order) as signed 512 px thumb URLs (valid
+ * REVIEW_URL_TTL_SECONDS), plus how many kept photos there are. RLS client (owner only); ONE
+ * select (with an exact count) and ONE createSignedUrls call. Photos whose thumb could not be
+ * signed are left out. Never returns ids, paths or AI fields.
+ */
+export async function listStoryStripThumbs(bookId: string, limit: number): Promise<{ urls: string[]; total: number }> {
+  if (!isUuid(bookId) || limit <= 0) return { urls: [], total: 0 };
+  const supabase = await createClient();
+  const { data, error, count } = await supabase
+    .from("photos")
+    .select("thumb_path", { count: "exact" })
+    .eq("book_id", bookId)
+    .eq("upload_state", "ready")
+    .eq("status", "kept")
+    .order("taken_at", { ascending: true, nullsFirst: false })
+    .order("id", { ascending: true })
+    .limit(limit);
+  if (error) throw new PhotosQueryError("list story strip thumbs", error.code);
+  const paths = [...new Set((data ?? []).map((r) => r.thumb_path).filter((p): p is string => !!p))];
+  if (paths.length === 0) return { urls: [], total: count ?? 0 };
+  const { data: signed, error: signError } = await supabase.storage.from(PHOTOS_BUCKET).createSignedUrls(paths, REVIEW_URL_TTL_SECONDS);
+  if (signError) throw new PhotosQueryError("sign story strip thumbs", "storage");
+  const byPath = new Map(signed.filter((s) => s.path && s.signedUrl && !s.error).map((s) => [s.path as string, s.signedUrl]));
+  return { urls: paths.map((p) => byPath.get(p)).filter((u): u is string => !!u), total: count ?? paths.length };
+}
+
 // ---------------------------------------------------------------------------
 // Editor (M5, D-036 / D-037 (4)). PUT /api/books/[id]/doc checks ownership
 // with getMyBook (RLS) before calling these.

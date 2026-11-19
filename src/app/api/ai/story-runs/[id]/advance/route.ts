@@ -9,6 +9,7 @@
 // ≥ it (Vercel Fluid compute). Logs carry error codes only.
 import { type NextRequest } from "next/server";
 import { advanceStoryRun, STORY_TICK_BUDGET_MS } from "@/lib/ai/story/run";
+import { storyTimingOn } from "@/lib/ai/story/tick-timing";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { isSameOrigin } from "@/lib/auth/same-origin";
 import { getStoryRunForOwner } from "@/lib/db/agent-runs";
@@ -22,17 +23,19 @@ export const maxDuration = 300;
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!isSameOrigin(request)) return json({ error: "forbidden" }, 403);
+  const t0 = performance.now();
   try {
     const user = await getCurrentUser();
     if (!user) return json({ error: "unauthenticated" }, 401);
-    // Task 9: a runaway client loop is cut off (429 + Retry-After); a normal job ticks far below it
-    const limited = await rateLimitResponse("story_tick", user.id);
-    if (limited) return limited;
     const { id } = await params;
-    if (!isUuid(id)) return json({ error: "not_found" }, 404);
-    // Ownership via RLS before the tick (which writes with the admin client).
-    const owned = await getStoryRunForOwner(id);
+    // Task 9: a runaway client loop is cut off (429 + Retry-After); a normal job ticks far below it.
+    // Ownership via RLS before the tick (which writes with the admin client). Both reads go out
+    // together (one round trip less per tick); a limited call still never reaches the tick.
+    const [limited, owned] = await Promise.all([rateLimitResponse("story_tick", user.id), isUuid(id) ? getStoryRunForOwner(id) : Promise.resolve(null)]);
+    if (limited) return limited;
     if (!owned) return json({ error: "not_found" }, 404);
+    // STORY_TICK_TIMING=1 (local measurement): auth + rate limit + ownership time before the tick.
+    if (storyTimingOn()) console.info(`[story-timing] route prelude=${Math.round(performance.now() - t0)}`);
     const result = await advanceStoryRun(owned.id, { budgetMs: STORY_TICK_BUDGET_MS });
     if ("notFound" in result) return json({ error: "not_found" }, 404);
     if ("leased" in result) return json({ leased: true }, 202, { "retry-after": "2" });

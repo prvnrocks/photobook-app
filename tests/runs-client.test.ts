@@ -9,7 +9,7 @@ import {
   type AdvanceOutcome,
   type FetchLike,
 } from "@/lib/runs/client";
-import { backoffMs, driveRun, MAX_TRANSIENT_TRIES } from "@/lib/runs/drive";
+import { backoffMs, driveRun, MAX_TRANSIENT_TRIES, TICK_GAP_MS } from "@/lib/runs/drive";
 
 const BOOK = "11111111-1111-4111-8111-111111111111";
 const RUN = "22222222-2222-4222-8222-222222222222";
@@ -207,6 +207,14 @@ describe("driveRun", () => {
     expect(out).toMatchObject({ kind: "done", tick: { state: "done" } });
     expect(seen).toEqual(["curating", "storytelling", "done"]);
     expect(advance).toHaveBeenCalledTimes(3);
+  });
+
+  it("a tick that moved the run on is followed by the next advance at once; only an unchanged answer pauses", async () => {
+    const { advance, sleeps, sleep } = script([tick("curating", false), tick("storytelling", false), tick("storytelling", false), tick("captioning", false), tick("done", true)]);
+    expect(await driveRun({ runId: RUN, advance, sleep })).toMatchObject({ kind: "done" });
+    expect(advance).toHaveBeenCalledTimes(5);
+    // curating → storytelling → (same storytelling answer: one short gap) → captioning → done
+    expect(sleeps).toEqual([TICK_GAP_MS]);
   });
 
   it("waits Retry-After on 202 without counting a failure", async () => {

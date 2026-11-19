@@ -56,7 +56,10 @@ function viewOf(state: DevStoryRunState): StoryRunView | null {
 
 const never = <T,>() => new Promise<T>(() => {});
 
-export function DevStoryRunClient({ state }: { state: DevStoryRunState }) {
+/** public/dev-photos (git-ignored free stock photos, see src/app/dev-book-page/real-photos.ts). */
+const DEV_PHOTOS = ["1001", "1012", "1015", "1022", "1036", "1040", "1055", "177", "274", "325", "342", "447"];
+
+export function DevStoryRunClient({ state, photos = 0 }: { state: DevStoryRunState; photos?: number }) {
   const [opened, setOpened] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
@@ -81,8 +84,9 @@ export function DevStoryRunClient({ state }: { state: DevStoryRunState }) {
       dailyCap: 3,
       auto: false,
       fanUrls: [],
+      storyPhotos: { urls: DEV_PHOTOS.slice(0, photos).map((id) => `/dev-photos/${id}.jpg`), total: photos > 0 ? 40 : 0 },
     }),
-    [state],
+    [state, photos],
   );
   const api: StoryRunApi = useMemo(
     () => ({

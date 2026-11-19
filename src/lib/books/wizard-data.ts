@@ -20,7 +20,7 @@ import { getActiveRunForBook, getLatestBookRun, hasAnyRunForBook, isStoryRunTrig
 import { storyRunViewOf, type StoryRunView } from "@/lib/storybook/run/progress";
 import { getMyBook, type MyBook } from "@/lib/db/books";
 import { touchWarnedDraft } from "@/lib/db/draft-activity";
-import { listUploadState } from "@/lib/db/photos";
+import { listStoryStripThumbs, listUploadState } from "@/lib/db/photos";
 import { albumEditedByUser, countKept, type CaptionsPreviewDoc, type RebuildVariant, type ReviewBanner, type ReviewTilePhoto } from "@/lib/review/ui";
 import type { FirstRunState } from "@/lib/upload/auto-build-client";
 import type { ExistingPhoto } from "@/lib/upload/queue";
@@ -33,6 +33,9 @@ import {
   uploadExisting,
 } from "./step-data";
 import { albumConfirmedOf, resolveWizardStep, type WizardGateInput, type WizardTarget } from "./wizard-gate";
+
+/** Photos shown on the storybook screen (step 6): two calm rows at most. */
+export const STORY_STRIP_PHOTOS = 12;
 
 /** Steps whose data comes from this loader (1–2 are the client form; 4–5 load through their actions). */
 export const WIZARD_DATA_STEPS = [3, 6, 7] as const;
@@ -101,6 +104,12 @@ export type WizardStep6Data = WizardStepBase & {
   auto: boolean;
   /** Signed 512 px thumbs of the draft's first photos (cover first); [] without a draft. */
   fanUrls: string[];
+  /**
+   * The user's own photos for the storybook screen: signed 512 px thumbs (short-lived) of the
+   * first STORY_STRIP_PHOTOS kept photos, and how many kept photos the book has. A read error →
+   * no photos (the screen works without them).
+   */
+  storyPhotos: { urls: string[]; total: number };
 };
 
 /** Step 7 — what /books/[id]/review computes for ReviewBody / ReviewGrid / CaptionsPreview. */
@@ -227,11 +236,12 @@ async function step3(book: MyBook, userId: string, aiOn: boolean, requested: Wiz
 
 async function step6(book: MyBook, aiOn: boolean, auto: boolean): Promise<WizardStep6Data> {
   // A read error is not "no run" (build page): keep it apart so ?auto=1 never strands a queued run.
-  const [activeRead, hasRunRead, fanUrls, latestRead] = await Promise.all([
+  const [activeRead, hasRunRead, fanUrls, latestRead, stripRead] = await Promise.all([
     settle(getActiveRunForBook(book.id)),
     settle(hasAnyRunForBook(book.id)),
     loadFanUrls(book.id, draftDoc(book.doc)),
     settle(getLatestBookRun(book.id)),
+    settle(listStoryStripThumbs(book.id, STORY_STRIP_PHOTOS)),
   ]);
   const active = activeRead.ok ? activeRead.value : null;
   const hasRun = hasRunRead.ok ? hasRunRead.value : false;
@@ -248,6 +258,7 @@ async function step6(book: MyBook, aiOn: boolean, auto: boolean): Promise<Wizard
     dailyCap: limitsFor(book.is_paid).maxLiveBuildsPerUserPerDay,
     auto,
     fanUrls,
+    storyPhotos: stripRead.ok ? stripRead.value : { urls: [], total: 0 },
   };
 }
 

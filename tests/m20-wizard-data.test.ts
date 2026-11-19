@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   getLatestBookRun: vi.fn(),
   listUploadState: vi.fn(),
   listReviewPhotos: vi.fn(),
+  listStoryStripThumbs: vi.fn(),
   touchWarnedDraft: vi.fn(),
 }));
 
@@ -40,6 +41,7 @@ vi.mock("@/lib/db/agent-runs", () => ({
 vi.mock("@/lib/db/photos", () => ({
   listUploadState: mocks.listUploadState,
   listReviewPhotos: mocks.listReviewPhotos,
+  listStoryStripThumbs: mocks.listStoryStripThumbs,
 }));
 vi.mock("@/lib/db/draft-activity", () => ({ touchWarnedDraft: mocks.touchWarnedDraft }));
 
@@ -135,6 +137,7 @@ beforeEach(() => {
     const all = [reviewRow(1), reviewRow(2), reviewRow(3, "dropped")];
     return ids ? ids.map((id, i) => ({ ...reviewRow(i + 1), id })) : all;
   });
+  mocks.listStoryStripThumbs.mockReset().mockResolvedValue({ urls: [], total: 0 });
   mocks.touchWarnedDraft.mockReset().mockResolvedValue("noop");
   errors = [];
   vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
@@ -398,12 +401,22 @@ describe("loadWizardStep — step 6 (build page parity)", () => {
     mocks.hasAnyRunForBook.mockResolvedValue(true);
     mocks.getMyBook.mockResolvedValue(book({ doc: ruleDraft() }));
     const d = await loadWizardStep(BOOK_ID, 6, { auto: true });
-    expect(Object.keys(d!).sort()).toEqual([...BASE_KEYS, "story", "activeRunId", "hasDoc", "readError", "trigger", "dailyCap", "auto", "fanUrls"].sort());
+    expect(Object.keys(d!).sort()).toEqual([...BASE_KEYS, "story", "activeRunId", "hasDoc", "readError", "trigger", "dailyCap", "auto", "fanUrls", "storyPhotos"].sort());
     expect(d).toMatchObject({ step: 6, activeRunId: RUN_ID, readError: false, trigger: "build", auto: true, resolved: 6 });
     expect((d as { fanUrls: string[] }).fanUrls).toHaveLength(6);
     // Only the draft's first photos are loaded + signed (FAN_PHOTOS = 6 at most).
     const ids = mocks.listReviewPhotos.mock.calls[0][1] as string[];
     expect(ids.length).toBeLessThanOrEqual(6);
+  });
+
+  it("Task 8 follow-up: the user's kept photos as short-lived thumbs for the storybook screen (12 at most); a read error → none", async () => {
+    mocks.listStoryStripThumbs.mockResolvedValue({ urls: ["https://signed/1", "https://signed/2"], total: 40 });
+    const d = await loadWizardStep(BOOK_ID, 6);
+    expect(d).toMatchObject({ storyPhotos: { urls: ["https://signed/1", "https://signed/2"], total: 40 } });
+    expect(mocks.listStoryStripThumbs).toHaveBeenCalledWith(BOOK_ID, 12);
+    mocks.listStoryStripThumbs.mockRejectedValue(timeout());
+    const e = await loadWizardStep(BOOK_ID, 6);
+    expect(e).toMatchObject({ storyPhotos: { urls: [], total: 0 }, readError: false, resolved: 6 });
   });
 
   it("read error kept distinct from 'no run'", async () => {

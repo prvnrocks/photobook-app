@@ -230,7 +230,7 @@ const step3 = (over: Record<string, unknown> = {}) => ({
   firstRun: "none", dailyCap: 3, ...over,
 });
 const step6 = (over: Record<string, unknown> = {}) => ({
-  ...base(6), story: null, activeRunId: RUN, hasDoc: false, readError: false, trigger: "build", dailyCap: 3, auto: false, fanUrls: [], ...over,
+  ...base(6), story: null, activeRunId: RUN, hasDoc: false, readError: false, trigger: "build", dailyCap: 3, auto: false, fanUrls: [], storyPhotos: { urls: [], total: 0 }, ...over,
 });
 const step7 = (over: Record<string, unknown> = {}) => ({
   ...base(7), photos: [], albumPhotoIds: [], aiUsed: true, userEdited: false, building: false,

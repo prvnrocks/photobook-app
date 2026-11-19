@@ -77,6 +77,7 @@ const STEP6: Step6 = {
   dailyCap: 3,
   auto: true,
   fanUrls: ["https://x/1.jpg", "https://x/2.jpg", "https://x/3.jpg"],
+  storyPhotos: { urls: [], total: 0 },
 } as unknown as Step6;
 const STEP7 = { step: 7, bookId: BOOK, resolved: 7, counts: { kept: 12 } } as unknown as Step7;
 
