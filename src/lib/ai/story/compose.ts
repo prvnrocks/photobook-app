@@ -152,7 +152,19 @@ export function composePhotosOf(rows: readonly OrganizePhotoRow[], quality: read
  * `opts.dryRun` = compose + validate, never save (previews, tests). Throws ComposeError only for
  * the codes above — an AI failure falls back to the deterministic composer.
  */
-export async function composeStorybookPages(bookId: string, opts: { dryRun?: boolean } = {}, deps: ComposeDeps = {}): Promise<ComposeStorybookResult> {
+export async function composeStorybookPages(
+  bookId: string,
+  opts: {
+    dryRun?: boolean;
+    /**
+     * Task 8: asked right before the save (after the AI call and validation). false = do not save —
+     * the result comes back like a dry run (rev null). The storybook job uses it to check that the
+     * job was not stopped meanwhile, so a cancelled job never writes the doc.
+     */
+    beforeSave?: () => Promise<boolean>;
+  } = {},
+  deps: ComposeDeps = {},
+): Promise<ComposeStorybookResult> {
   const owner = typeof bookId === "string" ? await (deps.ownerOf ?? defaultOwnerOf)(bookId) : null;
   if (!owner) throw new ComposeError("not_found");
   const { userId, book } = owner;
@@ -202,6 +214,7 @@ export async function composeStorybookPages(bookId: string, opts: { dryRun?: boo
   const report = { ...fresh.report, interiorPages: doc.pages.length, ai: { ...fresh.report.ai, status: ai.status, ignored: ai.ignored } };
   if (opts.dryRun) return { doc, report, rev: null };
   if (book.doc_rev === null) throw new ComposeError("saving_unavailable");
+  if (opts.beforeSave && !(await opts.beforeSave())) return { doc, report, rev: null };
   const saved = await (deps.save ?? saveDocIfRev)(book.id, userId, stored as unknown as Json, doc.pages.length, book.doc_rev);
   if (!saved.ok) throw saved.reason === "conflict" ? new ComposeError("conflict", undefined, true) : new ComposeError("not_found");
   return { doc, report, rev: saved.rev };

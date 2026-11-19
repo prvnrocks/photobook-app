@@ -22,6 +22,7 @@ import "server-only";
 // Nothing here logs prompts, answers, descriptions, generated text, ids or paths: codes only.
 
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import { checkDailyAiBudget } from "@/lib/ai/budget";
 import { AGENT_TIMEOUT_MS, EFFORT, resolveAiMode, type AiMode } from "@/lib/ai/client";
 import { estimateCallCostUsd } from "@/lib/ai/cost";
@@ -236,7 +237,13 @@ async function loadInputs(owner: { userId: string; book: StoryBook }, deps: Stor
  * Checks that must pass before a LIVE call, in order: usage table, per-book limit, daily budget.
  * Returns the reason a live call is not allowed, or null. Replay costs nothing and is never refused.
  */
-async function liveGate(owner: { userId: string; book: StoryBook }, deps: StoryDeps, scope: StoryCallScope): Promise<{ block: "usage_unavailable" | "limit_reached" | "budget_exhausted" | null; canRecord: boolean }> {
+async function liveGate(
+  owner: { userId: string; book: StoryBook },
+  deps: StoryDeps,
+  scope: StoryCallScope,
+  /** Task 8 (writeStoryStep): runs of this scope already counted that are THIS run (0 or 1) — a resumed step is not a new write. */
+  ownCounted = 0,
+): Promise<{ block: "usage_unavailable" | "limit_reached" | "budget_exhausted" | null; canRecord: boolean }> {
   const available = await (deps.usageAvailable ?? storyUsageAvailable)();
   if (!available) return { block: "usage_unavailable", canRecord: false };
   const counts = await (deps.usageCounts ?? countStoryRuns)(owner.book.id, owner.userId);
@@ -245,7 +252,7 @@ async function liveGate(owner: { userId: string; book: StoryBook }, deps: StoryD
     scope === "plan"
       ? counts.plans >= limits.maxStoryPlans
       : scope === "book"
-        ? counts.writes >= limits.maxStoryWrites
+        ? counts.writes - ownCounted >= limits.maxStoryWrites
         : scope === "chapter"
           ? counts.chapterRegens >= limits.maxStoryChapterRegens
           : counts.rewrites >= limits.maxStoryBlockRewrites;
@@ -641,11 +648,107 @@ const enumOr = <T extends string>(list: readonly T[], v: string | null, fallback
  * Throws StoryError; nothing is stored unless the result validates and the append succeeds.
  */
 export async function writeStory(bookId: string, storyPlan: StoryPlan, opts: { chapterId?: string } = {}, deps: StoryDeps = {}): Promise<StoryWriteResult> {
+  const out = await writeStoryImpl(bookId, storyPlan, opts, deps, null);
+  if (out.kind !== "done") throw new StoryError("invalid_result", "pending"); // unreachable without a step control
+  return out.result;
+}
+
+// ---------------------------------------------------------------------------- writeStoryStep (Task 8)
+
+const AcceptedSchema = z.strictObject({ kind: z.enum(["intro", "paragraph", "pull_quote", "caption", "closing"]), text: z.string().min(1).max(4000), photoIds: z.array(z.string().max(64)).max(MAX_PHOTO_REFS), factRefs: z.array(z.string().max(64)).max(MAX_FACT_REFS) });
+const IssueSchema = z.strictObject({ blockId: z.string().max(64), code: z.string().max(40), detail: z.string().max(64).optional() });
+const GroupStateSchema = z.discriminatedUnion("status", [
+  z.strictObject({ status: z.literal("ok"), blocks: z.array(z.tuple([z.string().regex(/^b[1-9]\d{0,3}$/), AcceptedSchema])).max(200), issues: z.array(IssueSchema).max(100) }),
+  z.strictObject({ status: z.literal("failed"), code: z.string().max(40), detail: z.string().max(64).optional() }),
+  z.strictObject({ status: z.literal("budget") }),
+]);
+/**
+ * What writeStoryStep has written so far (kept by the caller between steps — e.g. in an agent_runs
+ * cursor): one entry per finished group (chapter id or "closing"), the run id the calls are
+ * recorded under (one "write" for the per-book limit, however many steps), the run's real cost
+ * and the number of usable answers. Text of accepted blocks lives here until the version is stored.
+ */
+export const StoryWriteStateSchema = z.strictObject({
+  v: z.literal(1),
+  runId: z.string().uuid(),
+  spentUsd: z.number().min(0).max(1000),
+  okCalls: z.number().int().min(0).max(1000),
+  groups: z.record(z.string().regex(/^(c[1-9]\d{0,3}|closing)$/), GroupStateSchema),
+});
+export type StoryWriteState = z.infer<typeof StoryWriteStateSchema>;
+
+export function newStoryWriteState(runId: string = randomUUID()): StoryWriteState {
+  return { v: 1, runId, spentUsd: 0, okCalls: 0, groups: {} };
+}
+
+/**
+ * Groups (chapters + closing) a plan's whole-book write consists of, in writing order — the same
+ * list writeStory walks. Pages the user protected are not known here, so a group may turn out to
+ * have nothing to write (it is then skipped without a call).
+ */
+export function storyWriteGroups(plan: Pick<StoryPlan, "chapters" | "skeleton">): string[] {
+  const ids = plan.chapters.map((c) => c.id);
+  return plan.skeleton.pages.some((p) => p.kind === "closing") ? [...ids, "closing"] : ids;
+}
+
+export type StoryWriteStepOptions = {
+  /** Carried between steps (newStoryWriteState() for the first). */
+  state: StoryWriteState;
+  /** New groups written by this call (default 1). */
+  maxGroups?: number;
+  /** Groups to give up on (each reported as chapter_failed "stalled", never called again). */
+  skip?: readonly string[];
+  /**
+   * No model call at all: store the plan's pages without text (AI off, over budget, every chapter
+   * failed). Allowed in every AI mode; the version is still merged with the current one (user
+   * blocks / locked pages survive).
+   */
+  textless?: boolean;
+};
+
+export type StoryWriteStepResult =
+  | { kind: "pending"; state: StoryWriteState; written: number; total: number }
+  | { kind: "done"; state: StoryWriteState; result: StoryWriteResult; written: number; total: number };
+
+/**
+ * writeStory(bookId, plan) for the whole book, in bounded steps (Task 8: one chapter per request
+ * fits the route limit). Each call writes at most `maxGroups` groups that `state` has no answer for
+ * yet and returns `pending` with the updated state; the call that finds nothing left assembles,
+ * merges and stores the version exactly like writeStory and returns `done`. Repeating a call with
+ * the same state never repeats a finished group's model call. Throws StoryError like writeStory
+ * (the live gate runs before every step that calls the model; a resumed run is not a new write).
+ */
+export async function writeStoryStep(bookId: string, storyPlan: StoryPlan, opts: StoryWriteStepOptions, deps: StoryDeps = {}): Promise<StoryWriteStepResult> {
+  const parsed = StoryWriteStateSchema.safeParse(opts.state);
+  if (!parsed.success) throw new StoryError("invalid_instruction", "state");
+  const control: StepControl = {
+    state: structuredClone(parsed.data),
+    maxGroups: Math.max(1, Math.floor(opts.maxGroups ?? 1)),
+    skip: new Set(opts.skip ?? []),
+    textless: opts.textless === true,
+  };
+  const out = await writeStoryImpl(bookId, storyPlan, {}, deps, control);
+  return out.kind === "pending" ? out : { kind: "done", state: control.state, result: out.result, written: out.written, total: out.total };
+}
+
+type StepControl = { state: StoryWriteState; maxGroups: number; skip: Set<string>; textless: boolean };
+type ImplResult = StoryWriteStepResult | { kind: "done"; result: StoryWriteResult; state: null; written: number; total: number };
+
+/** Never called: a textless step makes no model call. */
+const NO_CALL_TRANSPORT: AgentTransport = {
+  kind: "replay",
+  parse: async () => {
+    throw new StoryError("ai_off");
+  },
+};
+
+async function writeStoryImpl(bookId: string, storyPlan: StoryPlan, opts: { chapterId?: string }, deps: StoryDeps, step: StepControl | null): Promise<ImplResult> {
   const config = deps.config ?? readStoryAiConfig();
   const mode = deps.mode ?? resolveAiMode();
   const now = deps.now ?? Date.now;
   const owner = await openBook(bookId, deps);
-  if (mode === "off") throw new StoryError("ai_off");
+  const textless = step?.textless === true;
+  if (mode === "off" && !textless) throw new StoryError("ai_off");
 
   const parsedPlan = StoryPlanSchema.safeParse(storyPlan);
   if (!parsedPlan.success) throw new StoryError("invalid_plan", "schema");
@@ -664,18 +767,20 @@ export async function writeStory(bookId: string, storyPlan: StoryPlan, opts: { c
   if (chapterMode && !planChapter) throw new StoryError("invalid_plan", "chapter");
   if (chapterMode && (!current || !current.chapters.some((c) => c.id === opts.chapterId))) throw new StoryError("no_story");
 
-  const live = mode === "live";
+  const live = mode === "live" && !textless;
   const scope: StoryCallScope = chapterMode ? "chapter" : "book";
   let canRecord = true;
-  if (live) {
-    const gate = await liveGate(owner, deps, scope);
+  if (textless) canRecord = false;
+  else if (live) {
+    const gate = await liveGate(owner, deps, scope, step && step.state.okCalls > 0 ? 1 : 0);
     if (gate.block) throw new StoryError(gate.block);
   } else canRecord = await (deps.usageAvailable ?? storyUsageAvailable)().catch(() => false);
-  const transport = deps.transport === undefined ? transportFor(mode) : deps.transport;
+  const transport = textless ? NO_CALL_TRANSPORT : deps.transport === undefined ? transportFor(mode) : deps.transport;
   if (!transport) throw new StoryError("ai_off");
 
   const version = (current?.version ?? 0) + 1;
-  const s: Session = { ...owner, mode, live, config, deps, now, runId: (deps.newRunId ?? randomUUID)(), scope, version, transport, canRecord, spent: 0, okCalls: 0 };
+  const runId = step ? step.state.runId : (deps.newRunId ?? randomUUID)();
+  const s: Session = { ...owner, mode, live, config, deps, now, runId, scope, version, transport, canRecord, spent: step?.state.spentUsd ?? 0, okCalls: step?.state.okCalls ?? 0 };
   const photoByAlias = new Map(inputs.photos.map((p) => [p.alias, p]));
   const photoById = new Map(inputs.photos.map((p) => [p.id, p]));
   const aliasesOf = (ids: readonly string[]) => ids.map((id) => photoById.get(id)?.alias).filter((x): x is string => !!x);
@@ -744,7 +849,7 @@ export async function writeStory(bookId: string, storyPlan: StoryPlan, opts: { c
     });
     await append(s, storybook);
     const keptPages = current.pages.filter((p) => p.chapterId === chapter.id && isProtectedPage(p)).map((p) => p.id);
-    return { storybook, merge: { keptPages, keptBlocks: [], keptTitles: [], carriedPages: [] }, balance: storybookBalance(storybook), issues };
+    return { kind: "done", state: null, written: 1, total: 1, result: { storybook, merge: { keptPages, keptBlocks: [], keptTitles: [], carriedPages: [] }, balance: storybookBalance(storybook), issues } };
   }
 
   // ------------------------------------------------------------------ the whole book
@@ -771,29 +876,81 @@ export async function writeStory(bookId: string, storyPlan: StoryPlan, opts: { c
     groups.push({ chapterId: null, scopeId: "closing", slots: closingSlots, allowed: inputs.photos, promptPhotos: heroes });
   }
 
+  const total = groups.filter((g) => g.slots.length > 0).length;
+  let written = 0;
+  let newThisCall = 0;
+  let pending = false;
+  const keepAccepted = (g: (typeof groups)[number], got: ReadonlyMap<string, Accepted>) => {
+    for (const [id, b] of got) accepted.set(id, b);
+    const intro = g.slots.find((x) => x.kind === "intro" && got.has(x.blockId));
+    if (intro) earlier.push({ label: `${g.scopeId} intro`, text: got.get(intro.blockId)!.text });
+  };
   for (const g of groups) {
     if (g.slots.length === 0) continue;
-    if (outOfBudget) {
-      issues.push({ blockId: g.scopeId, code: "run_budget" });
-      continue;
-    }
-    attempted++;
-    const outcome = await writeSlots(w, { ...g, alreadyWritten: earlier });
-    if (!outcome.ok) {
-      if (outcome.error) {
-        lastError = outcome.error;
-        issues.push({ blockId: g.scopeId, code: "chapter_failed", detail: outcome.error.detail ?? outcome.error.code });
+    // Task 8 (writeStoryStep): a group finished in an earlier step is replayed from the state, never called again
+    const done = step?.state.groups[g.scopeId];
+    if (done) {
+      written++;
+      if (done.status === "ok") {
+        attempted++;
+        const got = new Map(done.blocks.filter(([id]) => g.slots.some((x) => x.blockId === id)));
+        for (const b of got.values()) w.bookTexts.push(b.text);
+        keepAccepted(g, got);
+        issues.push(...(done.issues as GroundingIssue[]));
+      } else if (done.status === "failed") {
+        attempted++;
+        lastError = new StoryError(STORY_ERRORS.includes(done.code as StoryErrorCode) ? (done.code as StoryErrorCode) : "model_error", done.detail);
+        issues.push({ blockId: g.scopeId, code: "chapter_failed", detail: done.detail ?? done.code });
       } else {
         outOfBudget = true;
         issues.push({ blockId: g.scopeId, code: "run_budget" });
       }
       continue;
     }
-    for (const [id, b] of outcome.accepted) accepted.set(id, b);
+    if (textless) continue;
+    if (outOfBudget) {
+      issues.push({ blockId: g.scopeId, code: "run_budget" });
+      if (step) step.state.groups[g.scopeId] = { status: "budget" };
+      written++;
+      continue;
+    }
+    if (step?.skip.has(g.scopeId)) {
+      attempted++;
+      lastError = new StoryError("model_error", "stalled", true);
+      issues.push({ blockId: g.scopeId, code: "chapter_failed", detail: "stalled" });
+      step.state.groups[g.scopeId] = { status: "failed", code: "model_error", detail: "stalled" };
+      written++;
+      continue;
+    }
+    if (step && newThisCall >= step.maxGroups) {
+      pending = true;
+      break;
+    }
+    newThisCall++;
+    attempted++;
+    written++;
+    const outcome = await writeSlots(w, { ...g, alreadyWritten: earlier });
+    if (!outcome.ok) {
+      if (outcome.error) {
+        lastError = outcome.error;
+        issues.push({ blockId: g.scopeId, code: "chapter_failed", detail: outcome.error.detail ?? outcome.error.code });
+        if (step) step.state.groups[g.scopeId] = { status: "failed", code: outcome.error.code, ...(outcome.error.detail ? { detail: clipText(outcome.error.detail, 64) } : {}) };
+      } else {
+        outOfBudget = true;
+        issues.push({ blockId: g.scopeId, code: "run_budget" });
+        if (step) step.state.groups[g.scopeId] = { status: "budget" };
+      }
+      continue;
+    }
+    keepAccepted(g, outcome.accepted);
     issues.push(...outcome.issues);
-    const intro = g.slots.find((x) => x.kind === "intro" && outcome.accepted.has(x.blockId));
-    if (intro) earlier.push({ label: `${g.scopeId} intro`, text: outcome.accepted.get(intro.blockId)!.text });
+    if (step) step.state.groups[g.scopeId] = { status: "ok", blocks: [...outcome.accepted.entries()], issues: outcome.issues.map((i) => ({ blockId: i.blockId, code: i.code, ...(i.detail ? { detail: clipText(i.detail, 64) } : {}) })) };
   }
+  if (step) {
+    step.state.spentUsd = Math.round(s.spent * 1_000_000) / 1_000_000;
+    step.state.okCalls = s.okCalls;
+  }
+  if (step && pending) return { kind: "pending", state: step.state, written, total };
   // nothing usable came back at all → nothing is stored (when every page is the user's, nothing was asked)
   if (attempted > 0 && s.okCalls === 0) throw lastError ?? new StoryError("budget_exhausted", "run_budget");
 
@@ -854,7 +1011,8 @@ export async function writeStory(bookId: string, storyPlan: StoryPlan, opts: { c
   candidate = { ...candidate, facts: factRefsToStore(inputs.facts, current?.facts ?? [], citedFacts(candidate.pages)) };
   const storybook = storeOrThrow(candidate);
   await append(s, storybook);
-  return { storybook, merge, balance: balanceOf(storybook.pages, storybook.target), issues };
+  const result: StoryWriteResult = { storybook, merge, balance: balanceOf(storybook.pages, storybook.target), issues };
+  return step ? { kind: "done", state: step.state, result, written, total } : { kind: "done", state: null, result, written, total };
 }
 
 // ---------------------------------------------------------------------------- rewriteNarrativeBlock
