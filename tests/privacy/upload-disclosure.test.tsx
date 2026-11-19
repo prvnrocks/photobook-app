@@ -26,6 +26,13 @@ describe("upload privacy note", () => {
     expect(html).toContain('href="/privacy#ai"');
   });
 
+  it("the privacy link is a 44 px tall tap target (375 px audit)", () => {
+    const html = renderToStaticMarkup(<UploadPrivacyNote />);
+    const link = /<a [^>]*data-testid="upload-privacy-link"[^>]*>/.exec(html)?.[0] ?? "";
+    expect(link).toMatch(/class="[^"]*\bmin-h-11\b/);
+    expect(link).toMatch(/class="[^"]*\binline-flex\b/);
+  });
+
   it("with AI off it only says the photos are private (no AI claim)", () => {
     const html = renderToStaticMarkup(<UploadPrivacyNote aiOn={false} />);
     expect(html).not.toContain("Anthropic");

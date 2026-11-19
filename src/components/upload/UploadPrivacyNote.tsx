@@ -1,5 +1,6 @@
 // Task 9: privacy + AI processing disclosure beside the upload (no hooks: renders on the server or
-// inside a client island). 375 px first: a small lock line, one short paragraph, one link.
+// inside a client island). 375 px first: a small lock line, one short paragraph, one link (a 44 px
+// tall tap target — the 375 px audits require it).
 
 import { Lock } from "lucide-react";
 import { UPLOAD_PRIVACY_NOTE } from "@/lib/legal/upload-disclosure";
@@ -11,7 +12,7 @@ export function UploadPrivacyNote({ aiOn = true }: { aiOn?: boolean }) {
       <div className="min-w-0 type-small text-muted-foreground">
         <p className="font-medium text-foreground">{UPLOAD_PRIVACY_NOTE.privateLine}</p>
         {aiOn ? <p className="mt-1">{UPLOAD_PRIVACY_NOTE.aiLine}</p> : null}
-        <a href={UPLOAD_PRIVACY_NOTE.href} className="mt-1 inline-block font-medium text-[#0E3B2E] underline underline-offset-2" data-testid="upload-privacy-link">
+        <a href={UPLOAD_PRIVACY_NOTE.href} className="inline-flex min-h-11 items-center font-medium text-[#0E3B2E] underline underline-offset-2" data-testid="upload-privacy-link">
           {UPLOAD_PRIVACY_NOTE.linkText}
         </a>
       </div>
