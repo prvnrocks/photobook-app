@@ -54,7 +54,7 @@ export function toEditorShellData(data: EditorData, now: Date = new Date()): Edi
     }),
     rewritesUsed: data.rewritesUsed,
     rewritesLeft: data.rewritesLeft,
-    ...(data.latestStoryRun ? { story: { latest: data.latestStoryRun } } : {}),
+    ...(data.latestStoryRun ? { story: { latest: data.latestStoryRun, ...(data.storyTier ? { tier: data.storyTier } : {}) } } : {}),
     photos: data.photos.map((p) => ({
       id: p.id,
       status: p.status,

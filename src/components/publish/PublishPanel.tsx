@@ -23,7 +23,7 @@
 
 import { Loader2, MessageCircle, Send } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import type { PublishBookResult, PublishState, SetBookPasswordResult, UnpublishBookResult } from "@/app/books/[id]/publish/actions";
+import type { PublishBookResult, ResetShareLinkResult, PublishState, SetBookPasswordResult, UnpublishBookResult } from "@/app/books/[id]/publish/actions";
 import { Notice } from "@/components/app/Notice";
 import { useRefreshTransition } from "@/components/app/use-refresh-transition";
 import { UpgradeButtonView } from "@/components/upgrade/UpgradeButton";
@@ -41,6 +41,8 @@ import "./share-motion.css";
 export type PublishActions = {
   publish: () => Promise<PublishBookResult>;
   unpublish: () => Promise<UnpublishBookResult>;
+  /** Task 9: revoke the link for good (next publish = a new link). Absent = option hidden. */
+  resetLink?: () => Promise<ResetShareLinkResult>;
   setPassword: (password: string | null) => Promise<SetBookPasswordResult>;
 };
 
@@ -119,7 +121,7 @@ export function PublishPanelView({
   /** Conflict retry delay (tests). */
   wait?: (ms: number) => Promise<void>;
 }) {
-  const { busy, message, celebrate, publishedOn, confirmUnpublish, setConfirmUnpublish, onPublish, onUnpublish, onPasswordChanged } =
+  const { busy, message, celebrate, publishedOn, confirmUnpublish, setConfirmUnpublish, onPublish, onUnpublish, onResetLink, onPasswordChanged } =
     usePublishPanel({ state, actions, shared, refresh, wait });
   const locked = busy !== null || refreshing;
   const rootRef = useRef<HTMLDivElement>(null);
@@ -192,6 +194,7 @@ export function PublishPanelView({
               confirming={confirmUnpublish}
               onConfirmChange={setConfirmUnpublish}
               onUnpublish={onUnpublish}
+              {...(actions.resetLink ? { onResetLink, resetBusy: busy === "reset" } : {})}
               busy={busy === "unpublish"}
               locked={locked}
             />

@@ -51,5 +51,5 @@ export type EditorShellData = {
   rewritesLeft: number;
   photos: EditorShellPhoto[];
   /** Task 8: the book's newest storybook job (outcome line, a regeneration still running). Absent = none. */
-  story?: { latest: StoryRunView | null };
+  story?: { latest: StoryRunView | null; /** Task 9: the book's entitlement tier (server facts). */ tier?: "preview" | "full" };
 };

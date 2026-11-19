@@ -8,7 +8,10 @@ import { LIMITS } from "@/lib/ai/limits";
 export type PublishBlock = "invalid_doc" | "empty" | "page_limit" | "expired";
 
 /** Mirrors PublishErrorCode in the publish actions. */
-export type PublishError = "signed_out" | "not_found" | PublishBlock | "conflict" | "failed";
+export type PublishError = "signed_out" | "not_found" | PublishBlock | "preview_limit" | "conflict" | "failed";
+
+/** Task 9: an unpaid AI storybook is a free preview; its link shows the preview pages only. */
+export const PREVIEW_LIMIT_COPY = "This free preview can only share its preview pages. Remove the pages you added, or unlock the full book to share it all.";
 
 /** Mirrors SetPasswordErrorCode in the publish actions. */
 export type PasswordError =
@@ -25,6 +28,9 @@ export type PasswordError =
 /** Same bounds as src/lib/publish/password.ts (server-only); the server re-validates. */
 export const PASSWORD_MIN = 4;
 export const PASSWORD_MAX = 64;
+
+/** Task 9: after "Turn off and make a new link". */
+export const RESET_LINK_TEXT = "The old link is turned off for good. Publish again to get a new link.";
 
 export const EXPIRED_COPY = "This free link has expired — Upgrade to bring it back";
 export const CONFLICT_COPY = "Something changed — try again";
@@ -54,6 +60,8 @@ export function publishErrorCopy(code: PublishError, maxPages?: number): string 
       return CONFLICT_COPY;
     case "failed":
       return "Couldn't publish right now. Check your connection and try again.";
+    case "preview_limit":
+      return PREVIEW_LIMIT_COPY;
     default:
       return blockReasonCopy(code, maxPages);
   }

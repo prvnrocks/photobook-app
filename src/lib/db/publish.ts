@@ -171,6 +171,23 @@ export async function unpublishBook(bookId: string, ownerId: string): Promise<Ow
   return data.length === 1 ? { ok: true, slug: data[0].slug } : { ok: false, reason: "not_found" };
 }
 
+/**
+ * Task 9 — revoke the share link: published_doc = null AND slug = null, so the old /b/<slug> link
+ * stops working for good; the next publish makes a NEW slug (makeSlug). published_at, expires_at
+ * (the free-link clock), published_rev and the password stay. Returns the revoked slug (to purge
+ * its cached page) or not_found. Idempotent.
+ */
+export async function revokeShareLink(bookId: string, ownerId: string): Promise<OwnerWriteResult> {
+  if (!isUuid(bookId) || !isUuid(ownerId)) return { ok: false, reason: "not_found" };
+  const admin = createAdminClient();
+  const before = await admin.from("books").select("slug").eq("id", bookId).eq("user_id", ownerId).maybeSingle();
+  if (before.error) throw new PublishQueryError("read share link", before.error.code);
+  if (!before.data) return { ok: false, reason: "not_found" };
+  const { data, error } = await admin.from("books").update({ published_doc: null, slug: null }).eq("id", bookId).eq("user_id", ownerId).select("id");
+  if (error) throw new PublishQueryError("revoke share link", error.code);
+  return data.length === 1 ? { ok: true, slug: before.data.slug } : { ok: false, reason: "not_found" };
+}
+
 /** Sets (scrypt hash from hashPassword) or clears (null) books.password_hash. */
 export async function setBookPasswordHash(
   bookId: string,

@@ -40,6 +40,9 @@ import { cn } from "@/lib/utils";
 import { PageStrip } from "./PageStrip";
 import { SaveBanner, SaveStatus } from "./SaveStatus";
 import { StoryOutcomeNotice } from "./StoryOutcomeNotice";
+import { StoryPreviewBanner } from "./StoryPreviewBanner";
+import { openUpgrade } from "./UpgradeSheet";
+import { storyPreviewState } from "@/lib/editor/story-preview";
 import { EDITOR_TOOLS, panelOnSelect, visibleTools } from "./tools/registry";
 import type { EditorTool } from "./tools/types";
 import { useAutosave } from "./useAutosave";
@@ -115,6 +118,8 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
     [],
   );
   const closeRegen = useCallback(() => setRegenOpen(false), []);
+  // Task 9: free storybook preview → unlock banner; once entitled → "Complete my book".
+  const previewState = storyPreviewState(data.story);
   const openPreview = useCallback(() => setPreviewOpen(true), []);
   const closePreview = useCallback(() => setPreviewOpen(false), []);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -262,6 +267,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
 
         <SaveBanner status={autosave.status} bookId={data.book.id} />
         {data.story?.latest ? <StoryOutcomeNotice view={data.story.latest} /> : null}
+        {previewState ? <StoryPreviewBanner state={previewState} onUnlock={() => openUpgrade(ctx)} onComplete={storyRegen.open} disabled={state.readOnly || regenOpen} /> : null}
         {aiPath.makeWithAi ? (
           // Not dismissible: the only way into the AI for this book. Photos stay one tap away in
           // More → "See all photos".

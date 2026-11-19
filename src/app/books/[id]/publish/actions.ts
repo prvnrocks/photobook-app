@@ -13,11 +13,13 @@ import { stripUnusableAiPhotoBackgrounds } from "@/lib/design/background-suggest
 import type { BookDoc, BookFormat, DesignStyle } from "@/lib/book/types";
 import type { RenderPhotos } from "@/lib/book/render";
 import { getMyBook } from "@/lib/db/books";
+import { getBookEntitlement } from "@/lib/entitlements";
 import { getCoverPhoto } from "@/lib/db/cover-thumb";
 import { listPlaceablePhotos } from "@/lib/db/photos";
 import {
   getPublishRow,
   publishSnapshot,
+  revokeShareLink,
   setBookPasswordHash,
   unpublishBook,
   type PublishRow,
@@ -39,6 +41,8 @@ export type PublishErrorCode =
   | "signed_out"
   | "not_found"
   | PublishBlockReason // invalid_doc | empty | page_limit | expired
+  /** Task 9: an unpaid storybook preview has more pages than the preview may share. */
+  | "preview_limit"
   | "conflict"
   | "failed";
 
@@ -173,6 +177,13 @@ async function publishForOwner(owner: Owner): Promise<PublishOutcome> {
       maxPages: row.max_pages,
     });
     if (issues.length > 0) return { ok: false, error: "invalid_doc" };
+    // Task 9: an AI storybook without a full entitlement is a free PREVIEW — the published link never
+    // shows more than the preview's pages (pages the owner added by hand stay in their draft).
+    // Classic albums and paid books are unchanged.
+    if (!row.is_paid && doc.meta?.story) {
+      const entitlement = await getBookEntitlement(owner.bookId);
+      if (entitlement && entitlement.tier === "preview" && doc.pages.length > entitlement.limits.previewPages) return { ok: false, error: "preview_limit" };
+    }
 
     const nowIso = now.toISOString();
     // Keep the stored strings verbatim (no ms round-trip): expiry fixed at first publish.
@@ -314,6 +325,28 @@ export async function unpublishBookAction(bookId: string): Promise<UnpublishBook
     return { ok: true };
   } catch (err) {
     console.error(`[unpublish] failed (${errorCodeOf(err)})`);
+    return { ok: false, error: "failed" };
+  }
+}
+
+export type ResetShareLinkResult = { ok: true } | { ok: false; error: "signed_out" | "not_found" | "failed" };
+
+/**
+ * Task 9 — "Turn off and make a new link": revokes the share link for good (the old /b/<slug> never
+ * works again, also for anyone who saved it) — publishing again creates a NEW link. The free-link
+ * expiry date does not reset. Owner-only (session + RLS ownership check, then a write scoped by
+ * id AND user_id). Idempotent.
+ */
+export async function resetShareLinkAction(bookId: string): Promise<ResetShareLinkResult> {
+  const owner = await resolveOwner(bookId, "reset-link");
+  if ("error" in owner) return { ok: false, error: owner.error };
+  try {
+    const res = await revokeShareLink(owner.bookId, owner.userId);
+    if (!res.ok) return { ok: false, error: "not_found" };
+    revalidateBook(owner.bookId, res.slug);
+    return { ok: true };
+  } catch (err) {
+    console.error(`[reset-link] failed (${errorCodeOf(err)})`);
     return { ok: false, error: "failed" };
   }
 }

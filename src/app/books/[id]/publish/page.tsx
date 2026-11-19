@@ -23,7 +23,7 @@ import { getMyProfile } from "@/lib/db/profiles";
 import { publishCompare } from "@/lib/publish/compare";
 import { shareStatus } from "@/lib/publish/status";
 import { isPaymentsEnabled } from "@/lib/stripe";
-import { getPublishState, publishBookAction, setBookPasswordAction, unpublishBookAction } from "./actions";
+import { getPublishState, publishBookAction, resetShareLinkAction, setBookPasswordAction, unpublishBookAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +100,7 @@ export default async function PublishPage({
             actions={{
               publish: publishBookAction.bind(null, id),
               unpublish: unpublishBookAction.bind(null, id),
+              resetLink: resetShareLinkAction.bind(null, id),
               setPassword: setBookPasswordAction.bind(null, id),
             }}
           />

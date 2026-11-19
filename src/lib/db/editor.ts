@@ -21,6 +21,7 @@ import type { CaptionLang, Occasion, Tone } from "@/lib/book/options";
 import { parseBookDoc } from "@/lib/book/schema";
 import type { BookDoc } from "@/lib/book/types";
 import { albumConfirmedOf } from "@/lib/books/wizard-gate";
+import { getEntitlementTier } from "@/lib/entitlements";
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/uuid";
 
@@ -111,6 +112,8 @@ export type EditorData = {
    * (the editor then just shows no outcome line / no running regeneration).
    */
   latestStoryRun?: StoryRunView | null;
+  /** Task 9: entitlement tier, read only when the book has a storybook job (preview banner). */
+  storyTier?: "preview" | "full";
 };
 
 type PhotoRow = {
@@ -275,6 +278,8 @@ export async function getEditorData(bookId: string): Promise<EditorData | null> 
     latestStoryRun(supabase, book.id).catch(() => null),
   ]);
   const signed = await signRows(supabase, rows);
+  // Task 9: only a storybook needs the tier (ownership proved by getMyBook above). Fails safe to preview.
+  const storyTier = storyRun ? await getEntitlementTier(book.id) : undefined;
 
   const photos: EditorPhoto[] = rows.map((r, i) => ({
     id: r.id,
@@ -320,6 +325,7 @@ export async function getEditorData(bookId: string): Promise<EditorData | null> 
     albumConfirmed: albumConfirmedOf(book.album_confirmed_at),
     photos,
     latestStoryRun: storyRun,
+    ...(storyTier ? { storyTier } : {}),
   };
 }
 

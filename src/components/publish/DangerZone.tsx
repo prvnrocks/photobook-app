@@ -3,6 +3,8 @@
 // quiet red text button; the confirm step is a soft red panel with the solid Unpublish + Cancel.
 // The panel owns the action + busy state. Testids kept: unpublish-section, unpublish-button,
 // unpublish-confirm, unpublish-confirm-button.
+// Task 9: the confirm step also offers "Turn off and make a new link" (reset-link-button) — the old
+// link is revoked for good (anyone who saved it loses access); publishing again creates a new one.
 
 import { Loader2 } from "lucide-react";
 import { useId } from "react";
@@ -15,11 +17,15 @@ export type DangerZoneProps = {
   onUnpublish: () => void;
   /** Unpublish is in flight. */
   busy: boolean;
+  /** Task 9: revoke the link for good. Absent = option hidden. */
+  onResetLink?: () => void;
+  /** Reset is in flight. */
+  resetBusy?: boolean;
   /** Any action / refresh in flight. */
   locked: boolean;
 };
 
-export function DangerZone({ isPaid, confirming, onConfirmChange, onUnpublish, busy, locked }: DangerZoneProps) {
+export function DangerZone({ isPaid, confirming, onConfirmChange, onUnpublish, busy, locked, onResetLink, resetBusy = false }: DangerZoneProps) {
   const headingId = useId();
   return (
     <section
@@ -44,10 +50,19 @@ export function DangerZone({ isPaid, confirming, onConfirmChange, onUnpublish, b
               {busy ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
               Unpublish
             </button>
-            <button type="button" onClick={() => onConfirmChange(false)} disabled={busy} className={SHARE_CTA_EMERALD}>
+            <button type="button" onClick={() => onConfirmChange(false)} disabled={busy || resetBusy} className={SHARE_CTA_EMERALD}>
               Cancel
             </button>
           </div>
+          {onResetLink ? (
+            <div className="flex flex-col gap-2 border-t border-destructive-border pt-3">
+              <p className="type-small text-foreground">Shared the link with the wrong people? Turn it off for good — publishing again gives you a new link.</p>
+              <button type="button" onClick={onResetLink} disabled={locked} className={`${SHARE_CTA_DANGER_QUIET} -ms-4 self-start`} data-testid="reset-link-button">
+                {resetBusy ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
+                Turn off and make a new link
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : (
         <button

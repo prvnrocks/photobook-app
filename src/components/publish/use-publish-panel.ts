@@ -4,13 +4,14 @@
 // so the cards render from the server's PublishState.
 
 import { useEffect, useState } from "react";
-import type { PublishBookResult, PublishState, UnpublishBookResult } from "@/app/books/[id]/publish/actions";
+import type { PublishBookResult, PublishState, ResetShareLinkResult, UnpublishBookResult } from "@/app/books/[id]/publish/actions";
 import { track } from "@/lib/analytics/client";
 import {
   CHANGES_PUBLISHED_TEXT,
   LIVE_TEXT,
   publishErrorCopy,
   publishWithRetry,
+  RESET_LINK_TEXT,
   UNPUBLISHED_TEXT,
   unpublishErrorCopy,
 } from "@/lib/publish/ui";
@@ -31,7 +32,7 @@ export function usePublishPanel({
   refresh: () => void;
   wait?: (ms: number) => Promise<void>;
 }) {
-  const [busy, setBusy] = useState<"publish" | "unpublish" | null>(null);
+  const [busy, setBusy] = useState<"publish" | "unpublish" | "reset" | null>(null);
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
   const [message, setMessage] = useState<PanelMessage | null>(() =>
     shared ? { tone: "ok", text: shared === "changes" ? CHANGES_PUBLISHED_TEXT : LIVE_TEXT } : null,
@@ -98,10 +99,32 @@ export function usePublishPanel({
     }
   };
 
+  /** Task 9: revoke the link for good; publishing again makes a new one. */
+  const onResetLink = async () => {
+    if (!actions.resetLink) return;
+    setBusy("reset");
+    setMessage(null);
+    let r: ResetShareLinkResult;
+    try {
+      r = await actions.resetLink();
+    } catch {
+      r = { ok: false, error: "failed" };
+    }
+    setBusy(null);
+    setConfirmUnpublish(false);
+    if (r.ok) {
+      setMessage({ tone: "ok", text: RESET_LINK_TEXT });
+      setCelebrate(false);
+      refresh();
+    } else {
+      setMessage({ tone: "error", text: unpublishErrorCopy(r.error), signIn: r.error === "signed_out" });
+    }
+  };
+
   const onPasswordChanged = (text: string) => {
     setMessage({ tone: "ok", text });
     refresh();
   };
 
-  return { busy, message, celebrate, publishedOn, confirmUnpublish, setConfirmUnpublish, onPublish, onUnpublish, onPasswordChanged };
+  return { busy, message, celebrate, publishedOn, confirmUnpublish, setConfirmUnpublish, onPublish, onUnpublish, onResetLink, onPasswordChanged };
 }
