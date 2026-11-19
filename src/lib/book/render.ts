@@ -44,6 +44,7 @@ import type {
   Layout,
   LayoutDecoration,
   LayoutSlotDef,
+  PageText,
   Rect,
   SlotShapeKind,
   TextInk,
@@ -240,6 +241,8 @@ export interface RenderTextPanel extends RenderText {
   quarter?: { deg: 90 | -90; inner: Rect };
   /** M30: text colour (hex) from the layout's `ink` role; absent = the page / plate ink class. */
   color?: string;
+  /** Task 7, pageText panels only: the page text's element id (data-text-id). */
+  textId?: string;
   /**
    * M10c label plate behind the text: artwork fills the panel box; the text sits in `textBox`
    * (% of the panel box, from the plate's catalogue textBox) in the plate's ink.
@@ -305,6 +308,27 @@ export interface PageRenderModel {
   descriptionAreas?: RenderDescriptionArea[];
   /** M30 colour blocks on this page, in layout order (absent when none). */
   blocks?: RenderBlock[];
+  /** Task 7, editor only (RenderOptions editTargets): page text tap areas (absent when none). */
+  pageTextAreas?: RenderPageTextArea[];
+}
+
+/**
+ * Where a layout's "pageText" panel sits on this page (Task 7, editor tap target): with or without
+ * text, so the editor can offer to write one. Never computed for the viewer / print.
+ */
+export interface RenderPageTextArea {
+  /** % of the page. */
+  rect: Rect;
+  /** Index in doc.pages of the page that owns the panel. */
+  ownerIndex: number;
+  /** Panel number (`n` of the layout panel = `panel` of the page text). */
+  panel: number;
+  /** The page text's element id, null when the panel is empty. */
+  textId: string | null;
+  role: PageText["role"] | null;
+  empty: boolean;
+  /** Type size (cqw) of the editor's "add text" hint (same mm on every format). */
+  hintCqw: number;
 }
 
 export interface CoverRenderModel {
@@ -822,6 +846,36 @@ function wrappedLines(paragraphs: number[][], perLine: number): number {
   return Math.max(1, lines);
 }
 
+/**
+ * Task 7: how a text sets in a plain panel box (no plate, no quarter turn) — the same sizing the
+ * renderer uses (panelFontMm) plus the height the wrapped lines need at that size. `fits` = the
+ * lines fit `boxHmm × slack` (slack < 1 = a safety margin). Used by the storybook page composer to
+ * prevent text overflow (validatePageLayout) — never by the renderer itself.
+ */
+export function panelTextMetrics(
+  text: string,
+  role: TextRole,
+  boxWmm: number,
+  boxHmm: number,
+  f: Pick<ResolvedRoleFont, "font" | "textTransform" | "letterSpacing">,
+  style: DesignStyle | null | undefined,
+  slack = 1,
+): { sizeMm: number; neededMm: number; lines: number; fits: boolean } {
+  const leading = panelLeading(style, role, f);
+  const charEm = panelCharEm(f);
+  const lineGrow = panelLineGrow(f);
+  const sizeMm = panelFontMm(text, role, boxWmm, boxHmm * slack, {
+    charEm,
+    lineGrow,
+    ...(leading.padEm ? { lineHeight: leading.lineHeight, padEm: leading.padEm[0] + leading.padEm[1] } : {}),
+  });
+  const perLine = Math.max(1, Math.floor(boxWmm / (sizeMm * charEm)));
+  const lines = wrappedLines(panelParagraphs(text), perLine);
+  const pad = leading.padEm ? leading.padEm[0] + leading.padEm[1] : 0;
+  const neededMm = Math.round(sizeMm * (lines * leading.lineHeight * lineGrow + pad) * 1000) / 1000;
+  return { sizeMm, neededMm, lines, fits: neededMm <= boxHmm * slack + 1e-6 };
+}
+
 // --- Spread halves (M10b A9) ---------------------------------------------------------------------
 
 /** A spread rect (x 0..200) seen from one half: shifted into that page's 0..100 (may run outside). */
@@ -933,10 +987,18 @@ function boundText(doc: BookDoc, bind: TextBinding, owner: BookPage | null, n = 
     }
     case "pageCaption":
       return owner?.caption?.text ?? "";
+    // Task 7: the page text in panel `n` (absent → panel not drawn).
+    case "pageText":
+      return pageTextOf(owner, n)?.text ?? "";
     // M30: a cover line = the title of chapter `n` (doc order); no such chapter → not drawn.
     case "coverLine":
       return doc.chapters[n]?.title ?? "";
   }
+}
+
+/** Task 7: the text of `page` that sits in pageText panel `n` (texts carry their panel number). */
+export function pageTextOf(page: Pick<BookPage, "texts"> | null | undefined, n = 0): PageText | undefined {
+  return page?.texts?.find((t) => t.panel === n);
 }
 
 // --- Colour roles + blocks (M30) -----------------------------------------------------------------
@@ -1094,6 +1156,7 @@ function textPanels(
       typography: typographyOf(f),
       ...(quarter ? { quarter: { deg: t.rotate as 90 | -90, inner: quarterInner(boxWmm, boxHmm) } } : t.rotate ? { rotate: t.rotate } : {}),
       ...(colours && t.ink ? { color: colours[INK_COLOUR[t.ink]] } : {}),
+      ...(t.bind === "pageText" ? { textId: pageTextOf(owner, t.n ?? 0)?.id } : {}),
       ...(plateDef && t.plate
         ? { plate: { art: stickerArt(plateDef, t.plate.tint), textBox, ink: plateInk(plateDef, t.plate.tint) } }
         : {}),
@@ -1119,6 +1182,27 @@ function descriptionAreasOf(doc: BookDoc, layout: Layout, owner: BookPage, owner
       ownerIndex,
       chapterId: chapter.id,
       empty: !chapter.description?.text.trim(),
+      hintCqw: scaleCqw(DESCRIPTION_HINT_CQW, textScale(doc.format)),
+    });
+  }
+  return out;
+}
+
+/** pageText panels of `layout` on this page, with or without text (editor tap targets, Task 7). */
+function pageTextAreasOf(doc: BookDoc, layout: Layout, owner: BookPage, ownerIndex: number, offset: number): RenderPageTextArea[] {
+  const out: RenderPageTextArea[] = [];
+  for (const t of layout.texts ?? []) {
+    if (t.bind !== "pageText") continue;
+    const rect = shiftRect(t.box, offset);
+    if (!onPage(rect)) continue;
+    const text = pageTextOf(owner, t.n ?? 0);
+    out.push({
+      rect,
+      ownerIndex,
+      panel: t.n ?? 0,
+      textId: text?.id ?? null,
+      role: text?.role ?? null,
+      empty: !text?.text.trim(),
       hintCqw: scaleCqw(DESCRIPTION_HINT_CQW, textScale(doc.format)),
     });
   }
@@ -1212,12 +1296,13 @@ export function pageRenderModel(
   }
 
   const texts = layout.texts
-    ? textPanels(doc, layout, owner, offset, captionLang, ["chapterTitle", "dateLabel", "chapterDescription"])
+    ? textPanels(doc, layout, owner, offset, captionLang, ["chapterTitle", "dateLabel", "chapterDescription", "pageText"])
     : [];
   // Decorations are layout artwork: drawn on orphaned right halves too (like the background).
   const decorations = layout.decorations ? renderDecorations(layout, doc.occasion, offset) : [];
   const blocks = renderBlocks(doc, layout, owner, offset, opts);
   const descriptionAreas = opts.editTargets && owner ? descriptionAreasOf(doc, layout, owner, half?.ownerIndex ?? pageIndex, offset) : [];
+  const pageTextAreas = opts.editTargets && owner ? pageTextAreasOf(doc, layout, owner, half?.ownerIndex ?? pageIndex, offset) : [];
   return {
     kind: "page",
     pageId: page.id,
@@ -1229,6 +1314,7 @@ export function pageRenderModel(
     ...(texts.length > 0 ? { texts } : {}),
     ...(decorations.length > 0 ? { decorations } : {}),
     ...(descriptionAreas.length > 0 ? { descriptionAreas } : {}),
+    ...(pageTextAreas.length > 0 ? { pageTextAreas } : {}),
     ...(blocks.length > 0 ? { blocks } : {}),
   };
 }

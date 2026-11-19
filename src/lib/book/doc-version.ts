@@ -18,7 +18,7 @@ export function upgradeDocV1(v1: BookDocV1): BookDoc {
  * True when `doc` cannot be written as v1 without losing something: landscape format, a non-colour
  * book background, a book backgroundSource (M10c D5), a non-classic design style, a cover background of its own (D-087), any page background or spread side, more slots
  * on a page than v1 allows, a layout outside the M1–M10a classic portrait set (page or cover), or a v2-only caption
- * font (fonts-v2.ts) as book font or on a page caption, an accent colourway or a chapter description (M30). (An explicit `page.background: null` is
+ * font (fonts-v2.ts) as book font or on a page caption, an accent colourway or a chapter description (M30), or a page text (Task 7). (An explicit `page.background: null` is
  * the same as absent.) Unknown layout ids are not v2 by themselves (validation rejects them).
  */
 export function usesV2Features(doc: BookDoc): boolean {
@@ -28,6 +28,8 @@ export function usesV2Features(doc: BookDoc): boolean {
   // M30: an accent colourway or any chapter description is v2-only.
   if (doc.style.colourway !== undefined) return true;
   if (doc.chapters.some((c) => c.description !== undefined)) return true;
+  // Task 7: storybook page texts.
+  if (doc.pages.some((p) => p.texts !== undefined && p.texts.length > 0)) return true;
   if ((doc.style.designStyle ?? DEFAULT_DESIGN_STYLE) !== DEFAULT_DESIGN_STYLE) return true;
   if (isV2CaptionFont(doc.style.font)) return true;
   if (isV2Layout(doc.cover.layout)) return true;
@@ -85,7 +87,7 @@ function downgradeToV1(doc: BookDoc): BookDocV1 {
   };
   // Photo filters (D-089) are not a v2 feature: a v1 doc carries them too.
   if (doc.filters !== undefined && Object.keys(doc.filters).length > 0) v1.filters = { ...doc.filters };
-  if (doc.meta !== undefined) v1.meta = { ...doc.meta };
+  if (doc.meta !== undefined) v1.meta = copyMeta(doc.meta);
   return v1;
 }
 
@@ -118,6 +120,17 @@ function normaliseV2(doc: BookDoc): BookDoc {
       };
       if (p.background) page.background = { ...p.background };
       if (p.side !== undefined) page.side = p.side;
+      // Task 7: only stored when the page has texts; fixed key order (byte-stable recompositions).
+      if (p.texts !== undefined && p.texts.length > 0) {
+        page.texts = p.texts.map((t) => ({
+          id: t.id,
+          panel: t.panel,
+          role: t.role,
+          text: t.text,
+          source: t.source,
+          ...(t.blockRef !== undefined ? { blockRef: t.blockRef } : {}),
+        }));
+      }
       return page;
     }),
     style: {
@@ -130,8 +143,15 @@ function normaliseV2(doc: BookDoc): BookDoc {
   if (doc.style.colourway !== undefined) out.style.colourway = { id: doc.style.colourway.id, source: doc.style.colourway.source };
   // Photo filters (D-089): only stored when there are any.
   if (doc.filters !== undefined && Object.keys(doc.filters).length > 0) out.filters = { ...doc.filters };
-  if (doc.meta !== undefined) out.meta = { ...doc.meta };
+  if (doc.meta !== undefined) out.meta = copyMeta(doc.meta);
   return out;
+}
+
+/** meta as stored: the four origin keys in order, + the Task 7 `story` marker only when present. */
+function copyMeta(meta: NonNullable<BookDoc["meta"]>): NonNullable<BookDoc["meta"]> {
+  const { story, ...rest } = meta;
+  if (story === undefined) return { ...rest };
+  return { ...rest, story: { v: story.v, version: story.version, hashes: { ...story.hashes } } };
 }
 
 /**

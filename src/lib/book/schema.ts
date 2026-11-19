@@ -94,6 +94,35 @@ export const ChapterSchemaV2 = ChapterSchema.extend({
   description: ChapterDescriptionSchema.optional(),
 });
 
+// --- Page texts (Task 7, Balanced Storybook) ----------------------------------------------------
+// Longer editable narrative on a page: a chapter intro, a story paragraph, a pull quote or a closing
+// reflection. Each text sits in the layout text panel bound to "pageText" with the same `n` as its
+// `panel` (render.ts boundText). A text whose panel the current layout does not have is kept but not
+// drawn (and not published — public-doc.ts), like a chapter description no page shows. A doc v2
+// feature (usesV2Features). `source`: "ai" (Story Writer) or "user" (typed in the editor — never
+// overwritten by a recomposition). `blockRef` = the storybook NarrativeBlock id it came from.
+
+export const PAGE_TEXT_ROLES = ["intro", "paragraph", "pull_quote", "closing", "caption"] as const;
+/** UTF-16 units — the same cap as one storybook narrative block (STORY_LIMITS.narrativeText). */
+export const PAGE_TEXT_MAX = 900;
+/** Texts per page = pageText panels a layout may have (n 0..PAGE_TEXTS_MAX-1). */
+export const PAGE_TEXTS_MAX = 4;
+/** Element id of a page text: stable across recompositions ("tx-b4", "tx-b4-2"). */
+export const PAGE_TEXT_ID_RE = /^[a-z0-9][a-z0-9-]{0,47}$/;
+export const PageTextSchema = z.strictObject({
+  id: z.string().regex(PAGE_TEXT_ID_RE),
+  panel: z.number().int().min(0).max(PAGE_TEXTS_MAX - 1),
+  role: z.enum(PAGE_TEXT_ROLES),
+  text: z
+    .string()
+    .min(1)
+    .max(PAGE_TEXT_MAX)
+    .refine(wellFormed, NO_LONE_SURROGATE)
+    .refine((s) => s.trim().length > 0, { message: "blank" }),
+  source: z.enum(["ai", "user"]),
+  blockRef: z.string().regex(/^b[1-9]\d{0,3}$/).optional(),
+});
+
 export const CoverSchema = z.object({
   layout: IdSchema,
   photoId: IdSchema.nullable(),
@@ -230,6 +259,12 @@ export const PageSchema = z.object({
   background: PageBackgroundSchema.nullable().optional(),
   /** Half of a spread layout (M10b, plan decision 2). Accepted now, not used yet. */
   side: z.enum(["left", "right"]).optional(),
+  /** Task 7: narrative texts in the layout's "pageText" panels (one per panel). Absent = none. */
+  texts: z
+    .array(PageTextSchema)
+    .max(PAGE_TEXTS_MAX)
+    .refine((ts) => new Set(ts.map((t) => t.panel)).size === ts.length, { message: "two texts in one panel" })
+    .optional(),
 });
 
 export const StyleSchema = z.object({
@@ -272,6 +307,21 @@ export const DocMetaSchema = z
     runId: z.uuid().nullable(),
     /** Set to true by the editor (M5) on the first user change; AI never overwrites it. */
     userEdited: z.boolean(),
+    /**
+     * Task 7: written by the storybook page composer only. `version` = the storybook version the
+     * pages were composed from; `hashes` = content hash of every element it wrote ("cover",
+     * "ch:<chapter id>", "pg:<page id>") — an element whose current hash differs was changed by
+     * the user and is kept byte-identical by the next composition. Kept by editor saves.
+     */
+    story: z
+      .strictObject({
+        v: z.literal(1),
+        version: z.number().int().min(1),
+        hashes: z
+          .record(z.string().regex(/^(cover|ch:[A-Za-z0-9-]{1,64}|pg:[A-Za-z0-9-]{1,64})$/), z.string().regex(/^[0-9a-f]{12}$/))
+          .refine((r) => Object.keys(r).length <= 1 + 100 + 2 * LIMITS.paid.maxPages, { message: "too many hashes" }),
+      })
+      .optional(),
   })
   .strict();
 
@@ -347,6 +397,8 @@ export const TEXT_BINDINGS = [
   "coverSubtitle",
   "chapterDescription",
   "coverLine",
+  // Task 7: page.texts[panel === n] — a storybook intro / paragraph / pull quote / closing.
+  "pageText",
 ] as const;
 export const TextBindingSchema = z.enum(TEXT_BINDINGS);
 /**
@@ -521,7 +573,7 @@ export const LayoutTextSchema = z.strictObject({
     .optional(),
   /** M30: text colour role. Absent = today's behaviour (the renderer's default for the panel). */
   ink: z.enum(TEXT_INKS).optional(),
-  /** M30: chapter index for bind "coverLine" (absent = 0). Only valid with "coverLine". */
+  /** M30: chapter index for bind "coverLine" (absent = 0); Task 7: the panel number for bind "pageText". Only valid with those two. */
   n: z.number().int().min(0).max(COVER_LINE_MAX_N).optional(),
   /**
    * M29: share of the box height the font fitter (panelFontMm) sizes against — slack for narrow
@@ -540,7 +592,8 @@ const LayoutObjectSchema = z.object({
   role: z.enum(LAYOUT_ROLES),
   style: DesignStyleSchema,
   format: BookFormatSchema,
-  photoCount: z.number().int().min(1).max(MAX_SLOTS_V2),
+  /** Task 7: 0 = a text-only story page (storytelling / closing reflection); every older layout has ≥ 1. */
+  photoCount: z.number().int().min(0).max(MAX_SLOTS_V2),
   prefers: z.array(z.enum(["portrait", "landscape", "any"])),
   slots: z.array(LayoutSlotDefSchema).max(MAX_SLOTS_V2),
   caption: LayoutRectSchema.nullable(),
@@ -638,10 +691,10 @@ function m30LayoutIssues(l: LayoutObject): string[] {
       issues.push(`block ${i}: shaped block crosses the fold`);
     }
     if (b.when !== undefined) issues.push(...bindingIssues(l, b.when, `block ${i}`));
-    if (b.n !== undefined && b.when !== "coverLine") issues.push(`block ${i}: n needs when coverLine`);
+    if (b.n !== undefined && b.when !== "coverLine" && b.when !== "pageText") issues.push(`block ${i}: n needs when coverLine`);
   });
   (l.texts ?? []).forEach((t, i) => {
-    if (t.n !== undefined && t.bind !== "coverLine") issues.push(`text ${i}: n needs bind coverLine`);
+    if (t.n !== undefined && t.bind !== "coverLine" && t.bind !== "pageText") issues.push(`text ${i}: n needs bind coverLine`);
     issues.push(...bindingIssues(l, t.bind, `text ${i}`));
   });
   return issues;
@@ -650,6 +703,7 @@ function m30LayoutIssues(l: LayoutObject): string[] {
 function bindingIssues(l: LayoutObject, bind: (typeof TEXT_BINDINGS)[number], at: string): string[] {
   if (bind === "coverLine" && l.role !== "cover") return [`${at}: coverLine needs a cover layout`];
   if (bind === "chapterDescription" && l.role === "cover") return [`${at}: chapterDescription is not for covers`];
+  if (bind === "pageText" && l.role !== "page") return [`${at}: pageText needs a page layout`];
   return [];
 }
 
@@ -858,6 +912,7 @@ export function validateBookDoc(
   });
 
   const pageIds = new Set<string>();
+  const textIds = new Set<string>();
   const used = new Set<string>();
   doc.pages.forEach((page, i) => {
     const at = `pages[${i}]`;
@@ -892,6 +947,10 @@ export function validateBookDoc(
       if (page.caption !== null && (rightHalf || layout.caption === null)) {
         issues.push(`${at}: layout "${layout.id}" has no caption area`);
       }
+    }
+    for (const t of page.texts ?? []) {
+      if (textIds.has(t.id)) issues.push(`${at}: duplicate text id`);
+      textIds.add(t.id);
     }
 
     page.slots.forEach((slot, j) => {

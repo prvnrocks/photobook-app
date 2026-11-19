@@ -9,6 +9,8 @@
 // sticker (a layout decoration or text plate using OCCASION_ACCENT) and it isn't "other" — the
 // sticker already shows the occasion, so storing it reveals nothing new; every other snapshot stays
 // byte-identical. Older snapshots lack it and render the "other" accent until republished.
+// Task 7: v2 pages may carry `texts` (storybook narrative) — only texts the layout shows, without
+// `source` / `blockRef`.
 // `captionLang` (optional, added in the M6 review): the book's caption language frozen at publish
 // time, so the viewer never reads the live books.caption_lang (D-039). Snapshots published before
 // it existed simply lack the key and still parse; the viewer then falls back to the live column.
@@ -36,7 +38,9 @@ import {
   DesignStyleSchema,
   MAX_SLOTS_V1,
   MAX_SLOTS_V2,
+  PAGE_TEXTS_MAX,
   PageSchema,
+  PageTextSchema,
   PhotoFiltersSchema,
   StyleSchema,
   StyleSchemaV1,
@@ -58,6 +62,7 @@ const PublicChapterSchemaV2 = PublicChapterSchema.extend({
   description: ChapterDescriptionSchema.pick({ text: true }).strict().optional(),
 }).strict();
 const CaptionLangField = z.enum(CAPTION_LANGS).optional();
+const PublicPageTextSchema = PageTextSchema.pick({ id: true, panel: true, role: true, text: true }).strict();
 
 const PublicPageSchemaV1 = z
   .object({
@@ -95,6 +100,8 @@ const PublicPageSchemaV2 = z
     /** Page override WITHOUT `source` (strict variants: a `source` key rejects the snapshot). */
     background: BackgroundSchema.optional(),
     side: PageSchema.shape.side,
+    /** Task 7: page texts the layout SHOWS (a panel with that number), WITHOUT `source` / `blockRef`. Absent = none. */
+    texts: z.array(PublicPageTextSchema).max(PAGE_TEXTS_MAX).optional(),
   })
   .strict();
 
@@ -208,6 +215,18 @@ function publicCaptionAlign(page: BookPage, c: Caption): Caption["align"] {
   return (a === "start") !== rtl ? "left" : "right";
 }
 
+/**
+ * Task 7: the page texts a viewer would see — those whose panel number the page's layout has
+ * (a "pageText" panel with that `n`); never on a spread's right half. Text the owner cannot see
+ * (its layout was changed to one without that panel) is never published. Fresh objects, no
+ * `source` / `blockRef`.
+ */
+function shownPageTexts(p: BookPage): PublicBookDocV2["pages"][number]["texts"] & object {
+  if (!p.texts?.length || p.side === "right") return [];
+  const panels = new Set((getLayout(p.layout)?.texts ?? []).filter((t) => t.bind === "pageText").map((t) => t.n ?? 0));
+  return p.texts.filter((t) => panels.has(t.panel)).map((t) => ({ id: t.id, panel: t.panel, role: t.role, text: t.text }));
+}
+
 /** True when the cover or any page layout draws the occasion accent sticker (decoration or text plate). */
 function showsOccasionAccent(doc: BookDoc): boolean {
   return [doc.cover.layout, ...doc.pages.map((p) => p.layout)].some((id) => {
@@ -243,6 +262,8 @@ export function toPublicDoc(doc: BookDoc, opts: ToPublicDocOptions = {}): Public
         if (p.caption && page.caption) page.caption.align = publicCaptionAlign(p, p.caption);
         if (p.background) page.background = copyBackground(p.background);
         if (p.side !== undefined) page.side = p.side;
+        const texts = shownPageTexts(p);
+        if (texts.length > 0) page.texts = texts;
         return page;
       }),
       style: {
@@ -313,6 +334,7 @@ export function publicDocToRenderDoc(pub: PublicBookDoc): BookDoc {
       const out = page(p);
       if (p.background) out.background = { ...copyBackground(p.background), source: "user" };
       if (p.side !== undefined) out.side = p.side;
+      if (p.texts?.length) out.texts = p.texts.map((t) => ({ id: t.id, panel: t.panel, role: t.role, text: t.text, source: "user" as const }));
       return out;
     }),
     style: {

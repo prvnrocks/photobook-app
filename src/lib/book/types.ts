@@ -26,6 +26,7 @@ import type {
   LayoutSlotSchema,
   LayoutTextSchema,
   PageSchema,
+  PageTextSchema,
   RectSchema,
   SlotFrameSchema,
   SlotSchema,
@@ -48,6 +49,9 @@ export type BackgroundSource = z.infer<typeof BackgroundSourceSchema>;
 /** page.background: a Background plus who chose it. */
 export type PageBackground = z.infer<typeof PageBackgroundSchema>;
 export type BookPage = z.infer<typeof PageSchema>;
+/** Task 7: a narrative text in a page's "pageText" panel. */
+export type PageText = z.infer<typeof PageTextSchema>;
+export type PageTextRole = PageText["role"];
 export type Slot = z.infer<typeof SlotSchema>;
 export type Crop = z.infer<typeof CropSchema>;
 export type Caption = z.infer<typeof CaptionSchema>;

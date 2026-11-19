@@ -11,6 +11,7 @@ import {
   resolveBackground,
   type RenderCaption,
   type RenderDescriptionArea,
+  type RenderPageTextArea,
   type RenderPhotos,
 } from "@/lib/book/render";
 import type { Ink } from "@/lib/design/backgrounds";
@@ -20,7 +21,7 @@ import { Decorations } from "./Decoration";
 import { BackgroundLayer, Blocks, Box, INK_TEXT, PageFrame, PhotoSlot, TextPanel, type BookRenderMode } from "./PageParts";
 
 export type { BookRenderMode } from "./PageParts";
-export type { RenderCaption, RenderDescriptionArea, RenderPhoto, RenderPhotos } from "@/lib/book/render";
+export type { RenderCaption, RenderDescriptionArea, RenderPageTextArea, RenderPhoto, RenderPhotos } from "@/lib/book/render";
 
 export type BookPageProps = {
   doc: BookDoc;
@@ -52,6 +53,11 @@ export type BookPageProps = {
    * can offer to add one. Never called in view / print mode.
    */
   renderDescription?: (area: RenderDescriptionArea) => ReactNode;
+  /**
+   * Edit mode only (Task 7): rendered over each "pageText" panel of the page (absolute it with
+   * `inset-0`) — also where the panel has no text yet (`area.empty`). Never called in view / print.
+   */
+  renderPageText?: (area: RenderPageTextArea) => ReactNode;
   /** Edit mode only, cover only: rendered inside the cover text area (absolute, `inset-0`). */
   renderCoverTextOverlay?: () => ReactNode;
   className?: string;
@@ -65,7 +71,7 @@ export type BookPageProps = {
 };
 
 export function BookPage(props: BookPageProps) {
-  const { doc, page, mode, photos, captionLang, renderSlotOverlay, renderCaption, renderDescription, renderCoverTextOverlay, className, priority, extraLayouts } =
+  const { doc, page, mode, photos, captionLang, renderSlotOverlay, renderCaption, renderDescription, renderPageText, renderCoverTextOverlay, className, priority, extraLayouts } =
     props;
   if (page === "cover") {
     return (
@@ -86,7 +92,7 @@ export function BookPage(props: BookPageProps) {
   const m = pageRenderModel(doc, page, photos, captionLang, {
     bleed: mode === "print",
     ...(extraLayouts ? { extraLayouts } : {}),
-    ...(mode === "edit" && renderDescription ? { editTargets: true } : {}),
+    ...(mode === "edit" && (renderDescription || renderPageText) ? { editTargets: true } : {}),
   });
   if (!m) {
     const bookBg = resolveBackground(doc, null, photos);
@@ -164,6 +170,13 @@ export function BookPage(props: BookPageProps) {
         ? m.descriptionAreas?.map((a, i) => (
             <Box key={`d${i}`} rect={a.rect} data={{ "data-description-area": a.empty ? "empty" : "filled" }}>
               {renderDescription(a)}
+            </Box>
+          ))
+        : null}
+      {renderPageText
+        ? m.pageTextAreas?.map((a) => (
+            <Box key={`t${a.panel}`} rect={a.rect} data={{ "data-page-text-area": a.empty ? "empty" : "filled" }}>
+              {renderPageText(a)}
             </Box>
           ))
         : null}

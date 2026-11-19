@@ -459,8 +459,10 @@ export function TextPanel({ panel, ink }: { panel: RenderTextPanel; ink: Ink }) 
   if (panel.quarter) return <QuarterTurnTextPanel panel={panel} quarter={panel.quarter} ink={ink} />;
   if (panel.plate || panel.rotate) return <PlatedTextPanel panel={panel} ink={ink} />;
   const text = panelText(panel, ink);
+  // Task 7: page texts carry their element id (editor targets, tests); older panels keep their markup.
+  const data: Record<`data-${string}`, string> = panel.textId ? { "data-text-panel": panel.bind, "data-text-id": panel.textId } : { "data-text-panel": panel.bind };
   return (
-    <Box rect={panel.rect} className="flex flex-col justify-center overflow-hidden" data={{ "data-text-panel": panel.bind }}>
+    <Box rect={panel.rect} className="flex flex-col justify-center overflow-hidden" data={data}>
       <p dir="auto" lang={panel.lang} className={text.className} style={text.style} data-testid={`text-${panel.bind}`}>
         {panel.text}
       </p>

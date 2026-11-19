@@ -80,7 +80,10 @@ export function forcedMeta(savedDoc: unknown): DocMeta {
   const base = parsed?.success
     ? { generator: parsed.data.generator, generatorVersion: parsed.data.generatorVersion, runId: parsed.data.runId }
     : DEFAULT_META;
-  return { ...base, userEdited: true };
+  // Task 7: the storybook composer's element hashes stay with the doc (it compares them on the
+  // next composition to find what the user changed). Server data from the SAVED doc only.
+  const story = parsed?.success ? parsed.data.story : undefined;
+  return story ? { ...base, userEdited: true, story } : { ...base, userEdited: true };
 }
 
 /** page id → caption font of the saved doc (only well-formed pages). */

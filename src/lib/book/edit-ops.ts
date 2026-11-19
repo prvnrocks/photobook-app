@@ -32,9 +32,9 @@ import { styleCaptionFont } from "@/lib/design/styles";
 import { DEFAULT_ARABIC_CAPTION_FONT, defaultCaptionFont, type BookFontName } from "./fonts";
 import { BOOK_TITLE_MAX_CODE_POINTS } from "./options";
 import { suggestsBackgrounds } from "@/lib/design/background-suggest";
-import { BackgroundSchema, CHAPTER_DESCRIPTION_MAX, STYLE_COLOURWAY_IDS } from "./schema";
+import { BackgroundSchema, CHAPTER_DESCRIPTION_MAX, PAGE_TEXT_MAX, STYLE_COLOURWAY_IDS } from "./schema";
 import { isSpreadLayout, layoutsFor, repairSpreads, splitSpreadAt, spreadStartOf } from "./spreads";
-import type { Background, BookDoc, BookPage, Caption, Chapter, ColourwayId, Crop, Layout, PageBackground, Slot } from "./types";
+import type { Background, BookDoc, BookPage, Caption, Chapter, ColourwayId, Crop, Layout, PageBackground, PageText, PageTextRole, Slot } from "./types";
 
 export type EditOpErrorCode =
   | "page_out_of_range"
@@ -58,7 +58,9 @@ export type EditOpErrorCode =
   /** setColourway got an id the book's design style does not have (M30). */
   | "invalid_colourway"
   /** setChapterDescription on a design style without description layouts (M30; validateBookDoc rejects such docs). */
-  | "no_description_area";
+  | "no_description_area"
+  /** setPageText on a page whose layout has no "pageText" panel with that number (Task 7). */
+  | "no_text_area";
 
 export class EditOpError extends Error {
   readonly code: EditOpErrorCode;
@@ -819,6 +821,54 @@ export function setChapterDescription(doc: BookDoc, chapterId: string, text: str
   if (chapter.description?.text === clean && chapter.description.source === "user") return doc;
   chapters[idx] = { ...chapter, description: { text: clean, source: "user" } };
   return { ...doc, chapters };
+}
+
+// ---- page texts (Task 7) -------------------------------------------------------------------------
+
+/** UTF-16 cap of one page text (PAGE_TEXT_MAX). */
+export const PAGE_TEXT_EDIT_MAX = PAGE_TEXT_MAX;
+
+/** A fresh text element id for `page` / `panel` that no text of `doc` uses yet. */
+function newTextId(doc: BookDoc, page: BookPage, panel: number): string {
+  const used = new Set(doc.pages.flatMap((p) => (p.texts ?? []).map((t) => t.id)));
+  const base = `tx-${page.id.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 36) || "page"}-${panel}`.replace(/^tx--/, "tx-");
+  let id = base;
+  for (let k = 2; used.has(id); k++) id = `${base}-${k}`;
+  return id;
+}
+
+/**
+ * Task 7: set the text in page `pageIdx`'s "pageText" panel `panel`, typed by the user (source
+ * "user" — a recomposition never replaces it). An existing text keeps its id, role and blockRef;
+ * a new one gets a fresh id and `role` (default "paragraph"). Whitespace-only text removes the
+ * element (the panel and its `when` blocks collapse). Text is kept as typed, made jsonb-safe and
+ * clipped to PAGE_TEXT_MAX units. Same user text → the input doc. Throws page_out_of_range, and
+ * no_text_area when the page's layout has no pageText panel `panel`.
+ */
+export function setPageText(doc: BookDoc, pageIdx: number, panel: number, text: string, role: PageTextRole = "paragraph"): BookDoc {
+  const page = pageAt(doc, pageIdx);
+  const clean = safeText(text, PAGE_TEXT_MAX);
+  const texts = page.texts ?? [];
+  const at = texts.findIndex((t) => t.panel === panel);
+  if (clean.trim() === "") {
+    if (at < 0) return doc;
+    const rest = texts.filter((_, i) => i !== at);
+    const next: BookPage = { ...page };
+    if (rest.length > 0) next.texts = rest;
+    else delete next.texts;
+    return withPage(doc, pageIdx, next);
+  }
+  if (!getLayout(page.layout)?.texts?.some((t) => t.bind === "pageText" && (t.n ?? 0) === panel)) throw new EditOpError("no_text_area");
+  const prev = at >= 0 ? texts[at] : undefined;
+  if (prev && prev.text === clean && prev.source === "user") return doc;
+  const nextText: PageText = prev
+    ? { ...prev, text: clean, source: "user" }
+    : { id: newTextId(doc, page, panel), panel, role, text: clean, source: "user" };
+  const list = texts.slice();
+  if (at >= 0) list[at] = nextText;
+  else list.push(nextText);
+  list.sort((a, b) => a.panel - b.panel);
+  return withPage(doc, pageIdx, { ...page, texts: list });
 }
 
 /**

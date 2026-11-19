@@ -105,13 +105,22 @@ export function hasUserDescriptions(doc: unknown): boolean {
 }
 
 /**
+ * Task 7: true when any page text was written by the user (`texts[].source === "user"`). Raw read
+ * like hasUserCaptions. Editor saves also mark meta.userEdited (belt and braces).
+ */
+export function hasUserPageTexts(doc: unknown): boolean {
+  if (!isPlainObject(doc) || !Array.isArray(doc.pages)) return false;
+  return doc.pages.some((p) => isPlainObject(p) && Array.isArray(p.texts) && p.texts.some((t) => isPlainObject(t) && t.source === "user"));
+}
+
+/**
  * May an AI run (build / rebuild / rule fallback written by a run) overwrite this doc?
  * isReplaceableDoc AND no user captions (D-031) AND no user backgrounds (D-068) AND no shown user
- * chapter descriptions (D-090). The free "Update album" relayout (D-028) keeps using
+ * chapter descriptions (D-090) AND no user page texts (Task 7). The free "Update album" relayout (D-028) keeps using
  * isReplaceableDoc: it preserves user captions and backgrounds instead of replacing the doc.
  */
 export function isAiReplaceableDoc(doc: unknown): boolean {
-  return isReplaceableDoc(doc) && !hasUserCaptions(doc) && !hasUserBackgrounds(doc) && !hasUserDescriptions(doc);
+  return isReplaceableDoc(doc) && !hasUserCaptions(doc) && !hasUserBackgrounds(doc) && !hasUserDescriptions(doc) && !hasUserPageTexts(doc);
 }
 
 /** Copy of `doc` with `meta` set (replaced, not merged). Throws on an invalid meta (code bug). */

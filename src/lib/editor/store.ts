@@ -281,4 +281,5 @@ export const EDIT_ERROR_COPY: Record<EditOpErrorCode, string> = {
   layout_not_for_book: "That layout doesn't match this book's size or style.",
   invalid_colourway: "That colour isn't available for this book.",
   no_description_area: "This book's style has no chapter descriptions.",
+  no_text_area: "This page has no text area there.",
 };
