@@ -422,3 +422,30 @@ export async function signExportUrl(path: string, ttlSeconds: number, filename: 
   }
   return data?.signedUrl ?? null;
 }
+
+// --- Print package (Task 10) ------------------------------------------------------------------------
+// The cover and the interior of a ready export as two separate PDFs, made on request from the
+// stored PDF (src/lib/pdf/package.ts). Same private bucket and owner folder; no row of their own:
+// the daily orphan sweep removes them ORPHAN_OBJECT_DAYS after they were made (their names never
+// match an exports row path), deleting the book removes its folder, and a newer export removes the
+// older export's package with its PDF.
+
+export const PRINT_PACKAGE_PARTS = ["cover", "interior"] as const;
+export type PrintPackagePart = (typeof PRINT_PACKAGE_PARTS)[number];
+
+/** {user}/{book}/{export}-{cover|interior}.pdf (ids validated by the caller). */
+export function exportPackagePath(userId: string, bookId: string, exportId: string, part: PrintPackagePart): string {
+  return `${exportObjectPath(userId, bookId, exportId).replace(/\.pdf$/, "")}-${part}.pdf`;
+}
+
+/** Downloads a stored export PDF (server memory; ≤ EXPORT_MAX_BYTES). null when it is missing. */
+export async function downloadExportPdf(path: string): Promise<Uint8Array | null> {
+  const { data, error } = await createAdminClient().storage.from(EXPORTS_BUCKET).download(path);
+  if (error) {
+    if (isNotFound(error)) return null;
+    throw new ExportStorageError("download", storageCode(error));
+  }
+  if (!data) return null;
+  if (data.size > EXPORT_MAX_BYTES) throw new ExportStorageError("download", "too_large");
+  return new Uint8Array(await data.arrayBuffer());
+}

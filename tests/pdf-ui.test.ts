@@ -24,6 +24,8 @@ import {
   pdfErrorCopy,
   pdfReadyDetail,
   pdfStatusCopy,
+  pdfFailureCopy,
+  parseReadiness,
   type PdfHttpResult,
   type PdfUiState,
 } from "@/lib/pdf/ui";
@@ -265,7 +267,8 @@ describe("controller", () => {
     await vi.advanceTimersByTimeAsync(PDF_POLL_MS);
     const s = t.c.getState();
     expect(s).toEqual({ kind: "error", code: "failed", detail: "render_timeout" });
-    expect(pdfStatusCopy(s)).toBe("We couldn't make your PDF — try again");
+    // Task 10: the failure code in plain words (never the raw code)
+    expect(pdfStatusCopy(s)).toBe("Making the PDF took too long — try again in a minute");
     expect(pdfButtonLabel(s)).toBe("Try again");
     await t.c.start();
     expect(t.calls.map((c) => c.method)).toEqual(["POST", "GET", "POST"]);
@@ -285,11 +288,44 @@ describe("controller", () => {
     "navigation_failed",
     "merge_failed",
     undefined,
-  ])("failed (%s) → same retry copy", async (code) => {
+  ])("failed (%s) → a retry line (Task 10: specific where the code is known, never the raw code)", async (code) => {
     const t = setup([queued(), ok(code ? { status: "failed", error: code } : { status: "failed" })]);
     await t.c.start();
     await vi.advanceTimersByTimeAsync(PDF_POLL_MS);
-    expect(pdfStatusCopy(t.c.getState())).toBe("We couldn't make your PDF — try again");
+    const copy = pdfStatusCopy(t.c.getState())!;
+    expect(copy).toMatch(/try again/i);
+    if (code) expect(copy).not.toContain(code);
+    expect(copy).toBe(pdfFailureCopy(code ?? undefined));
+  });
+
+  it("Task 10: failure copy per code", () => {
+    expect(pdfFailureCopy("too_large")).toMatch(/too big/);
+    expect(pdfFailureCopy("render_timeout")).toMatch(/took too long/);
+    expect(pdfFailureCopy("download_failed")).toMatch(/photos couldn't be read/);
+    expect(pdfFailureCopy("blank_page")).toMatch(/didn't come out right/);
+    expect(pdfFailureCopy("whatever")).toBe("We couldn't make your PDF — try again");
+    expect(pdfFailureCopy(undefined)).toBe("We couldn't make your PDF — try again");
+  });
+
+  it("Task 10: 422 not_ready → error with the server's readiness lines; Try again re-POSTs", async () => {
+    const readiness = { ok: false, summary: "1 thing to fix before the PDF can be made", lines: [{ text: "Page 2 is empty — add a photo or text, or delete the page", severity: "error" }], more: 0 };
+    const t = setup([{ status: 422, body: { error: "not_ready", readiness } }, ok(READY)]);
+    await t.c.start();
+    const s = t.c.getState();
+    expect(s).toEqual({ kind: "error", code: "not_ready", readiness: { summary: readiness.summary, lines: readiness.lines, more: 0 } });
+    expect(pdfStatusCopy(s)).toBe("Some pages need a fix before the PDF can be made");
+    expect(pdfButtonLabel(s)).toBe("Try again");
+    await t.c.start();
+    expect(t.c.getState().kind).toBe("ready");
+  });
+
+  it("Task 10: parseReadiness bounds what it keeps", () => {
+    expect(parseReadiness({ error: "not_ready" })).toBeUndefined();
+    const r = parseReadiness({ readiness: { summary: "x".repeat(500), lines: [...Array(20)].map((_, i) => ({ text: `l${i}`, severity: i ? "warning" : "nope" })), more: 3 } })!;
+    expect(r.summary).toHaveLength(200);
+    expect(r.lines).toHaveLength(12);
+    expect(r.lines[0]!.severity).toBe("error");
+    expect(r.more).toBe(3);
   });
 
   it.each(["superseded", "missing_file"])("failed (%s) → re-POSTs once for the current PDF → ready", async (code) => {

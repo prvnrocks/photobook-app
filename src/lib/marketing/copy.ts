@@ -37,7 +37,7 @@ export const MARQUEE_ITEMS = [
   "AI picks your best photos",
   "Arabic & English captions",
   "Share on WhatsApp",
-  "Print-ready PDF",
+  "High-quality PDF",
   "Made in Abu Dhabi",
 ] as const;
 

@@ -24,7 +24,7 @@
 // Equality is confirmed on the real bytes of the image AND of every stream it references (SMask,
 // ICC); the duplicates' now-unreferenced SMask / ICC objects are deleted as well (M10b A19 N1).
 
-import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef, PDFStream, type PDFContext, type PDFObject } from "pdf-lib";
+import { decodePDFRawStream, PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef, PDFStream, type PDFContext, type PDFObject, type PDFPage } from "pdf-lib";
 import { APP_NAME } from "@/lib/brand";
 import { orientationOf, sheetPt, trimPt } from "@/lib/book/format";
 import type { BookFormat } from "@/lib/book/types";
@@ -93,6 +93,12 @@ export interface MergeOptions {
 export interface MergedPdf {
   bytes: Uint8Array;
   pageCount: number;
+  /**
+   * Task 10: 1-based pages whose content streams paint nothing (no fill / stroke / text / image /
+   * shading operator) — a sheet Chromium left white. Every real sheet paints at least its
+   * background, so runExport fails the export ('blank_page') instead of shipping such a page.
+   */
+  blankPages: number[];
 }
 
 /** Merges chunk PDFs in order and applies print boxes + metadata. Throws PdfRenderError('merge_failed'). */
@@ -101,6 +107,7 @@ export async function mergePdfs(chunks: readonly Uint8Array[], opts: MergeOption
   const now = opts.now ?? new Date();
   try {
     const out = await PDFDocument.create({ updateMetadata: false });
+    const blankPages: number[] = [];
     for (const chunk of chunks) {
       const src = await PDFDocument.load(chunk, { updateMetadata: false });
       const pages = await out.copyPages(src, src.getPageIndices());
@@ -114,6 +121,7 @@ export async function mergePdfs(chunks: readonly Uint8Array[], opts: MergeOption
         page.setBleedBox(sheet.x, sheet.y, sheet.width, sheet.height);
         page.setTrimBox(trim.x, trim.y, trim.width, trim.height);
         out.addPage(page);
+        if (!pageHasMarks(page, out.context)) blankPages.push(out.getPageCount());
       }
     }
     const pageCount = out.getPageCount();
@@ -128,11 +136,36 @@ export async function mergePdfs(chunks: readonly Uint8Array[], opts: MergeOption
     out.setModificationDate(now);
 
     const bytes = await out.save({ useObjectStreams: true });
-    return { bytes, pageCount };
+    return { bytes, pageCount, blankPages };
   } catch (e) {
     if (e instanceof PdfRenderError) throw e;
     throw new PdfRenderError("merge_failed");
   }
+}
+
+// --- Blank page check (Task 10) -------------------------------------------------------------------
+
+/** A painting operator as a whole token: fill / stroke / text show / XObject / shading / inline image. */
+const PAINT_OP = /(?:^|[\s\]\)>])(?:f\*?|F|B\*?|b\*?|S|s|Do|Tj|TJ|'|"|sh|BI)(?=[\s[(<\/]|$)/;
+
+const LATIN1 = new TextDecoder("latin1");
+
+function streamText(o: PDFObject | undefined): string {
+  try {
+    if (o instanceof PDFRawStream) return LATIN1.decode(decodePDFRawStream(o).decode());
+    if (o instanceof PDFStream) return LATIN1.decode(o.getContents());
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+/** True when the page's content streams contain at least one painting operator. */
+export function pageHasMarks(page: PDFPage, context: PDFContext): boolean {
+  const contents = page.node.Contents();
+  if (!contents) return false;
+  const items: (PDFObject | undefined)[] = contents instanceof PDFArray ? contents.asArray().map((r) => context.lookup(r)) : [contents];
+  return items.some((o) => PAINT_OP.test(streamText(o)));
 }
 
 // --- Image dedupe ---------------------------------------------------------------------------------

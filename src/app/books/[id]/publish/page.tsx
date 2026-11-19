@@ -20,6 +20,7 @@ import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNot
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getMyBookTitle } from "@/lib/db/books";
 import { getMyProfile } from "@/lib/db/profiles";
+import { getPrintReadinessView } from "@/lib/print/server";
 import { publishCompare } from "@/lib/publish/compare";
 import { shareStatus } from "@/lib/publish/status";
 import { isPaymentsEnabled } from "@/lib/stripe";
@@ -67,7 +68,9 @@ export default async function PublishPage({
   const title = (await getMyBookTitle(id).catch(() => null)) || "Our photobook";
   const paymentsEnabled = isPaymentsEnabled();
   const status = shareStatus(res.state, new Date());
-  const slots = shareSlots({ bookId: id, title, state: res.state, preview: res.preview, compare: publishCompare(), paymentsEnabled });
+  // Task 10: print checks before "Download PDF" (paid books only — free books have no PDF).
+  const readiness = res.state.isPaid ? await getPrintReadinessView(id) : null;
+  const slots = shareSlots({ bookId: id, title, state: res.state, preview: res.preview, compare: publishCompare(), paymentsEnabled, readiness });
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">

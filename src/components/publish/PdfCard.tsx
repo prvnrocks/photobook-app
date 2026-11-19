@@ -15,18 +15,22 @@ export type PdfCardProps = {
   isPaid: boolean;
   /** Paid: the download control (<PdfDownload look={PDF_SHARE_LOOK} …/> or the View in fixtures). */
   download?: ReactNode;
+  /** Task 10, paid: the print checks of the saved book (<PrintChecks>), shown above the button. */
+  checks?: ReactNode;
+  /** Task 10, paid: the print files control (cover + interior PDFs). */
+  printFiles?: ReactNode;
 };
 
 const CARD = cx(SHARE_CARD, "flex flex-col gap-4");
 
 export const PDF_CARD_COPY = {
   heading: "PDF download",
-  paidBody: "Download your book as a print-ready PDF.",
-  lockedBody: "A print-ready PDF of your book comes with the upgrade.",
+  paidBody: "Download your book as a high-quality A5 PDF.",
+  lockedBody: "A high-quality PDF of your book comes with the upgrade.",
   lockedCta: "Upgrade for PDF",
 } as const;
 
-export function PdfCard({ isPaid, download }: PdfCardProps) {
+export function PdfCard({ isPaid, download, checks, printFiles }: PdfCardProps) {
   if (!isPaid) {
     return (
       <section id="pdf" className={CARD} data-testid="publish-pdf-locked" aria-labelledby="publish-pdf-locked-title">
@@ -60,7 +64,9 @@ export function PdfCard({ isPaid, download }: PdfCardProps) {
           <p className="type-small mt-1 text-muted-foreground">{PDF_CARD_COPY.paidBody}</p>
         </div>
       </div>
+      {checks}
       {download}
+      {printFiles}
     </section>
   );
 }

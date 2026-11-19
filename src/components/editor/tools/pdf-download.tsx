@@ -34,7 +34,7 @@ export function PdfPanel({ ctx }: EditorPanelProps) {
         <span className={ICON_CHIP} aria-hidden="true">
           <FileText className="size-4" />
         </span>
-        <p className="min-w-0 pt-0.5 text-sm text-muted-foreground">Download your book as a print-ready PDF. It includes your latest saved edits.</p>
+        <p className="min-w-0 pt-0.5 text-sm text-muted-foreground">Download your book as a high-quality A5 PDF. It includes your latest saved edits.</p>
       </div>
       <PdfDownload
         look={PDF_EDITOR_LOOK}

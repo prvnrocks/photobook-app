@@ -7,6 +7,8 @@
 //       (a queued job, or a rendering one whose lease expired, is re-kicked — re-POST to nudge)
 //   401 unauthenticated | 403 forbidden (cross-site) | 404 not_found | 402 not_paid
 //   409 invalid_doc | empty | page_limit | conflict (doc saved twice during the request)
+//   422 { error: 'not_ready', readiness: { ok, summary, lines[], more } } (Task 10: the print
+//       readiness check found blank pages / missing photos / clipped text — plain-language lines)
 //   429 daily_cap | 503 unavailable (BOOK_ACCESS_SECRET / Chromium / app URL not configured)
 //   500 server_error
 // GET ?exportId=<uuid> — poll (kept for compatibility; the client polls the lightweight
@@ -43,6 +45,7 @@ const ERROR_STATUS: Record<RequestExportError, number> = {
   conflict: 409,
   daily_cap: 429,
   unavailable: 503,
+  not_ready: 422,
 };
 
 function schedule(exportId: string): void {
@@ -58,7 +61,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!isUuid(id)) return json({ error: "not_found" }, 404);
 
     const result = await requestExport(id, user.id, { schedule });
-    if (!result.ok) return json({ error: result.error }, ERROR_STATUS[result.error]);
+    if (!result.ok) {
+      if (result.error === "not_ready") return json({ error: "not_ready", readiness: result.readiness }, 422);
+      return json({ error: result.error }, ERROR_STATUS[result.error]);
+    }
     return json(result.body, result.httpStatus);
   } catch (err) {
     const unavailable = unavailableIfTimeout(err, { route: "pdf-export" });

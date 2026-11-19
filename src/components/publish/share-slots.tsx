@@ -18,6 +18,9 @@ import { SHARE_COPY } from "@/lib/publish/ui";
 import { PdfCard } from "./PdfCard";
 import { PdfDownload, PdfDownloadView } from "./PdfDownload";
 import { PlanCard } from "./PlanCard";
+import { PrintChecks } from "./PrintChecks";
+import { PrintFiles } from "./PrintFiles";
+import type { ReadinessView } from "@/lib/print/copy";
 import { PDF_SHARE_LOOK, SHARE_UPGRADE_CLASS, SHARE_UPGRADE_SECONDARY_CLASS } from "./share-classes";
 import { SHARE_OPEN_LINK } from "./share-page-classes";
 import { SharePreview } from "./SharePreview";
@@ -38,6 +41,8 @@ export type ShareSlotsInput = {
   refresh?: () => void;
   /** PDF API transport for router-free renders (dev fixture / tests). */
   pdfTransport?: PdfTransport;
+  /** Task 10: print checks of the saved book (paid books; null = not available). */
+  readiness?: ReadinessView | null;
 };
 
 export function shareSlots(input: ShareSlotsInput): ShareSlots {
@@ -76,7 +81,14 @@ export function shareSlots(input: ShareSlotsInput): ShareSlots {
       />
     ) : null,
     plan: <PlanCard compare={compare} isPaid={state.isPaid} upgrade={state.isPaid ? null : upgrade} />,
-    pdf: <PdfCard isPaid={state.isPaid} download={download} />,
+    pdf: (
+      <PdfCard
+        isPaid={state.isPaid}
+        download={download}
+        checks={state.isPaid && input.readiness ? <PrintChecks view={input.readiness} /> : null}
+        printFiles={state.isPaid && !refresh ? <PrintFiles bookId={bookId} /> : null}
+      />
+    ),
   };
 }
 

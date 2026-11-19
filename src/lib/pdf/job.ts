@@ -37,17 +37,22 @@ import {
   createExportJob,
   EXPORT_MAX_BYTES,
   exportObjectPath,
+  exportPackagePath,
   failExport,
   finishExport,
   getExportForOwner,
   getExportForRender,
   listOlderReadyExports,
+  PRINT_PACKAGE_PARTS,
   removeExportObjects,
   signExportUrl,
   supersedeExports,
   uploadExportPdf,
 } from "@/lib/db/exports";
-import { listKeptPhotoIds, listPrintPhotoSources } from "@/lib/db/print";
+import { listKeptPhotoIds, listPrintPhotoDims, listPrintPhotoSources } from "@/lib/db/print";
+import { readinessView, type ReadinessView } from "@/lib/print/copy";
+import { validatePrintReadiness, type PrintReadinessReport } from "@/lib/print/readiness";
+import { GENERIC_A5_DIGITAL } from "@/lib/print/specs";
 import { serializeDoc } from "@/lib/book/doc-version";
 import { parseBookDoc } from "@/lib/book/schema";
 import { hasAiPhotoBackground, stripUnusableAiPhotoBackgrounds } from "@/lib/design/background-suggest";
@@ -63,7 +68,7 @@ import { mergePdfs } from "./finalize";
 import { planPrintImages, type PlanOptions } from "./image-plan";
 import { createPrintImageLoader, PRINT_JPEG_QUALITY, PrintImageError } from "./images";
 import { chunkPhotoSchedule, PREFETCH_WINDOW_CHUNKS, startPrefetch } from "./prefetch";
-import { printChunkRanges, printPhotoIds, type PrintSheetTarget } from "./print-doc";
+import { printChunkRanges, printPhotoIds, type PrintPhotoDims, type PrintSheetTarget } from "./print-doc";
 import { renderBook, type RenderTimings } from "./render-pdf";
 import {
   canExport,
@@ -136,17 +141,40 @@ export type RequestExportError =
   | "page_limit"
   | "daily_cap"
   | "conflict"
-  | "unavailable";
+  | "unavailable"
+  /** Task 10: the print readiness check found errors (blank page, missing photo, clipped text…). */
+  | "not_ready";
 
 export type RequestExportResult =
   | { ok: true; httpStatus: 200; body: ReadyExport }
   | { ok: true; httpStatus: 202; body: PendingExport }
-  | { ok: false; error: RequestExportError };
+  | { ok: false; error: Exclude<RequestExportError, "not_ready"> }
+  | { ok: false; error: "not_ready"; readiness: ReadinessView };
 
 export interface RequestExportOptions {
   /** Starts runExport(exportId) after the response (route: after()). */
   schedule: (exportId: string) => void;
   env?: Env;
+  /** Task 10 test hook: photo sizes for the readiness check (default listPrintPhotoDims). */
+  photoDims?: (bookId: string, ids: readonly string[]) => Promise<PrintPhotoDims[]>;
+}
+
+/**
+ * Task 10: the readiness check of the doc an export would render, against the digital spec. Photo
+ * sizes come from the book's ready photos (the owner was verified by getMyBook under RLS).
+ */
+export async function exportReadiness(
+  bookId: string,
+  doc: BookDoc,
+  book: { caption_lang: string | null; max_pages: number },
+  photoDims: (bookId: string, ids: readonly string[]) => Promise<PrintPhotoDims[]> = listPrintPhotoDims,
+): Promise<PrintReadinessReport> {
+  const dims = await photoDims(bookId, printPhotoIds(doc, allSheets(doc)));
+  return validatePrintReadiness(doc, GENERIC_A5_DIGITAL, {
+    photos: new Map(dims.map((d) => [d.id, { width: d.width, height: d.height }])),
+    lang: captionLangOf(book.caption_lang),
+    maxPages: book.max_pages,
+  });
 }
 
 /**
@@ -174,6 +202,12 @@ export async function requestExport(
     if (!check.ok) return { ok: false, error: check.reason };
     if (book.doc_rev === null) return { ok: false, error: "unavailable" }; // migration 0900 missing
     if (!exportAvailable(opts.env)) return { ok: false, error: "unavailable" };
+    // Task 10: no PDF of a book with blank pages, missing photos or clipped text (warnings pass).
+    const readiness = await exportReadiness(bookId, check.doc, book, opts.photoDims);
+    if (!readiness.ok) {
+      console.info(`[pdf-export] not_ready errors=${readiness.errors} warnings=${readiness.warnings}`);
+      return { ok: false, error: "not_ready", readiness: readinessView(readiness) };
+    }
 
     const res = await createExportJob({
       bookId,
@@ -263,7 +297,11 @@ export type ExportJobErrorCode =
   | "upload_failed"
   | "render_timeout"
   | "unavailable"
-  | "server_error";
+  | "server_error"
+  /** Task 10: the merged PDF does not have cover + one sheet per page. */
+  | "page_count_mismatch"
+  /** Task 10: a sheet came out of Chromium with nothing painted on it. */
+  | "blank_page";
 
 export class ExportJobError extends Error {
   readonly code: ExportJobErrorCode;
@@ -452,6 +490,9 @@ async function renderPass(ctx: RenderContext, pass: RenderPass): Promise<{ bytes
     const tMerge = Date.now();
     const merged = await mergePdfs(chunks, { title: doc.cover.title, format: doc.format });
     timings.merge = Date.now() - tMerge;
+    // Task 10: the PDF must be exactly cover + every page, none of them left white.
+    if (merged.pageCount !== sheetCount) throw new ExportJobError("page_count_mismatch");
+    if ((merged.blankPages ?? []).length > 0) throw new ExportJobError("blank_page");
     return merged;
   } finally {
     if (stopPrefetch) {
@@ -571,7 +612,10 @@ async function renderAndStore(
   try {
     const older = await listOlderReadyExports(exp.bookId, exp.id);
     if (older.length > 0) {
-      await removeExportObjects(older.map((o) => o.path));
+      // Task 10: with each older PDF, its print package (cover + interior) if one was made.
+      await removeExportObjects(
+        older.flatMap((o) => [o.path, ...PRINT_PACKAGE_PARTS.map((part) => exportPackagePath(exp.userId, exp.bookId, o.id, part))]),
+      );
       await supersedeExports(
         exp.bookId,
         exp.userId,

@@ -145,3 +145,25 @@ describe("mergePdfs", () => {
     await expect(mergePdfs([empty])).rejects.toMatchObject({ code: "merge_failed" });
   });
 });
+
+describe("Task 10: blank page detection", () => {
+  it("lists pages whose content paints nothing; drawn pages (fill, text, image) are not blank", async () => {
+    const doc = await PDFDocument.create();
+    const font = await doc.embedFont("Helvetica");
+    doc.addPage([CHROMIUM.w, CHROMIUM.h]).drawRectangle({ x: 0, y: 0, width: 50, height: 50 }); // fill
+    doc.addPage([CHROMIUM.w, CHROMIUM.h]); // nothing
+    doc.addPage([CHROMIUM.w, CHROMIUM.h]).drawText("Hello", { x: 20, y: 20, size: 12, font }); // text
+    const img = await doc.embedJpg(await sharp({ create: { width: 4, height: 4, channels: 3, background: "#888" } }).jpeg().toBuffer());
+    doc.addPage([CHROMIUM.w, CHROMIUM.h]).drawImage(img, { x: 0, y: 0, width: 10, height: 10 }); // image
+    const { pageCount, blankPages } = await mergePdfs([await doc.save()]);
+    expect(pageCount).toBe(4);
+    expect(blankPages).toEqual([2]);
+  });
+
+  it("numbers blank pages across chunks", async () => {
+    const empty = await PDFDocument.create();
+    empty.addPage([CHROMIUM.w, CHROMIUM.h]);
+    const { blankPages } = await mergePdfs([await chunk(2), await empty.save()]);
+    expect(blankPages).toEqual([3]);
+  });
+});

@@ -67,7 +67,16 @@ export type PdfErrorCode =
   /** The export job failed (GET {status:'failed'}); `detail` holds the server's code. */
   | "failed"
   /** fetch threw (offline, DNS…). */
-  | "network";
+  | "network"
+  /** Task 10: 422 {error:'not_ready', readiness}: the print checks found things to fix first. */
+  | "not_ready";
+
+/** Task 10: the server's plain-language readiness lines (built server-side, src/lib/print/copy.ts). */
+export interface PdfReadinessInfo {
+  summary: string;
+  lines: { text: string; severity: "error" | "warning" }[];
+  more: number;
+}
 
 export interface PdfReadyInfo {
   exportId: string;
@@ -84,7 +93,7 @@ export type PdfUiState =
   | { kind: "preparing"; exportId: string; status: "queued" | "rendering"; paused: boolean }
   | ({ kind: "ready" } & PdfReadyInfo)
   | { kind: "timeout"; exportId: string }
-  | { kind: "error"; code: PdfErrorCode; detail?: string };
+  | { kind: "error"; code: PdfErrorCode; detail?: string; readiness?: PdfReadinessInfo };
 
 export type PdfUiKind = PdfUiState["kind"];
 
@@ -112,6 +121,8 @@ export function pdfErrorCopy(code: PdfErrorCode): string {
       return "We couldn't find this book";
     case "network":
       return "Couldn't reach the server — check your connection and try again";
+    case "not_ready":
+      return "Some pages need a fix before the PDF can be made";
     case "failed":
     case "conflict":
     case "server_error":
@@ -132,6 +143,31 @@ export function pdfReadyDetail(info: Pick<PdfReadyInfo, "bytes" | "pageCount">):
   return `${formatPdfSize(info.bytes)} · ${n} ${n === 1 ? "page" : "pages"}`;
 }
 
+/**
+ * Task 10: what went wrong when the export JOB failed (GET {status:'failed', error}) — the server's
+ * failure code in plain words, always ending with what to do. Unknown codes → the generic line.
+ */
+export function pdfFailureCopy(detail: string | undefined): string {
+  switch (detail) {
+    case "too_large":
+      return "This PDF came out too big to store — try fewer pages or smaller photos, then try again";
+    case "render_timeout":
+    case "chrome_unavailable":
+    case "navigation_failed":
+      return "Making the PDF took too long — try again in a minute";
+    case "download_failed":
+    case "decode_failed":
+    case "unknown_photo":
+    case "image_failed":
+      return "One of the photos couldn't be read — replace it or try again";
+    case "blank_page":
+    case "page_count_mismatch":
+      return "A page didn't come out right, so we stopped — try again, and tell us if it happens again";
+    default:
+      return "We couldn't make your PDF — try again";
+  }
+}
+
 /** Status line for every state (null = nothing to say). */
 export function pdfStatusCopy(s: PdfUiState): string | null {
   switch (s.kind) {
@@ -145,6 +181,7 @@ export function pdfStatusCopy(s: PdfUiState): string | null {
     case "timeout":
       return PDF_TIMEOUT_COPY;
     case "error":
+      if (s.code === "failed") return pdfFailureCopy(s.detail);
       return pdfErrorCopy(s.code);
   }
 }
@@ -204,7 +241,20 @@ const API_ERRORS: readonly PdfErrorCode[] = [
   "unavailable",
   "server_error",
   "conflict",
+  "not_ready",
 ];
+
+/** Task 10: the readiness lines of a 422 not_ready body (bounded, strings only), or undefined. */
+export function parseReadiness(body: unknown): PdfReadinessInfo | undefined {
+  const r = obj(obj(body)?.readiness);
+  if (!r || typeof r.summary !== "string" || !Array.isArray(r.lines)) return undefined;
+  const lines = r.lines
+    .map((l) => obj(l))
+    .filter((l): l is Record<string, unknown> => !!l && typeof l.text === "string")
+    .slice(0, 12)
+    .map((l) => ({ text: String(l.text).slice(0, 200), severity: l.severity === "warning" ? ("warning" as const) : ("error" as const) }));
+  return { summary: r.summary.slice(0, 200), lines, more: typeof r.more === "number" && r.more > 0 ? Math.floor(r.more) : 0 };
+}
 
 function obj(v: unknown): Record<string, unknown> | null {
   return typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -284,6 +334,8 @@ export function errorCodeFor(status: number, body: unknown): PdfErrorCode {
       return "not_found";
     case 409:
       return "invalid_doc";
+    case 422:
+      return "not_ready";
     case 429:
       return "daily_cap";
     case 503:
@@ -386,10 +438,12 @@ export function createPdfDownloadController(deps: PdfControllerDeps): PdfControl
     }, PDF_LINK_VALID_MS);
   };
 
-  const fail = (code: PdfErrorCode, detail?: string) => {
+  const fail = (code: PdfErrorCode, detail?: string, readiness?: PdfReadinessInfo) => {
     clearTimer();
     stopVisible();
-    set(detail ? { kind: "error", code, detail } : { kind: "error", code });
+    const s: PdfUiState = detail ? { kind: "error", code, detail } : { kind: "error", code };
+    if (readiness && s.kind === "error") s.readiness = readiness;
+    set(s);
   };
 
   const schedulePoll = (exportId: string, g: number) => {
@@ -509,7 +563,8 @@ export function createPdfDownloadController(deps: PdfControllerDeps): PdfControl
       }
       return fail("server_error");
     }
-    fail(errorCodeFor(r.status, r.body));
+    const code = errorCodeFor(r.status, r.body);
+    fail(code, undefined, code === "not_ready" ? parseReadiness(r.body) : undefined);
   };
 
   /** Re-POST mid-poll (kick a stuck queued job / fetch the current PDF). Network errors count as poll failures. */

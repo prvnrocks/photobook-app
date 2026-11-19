@@ -30,11 +30,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/db/books", () => ({ getMyBook: vi.fn() }));
-vi.mock("@/lib/db/print", () => ({ listPrintPhotoSources: mocks.listPrintPhotoSources }));
+vi.mock("@/lib/db/print", () => ({ listPrintPhotoSources: mocks.listPrintPhotoSources, listPrintPhotoDims: vi.fn(async (_b: string, ids: readonly string[]) => ids.map((id) => ({ id, width: 4000, height: 3000 }))) }));
 vi.mock("@/lib/db/exports", async (orig) => {
   const real = await orig<typeof import("@/lib/db/exports")>();
   return {
     exportObjectPath: real.exportObjectPath,
+    exportPackagePath: real.exportPackagePath,
+    PRINT_PACKAGE_PARTS: real.PRINT_PACKAGE_PARTS,
     EXPORT_MAX_BYTES: real.EXPORT_MAX_BYTES,
     createExportJob: vi.fn(),
     getExportForOwner: vi.fn(),
@@ -139,6 +141,21 @@ function expectNoPii() {
 }
 
 describe("runExport", () => {
+  it("Task 10: a merged PDF without cover + one sheet per page fails page_count_mismatch (nothing uploaded)", async () => {
+    mocks.mergePdfs.mockResolvedValue({ bytes: PDF, pageCount: 2, blankPages: [] });
+    expect(await runExport(EXP)).toBe("failed");
+    expect(mocks.failExport).toHaveBeenCalledWith(EXP, TOKEN, "page_count_mismatch");
+    expect(mocks.uploadExportPdf).not.toHaveBeenCalled();
+    expectNoPii();
+  });
+
+  it("Task 10: a sheet Chromium left white fails blank_page (nothing uploaded)", async () => {
+    mocks.mergePdfs.mockResolvedValue({ bytes: PDF, pageCount: 3, blankPages: [2] });
+    expect(await runExport(EXP)).toBe("failed");
+    expect(mocks.failExport).toHaveBeenCalledWith(EXP, TOKEN, "blank_page");
+    expect(mocks.uploadExportPdf).not.toHaveBeenCalled();
+  });
+
   it("success: claim → photos (book + owner) → render → merge → upload exact path → finish → older cleanup", async () => {
     expect(await runExport(EXP)).toBe("ready");
 
@@ -172,7 +189,7 @@ describe("runExport", () => {
     expect(mocks.uploadExportPdf).toHaveBeenCalledWith(PATH, PDF);
     expect(mocks.finishExport).toHaveBeenCalledWith({ exportId: EXP, token: TOKEN, path: PATH, bytes: 4, pageCount: 3 });
     expect(mocks.listOlderReadyExports).toHaveBeenCalledWith(BOOK, EXP);
-    expect(mocks.removeExportObjects).toHaveBeenCalledWith([`${USER}/${BOOK}/${OLD}.pdf`]);
+    expect(mocks.removeExportObjects).toHaveBeenCalledWith([`${USER}/${BOOK}/${OLD}.pdf`, `${USER}/${BOOK}/${OLD}-cover.pdf`, `${USER}/${BOOK}/${OLD}-interior.pdf`]);
     // S1: older rows are kept as superseded (never deleted), after their objects were removed
     expect(mocks.supersedeExports).toHaveBeenCalledWith(BOOK, USER, [OLD], "superseded");
     expect(mocks.removeExportObjects.mock.invocationCallOrder[0]).toBeLessThan(mocks.supersedeExports.mock.invocationCallOrder[0]);
@@ -450,6 +467,7 @@ describe("runExport prefetch + timing logs", () => {
     mocks.getExportForRender.mockResolvedValue({ id: EXP, bookId: BOOK, userId: USER, docRev: 7, doc: twoChunkDoc(), captionLang: "en", status: "rendering" });
     const sources = Array.from({ length: 24 }, (_, i) => i + 1).map((n) => ({ id: P(n), width: 3000, height: 4000, original_path: `x/${n}-original.jpg` }));
     mocks.listPrintPhotoSources.mockResolvedValue(sources);
+    mocks.mergePdfs.mockResolvedValue({ bytes: PDF, pageCount: 26 }); // Task 10: cover + 25 pages
     mocks.renderBook.mockImplementation(async (opts: { onChunkDone?: (k: number) => void; timings?: { launchMs: number; chunkMs: number[] } }) => {
       // prefetch was queued before the renderer (and its browser launch) started
       expect(loader.prefetch).toHaveBeenCalledTimes(2);

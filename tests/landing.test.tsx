@@ -135,7 +135,7 @@ describe("M16 hero (Emerald & gold)", () => {
       "AI picks your best photos",
       "Arabic & English captions",
       "Share on WhatsApp",
-      "Print-ready PDF",
+      "High-quality PDF",
       "Made in Abu Dhabi",
     ]);
     const marquee = html.slice(html.indexOf('data-testid="section-marquee"'), html.indexOf('data-testid="section-how"'));

@@ -28,11 +28,13 @@ vi.mock("@/lib/db/books", () => ({
 vi.mock("@/lib/db/photos", () => ({ setUserOverride: mocks.setUserOverride, listPhotosForCuration: vi.fn() }));
 vi.mock("@/lib/db/agent-runs", () => ({ getActiveRunForBook: vi.fn() }));
 vi.mock("@/lib/ai/learn-from-book", () => ({ learnFromBook: vi.fn() }));
-vi.mock("@/lib/db/print", () => ({ listKeptPhotoIds: mocks.listKeptPhotoIds, listPrintPhotoSources: vi.fn() }));
+vi.mock("@/lib/db/print", () => ({ listKeptPhotoIds: mocks.listKeptPhotoIds, listPrintPhotoSources: vi.fn(), listPrintPhotoDims: vi.fn(async (_b: string, ids: readonly string[]) => ids.map((id) => ({ id, width: 4000, height: 3000 }))) }));
 vi.mock("@/lib/db/exports", async (orig) => {
   const real = await orig<typeof import("@/lib/db/exports")>();
   return {
     exportObjectPath: real.exportObjectPath,
+    exportPackagePath: real.exportPackagePath,
+    PRINT_PACKAGE_PARTS: real.PRINT_PACKAGE_PARTS,
     EXPORT_MAX_BYTES: real.EXPORT_MAX_BYTES,
     createExportJob: mocks.createExportJob,
     getExportForOwner: vi.fn(),

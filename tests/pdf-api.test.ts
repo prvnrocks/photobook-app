@@ -28,11 +28,13 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: async () => mocks.user }));
 vi.mock("@/lib/db/books", () => ({ getMyBook: mocks.getMyBook }));
-vi.mock("@/lib/db/print", () => ({ listPrintPhotoSources: vi.fn() }));
+vi.mock("@/lib/db/print", () => ({ listPrintPhotoSources: vi.fn(), listPrintPhotoDims: vi.fn(async (_b: string, ids: readonly string[]) => ids.map((id) => ({ id, width: 4000, height: 3000 }))) }));
 vi.mock("@/lib/db/exports", async (orig) => {
   const real = await orig<typeof import("@/lib/db/exports")>();
   return {
     exportObjectPath: real.exportObjectPath,
+    exportPackagePath: real.exportPackagePath,
+    PRINT_PACKAGE_PARTS: real.PRINT_PACKAGE_PARTS,
     EXPORT_MAX_BYTES: real.EXPORT_MAX_BYTES,
     createExportJob: mocks.createExportJob,
     getExportForOwner: mocks.getExportForOwner,
@@ -215,6 +217,31 @@ describe("POST /api/books/[id]/pdf", () => {
     expect(res.status).toBe(409);
     expect(await body(res)).toEqual({ error: "page_limit" });
     expect(mocks.createExportJob).not.toHaveBeenCalled();
+  });
+
+  it("Task 10: 422 not_ready with plain lines when the readiness check finds a blank page (no job)", async () => {
+    const d = doc(3);
+    d.pages[1] = { ...d.pages[1]!, slots: [{ photoId: null as unknown as string, crop }], caption: null as unknown as (typeof d.pages)[number]["caption"], chapterId: null as unknown as string };
+    mocks.book = { ...mocks.book!, doc: d };
+    const res = await post();
+    expect(res.status).toBe(422);
+    const b = await body(res);
+    expect(b.error).toBe("not_ready");
+    const readiness = b.readiness as { ok: boolean; summary: string; lines: { text: string; severity: string }[]; more: number };
+    expect(readiness.ok).toBe(false);
+    expect(readiness.summary).toBe("1 thing to fix before the PDF can be made");
+    expect(readiness.lines[0]).toEqual({ text: "Page 2 is empty — add a photo or text, or delete the page", severity: "error" });
+    expect(mocks.createExportJob).not.toHaveBeenCalled();
+    expect(logs.join("\n")).toMatch(/\[pdf-export\] not_ready errors=1 warnings=\d+/);
+    expect(logs.join("\n")).not.toContain("Summer 2026");
+  });
+
+  it("Task 10: warnings (low resolution) never block the export", async () => {
+    const dims = (await import("@/lib/db/print")).listPrintPhotoDims as unknown as ReturnType<typeof vi.fn>;
+    dims.mockImplementationOnce(async (_b: string, ids: readonly string[]) => ids.map((id) => ({ id, width: 300, height: 400 })));
+    const res = await post();
+    expect(res.status).toBe(202);
+    expect(mocks.createExportJob).toHaveBeenCalledTimes(1);
   });
 
   it("429 daily_cap", async () => {

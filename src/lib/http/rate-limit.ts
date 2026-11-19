@@ -30,6 +30,8 @@ export const RATE_LIMITS = {
   finalize: { limit: 30, windowSeconds: 60 },
   /** Stripe Checkout session creation. */
   checkout: { limit: 10, windowSeconds: 600 },
+  /** Task 10: POST /api/books/[id]/pdf/package — cover + interior PDFs (downloads + splits a stored PDF). */
+  print_package: { limit: 10, windowSeconds: 600 },
 } as const;
 export type RateLimitRoute = keyof typeof RATE_LIMITS;
 

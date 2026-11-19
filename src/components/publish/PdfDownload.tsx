@@ -30,6 +30,7 @@ import {
   pdfReadyDetail,
   pdfStatusCopy,
   type PdfController,
+  type PdfReadinessInfo,
   type PdfTransport,
   type PdfUiState,
 } from "@/lib/pdf/ui";
@@ -166,6 +167,7 @@ export function PdfDownloadView({
                 {pdfReadyDetail(state)}
               </span>
             ) : null}
+            {state.kind === "error" && state.readiness ? <ReadinessLines info={state.readiness} /> : null}
             {state.kind === "error" && state.code === "unauthenticated" ? (
               <>
                 {" "}
@@ -243,6 +245,28 @@ function PdfProgress({ state, copy, well }: { state: PdfUiState; copy: string; w
         </p>
       ) : null}
     </div>
+  );
+}
+
+/** Task 10: the server's print-check lines after a 422 not_ready (plain copy, errors first). */
+function ReadinessLines({ info }: { info: PdfReadinessInfo }) {
+  return (
+    <span className="mt-2 block" data-testid="pdf-readiness">
+      <span className="block font-medium">{info.summary}</span>
+      <span className="mt-1 flex flex-col gap-1" role="list">
+        {info.lines.map((l) => (
+          <span key={l.text} role="listitem" className="block break-words" data-severity={l.severity}>
+            {l.severity === "error" ? "• " : "◦ "}
+            {l.text}
+          </span>
+        ))}
+        {info.more > 0 ? (
+          <span role="listitem" className="block text-muted-foreground">
+            and {info.more} more
+          </span>
+        ) : null}
+      </span>
+    </span>
   );
 }
 

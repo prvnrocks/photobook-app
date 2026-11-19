@@ -80,9 +80,24 @@ describe("<PdfDownloadView>", () => {
     const html = view({ state: { kind: "error", code: "failed", detail: "render_timeout" } });
     expect(html).toContain('data-code="failed"');
     expect(html).toContain('role="alert"');
-    expect(html).toContain("We couldn&#x27;t make your PDF — try again");
+    expect(html).toContain("Making the PDF took too long — try again in a minute");
     expect(html).toContain("Try again");
     expect(html).not.toContain("render_timeout");
+  });
+
+  it("Task 10: not_ready shows the print-check lines and keeps Try again", () => {
+    const html = view({
+      state: {
+        kind: "error",
+        code: "not_ready",
+        readiness: { summary: "2 things to fix before the PDF can be made", lines: [{ text: "Page 3 is empty — add a photo or text, or delete the page", severity: "error" }, { text: "Page 5: a photo may look soft when printed (110 dpi)", severity: "warning" }], more: 1 },
+      },
+    });
+    expect(html).toContain('data-testid="pdf-readiness"');
+    expect(html).toContain("2 things to fix before the PDF can be made");
+    expect(html).toContain("Page 3 is empty");
+    expect(html).toContain("and 1 more");
+    expect(html).toContain("Try again");
   });
 
   it("daily cap / timeout copy", () => {
