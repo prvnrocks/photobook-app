@@ -131,31 +131,49 @@ describe("prompt + schema freeze (pre-M30 styles)", () => {
 // their output schemas are frozen too. v1 → v2 was an intended change (narrative instead of
 // inventories, no inferred gender, light framing) with the versions bumped to story-plan-2 /
 // story-write-2 / story-rewrite-2 so stored versions, story_ai_calls rows and replays never mix.
-// A new change: bump the version constant in src/lib/ai/story/prompts.ts and re-record these.
+// v2 → v3 (2026-11-19, memory narrative) was intended too: the planner returns a StoryBrief with the
+// outline (schema changed), the writer / rewriter get the brief, never write about the photography or
+// poses, no generic inspirational lines, personal vs observational mode; versions story-plan-3 /
+// story-write-3 / story-rewrite-3. A new change: bump the version constant in
+// src/lib/ai/story/prompts.ts and re-record these.
 const STORY_PROMPTS: Record<string, { version: string; system: string; schema: string }> = {
-  planner: { version: "story-plan-2", system: "af2ac47f220b750b3c66f3d00c590ff7021e0a6b44cb1e996e2872cac3c6525d", schema: "00efab4b3f1dd47f287454a46fd485f1814a471005014146f8ebd09364d4584a" },
-  writer: { version: "story-write-2", system: "1c027a463593aa4451d4addb9852522547321a2f8b5c4debf1ea4ea2529af47f", schema: "c7233b3f34b51e8eda3a82fbe70a8bcdede446ba6bc817fd0ac7387636782eac" },
-  rewriter: { version: "story-rewrite-2", system: "2a5540298905955d8c21b935265b29a0c10badeb74f0e88ec5731d530dd01c6a", schema: "d77f0265b840e30177fafcdd4a3ad0a714f00aa9b4c5766a9a9fcd920e6b5f33" },
+  planner: { version: "story-plan-3", system: "304e2de00e036c657824c1dfaa664e8041826986f635938c8cad4c9d62f7a161", schema: "7b106c150dc18e4a68e487d46c2f7e1635802f8bc130f50d66e78cab90370075" },
+  writer: { version: "story-write-3", system: "d1b7a0c9521c2c6c8ab9ef9811c7cd01ea35ee4401b34b614f31c8b1c429e86a", schema: "c7233b3f34b51e8eda3a82fbe70a8bcdede446ba6bc817fd0ac7387636782eac" },
+  rewriter: { version: "story-rewrite-3", system: "8f3a07925fd782897c8067a96a4e35693069142ec4b13d24c2ef432422359230", schema: "d77f0265b840e30177fafcdd4a3ad0a714f00aa9b4c5766a9a9fcd920e6b5f33" },
 };
 
-describe("storybook prompt freeze (v2)", () => {
+describe("storybook prompt freeze (v3)", () => {
   const current = {
     planner: { version: StoryPrompts.STORY_PLANNER_PROMPT_VERSION, system: StoryPrompts.STORY_PLANNER_SYSTEM_PROMPT, schema: schemaJson(StoryPrompts.StoryPlanAiSchema) },
     writer: { version: StoryPrompts.STORY_WRITER_PROMPT_VERSION, system: StoryPrompts.STORY_WRITER_SYSTEM_PROMPT, schema: schemaJson(StoryPrompts.StoryBlocksAiSchema) },
     rewriter: { version: StoryPrompts.STORY_REWRITER_PROMPT_VERSION, system: StoryPrompts.STORY_REWRITER_SYSTEM_PROMPT, schema: schemaJson(StoryPrompts.StoryRewriteAiSchema) },
   } as const;
-  it.each(Object.keys(STORY_PROMPTS) as (keyof typeof current)[])("%s: version, system text and schema are the recorded v2", (agent) => {
+  it.each(Object.keys(STORY_PROMPTS) as (keyof typeof current)[])("%s: version, system text and schema are the recorded v3", (agent) => {
     expect(current[agent].version).toBe(STORY_PROMPTS[agent]!.version);
     expect(sha(current[agent].system)).toBe(STORY_PROMPTS[agent]!.system);
     expect(sha(current[agent].schema)).toBe(STORY_PROMPTS[agent]!.schema);
   });
-  it("the v2 texts carry the narrative rules (one anchor, no inferred gender, light framing) and keep the hard source rules", () => {
+  it("the v3 texts carry the narrative rules (one anchor, no inferred gender, light framing) and keep the hard source rules", () => {
     const w = current.writer.system;
     expect(w).toContain("ONE ANCHOR");
     expect(w).toContain("Never infer anyone's gender");
     expect(w).toContain("light narrative framing");
     expect(w).toContain("A person may be named only when the name appears in a FACT");
-    expect(w).toContain("Never write dialogue or quotation marks");
+    expect(w).toContain("Never write dialogue, quotation marks or what anyone said");
     expect(w).not.toContain("Concrete over general");
+  });
+  it("v3: the memory narrative rules — the brief, no photography or poses, no filler, personal vs observational", () => {
+    const w = current.writer.system;
+    expect(w).toContain("THE STORY BRIEF");
+    expect(w).toContain("NEVER CLAIM");
+    expect(w).toContain("NEVER WRITE ABOUT THE PHOTOGRAPHY");
+    expect(w).toContain("Never describe poses or gestures");
+    expect(w).toContain("Write about why the moments matter, not merely what appears in the photographs.");
+    expect(w).toContain("MODE observational");
+    expect(w).toContain("some bonds never fade");
+    expect(current.planner.system).toContain("THE STORY BRIEF (brief)");
+    expect(current.planner.system).toContain("FIXED CHAPTERS");
+    expect(current.rewriter.system).toContain("STORY BRIEF");
+    for (const t of [current.planner.system, current.writer.system, current.rewriter.system]) expect(t).not.toMatch(/\bf\d+\b.*(?:brother|Dubai)/);
   });
 });

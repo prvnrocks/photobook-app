@@ -6,9 +6,10 @@
 //   similar    a burst-like run of the same shot: taken seconds apart (≤ maxGapSeconds between
 //              neighbours, ≤ maxSpanSeconds from the first), same scene per the photo analysis, and
 //              visually close (dHash distance ≤ maxHamming, or the same average colour AND mostly the
-//              same things in the analysis). One photo per started `keepPer` photos is kept (a run
-//              of 7 keeps 2), the best ranked first. Single-pass anchored grouping, not
-//              single-linkage: a long session cannot chain into one giant group.
+//              same things in the analysis). About one photo in 2–3 is kept (one per started
+//              `keepPer` = 2.5 photos: a run of 7 keeps 3): the best ranked first, then the ones that
+//              look most different from those already kept (varied framing). Single-pass anchored
+//              grouping, not single-linkage: a long session cannot chain into one giant group.
 //   blurry     bookBlurryIds (quality.ts): a clear outlier against the book's own sharpness
 //
 // Nothing here deletes anything. The caller writes `photos.status = 'dropped'` + `drop_reason`
@@ -21,6 +22,13 @@
 // average-colour distance 0–30 and analysis overlap 0.4–0.8; a change of spot shows distance
 // ≥ 20 and colour ≥ 30. With the defaults the set gives 8 runs (2–7 photos, none spanning more
 // than 60 s) and keeps the change-of-spot photos apart.
+//
+// v3 calibration (2026-11-19, user feedback: 30 of 50 photos of one 11-minute session left out felt
+// too aggressive): similar runs keep about 1 in 2–3 instead of 1 in 4, and the filters set aside at
+// most `maxAsideShare` (40 %) of the book — similar shots come back (most different-looking first)
+// until the share is met. Near-identical duplicates (exact copies, dHash ≤ 6 within 3 minutes) and
+// clearly blurry photos are never given back: they are not worth printing twice; when they alone
+// pass 40 % the book keeps one of each and nothing more.
 
 import { hammingHex } from "./dupes";
 import { comparePreferred, type DupPhoto, type DuplicateGroup } from "./duplicates";
@@ -39,8 +47,10 @@ export const SIMILAR_DEFAULTS = {
   minOverlap: 0.5,
   /** Distance to the run's first photo still accepted when the neighbour matches. */
   anchorHamming: 20,
-  /** Keep one photo per started `keepPer` photos of a run. */
-  keepPer: 4,
+  /** Keep one photo per started `keepPer` photos of a run (2.5 ≈ one in 2–3). */
+  keepPer: 2.5,
+  /** Photos set aside: at most this share of the book (only similar shots are given back for it). */
+  maxAsideShare: 0.4,
   /** Never leave fewer than this many photos in a book (or all of them when it has fewer). */
   minKept: 4,
 } as const;
@@ -117,10 +127,33 @@ export function groupSimilarShots(photos: readonly FilterPhoto[], options: Simil
   }
   return runs
     .filter((r) => r.length >= 2)
-    .map((r) => {
-      const ranked = [...r].sort(comparePreferred);
-      return { photoIds: r.map((p) => p.id), keep: ranked.slice(0, Math.ceil(r.length / o.keepPer)).map((p) => p.id) };
-    });
+    .map((r) => ({ photoIds: r.map((p) => p.id), keep: variedKeep([...r].sort(comparePreferred), Math.ceil(r.length / o.keepPer)).map((p) => p.id) }));
+}
+
+const dist = (a: FilterPhoto, b: FilterPhoto) => (a.phash && b.phash ? hammingHex(a.phash.toLowerCase(), b.phash.toLowerCase()) : 0);
+
+/**
+ * `n` photos of a ranked run: the best one first, then each time the photo that looks most
+ * different from those already kept (largest smallest dHash distance; ties → better ranked).
+ */
+export function variedKeep<T extends FilterPhoto>(ranked: readonly T[], n: number): T[] {
+  const kept: T[] = [];
+  const left = [...ranked];
+  while (kept.length < n && left.length > 0) {
+    let at = 0;
+    if (kept.length > 0) {
+      let best = -1;
+      left.forEach((p, i) => {
+        const d = Math.min(...kept.map((k) => dist(p, k)));
+        if (d > best) {
+          best = d;
+          at = i;
+        }
+      });
+    }
+    kept.push(left.splice(at, 1)[0]!);
+  }
+  return kept;
 }
 
 /**
@@ -141,13 +174,19 @@ export function decidePhotoFilters(photos: readonly FilterPhoto[], duplicateGrou
   const reason = new Map<string, FilterReason>();
   const userKept = new Set(duplicateGroups.filter((g) => g.preferredSource === "user").map((g) => g.preferredPhotoId));
 
+  /** Similar shots the 40 % cap may give back, with the photos of their run that stay. */
+  const cappable = new Map<string, { reason: FilterReason; keepers: FilterPhoto[] }>();
+
   // 1. duplicate groups: one keeper among the members still in the book
   for (const g of duplicateGroups) {
     const members = g.photoIds.map((id) => byId.get(id)).filter((p): p is FilterPhoto => !!p && p.status !== "dropped");
     if (members.length < 2) continue;
     const preferred = members.find((p) => p.id === g.preferredPhotoId);
     const keeper = preferred && (g.preferredSource === "user" || !blurry.has(preferred.id)) ? preferred : [...members].sort(rank)[0]!;
-    for (const p of members) if (p.id !== keeper.id && eligible(p.id) && !userKept.has(p.id)) reason.set(p.id, "duplicate");
+    for (const p of members) {
+      if (p.id === keeper.id || !eligible(p.id) || userKept.has(p.id)) continue;
+      reason.set(p.id, "duplicate");
+    }
   }
 
   // 2. similar shots among what is left
@@ -157,12 +196,34 @@ export function decidePhotoFilters(photos: readonly FilterPhoto[], duplicateGrou
     const keepN = Math.ceil(members.length / o.keepPer);
     const pinned = members.filter((p) => p.userOverride || userKept.has(p.id));
     const order = [...new Set([...pinned, ...[...members].sort(rank)])];
-    const keep = new Set(order.slice(0, Math.max(keepN, pinned.length)).map((p) => p.id));
-    for (const p of members) if (!keep.has(p.id) && eligible(p.id)) reason.set(p.id, "similar");
+    const keepList = [...pinned, ...variedKeep(order.filter((p) => !pinned.includes(p)), Math.max(0, keepN - pinned.length))];
+    const keep = new Set(keepList.map((p) => p.id));
+    for (const p of members) {
+      if (keep.has(p.id) || !eligible(p.id)) continue;
+      reason.set(p.id, "similar");
+      cappable.set(p.id, { reason: "similar", keepers: keepList });
+    }
   }
 
   // 3. clearly blurry photos that are still in
   for (const p of alive) if (blurry.has(p.id) && !reason.has(p.id) && eligible(p.id) && !userKept.has(p.id)) reason.set(p.id, "blurry");
+
+  // v3: the filters never take more than maxAsideShare of the book through similar shots — the
+  // ones that look most different from what stays come back first. Near-identical duplicates and
+  // clearly blurry photos are not given back (they still count toward the share).
+  const maxAside = Math.floor(alive.length * o.maxAsideShare);
+  const asideCappable = [...cappable.keys()].filter((id) => reason.has(id));
+  const over = reason.size - maxAside;
+  if (over > 0 && asideCappable.length > 0) {
+    const order = asideCappable
+      .map((id) => {
+        const c = cappable.get(id)!;
+        const p = byId.get(id)!;
+        return { id, p, similar: c.reason === "similar" ? 1 : 0, spread: c.keepers.length ? Math.min(...c.keepers.map((k) => dist(p, k))) : 0 };
+      })
+      .sort((a, b) => b.similar - a.similar || b.spread - a.spread || rank(a.p, b.p));
+    for (const x of order.slice(0, over)) reason.delete(x.id);
+  }
 
   // never empty a book: give back the best ranked set-aside photos until minKept remain
   const keptAfter = alive.length - reason.size;

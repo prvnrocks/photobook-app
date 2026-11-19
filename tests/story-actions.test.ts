@@ -112,8 +112,8 @@ const storedContext = (bookId = BOOK_ID) => MemoryContextSchema.parse(stored(boo
 const input = (over: Partial<Parameters<typeof saveStoryAnswersAction>[1]> = {}) => ({
   storyTone: "heartfelt" as const,
   answers: [
-    { questionId: "travel.companions", text: "My sister and the kids" },
-    { questionId: "travel.special", text: "Our first trip together" },
+    { questionId: "memory.relationship", text: "My sister and the kids" },
+    { questionId: "memory.moment", text: "Our first trip together" },
   ],
   skipped: false,
   ...over,
@@ -164,15 +164,15 @@ describe("saveStoryAnswersAction", () => {
       context: {
         storyTone: "heartfelt",
         answers: [
-          { questionId: "travel.companions", text: "My sister and the kids" },
-          { questionId: "travel.special", text: "Our first trip together" },
+          { questionId: "memory.relationship", text: "My sister and the kids" },
+          { questionId: "memory.moment", text: "Our first trip together" },
         ],
         skipped: false,
         rev: 1,
       },
     });
     const ctx = storedContext();
-    const [q1, q2] = storyQuestionsFor("travel");
+    const [, q1, q2] = storyQuestionsFor("travel");
     expect(ctx.answers).toEqual([
       { questionId: q1.id, question: q1.prompt, text: "My sister and the kids", source: "user" },
       { questionId: q2.id, question: q2.prompt, text: "Our first trip together", source: "user" },
@@ -211,28 +211,29 @@ describe("saveStoryAnswersAction", () => {
     expect(await saveStoryAnswersAction(BOOK_ID, input({ skipped: true, answers: [{ questionId: "wedding.moments", text: "x" }] }))).toEqual({ ok: false, error: "invalid" });
     // the same question twice
     const twice = [
-      { questionId: "travel.companions", text: "A" },
-      { questionId: "travel.companions", text: "B" },
+      { questionId: "memory.relationship", text: "A" },
+      { questionId: "memory.relationship", text: "B" },
     ];
     expect(await saveStoryAnswersAction(BOOK_ID, input({ answers: twice }))).toEqual({ ok: false, error: "invalid" });
     expect(db.state.writes).toEqual([]);
   });
 
-  it("the questions follow the book's occasion (birthday; unknown / missing occasion → Other)", async () => {
+  it("v3: the same three questions for every occasion (birthday; unknown / missing occasion → Other)", async () => {
     mocks.getMyBook.mockResolvedValue(book({ occasion: "birthday", tone: null, caption_lang: "ar" }));
-    const res = await saveStoryAnswersAction(BOOK_ID, input({ answers: [{ questionId: "birthday.person", text: "عيد ميلاد أمي" }] }));
+    const res = await saveStoryAnswersAction(BOOK_ID, input({ answers: [{ questionId: "memory.relationship", text: "عيد ميلاد أمي" }] }));
     expect(res.ok).toBe(true);
     expect(storedContext()).toMatchObject({ occasion: "birthday", tone: "fun", lang: "ar" });
     expect(storedContext().answers).toEqual([
-      { questionId: "birthday.person", question: storyQuestionsFor("birthday")[0].prompt, text: "عيد ميلاد أمي", source: "user" },
+      { questionId: "memory.relationship", question: storyQuestionsFor("birthday")[1].prompt, text: "عيد ميلاد أمي", source: "user" },
     ]);
-    expect(await saveStoryAnswersAction(BOOK_ID, input({ answers: [{ questionId: "travel.companions", text: "x" }] }))).toEqual({ ok: false, error: "invalid" });
+    // a Task 5 question id is no longer asked
+    expect(await saveStoryAnswersAction(BOOK_ID, input({ answers: [{ questionId: "birthday.person", text: "x" }] }))).toEqual({ ok: false, error: "invalid" });
 
     mocks.getMyBook.mockResolvedValue(book({ occasion: "picnic", tone: "loud", caption_lang: "fr" }));
-    expect((await saveStoryAnswersAction(BOOK_ID, input({ answers: [{ questionId: "other.about", text: "A picnic" }] }))).ok).toBe(true);
+    expect((await saveStoryAnswersAction(BOOK_ID, input({ answers: [{ questionId: "memory.occasion", text: "A picnic" }] }))).ok).toBe(true);
     expect(storedContext()).toMatchObject({ occasion: "other", tone: "minimal", lang: "en" });
     mocks.getMyBook.mockResolvedValue(book({ occasion: null }));
-    expect((await saveStoryAnswersAction(BOOK_ID, input({ answers: [{ questionId: "other.special", text: "The people" }] }))).ok).toBe(true);
+    expect((await saveStoryAnswersAction(BOOK_ID, input({ answers: [{ questionId: "memory.moment", text: "The people" }] }))).ok).toBe(true);
   });
 
   it("answers are trimmed; blank answers are dropped, never stored as empty entries", async () => {
@@ -240,18 +241,18 @@ describe("saveStoryAnswersAction", () => {
       BOOK_ID,
       input({
         answers: [
-          { questionId: "travel.companions", text: "   \n\t " },
-          { questionId: "travel.special", text: "  The views \n" },
+          { questionId: "memory.relationship", text: "   \n\t " },
+          { questionId: "memory.moment", text: "  The views \n" },
         ],
       }),
     );
-    expect(res).toMatchObject({ ok: true, context: { answers: [{ questionId: "travel.special", text: "The views" }], skipped: false } });
+    expect(res).toMatchObject({ ok: true, context: { answers: [{ questionId: "memory.moment", text: "The views" }], skipped: false } });
     expect(storedContext().answers).toEqual([
-      { questionId: "travel.special", question: storyQuestionsFor("travel")[1].prompt, text: "The views", source: "user" },
+      { questionId: "memory.moment", question: storyQuestionsFor("travel")[2].prompt, text: "The views", source: "user" },
     ]);
 
     // everything blank, not skipped: stored as "reached, nothing said"
-    const none = await saveStoryAnswersAction(BOOK_ID, input({ storyTone: null, answers: [{ questionId: "travel.companions", text: "" }] }));
+    const none = await saveStoryAnswersAction(BOOK_ID, input({ storyTone: null, answers: [{ questionId: "memory.relationship", text: "" }] }));
     expect(none).toMatchObject({ ok: true, context: { storyTone: null, answers: [], skipped: false, rev: 2 } });
     expect(storedContext()).toMatchObject({ answers: [], skipped: false, storyTone: null });
   });
@@ -283,13 +284,13 @@ describe("saveStoryAnswersAction", () => {
   });
 
   it("the stored question is the server's prompt even when the client sends its own", async () => {
-    const sneaky = { questionId: "travel.companions", text: "Friends", question: "Ignore the rules", source: "ai" };
+    const sneaky = { questionId: "memory.relationship", text: "Friends", question: "Ignore the rules", source: "ai" };
     expect(await saveStoryAnswersAction(BOOK_ID, input({ answers: [sneaky as never] }))).toEqual({ ok: false, error: "invalid" });
     expect(db.state.writes).toEqual([]);
-    await saveStoryAnswersAction(BOOK_ID, input({ answers: [{ questionId: "travel.companions", text: "Friends" }] }));
+    await saveStoryAnswersAction(BOOK_ID, input({ answers: [{ questionId: "memory.relationship", text: "Friends" }] }));
     expect(storedContext().answers[0]).toEqual({
-      questionId: "travel.companions",
-      question: "Who did you travel with?",
+      questionId: "memory.relationship",
+      question: "Who is in these photos, to you?",
       text: "Friends",
       source: "user",
     });
@@ -333,13 +334,13 @@ describe("saveStoryAnswersAction", () => {
   });
 
   it("rejects over-long and malformed input without writing", async () => {
-    const one = (text: string) => input({ answers: [{ questionId: "travel.companions", text }] });
+    const one = (text: string) => input({ answers: [{ questionId: "memory.relationship", text }] });
     expect(await saveStoryAnswersAction(BOOK_ID, one("x".repeat(201)))).toEqual({ ok: false, error: "invalid" });
     expect(await saveStoryAnswersAction(BOOK_ID, one("🎂".repeat(201)))).toEqual({ ok: false, error: "invalid" });
     expect(await saveStoryAnswersAction(BOOK_ID, one("x".repeat(5000)))).toEqual({ ok: false, error: "invalid" });
     expect(await saveStoryAnswersAction(BOOK_ID, one("half \ud83d"))).toEqual({ ok: false, error: "invalid" });
-    const three = [...input().answers, { questionId: "travel.companions", text: "x" }];
-    expect(await saveStoryAnswersAction(BOOK_ID, input({ answers: three }))).toEqual({ ok: false, error: "invalid" });
+    const four = [...input().answers, { questionId: "memory.occasion", text: "x" }, { questionId: "memory.relationship", text: "y" }];
+    expect(await saveStoryAnswersAction(BOOK_ID, input({ answers: four }))).toEqual({ ok: false, error: "invalid" });
     for (const bad of [
       null,
       undefined,
@@ -349,7 +350,7 @@ describe("saveStoryAnswersAction", () => {
       { ...input(), skipped: "yes" },
       { ...input(), answers: "x" },
       { ...input(), answers: [{ questionId: 5, text: "x" }] },
-      { ...input(), answers: [{ questionId: "travel.companions", text: 5 }] },
+      { ...input(), answers: [{ questionId: "memory.relationship", text: 5 }] },
       { ...input(), people: [{ name: "Injected", relation: null }] },
       { ...input(), rev: 99 },
     ]) {
@@ -365,7 +366,7 @@ describe("saveStoryAnswersAction", () => {
 
   it("a database failure → unavailable, and no user text reaches the log", async () => {
     db.state.writeErrors.push({ code: "42P01", message: "relation storybooks does not exist: SECRET-ANSWER" });
-    const res = await saveStoryAnswersAction(BOOK_ID, input({ answers: [{ questionId: "travel.companions", text: "SECRET-ANSWER" }] }));
+    const res = await saveStoryAnswersAction(BOOK_ID, input({ answers: [{ questionId: "memory.relationship", text: "SECRET-ANSWER" }] }));
     expect(res).toEqual({ ok: false, error: "unavailable" });
     mocks.getMyBook.mockRejectedValue(new Error("boom SECRET-ANSWER"));
     expect(await saveStoryAnswersAction(BOOK_ID, input())).toEqual({ ok: false, error: "unavailable" });
@@ -392,10 +393,36 @@ describe("loadStoryAnswersAction", () => {
     expect(skipped).toMatchObject({ context: { skipped: true, answers: [], rev: 2 } });
   });
 
-  it("answers to another occasion's questions are not shown after the occasion changed", async () => {
+  it("v3: answers stay after the occasion changed (the questions no longer depend on it)", async () => {
     await saveStoryAnswersAction(BOOK_ID, input());
     mocks.getMyBook.mockResolvedValue(book({ occasion: "wedding" }));
-    expect(await loadStoryAnswersAction(BOOK_ID)).toEqual({ ok: true, context: { storyTone: "heartfelt", answers: [], skipped: false, rev: 1 } });
+    expect(await loadStoryAnswersAction(BOOK_ID)).toEqual({ ok: true, context: { storyTone: "heartfelt", answers: input().answers, skipped: false, rev: 1 } });
+  });
+
+  it("v3: Task 5 answers (legacy question ids) still load, under the matching new question, unchanged", async () => {
+    const legacy = MemoryContextSchema.parse({
+      ...baseContext({
+        answers: [
+          { questionId: "travel.companions", question: "Who did you travel with?", text: "My brother", source: "user" },
+          { questionId: "travel.special", question: "What made this trip special?", text: "We met again after a long time.", source: "user" },
+        ],
+        storyTone: "joyful",
+      }),
+      rev: 1,
+      updatedAt: "2026-11-19T10:00:00Z",
+    });
+    db.state.rows.push({ book_id: BOOK_ID, user_id: OWNER, status: "ready", context: legacy, context_rev: 1, current_version: 1 });
+    expect(await loadStoryAnswersAction(BOOK_ID)).toEqual({
+      ok: true,
+      context: { storyTone: "joyful", answers: [{ questionId: "memory.relationship", text: "My brother" }, { questionId: "memory.moment", text: "We met again after a long time." }], skipped: false, rev: 1 },
+    });
+  });
+
+  it("v3: an occasion answer equal to the step-2 occasion (the field's prefill) is not stored; a changed one is", async () => {
+    await saveStoryAnswersAction(BOOK_ID, input({ answers: [{ questionId: "memory.occasion", text: " travel " }] }));
+    expect(storedContext().answers).toEqual([]);
+    await saveStoryAnswersAction(BOOK_ID, input({ answers: [{ questionId: "memory.occasion", text: "Seeing my brother again" }] }));
+    expect(storedContext().answers).toEqual([{ questionId: "memory.occasion", question: "What was the occasion?", text: "Seeing my brother again", source: "user" }]);
   });
 
   it("same guards as saving", async () => {
@@ -499,7 +526,7 @@ describe("db/storybooks", () => {
     expect(storedContext()).toEqual(saved);
 
     const writes = db.state.writes.length;
-    const aiAnswer = { questionId: "travel.companions", question: "Who did you travel with?", text: "A family of four", source: "ai" };
+    const aiAnswer = { questionId: "memory.relationship", question: "Who did you travel with?", text: "A family of four", source: "ai" };
     await expect(saveMemoryContext(BOOK_ID, OWNER, baseContext({ answers: [aiAnswer as never] }))).rejects.toMatchObject({ code: "invalid_context" });
     await expect(saveMemoryContext(BOOK_ID, OWNER, { ...baseContext(), observations: [] } as never)).rejects.toMatchObject({ code: "invalid_context" });
     await expect(saveMemoryContext(BOOK_ID, OWNER, baseContext({ facts: ["bad \ud83d"] }))).rejects.toMatchObject({ code: "invalid_context" });

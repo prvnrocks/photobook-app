@@ -62,11 +62,15 @@ const blockNumber = (id: unknown) => (typeof id === "string" && /^b\d+$/.test(id
 const langOf = (meta: Record<string, unknown>) => (meta.lang === "ar" ? "ar" : "en");
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
-/** Planner: the rule outline the service put into scenarioMeta (already grounded). */
+/** v3: an empty, valid brief (the service validates and fills it from the rules). */
+const EMPTY_BRIEF = { centralTheme: "", occasion: null, occasionRefs: [], location: null, locationRefs: [], relationships: [], verifiedFacts: [], momentGroups: [], emotionalDirection: "observational", emotionalRefs: [], narrativeArc: [], unsupportedAssumptions: [] };
+
+/** Planner: the rule brief + rule outline the service put into scenarioMeta (already grounded). */
 export const storyPlanReplaySynth: ReplaySynth = (meta, ctx) => {
   if (ctx.scenario === "invalid") return { chapters: "not a list" };
   const chapters = Array.isArray(meta.chapters) ? (meta.chapters as Record<string, unknown>[]) : [];
   return {
+    brief: meta.brief && typeof meta.brief === "object" ? meta.brief : EMPTY_BRIEF,
     title: null,
     subtitle: null,
     chapters: chapters.map((c) => ({

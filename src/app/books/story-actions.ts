@@ -1,6 +1,6 @@
 "use server";
 
-// Wizard story step ("Every memory has a story.", Task 5): saves / loads the user's answers in the
+// Wizard story step ("What makes this memory special?", Task 5 / v3): saves / loads the user's answers in the
 // book's memory context and recommends a design. Owner only: getMyBook under RLS proves ownership,
 // then the admin write is filtered by book_id + user_id (src/lib/db/storybooks.ts).
 // Answers are user data: nothing typed by the user is ever logged — codes only.
@@ -19,7 +19,7 @@ import {
   type StoryAnswersResult,
   type StoryAnswersView,
 } from "@/lib/story/answers";
-import { STORY_ANSWER_MAX, STORY_QUESTIONS_MAX, STORY_TONES, storyQuestionsFor } from "@/lib/story/questions";
+import { MEMORY_QUESTION_IDS, STORY_ANSWER_MAX, STORY_QUESTIONS_MAX, STORY_TONES, migrateStoryAnswers, occasionPrefill, storyQuestionsFor } from "@/lib/story/questions";
 import { STORYBOOK_SCHEMA_VERSION } from "@/lib/storybook/schemas";
 import type { MemoryContext } from "@/lib/storybook/types";
 import { codePointLength, hasLoneSurrogate } from "@/lib/text/clip";
@@ -55,12 +55,15 @@ function bookBasics(book: OwnedBook): { occasion: Occasion; tone: Tone; lang: Ca
   };
 }
 
-/** Only answers to the questions the book's CURRENT occasion asks are shown (the occasion may have changed). */
+/**
+ * The stored answers under the questions asked now. v3: Task 5 answers (legacy ids) are shown under
+ * the matching v3 question (migrateStoryAnswers) — the user's own text, so old books still load.
+ */
 function viewOf(context: MemoryContext, occasion: Occasion): StoryAnswersView {
   const asked = new Set(storyQuestionsFor(occasion).map((q) => q.id));
   return {
     storyTone: context.storyTone,
-    answers: context.answers.filter((a) => asked.has(a.questionId)).map((a) => ({ questionId: a.questionId, text: a.text })),
+    answers: migrateStoryAnswers(context.answers).filter((a) => asked.has(a.questionId)).map((a) => ({ questionId: a.questionId, text: a.text })),
     skipped: context.skipped,
     rev: context.rev,
   };
@@ -69,6 +72,7 @@ function viewOf(context: MemoryContext, occasion: Occasion): StoryAnswersView {
 /**
  * Saves the story step. Rules (all enforced here, never trusted from the client):
  *   - every questionId must be one of storyQuestionsFor(book.occasion), each at most once;
+ *   - v3: an occasion answer equal to the step-2 occasion (the field's prefill) is not stored;
  *   - answers are trimmed; a blank answer is dropped (a skipped question stores nothing);
  *     an answer over STORY_ANSWER_MAX code points or with a lone surrogate → "invalid";
  *   - the stored `question` is the server's prompt for the id; `source` is always "user";
@@ -101,6 +105,8 @@ export async function saveStoryAnswersAction(bookId: string, input: StoryAnswers
       const text = a.text.trim();
       if (hasLoneSurrogate(text) || codePointLength(text) > STORY_ANSWER_MAX) return { ok: false, error: "invalid" };
       if (text === "" || wanted.skipped) continue;
+      // v3: the occasion field starts as the step-2 occasion — unchanged, it adds nothing the book doesn't know
+      if (a.questionId === MEMORY_QUESTION_IDS.occasion && text.toLowerCase() === occasionPrefill(basics.occasion).toLowerCase()) continue;
       answers.push({ questionId: a.questionId, question, text, source: "user" });
     }
 

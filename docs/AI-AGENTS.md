@@ -290,7 +290,7 @@ wizard or the editor yet. Three server functions, each proving book ownership fi
   `story_ai_calls` row (migration 2600, service role only: kind, scope, chapter, version, model, prompt version,
   tokens, cost, latency, error code — no text). Live calls are refused while the table is missing.
 - **Config**: `AI_STORY_MODEL` (allow-list = photo models), `AI_STORY_TIMEOUT_MS`, `AI_STORY_MAX_RETRIES`.
-  Prompt versions: `story-plan-2`, `story-write-2`, `story-rewrite-2` (`prompts.ts`, static system prompts, frozen by
+  Prompt versions: `story-plan-3`, `story-write-3`, `story-rewrite-3` (`prompts.ts`, static system prompts, frozen by
   `tests/ai/prompt-freeze.test.ts`).
 - **v2 narrative (2026-11-19)**: live v1 output read as object inventories with repeated beats and an inferred "he".
   v2 prompts ask for a story arc built on the user's answers (opening → what happened in order → closing beat), ONE
@@ -308,6 +308,25 @@ wizard or the editor yet. Three server functions, each proving book ownership fi
   `photos.status = 'dropped'` + `drop_reason` `duplicate` / `similar` / `blurry` — never a `user_override` photo,
   restorable from "Left out by AI"; step 6 shows the real counts. One long visit is split into scenes at gaps that are
   long for the set (moments v2), labelled by setting ("At the café"), never by one object.
+- **v3 memory narrative (2026-11-19)**: live v2 output read as photo-shoot commentary ("The cups got their close-ups
+  first", "Then the portraits took over"). v3 adds a **StoryBrief** (`brief.ts`, schema in `src/lib/storybook/brief.ts`):
+  central theme, occasion (the user's wording wins; the book's stored occasion is unchanged), location (title / user /
+  photo metadata only), relationships ONLY from the user's facts, verified facts each traced to fact ids / photo ids,
+  moment groups with why they matter, emotional direction from user context only (else "observational and
+  restrained"), narrative arc (opening → middle → closing) and unsupported assumptions. It is written by the planner
+  call (`story-plan-3` returns brief + outline — one call, the planner already has every input), validated field by
+  field in code (`acceptBrief`; `ruleBrief` fallback), re-checked by writeStory and stored with the plan and every
+  storybook version (`Storybook.brief`). **Modes**: personal (the user wrote something about the memory) vs
+  observational (third person, no relationships / feelings / "we", elegant observation). Writer `story-write-3` and
+  rewriter `story-rewrite-3` get the brief (chapter beat + NEVER CLAIM list). New lints (`memory-lint.ts`, English):
+  `photo_commentary`, `generic_language`, `unsupported_claim` (conversations, reasons / length of separation),
+  `claimed_emotion`, `wrong_voice`; "reunion" counts as the user's own "met again after a long time". Wizard step 4 is
+  now "What makes this memory special?" (occasion prefilled from step 2, who is in the photos + chips, one short
+  memory; Task 5 answers load under the new questions). Moments v3: one visit is one moment unless a real change
+  (≥ 10-minute pause, or another setting / activity after a pause); filters keep ~1 in 2–3 similar shots and set aside
+  ≤ 40 % (near-identical duplicates / blurry excepted). **Regenerate story** = a run after a finished one with the
+  same photos: analysis / filters / moments reused, the previous plan's chapter structure pinned (identical page
+  skeleton), only brief → plan → write, then the design stage (`regenerateCursor`, `regenerateStory`).
 - **Replay** (`replay.ts`): deterministic, grounded synthesisers behind the service's own `ReplayTransport` (the shared
   `tests/fixtures/ai` files belong to the album pipeline and are not read).
 - **Errors** (`StoryError.code`): `not_found`, `no_photos`, `ai_off`, `invalid_plan`, `no_story`, `invalid_instruction`,

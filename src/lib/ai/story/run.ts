@@ -22,6 +22,9 @@ import "server-only";
 //             next checkpoint fails and it stops before any further model call / doc write.
 //   resume  → "Try again" starts a NEW run; its first tick copies the finished stages of the
 //             previous failed / cancelled run of the book (same photos) and continues from there.
+//   regenerate → v3: a NEW run after a FINISHED one ("Regenerate story") with the same photos reuses
+//             the analysis, filters and moments and pins the previous plan's chapter structure:
+//             only brief → plan (titles / arcs) → write run, then the design stage (regenerateCursor).
 //
 // Idempotent by construction: analyses are cached per image (only photos without a stored
 // analysis are sent), moments are recomputed (no model), the plan and every written chapter live
@@ -128,7 +131,8 @@ export interface StoryRunDeps {
    * is set aside.
    */
   applyPhotoFilters?(bookId: string, userId: string, decisions: readonly FilterDecision[]): Promise<FilterCounts>;
-  planStory(bookId: string, opts: { rule: boolean; maxPages?: number }): Promise<StoryPlan>;
+  /** `pinned` (v3 "Regenerate story"): keep this earlier plan's chapter structure; only brief, titles and arcs are new. */
+  planStory(bookId: string, opts: { rule: boolean; maxPages?: number; pinned?: StoryPlan | null }): Promise<StoryPlan>;
   writeStoryStep: typeof writeStoryStep;
   composeStorybookPages(bookId: string, opts: { rule: boolean; beforeSave: () => Promise<boolean>; maxPages?: number }): Promise<{ pages: number; warnings: number; ai: ComposeAiStatus; saved: boolean }>;
   /** Task 9: the book's entitlement (preview / full) from server facts — never from the client. */
@@ -172,7 +176,7 @@ export function defaultStoryRunDeps(): StoryRunDeps {
       await setAsideFilteredPhotos(bookId, decisions);
       return filterCounts(await listPhotosForOrganize(bookId, userId));
     },
-    planStory: (bookId, opts) => planStory(bookId, { ...(opts.rule ? { mode: "off" as const } : {}), ...(opts.maxPages ? { planMaxPages: opts.maxPages } : {}) }),
+    planStory: (bookId, opts) => planStory(bookId, { ...(opts.rule ? { mode: "off" as const } : {}), ...(opts.maxPages ? { planMaxPages: opts.maxPages } : {}), ...(opts.pinned ? { pinned: opts.pinned } : {}) }),
     writeStoryStep,
     composeStorybookPages: async (bookId, opts) => {
       const r = await composeStorybookPages(bookId, { beforeSave: opts.beforeSave, ...(opts.maxPages ? { maxPages: opts.maxPages } : {}) }, opts.rule ? { mode: "off" } : {});
@@ -208,6 +212,12 @@ export type StoryCursor = {
   filtered: FilterCounts | null;
   moments: number | null;
   plan: StoryPlan | null;
+  /**
+   * v3 "Regenerate story": the previous finished run's plan for the same photos. Its chapter
+   * structure (and so the page skeleton) is kept; the organizing stage only makes a new brief,
+   * titles and arcs, and the writing stage writes new text. Analysis, filters and moments are reused.
+   */
+  pinnedPlan: StoryPlan | null;
   planAttempts: number;
   /** Sorted ready-photo ids the plan was made from (a resumed run only reuses a plan for the same photos). */
   photoSig: string | null;
@@ -242,6 +252,7 @@ export function initialStoryCursor(): StoryCursor {
     filtered: null,
     moments: null,
     plan: null,
+    pinnedPlan: null,
     planAttempts: 0,
     photoSig: null,
     replanned: false,
@@ -265,6 +276,7 @@ export function parseStoryCursor(raw: unknown): StoryCursor | null {
   const base = initialStoryCursor();
   const plan = raw.plan === null || raw.plan === undefined ? null : StoryPlanSchema.safeParse(raw.plan);
   if (plan && !plan.success) return null;
+  const pinned = raw.pinnedPlan === null || raw.pinnedPlan === undefined ? null : StoryPlanSchema.safeParse(raw.pinnedPlan);
   const wsRaw = raw.write.state;
   const ws = wsRaw === null || wsRaw === undefined ? null : StoryWriteStateSchema.safeParse(wsRaw);
   if (ws && !ws.success) return null;
@@ -285,6 +297,7 @@ export function parseStoryCursor(raw: unknown): StoryCursor | null {
     filtered: isObj(raw.filtered) ? { duplicate: nat(raw.filtered.duplicate), similar: nat(raw.filtered.similar), blurry: nat(raw.filtered.blurry) } : null,
     moments: typeof raw.moments === "number" ? nat(raw.moments) : null,
     plan: plan ? plan.data : null,
+    pinnedPlan: pinned && pinned.success ? pinned.data : null,
     planAttempts: nat(raw.planAttempts),
     photoSig: typeof raw.photoSig === "string" ? raw.photoSig : null,
     replanned: raw.replanned === true,
@@ -353,6 +366,28 @@ export function resumeCursor(prev: StoryCursor, photoSig: string, prevRunId: str
     const groups = Object.fromEntries(Object.entries(prev.write.state.groups).filter(([, g]) => g.status === "ok"));
     c.write.state = { ...prev.write.state, groups };
   }
+  return { cursor: c, stage: "discovering" };
+}
+
+/**
+ * v3 — "Regenerate story" (a new run after a FINISHED one): when the photos are the same, the run
+ * reuses the finished analysis, filters and moments (no vision call, no re-clustering, nothing set
+ * aside again) and pins the previous plan's chapter structure, so only brief → plan → write run
+ * before the design stage re-fits the new text into the same pages. Other photos → a fresh run.
+ */
+export function regenerateCursor(prev: StoryCursor, photoSig: string, prevRunId: string): { cursor: StoryCursor; stage: StoryRunStage } {
+  const samePhotos = prev.photoSig !== null && prev.photoSig === photoSig;
+  if (!samePhotos || !prev.plan || !prev.quality.done) return { cursor: { ...initialStoryCursor(), initialized: true }, stage: "discovering" };
+  const c = initialStoryCursor();
+  c.initialized = true;
+  c.resumedFrom = prevRunId;
+  c.analysis = { ...prev.analysis, done: false, retries: {} };
+  c.quality = { done: true, calls: 0 };
+  c.filtered = prev.filtered;
+  c.moments = prev.moments;
+  c.pinnedPlan = prev.plan;
+  c.planPages = prev.planPages;
+  c.notes = prev.notes.filter((n) => n === "photos_unanalysed");
   return { cursor: c, stage: "discovering" };
 }
 
@@ -748,6 +783,12 @@ async function tick(
         const continued = continueCursor(prevCursor, photoSigOf(rows), prev.id);
         cursor = { ...continued.cursor, notes: [...new Set([...notes, ...continued.cursor.notes])] };
         stage = continued.stage;
+      } else if (prev && prevCursor && prev.state === "done" && prevCursor.plan) {
+        // v3 "Regenerate story": same photos → reuse analysis / filters / moments, keep the layout
+        const rows = await deps.listPhotos(book.id, book.user_id);
+        const regen = regenerateCursor(prevCursor, photoSigOf(rows), prev.id);
+        cursor = { ...regen.cursor, notes: [...new Set([...notes, ...regen.cursor.notes])] };
+        stage = regen.stage;
       }
       cursor.tier = tier;
       cursor.previewPages = tier === "preview" ? (ent?.limits.previewPages ?? 5) : null;
@@ -964,7 +1005,7 @@ async function organize(ctx: Ctx): Promise<boolean> {
   const budget = c.planPages ?? planBudget(c.tier ?? "preview", await ctx.deps.getEntitlement(ctx.bookId));
   let plan: StoryPlan;
   try {
-    plan = await ctx.deps.planStory(ctx.bookId, { rule, maxPages: budget });
+    plan = await ctx.deps.planStory(ctx.bookId, { rule, maxPages: budget, ...(c.pinnedPlan ? { pinned: c.pinnedPlan } : {}) });
   } catch (e) {
     if (e instanceof StoryError && (e.code === "no_photos" || e.code === "not_found")) throw new RunFailure(e.code, "organizing");
     throw e;
@@ -1030,6 +1071,7 @@ async function write(ctx: Ctx): Promise<boolean> {
           // the photos changed under the plan: plan once more
           c.replanned = true;
           c.plan = null;
+          c.pinnedPlan = null;
           c.planPages = null;
           c.write.state = null;
           ctx.state = "organizing";
@@ -1142,7 +1184,8 @@ async function finish(ctx: Ctx): Promise<StoryAdvanceResult> {
   // The cursor keeps the plan (a later "Regenerate" starts fresh); written text is dropped — except
   // for a preview (Task 9): its chapters are kept so "Complete my book" never writes them again.
   const keepText = ctx.cursor.tier === "preview";
-  const cursor: StoryCursor = keepText ? ctx.cursor : { ...ctx.cursor, write: { ...ctx.cursor.write, state: ctx.cursor.write.state ? { ...ctx.cursor.write.state, groups: {} } : null } };
+  const done: StoryCursor = { ...ctx.cursor, pinnedPlan: null }; // the new plan replaces the pinned one
+  const cursor: StoryCursor = keepText ? done : { ...done, write: { ...done.write, state: done.write.state ? { ...done.write.state, groups: {} } : null } };
   const progress = storyProgressOf(cursor, "done", ctx.mode, null, outcome);
   const ok = await ctx.deps.checkpointRun(ctx.run.id, ctx.token, {
     state: "done",

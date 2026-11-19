@@ -1,6 +1,6 @@
 // The book creation wizard's steps (M19 T2 D-071; M20 T2 D-072; Task 5 order): one continuous 7-step
 // wizard on /books/new — 1 title → 2 occasion (the book is created on step-2 Continue, with a
-// provisional design) → 3 photos → 4 story ("Every memory has a story.", optional) → 5 design (page
+// provisional design) → 3 photos → 4 story ("What makes this memory special?", optional) → 5 design (page
 // shape + book style, recommended from the photos / occasion; the first build is requested on its
 // Continue) → 6 create (the first build) → 7 edit (the editor; old album books still get the in-wizard preview). Each step has a short stepper name, a
 // lucide icon id (mapped to components in WizardStepper, so this module stays icon-free) and a headline.
@@ -17,7 +17,7 @@ export const WIZARD_STEPS = [
   { id: "title", name: "Title", icon: "pen-line", headline: "Give your book a title" },
   { id: "occasion", name: "Occasion", icon: "heart", headline: "What's this book for?" },
   { id: "photos", name: "Photos", icon: "images", headline: "Add your photos" },
-  { id: "story", name: "Story", icon: "feather", headline: "Every memory has a story." },
+  { id: "story", name: "Story", icon: "feather", headline: "What makes this memory special?" },
   { id: "design", name: "Design", icon: "palette", headline: "Choose your book design" },
   { id: "sorting", name: "Create", icon: "sparkles", headline: "Sorting your photos" },
   { id: "review", name: "Edit", icon: "book-open-check", headline: "Preview and personalize" },

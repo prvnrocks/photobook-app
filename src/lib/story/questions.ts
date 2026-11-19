@@ -1,12 +1,16 @@
-// "Every memory has a story." — the wizard's optional story step (Task 5). Pure data, client-safe.
+// "What makes this memory special?" — the wizard's optional story step (Task 5, reshaped in v3
+// 2026-11-19). Pure data, client-safe.
 //
-// At most two short questions per occasion, each with tap-to-fill chips so nobody has to type a
-// long description. Answers are the USER's words: they are stored in the memory context with
-// source "user" (src/lib/storybook/schemas.ts) and a skipped question stores nothing.
+// Three short, optional fields: the occasion (prefilled from step 2, editable), who is in the
+// photos to the user (free text + tap-to-fill chips) and one short personal memory. Answers are
+// the USER's words: they are stored in the memory context with source "user"
+// (src/lib/storybook/schemas.ts); a skipped question stores nothing and nothing is ever prefilled
+// except the occasion the user already picked (which is stored only when they change it).
 // Nothing here asks for or suggests anything sensitive (health, religion, money, exact address,
-// full names, ages …). Question ids are stable: stored answers refer to them.
+// full names, ages …). Question ids are stable: stored answers refer to them; Task 5 answers are
+// mapped onto the v3 questions (LEGACY_QUESTION_MAP) so they still load.
 
-import type { Occasion } from "@/lib/book/options";
+import { OCCASION_LABELS, type Occasion } from "@/lib/book/options";
 
 export const STORY_TONES = ["heartfelt", "joyful", "elegant"] as const;
 export type StoryTone = (typeof STORY_TONES)[number];
@@ -19,125 +23,105 @@ export const STORY_TONE_LABELS: Record<StoryTone, string> = {
 
 /** Max answer length in Unicode code points (what Postgres char_length counts). */
 export const STORY_ANSWER_MAX = 200;
-/** Never more than this many questions on the step. */
-export const STORY_QUESTIONS_MAX = 2;
+/** Never more than this many questions on the step (v3: occasion, relationship, one memory). */
+export const STORY_QUESTIONS_MAX = 3;
 /** Max chip length (characters). */
 export const STORY_SUGGESTION_MAX = 30;
 
+/** v3 question kinds of "What makes this memory special?". */
+export const MEMORY_QUESTION_KINDS = ["occasion", "relationship", "moment"] as const;
+export type MemoryQuestionKind = (typeof MEMORY_QUESTION_KINDS)[number];
+
 export type StoryQuestion = {
-  /** Stable id, `<occasion>.<topic>`, e.g. "travel.companions". */
+  /** Stable id, `memory.<kind>` (v3) or a legacy `<occasion>.<topic>` id in stored answers. */
   id: string;
+  kind: MemoryQuestionKind;
   prompt: string;
+  /** A hint under the label (plain words, never an answer). */
+  hint: string;
   placeholder: string;
-  /** 3–5 short tap-to-fill chips. */
+  /** Short tap-to-fill chips (none for the occasion: it is prefilled from step 2 instead). */
   suggestions: string[];
 };
 
-const QUESTIONS: Record<Occasion, readonly StoryQuestion[]> = {
-  wedding: [
-    {
-      id: "wedding.occasion",
-      prompt: "Whose day was it, and what kind of celebration?",
-      placeholder: "e.g. Our wedding by the sea",
-      suggestions: ["Our wedding day", "Our engagement party", "My sister's wedding", "A friend's wedding", "Our anniversary"],
-    },
-    {
-      id: "wedding.moments",
-      prompt: "Which moments mattered most?",
-      placeholder: "e.g. The first dance",
-      suggestions: ["The vows", "The first dance", "Getting ready together", "The speeches", "Dancing all night"],
-    },
-  ],
-  travel: [
-    {
-      id: "travel.companions",
-      prompt: "Who did you travel with?",
-      placeholder: "e.g. My two best friends",
-      suggestions: ["My partner", "My family", "My friends", "Just me", "The whole team"],
-    },
-    {
-      id: "travel.special",
-      prompt: "What made this trip special?",
-      placeholder: "e.g. Our first time in the mountains",
-      suggestions: ["Our first trip together", "The food", "The views", "Time to slow down", "A dream come true"],
-    },
-  ],
-  baby: [
-    {
-      id: "baby.milestone",
-      prompt: "Which milestone is this book about?",
-      placeholder: "e.g. The first year",
-      suggestions: ["The first days", "The first month", "The first year", "Coming home", "Meeting the family"],
-    },
-    {
-      id: "baby.firsts",
-      prompt: "Any firsts you want to remember?",
-      placeholder: "e.g. The first laugh",
-      suggestions: ["First smile", "First laugh", "First steps", "First word", "First trip out"],
-    },
-  ],
-  birthday: [
-    {
-      id: "birthday.person",
-      prompt: "Whose birthday was it?",
-      placeholder: "e.g. My mum's",
-      suggestions: ["Mine", "My child's", "My partner's", "My mum's", "A close friend's"],
-    },
-    {
-      id: "birthday.highlights",
-      prompt: "What made the day special?",
-      placeholder: "e.g. Everyone came",
-      suggestions: ["A surprise party", "The cake", "Everyone together", "Games and laughter", "A quiet dinner"],
-    },
-  ],
-  graduation: [
-    {
-      id: "graduation.graduate",
-      prompt: "Who graduated?",
-      placeholder: "e.g. My younger brother",
-      suggestions: ["I did", "My child", "My sister", "My brother", "My best friend"],
-    },
-    {
-      id: "graduation.proud",
-      prompt: "What should the book remember about the day?",
-      placeholder: "e.g. The cap toss",
-      suggestions: ["Walking the stage", "The cap toss", "Proud family", "Friends for life", "Years of hard work"],
-    },
-  ],
-  family: [
-    {
-      id: "family.people",
-      prompt: "Who is in this book?",
-      placeholder: "e.g. Three generations of us",
-      suggestions: ["The whole family", "The kids", "Grandparents and kids", "Cousins together", "Just the two of us"],
-    },
-    {
-      id: "family.special",
-      prompt: "What do you want to remember about this time?",
-      placeholder: "e.g. Fridays at grandma's",
-      suggestions: ["Everyday moments", "A family gathering", "A holiday together", "Weekends at home", "Growing up fast"],
-    },
-  ],
-  other: [
-    {
-      id: "other.about",
-      prompt: "What is this book about?",
-      placeholder: "e.g. A year of little moments",
-      suggestions: ["A special day", "A year in photos", "Time with friends", "A place we love", "A gift for someone"],
-    },
-    {
-      id: "other.special",
-      prompt: "What made it special?",
-      placeholder: "e.g. We were all together",
-      suggestions: ["The people", "The place", "The little moments", "Being together", "A new beginning"],
-    },
-  ],
+export const MEMORY_QUESTION_IDS: Record<MemoryQuestionKind, string> = {
+  occasion: "memory.occasion",
+  relationship: "memory.relationship",
+  moment: "memory.moment",
 };
 
-/** The (at most two) questions for an occasion. No / unknown occasion → the "Other" questions. */
-export function storyQuestionsFor(occasion: Occasion | null): StoryQuestion[] {
-  const list = (occasion && QUESTIONS[occasion]) || QUESTIONS.other;
-  return list.slice(0, STORY_QUESTIONS_MAX).map((q) => ({ ...q, suggestions: [...q.suggestions] }));
+const QUESTIONS: readonly StoryQuestion[] = [
+  {
+    id: MEMORY_QUESTION_IDS.occasion,
+    kind: "occasion",
+    prompt: "What was the occasion?",
+    hint: "From the start of this book — change it in your own words if you like.",
+    placeholder: "e.g. A weekend trip",
+    suggestions: [],
+  },
+  {
+    id: MEMORY_QUESTION_IDS.relationship,
+    kind: "relationship",
+    prompt: "Who is in these photos, to you?",
+    hint: "We only use what you write here — we never guess who people are.",
+    placeholder: "e.g. My brother and me",
+    suggestions: ["My brother", "My sister", "My partner", "Friends", "Family"],
+  },
+  {
+    id: MEMORY_QUESTION_IDS.moment,
+    kind: "moment",
+    prompt: "One short memory from that time",
+    hint: "A sentence is enough.",
+    placeholder: "e.g. The first coffee we had together in ages",
+    suggestions: [],
+  },
+];
+
+/**
+ * The questions of "What makes this memory special?" (v3: the same three for every occasion;
+ * the occasion field is prefilled from step 2 by the step, see occasionPrefill).
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for callers: the questions no longer vary by occasion (v3)
+export function storyQuestionsFor(_occasion: Occasion | null): StoryQuestion[] {
+  return QUESTIONS.slice(0, STORY_QUESTIONS_MAX).map((q) => ({ ...q, suggestions: [...q.suggestions] }));
+}
+
+/** The occasion field's starting text: the occasion picked in step 2 ("Travel"), "" for none / Other. */
+export function occasionPrefill(occasion: Occasion | null): string {
+  return occasion && occasion !== "other" ? OCCASION_LABELS[occasion] : "";
+}
+
+/**
+ * Task 5 answers (two questions per occasion) → the v3 questions, so stored answers still load:
+ * who-questions → relationship, what-it-was-about questions → occasion, what-made-it-special
+ * questions → the short memory. The text is the user's own, unchanged.
+ */
+export const LEGACY_QUESTION_MAP: Readonly<Record<string, string>> = {
+  "wedding.occasion": MEMORY_QUESTION_IDS.occasion,
+  "wedding.moments": MEMORY_QUESTION_IDS.moment,
+  "travel.companions": MEMORY_QUESTION_IDS.relationship,
+  "travel.special": MEMORY_QUESTION_IDS.moment,
+  "baby.milestone": MEMORY_QUESTION_IDS.occasion,
+  "baby.firsts": MEMORY_QUESTION_IDS.moment,
+  "birthday.person": MEMORY_QUESTION_IDS.relationship,
+  "birthday.highlights": MEMORY_QUESTION_IDS.moment,
+  "graduation.graduate": MEMORY_QUESTION_IDS.relationship,
+  "graduation.proud": MEMORY_QUESTION_IDS.moment,
+  "family.people": MEMORY_QUESTION_IDS.relationship,
+  "family.special": MEMORY_QUESTION_IDS.moment,
+  "other.about": MEMORY_QUESTION_IDS.occasion,
+  "other.special": MEMORY_QUESTION_IDS.moment,
+};
+
+/** Stored answers under the v3 ids: a v3 answer wins over a legacy one for the same question. */
+export function migrateStoryAnswers<T extends { questionId: string; text: string }>(answers: readonly T[]): (T & { questionId: string })[] {
+  const out = new Map<string, T>();
+  for (const a of answers) if (Object.values(MEMORY_QUESTION_IDS).includes(a.questionId)) out.set(a.questionId, a);
+  for (const a of answers) {
+    const to = LEGACY_QUESTION_MAP[a.questionId];
+    if (to && !out.has(to)) out.set(to, { ...a, questionId: to });
+  }
+  return QUESTIONS.map((q) => out.get(q.id)).filter((a): a is T => !!a);
 }
 
 export function isStoryTone(value: unknown): value is StoryTone {

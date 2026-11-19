@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-// Task 5: wizard step 4 "Every memory has a story." (StepStory) in a DOM — the questions per occasion
-// (≤ 2, incl. birthday), exact title + tone labels, tap-to-fill chips, nothing prefilled, the
+// Task 5 / v3: wizard step 4 "What makes this memory special?" (StepStory) in a DOM — the three
+// questions (occasion prefilled from step 2, who with chips, one memory), exact title + tone labels,
+// tap-to-fill chips, nothing else prefilled, the
 // optional tone (radio semantics, can be cleared), the 200-code-point limit, Continue / Skip payloads,
 // restore on re-entry, a failed save that never traps the user, and accessible names / roles.
 import { act } from "react";
@@ -8,7 +9,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OCCASIONS, type Occasion } from "@/lib/book/options";
 import type { StoryAnswersInput, StoryAnswersResult, StoryAnswersView } from "@/lib/story/answers";
-import { STORY_ANSWER_MAX, STORY_TONE_LABELS, STORY_TONES, storyQuestionsFor } from "@/lib/story/questions";
+import { STORY_ANSWER_MAX, STORY_TONE_LABELS, STORY_TONES, occasionPrefill, storyQuestionsFor } from "@/lib/story/questions";
 
 const actions = vi.hoisted(() => ({ load: vi.fn(), save: vi.fn(), recommend: vi.fn() }));
 vi.mock("@/app/books/story-actions", () => ({
@@ -109,11 +110,11 @@ async function type(el: HTMLTextAreaElement, text: string) {
 const lastSave = () => actions.save.mock.calls.at(-1) as [string, StoryAnswersInput];
 
 describe("StepStory — what is asked", () => {
-  it("title is exactly 'Every memory has a story.' with one supporting line; everything is optional", async () => {
+  it("title is exactly 'What makes this memory special?' with one supporting line; everything is optional", async () => {
     await mount();
     const h = $("wizard-headline");
     expect(h.tagName).toBe("H1");
-    expect(h.textContent).toBe("Every memory has a story.");
+    expect(h.textContent).toBe("What makes this memory special?");
     expect(h.id).toBe("wizard-headline");
     expect(h.getAttribute("tabindex")).toBe("-1"); // focus target after a step change
     expect($$("story-support")).toHaveLength(1);
@@ -123,49 +124,47 @@ describe("StepStory — what is asked", () => {
     expect($<HTMLButtonElement>("story-continue").disabled).toBe(false);
   });
 
-  it.each([...OCCASIONS, null] as const)("occasion %s: at most 2 questions, each a labelled short field with tap-to-fill chips", async (occ) => {
+  it.each([...OCCASIONS, null] as const)("occasion %s: occasion (prefilled from step 2), relationship (chips) and one short memory — labelled, optional, dir=auto", async (occ) => {
     occasion = occ;
     await mount();
     const questions = storyQuestionsFor(occ);
-    expect(questions.length).toBeGreaterThan(0);
-    expect(questions.length).toBeLessThanOrEqual(2);
+    expect(questions.map((q) => q.kind)).toEqual(["occasion", "relationship", "moment"]);
     const fields = [...container.querySelectorAll("textarea")];
-    expect(fields).toHaveLength(questions.length);
+    expect(fields).toHaveLength(3);
     for (const q of questions) {
       const f = field(q.id);
-      // a visible <label> names the field
+      // a visible <label> names the field, a hint describes it
       const label = container.querySelector(`label[for="${f.id}"]`)!;
       expect(label.textContent).toContain(q.prompt);
-      expect(f.value).toBe(""); // nothing prefilled
+      expect(label.textContent).toContain("optional");
+      expect(f.getAttribute("aria-describedby")).toContain(`${f.id}-hint`);
+      // only the occasion starts with text: the occasion the user picked in step 2
+      expect(f.value).toBe(q.kind === "occasion" ? occasionPrefill(occ) : "");
       expect(f.placeholder).toBe(q.placeholder);
       expect(f.getAttribute("dir")).toBe("auto");
-      expect(f.rows).toBe(2); // short: never a long text box
+      expect(f.rows).toBe(q.kind === "moment" ? 3 : 2); // short: never a long text box
       expect(f.required).toBe(false);
-      const chips = [...$(`story-question-${q.id}`).querySelectorAll<HTMLButtonElement>('[data-testid="story-chip"]')];
-      expect(chips.map((c) => c.textContent)).toEqual(q.suggestions);
+      const chips = $(`story-question-${q.id}`).querySelectorAll<HTMLButtonElement>('[data-testid="story-chip"]');
+      expect([...chips].map((c) => c.textContent)).toEqual(q.suggestions);
       for (const c of chips) {
         expect(c.type).toBe("button");
-        expect(c.className).toContain("min-h-11"); // ≥ 44 px
+        expect(c.className).toContain("min-h-11"); // >= 44 px
         expect(c.getAttribute("aria-pressed")).toBe("false");
         expect(c.getAttribute("dir")).toBe("auto");
       }
     }
+    expect($$("story-chip").length).toBe(questions[1]!.suggestions.length);
   });
 
-  it("birthday has its own questions; no occasion falls back to the 'other' questions", async () => {
-    occasion = "birthday";
+  it("the occasion is sent only when the user changed it; the step-2 occasion alone adds nothing", async () => {
     await mount();
-    const ids = [...container.querySelectorAll("textarea")].map((t) => t.getAttribute("data-testid"));
-    expect(ids).toEqual(storyQuestionsFor("birthday").map((q) => `story-answer-${q.id}`));
-    expect(ids.every((id) => id!.startsWith("story-answer-birthday."))).toBe(true);
-    act(() => root.unmount());
-    root = createRoot(container);
-    occasion = null;
-    value = null;
-    await mount();
-    expect([...container.querySelectorAll("textarea")].map((t) => t.getAttribute("data-testid"))).toEqual(
-      storyQuestionsFor("other").map((q) => `story-answer-${q.id}`),
-    );
+    expect(field("memory.occasion").value).toBe("Travel");
+    await click($("story-continue"));
+    expect(lastSave()[1]).toEqual({ storyTone: null, answers: [], skipped: false });
+    await type(field("memory.occasion"), "Seeing my brother again");
+    await click($("story-continue"));
+    expect(lastSave()[1].answers).toEqual([{ questionId: "memory.occasion", text: "Seeing my brother again" }]);
+    expect(storyInputFromDraft({ ...EMPTY_STORY_DRAFT, answers: { "memory.occasion": " travel " } }, storyQuestionsFor("travel"), false, "Travel").answers).toEqual([]);
   });
 
   it("the three tone choices, exactly: an optional native radio group", async () => {
@@ -208,7 +207,8 @@ describe("StepStory — what is asked", () => {
 });
 
 describe("StepStory — answering", () => {
-  const [q1, q2] = storyQuestionsFor("travel");
+  // q1 = who is in the photos (with chips), q2 = one short memory (the occasion field is tested above)
+  const [, q1, q2] = storyQuestionsFor("travel");
 
   it("a chip fills its own field only when tapped (pressed state + check mark); typing clears the pressed state", async () => {
     await mount();
@@ -305,7 +305,7 @@ describe("StepStory — answering", () => {
     expect($(`story-count-${q1.id}`)).toBeNull();
     await type(field(q1.id), "a".repeat(STORY_COUNTER_FROM));
     expect($(`story-count-${q1.id}`).textContent).toContain(`${STORY_COUNTER_FROM}/${STORY_ANSWER_MAX}`);
-    expect(field(q1.id).getAttribute("aria-describedby")).toBe($(`story-count-${q1.id}`).id);
+    expect(field(q1.id).getAttribute("aria-describedby")).toContain($(`story-count-${q1.id}`).id);
     await type(field(q1.id), "🌊".repeat(STORY_ANSWER_MAX + 25));
     expect(Array.from(field(q1.id).value)).toHaveLength(STORY_ANSWER_MAX);
     expect(field(q1.id).value.length).toBe(STORY_ANSWER_MAX * 2); // UTF-16 units: whole emoji kept, none cut in half
@@ -318,7 +318,7 @@ describe("StepStory — answering", () => {
 });
 
 describe("StepStory — load, restore and failures", () => {
-  const [q1, q2] = storyQuestionsFor("travel");
+  const [, q1, q2] = storyQuestionsFor("travel");
   const storedView: StoryAnswersView = {
     storyTone: "elegant",
     answers: [{ questionId: q2.id, text: "The night market" }],

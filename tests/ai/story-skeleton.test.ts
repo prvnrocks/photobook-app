@@ -22,7 +22,7 @@ function inputsOf(sizes: number[], over: Partial<StoryInputs> = {}): StoryInputs
   const photos = moments.flatMap((m) =>
     m.photoIds.map((id) => ({ alias: `p${++a}`, id, momentId: m.id, dateLabel: null, place: null, description: "A quiet view of a garden.", scene: "landscape", objects: ["garden"], activities: [], storyRole: "establishing", atmosphere: "calm" })),
   );
-  return { photos, moments, facts: [], avoid: [], lang: "en", occasion: "other", storyTone: null, narrator: "third", contextRev: null, ...over };
+  return { photos, moments, facts: [], avoid: [], lang: "en", occasion: "other", storyTone: null, narrator: "third", contextRev: null, mode: "observational", ...over };
 }
 
 /** n photos spread over `moments` moments as evenly as possible. */

@@ -51,6 +51,7 @@
 //      fact.
 
 import type { NarrativeKind } from "@/lib/storybook/types";
+import { genericLanguageIssue, memoryLint, photoCommentaryIssue, type StoryMode } from "./memory-lint";
 
 export const WORD_BOUNDS: Record<NarrativeKind, { min: number; max: number; target: readonly [number, number] }> = {
   intro: { min: 30, max: 70, target: [35, 65] },
@@ -88,6 +89,11 @@ export const GROUNDING_ISSUE_CODES = [
   "inventory", // a list of visible things instead of narrative (v2)
   "gendered_word", // he / she / man / woman … not given by the user (v2)
   "near_duplicate", // says what another block of the chapter already said (v2)
+  "photo_commentary", // the camera / shots / poses / close-ups are the subject (v3, memory-lint.ts)
+  "generic_language", // inspirational filler (v3)
+  "unsupported_claim", // what was said, why / how long people were apart (v3)
+  "claimed_emotion", // an emotion word the user's words do not support (v3)
+  "wrong_voice", // "I" / "we" in a third-person book (v3)
   // rewrite only
   "unchanged",
   "not_shorter",
@@ -129,6 +135,10 @@ export type GroundingContext = {
   narrator?: "first_singular" | "first_plural" | "third";
   /** Accepted texts of the SAME chapter (v2 near-duplicate check). */
   chapterTexts?: readonly string[];
+  /** v3: personal (the user told us about the memory) or observational (no personal context). */
+  mode?: StoryMode;
+  /** v3: emotion words the brief's USER-supported emotional direction allows (personal mode). */
+  allowedEmotions?: ReadonlySet<string>;
 };
 
 export type BlockDraft = { blockId: string; kind: NarrativeKind; text: string; photoRefs: readonly string[]; factRefs: readonly string[] };
@@ -508,9 +518,14 @@ function vocabOf(texts: readonly string[], extraGroups: readonly string[] = []):
       if (ORDINALS.has(t.norm)) v.tokens.add(`ord:${t.norm}`);
     });
     for (const g of grams(toks.map((t) => t.norm), 4)) v.grams.add(g);
+    // v3: the user's own "met again after a long time" makes "reunion" a paraphrase, not an invention
+    if (REUNION_WORDS.test(text)) v.groups.add("reunion");
   }
   return v;
 }
+
+/** User wording that describes meeting again after time apart (grants the "reunion" milestone). */
+const REUNION_WORDS = /\breunit(?:ed|ing|e)\b|\b(?:meet|met|meeting|see|saw|seeing|together)\b[^.!?]*\bagain\b|\bafter\s+(?:such\s+|so\s+|a\s+)?(?:long\s+time|long|while|years|months|ages)\b/i;
 
 function hasGroup(v: Vocab, group: string): boolean {
   if (v.groups.has(group)) return true;
@@ -886,6 +901,9 @@ export function checkBlock(block: BlockDraft, ctx: GroundingContext): GroundingI
   }
   const dup = nearDuplicateIssue(text, ctx.chapterTexts ?? []);
   if (dup) push("near_duplicate", dup);
+
+  // 6. memory narrative (v3): no photo-shoot commentary, no filler, no claims the sources can't know
+  for (const f of memoryLint(text, ctx.lang, { citedFactTexts: citedFacts.map((f) => f.text), evidenceTexts: citedPhotos.map(evidenceText), mode: ctx.mode, narrator: ctx.narrator, allowedEmotions: ctx.allowedEmotions })) push(f.code, f.detail);
   return issues;
 }
 
@@ -918,5 +936,21 @@ export function checkPlanText(id: string, kind: "title" | "arc", text: string, c
   const evidence = vocabOf([...ctx.evidence, ...ctx.metadata]);
   for (const f of scan({ text: t, lang: ctx.lang, trusted, evidence, quotable: facts.map((x) => x.text), uncitedNames: new Set(), avoid: ctx.avoid ?? [] })) push(f.code, f.detail);
   if (scriptIssue(t, ctx.lang, trusted)) push("wrong_script");
+  // v3: a title or an arc about the camera ("The first photos") steers the writer to commentary
+  if (ctx.lang === "en") {
+    if (photoCommentaryIssue(t)) push("photo_commentary", "camera_subject");
+    if (genericLanguageIssue(t)) push("generic_language", "inspirational");
+  }
   return issues;
+}
+
+/** Relationship groups a text names ("my brother" → brother). v3: the brief keeps a relationship only when the user's fact names it. */
+export function relationshipGroupsOf(text: string): Set<string> {
+  const out = new Set<string>();
+  const toks = tokenize(text);
+  toks.forEach((t, i) => {
+    const c = classify(t, toks[i + 1], toks[i - 1]);
+    if (c.rel) out.add(c.rel);
+  });
+  return out;
 }

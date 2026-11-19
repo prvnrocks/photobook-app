@@ -4,7 +4,7 @@
  *
  * Flow (Task 5 order): /books/new steps 1–2 (title + suggestion chips · occasion tiles, no caption-
  * language control) → step-2 Continue creates the book (provisional design) and stays on the SAME
- * document → step 3 photos (upload only, no build) → step 4 story ("Every memory has a story.",
+ * document → step 3 photos (upload only, no build) → step 4 story ("What makes this memory special?",
  * optional) → step 5 design (shape + style, recommended; "Create my book" saves it and asks for the
  * first build) → step 6. Since Task 8 step 6 is the storybook job ("Your memories are becoming a
  * story.", four real stages, Stop); when it is done the wizard REPLACES its entry with the editor
@@ -510,12 +510,11 @@ test.describe("m20 wizard (live)", () => {
     expect((await runsOf(bookA)).length).toBe(0);
     await continueFromPhotos(page);
 
-    // Step 4 "Every memory has a story.": ≤ 2 questions for the occasion, chips, the three tones; all optional.
+    // Step 4 "What makes this memory special?": occasion (prefilled), who (chips), one memory, the three tones; all optional.
     await expect(page.getByTestId("wizard-headline")).toHaveText(STORY_HEADLINE);
     const fields = storyFields(page);
-    expect(await fields.count()).toBeGreaterThan(0);
-    expect(await fields.count()).toBeLessThanOrEqual(2);
-    for (let i = 0; i < (await fields.count()); i++) await expect(fields.nth(i)).toHaveValue(""); // nothing prefilled
+    expect(await fields.count()).toBe(3);
+    for (let i = 1; i < (await fields.count()); i++) await expect(fields.nth(i)).toHaveValue(""); // only the occasion is prefilled
     for (const tone of ["heartfelt", "joyful", "elegant"] as const) {
       await expect(page.getByTestId(`story-tone-${tone}`)).toHaveText(WIZARD_STORY_TONE_LABELS[tone]);
       await expect(cardRadio(page, `story-tone-${tone}`)).not.toBeChecked();
@@ -527,10 +526,10 @@ test.describe("m20 wizard (live)", () => {
     const firstChip = page.getByTestId("story-chip").first();
     const chipWords = ((await firstChip.textContent()) ?? "").trim();
     await firstChip.click();
-    await expect(fields.first()).toHaveValue(chipWords);
-    await fields.first().fill(ARABIC_TITLE);
-    await expect(fields.first()).toHaveAttribute("dir", "auto");
-    expect(await fields.first().evaluate((el) => getComputedStyle(el).direction)).toBe("rtl");
+    await expect(fields.nth(1)).toHaveValue(chipWords);
+    await fields.nth(1).fill(ARABIC_TITLE);
+    await expect(fields.nth(1)).toHaveAttribute("dir", "auto");
+    expect(await fields.nth(1).evaluate((el) => getComputedStyle(el).direction)).toBe("rtl");
     await page.getByTestId("story-tone-elegant").click();
     await expect(cardRadio(page, "story-tone-elegant")).toBeChecked();
     // Forward to Design and back: the answers are still there (Back / Forward never lose them).
@@ -538,7 +537,7 @@ test.describe("m20 wizard (live)", () => {
     await expectWizardStep(page, 5, 30_000);
     await page.getByTestId("wizard-back").click();
     await expectWizardStep(page, 4);
-    await expect(storyFields(page).first()).toHaveValue(ARABIC_TITLE);
+    await expect(storyFields(page).nth(1)).toHaveValue(ARABIC_TITLE);
     await expect(cardRadio(page, "story-tone-elegant")).toBeChecked();
     await page.getByTestId("story-continue").click();
     await expectWizardStep(page, 5, 30_000);

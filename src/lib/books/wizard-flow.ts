@@ -4,7 +4,7 @@
 //                         provisional design (default shape + the occasion's style); with a book
 //                         (edit mode) it saves title / occasion instead.
 //   3 photos              the book exists. Upload only: NO build starts here any more.
-//   4 story               optional answers ("Every memory has a story."); the step saves itself.
+//   4 story               optional answers ("What makes this memory special?"); the step saves itself.
 //   5 design              page shape + book style (recommended, never forced). Its Continue saves the
 //                         design and asks for the first build → 6.
 //   6 create (the build), 7 preview → editor.

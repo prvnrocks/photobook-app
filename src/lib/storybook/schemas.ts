@@ -14,6 +14,7 @@ import { CAPTION_LANGS, OCCASIONS, TONES } from "@/lib/book/options";
 import { BOOK_FORMATS, DESIGN_STYLES } from "@/lib/book/schema";
 import { STORY_ANSWER_MAX, STORY_QUESTIONS_MAX, STORY_TONES } from "@/lib/story/questions";
 import { codePointLength, hasLoneSurrogate } from "@/lib/text/clip";
+import { StoryBriefSchema } from "./brief";
 
 /** Bump when a stored shape changes incompatibly; older rows are migrated on read. */
 export const STORYBOOK_SCHEMA_VERSION = 1;
@@ -195,7 +196,8 @@ export const PersonSchema = z
   .strict();
 
 /**
- * One answer the user gave on the wizard's story step ("Every memory has a story.").
+ * One answer the user gave on the wizard's story step ("What makes this memory special?"; Task 5
+ * answers keep their legacy question ids and are mapped on read).
  * `question` is the server's prompt text for `questionId` at the time of answering (never client
  * text); `text` is the user's own words or a chip the user tapped. `source` can only be "user":
  * an unanswered question has NO entry — the AI never fills one in.
@@ -411,6 +413,12 @@ export const StorybookSchema = z
     pages: z.array(StoryPageSchema).max(STORY_LIMITS.pagesPerBook),
     /** Task 6: the memory facts cited by `factRefs` of this version's blocks (hashes only). */
     facts: z.array(StoryFactRefSchema).max(STORY_LIMITS.factsPerBook).optional(),
+    /**
+     * v3: the StoryBrief this version was written from (src/lib/storybook/brief.ts) — versioned with
+     * the text, with its own provenance (source, model, prompt version, context revision). Absent on
+     * versions written before v3. User data like the narrative text: deleted with the book.
+     */
+    brief: StoryBriefSchema.optional(),
     createdAt: isoDateTime,
   })
   .strict()

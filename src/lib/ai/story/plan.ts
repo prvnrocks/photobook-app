@@ -15,6 +15,7 @@ import { clipText } from "@/lib/text/clip";
 import { ARC_MAX_CHARS, TITLE_MAX_CHARS, checkPlanText, type GroundingIssue, type PlanTextContext } from "./grounding";
 import type { StoryInputs, StoryMoment } from "./inputs";
 import { buildSkeleton, type Skeleton } from "./skeleton";
+import { StoryBriefSchema, type StoryBrief } from "@/lib/storybook/brief";
 
 export const STORY_PLAN_VERSION = 1;
 
@@ -102,6 +103,8 @@ export const StoryPlanSchema = z
       .strict(),
     contextRev: z.number().int().min(1).nullable(),
     generator: z.object({ model: z.string().min(1).max(64).nullable(), promptVersion: z.string().min(1).max(40) }).strict(),
+    /** v3: the validated StoryBrief the outline follows (absent on plans made before v3). */
+    brief: StoryBriefSchema.optional(),
   })
   .strict();
 export type StoryPlan = z.infer<typeof StoryPlanSchema>;
@@ -279,6 +282,8 @@ export function assemblePlan(args: {
   fallbackReason: PlanFallbackReason | null;
   model: string | null;
   promptVersion: string;
+  /** v3: the validated brief (stored with the plan, then with the storybook version). */
+  brief?: StoryBrief;
 }): StoryPlan {
   const { inputs, outline } = args;
   const closing = wantsClosing(inputs.photos.length);
@@ -297,7 +302,39 @@ export function assemblePlan(args: {
     skeleton: skeletonFor(outline, inputs, closing, args.maxPages),
     contextRev: inputs.contextRev,
     generator: { model: args.model, promptVersion: args.promptVersion },
+    ...(args.brief ? { brief: args.brief } : {}),
   };
+}
+
+/**
+ * v3 "Regenerate story": the chapter STRUCTURE of an earlier plan (moments per chapter, hero
+ * photo, paragraph moments) — the layout — kept for a new brief + titles + arcs, when that plan
+ * still describes the book's moments exactly. Null = the book changed: plan from scratch.
+ */
+export function pinnedStructure(pinned: StoryPlan | null | undefined, inputs: StoryInputs): StoryPlan["chapters"] | null {
+  if (!pinned) return null;
+  const parsed = StoryPlanSchema.safeParse(pinned);
+  if (!parsed.success) return null;
+  const expected = inputs.moments.map((m) => ({ id: m.id, photoIds: m.photoIds, label: m.label, dateLabel: m.dateLabel, place: m.place }));
+  if (!same(parsed.data.moments, expected) || parsed.data.photoCount !== inputs.photos.length || parsed.data.lang !== inputs.lang) return null;
+  return parsed.data.chapters;
+}
+
+/** New titles / arcs on the pinned structure (by position); a missing or ungrounded one keeps the old text. */
+export function applyPinned(pinned: StoryPlan["chapters"], fresh: PlanOutline | null, inputs: StoryInputs): PlanOutline {
+  const used = new Set<string>();
+  const chapters = pinned.map((c, i) => {
+    const f = fresh?.chapters[i];
+    const ctx = chapterTextContext(inputs, c.momentIds);
+    const okTitle = (t: string | undefined): t is string => !!t && [...t].length <= TITLE_MAX_CHARS && !used.has(t.toLowerCase()) && checkPlanText("t", "title", t, ctx).length === 0;
+    const okArc = (t: string | undefined): t is string => !!t && [...t].length <= ARC_MAX_CHARS && checkPlanText("a", "arc", t, ctx).length === 0;
+    const fallbacks = FALLBACK_TITLES[inputs.lang];
+    const title = [f?.title, c.title, ...fallbacks.slice(i % fallbacks.length), ...fallbacks].find(okTitle) ?? fallbacks[i % fallbacks.length]!;
+    used.add(title.toLowerCase());
+    const arc = [f?.arc, c.arc].find(okArc) ?? FALLBACK_ARC[inputs.lang];
+    return { ...c, title, arc, momentIds: [...c.momentIds], beats: { heroPhotoId: c.beats.heroPhotoId, narrativeMomentIds: [...c.beats.narrativeMomentIds] } };
+  });
+  return { title: fresh?.title ?? null, subtitle: fresh?.subtitle ?? null, chapters };
 }
 
 /** Structural equality of plain JSON values (key order does not matter). */

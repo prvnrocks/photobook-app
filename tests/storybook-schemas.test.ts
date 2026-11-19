@@ -244,10 +244,12 @@ describe("MemoryContextSchema", () => {
     }
   });
 
-  it("story answers: at most 2, unique question, non-blank, 1–200 code points, Arabic accepted", () => {
+  it("story answers: at most 3 (v3), unique question, non-blank, 1–200 code points, Arabic accepted", () => {
     const second = answer({ questionId: "travel.special", question: "What made this trip special?", text: "The views" });
+    const third = answer({ questionId: "memory.moment", question: "One short memory from that time", text: "The first coffee" });
     expect(MemoryContextSchema.safeParse(context({ answers: [answer(), second] })).success).toBe(true);
-    expect(MemoryContextSchema.safeParse(context({ answers: [answer(), second, answer({ questionId: "travel.other" })] })).success).toBe(false);
+    expect(MemoryContextSchema.safeParse(context({ answers: [answer(), second, third] })).success).toBe(true);
+    expect(MemoryContextSchema.safeParse(context({ answers: [answer(), second, third, answer({ questionId: "travel.other" })] })).success).toBe(false);
     expect(messages(MemoryContextSchema.safeParse(context({ answers: [answer(), answer({ text: "Again" })] })))).toContain("answers: duplicate question");
     for (const text of ["", "   ", "\n\t", "x".repeat(201), "bad \ud83d"]) {
       expect(MemoryContextSchema.safeParse(context({ answers: [answer({ text })] })).success).toBe(false);

@@ -365,7 +365,7 @@ test("02 wizard: title + occasion create the book; Photos shows the privacy note
 test("03 Story: one answer typed, one skipped, a tone → Design shows Recommended badges", async () => {
   need("02");
   await continueFromPhotos(page);
-  await expect(page.getByTestId("wizard-headline")).toHaveText("Every memory has a story.");
+  await expect(page.getByTestId("wizard-headline")).toHaveText("What makes this memory special?");
   const questions = page.locator('[data-testid^="story-question-"]');
   expect(await questions.count()).toBeGreaterThanOrEqual(2);
   await shot(page, "02-story-375", true);

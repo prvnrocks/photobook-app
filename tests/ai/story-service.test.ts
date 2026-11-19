@@ -68,7 +68,7 @@ describe("story config", () => {
     expect(STORY_WRITER_SYSTEM_PROMPT).toMatch(/35–65 words/);
     expect(STORY_WRITER_SYSTEM_PROMPT).toMatch(/25–55 words/);
     expect(STORY_WRITER_SYSTEM_PROMPT).toMatch(/caption: [^\n]*5–18 words/);
-    expect([STORY_PLANNER_PROMPT_VERSION, STORY_WRITER_PROMPT_VERSION, STORY_REWRITER_PROMPT_VERSION]).toEqual(["story-plan-2", "story-write-2", "story-rewrite-2"]);
+    expect([STORY_PLANNER_PROMPT_VERSION, STORY_WRITER_PROMPT_VERSION, STORY_REWRITER_PROMPT_VERSION]).toEqual(["story-plan-3", "story-write-3", "story-rewrite-3"]);
   });
 });
 
@@ -107,7 +107,7 @@ describe("planStory", () => {
     expect(isBalanced(plan.skeleton.balance)).toBe(true);
     // usage: one row, tokens and cost, no text
     expect(w.records).toEqual([
-      { userId: USER, bookId: BOOK, runId: pid(901), kind: "plan", scope: "plan", chapterId: null, storybookVersion: null, model: "claude-opus-5-5", promptVersion: "story-plan-2", mode: "live", usage: { input: 1800, output: 600, cacheRead: 1500, cacheWrite: 0 }, costUsd: costUsd("claude-opus-5-5", { input: 1800, output: 600, cacheRead: 1500, cacheWrite: 0 }), latencyMs: 2345, status: "ok" },
+      { userId: USER, bookId: BOOK, runId: pid(901), kind: "plan", scope: "plan", chapterId: null, storybookVersion: null, model: "claude-opus-5-5", promptVersion: "story-plan-3", mode: "live", usage: { input: 1800, output: 600, cacheRead: 1500, cacheWrite: 0 }, costUsd: costUsd("claude-opus-5-5", { input: 1800, output: 600, cacheRead: 1500, cacheWrite: 0 }), latencyMs: 2345, status: "ok" },
     ]);
   });
 
@@ -154,7 +154,7 @@ describe("planStory", () => {
     const five = (_req: AgentRequest<unknown>, good: unknown) => {
       const g = good as { chapters: Record<string, unknown>[] };
       const one = g.chapters[0]!;
-      return { title: null, subtitle: null, chapters: ["m1", "m2", "m3", "m4", "m5", "m6"].map((m, i) => ({ ...one, title: `Scenery part ${"abcdef"[i]}`, momentIds: [m], heroPhoto: `p${i * 4 + 1}`, paragraphMoments: [m] })) };
+      return { brief: (good as { brief: unknown }).brief, title: null, subtitle: null, chapters: ["m1", "m2", "m3", "m4", "m5", "m6"].map((m, i) => ({ ...one, title: `Scenery part ${"abcdef"[i]}`, momentIds: [m], heroPhoto: `p${i * 4 + 1}`, paragraphMoments: [m] })) };
     };
     const w = world({ script: { 0: five } });
     const plan = await planStory(BOOK, w.deps);
@@ -166,7 +166,7 @@ describe("planStory", () => {
   });
 
   it("still wrong after the re-ask → the rule plan with reason invalid_output", async () => {
-    const empty = () => ({ title: null, subtitle: null, chapters: [{ title: "Everything", arc: "All of it.", momentIds: ["m1", "m2", "m3", "m4", "m5", "m6"], heroPhoto: "p1", paragraphMoments: [] }] });
+    const empty = (_req: AgentRequest<unknown>, good: unknown) => ({ brief: (good as { brief: unknown }).brief, title: null, subtitle: null, chapters: [{ title: "Everything", arc: "All of it.", momentIds: ["m1", "m2", "m3", "m4", "m5", "m6"], heroPhoto: "p1", paragraphMoments: [] }] });
     const w = world({ script: { 0: empty, 1: empty } });
     const plan = await planStory(BOOK, w.deps);
     expect(w.requests).toHaveLength(2);
@@ -325,7 +325,7 @@ describe("writeStory", () => {
     const s = result.storybook;
     expect(StorybookSchema.safeParse(s).success).toBe(true);
     expect(s).toMatchObject({ bookId: BOOK, version: 1, parentVersion: null, origin: "ai", lang: "en", contextRev: 3, target: { photoShare: 0.65, narrativeShare: 0.35 } });
-    expect(s.generator).toEqual({ pipeline: "balanced-storybook-1", model: "claude-opus-5-5", prompts: { planner: "story-plan-2", writer: "story-write-2" } });
+    expect(s.generator).toEqual({ pipeline: "balanced-storybook-1", model: "claude-opus-5-5", prompts: { planner: "story-plan-3", writer: "story-write-3" } });
     expect(result.merge).toBeNull();
     expect(result.issues).toEqual([]);
     expect(result.balance).toEqual(storybookBalance(s));
@@ -372,7 +372,7 @@ describe("writeStory", () => {
       ["write", "book", "closing", 1, "ok"],
     ]);
     for (const r of w.records) {
-      expect(r).toMatchObject({ userId: USER, bookId: BOOK, runId: pid(901), mode: "live", model: "claude-opus-5-5", promptVersion: "story-write-2", latencyMs: 2345, usage: { input: 1800, output: 600, cacheRead: 1500, cacheWrite: 0 } });
+      expect(r).toMatchObject({ userId: USER, bookId: BOOK, runId: pid(901), mode: "live", model: "claude-opus-5-5", promptVersion: "story-write-3", latencyMs: 2345, usage: { input: 1800, output: 600, cacheRead: 1500, cacheWrite: 0 } });
       expect(r.costUsd).toBe(costUsd("claude-opus-5-5", r.usage));
       expect(r.costUsd).toBeGreaterThan(0);
       expect(Object.keys(r).sort()).toEqual(["bookId", "chapterId", "costUsd", "kind", "latencyMs", "mode", "model", "promptVersion", "runId", "scope", "status", "storybookVersion", "usage", "userId"]);
@@ -426,9 +426,12 @@ describe("writeStory", () => {
       for (const b of g.blocks) if (b.blockId === "b1" || b.blockId === "b2") b.text = `Maria was thrilled in Lisbon. ${b.text}`;
       return g;
     };
-    const script = world({ script: { 0: invent, 1: invent } });
+    const script = world({ script: { 0: invent, 1: invent, 2: invent } });
     const result = await writeStory(BOOK, w.plan, {}, { ...w.deps, transport: script.deps.transport });
-    expect(script.requests).toHaveLength(5);
+    // v3: chapter 1 = write + repair + one more repair for the book's opening intro (b1 only); then c2, c3, closing
+    expect(script.requests).toHaveLength(6);
+    expect(userText(script.requests[2]!)).toMatch(/REPAIR — [^\n]*\nb1: /);
+    expect(userText(script.requests[2]!)).not.toMatch(/\nb2: /);
     expect(result.issues.map((i) => i.blockId)).toEqual(expect.arrayContaining(["b1", "b2"]));
     expect(result.issues.map((i) => i.code)).toEqual(expect.arrayContaining(["ungrounded_name", "stated_feeling"]));
     expect(JSON.stringify(result.issues)).not.toMatch(/Maria|Lisbon/);
@@ -456,7 +459,7 @@ describe("writeStory", () => {
       g.blocks.push({ blockId: "b99", text: "The quiet lantern glows beside the door.", photoRefs: ["p1"], factRefs: [] });
       return g;
     };
-    const script = world({ script: { 0: odd, 1: () => ({ blocks: [] }) } });
+    const script = world({ script: { 0: odd, 1: () => ({ blocks: [] }), 2: () => ({ blocks: [] }) } });
     const result = await writeStory(BOOK, w.plan, {}, { ...w.deps, transport: script.deps.transport });
     expect(result.issues).toEqual(expect.arrayContaining([{ blockId: "b1", code: "empty", detail: "missing" }, { blockId: "b2", code: "empty", detail: "missing" }]));
     expect(blocksOf(result.storybook).map((b) => b.id)).not.toContain("b99");
@@ -759,9 +762,9 @@ describe("rewriteNarrativeBlock", () => {
     // everything else identical
     const strip = (x: Storybook) => ({ ...x, version: 0, parentVersion: 0, origin: "", generator: null, createdAt: "", facts: null, pages: x.pages.map((p) => ({ ...p, blocks: p.blocks.map((b) => (b.id === target.id ? null : b)) })) });
     expect(strip(s)).toEqual(strip(w.storybook));
-    expect(s.generator.prompts).toEqual({ planner: "story-plan-2", writer: "story-write-2", rewriter: "story-rewrite-2" });
+    expect(s.generator.prompts).toEqual({ planner: "story-plan-3", writer: "story-write-3", rewriter: "story-rewrite-3" });
     expect(w.versions).toHaveLength(2);
-    expect(w.records.at(-1)).toMatchObject({ kind: "rewrite", scope: "block", storybookVersion: 2, promptVersion: "story-rewrite-2", status: "ok" });
+    expect(w.records.at(-1)).toMatchObject({ kind: "rewrite", scope: "block", storybookVersion: 2, promptVersion: "story-rewrite-3", status: "ok" });
   });
 
   it("accepts the composite id and a plain id with opts.bookId; anything else is not_found", async () => {
@@ -934,12 +937,13 @@ describe("writeStory v2: a story, not an inventory", () => {
       g.blocks[1]!.text = `Later he walks along the beach near the water while the afternoon slows down around everyone there and nobody hurries back.`;
       return g;
     };
-    const script = world({ script: { 0: listy, 1: listy } });
+    const script = world({ script: { 0: listy, 1: listy, 2: () => ({ blocks: [] }) } }); // 2: the opening's extra repair (v3)
     const result = await writeStory(BOOK, w.plan, {}, { ...w.deps, transport: script.deps.transport, record: w.deps.record });
     const repair = userText(script.requests[1]!);
     expect(repair).toMatch(/b1: [a-z_, ]*inventory/);
     expect(repair).toMatch(/b2: [a-z_, ]*gendered_word/);
-    expect(result.issues.map((i) => [i.blockId, i.code])).toEqual(expect.arrayContaining([["b1", "inventory"], ["b2", "gendered_word"]]));
+    expect(result.issues.map((i) => [i.blockId, i.code])).toEqual(expect.arrayContaining([["b2", "gendered_word"]]));
+    expect(result.issues.map((i) => i.blockId)).toContain("b1"); // reported with the codes of its last (extra, v3) repair
     const stored = blocksOf(result.storybook).map((b) => b.id);
     expect(stored).not.toContain("b1");
     expect(stored).not.toContain("b2");

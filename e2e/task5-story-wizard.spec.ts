@@ -248,7 +248,8 @@ test.describe("task 5 story wizard (live)", () => {
   test("a. Travel: typed answer + chip + tone survive Back / forward / reload; context = the user's words only; Recommended overridden by hand; → editor", async () => {
     test.setTimeout(600_000);
     const { page } = phone;
-    const [q1, q2] = storyQuestionsFor("travel");
+    // v3 "What makes this memory special?": q1 = one short memory (typed), q2 = who is in the photos (chip)
+    const [, q2, q1] = storyQuestionsFor("travel");
     const runPosts: string[] = [];
     const onRequest = (r: { method(): string; url(): string }) => {
       // the album build (old flow) or the storybook job start (Task 8) — never the job's ticks
@@ -258,11 +259,12 @@ test.describe("task 5 story wizard (live)", () => {
 
     travelBook = await bookOnStory(page, { title: "Task five travel", occasion: "travel" }, 6, 500);
 
-    // Step 4: the two travel questions, nothing prefilled, no tone chosen; nothing stored yet.
+    // Step 4: the three questions; only the occasion shows the step-2 occasion; no tone chosen; nothing stored yet.
     await expect(page.getByTestId(`story-question-${q1.id}`).locator("label")).toContainText(q1.prompt);
     await expect(page.getByTestId(`story-question-${q2.id}`).locator("label")).toContainText(q2.prompt);
-    await expect(storyFields(page)).toHaveCount(2);
-    for (const i of [0, 1]) await expect(storyFields(page).nth(i)).toHaveValue("");
+    await expect(storyFields(page)).toHaveCount(3);
+    await expect(storyFields(page).nth(0)).toHaveValue("Travel");
+    for (const i of [1, 2]) await expect(storyFields(page).nth(i)).toHaveValue("");
     await expect(page.locator('input[name="story-tone"]:checked')).toHaveCount(0);
     expect(await storyContext(travelBook)).toBeNull();
     await shot(page, "story-375-empty");
@@ -297,7 +299,7 @@ test.describe("task 5 story wizard (live)", () => {
     await page.reload();
     await expectWizardStep(page, 4, 30_000);
     expect(new URL(page.url()).searchParams.get("step")).toBe("4");
-    await expect(storyFields(page)).toHaveCount(2, { timeout: 30_000 }); // one settled set after the reload
+    await expect(storyFields(page)).toHaveCount(3, { timeout: 30_000 }); // one settled set after the reload
     await expect(page.getByTestId(`story-answer-${q1.id}`)).toHaveValue(TYPED_ANSWER, { timeout: 30_000 });
     await expect(page.getByTestId(`story-answer-${q2.id}`)).toHaveValue(chipWords);
     await expect(cardRadio(page, "story-tone-joyful")).toBeChecked();
@@ -305,8 +307,8 @@ test.describe("task 5 story wizard (live)", () => {
 
     // The stored context: exactly the two answers, in the user's words, with the SERVER's prompts.
     const expectedAnswers = [
-      { questionId: q1.id, question: "Who did you travel with?", text: TYPED_ANSWER, source: "user" },
-      { questionId: q2.id, question: "What made this trip special?", text: chipWords, source: "user" },
+      { questionId: q2.id, question: q2.prompt, text: chipWords, source: "user" },
+      { questionId: q1.id, question: q1.prompt, text: TYPED_ANSWER, source: "user" },
     ];
     const stored = await storyContext(travelBook);
     expect(stored).not.toBeNull();
@@ -391,10 +393,10 @@ test.describe("task 5 story wizard (live)", () => {
     test.setTimeout(600_000);
     const { page } = phone;
     const id = await bookOnStory(page, { title: "Task five baby", occasion: "baby" }, 6, 520);
-    const [q1, q2] = storyQuestionsFor("baby");
+    const [, q1, q2] = storyQuestionsFor("baby");
     await expect(page.getByTestId(`story-question-${q1.id}`)).toBeVisible();
     await expect(page.getByTestId(`story-question-${q2.id}`)).toBeVisible();
-    for (const i of [0, 1]) await expect(storyFields(page).nth(i)).toHaveValue("");
+    for (const i of [1, 2]) await expect(storyFields(page).nth(i)).toHaveValue("");
     await expect(page.getByTestId("story-skip")).toHaveText("Skip for now");
     await page.getByTestId("story-skip").tap();
     await expectWizardStep(page, 5, 30_000);
@@ -407,7 +409,7 @@ test.describe("task 5 story wizard (live)", () => {
     // Back on the step after a skip: still empty (a skip never fills anything in).
     await page.getByTestId("wizard-back").tap();
     await expectWizardStep(page, 4);
-    for (const i of [0, 1]) await expect(storyFields(page).nth(i)).toHaveValue("");
+    for (const i of [1, 2]) await expect(storyFields(page).nth(i)).toHaveValue("");
     await expect(page.locator('[data-testid="story-chip"][aria-pressed="true"]')).toHaveCount(0);
     await page.getByTestId("story-skip").tap();
     await expectWizardStep(page, 5, 30_000);
@@ -421,18 +423,19 @@ test.describe("task 5 story wizard (live)", () => {
     expect(runs.length).toBe(1);
   });
 
-  test("c. Birthday can be chosen on step 2 and asks two questions", async () => {
+  test("c. Birthday can be chosen on step 2 and asks the three memory questions", async () => {
     test.setTimeout(300_000);
     const { page } = phone;
     birthdayBook = await bookOnStory(page, { title: "Task five birthday", occasion: "birthday" }, 2, 540);
     expect(await bookRow(birthdayBook)).toMatchObject({ occasion: "birthday" });
     const fields = storyFields(page);
-    await expect(fields).toHaveCount(2);
-    await expect(page.getByRole("textbox", { name: /Whose birthday was it\?/ })).toBeVisible();
-    await expect(page.getByRole("textbox", { name: /What made the day special\?/ })).toBeVisible();
-    // Each question has its own tap-to-fill chips.
+    await expect(fields).toHaveCount(3);
+    await expect(page.getByRole("textbox", { name: /What was the occasion\?/ })).toHaveValue("Birthday");
+    await expect(page.getByRole("textbox", { name: /Who is in these photos, to you\?/ })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: /One short memory/ })).toBeVisible();
+    // Only "who is in these photos" has tap-to-fill chips.
     for (const q of storyQuestionsFor("birthday")) {
-      expect(await page.getByTestId(`story-question-${q.id}`).getByTestId("story-chip").count()).toBeGreaterThanOrEqual(3);
+      expect(await page.getByTestId(`story-question-${q.id}`).getByTestId("story-chip").count()).toBe(q.suggestions.length);
     }
     // Left here on purpose (nothing answered, nothing saved): test f opens it from the dashboard.
     expect(await storyContext(birthdayBook)).toBeNull();
@@ -668,7 +671,7 @@ test.describe("task 5 story wizard (live)", () => {
     await pickPhotos(page, 6, 580);
     await continueFromPhotos(page);
 
-    const [q1] = storyQuestionsFor("family");
+    const [, q1] = storyQuestionsFor("family");
     const chip = page.getByTestId(`story-question-${q1.id}`).getByTestId("story-chip").first();
     const chipWords = ((await chip.textContent()) ?? "").trim();
     await chip.tap();

@@ -14,6 +14,7 @@ import { PhotoVisionSchema, STORY_LIMITS } from "@/lib/storybook/schemas";
 import type { MemoryContext, StoryFactKind, StoryFactRef } from "@/lib/storybook/types";
 import { clipText } from "@/lib/text/clip";
 import type { GroundingFact, GroundingPhoto } from "./grounding";
+import type { StoryMode } from "./memory-lint";
 
 export type StoryPhoto = {
   alias: string;
@@ -30,7 +31,16 @@ export type StoryPhoto = {
   atmosphere: string | null;
 };
 export type StoryMoment = { id: string; photoIds: string[]; label: string; dateLabel: string | null; place: string | null; heroPhotoId: string | null };
-export type StoryFact = { id: string; kind: StoryFactKind; text: string; hash: string; /** The server's question text, for an answer. */ question?: string };
+export type StoryFact = {
+  id: string;
+  kind: StoryFactKind;
+  text: string;
+  hash: string;
+  /** The server's question text, for an answer. */
+  question?: string;
+  /** v3: the stable question id of an answer ("memory.relationship", "travel.companions" …). */
+  questionId?: string;
+};
 
 export type StoryInputs = {
   photos: StoryPhoto[];
@@ -40,8 +50,15 @@ export type StoryInputs = {
   lang: CaptionLang;
   occasion: Occasion;
   storyTone: StoryTone | null;
+  /** v3: "observational" when there is no personal context — then always told in the third person. */
   narrator: MemoryContext["narrator"];
   contextRev: number | null;
+  /**
+   * v3 (memory narrative): "personal" when the user told us something about the memory (an answer,
+   * a note, a person, a place or a fact); "observational" otherwise — the story then never claims
+   * relationships, feelings or a "we", and reads as elegant observation.
+   */
+  mode: StoryMode;
 };
 
 export type StoryBookRow = { title: string | null; occasion: string | null; caption_lang: string };
@@ -55,15 +72,15 @@ export function factHash(kind: string, text: string): string {
  * in `known` (same kind + text hash) keeps its id, a new one gets the next free number.
  */
 export function buildFacts(book: StoryBookRow, context: MemoryContext | null, known: readonly StoryFactRef[] = []): StoryFact[] {
-  const raw: { kind: StoryFactKind; text: string; question?: string }[] = [];
-  const add = (kind: StoryFactKind, text: string | null | undefined, question?: string) => {
+  const raw: { kind: StoryFactKind; text: string; question?: string; questionId?: string }[] = [];
+  const add = (kind: StoryFactKind, text: string | null | undefined, question?: string, questionId?: string) => {
     const t = (text ?? "").replace(/\s+/g, " ").trim();
-    if (t) raw.push({ kind, text: clipText(t, STORY_LIMITS.noteText), question });
+    if (t) raw.push({ kind, text: clipText(t, STORY_LIMITS.noteText), question, questionId });
   };
   add("occasion", book.occasion && (OCCASIONS as readonly string[]).includes(book.occasion) && book.occasion !== "other" ? book.occasion : null);
   add("title", book.title);
   if (context) {
-    for (const a of context.answers) add("answer", a.text, a.question);
+    for (const a of context.answers) add("answer", a.text, a.question, a.questionId);
     add("note", context.note);
     for (const p of context.people) add("person", p.relation ? `${p.name.trim()} — ${p.relation.trim()}` : p.name);
     for (const p of context.places) add("place", p);
@@ -85,7 +102,7 @@ export function buildFacts(book: StoryBookRow, context: MemoryContext | null, kn
       id = `f${next}`;
       used.add(id);
     }
-    out.push({ id, kind: r.kind, text: r.text, hash, ...(r.question ? { question: r.question } : {}) });
+    out.push({ id, kind: r.kind, text: r.text, hash, ...(r.question ? { question: r.question } : {}), ...(r.questionId ? { questionId: r.questionId } : {}) });
   }
   return out;
 }
@@ -192,6 +209,7 @@ export function buildStoryInputs(args: {
   }
 
   const c = args.context;
+  const mode = storyModeOf(c);
   return {
     photos,
     moments,
@@ -200,10 +218,21 @@ export function buildStoryInputs(args: {
     lang: args.book.caption_lang === "ar" ? "ar" : "en",
     occasion: args.book.occasion && (OCCASIONS as readonly string[]).includes(args.book.occasion) ? (args.book.occasion as Occasion) : "other",
     storyTone: c?.storyTone ?? null,
-    narrator: c?.narrator ?? "third",
+    narrator: mode === "observational" ? "third" : (c?.narrator ?? "third"),
     contextRev: c?.rev ?? null,
+    mode,
   };
 }
+
+/** v3: personal context = anything the user told us about the memory beyond the title and occasion. */
+export function storyModeOf(c: MemoryContext | null): StoryMode {
+  if (!c) return "observational";
+  const said = c.answers.some((a) => a.text.trim()) || !!c.note?.trim() || c.people.length > 0 || c.places.length > 0 || c.facts.length > 0;
+  return said ? "personal" : "observational";
+}
+
+/** Facts the user wrote about the memory (not the book title or the occasion they picked). */
+export const isPersonalFact = (f: Pick<StoryFact, "kind">) => f.kind === "answer" || f.kind === "note" || f.kind === "person" || f.kind === "place" || f.kind === "fact";
 
 /** Grounding view of one photo. */
 export function groundingPhoto(p: StoryPhoto): GroundingPhoto {

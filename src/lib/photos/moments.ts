@@ -12,11 +12,15 @@
 // (content or place), else they form their own "undated" moments. Either way the grouping is
 // reported as uncertain so the user can check it.
 //
-// Scenes (v2): one long moment (a single visit, no GPS change, no 20-minute gap) is split into
-// scenes at gaps that are long FOR THIS SET — at least `sceneMinGapSeconds` and `sceneGapFactor`
-// × the moment's median gap — or at half that gap when what the photos show changes. Segments
-// smaller than `sceneMinSize` join the neighbour across the shorter gap, and a moment gets at most
-// one scene per `scenePhotosPer` photos. Moments under `sceneMinPhotos` photos stay whole.
+// Scenes (v3, 2026-11-19): one long moment (a single visit, no GPS change, no 20-minute gap) is
+// split into scenes only at a REAL change: a pause of at least `sceneLongGapSeconds`, or a pause
+// of at least `sceneMinGapSeconds` where the photos on both sides clearly show a different
+// setting (café → beach) or a different non-pose activity with little content in common.
+// Visually similar, consecutive photos of the same setting stay ONE moment — v2 split one
+// 11-minute café visit into 3–4 "At the café" scenes at pauses that were only long for the set,
+// which the story then told as unrelated events. Segments smaller than `sceneMinSize` join the
+// neighbour across the shorter gap, and a moment gets at most one scene per `scenePhotosPer`
+// photos. Moments under `sceneMinPhotos` photos stay whole.
 //
 // Labels (v2) describe the SCENE, never one photo's detail: a setting several photos show
 // ("At the café"), else a shared scene-level activity (not a pose like "holding a cup"), else a
@@ -27,7 +31,7 @@ import { haversineKm } from "./geo-cluster";
 import type { DuplicateGroup } from "./duplicates";
 import type { QualityFlag } from "./quality";
 
-export const MOMENTS_VERSION = 2;
+export const MOMENTS_VERSION = 3;
 
 export const MOMENT_DEFAULTS = {
   /** Gaps up to this many minutes never count toward a break. */
@@ -51,16 +55,18 @@ export const MOMENT_DEFAULTS = {
   collagePerMoment: 4,
   /** A moment with fewer photos is never split into scenes. */
   sceneMinPhotos: 12,
-  /** A scene break needs a gap of at least this many seconds … */
+  /** A scene break needs a pause of at least this many seconds AND a clear change of setting / activity … */
   sceneMinGapSeconds: 45,
-  /** … and at least this many times the moment's median gap. */
-  sceneGapFactor: 12,
-  /** At half that gap, a change of content (overlap below this) is a break too. */
+  /** … or a pause this long on its own (a real break inside one visit). */
+  sceneLongGapSeconds: 600,
+  /** An activity change counts only when the content overlap across the pause is below this. */
   sceneContentCut: 0.2,
+  /** Photos on each side of a pause compared for a change. */
+  sceneWindow: 4,
   /** Smallest scene; smaller segments join a neighbour. */
-  sceneMinSize: 4,
+  sceneMinSize: 6,
   /** At most one scene per this many photos. */
-  scenePhotosPer: 6,
+  scenePhotosPer: 8,
   /** Moments this close in time (hours) and place (visitKm) form one visit for setting labels. */
   visitHours: 3,
   visitKm: 1,
@@ -346,12 +352,6 @@ export function labelMoment(
 
 // ---------------------------------------------------------------------------- clustering
 
-const median = (xs: readonly number[]) => {
-  const s = [...xs].sort((a, b) => a - b);
-  const m = s.length >> 1;
-  return s.length === 0 ? 0 : s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
-};
-
 /**
  * Splits one dated moment into scenes (see the header). Returns the photo index ranges
  * [start, end) in time order; one range = the moment stays whole. Deterministic.
@@ -361,22 +361,27 @@ export function sceneRanges(photos: readonly MomentPhoto[], o: MomentConfig): [n
   if (n < o.sceneMinPhotos) return [[0, n]];
   const t = photos.map((p) => ms(p.takenAt)!);
   const gaps = t.slice(1).map((x, i) => (x - t[i]!) / 1000);
-  const threshold = Math.max(o.sceneMinGapSeconds, o.sceneGapFactor * median(gaps));
   const tokens = photos.map((p) => contentTokens(p.vision));
-  const window = (from: number, to: number) => {
-    const out = new Set<string>();
-    for (let i = Math.max(0, from); i < Math.min(n, to); i++) for (const x of tokens[i]!) out.add(x);
+  const settings = photos.map((p) => new Set(settingsOf(p)));
+  const activities = photos.map((p) => new Set((p.vision?.activities ?? []).filter((a) => !POSE_ACTIVITY.test(a)).map((a) => a.toLowerCase().split(/\s+/)[0]!)));
+  const union = <T,>(list: readonly Set<T>[], from: number, to: number) => {
+    const out = new Set<T>();
+    for (let i = Math.max(0, from); i < Math.min(n, to); i++) for (const x of list[i]!) out.add(x);
     return out;
+  };
+  const disjoint = <T,>(a: ReadonlySet<T>, b: ReadonlySet<T>) => a.size > 0 && b.size > 0 && ![...a].some((x) => b.has(x));
+  /** A clear change between photo i and i + 1, per the analysis (not just a pause). */
+  const changes = (i: number) => {
+    const w = o.sceneWindow;
+    if (disjoint(union(settings, i + 1 - w, i + 1), union(settings, i + 1, i + 1 + w))) return true;
+    const before = union(tokens, i + 1 - w, i + 1);
+    const after = union(tokens, i + 1, i + 1 + w);
+    return disjoint(union(activities, i + 1 - w, i + 1), union(activities, i + 1, i + 1 + w)) && before.size > 0 && after.size > 0 && jaccard(before, after) < o.sceneContentCut;
   };
   // cut i = between photo i and i + 1
   const cuts: number[] = [];
   gaps.forEach((g, i) => {
-    if (g >= threshold) cuts.push(i);
-    else if (g >= threshold / 2) {
-      const before = window(i - 2, i + 1);
-      const after = window(i + 1, i + 4);
-      if (before.size > 0 && after.size > 0 && jaccard(before, after) < o.sceneContentCut) cuts.push(i);
-    }
+    if (g >= o.sceneLongGapSeconds || (g >= o.sceneMinGapSeconds && changes(i))) cuts.push(i);
   });
   let ranges: [number, number][] = [];
   let start = 0;
@@ -554,7 +559,8 @@ export function clusterMoments(photos: readonly MomentPhoto[], options: MomentOp
     const visit = drafts.slice(i, j);
     const photosOfVisit = visit.flatMap((d) => d.photos);
     const described = photosOfVisit.filter((p) => p.vision).length;
-    const setting = visit.length > 1 ? dominantSetting(photosOfVisit, 2) : null;
+    // v3: one long visit is now usually ONE moment — a setting a few of its photos show labels it too
+    const setting = visit.length > 1 ? dominantSetting(photosOfVisit, 2) : photosOfVisit.length >= o.sceneMinPhotos ? dominantSetting(photosOfVisit, 3) : null;
     if (setting) for (const d of visit) visitSetting.set(d, { ...setting, of: described });
     i = j;
   }

@@ -1,0 +1,118 @@
+{
+  "_comment": "Story v3 (memory narrative) — SYNTHETIC recorded model outputs for tests/ai/story-memory-narrative.test.ts. Generic content written for the tests; no user data. Fact ids: f1 occasion 'travel', f2 title 'A weekend in Dubai', f3 'My brother' (memory.relationship), f4 'We met again after a long time.' (memory.moment). Photo aliases p1… are the café photos.",
+  "reunionBrief": {
+    "centralTheme": "Reuniting with my brother after a long time",
+    "occasion": "reunion",
+    "occasionRefs": ["f4"],
+    "location": "Dubai",
+    "locationRefs": ["f2"],
+    "relationships": [{ "text": "my brother", "factRef": "f3" }],
+    "verifiedFacts": [
+      { "text": "The people are brothers", "source": "user", "refs": ["f3"] },
+      { "text": "They met after a long time", "source": "user", "refs": ["f4"] },
+      { "text": "They spent time together over coffee", "source": "photos", "refs": ["p1", "p2"] }
+    ],
+    "momentGroups": [{ "momentIds": ["m1"], "beat": "opening", "whyItMatters": "The first time together after a long time, in the user's words." }],
+    "emotionalDirection": "warm and nostalgic",
+    "emotionalRefs": ["f3", "f4"],
+    "narrativeArc": [
+      { "beat": "opening", "text": "The long-awaited reunion" },
+      { "beat": "middle", "text": "Spending time together" },
+      { "beat": "closing", "text": "A memory to carry forward" }
+    ],
+    "unsupportedAssumptions": ["Exact duration apart", "Specific conversations", "Reasons for separation"]
+  },
+  "inventedBrief": {
+    "centralTheme": "Two cousins reunited after ten years",
+    "occasion": "birthday",
+    "occasionRefs": ["f4"],
+    "location": "Old harbour market",
+    "locationRefs": ["p1"],
+    "relationships": [{ "text": "my cousin", "factRef": "f3" }, { "text": "my brother", "factRef": "f99" }],
+    "verifiedFacts": [
+      { "text": "They had not met for ten years", "source": "user", "refs": ["f4"] },
+      { "text": "They felt happy to see each other", "source": "user", "refs": ["f4"] },
+      { "text": "Iced coffee at a café with stone arches", "source": "photos", "refs": ["p1"] },
+      { "text": "A claim with no source", "source": "photos", "refs": [] }
+    ],
+    "momentGroups": [{ "momentIds": ["m9"], "beat": "opening", "whyItMatters": "Unknown moment." }],
+    "emotionalDirection": "joyful and tearful",
+    "emotionalRefs": [],
+    "narrativeArc": [{ "beat": "opening", "text": "They talked about their childhood" }],
+    "unsupportedAssumptions": []
+  },
+  "writer": {
+    "personal": {
+      "intro": [
+        "We met again after a long time, and a weekend in Dubai is where it finally happened. My brother and I began with iced coffee in the shade of the stone arches, with nowhere else to be and the whole afternoon still ahead of us."
+      ],
+      "paragraph": [
+        "The reunion did not need a plan. One table in the shade was enough, and the first iced coffee went quickly while the afternoon settled in around us.",
+        "Later the shade moved along the arches, and we moved with it. My brother stayed close the whole time, and nobody looked at the clock.",
+        "As the sun shifted, the stone walls turned a deeper gold. It was an ordinary hour, made rare by how long it had taken us to get here.",
+        "Toward the end we found a bench under the arches and let the last of the ice melt slowly. Nothing about that hour asked us to hurry.",
+        "Before leaving, we walked the length of the shaded walkway side by side, cups nearly empty, still in no rush to be anywhere else.",
+        "The light softened as the afternoon wore on, and the walkway grew quiet around the two of us and our nearly finished drinks."
+      ],
+      "caption": [
+        "Iced coffee first, everything else after.",
+        "Under the arches, all afternoon long.",
+        "Side by side, after a long time.",
+        "A bench in the shade near the end.",
+        "The walkway, quiet by late afternoon.",
+        "Last sips before heading out."
+      ],
+      "pull_quote": ["One unhurried afternoon, finally shared."],
+      "closing": [
+        "A weekend in Dubai gave us one unhurried afternoon, and it was enough. We left with empty cups and the same easy quiet we had started with, side by side. We met again after a long time; this book keeps that afternoon close."
+      ]
+    },
+    "observational": {
+      "intro": [
+        "Iced coffee arrives first in the deep shade of the stone arches, out of the afternoon sun. The day is slow here, the walkway mostly empty, and the light moves across the walls a little at a time."
+      ],
+      "paragraph": [
+        "Two people take a table in the shade, the arches opening onto the bright street beyond and the heat kept outside.",
+        "Sunlight reaches the far end of the walkway while the near tables stay cool. The ice in the cups slowly gives way.",
+        "Later, a bench under the arches becomes the place to sit, and the afternoon carries on without any hurry at all.",
+        "The stone turns a deeper gold as the sun shifts, and the shaded walkway holds its quiet through the afternoon.",
+        "By late afternoon the cups are nearly empty and the light along the arches has softened to a pale glow.",
+        "A last look down the walkway shows the shade, the glowing stone and an easy, steady pace that nobody seems in a hurry to break."
+      ],
+      "caption": [
+        "Iced coffee in the shade of the arches.",
+        "The cold cups against warm stone.",
+        "The walkway, quiet in the afternoon light.",
+        "A bench under the arches.",
+        "Light shifting along the stone walls.",
+        "The last of the ice, melting slowly."
+      ],
+      "pull_quote": ["An afternoon measured in melting ice."],
+      "closing": [
+        "The afternoon ends where it began, in the shade of the stone arches, with two cups nearly empty and the walkway still. What remains is the light, the cool shade and the slow pace of a single unhurried visit."
+      ]
+    },
+    "commentary": [
+      "The cups got their close-ups first, held up against the warm wall before the ice could melt, and then the portraits took over.",
+      "Shot after shot, we worked every angle by the green sign until it looked right.",
+      "We kept clicking by the wall, one more photo each time the light changed on the stone."
+    ],
+    "unsupported": {
+      "relationship": { "text": "My cousin and I shared a table in the shade for most of the afternoon, iced coffee in hand.", "factRefs": ["f3"] },
+      "date": { "text": "In March we finally sat down together in the shade with iced coffee and no plans at all.", "factRefs": ["f4"] },
+      "conversation": { "text": "We talked about our childhood while the ice melted slowly in the shade of the arches.", "factRefs": ["f4"] },
+      "catching_up": { "text": "There was plenty of catching up between sips in the shade of the stone arches.", "factRefs": ["f4"] },
+      "emotion": { "text": "Tears of joy came easily as we sat together in the shade with our iced coffee.", "factRefs": ["f3", "f4"] },
+      "separation": { "text": "All these years since we last sat together melted away over iced coffee in the shade.", "factRefs": ["f4"] },
+      "generic": { "text": "Some bonds never fade, and the little things like iced coffee in the shade remind us of that.", "factRefs": ["f3"] }
+    },
+    "personalInObservational": [
+      "My brother and I finally met again after a long time, iced coffee in hand under the stone arches.",
+      "We felt so happy to share an afternoon in the shade after all this time apart."
+    ],
+    "repetitive": [
+      "Another round of iced coffee by the wall, the cups held up again in the shade of the arches.",
+      "Again the cups came up by the wall, another round of iced coffee in the shade of the arches."
+    ]
+  }
+}

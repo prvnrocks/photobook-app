@@ -7,7 +7,7 @@
  *     created HERE, with a provisional design (default shape + the occasion's style)
  *   3 Photos (/books/new?book=<id>&step=3; upload-input / upload-pick). Upload only — no build starts.
  *     When the upload settled: upload-wizard-continue.
- *   4 Story ("Every memory has a story."; story-answer-<questionId>, story-chip, story-tone-<tone>;
+ *   4 Story ("What makes this memory special?"; story-answer-<questionId>, story-chip, story-tone-<tone>;
  *     story-continue / story-skip) — optional.
  *   5 Design (format-* and style-* labels on one screen; six style cards since M30, travel defaults to
  *     Magazine — D-090; a "Recommended" badge = choice-badge) → wizard-design-continue ("Create my
@@ -86,7 +86,7 @@ export const wizardStepUrl = (bookId: string, steps = "[67]") => new RegExp(`/bo
 export const WIZARD_TOTAL = 7;
 /** Stepper names, in order (Task 5). */
 export const WIZARD_STEP_NAMES = ["Title", "Occasion", "Photos", "Story", "Design", "Create", "Edit"] as const;
-export const STORY_HEADLINE = "Every memory has a story.";
+export const STORY_HEADLINE = "What makes this memory special?";
 
 /** The options createBookViaWizard was given, for the later Story / Design steps of the same page. */
 const remembered = new WeakMap<Page, WizardOptions>();

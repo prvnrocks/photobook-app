@@ -18,7 +18,7 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({}) }));
 import type { AnalyzePhotosResult } from "@/lib/ai/photo-intelligence/analyze";
 import { ComposeError } from "@/lib/ai/story/compose";
 import type { StoryPlan } from "@/lib/ai/story/plan";
-import { advanceStoryRun, cancelStoryRun, MAX_GROUP_ATTEMPTS, parseStoryCursor, startStoryRun, type StoryRunDeps } from "@/lib/ai/story/run";
+import { advanceStoryRun, cancelStoryRun, initialStoryCursor, MAX_GROUP_ATTEMPTS, parseStoryCursor, regenerateCursor, startStoryRun, type StoryRunDeps } from "@/lib/ai/story/run";
 import { previewSelection } from "@/lib/ai/story/preview";
 import { planStory, storyWriteGroups, writeStoryStep } from "@/lib/ai/story/service";
 import { TransportError } from "@/lib/ai/transport";
@@ -628,6 +628,56 @@ describe("storybook job: free preview without a full entitlement (Task 9)", () =
     for (const [id, text] of previewText) expect(fullText.get(id)).toBe(text);
     expect(full.pages.length).toBeGreaterThan(5);
     expect(full.chapters.length).toBe(previewCursor.plan!.chapters.length);
+  });
+});
+
+// v3: "Regenerate story" runs only brief → plan → write on the finished analysis, moments and layout.
+describe("storybook job: regenerate story (v3)", () => {
+  it("a new run after a finished one reuses analysis / filters / moments, keeps the plan's page skeleton, and only re-plans + re-writes", async () => {
+    const s = await setup();
+    s.deps.planStory = vi.fn(async (_bookId: string, opts: { rule: boolean; maxPages?: number; pinned?: StoryPlan | null }) =>
+      planStory(BOOK, { ...s.w.deps, ...(opts.maxPages ? { planMaxPages: opts.maxPages } : {}), ...(opts.pinned ? { pinned: opts.pinned } : {}) }),
+    );
+    s.deps.applyPhotoFilters = vi.fn(async () => ({ duplicate: 0, similar: 2, blurry: 0 }));
+    const first = await start(s.deps);
+    await drive(s.deps, first);
+    const plan1 = parseStoryCursor(s.table.rows.get(first)!.cursor)!.plan!;
+    const before = {
+      analyze: vi.mocked(s.deps.analyzePhotos).mock.calls.length,
+      cluster: vi.mocked(s.deps.clusterPhotosIntoMoments).mock.calls.length,
+      filters: vi.mocked(s.deps.applyPhotoFilters!).mock.calls.length,
+      planner: s.w.requests.filter((r) => r.agent === "storyteller").length,
+      writer: s.w.requests.filter((r) => r.agent === "caption_writer").length,
+      versions: s.w.versions.length,
+    };
+
+    const second = await start(s.deps);
+    const last = (await drive(s.deps, second)).at(-1)!;
+    expect(last.state).toBe("done");
+    // no photo analysis, no re-clustering, nothing set aside again
+    expect(vi.mocked(s.deps.analyzePhotos).mock.calls.length).toBe(before.analyze);
+    expect(vi.mocked(s.deps.clusterPhotosIntoMoments).mock.calls.length).toBe(before.cluster);
+    expect(vi.mocked(s.deps.applyPhotoFilters!).mock.calls.length).toBe(before.filters);
+    // brief + plan: ONE planner call, pinned to the previous plan
+    expect(s.w.requests.filter((r) => r.agent === "storyteller").length - before.planner).toBe(1);
+    expect(vi.mocked(s.deps.planStory).mock.calls.at(-1)![1]).toMatchObject({ pinned: plan1 });
+    // the layout (which photos on which page) is the same; the text is new
+    const cursor = parseStoryCursor(s.table.rows.get(second)!.cursor)!;
+    expect(cursor.plan!.skeleton).toEqual(plan1.skeleton);
+    expect(cursor.plan!.chapters.map((c) => c.momentIds)).toEqual(plan1.chapters.map((c) => c.momentIds));
+    expect(cursor.pinnedPlan).toBeNull(); // dropped once the run finished
+    expect(cursor.filtered).toEqual({ duplicate: 0, similar: 2, blurry: 0 });
+    expect(s.w.requests.filter((r) => r.agent === "caption_writer").length - before.writer).toBe(storyWriteGroups(plan1).length);
+    expect(s.w.versions.length).toBe(before.versions + 1);
+    expect(s.w.versions.at(-1)!.brief).toMatchObject({ v: 1, mode: "personal" });
+  });
+
+  it("other photos than the finished run → a fresh run (analysis, moments and plan from scratch)", () => {
+    const prev = { ...initialStoryCursor(), initialized: true, photoSig: "a", plan: null as StoryPlan | null, quality: { done: true, calls: 1 } };
+    expect(regenerateCursor(prev, "a", "r1").cursor.pinnedPlan).toBeNull(); // no plan to keep
+    const withPlan = { ...prev, plan: { v: 1 } as unknown as StoryPlan };
+    expect(regenerateCursor(withPlan, "b", "r1").cursor).toMatchObject({ pinnedPlan: null, quality: { done: false }, filtered: null, resumedFrom: null });
+    expect(regenerateCursor(withPlan, "a", "r1").cursor).toMatchObject({ pinnedPlan: withPlan.plan, quality: { done: true }, resumedFrom: "r1" });
   });
 });
 

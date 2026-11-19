@@ -33,9 +33,10 @@ const loadStub = async (): Promise<StoryAnswersResult> => ({ ok: true, context: 
 const saveStub = async (): Promise<StoryAnswersResult> => ({ ok: true, context: { ...EMPTY_STORY_ANSWERS, answers: [], rev: 1 } });
 
 function filledStory(occasion: Occasion | null): StoryDraft {
-  const [q1, q2] = storyQuestionsFor(occasion);
+  // v3: q1 = who is in the photos (chips), q2 = one short memory
+  const [, q1, q2] = storyQuestionsFor(occasion);
   const answers: Record<string, string> = {};
-  if (q1) answers[q1.id] = q1.suggestions[1] ?? q1.suggestions[0];
+  if (q1) answers[q1.id] = q1.suggestions[1] ?? q1.suggestions[0] ?? "";
   if (q2) answers[q2.id] = "The night we watched the sun go down from the old harbour";
   return { storyTone: "heartfelt", answers, touched: true, loaded: "loaded" };
 }

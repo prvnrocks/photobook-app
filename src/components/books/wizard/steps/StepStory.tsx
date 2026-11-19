@@ -1,8 +1,11 @@
 "use client";
-// Wizard step 4 "Every memory has a story." (Task 5): at most two short questions for the book's
-// occasion (src/lib/story/questions.ts) and an optional storytelling tone. Everything is optional —
-// "Skip for now" is always there, nothing is required and nothing is prefilled: a suggestion chip
-// fills its field only when the user taps it, and only the user's own words are sent.
+// Wizard step 4 "What makes this memory special?" (Task 5, reshaped in v3): three short optional
+// fields (src/lib/story/questions.ts) — the occasion (prefilled with the occasion picked in step 2,
+// editable; stored only when the user changes it), who is in the photos to the user (free text +
+// chips like "My brother") and one short personal memory — plus an optional storytelling tone.
+// Everything is optional — "Skip for now" is always there, nothing is required and nothing else is
+// prefilled: a suggestion chip fills its field only when the user taps it, and only the user's own
+// words are sent. The story uses these words as the only personal facts (never guessed from photos).
 //   - Entry: loadStoryAnswersAction shows what is stored (a reload / a later visit). The wizard keeps
 //     a client copy (`value`), so Back / Forward inside the session is instant and nothing typed is
 //     lost; text typed before the load answers is never overwritten.
@@ -16,17 +19,30 @@
 // Lazy-loaded with the other book steps (not in the /books/new first load).
 
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
-import { loadStoryAnswersAction, saveStoryAnswersAction } from "@/app/books/story-actions";
+import {
+  loadStoryAnswersAction,
+  saveStoryAnswersAction,
+} from "@/app/books/story-actions";
 import { Notice } from "@/components/app/Notice";
 import { WizardHeadline } from "@/components/wizard/WizardHeadline";
-import { WIZARD_BACK_CLASS, WIZARD_SECONDARY_CLASS, WizardNav } from "@/components/wizard/WizardNav";
+import {
+  WIZARD_BACK_CLASS,
+  WIZARD_SECONDARY_CLASS,
+  WizardNav,
+} from "@/components/wizard/WizardNav";
 import type { Occasion } from "@/lib/book/options";
 import { wizardHeadline } from "@/lib/books/wizard-steps";
-import type { StoryAnswersInput, StoryAnswersResult, StoryAnswersView } from "@/lib/story/answers";
+import type {
+  StoryAnswersInput,
+  StoryAnswersResult,
+  StoryAnswersView,
+} from "@/lib/story/answers";
 import {
+  MEMORY_QUESTION_IDS,
   STORY_ANSWER_MAX,
   STORY_TONE_LABELS,
   STORY_TONES,
+  occasionPrefill,
   storyQuestionsFor,
   type StoryQuestion,
   type StoryTone,
@@ -42,13 +58,20 @@ export type StoryDraft = {
   loaded: "pending" | "loaded" | "failed";
 };
 
-export const EMPTY_STORY_DRAFT: StoryDraft = { storyTone: null, answers: {}, touched: false, loaded: "pending" };
+export const EMPTY_STORY_DRAFT: StoryDraft = {
+  storyTone: null,
+  answers: {},
+  touched: false,
+  loaded: "pending",
+};
 
 /** Show the counter from this many characters before the limit. */
 export const STORY_COUNTER_FROM = STORY_ANSWER_MAX - 20;
 
-export const STORY_SUPPORT_LINE = "A few words help us tell it your way. Answer what you like, or skip.";
-export const STORY_SAVE_FAILED = "We couldn't save your answers. Try again, or continue without them.";
+export const STORY_SUPPORT_LINE =
+  "A few words help us tell your story, not just describe the photos. Answer what you like, or skip.";
+export const STORY_SAVE_FAILED =
+  "We couldn't save your answers. Try again, or continue without them.";
 
 const codePoints = (s: string) => Array.from(s).length;
 
@@ -56,24 +79,61 @@ const codePoints = (s: string) => Array.from(s).length;
 export function clampStoryAnswer(text: string): string {
   const flat = text.replace(/[\r\n]+/g, " ");
   const chars = Array.from(flat);
-  return chars.length > STORY_ANSWER_MAX ? chars.slice(0, STORY_ANSWER_MAX).join("") : flat;
+  return chars.length > STORY_ANSWER_MAX
+    ? chars.slice(0, STORY_ANSWER_MAX).join("")
+    : flat;
 }
 
-/** The stored view → the draft (only answers of the questions asked now). */
-export function storyDraftFromView(view: StoryAnswersView, questions: readonly StoryQuestion[]): StoryDraft {
+/** The stored view → the draft (only answers of the questions asked now; the server maps old answers). */
+export function storyDraftFromView(
+  view: StoryAnswersView,
+  questions: readonly StoryQuestion[],
+): StoryDraft {
   const asked = new Set(questions.map((q) => q.id));
   const answers: Record<string, string> = {};
-  for (const a of view.answers) if (asked.has(a.questionId)) answers[a.questionId] = clampStoryAnswer(a.text);
-  return { storyTone: view.storyTone, answers, touched: false, loaded: "loaded" };
+  for (const a of view.answers)
+    if (asked.has(a.questionId))
+      answers[a.questionId] = clampStoryAnswer(a.text);
+  return {
+    storyTone: view.storyTone,
+    answers,
+    touched: false,
+    loaded: "loaded",
+  };
 }
 
-/** What Continue / Skip send. Blank answers are left out (the server would drop them anyway). */
-export function storyInputFromDraft(draft: StoryDraft, questions: readonly StoryQuestion[], skipped: boolean): StoryAnswersInput {
-  if (skipped) return { storyTone: draft.storyTone, answers: [], skipped: true };
+/** What a field shows: the user's text, or — for the occasion only, until they type — the step-2 occasion. */
+export function storyFieldValue(
+  draft: StoryDraft,
+  q: StoryQuestion,
+  prefill: string,
+): string {
+  const own = draft.answers[q.id];
+  return own !== undefined ? own : q.kind === "occasion" ? prefill : "";
+}
+
+/**
+ * What Continue / Skip send. Blank answers are left out (the server would drop them anyway), and so
+ * is an occasion still equal to the step-2 occasion (`prefill`): only the user's own words are sent.
+ */
+export function storyInputFromDraft(
+  draft: StoryDraft,
+  questions: readonly StoryQuestion[],
+  skipped: boolean,
+  prefill = "",
+): StoryAnswersInput {
+  if (skipped)
+    return { storyTone: draft.storyTone, answers: [], skipped: true };
   const answers: StoryAnswersInput["answers"] = [];
   for (const q of questions) {
     const text = (draft.answers[q.id] ?? "").trim();
-    if (text !== "") answers.push({ questionId: q.id, text });
+    if (text === "") continue;
+    if (
+      q.id === MEMORY_QUESTION_IDS.occasion &&
+      text.toLowerCase() === prefill.trim().toLowerCase()
+    )
+      continue;
+    answers.push({ questionId: q.id, text });
   }
   return { storyTone: draft.storyTone, answers, skipped: false };
 }
@@ -92,7 +152,10 @@ export type StepStoryProps = {
   onContinue: () => void;
   /** Test seams; default to the server actions. */
   load?: (bookId: string) => Promise<StoryAnswersResult>;
-  save?: (bookId: string, input: StoryAnswersInput) => Promise<StoryAnswersResult>;
+  save?: (
+    bookId: string,
+    input: StoryAnswersInput,
+  ) => Promise<StoryAnswersResult>;
 };
 
 const FIELD_CLASS =
@@ -106,8 +169,20 @@ const TONE_CLASS =
 
 function Check({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 16 16" fill="none" className={className} aria-hidden="true" focusable="false">
-      <path d="M3.5 8.5l3 3 6-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      className={className}
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M3.5 8.5l3 3 6-7"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -125,6 +200,7 @@ export function StepStory({
 }: StepStoryProps) {
   const uid = useId();
   const questions = storyQuestionsFor(occasion);
+  const prefill = occasionPrefill(occasion);
   const draft = value ?? EMPTY_STORY_DRAFT;
   const draftRef = useRef(draft);
   draftRef.current = draft;
@@ -159,11 +235,19 @@ export function StepStory({
           onChangeRef.current({ ...cur, loaded: "failed" });
           return;
         }
-        const stored = storyDraftFromView(res.context, storyQuestionsFor(occasion));
+        const stored = storyDraftFromView(
+          res.context,
+          storyQuestionsFor(occasion),
+        );
         // Never overwrite what the user did while the load was on its way: their words / tone win.
         onChangeRef.current(
           cur.touched
-            ? { ...cur, answers: { ...stored.answers, ...cur.answers }, storyTone: cur.storyTone ?? stored.storyTone, loaded: "loaded" }
+            ? {
+                ...cur,
+                answers: { ...stored.answers, ...cur.answers },
+                storyTone: cur.storyTone ?? stored.storyTone,
+                loaded: "loaded",
+              }
             : stored,
         );
       });
@@ -178,7 +262,9 @@ export function StepStory({
   }
 
   function setAnswer(id: string, text: string) {
-    patch({ answers: { ...draftRef.current.answers, [id]: clampStoryAnswer(text) } });
+    patch({
+      answers: { ...draftRef.current.answers, [id]: clampStoryAnswer(text) },
+    });
   }
 
   async function submit(kind: "continue" | "skip") {
@@ -193,7 +279,10 @@ export function StepStory({
     setSaving(kind);
     let res: StoryAnswersResult;
     try {
-      res = await save(bookId, storyInputFromDraft(cur, questions, kind === "skip"));
+      res = await save(
+        bookId,
+        storyInputFromDraft(cur, questions, kind === "skip", prefill),
+      );
     } catch {
       res = { ok: false, error: "unavailable" };
     }
@@ -214,12 +303,20 @@ export function StepStory({
   const busy = saving !== null;
 
   return (
-    <form onSubmit={onSubmit} noValidate className="mx-auto flex w-full max-w-[40rem] min-w-0 flex-col gap-8" data-testid="wizard-step-story">
+    <form
+      onSubmit={onSubmit}
+      noValidate
+      className="mx-auto flex w-full max-w-[40rem] min-w-0 flex-col gap-8"
+      data-testid="wizard-step-story"
+    >
       <div className="flex flex-col gap-2">
         <WizardHeadline id={headlineId} focusable>
           {wizardHeadline(4)}
         </WizardHeadline>
-        <p className="text-center text-base text-muted-foreground" data-testid="story-support">
+        <p
+          className="text-center text-base text-muted-foreground"
+          data-testid="story-support"
+        >
           {STORY_SUPPORT_LINE}
         </p>
       </div>
@@ -227,24 +324,42 @@ export function StepStory({
       <div className="flex min-w-0 flex-col gap-7">
         {questions.map((q, i) => {
           const fieldId = `${uid}-q${i}`;
-          const text = draft.answers[q.id] ?? "";
+          const text = storyFieldValue(draft, q, prefill);
           const length = codePoints(text);
           const showCounter = length >= STORY_COUNTER_FROM;
           return (
-            <div key={q.id} className="flex min-w-0 flex-col gap-2.5" data-testid={`story-question-${q.id}`}>
+            <div
+              key={q.id}
+              className="flex min-w-0 flex-col gap-2.5"
+              data-testid={`story-question-${q.id}`}
+            >
               <label htmlFor={fieldId} className="type-h2 text-heading">
-                {q.prompt} <span className="type-small font-normal text-muted-foreground">(optional)</span>
+                {q.prompt}{" "}
+                <span className="type-small font-normal text-muted-foreground">
+                  (optional)
+                </span>
               </label>
+              <p
+                id={`${fieldId}-hint`}
+                className="type-small -mt-1 text-muted-foreground"
+                data-testid={`story-hint-${q.id}`}
+              >
+                {q.hint}
+              </p>
               <textarea
                 id={fieldId}
                 name={`story-${q.id}`}
-                rows={2}
+                rows={q.kind === "moment" ? 3 : 2}
                 dir="auto"
                 value={text}
                 onChange={(e) => setAnswer(q.id, e.target.value)}
                 onKeyDown={(e) => {
                   // One short line: Enter submits like a text field (Shift+Enter does nothing special).
-                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  if (
+                    e.key === "Enter" &&
+                    !e.shiftKey &&
+                    !e.nativeEvent.isComposing
+                  ) {
                     e.preventDefault();
                     e.currentTarget.form?.requestSubmit();
                   }
@@ -252,12 +367,20 @@ export function StepStory({
                 placeholder={q.placeholder}
                 autoComplete="off"
                 enterKeyHint="done"
-                aria-describedby={showCounter ? `${fieldId}-count` : undefined}
+                aria-describedby={
+                  showCounter
+                    ? `${fieldId}-hint ${fieldId}-count`
+                    : `${fieldId}-hint`
+                }
                 className={FIELD_CLASS}
                 data-testid={`story-answer-${q.id}`}
               />
               {showCounter ? (
-                <p id={`${fieldId}-count`} className="type-small text-end text-muted-foreground" data-testid={`story-count-${q.id}`}>
+                <p
+                  id={`${fieldId}-count`}
+                  className="type-small text-end text-muted-foreground"
+                  data-testid={`story-count-${q.id}`}
+                >
                   <span aria-hidden="true">
                     {length}/{STORY_ANSWER_MAX}
                   </span>
@@ -266,42 +389,62 @@ export function StepStory({
                   </span>
                 </p>
               ) : null}
-              <div className="flex min-w-0 flex-wrap gap-2" role="group" aria-label={`Ideas for: ${q.prompt}`}>
-                {q.suggestions.map((s) => {
-                  const on = text === s;
-                  return (
-                    <button
-                      key={s}
-                      type="button"
-                      dir="auto"
-                      aria-pressed={on}
-                      onClick={() => setAnswer(q.id, s)}
-                      className={CHIP_CLASS}
-                      data-testid="story-chip"
-                    >
-                      {on ? <Check className="size-3.5 shrink-0" /> : null}
-                      <span className="truncate">{s}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              {q.suggestions.length > 0 ? (
+                <div
+                  className="flex min-w-0 flex-wrap gap-2"
+                  role="group"
+                  aria-label={`Ideas for: ${q.prompt}`}
+                >
+                  {q.suggestions.map((s) => {
+                    const on = text === s;
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        dir="auto"
+                        aria-pressed={on}
+                        onClick={() => setAnswer(q.id, s)}
+                        className={CHIP_CLASS}
+                        data-testid="story-chip"
+                      >
+                        {on ? <Check className="size-3.5 shrink-0" /> : null}
+                        <span className="truncate">{s}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
           );
         })}
       </div>
 
-      <fieldset className="min-w-0" aria-describedby={`${uid}-tone-hint`} data-testid="story-tone">
+      <fieldset
+        className="min-w-0"
+        aria-describedby={`${uid}-tone-hint`}
+        data-testid="story-tone"
+      >
         <legend className="type-h2 text-heading">
-          How should it sound? <span className="type-small font-normal text-muted-foreground">(optional)</span>
+          How should it sound?{" "}
+          <span className="type-small font-normal text-muted-foreground">
+            (optional)
+          </span>
         </legend>
-        <p id={`${uid}-tone-hint`} className="type-small mt-1 text-muted-foreground">
+        <p
+          id={`${uid}-tone-hint`}
+          className="type-small mt-1 text-muted-foreground"
+        >
           Pick one, or leave it open. Tap your choice again to clear it.
         </p>
         <div className="mt-3 grid min-w-0 grid-cols-1 gap-2.5 sm:grid-cols-3">
           {STORY_TONES.map((id) => {
             const on = draft.storyTone === id;
             return (
-              <label key={id} className={TONE_CLASS} data-testid={`story-tone-${id}`}>
+              <label
+                key={id}
+                className={TONE_CLASS}
+                data-testid={`story-tone-${id}`}
+              >
                 <input
                   type="radio"
                   name="story-tone"
@@ -310,7 +453,8 @@ export function StepStory({
                   onChange={() => patch({ storyTone: id })}
                   // A checked radio fires click but not change: that click clears the choice (optional).
                   onClick={() => {
-                    if (draftRef.current.storyTone === id) patch({ storyTone: null });
+                    if (draftRef.current.storyTone === id)
+                      patch({ storyTone: null });
                   }}
                   // Space on an already-checked radio fires no click in Chromium: clear it here too.
                   onKeyDown={(e) => {
@@ -342,10 +486,22 @@ export function StepStory({
           data-testid="story-save-error"
           action={
             <>
-              <button type="button" onClick={() => void submit(failed)} disabled={busy} className={WIZARD_BACK_CLASS} data-testid="story-save-retry">
+              <button
+                type="button"
+                onClick={() => void submit(failed)}
+                disabled={busy}
+                className={WIZARD_BACK_CLASS}
+                data-testid="story-save-retry"
+              >
                 Try again
               </button>
-              <button type="button" onClick={onContinue} disabled={busy} className={WIZARD_BACK_CLASS} data-testid="story-continue-unsaved">
+              <button
+                type="button"
+                onClick={onContinue}
+                disabled={busy}
+                className={WIZARD_BACK_CLASS}
+                data-testid="story-continue-unsaved"
+              >
                 Continue without saving
               </button>
             </>
@@ -358,7 +514,13 @@ export function StepStory({
       <WizardNav
         onBack={onBack}
         secondary={
-          <button type="button" onClick={() => void submit("skip")} disabled={busy} className={WIZARD_SECONDARY_CLASS} data-testid="story-skip">
+          <button
+            type="button"
+            onClick={() => void submit("skip")}
+            disabled={busy}
+            className={WIZARD_SECONDARY_CLASS}
+            data-testid="story-skip"
+          >
             Skip for now
           </button>
         }

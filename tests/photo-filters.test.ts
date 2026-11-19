@@ -117,12 +117,12 @@ function fp(n: number, sec: number, over: Partial<FilterPhoto> = {}): FilterPhot
 }
 
 describe("similar shots", () => {
-  it("a burst of the same pose is one run; the best ranked photo is kept, one per started 4", () => {
+  it("a burst of the same pose is one run; about one in 2–3 is kept, the best ranked first (v3)", () => {
     const photos = [fp(1, 0, { quality: 50 }), fp(2, 3, { quality: 70 }), fp(3, 6, { quality: 55 }), fp(4, 9), fp(5, 12), fp(6, 15)];
     const g = groupSimilarShots(photos);
     expect(g).toHaveLength(1);
     expect(g[0]!.photoIds).toHaveLength(6);
-    expect(g[0]!.keep).toEqual([pid(2), pid(4)]); // 6 photos keep 2: best quality, then quality ties by size → id
+    expect(g[0]!.keep).toEqual([pid(2), pid(4), pid(5)]); // 6 photos keep 3: best quality, then (same look) quality ties by size → id
   });
 
   it("a long gap, a scene change or a different look starts a new run; a long session cannot chain into one group", () => {
@@ -157,10 +157,10 @@ describe("decidePhotoFilters", () => {
     const reasons = Object.fromEntries(out.map((d) => [d.photoId, d.reason]));
     expect(reasons[pid(2)]).toBe("duplicate");
     expect(reasons[pid(30)]).toBe("blurry");
-    // the remaining burst (1, 3, 4) keeps photo 3 (best quality)
+    // the remaining burst (1, 3, 4) keeps 2 of 3 (v3: about one in 2–3): photo 3 (best quality), then photo 1
     expect(reasons[pid(3)]).toBeUndefined();
-    expect([reasons[pid(1)], reasons[pid(4)]]).toEqual(["similar", "similar"]);
-    expect(filterCounts(photos.map((p) => ({ status: reasons[p.id] ? "dropped" : "kept", drop_reason: reasons[p.id] ?? null, user_override: false })))).toEqual({ duplicate: 1, similar: 2, blurry: 1 });
+    expect([reasons[pid(1)], reasons[pid(4)]]).toEqual([undefined, "similar"]);
+    expect(filterCounts(photos.map((p) => ({ status: reasons[p.id] ? "dropped" : "kept", drop_reason: reasons[p.id] ?? null, user_override: false })))).toEqual({ duplicate: 1, similar: 1, blurry: 1 });
   });
 
   it("the user always wins: overridden photos are never set aside, a user-preferred copy is kept, dropped photos are not re-decided", () => {
@@ -205,15 +205,26 @@ describe("scenes inside one long visit", () => {
     return out;
   }
 
-  it("is split at the pauses that are long for this set; tiny segments join a neighbour", () => {
+  it("v3: one visit of the same setting stays ONE moment — pauses that are only long for the set are not new events", () => {
     const photos = cafeVisit();
-    const ranges = sceneRanges(photos, MOMENT_DEFAULTS);
-    expect(ranges.length).toBeGreaterThanOrEqual(3);
-    expect(ranges.length).toBeLessThanOrEqual(Math.floor(60 / MOMENT_DEFAULTS.scenePhotosPer));
-    for (const [a, b] of ranges) expect(b - a).toBeGreaterThanOrEqual(MOMENT_DEFAULTS.sceneMinSize);
+    expect(sceneRanges(photos, MOMENT_DEFAULTS)).toEqual([[0, 60]]);
     const { moments } = clusterMoments(photos);
-    expect(moments.length).toBe(ranges.length);
-    expect(moments.flatMap((m) => m.photoIds)).toEqual(photos.map((p) => p.id)); // every photo once, in order
+    expect(moments).toHaveLength(1);
+    expect(moments[0]!.photoIds).toEqual(photos.map((p) => p.id)); // every photo once, in order
+  });
+
+  it("v3: a real change splits — another setting after a pause, or a long break; tiny segments join a neighbour", () => {
+    const CAFE: MomentVision = { ...PORTRAIT, description: "two people at a café table" };
+    const BEACH: MomentVision = { scene: "landscape", objects: ["sand", "sea"], activities: ["swimming in the sea"], description: "people on a beach by the sea" };
+    const photos = [...Array.from({ length: 12 }, (_, i) => mp(i + 1, i * 5, CAFE)), ...Array.from({ length: 12 }, (_, i) => mp(13 + i, 300 + i * 5, BEACH))];
+    expect(sceneRanges(photos, MOMENT_DEFAULTS)).toEqual([[0, 12], [12, 24]]);
+    // the same setting on both sides, but a 12-minute break
+    const long = [...Array.from({ length: 12 }, (_, i) => mp(i + 1, i * 5, CAFE)), ...Array.from({ length: 12 }, (_, i) => mp(13 + i, 60 + 720 + i * 5, CAFE))];
+    expect(sceneRanges(long, MOMENT_DEFAULTS)).toEqual([[0, 12], [12, 24]]);
+    // a change too close to the end joins its neighbour
+    const tail = [...Array.from({ length: 20 }, (_, i) => mp(i + 1, i * 5, CAFE)), ...Array.from({ length: 3 }, (_, i) => mp(21 + i, 400 + i * 5, BEACH))];
+    const ranges = sceneRanges(tail, MOMENT_DEFAULTS);
+    for (const [a, b] of ranges) expect(b - a).toBeGreaterThanOrEqual(MOMENT_DEFAULTS.sceneMinSize);
   });
 
   it("labels describe the scene: a setting a few photos of the visit show labels every scene; never 'Holding a cup'", () => {

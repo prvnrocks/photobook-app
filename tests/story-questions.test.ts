@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { OCCASIONS, type Occasion } from "@/lib/book/options";
 import {
   isStoryTone,
+  LEGACY_QUESTION_MAP,
+  MEMORY_QUESTION_IDS,
+  migrateStoryAnswers,
+  occasionPrefill,
+  STORY_QUESTIONS_MAX,
   STORY_ANSWER_MAX,
   STORY_TONE_LABELS,
   STORY_TONES,
@@ -33,78 +38,65 @@ describe("story tones", () => {
   });
 });
 
-describe("storyQuestionsFor", () => {
+describe("storyQuestionsFor (v3: What makes this memory special?)", () => {
   it("birthday is an occasion, in the agreed order", () => {
     expect(OCCASIONS).toEqual(["wedding", "travel", "baby", "birthday", "graduation", "family", "other"]);
   });
 
-  it.each(ALL)("%s: one or two short questions with stable unique ids and 3–5 short chips", (occasion) => {
+  it.each(ALL)("%s: three short optional questions — occasion, relationship, one memory — with stable ids", (occasion) => {
     const questions = storyQuestionsFor(occasion);
-    expect(questions.length).toBeGreaterThanOrEqual(1);
-    expect(questions.length).toBeLessThanOrEqual(2);
-    expect(new Set(questions.map((q) => q.id)).size).toBe(questions.length);
+    expect(questions).toHaveLength(STORY_QUESTIONS_MAX);
+    expect(questions.map((q) => q.id)).toEqual(["memory.occasion", "memory.relationship", "memory.moment"]);
+    expect(questions.map((q) => q.kind)).toEqual(["occasion", "relationship", "moment"]);
     for (const q of questions) {
       expect(q.id).toMatch(/^[a-z]+\.[a-z_]+$/);
-      expect(q.id.length).toBeLessThanOrEqual(60);
-      expect(q.id.startsWith(`${occasion ?? "other"}.`)).toBe(true);
       expect(q.prompt.trim()).toBe(q.prompt);
       expect(q.prompt.length).toBeGreaterThan(5);
       expect(q.prompt.length).toBeLessThanOrEqual(60);
-      expect(q.prompt.endsWith("?")).toBe(true);
+      expect(q.hint.length).toBeGreaterThan(0);
       expect(q.placeholder.length).toBeGreaterThan(0);
       expect(q.placeholder.length).toBeLessThanOrEqual(50);
-      expect(q.suggestions.length).toBeGreaterThanOrEqual(3);
-      expect(q.suggestions.length).toBeLessThanOrEqual(5);
-      expect(new Set(q.suggestions).size).toBe(q.suggestions.length);
       for (const chip of q.suggestions) {
         expect(chip.trim()).toBe(chip);
-        expect(chip.length).toBeGreaterThan(0);
         expect(chip.length).toBeLessThanOrEqual(30);
-        expect(Array.from(chip).length).toBeLessThanOrEqual(STORY_ANSWER_MAX);
       }
     }
   });
 
-  it("ids are unique across all occasions", () => {
-    const ids = OCCASIONS.flatMap((o) => storyQuestionsFor(o).map((q) => q.id));
-    expect(new Set(ids).size).toBe(ids.length);
+  it("relationship chips are short and only suggestions (my brother, my partner, friends, family …); the other fields have none", () => {
+    const [occasion, relationship, moment] = storyQuestionsFor("travel");
+    expect(relationship!.suggestions).toEqual(expect.arrayContaining(["My brother", "My partner", "Friends", "Family"]));
+    expect(relationship!.suggestions.length).toBeLessThanOrEqual(5);
+    expect(occasion!.suggestions).toEqual([]);
+    expect(moment!.suggestions).toEqual([]);
+    expect(relationship!.hint).toMatch(/never guess/i);
   });
 
-  it("travel asks who they travelled with and what made it special", () => {
-    const [a, b] = storyQuestionsFor("travel");
-    expect(a.id).toBe("travel.companions");
-    expect(a.prompt).toMatch(/who .*travel/i);
-    expect(b.id).toBe("travel.special");
-    expect(b.prompt).toMatch(/special/i);
+  it("the occasion field starts as the step-2 occasion; none / Other start empty", () => {
+    expect(occasionPrefill("travel")).toBe("Travel");
+    expect(occasionPrefill("birthday")).toBe("Birthday");
+    expect(occasionPrefill("other")).toBe("");
+    expect(occasionPrefill(null)).toBe("");
   });
 
-  it("baby asks for the milestone and memorable firsts", () => {
-    const [a, b] = storyQuestionsFor("baby");
-    expect(a.id).toBe("baby.milestone");
-    expect(a.prompt).toMatch(/milestone/i);
-    expect(b.id).toBe("baby.firsts");
-    expect(b.prompt).toMatch(/firsts/i);
-  });
-
-  it("wedding asks about the occasion and the important moments", () => {
-    const [a, b] = storyQuestionsFor("wedding");
-    expect(a.id).toBe("wedding.occasion");
-    expect(a.prompt).toMatch(/whose day|celebration/i);
-    expect(b.id).toBe("wedding.moments");
-    expect(b.prompt).toMatch(/moments/i);
-  });
-
-  it("no occasion (or an unknown one) gets the Other questions", () => {
-    expect(storyQuestionsFor(null)).toEqual(storyQuestionsFor("other"));
-    expect(storyQuestionsFor("picnic" as Occasion)).toEqual(storyQuestionsFor("other"));
+  it("Task 5 answers load under the v3 questions (the user's own text, unchanged); a v3 answer wins", () => {
+    expect(migrateStoryAnswers([{ questionId: "travel.companions", text: "My brother" }, { questionId: "travel.special", text: "We met again after a long time." }])).toEqual([
+      { questionId: "memory.relationship", text: "My brother" },
+      { questionId: "memory.moment", text: "We met again after a long time." },
+    ]);
+    expect(migrateStoryAnswers([{ questionId: "other.about", text: "A year of little moments" }])).toEqual([{ questionId: "memory.occasion", text: "A year of little moments" }]);
+    expect(migrateStoryAnswers([{ questionId: "memory.moment", text: "new" }, { questionId: "travel.special", text: "old" }])).toEqual([{ questionId: "memory.moment", text: "new" }]);
+    expect(migrateStoryAnswers([{ questionId: "unknown.thing", text: "x" }])).toEqual([]);
+    // every Task 5 id has a home
+    for (const id of Object.keys(LEGACY_QUESTION_MAP)) expect(Object.values(MEMORY_QUESTION_IDS)).toContain(LEGACY_QUESTION_MAP[id]);
   });
 
   it("returns fresh copies (a caller cannot change the catalogue)", () => {
     const first = storyQuestionsFor("travel");
-    first[0].suggestions.push("x");
+    first[1]!.suggestions.push("x");
     first.pop();
-    expect(storyQuestionsFor("travel")).toHaveLength(2);
-    expect(storyQuestionsFor("travel")[0].suggestions).not.toContain("x");
+    expect(storyQuestionsFor("travel")).toHaveLength(3);
+    expect(storyQuestionsFor("travel")[1]!.suggestions).not.toContain("x");
   });
 
   it.each(ALL)("%s: nothing asks for or suggests sensitive details", (occasion) => {

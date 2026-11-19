@@ -52,7 +52,8 @@ import { getEntitlementTier } from "@/lib/entitlements";
 import { readStoryAiConfig, type StoryAiConfig } from "./config";
 import { MAX_FACT_REFS, MAX_PHOTO_REFS, WORD_BOUNDS, checkBlock, countWords, type BlockDraft, type GroundingContext, type GroundingIssue, type GroundingIssueCode } from "./grounding";
 import { buildStoryInputs, factRefsToStore, groundingFacts, groundingPhoto, type StoryInputs, type StoryPhoto } from "./inputs";
-import { StoryPlanSchema, acceptedBookTitle, assemblePlan, chapterCountRange, checkOutline, checkPlanAgainstBook, ruleOutline, wantsClosing, type PlanFallbackReason, type PlanOutline, type StoryPlan } from "./plan";
+import { StoryPlanSchema, acceptedBookTitle, applyPinned, assemblePlan, chapterCountRange, checkOutline, checkPlanAgainstBook, pinnedStructure, ruleOutline, wantsClosing, type PlanFallbackReason, type PlanOutline, type StoryPlan } from "./plan";
+import { acceptBrief, allowedEmotionsOf, briefToAi, revalidateBrief, ruleBrief, type StoryBrief } from "./brief";
 import {
   REWRITE_KINDS,
   STORY_MAX_TOKENS,
@@ -142,6 +143,12 @@ export type StoryDeps = {
    * plan. Default: the book's own limit (limitsFor(is_paid).maxPages).
    */
   planMaxPages?: number;
+  /**
+   * v3 "Regenerate story" (server-chosen, never from a client): an earlier plan whose chapter
+   * structure (moments per chapter, hero photo, paragraph moments → the page skeleton) planStory
+   * keeps; only the brief, titles and arcs are made again. Ignored when the book's moments changed.
+   */
+  pinned?: StoryPlan | null;
   /** Task 9: usage ledger factory per call kind (default: ai_usage_ledger, bucket from the entitlement). */
   meterFor?: (owner: { userId: string; bookId: string }, kind: StoryCallKind) => UsageMeter | undefined;
   mode?: AiMode;
@@ -412,7 +419,12 @@ export async function planStory(bookId: string, deps: StoryDeps = {}): Promise<S
 
   const maxPages = pageBudget(deps.planMaxPages, limitsFor(owner.book.is_paid).maxPages);
   const base = { bookId: owner.book.id, inputs, maxPages, promptVersion: STORY_PLANNER_PROMPT_VERSION };
-  const rule = (reason: PlanFallbackReason) => assemblePlan({ ...base, outline: ruleOutline(inputs), source: "rule", fallbackReason: reason, model: null });
+  // v3: "Regenerate story" keeps the chapter structure (and so the page skeleton) of the given plan
+  const pinned = pinnedStructure(deps.pinned, inputs);
+  const baseOutline = () => (pinned ? applyPinned(pinned, null, inputs) : ruleOutline(inputs));
+  let aiBrief: StoryBrief | null = null;
+  const rule = (reason: PlanFallbackReason) =>
+    assemblePlan({ ...base, outline: baseOutline(), source: "rule", fallbackReason: reason, model: null, brief: aiBrief ?? ruleBrief(inputs, { promptVersion: STORY_PLANNER_PROMPT_VERSION }) });
   if (mode === "off") return rule("ai_off");
 
   const live = mode === "live";
@@ -428,9 +440,10 @@ export async function planStory(bookId: string, deps: StoryDeps = {}): Promise<S
   const range = chapterCountRange(inputs.photos.length, inputs.moments.length);
   const closing = wantsClosing(inputs.photos.length);
   const aliasById = new Map(inputs.photos.map((p) => [p.id, p.alias]));
-  const replayOutline = ruleOutline(inputs);
+  const replayOutline = baseOutline();
   const scenarioMeta = {
     lang: inputs.lang,
+    brief: briefToAi(ruleBrief(inputs, { promptVersion: STORY_PLANNER_PROMPT_VERSION }), inputs),
     chapters: replayOutline.chapters.map((c) => ({ title: c.title, arc: c.arc, momentIds: c.momentIds, heroPhoto: aliasById.get(c.beats.heroPhotoId), paragraphMoments: c.beats.narrativeMomentIds })),
   };
 
@@ -443,7 +456,7 @@ export async function planStory(bookId: string, deps: StoryDeps = {}): Promise<S
       chapterId: null,
       promptVersion: STORY_PLANNER_PROMPT_VERSION,
       system: STORY_PLANNER_SYSTEM_PROMPT,
-      userText: plannerUserText(inputs, range, closing, feedback),
+      userText: plannerUserText(inputs, range, closing, feedback, pinned?.map((c) => ({ id: c.id, momentIds: c.momentIds }))),
       schema: StoryPlanAiSchema,
       strictSchema: StoryPlanStrictSchema,
       toLogOutput: planLogOutput,
@@ -460,12 +473,15 @@ export async function planStory(bookId: string, deps: StoryDeps = {}): Promise<S
       feedback = { codes: ["invalid_output"] };
       continue;
     }
-    const outline = outlineFromModel(result.data, inputs);
+    // v3: the brief is validated field by field; whatever cannot be traced is replaced by the rules
+    aiBrief = acceptBrief(result.data.brief, inputs, { source: "ai", model: result.model, promptVersion: STORY_PLANNER_PROMPT_VERSION });
+    const fresh = outlineFromModel(result.data, inputs);
+    const outline = pinned ? applyPinned(pinned, fresh, inputs) : fresh;
     const issues = checkOutline(outline, inputs);
     if (issues.length === 0) {
       const titled: PlanOutline = { ...outline, title: acceptedBookTitle(outline.title, inputs), subtitle: acceptedBookTitle(outline.subtitle, inputs) };
       if (titled.title === null) titled.subtitle = null;
-      return assemblePlan({ ...base, outline: titled, source: "ai", fallbackReason: null, model: result.model });
+      return assemblePlan({ ...base, outline: titled, source: "ai", fallbackReason: null, model: result.model, brief: aiBrief });
     }
     feedback = { codes: [...new Set(issues.flatMap((i) => [i.code, ...(i.grounding ?? []).map((g) => g.code)]))] };
   }
@@ -486,10 +502,22 @@ type WriteContext = {
   /** Text of every block that will be in the book — grows as blocks are accepted. */
   bookTexts: string[];
   maxRunCostUsd: number;
+  /** v3: the validated story brief the writer follows. */
+  brief: StoryBrief;
 };
 
 function groundingContext(w: WriteContext, allowed: readonly StoryPhoto[]): GroundingContext {
-  return { lang: w.inputs.lang, photos: new Map(allowed.map((p) => [p.alias, groundingPhoto(p)])), bookPhotos: w.bookAliases, facts: groundingFacts(w.inputs.facts), otherTexts: w.bookTexts, avoid: w.inputs.avoid, narrator: w.inputs.narrator };
+  return {
+    lang: w.inputs.lang,
+    photos: new Map(allowed.map((p) => [p.alias, groundingPhoto(p)])),
+    bookPhotos: w.bookAliases,
+    facts: groundingFacts(w.inputs.facts),
+    otherTexts: w.bookTexts,
+    avoid: w.inputs.avoid,
+    narrator: w.inputs.narrator,
+    mode: w.inputs.mode,
+    allowedEmotions: allowedEmotionsOf(w.brief),
+  };
 }
 
 /** First three words of every text already in the book, de-duplicated (at most 60). */
@@ -509,7 +537,8 @@ type SlotsOutcome =
 
 /**
  * Writes one group of blocks (a chapter, or the closing page): one call, the grounding check,
- * ONE repair call for the blocks that failed, then the still-failing blocks are dropped.
+ * ONE repair call for the blocks that failed, then the still-failing blocks are dropped — except the
+ * book's opening intro and closing, which get one more targeted repair call first (v3).
  */
 async function writeSlots(
   w: WriteContext,
@@ -522,7 +551,7 @@ async function writeSlots(
     chapterId: a.scopeId,
     promptVersion: STORY_WRITER_PROMPT_VERSION,
     system: STORY_WRITER_SYSTEM_PROMPT,
-    userText: writerUserText({ inputs, plan, chapterId: a.chapterId, slots, photos: a.promptPhotos, alreadyWritten: written, repair, usedOpenings: openingsOf(w.bookTexts) }),
+    userText: writerUserText({ inputs, plan, chapterId: a.chapterId, slots, photos: a.promptPhotos, alreadyWritten: written, repair, usedOpenings: openingsOf(w.bookTexts), brief: w.brief }),
     schema: StoryBlocksAiSchema,
     strictSchema: StoryBlocksStrictSchema,
     toLogOutput: blocksLogOutput,
@@ -581,10 +610,32 @@ async function writeSlots(
     return { ok: true, accepted, issues: dropped };
   }
   const second = await call(s, repair);
+  const stillFailed: { slot: Slot; issues: GroundingIssue[] }[] = [];
   for (const f of failed) {
-    if (!second.ok) dropped.push(...f.issues);
-    else dropped.push(...check(f.slot, second.data.blocks));
+    const issues = second.ok ? check(f.slot, second.data.blocks) : f.issues;
+    if (issues.length) stillFailed.push({ slot: f.slot, issues });
   }
+  // v3: the book's opening (intro of the first chapter) and its closing page frame the whole story —
+  // they get ONE more targeted repair call before they are dropped; every other block is dropped now
+  const framing = second.ok ? stillFailed.filter((f) => f.slot.kind === "closing" || (f.slot.kind === "intro" && a.chapterId !== null && a.chapterId === plan.chapters[0]?.id)) : [];
+  if (framing.length > 0) {
+    const writtenNow = [...a.alreadyWritten, ...[...accepted.entries()].map(([id, b]) => ({ label: id, text: b.text }))];
+    const third = {
+      ...request(framing.map((f) => f.slot), framing.map((f) => ({ blockId: f.slot.blockId, codes: [...new Set(f.issues.map((i) => i.code))] })), writtenNow),
+      stepKey: `story-repair-frame:${a.scopeId}`,
+      kind: "repair" as const,
+      effort: EFFORT.caption_repair,
+      maxTokens: STORY_MAX_TOKENS.repair,
+    };
+    if (!s.live || s.spent + estimateCost(s, third) <= w.maxRunCostUsd) {
+      const again = await call(s, third);
+      for (const f of framing) {
+        const issues = again.ok ? check(f.slot, again.data.blocks) : f.issues;
+        f.issues = issues;
+      }
+    }
+  }
+  for (const f of stillFailed) dropped.push(...f.issues);
   return { ok: true, accepted, issues: dropped };
 }
 
@@ -833,7 +884,9 @@ async function writeStoryImpl(bookId: string, storyPlan: StoryPlan, opts: { chap
   const photoByAlias = new Map(inputs.photos.map((p) => [p.alias, p]));
   const photoById = new Map(inputs.photos.map((p) => [p.id, p]));
   const aliasesOf = (ids: readonly string[]) => ids.map((id) => photoById.get(id)?.alias).filter((x): x is string => !!x);
-  const w: WriteContext = { s, inputs, plan, photoByAlias, bookAliases: new Set(photoByAlias.keys()), bookTexts: [], maxRunCostUsd: limits.maxRunCostUsd };
+  // v3: the plan's brief is untrusted like the rest of the plan — checked again against the book now
+  const brief = revalidateBrief(plan.brief, inputs, STORY_PLANNER_PROMPT_VERSION);
+  const w: WriteContext = { s, inputs, plan, photoByAlias, bookAliases: new Set(photoByAlias.keys()), bookTexts: [], maxRunCostUsd: limits.maxRunCostUsd, brief };
   const nowIso = new Date(now()).toISOString();
   const generator = { pipeline: STORY_PIPELINE, model: config.model, prompts: { planner: plan.generator.promptVersion, writer: STORY_WRITER_PROMPT_VERSION } };
   const photosOfChapter = (momentIds: readonly string[]) => inputs.photos.filter((p) => momentIds.includes(p.momentId));
@@ -894,6 +947,7 @@ async function writeStoryImpl(bookId: string, storyPlan: StoryPlan, opts: { chap
       contextRev: inputs.contextRev ?? current.contextRev,
       chapters,
       pages,
+      brief,
       facts: factRefsToStore(inputs.facts, current.facts ?? [], citedFacts(pages)),
       createdAt: nowIso,
     });
@@ -1053,6 +1107,7 @@ async function writeStoryImpl(bookId: string, storyPlan: StoryPlan, opts: { chap
     moments,
     chapters,
     pages,
+    brief,
     createdAt: nowIso,
   };
 
@@ -1142,6 +1197,7 @@ export async function rewriteNarrativeBlock(blockId: string, instruction: Rewrit
   const allowed = chapter ? chapter.momentIds.flatMap((id) => momentPhotos.get(id) ?? []).map((id) => photoById.get(id)).filter((p): p is StoryPhoto => !!p) : inputs.photos;
   const first = [...page.photoIds, ...block.groundedIn].map((id) => photoById.get(id)).filter((p): p is StoryPhoto => !!p && allowed.includes(p));
   const promptPhotos = [...new Set([...first, ...allowed])].slice(0, 16);
+  const brief = revalidateBrief(current.brief, inputs, STORY_PLANNER_PROMPT_VERSION);
   const ctx: GroundingContext = {
     lang: inputs.lang,
     photos: new Map(promptPhotos.map((p) => [p.alias, groundingPhoto(p)])),
@@ -1151,6 +1207,8 @@ export async function rewriteNarrativeBlock(blockId: string, instruction: Rewrit
     avoid: inputs.avoid,
     narrator: inputs.narrator,
     chapterTexts: current.pages.filter((p) => p.chapterId === page.chapterId).flatMap((p) => p.blocks.filter((b) => b.id !== block.id).map((b) => b.text)),
+    mode: inputs.mode,
+    allowedEmotions: allowedEmotionsOf(brief),
   };
   const words = countWords(block.text);
   const bounds = WORD_BOUNDS[block.kind];
@@ -1166,7 +1224,7 @@ export async function rewriteNarrativeBlock(blockId: string, instruction: Rewrit
       chapterId: page.chapterId ?? (page.kind === "closing" ? "closing" : null),
       promptVersion: STORY_REWRITER_PROMPT_VERSION,
       system: STORY_REWRITER_SYSTEM_PROMPT,
-      userText: rewriterUserText({ inputs, tone: how.tone ?? inputs.storyTone, block: { id: block.id, kind: block.kind, text: block.text, words }, instruction: how.kind, note: how.note, range: bounds, pagePhotos, photos: promptPhotos, retry }),
+      userText: rewriterUserText({ inputs, tone: how.tone ?? inputs.storyTone, block: { id: block.id, kind: block.kind, text: block.text, words }, instruction: how.kind, note: how.note, range: bounds, pagePhotos, photos: promptPhotos, retry, brief }),
       schema: StoryRewriteAiSchema,
       strictSchema: StoryRewriteStrictSchema,
       toLogOutput: rewriteLogOutput,
@@ -1212,4 +1270,22 @@ export async function rewriteNarrativeBlock(blockId: string, instruction: Rewrit
   });
   await append(s, storybook);
   return { proposal, stored: true, storybook };
+}
+
+// ---------------------------------------------------------------------------- regenerateStory (v3)
+
+export type RegenerateStoryResult = { plan: StoryPlan; result: StoryWriteResult };
+
+/**
+ * "Regenerate story" without photo analysis or page layout: reads the STORED photo analyses and
+ * moments (no vision call, no clustering), keeps the chapter structure of `previous` (so the page
+ * skeleton — which photos go on which page — stays identical), and runs only brief → plan (titles
+ * + arcs) → write. User-written blocks, user titles and locked pages survive (mergeAiDraft).
+ * Calls: one planner call (+ one retry) and the usual writer calls. Composition into the book doc
+ * is the caller's (the storybook job's design stage re-fits the new text into the same pages).
+ */
+export async function regenerateStory(bookId: string, previous: StoryPlan, deps: StoryDeps = {}): Promise<RegenerateStoryResult> {
+  const plan = await planStory(bookId, { ...deps, pinned: previous });
+  const result = await writeStory(bookId, plan, {}, deps);
+  return { plan, result };
 }

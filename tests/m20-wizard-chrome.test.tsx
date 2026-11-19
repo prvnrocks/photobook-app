@@ -62,7 +62,7 @@ describe("wizard steps (7)", () => {
     expect(wizardHeadline(1)).toBe("Give your book a title");
     expect(wizardHeadline(2)).toBe("What's this book for?");
     expect(wizardHeadline(3)).toBe("Add your photos");
-    expect(wizardHeadline(4)).toBe("Every memory has a story.");
+    expect(wizardHeadline(4)).toBe("What makes this memory special?");
     expect(wizardHeadline(5)).toBe("Choose your book design");
     expect(wizardHeadline(6)).toBe("Sorting your photos");
     expect(wizardHeadline(7)).toBe("Preview and personalize");
