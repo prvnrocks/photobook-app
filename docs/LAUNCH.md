@@ -210,8 +210,13 @@ Preview origin (e.g. the branch alias of a `staging` branch) that is also in the
       `composeStorybookPages()` with AI on** (additive: widens the `story_ai_calls` kind / scope checks with
       `compose`; no new table or column). Live page-intent calls are refused while it is missing — the composer then
       lays the book out deterministically. Needs 2600. Then run `rls_check.sql` → 186.
+- [ ] **Storybook generation jobs: push `20261123002800_storybook_runs.sql` BEFORE deploying the Task 8 code**
+      (additive: `agent_runs` trigger `storybook` + stage states `discovering` / `organizing` / `writing` /
+      `designing`; `claim_agent_run`, `create_agent_run_capped` and `reap_stale_agent_runs` re-created with every
+      existing behaviour kept). Without it the wizard's Create step cannot start a story (503, nothing written).
+      Needs 2700. Then run `rls_check.sql` → 187.
 - [ ] Supabase → SQL Editor → paste the whole of `supabase/tests/rls_check.sql` → Run. Expected: an error panel
-      starting with **`RLS OK — all 186 checks passed`** (185 before 2700, 184 before 2600, 181 before 2500, 180 before 2400, 179 before 2300, 177 before 2200, 176 before 2100, 175 before 2000, 173 before 1900) (raised on purpose; it rolls everything back). Anything
+      starting with **`RLS OK — all 187 checks passed`** (186 before 2800, 185 before 2700, 184 before 2600, 181 before 2500, 180 before 2400, 179 before 2300, 177 before 2200, 176 before 2100, 175 before 2000, 173 before 1900) (raised on purpose; it rolls everything back). Anything
       else (`RLS FAIL [...]`, permission denied) is a blocker.
 - [ ] Verify `private.auth_user_email` works (the warning emails depend on it; needs `postgres` to read
       `auth.users`):

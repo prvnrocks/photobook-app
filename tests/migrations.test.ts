@@ -1017,9 +1017,10 @@ describe("migrations: M3 review fixes — agent pipeline hardening (0700)", () =
       expect(body).toMatch(/if p_book_id is null or p_user_id is null[\s\S]*?raise exception 'invalid_argument' using errcode = '22023'/);
     });
 
-    it("daily cap: live build/rebuild runs of the user in 24 h that cost something or are still active", () => {
+    it("daily cap: live build/rebuild runs of the user in 24 h that cost something or are still active (+ storybook runs since 2800)", () => {
+      // latest = 2800: the build / rebuild rule is unchanged, storybook runs are OR-ed in
       expect(body).toContain(
-        "where r.user_id = p_user_id and r.mode = 'live' and r.trigger in ('build', 'rebuild') and r.started_at >= now() - interval '24 hours' and (r.total_cost_usd > 0 or r.state not in ('done', 'failed'));",
+        "where r.user_id = p_user_id and r.mode = 'live' and r.started_at >= now() - interval '24 hours' and ( (r.trigger in ('build', 'rebuild') and (r.total_cost_usd > 0 or r.state not in ('done', 'failed'))) or (r.trigger = 'storybook' and (r.state not in ('done', 'failed') or r.ai_status in ('ok', 'partial'))) );",
       );
       expect(body).toContain("if v_n >= p_daily_cap then return jsonb_build_object('error', 'limit', 'limit', 'daily_builds');");
     });
@@ -1258,15 +1259,18 @@ describe("migrations: Milestone 5 editor (0900, D-036 / D-037)", () => {
       );
     });
 
-    it("claim_agent_run (latest = 0900) only leases build / rebuild runs; privileges re-stated", () => {
+    it("claim_agent_run (0900; latest = 2800 adds storybook runs) never leases rewrite runs; privileges re-stated", () => {
+      expect(ws(sql)).toContain(
+        "update public.agent_runs as r set lease_until = now() + make_interval(secs => v_secs), lease_token = v_token, attempts = r.attempts + 1 where r.id = p_run_id and r.trigger in ('build', 'rebuild') and r.state not in ('done', 'failed') and (r.lease_until is null or r.lease_until < now());",
+      );
       const f = latestFunction("public.claim_agent_run")!;
-      expect(sql).toContain(f.body);
       expect(f.header).toMatch(/returns\s+uuid/);
       expect(f.header).toMatch(/security\s+invoker/);
       expect(f.header).toMatch(/set\s+search_path\s*=\s*''/);
       expect(ws(f.body)).toContain(
-        "update public.agent_runs as r set lease_until = now() + make_interval(secs => v_secs), lease_token = v_token, attempts = r.attempts + 1 where r.id = p_run_id and r.trigger in ('build', 'rebuild') and r.state not in ('done', 'failed') and (r.lease_until is null or r.lease_until < now());",
+        "update public.agent_runs as r set lease_until = now() + make_interval(secs => v_secs), lease_token = v_token, attempts = r.attempts + 1 where r.id = p_run_id and r.trigger in ('build', 'rebuild', 'storybook') and r.state not in ('done', 'failed') and (r.lease_until is null or r.lease_until < now());",
       );
+      expect(ws(f.body)).not.toContain("'rewrite'");
       expect(flat).toContain("revoke all on function public.claim_agent_run(uuid, integer) from public, anon, authenticated;");
       expect(flat).toContain("grant execute on function public.claim_agent_run(uuid, integer) to service_role;");
     });
@@ -3217,9 +3221,9 @@ describe("migrations: story compose kind (2700, Task 7)", () => {
   const flat = sql.replace(/\s+/g, " ");
   const body = sql.replace(/--.*$/gm, "").replace(/\s+/g, " ").trim();
 
-  it("is the latest migration, comes right after 2600, migration-first header with a rollback note", () => {
+  it("comes right after 2600 and right before 2800 (latest until then), migration-first header with a rollback note", () => {
     expect(m, `${name} missing`).toBeDefined();
-    expect(files[files.length - 1]).toBe(name);
+    expect(files.indexOf("20261123002800_storybook_runs.sql")).toBe(files.indexOf(name) + 1);
     expect(files.indexOf(name)).toBe(files.indexOf("20261121002600_story_ai_calls.sql") + 1);
     const raw = readFileSync(join(process.cwd(), "supabase", "migrations", name), "utf8");
     expect(raw).toMatch(/Deploy order/);
@@ -3247,10 +3251,92 @@ describe("migrations: story compose kind (2700, Task 7)", () => {
     expect(flat).toContain(`check (scope in (${scopes.map((k) => `'${k}'`).join(", ")}))`);
   });
 
-  it("rls_check.sql covers 2700 and counts 186 checks", () => {
+  it("rls_check.sql covers 2700 (186 checks then; 2800 → 187)", () => {
     const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
     expect(rls).toContain(name);
     expect(rls).toContain("RLS FAIL [story compose kind]");
-    expect(rls).toContain("RLS OK — all 186 checks passed");
+  });
+});
+
+describe("migrations: storybook runs (2800, Task 8)", () => {
+  const name = "20261123002800_storybook_runs.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const flat = sql.replace(/\s+/g, " ");
+  const body = sql.replace(/--.*$/gm, "").replace(/\s+/g, " ").trim();
+  const fn = (fname: string) => {
+    const start = body.indexOf(`create or replace function public.${fname}(`);
+    return start < 0 ? "" : body.slice(start, body.indexOf("$$;", body.indexOf("$$", start) + 2));
+  };
+
+  it("is the latest migration, comes right after 2700, migration-first header with a rollback note", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files[files.length - 1]).toBe(name);
+    expect(files.indexOf(name)).toBe(files.indexOf("20261122002700_story_compose_kind.sql") + 1);
+    const raw = readFileSync(join(process.cwd(), "supabase", "migrations", name), "utf8");
+    expect(raw).toMatch(/Deploy order/);
+    expect(raw).toMatch(/Rollback/);
+  });
+
+  it("widens the trigger and state checks, each dropped and re-added in ONE alter table statement", () => {
+    expect(body).toContain(
+      "alter table public.agent_runs drop constraint agent_runs_trigger_check, add constraint agent_runs_trigger_check check (trigger in ('build', 'rebuild', 'rewrite', 'storybook'));",
+    );
+    expect(body).toMatch(/alter table public\.agent_runs drop constraint agent_runs_state_check, add constraint agent_runs_state_check check \(/);
+    for (const st of ["queued", "curating", "storytelling", "captioning", "critiquing", "repairing", "validating", "rewriting", "discovering", "organizing", "writing", "designing", "done", "failed"]) {
+      expect(flat).toContain(`'${st}'`);
+    }
+    // no standalone drop: every drop sits in the same statement as its re-add
+    expect(body.match(/drop constraint/g)).toHaveLength(2);
+    expect(sql).not.toMatch(/drop\s+(index|table|function|policy)/);
+  });
+
+  it("stage states belong to storybook runs only, which are never queued; the one-active index is untouched", () => {
+    expect(flat).toContain(
+      "(state in ('discovering', 'organizing', 'writing', 'designing')) = (trigger = 'storybook' and state not in ('done', 'failed'))",
+    );
+    expect(sql).not.toMatch(/agent_runs_one_active_per_book_idx\s+on/);
+    expect(sql).not.toMatch(/disable\s+row\s+level\s+security|security\s+definer|create\s+(table|policy|trigger)/i);
+  });
+
+  it("claim_agent_run leases build / rebuild / storybook runs only (rewrite stays refused)", () => {
+    const claim = fn("claim_agent_run");
+    expect(claim).toContain("and r.trigger in ('build', 'rebuild', 'storybook')");
+    expect(claim).toContain("security invoker");
+    expect(claim).toContain("set search_path = ''");
+    expect(flat).toContain("revoke all on function public.claim_agent_run(uuid, integer) from public, anon, authenticated;");
+  });
+
+  it("create_agent_run_capped keeps the 0700 behaviour and adds storybook runs (discovering, daily count)", () => {
+    const create = fn("create_agent_run_capped");
+    expect(create).toContain("perform pg_advisory_xact_lock(hashtextextended(p_user_id::text, 1));");
+    expect(create).toContain("(r.trigger in ('build', 'rebuild') and (r.total_cost_usd > 0 or r.state not in ('done', 'failed')))");
+    expect(create).toContain("(r.trigger = 'storybook' and (r.state not in ('done', 'failed') or r.ai_status in ('ok', 'partial')))");
+    expect(create).toContain("case when p_trigger = 'storybook' then 'discovering' else 'queued' end");
+    expect(create).toContain("exception when unique_violation then return jsonb_build_object('error', 'already_running');");
+    expect(create).toContain("if p_trigger = 'rebuild' then");
+    expect(flat).toContain(
+      "revoke all on function public.create_agent_run_capped(uuid, uuid, text, text, integer, integer, boolean) from public, anon, authenticated;",
+    );
+  });
+
+  it("reap_stale_agent_runs reaps storybook runs and restores books.ai_status for builds only", () => {
+    const reap = fn("reap_stale_agent_runs");
+    expect(reap).toContain("(r.trigger in ('build', 'rebuild', 'storybook') and r.updated_at < now() - make_interval(hours => p_hours))");
+    expect(reap).toContain("array_agg(x.book_id) filter (where x.trigger in ('build', 'rebuild') and x.book_id is not null)");
+    expect(reap).toContain("security invoker");
+  });
+
+  it("the code's storybook stage states match the migration", () => {
+    const src = readFileSync(join(process.cwd(), "src", "lib", "storybook", "run", "progress.ts"), "utf8");
+    const states = JSON.parse(/export const STORY_RUN_STATES = (\[[^\]]*\]) as const;/.exec(src)![1]!) as string[];
+    expect(states).toEqual(["discovering", "organizing", "writing", "designing"]);
+  });
+
+  it("rls_check.sql covers 2800 and counts 187 checks", () => {
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain(name);
+    expect(rls).toContain("RLS FAIL [storybook runs]");
+    expect(rls).toContain("RLS OK — all 187 checks passed");
   });
 });

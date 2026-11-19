@@ -75,7 +75,10 @@
 --      and 20261121002600_story_ai_calls.sql (story_ai_calls: service role
 --      only, kind / scope / error-code checks, no text columns)
 --      and 20261122002700_story_compose_kind.sql (story_ai_calls kind and
---      scope 'compose' accepted, unknown values still rejected).
+--      scope 'compose' accepted, unknown values still rejected)
+--      and 20261123002800_storybook_runs.sql (agent_runs trigger
+--      'storybook' + stage states only for it, never queued, one active run
+--      per book shared with builds, claim leases it, owner can't write runs).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -84,7 +87,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 186 checks passed
+--       RLS OK — all 187 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -136,6 +139,9 @@ declare
   v_res      jsonb;
   book_e     uuid;
   run_rw     uuid;
+  book_sb    uuid;
+  run_sb     uuid;
+  run_rw2    uuid;
   book_p     uuid;
   ip_1       text;
   ip_2       text;
@@ -4371,6 +4377,75 @@ begin
     insert into public.story_ai_calls (user_id, book_id, run_id, kind, scope, model, prompt_version, mode, status)
     values (uid_a, book_a, gen_random_uuid(), 'compose', 'compose', 'm', 'p', 'live', 'ok');
     raise exception 'RLS FAIL [story compose kind]: owner can insert a compose row';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  checks := checks + 1;
+
+  -- ===========================================================================
+  -- 2800 storybook runs: trigger 'storybook' + stage states (Task 8)
+  -- ===========================================================================
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  insert into public.books (user_id, title) values (uid_a, 'RLS check storybook') returning id into book_sb;
+  set local role service_role;
+  -- capped creation inserts a storybook run in 'discovering' (never 'queued')
+  run_sb := (public.create_agent_run_capped(book_sb, uid_a, 'storybook', 'replay', 100, 100, false) ->> 'id')::uuid;
+  if run_sb is null or (select state from public.agent_runs where id = run_sb) <> 'discovering' then
+    raise exception 'RLS FAIL [storybook runs]: capped creation did not insert a discovering storybook run';
+  end if;
+  -- one active run per book is shared with builds: a build of the same book is already_running
+  if public.create_agent_run_capped(book_sb, uid_a, 'build', 'replay', 100, 100, false) ->> 'error' <> 'already_running' then
+    raise exception 'RLS FAIL [storybook runs]: a build started while a storybook run is active';
+  end if;
+  -- stage states only with trigger 'storybook'; an unfinished storybook run is never 'queued'
+  begin
+    insert into public.agent_runs (user_id, trigger, mode, state) values (uid_a, 'build', 'replay', 'writing');
+    raise exception 'RLS FAIL [storybook runs]: a build run accepted a storybook stage state';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.agent_runs (user_id, trigger, mode, state) values (uid_a, 'storybook', 'replay', 'queued');
+    raise exception 'RLS FAIL [storybook runs]: a queued storybook run was accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.agent_runs (user_id, trigger, mode, state) values (uid_a, 'story', 'replay', 'done');
+    raise exception 'RLS FAIL [storybook runs]: an unknown trigger was accepted';
+  exception when check_violation then null;
+  end;
+  -- claim leases a storybook run (and still refuses a rewrite run)
+  if public.claim_agent_run(run_sb, 30) is null then
+    raise exception 'RLS FAIL [storybook runs]: claim_agent_run refused an active storybook run';
+  end if;
+  insert into public.agent_runs (user_id, trigger, mode, state) values (uid_a, 'rewrite', 'replay', 'rewriting')
+  returning id into run_rw2;
+  if public.claim_agent_run(run_rw2, 30) is not null then
+    raise exception 'RLS FAIL [storybook runs]: claim_agent_run leased a rewrite run';
+  end if;
+  -- a cancelled run is failed + error_code 'cancelled' and frees the book
+  update public.agent_runs set state = 'failed', error_code = 'cancelled', finished_at = now(),
+         lease_until = null, lease_token = null where id = run_sb;
+  if public.claim_agent_run(run_sb, 30) is not null then
+    raise exception 'RLS FAIL [storybook runs]: a cancelled storybook run could be claimed';
+  end if;
+  if public.create_agent_run_capped(book_sb, uid_a, 'storybook', 'replay', 100, 100, false) ->> 'id' is null then
+    raise exception 'RLS FAIL [storybook runs]: a new storybook run was refused after a cancel';
+  end if;
+  reset role;
+  -- the owner still cannot write runs
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  begin
+    insert into public.agent_runs (book_id, user_id, trigger, mode, state)
+    values (book_sb, uid_a, 'storybook', 'live', 'discovering');
+    raise exception 'RLS FAIL [storybook runs]: owner can insert a storybook run';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.agent_runs set state = 'done' where id = run_sb;
+    raise exception 'RLS FAIL [storybook runs]: owner can update a storybook run';
   exception when insufficient_privilege then null;
   end;
   reset role;
