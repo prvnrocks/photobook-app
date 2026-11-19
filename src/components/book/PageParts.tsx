@@ -453,7 +453,8 @@ function panelText(panel: RenderTextPanel, ink: Ink): { className: string; style
 
 /**
  * A layout text panel (M10b A9): bound doc text in its design-style font, logical alignment,
- * dir="auto" (Arabic renders right-to-left with start/end mirrored). Vertically centred in its box.
+ * dir="auto" (Arabic renders right-to-left with start/end mirrored). Vertically centred in its box
+ * unless the layout sets valign "start" (story paragraphs sit under their accent bar).
  */
 export function TextPanel({ panel, ink }: { panel: RenderTextPanel; ink: Ink }) {
   if (panel.quarter) return <QuarterTurnTextPanel panel={panel} quarter={panel.quarter} ink={ink} />;
@@ -462,7 +463,7 @@ export function TextPanel({ panel, ink }: { panel: RenderTextPanel; ink: Ink }) 
   // Task 7: page texts carry their element id (editor targets, tests); older panels keep their markup.
   const data: Record<`data-${string}`, string> = panel.textId ? { "data-text-panel": panel.bind, "data-text-id": panel.textId } : { "data-text-panel": panel.bind };
   return (
-    <Box rect={panel.rect} className="flex flex-col justify-center overflow-hidden" data={data}>
+    <Box rect={panel.rect} className={`flex flex-col ${panel.valign === "start" ? "justify-start" : "justify-center"} overflow-hidden`} data={data}>
       <p dir="auto" lang={panel.lang} className={text.className} style={text.style} data-testid={`text-${panel.bind}`}>
         {panel.text}
       </p>

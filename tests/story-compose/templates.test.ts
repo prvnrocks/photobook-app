@@ -5,7 +5,10 @@ import { pageMm } from "@/lib/book/format";
 import { STICKERS } from "@/lib/design/stickers";
 import { getLayout, LAYOUTS, STORY_LAYOUTS, isStoryLayoutId } from "@/lib/layouts";
 import { layoutsFor } from "@/lib/book/spreads";
-import { STORY_PHOTO_GAPS, STORY_PHOTO_KINDS, STORY_TEMPLATE_KINDS, storyTemplateId } from "@/lib/layouts/story";
+import { STORY_BODY_SIZE, STORY_PHOTO_GAPS, STORY_PHOTO_KINDS, STORY_TEMPLATE_KINDS, storyTemplateId } from "@/lib/layouts/story";
+import { panelFontMm, panelTextMetrics } from "@/lib/book/render";
+import { roleFont } from "@/lib/design/styles";
+import { maxText } from "@/lib/storybook/compose/dev-fixture";
 import { approvedTemplateIds, getPageTemplate, isApprovedTemplate, pageTemplates, panelCapacityWords, templateCapacity, templateFamilyOf, TEMPLATE_FAMILIES, templatesFor } from "@/lib/layouts/templates";
 import { WORD_BOUNDS } from "@/lib/ai/story/grounding";
 
@@ -130,5 +133,60 @@ describe("template registry", () => {
       expect(c.en).toBeGreaterThan(0);
       expect(c.ar).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("story text sizing (fix: tiny paragraph in a huge box)", () => {
+  const tells = () => pageTemplates().filter((t) => t.isNew && t.family === "storytelling");
+
+  it("paragraph panels use the body-copy size range and sit at the top of their box", () => {
+    for (const t of tells()) {
+      const main = getLayout(t.id)!.texts!.find((x) => x.bind === "pageText" && (x.n ?? 0) === 0)!;
+      expect(main.size, t.id).toEqual(STORY_BODY_SIZE);
+      expect(main.valign, t.id).toBe("start");
+    }
+    // openers keep the role's own size and centring (unchanged look)
+    for (const t of pageTemplates().filter((x) => x.isNew && x.family === "chapter_opening")) {
+      const main = getLayout(t.id)!.texts!.find((x) => x.bind === "pageText")!;
+      expect(main.size, t.id).toBeUndefined();
+      expect(main.valign, t.id).toBeUndefined();
+    }
+  });
+
+  // Upper bound 47 %: A5 landscape tell-3 holds three photos of ANY orientation in a row, which caps
+  // the photo height at 80 mm (a landscape photo in a taller slot loses > 45 % — CROP_REJECT).
+  it("pages with photos give the paragraph 20–47 % of the page (box + its white space), photos the rest", () => {
+    for (const t of tells().filter((x) => x.photoCount > 0)) {
+      const main = getLayout(t.id)!.texts!.find((x) => x.bind === "pageText" && (x.n ?? 0) === 0)!;
+      const region = main.area ?? main.box;
+      const share = (region.w * region.h) / 10000;
+      expect(share, t.id).toBeGreaterThanOrEqual(0.2);
+      expect(share, t.id).toBeLessThanOrEqual(0.47);
+    }
+  });
+
+  it("the longest paragraph (60 words) fits every paragraph panel at ≥ 10 pt in EN and AR; a 25-word one sets at the max size", () => {
+    for (const t of tells()) {
+      const p = t.panels.find((x) => x.n === 0)!;
+      const page = pageMm(t.format);
+      const w = (p.rect.w / 100) * page.w;
+      const h = (p.rect.h / 100) * page.h;
+      for (const lang of ["en", "ar"] as const) {
+        const long = maxText("paragraph", lang, 3);
+        const f = roleFont(t.style, p.font, long, { captionLang: lang });
+        const m = panelTextMetrics(long, p.font, w, h, f, t.style, 1, undefined, p.size);
+        expect(m.fits, `${t.id} ${lang}`).toBe(true);
+        expect(m.sizeMm, `${t.id} ${lang}`).toBeGreaterThanOrEqual(STORY_BODY_SIZE.minMm);
+        const short = long.split(" ").slice(0, 25).join(" ");
+        expect(panelTextMetrics(short, p.font, w, h, roleFont(t.style, p.font, short, { captionLang: lang }), t.style, 1, undefined, p.size).sizeMm, `${t.id} ${lang} short`).toBe(STORY_BODY_SIZE.maxMm);
+      }
+    }
+  });
+
+  it("panelFontMm honours a panel's own range and is unchanged without one", () => {
+    const words = Array.from({ length: 30 }, () => "words").join(" ");
+    expect(panelFontMm(words, "body", 124, 60)).toBe(3.2);
+    expect(panelFontMm(words, "body", 124, 60, undefined, STORY_BODY_SIZE)).toBe(STORY_BODY_SIZE.maxMm);
+    expect(panelFontMm(Array.from({ length: 400 }, () => "words").join(" "), "body", 124, 60, undefined, STORY_BODY_SIZE)).toBe(STORY_BODY_SIZE.minMm);
   });
 });

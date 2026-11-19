@@ -195,13 +195,13 @@ function assignPhotos(t: PageTemplate, layout: Layout, photos: readonly ComposeP
 }
 
 /** Does `text` fit `panel` of `t` (caption areas at the fixed caption size)? */
-export function textFits(t: Pick<PageTemplate, "style" | "format">, panel: Pick<TemplatePanel, "n" | "rect" | "font">, text: string, lang: "en" | "ar", slack = CAPACITY_SLACK): boolean {
+export function textFits(t: Pick<PageTemplate, "style" | "format">, panel: Pick<TemplatePanel, "n" | "rect" | "font" | "size">, text: string, lang: "en" | "ar", slack = CAPACITY_SLACK): boolean {
   const page = pageMm(t.format);
   const wMm = (panel.rect.w / 100) * page.w;
   const hMm = (panel.rect.h / 100) * page.h;
   const font: TextRole = panel.font;
   const f = roleFont(t.style, font, text, { captionLang: lang });
-  return panelTextMetrics(text, font, wMm, hMm, f, t.style, slack, panel.n === -1 ? CAPTION_SIZE_MM : undefined).fits;
+  return panelTextMetrics(text, font, wMm, hMm, f, t.style, slack, panel.n === -1 ? CAPTION_SIZE_MM : undefined, panel.size).fits;
 }
 
 type TextPlan = { ok: true; texts: TextAssignment[] } | { ok: false; reason: "text_unplaced" | "text_overflow"; detail: string };

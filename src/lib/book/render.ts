@@ -243,6 +243,8 @@ export interface RenderTextPanel extends RenderText {
   color?: string;
   /** Task 7, pageText panels only: the page text's element id (data-text-id). */
   textId?: string;
+  /** Story-text fix: "start" = top of the box (LayoutText.valign); absent = vertically centred. Plain panels only. */
+  valign?: "start";
   /**
    * M10c label plate behind the text: artwork fills the panel box; the text sits in `textBox`
    * (% of the panel box, from the plate's catalogue textBox) in the plate's ink.
@@ -709,8 +711,10 @@ export function panelFontMm(
   boxWmm: number,
   boxHmm: number,
   face?: { charEm: number; lineGrow: number; /** panelLeading: line-height override + ink headroom (em, top + bottom). */ lineHeight?: number; padEm?: number },
+  /** A layout panel's own size range (LayoutText.size) instead of the role's maxMm / minMm. */
+  range?: { maxMm: number; minMm: number },
 ): number {
-  const base = PANEL_TYPE[role];
+  const base = range ? { ...PANEL_TYPE[role], ...range } : PANEL_TYPE[role];
   const t = face ? { ...base, charEm: face.charEm, lineHeight: (face.lineHeight ?? base.lineHeight) * face.lineGrow } : base;
   const pad = face?.padEm ?? 0;
   const paragraphs = panelParagraphs(text);
@@ -862,6 +866,8 @@ export function panelTextMetrics(
   slack = 1,
   /** A fixed type size (mm) instead of the fitter's — page captions render at one size (CAPTION_FONT_SIZE_CQW). */
   fixedSizeMm?: number,
+  /** The panel's own size range (LayoutText.size), as the renderer uses it. */
+  range?: { maxMm: number; minMm: number },
 ): { sizeMm: number; neededMm: number; lines: number; fits: boolean } {
   const leading = panelLeading(style, role, f);
   const charEm = panelCharEm(f);
@@ -870,7 +876,7 @@ export function panelTextMetrics(
     charEm,
     lineGrow,
     ...(leading.padEm ? { lineHeight: leading.lineHeight, padEm: leading.padEm[0] + leading.padEm[1] } : {}),
-  });
+  }, range);
   const perLine = Math.max(1, Math.floor(boxWmm / (sizeMm * charEm)));
   const lines = wrappedLines(panelParagraphs(text), perLine);
   const pad = leading.padEm ? leading.padEm[0] + leading.padEm[1] : 0;
@@ -1143,6 +1149,7 @@ function textPanels(
         lineGrow: panelLineGrow(f),
         ...(leading.padEm ? { lineHeight: leading.lineHeight, padEm: leading.padEm[0] + leading.padEm[1] } : {}),
       },
+      t.size,
     );
     out.push({
       bind: t.bind,
@@ -1159,6 +1166,7 @@ function textPanels(
       ...(quarter ? { quarter: { deg: t.rotate as 90 | -90, inner: quarterInner(boxWmm, boxHmm) } } : t.rotate ? { rotate: t.rotate } : {}),
       ...(colours && t.ink ? { color: colours[INK_COLOUR[t.ink]] } : {}),
       ...(t.bind === "pageText" ? { textId: pageTextOf(owner, t.n ?? 0)?.id } : {}),
+      ...(t.valign && !quarter && !plateDef && !t.rotate ? { valign: t.valign } : {}),
       ...(plateDef && t.plate
         ? { plate: { art: stickerArt(plateDef, t.plate.tint), textBox, ink: plateInk(plateDef, t.plate.tint) } }
         : {}),

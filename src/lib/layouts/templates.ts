@@ -52,6 +52,8 @@ export interface TemplatePanel {
   /** % of the page. */
   rect: Rect;
   font: TextRole;
+  /** The panel's own type size range (LayoutText.size); absent = the role's. */
+  size?: { maxMm: number; minMm: number };
 }
 
 export interface PageTemplate {
@@ -115,7 +117,7 @@ function panelsOf(layout: Layout): TemplatePanel[] {
   for (const t of layout.texts ?? []) {
     if (t.bind !== "pageText") continue;
     const n = t.n ?? 0;
-    out.push({ n, roles: n === 0 ? MAIN_ROLES : QUOTE_ROLES, rect: t.box, font: t.font });
+    out.push({ n, roles: n === 0 ? MAIN_ROLES : QUOTE_ROLES, rect: t.box, font: t.font, ...(t.size ? { size: t.size } : {}) });
   }
   out.sort((a, b) => a.n - b.n);
   if (layout.caption) {
@@ -125,14 +127,17 @@ function panelsOf(layout: Layout): TemplatePanel[] {
   return out;
 }
 
-/** Geometric narrative share of a layout: text boxes (pageText, caption, chapter title, date) vs photo slots. */
+/**
+ * Geometric narrative share of a layout: text boxes (pageText, caption, chapter title, date) vs photo
+ * slots. A story paragraph counts its `area` (box + its own white space, ./story) when it has one.
+ */
 export function layoutNarrativeShare(layout: Layout, shown?: (bind: string, n: number) => boolean): number {
   let text = 0;
   for (const t of layout.texts ?? []) {
     if (t.bind === "pageCaption" || t.bind === "chapterDescription") continue;
     if (t.bind !== "pageText" && t.bind !== "chapterTitle" && t.bind !== "dateLabel") continue;
     if (shown && !shown(t.bind, t.n ?? 0)) continue;
-    text += clippedArea(t.box);
+    text += clippedArea(t.area ?? t.box);
   }
   if (layout.caption && (!shown || shown("pageCaption", 0))) text += clippedArea(layout.caption);
   const photos = layout.slots.reduce((s, r) => s + clippedArea(r), 0);
@@ -236,7 +241,7 @@ const capacityCache = new Map<string, number>();
  * (render.ts panelTextMetrics, the renderer's own fitter) with `slack` of the box height
  * (default 1 = exactly fits; the selector uses CAPACITY_SLACK). Memoised.
  */
-export function panelCapacityWords(template: Pick<PageTemplate, "id" | "style" | "format">, panel: Pick<TemplatePanel, "n" | "rect" | "font">, lang: "en" | "ar", slack = 1): number {
+export function panelCapacityWords(template: Pick<PageTemplate, "id" | "style" | "format">, panel: Pick<TemplatePanel, "n" | "rect" | "font" | "size">, lang: "en" | "ar", slack = 1): number {
   const key = `${template.id}:${panel.n}:${lang}:${slack}`;
   const hit = capacityCache.get(key);
   if (hit !== undefined) return hit;
@@ -247,7 +252,7 @@ export function panelCapacityWords(template: Pick<PageTemplate, "id" | "style" |
   const fits = (n: number) => {
     const text = sample(n);
     const f = roleFont(template.style, panel.font, text, { captionLang: lang });
-    return panelTextMetrics(text, panel.font, wMm, hMm, f, template.style, slack).fits;
+    return panelTextMetrics(text, panel.font, wMm, hMm, f, template.style, slack, undefined, panel.size).fits;
   };
   let lo = 0;
   let hi = 600;

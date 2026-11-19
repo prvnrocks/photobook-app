@@ -3,7 +3,7 @@
 // pages (photos + a paragraph, or text only), and closing reflections. Hero and collage pages reuse
 // the existing catalogue (src/lib/layouts/templates.ts tags them).
 //
-// Every design style × format gets the same ten templates, drawn once per format in page mm
+// Every design style × format gets the same text templates (STORY_TEMPLATE_KINDS), drawn once per format in page mm
 // (y down) and dressed per style below — the style decides framing (full bleed / inset / rounded /
 // polaroid), text alignment and colour roles, never the text capacity rules. Generated once at
 // module load from the tables in this file: deterministic, no layout maths in components.
@@ -21,13 +21,16 @@
 import type { BookFormat, DesignStyle, Layout, LayoutBlock, LayoutDecoration, LayoutSlotDef, LayoutText, Rect, TextInk } from "@/lib/book/types";
 
 /**
- * The fourteen text template kinds every style × format gets, in catalogue order. Variants exist so a
+ * The text template kinds every style × format gets, in catalogue order. Variants exist so a
  * page never has to repeat its neighbour and so both photo orientations fit without a heavy crop:
- * open-c / tell-1c take the orientation open-a,b / tell-1a,b do not. hero-small (a framed photo of
+ * open-c / tell-1c take the orientation open-a,b / tell-1a,b do not; on A5 portrait two photos
+ * side by side cannot fill ~65 % of the page in any orientation, so tell-2 takes a portrait pair,
+ * tell-2b a landscape pair and tell-2c one of each (A5 landscape: tell-2 / tell-2b take any pair).
+ * hero-small (a framed photo of
  * ~90 mm with a caption) is the low-resolution fallback: a photo too small for a full-bleed hero
  * still prints at ≥ 150 dpi there.
  */
-export const STORY_TEMPLATE_KINDS = ["open-a", "open-b", "open-c", "tell-1a", "tell-1b", "tell-1c", "tell-2", "tell-2b", "tell-3", "tell-3b", "tell-0", "tell-0q", "close-0", "close-1", "hero-small"] as const;
+export const STORY_TEMPLATE_KINDS = ["open-a", "open-b", "open-c", "tell-1a", "tell-1b", "tell-1c", "tell-2", "tell-2b", "tell-2c", "tell-3", "tell-3b", "tell-0", "tell-0q", "close-0", "close-1", "hero-small"] as const;
 /**
  * Photo template kinds (hero = 1 photo, grid = collage), generated ONLY where the existing catalogue
  * has no tagged hero / collage template of that kind for a style × format (STORY_PHOTO_GAPS) —
@@ -105,6 +108,16 @@ interface PhotoPlan {
   caption?: Box;
 }
 
+/**
+ * Type size range (mm on the page, LayoutText.size) of story paragraphs and closings: 11.5 pt down
+ * to 10 pt at A5 (same mm on landscape — the renderer sizes in page mm). The fitter starts at maxMm
+ * and shrinks only as far as minMm; every main panel below is sized so the longest AI block (70
+ * words, EN and AR, tests/story-compose/templates.test.ts) fits at minMm with an 8 % margin, and a
+ * 60-word paragraph sets at or near maxMm. The role's own range (body, 3.2 → 2.8 mm) is a caption
+ * size meant for chapter descriptions.
+ */
+export const STORY_BODY_SIZE = { maxMm: 4.05, minMm: 3.5 } as const;
+
 const PW = 148;
 const PH = 210;
 const LW = 210;
@@ -115,17 +128,18 @@ const PORTRAIT_PLANS: Record<StoryTextKind, Plan> = {
   "open-a": { name: "Chapter opening: photo above, title and intro below", photos: [[0, 0, PW, 110]], prefers: ["any"], date: [12, 117, 136, 123], chapter: [12, 124, 136, 139], main: [12, 142, 136, 200], panel: [0, 110, PW, PH] },
   "open-b": { name: "Chapter opening: title and intro above, photo below", photos: [[0, 92, PW, PH]], prefers: ["any"], date: [12, 12, 136, 18], chapter: [12, 19, 136, 34], main: [12, 37, 136, 84], panel: [0, 0, PW, 92] },
   "open-c": { name: "Chapter opening: tall photo, title and intro below", photos: [[0, 0, PW, 136]], prefers: ["portrait"], date: [12, 142, 136, 148], chapter: [12, 149, 136, 163], main: [12, 166, 136, 200], panel: [0, 136, PW, PH] },
-  "tell-1a": { name: "Story: photo above, paragraph below", photos: [[0, 0, PW, 110]], prefers: ["landscape"], main: [12, 120, 136, 200] },
+  "tell-1a": { name: "Story: photo above, paragraph below", photos: [[0, 0, PW, 124]], prefers: ["landscape"], main: [12, 134, 136, 200] },
   "tell-1c": { name: "Story: portrait photo, paragraph below", photos: [[24, 12, 124, 146]], prefers: ["portrait"], main: [12, 154, 136, 200] },
-  "tell-1b": { name: "Story: paragraph above, photo below", photos: [[0, 100, PW, PH]], prefers: ["landscape"], main: [12, 12, 136, 92] },
-  "tell-2": { name: "Story: two photos and a paragraph", photos: [[0, 0, (PW - G) / 2, 88], [(PW + G) / 2, 0, PW, 88]], prefers: ["any", "any"], main: [12, 98, 136, 200] },
+  "tell-1b": { name: "Story: paragraph above, photo below", photos: [[0, 86, PW, PH]], prefers: ["landscape"], main: [12, 28, 136, 76] },
+  "tell-2": { name: "Story: two portrait photos and a paragraph", photos: [[0, 0, (PW - G) / 2, 130], [(PW + G) / 2, 0, PW, 130]], prefers: ["portrait", "portrait"], main: [12, 140, 136, 200] },
   "tell-3": { name: "Story: three photos and a paragraph", photos: [[0, 0, PW, 74], [0, 74 + G, (PW - G) / 2, 140], [(PW + G) / 2, 74 + G, PW, 140]], prefers: ["landscape", "any", "any"], main: [12, 150, 136, 200] },
-  "tell-2b": { name: "Story: paragraph above two photos", photos: [[0, 120, (PW - G) / 2, PH], [(PW + G) / 2, 120, PW, PH]], prefers: ["any", "any"], main: [12, 12, 136, 110] },
+  "tell-2b": { name: "Story: paragraph above two landscape photos", photos: [[0, 66, PW, (66 + PH - G) / 2], [0, (66 + PH + G) / 2, PW, PH]], prefers: ["landscape", "landscape"], main: [12, 12, 136, 56] },
+  "tell-2c": { name: "Story: wide photo, tall photo and a paragraph", photos: [[0, 0, PW, 94], [0, 94 + G, 66, PH]], prefers: ["landscape", "portrait"], main: [76, 104, 136, 202] },
   "tell-3b": { name: "Story: paragraph above three photos", photos: [[0, 72, PW, 140], [0, 140 + G, (PW - G) / 2, PH], [(PW + G) / 2, 140 + G, PW, PH]], prefers: ["landscape", "any", "any"], main: [12, 12, 136, 62] },
-  "tell-0": { name: "Story: text page", photos: [], prefers: [], main: [16, 30, 132, 180] },
+  "tell-0": { name: "Story: text page", photos: [], prefers: [], main: [16, 46, 132, 190] },
   "tell-0q": { name: "Story: pull quote and text", photos: [], prefers: [], quote: [16, 22, 132, 62], main: [16, 72, 132, 190] },
-  "close-0": { name: "Closing reflection", photos: [], prefers: [], main: [18, 40, 130, 170], centred: true, panel: [0, 0, PW, PH] },
-  "close-1": { name: "Closing reflection with a photo", photos: [[34, 20, 114, 80]], prefers: ["landscape"], main: [16, 92, 132, 190], centred: true },
+  "close-0": { name: "Closing reflection", photos: [], prefers: [], main: [18, 70, 130, 186], centred: true, panel: [0, 0, PW, PH] },
+  "close-1": { name: "Closing reflection with a photo", photos: [[34, 20, 114, 80]], prefers: ["landscape"], main: [16, 90, 132, 172], centred: true },
   "hero-small": { name: "1 framed photo with caption (small)", photos: [[29, 44, 119, 134]], prefers: ["any"], main: [0, 0, 0, 0], caption: [18, 144, 130, 166] },
 };
 
@@ -133,16 +147,17 @@ const LANDSCAPE_PLANS: Record<StoryTextKind, Plan> = {
   "open-a": { name: "Chapter opening: photo left, title and intro right", photos: [[0, 0, 118, LH]], prefers: ["any"], date: [128, 14, 200, 20], chapter: [128, 22, 200, 40], main: [128, 44, 200, 136], panel: [118, 0, LW, LH] },
   "open-b": { name: "Chapter opening: title and intro left, photo right", photos: [[92, 0, LW, LH]], prefers: ["any"], date: [10, 14, 82, 20], chapter: [10, 22, 82, 40], main: [10, 44, 82, 136], panel: [0, 0, 92, LH] },
   "open-c": { name: "Chapter opening: wide photo left, title and intro right", photos: [[0, 0, 126, LH]], prefers: ["landscape"], date: [136, 14, 200, 20], chapter: [136, 22, 200, 40], main: [136, 44, 200, 136], panel: [126, 0, LW, LH] },
-  "tell-1a": { name: "Story: photo left, paragraph right", photos: [[0, 0, 112, LH]], prefers: ["portrait"], main: [122, 14, 200, 134] },
+  "tell-1a": { name: "Story: photo left, paragraph right", photos: [[0, 0, 124, LH]], prefers: ["portrait"], main: [134, 14, 200, 134] },
   "tell-1c": { name: "Story: wide photo above, paragraph below", photos: [[0, 0, LW, 96]], prefers: ["landscape"], main: [14, 104, 196, 138] },
-  "tell-1b": { name: "Story: paragraph left, photo right", photos: [[98, 0, LW, LH]], prefers: ["portrait"], main: [10, 14, 88, 134] },
-  "tell-2": { name: "Story: two photos and a paragraph", photos: [[0, 0, (LW - G) / 2, 84], [(LW + G) / 2, 0, LW, 84]], prefers: ["any", "any"], main: [14, 92, 196, 138] },
+  "tell-1b": { name: "Story: paragraph left, photo right", photos: [[86, 0, LW, LH]], prefers: ["portrait"], main: [10, 14, 76, 134] },
+  "tell-2": { name: "Story: two photos and a paragraph", photos: [[0, 0, (LW - G) / 2, 102], [(LW + G) / 2, 0, LW, 102]], prefers: ["any", "any"], main: [14, 112, 196, 140] },
   "tell-3": { name: "Story: three photos and a paragraph", photos: [[0, 0, (LW - 2 * G) / 3, 80], [(LW - 2 * G) / 3 + G, 0, (2 * (LW - 2 * G)) / 3 + G, 80], [(2 * (LW - 2 * G)) / 3 + 2 * G, 0, LW, 80]], prefers: ["any", "any", "any"], main: [14, 90, 196, 138] },
-  "tell-2b": { name: "Story: paragraph above two photos", photos: [[0, 62, (LW - G) / 2, LH], [(LW + G) / 2, 62, LW, LH]], prefers: ["any", "any"], main: [14, 10, 196, 52] },
-  "tell-3b": { name: "Story: paragraph above three photos", photos: [[0, 62, (LW - 2 * G) / 3, LH], [(LW - 2 * G) / 3 + G, 62, (2 * (LW - 2 * G)) / 3 + G, LH], [(2 * (LW - 2 * G)) / 3 + 2 * G, 62, LW, LH]], prefers: ["portrait", "portrait", "portrait"], main: [14, 10, 196, 52] },
-  "tell-0": { name: "Story: text page", photos: [], prefers: [], main: [30, 20, 180, 128] },
+  "tell-2b": { name: "Story: paragraph above two photos", photos: [[0, 48, (LW - G) / 2, LH], [(LW + G) / 2, 48, LW, LH]], prefers: ["any", "any"], main: [14, 12, 196, 40] },
+  "tell-2c": { name: "Story: tall photo, wide photo and a paragraph", photos: [[0, 0, 84, LH], [84 + G, 0, LW, 76]], prefers: ["portrait", "landscape"], main: [96, 86, 196, 140] },
+  "tell-3b": { name: "Story: paragraph above three photos", photos: [[0, 48, (LW - 2 * G) / 3, LH], [(LW - 2 * G) / 3 + G, 48, (2 * (LW - 2 * G)) / 3 + G, LH], [(2 * (LW - 2 * G)) / 3 + 2 * G, 48, LW, LH]], prefers: ["portrait", "portrait", "portrait"], main: [14, 12, 196, 40] },
+  "tell-0": { name: "Story: text page", photos: [], prefers: [], main: [30, 30, 180, 132] },
   "tell-0q": { name: "Story: pull quote and text", photos: [], prefers: [], quote: [30, 16, 180, 44], main: [30, 52, 180, 132] },
-  "close-0": { name: "Closing reflection", photos: [], prefers: [], main: [36, 26, 174, 122], centred: true, panel: [0, 0, LW, LH] },
+  "close-0": { name: "Closing reflection", photos: [], prefers: [], main: [36, 44, 174, 134], centred: true, panel: [0, 0, LW, LH] },
   "close-1": { name: "Closing reflection with a photo", photos: [[20, 30, 96, 118]], prefers: ["portrait"], main: [106, 24, 192, 124], centred: true },
   "hero-small": { name: "1 framed photo with caption (small)", photos: [[60, 16, 150, 106]], prefers: ["any"], main: [0, 0, 0, 0], caption: [36, 114, 174, 134] },
 };
@@ -303,6 +318,32 @@ function buildPhotoFrom(style: DesignStyle, format: BookFormat, plan: PhotoPlan)
   };
 }
 
+/**
+ * The page region a story paragraph owns (LayoutText.area, the narrative side of the 65 / 35
+ * balance): its box grown sideways to the nearest photo or the trim, then up / down the same way —
+ * the text, its accent bar and the white space around them. Plan geometry (before style insets), so
+ * every style measures the same design.
+ */
+function textRegion(b: Box, photos: readonly Box[], W: number, H: number): Box {
+  const e = 1e-6;
+  const overlaps = (a0: number, a1: number, b0: number, b1: number) => Math.min(a1, b1) - Math.max(a0, b0) > e;
+  let x0 = 0;
+  let x1 = W;
+  for (const p of photos) {
+    if (!overlaps(b[1], b[3], p[1], p[3])) continue;
+    if (p[2] <= b[0] + e) x0 = Math.max(x0, p[2]);
+    if (p[0] >= b[2] - e) x1 = Math.min(x1, p[0]);
+  }
+  let y0 = 0;
+  let y1 = H;
+  for (const p of photos) {
+    if (!overlaps(x0, x1, p[0], p[2])) continue;
+    if (p[3] <= b[1] + e) y0 = Math.max(y0, p[3]);
+    if (p[1] >= b[3] - e) y1 = Math.min(y1, p[1]);
+  }
+  return [x0, y0, x1, y1];
+}
+
 function buildOne(style: DesignStyle, format: BookFormat, kind: StoryTextKind): Layout {
   const portrait = format === "A5_PORTRAIT";
   const W = portrait ? PW : LW;
@@ -327,10 +368,17 @@ function buildOne(style: DesignStyle, format: BookFormat, kind: StoryTextKind): 
     ...(ink ? { ink } : {}),
     ...extra,
   });
+  // Storytelling pages read as body copy: the paragraph takes STORY_BODY_SIZE and sits at the top of
+  // its box, right under the accent bar (a centred block floated in the middle of a tall box).
+  // Closings keep the body size range too but stay centred; openers keep the role's (unchanged).
+  // The text-only closing (close-0) also starts under its bar, a third of the way down the page.
+  const story = kind.startsWith("tell");
+  const top: Partial<LayoutText> = story || kind === "close-0" ? { valign: "start" } : {};
   if (plan.date) texts.push(t("dateLabel", plan.date, "year", inks?.date));
   if (plan.chapter) texts.push(t("chapterTitle", plan.chapter, "chapter", inks?.chapter));
-  if (plan.quote) texts.push(t("pageText", plan.quote, "chapter", inks?.quote, { n: 1 }));
-  texts.push(t("pageText", plan.main, "body", inks?.body, { n: 0 }));
+  if (plan.quote) texts.push(t("pageText", plan.quote, "chapter", inks?.quote, { n: 1, ...top }));
+  const area = story && n > 0 ? { area: pctRect(textRegion(plan.main, plan.photos, W, H), W, H) } : {};
+  texts.push(t("pageText", plan.main, "body", inks?.body, { n: 0, ...(story || kind.startsWith("close") ? { size: { ...STORY_BODY_SIZE } } : {}), ...top, ...area }));
 
   const blocks: LayoutBlock[] = [];
   if (panelled) blocks.push({ box: pctRect(plan.panel!, W, H), fill: "panel", layer: "under" });
@@ -341,7 +389,9 @@ function buildOne(style: DesignStyle, format: BookFormat, kind: StoryTextKind): 
   } else if (d.bar && panelled) {
     const first = plan.date ?? plan.main;
     const y1 = first[1] - 2.6;
-    blocks.push({ box: pctRect([first[0], y1 - d.bar.h, first[0] + d.bar.w, y1], W, H), fill: "accent", layer: "under" });
+    // Centred text (the closing) gets a centred bar.
+    const x0 = align === "center" ? (first[0] + first[2] - d.bar.w) / 2 : first[0];
+    blocks.push({ box: pctRect([x0, y1 - d.bar.h, x0 + d.bar.w, y1], W, H), fill: "accent", layer: "under" });
   }
 
   const decorations = tapeOver(d, plan.photos, W, H);
@@ -367,7 +417,7 @@ const FORMATS: readonly BookFormat[] = ["A5_PORTRAIT", "A5_LANDSCAPE"];
 
 /**
  * Every story template: style by style (catalogue order), portrait then landscape; per style ×
- * format the ten text templates, then its gap photo templates (STORY_PHOTO_GAPS, kind order).
+ * format the text templates, then its gap photo templates (STORY_PHOTO_GAPS, kind order).
  */
 export const STORY_LAYOUTS: readonly Layout[] = STYLES.flatMap((style) =>
   FORMATS.flatMap((format) => [

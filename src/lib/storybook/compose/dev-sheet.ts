@@ -23,12 +23,14 @@ export function templateSheetDoc(design: BookDesign, lang: "en" | "ar", which: "
   const style = { background: { kind: "color" as const, hex: "#FFFFFF" }, designStyle: design.designStyle, font: styleCaptionFont(design.designStyle, lang) };
   const pages: BookPage[] = templates.map((t, i) => {
     const layout = getLayout(t.id)!;
+    const used = new Set<string>();
     const slots = layout.slots.map((_, k) => {
       // match each slot's orientation so the sheet shows the template as intended
       const want = layout.prefers[k];
       const pool = photos.slice(1);
-      const pick = pool.find((p, j) => j >= next - 1 && (want === "any" || (want === "portrait" ? (p.height ?? 0) > (p.width ?? 0) : (p.width ?? 0) > (p.height ?? 0)))) ?? pool[next - 1]!;
+      const pick = pool.find((p, j) => j >= next - 1 && !used.has(p.id) && (want === "any" || (want === "portrait" ? (p.height ?? 0) > (p.width ?? 0) : (p.width ?? 0) > (p.height ?? 0)))) ?? pool[next - 1]!;
       next++;
+      used.add(pick.id);
       return { photoId: pick.id, crop: { x: 0.5, y: 0.5, zoom: 1 } };
     });
     const texts: PageText[] = t.panels

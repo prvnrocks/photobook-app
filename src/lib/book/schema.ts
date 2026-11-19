@@ -580,6 +580,23 @@ export const LayoutTextSchema = z.strictObject({
    * columns where real word wrap needs more lines than the estimate. Omitted = 1 (pre-M29 layouts).
    */
   fit: z.number().min(0.5).max(1).optional(),
+  /**
+   * Story-text fix: type size range (mm on the page) that replaces the role's own (render.ts
+   * PANEL_TYPE) for this panel — the fitter starts at maxMm and shrinks only down to minMm. Used by
+   * the storytelling paragraph panels (src/lib/layouts/story), which read as body copy, not captions.
+   * Omitted = the role's range (every older layout).
+   */
+  size: z
+    .strictObject({ maxMm: z.number().positive().max(40), minMm: z.number().positive().max(40) })
+    .refine((s) => s.minMm <= s.maxMm, { message: "size minMm above maxMm" })
+    .optional(),
+  /** Story-text fix: "start" = the text sits at the top of its box (next to its accent bar). Omitted = vertically centred. */
+  valign: z.literal("start").optional(),
+  /**
+   * Story-text fix: the page region this text owns for the photo / narrative balance (the box plus
+   * the white space around it up to the photos and the trim). Never rendered. Omitted = the box.
+   */
+  area: LayoutRectSchema.optional(),
 });
 
 const LayoutObjectSchema = z.object({

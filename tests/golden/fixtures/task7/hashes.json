@@ -2,431 +2,431 @@
   "photos-10": {
     "classic-portrait": {
       "pages": 9,
-      "narrative": 0.2997,
-      "doc": "c1b77106efb2ce55f57e77b0143f619306f870daab25c098641140fc9b6ebf26",
-      "view": "1c863e807c0ad900cf6a66a04efb522cd23463a559788827b8b69ad0f4b7d129",
-      "print": "183c5c646079b363afa7408fe035e10462cf7f32fc4886220ecea94533016276"
+      "narrative": 0.2921,
+      "doc": "62fd4fe94f724d0a057e33dc1410c077fb5e928acf21dcb411ec50750021f66f",
+      "view": "efb69201996035b68cd6013564668d9f43c2a6b3530b9feeb4579bb90426c971",
+      "print": "f05286f8bd996bc00259127d4956196f795fc76124b9a8267f6690ec89d36e83"
     },
     "classic-landscape": {
       "pages": 9,
-      "narrative": 0.2834,
-      "doc": "65e15360d87710598ad36c00813b624465c7780053264a6c8c429ba6517e5657",
-      "view": "e75088882eed574e8b54c7025e8d4bf572b035bba5b1ac43556a28fe79b7128c",
-      "print": "8d13609692d2410ed00e1d8402f3ebd4165ccbd81f2a053f79b5659d50255bde"
+      "narrative": 0.2858,
+      "doc": "2e8220561c79d3b929561c25c563cd0be0e009ba9f1a566cc3562aabb2c87bf0",
+      "view": "1ab6abbc1d188aa8bc9c84dc22debe08f234c398efdbe9f0fdc8ec06e848e78b",
+      "print": "4d344e4f69293b8e9eb84684a763c3d14f923c1b81d5df5a0350c7ecb86c6406"
     },
     "modern-portrait": {
       "pages": 9,
-      "narrative": 0.2757,
-      "doc": "9babdffc3fecb87aa925dcbd647afed47a05f9fd8336a2d527d58730338e52ee",
-      "view": "ddc99cfeac09e314ebd16eda799d424cc36b894038b28bb0507684dc49ec8b5d",
-      "print": "0e86d57502edd442853e5ddf6929a3b9263ba42e172ac3191bef9ff364de6c94"
+      "narrative": 0.2692,
+      "doc": "a2441317c8fa8ad1db6a495ec950f05ce0fa96d791683a1c3b7eb2fbe9a7b220",
+      "view": "ccd2fb94c93b63f31dcfadb17403e6adfa55f313b0cfa6dc797a6bae159dc98d",
+      "print": "c1ff926a882ca7e56f8d4b80960405eea936f9fb12709d93d81b26542557399b"
     },
     "modern-landscape": {
       "pages": 9,
-      "narrative": 0.2548,
-      "doc": "aa6650cce88f270e4deeed889b4182fc960ae450c35d6be061d075bbd9e3e670",
-      "view": "0e89b5a5a6cb91de75d5590bcc1855549e96e4b8be1fe8b206b678b0075bcb2d",
-      "print": "d82fc0b3aa110e750b32ffa7e2191bc32395abb82e67c8bfad71068ff497581b"
+      "narrative": 0.2568,
+      "doc": "87345887052630f21889932d8f54f6044dc50ac9b8e968546edc7aa2a9dd6a16",
+      "view": "326cc29beb19437cd32c413471dc9a8d27a7383e813cce1e73d306e483adbab1",
+      "print": "e1a6973758457bd799c167d192d9039036022a9f13d25adc4820d4b377d8b110"
     },
     "geometric-portrait": {
       "pages": 9,
-      "narrative": 0.2954,
-      "doc": "683c72d0868e2b245c22149db0be693f634a0959370474a57275af48f6839589",
-      "view": "aac6ada2aef56ba37500753d268e45ead92a85d6d86ef98d483cfb6f49d5f637",
-      "print": "6fedcff77db468b039c21bd8234e05df0ca414bd0bb9b3832ecf3f9107285737"
+      "narrative": 0.2879,
+      "doc": "91fda8eb873a4253c6417c9f00598e27cfb5ff79bdbc9e7e6f63b8ae72abd69c",
+      "view": "f1c82d52cc1fb1db7ebb592655886879235b412970d4d5d353da1c1a1ec1d240",
+      "print": "4e459814235010cf7abc993ac63ea8645f6df7a9629b3d1cb797d7ad654e5906"
     },
     "geometric-landscape": {
       "pages": 9,
-      "narrative": 0.2782,
-      "doc": "f3f9e338b124c2c3fc24053368289d0d212ba9fc08bb9bdd89d87e2db38076e3",
-      "view": "632c0fc64c5da666173df0c0ba611759e183e12002a571baea78f49d0df97b07",
-      "print": "f154967e29f2c4ac5a01d25404557c6f609ca59694e79ca50599b3ebc6513c90"
+      "narrative": 0.2805,
+      "doc": "7ddb9b1a81209986e48d79643bb6470c92674390d92abcd33acb7853e9d06ade",
+      "view": "c62d5ea8ad2095e2e04b943bedbf6149755cc49f6626b4d8d0c91a9ea5f3635c",
+      "print": "90e22dfceb1e7ea993d3edac3ff6aea813bcf38b85f1293fc1b1040d444a58e0"
     },
     "scrapbook-portrait": {
       "pages": 9,
-      "narrative": 0.3042,
-      "doc": "93cb291d8ec723b4b894eee84ae9b3a9dca3b73549198dc8bf18c4e675a0b75e",
-      "view": "e274958b8a4e7000b60a8616e7203d533afeb4324442d52b9c4bfa8a90af35b5",
-      "print": "615e4d2572a1be4655c7729bf08d75ecc99b308747fe75f55a9f1ba161309de7"
+      "narrative": 0.2965,
+      "doc": "2b6735079b34a7db1f1d9c908c356b060fbfe7268f152cf1d4229fdddaec084a",
+      "view": "16ecc8feaa39e40a93f2e27f2e7265673d5607bcead8c6467215f9455e4c26a2",
+      "print": "7ea22b157d335e7e5a35670a8ebd11a6f7436d7e13e2956b84666554e048b629"
     },
     "scrapbook-landscape": {
       "pages": 9,
-      "narrative": 0.2889,
-      "doc": "437327d8c374ab9eda80231a1b7a43bc49713bce92fd648e0a82e7dae8193906",
-      "view": "6c7cbac5ab38e6d73f3e94037e0722b594397b10f14b69f2b3a7ae5c430c9b01",
-      "print": "652ab726087292bd034a73f10f354c7ea79f3c132bd04cf5c7822861db9b1b5b"
+      "narrative": 0.2936,
+      "doc": "88c0aaa5901639b11ba4fd84077d8c3b8c5c4cfef9245d7ec5f0fb4bf4b5c202",
+      "view": "25346c3c76f612a428bc411067b1a6ba8546c5fc02ffdb92253179298a8b45dd",
+      "print": "efe65795496116c6d2a3548466041cc33e37c211b90b4181e5671b8ebb122318"
     },
     "magazine-portrait": {
       "pages": 9,
-      "narrative": 0.2757,
-      "doc": "98d6cb605f9bd84dd8425f21ac68d474bf35ea3bb27c225096852bf401d5e257",
-      "view": "842f479a37be55b9eb42bf27cfcb05c0ca3239ead4c630d55c6abb21f4de3c8b",
-      "print": "6b00bb2f4caf19fa0ba20b467126304e353c04299ff2f890d8f3f0e0ed2ced52"
+      "narrative": 0.2692,
+      "doc": "6aea181a35a93d16288252ac28579fcb5f723044305186a90ce7f4d384bf72df",
+      "view": "2ec8b8b6fddcffaaf4780fc9aa946113290c841bb5385254d8338adf792e72bf",
+      "print": "7876078ed365366bd1345b187f4cd58b5342a50ed481cc82aec264e3735eb6e3"
     },
     "magazine-landscape": {
       "pages": 9,
-      "narrative": 0.2573,
-      "doc": "0323b8c68e6036e772a95cbabd491e019e8b83ab7d8793f2c8358a0432095a63",
-      "view": "e18ddcdfa7b01d5b17463022b304328cdb36dbac7e079ed659b83c6fe0a43b2b",
-      "print": "1cf1fc78fef150e2dddd025fd33d2594f280fb54555c3070507947d391f4ddc5"
+      "narrative": 0.2593,
+      "doc": "40fe6ddd1a4097fc4abbdaed6e46128e37b2cd5103952c9087bed55fcff3498d",
+      "view": "d3a1878b33a94ccfe50be553d7364dab81a779e6298b7807098370cc1eff65e8",
+      "print": "c0ff9b12862dae5a8ae37700b25b56e31fac45f4cb82e1e70d3a21a4c4622ee6"
     },
     "editorial-portrait": {
       "pages": 9,
-      "narrative": 0.2974,
-      "doc": "7c3b184111776ec0420a3049dd3a194de81bfd08398a3c0a26b8f3cdbb1171da",
-      "view": "4d72e749ede5f4e18bbdbcd8076f0de08981cc38bf0052b67a9add7ce5c4d692",
-      "print": "fe4cd41194e22a8c6e88f823404ec448d272840769ec99e8dab96bc8d13e507c"
+      "narrative": 0.2899,
+      "doc": "a9d0904def3f03ae2b6d8f0576fac1a878f389445f5e1197c493869c2a43d675",
+      "view": "d3d10dda80dbdf60a9a4c1d233b62c4e40eaf9783024e99ebe84a4bf14f7484a",
+      "print": "fd067dbbdd071aa4227a4ae049948951f58f58a3afaf31f058ca103f48ae7c44"
     },
     "editorial-landscape": {
       "pages": 9,
-      "narrative": 0.2804,
-      "doc": "8e10f05d5a9dd8b6982ff1643074f0a74ccebf0d644f059426c6bc47f94be3c9",
-      "view": "158ccada62d1e80dc3e57bbcc34fa4472b793695525f0b17f7c07f089fef7529",
-      "print": "b227eb2201b2049b0c79228950546963dda7ab1284c1712be827fb99213e1788"
+      "narrative": 0.2827,
+      "doc": "c3c08ef9029bee73e9e4ce56e17ebdc8059dfc2b83c27950f7103b889e1f6e4c",
+      "view": "8375b6be6f8a3838d84218d7e299b070be1c47f6e27a7c99618576b4987be00d",
+      "print": "8c9734e1d94a20b84b97075d18bcace99966021893327f8b30cf8287370103c6"
     }
   },
   "photos-60-free": {
     "classic-portrait": {
       "pages": 20,
-      "narrative": 0.259,
+      "narrative": 0.2946,
       "doc": "40a8d557f71ecf5299597a9cfb5f8e32e0bb6ad0cfb153e71da217ced143a106",
-      "view": "4fd31ca2a9798a72b21582a5a4a44c09130abfe0ea073a76a37d673c8b8062e2",
-      "print": "5aca838216f09a09d5c5c3a806d9080b14798bd429802abfa2cd275bb709406c"
+      "view": "ae1e8defbf085b3155bbe970abcbffaca996f05c8d76f882af06e1b6a1d85412",
+      "print": "e90dcb74aae2ac3cd472e58706786f3f44845d51f396f563f7ce69798b35a5a7"
     },
     "classic-landscape": {
       "pages": 20,
-      "narrative": 0.2942,
-      "doc": "191661ad9674e137d6e56258ea15d3ff11ced5f842b760507359ab5c981986ab",
-      "view": "3d4d6a43851e45462e82c6ede859edd7012dc906675b9a836b14dff8223046d9",
-      "print": "4a4fe12d7712600cb8b65018f7c843df14c54a25000ad7ece991e81b6bab0d95"
+      "narrative": 0.3334,
+      "doc": "17c5d2f31d7faddd33b5805d7a620cfbb9258e833b4e473b01d36d8dabbdd681",
+      "view": "cc89d569ade6cf32fbb8253be82530c26db3330d600f919bbdcf2463da25264c",
+      "print": "d4fe13b3a1ce41b3853a239efbaef67295ae80dd943d85048662e4d709c9925b"
     },
     "modern-portrait": {
       "pages": 20,
-      "narrative": 0.2263,
+      "narrative": 0.2586,
       "doc": "2b0d76b4fc3c54064339131d0c94ea8e561aecd79b1e75e006edd821f1d54b4b",
-      "view": "4948e3de9fa5ccdc445766f3efc2c7ae5bb66cde137f5f370953b14eadaf4ccd",
-      "print": "b939c2bfa1028259f7c5e4e2d0de77a342bce46a9a7c01bce398935df39dc19f"
+      "view": "9a22d6731df9142f8e48b218073eace1ef2ec74aa88d79ebb12337ec17331854",
+      "print": "7731b6534a05646d93911021e52010dd7736bdf853c804130a7a7530e4e40e83"
     },
     "modern-landscape": {
       "pages": 20,
-      "narrative": 0.2535,
-      "doc": "8a118f9fc0df3cee8ad897029f88e86f6edd1ddd3b910cb465e0c11bb4f8a2e5",
-      "view": "984365332a97ad8ddd78d5266c912c335464fe4f15ea8a40c8e9e17679999738",
-      "print": "85879acf9abce0d2f75169e70196abae568e4a74325b5a60115a4657e2048ea3"
+      "narrative": 0.2911,
+      "doc": "22c16418f71090bd9b68461dd761d6839a37d75780d15a398b455b22ff95ee85",
+      "view": "70d714e8d0a40b2f645094ef35212afd2a661ed46554158eb6c943f19712218a",
+      "print": "930548cc38dd741083c4e036cf64b2c8a6a7b1bc291a83dce02a7323c31aa18b"
     },
     "geometric-portrait": {
       "pages": 20,
-      "narrative": 0.2542,
+      "narrative": 0.2893,
       "doc": "4fb1c2afd0180ada7faff022b523dcfdaf788bbc7d2d228ce7e14bec7f5cbf3d",
-      "view": "b733507638652cdfb5cd5bdb94c49b7aed04700e3536149b4d19d551cc653e7e",
-      "print": "490279c5659556e60468f3a0fb0ef8f33c89c94cf51aa6dd0c966f7e493dbfa2"
+      "view": "5ad11e637500b1143c22d4b0ba3e28962d65141080f0a73549e35939a10148fd",
+      "print": "0fdc8adc12aef4dd27c476958573303e6e7636cde436bcddd9880c70a375a17a"
     },
     "geometric-landscape": {
       "pages": 20,
-      "narrative": 0.2867,
-      "doc": "c9866feb757721fff396201f406edb270639dbb10a203226b619878536927dea",
-      "view": "96ef4a38afd7c56ecffb660cac5dec978c6d21fea39d92d05743750975bbb4ea",
-      "print": "ea7674397ab5afd36648178a4e342359629b21e0c19934c0ec4e1bcd5679ed1d"
+      "narrative": 0.3257,
+      "doc": "196db55e20f033da02e361103246e5fc7f618c3f21c185612b0fe008fffc95a7",
+      "view": "8233f492791e3bef5043b70434f6d0435aa3bc80f4bb9d9a293187f6b8185a35",
+      "print": "0661cf9a680a044283a224f58a677fd34d502b415bb96135e7d4dfb7141c8d84"
     },
     "scrapbook-portrait": {
       "pages": 20,
-      "narrative": 0.2751,
+      "narrative": 0.3113,
       "doc": "ce202116a0788e6b6c2a1060c6438dcf4de56b36cfd244f1012ae8b7f2db818e",
-      "view": "eb4fcd0e22c2b3f09ebd0ec7a2b3b741d5a7988e9174dff76b72e1146eafc916",
-      "print": "c7261fd467d625556efa7d0d4e7f84b44f3b698ac7227103752c34edaafb33e5"
+      "view": "d370fb8665e498a8b8ea39fbf61e547fc9f195b47b8ca2b46eb5603e9aa33cc4",
+      "print": "f5610a09ef801be994b45a15bfbba42dcc0447f15b6866802d52d869b2ef0d3c"
     },
     "scrapbook-landscape": {
       "pages": 20,
-      "narrative": 0.2994,
-      "doc": "6e5d7a5dc99cf44d49b49b03468afc0b3475429a2a00d9d0b098bf62f57ca9e3",
-      "view": "fee6702bb59f4a2ae0ef94291fabe7f0661be78c4f78b7ffd7ee97138911505e",
-      "print": "fe46cd805de58902497bb9f6fd872449075d0820bef16bf2a6921e1fb888e304"
+      "narrative": 0.3413,
+      "doc": "0e13bd6b5edd6ce380208758632ebe0f513307720aba1c6c0c8837eb5bc0f67d",
+      "view": "a3cc4604cb4b2484dc46a658ba55f51786bb02943167e53dbdbc664fe0b55f49",
+      "print": "673c87e029bd7c9236ac8253e1215a585c332f1667be1a68b80d0265d971850a"
     },
     "magazine-portrait": {
       "pages": 20,
-      "narrative": 0.2242,
+      "narrative": 0.2566,
       "doc": "a0a0cbe73f98adf9acdb940826f96c01d178faa8f1be6cf161f93dd7ef73cb7a",
-      "view": "1b6b2431182774baa79b1f76401ca7044edac2d0c18ba50305a79ee517283482",
-      "print": "cd0a62fe010ad70425beef892fb2c37933eb1bc49b34745d9e889db422416ca5"
+      "view": "db4eae82958506f429da47ce28f1d5789c52a882a57252cbf63a2016f936afca",
+      "print": "9f7f5b365b89cbc9e754c1fbf02822d14ec167d9f553bc71deca5054ae179c47"
     },
     "magazine-landscape": {
       "pages": 20,
-      "narrative": 0.2573,
-      "doc": "ad16c42c2e736837e88ca6a9dd6a886aa714297d6ca82810a8bdcdb8a21728b8",
-      "view": "d9308871c546e493a946038d7d68ca5da1156f0ec3eafca32d3ae586f122e487",
-      "print": "66bf5f0df575c3cd6deb7fa2fe54a79b81263e0c4512e37a5fdaf888de66b4e0"
+      "narrative": 0.2949,
+      "doc": "d6e069de298ea3f08dae5b58dafe8c3652cb82b039c5021261663c7e713c4a56",
+      "view": "488458a940468b113d4ee507b11c2b5babf111494c7f04baf7bf17c6b42d3ab8",
+      "print": "d82b5d19d794a8209222460d790e457613abdb9859cf65584208834cffc171b1"
     },
     "editorial-portrait": {
       "pages": 20,
-      "narrative": 0.2559,
+      "narrative": 0.291,
       "doc": "d4578e5e2d1a8e02150481c92103c590196e1b924aa33b6d55bdc4a7a68949d0",
-      "view": "afec21ba75eeff4bf359ed348e9759585eca3642a3ffa5ad9b5c5aa52e824708",
-      "print": "ed8243cd755a6382d175b5c342eb21db013d88e7c89e572cff211482df88331a"
+      "view": "b16a123704d20331a8155ffd18e66d755d55c81fbc47a14e465e21cf434e2b49",
+      "print": "c05ae9a6f40014197d81367aceee2724e159a28a4b39b4ea59c48fde5c4ff524"
     },
     "editorial-landscape": {
       "pages": 20,
-      "narrative": 0.2867,
-      "doc": "d87edf0108c3c929bb4a785cfa3ce019a20551e70c8046f5f406527ddcbbe0d0",
-      "view": "8d31707edc7b1a80f4e8aedb6164a3276ce6652c67300a60658a34d088ad6d90",
-      "print": "c3d53f9897aa6cfc1c741cd08e6b658af56300bef37f5e547f6750266678e685"
+      "narrative": 0.3257,
+      "doc": "5298e031e4aaa3c03343ecf0f43b990e48cb177f5f3f5b9d3b52d9ff7e4fb01e",
+      "view": "fed95c75f7418b468f7350d59371784df0e2e1583bfb8959535fa7638b6195ba",
+      "print": "7fb5d895b3524d0e4cf4693972c7e4a75bb9c8e702cd37a812b7432ece95765a"
     }
   },
   "photos-60-paid": {
     "classic-portrait": {
       "pages": 39,
-      "narrative": 0.3965,
-      "doc": "0319b77d8f237f074aaf88dc6672e532db298e4ad46023e81b4aeda7b229a197",
-      "view": "f5c7333d1e557541b7d89b1b78074bfd92886c55c18af59486f25850e494efdd",
-      "print": "d3748675203c9a57bbd451a66c20a57075ada412127f00b349a467faf51b30df"
+      "narrative": 0.3077,
+      "doc": "3f3d61048577e97ec0ecdb186d705cf73c3fcee6b2ae3b75a8461a0e8d61fff3",
+      "view": "5682074f855ce0b214f7fbe9d6be661c92de379e41eeb9733549903b6894b912",
+      "print": "229285372b1bc9f4c02657db38d239e1ea25951935b21553d162e52e8a135e4a"
     },
     "classic-landscape": {
       "pages": 37,
-      "narrative": 0.3123,
-      "doc": "f02340d9a1ec9d6bc4d93abb243c319d18bbfb3670eec0399267b0a444efb9fd",
-      "view": "f24530f901ba6ec5ec5bdd19c1dbea3b77574402d8b48f2d3a5ecbc0ce30f023",
-      "print": "018aed747d7bf29cdc979853a2d5dfac0e21f79ae4285b50b9cdcf0e0ccb9c81"
+      "narrative": 0.3194,
+      "doc": "607f92f69532ee0d1387c5038ef75f8ae391657d5e1b47691e748a08aa36ece4",
+      "view": "2ee66cfbfdce6d4e129d43ebc972564ab65ddceeeb53791ffdf1aaddef81d70a",
+      "print": "98290af03561151d1d8e2c971e75a8e818f2aa80bbb0bdac4c24b7a25b5944fd"
     },
     "modern-portrait": {
       "pages": 39,
-      "narrative": 0.3416,
-      "doc": "5ec21a132fc779145be67909cd1ebe17f355a59da12b0c395f8a3922556183d6",
-      "view": "0d384350bab35ef7cf440b1c230c5c1847fc18ae4beb3da6058ffaa6cbf479df",
-      "print": "11b7976ee9ee27cebdabba72084d628db2d7d2b8305c04ed5b21ba312064482a"
+      "narrative": 0.2633,
+      "doc": "1e2813d8921bb383b3cefbd3e6bcecf977c40b34178595f04796327dc39b1d4b",
+      "view": "e1a6598f7fcfc4b158c6e12200dbb1e49c2a9df6def51531a01153805b7e7ede",
+      "print": "18b9835ea85e68cb92c690c744eef391f1b2d56bf0bde4c7074d621c859e6a87"
     },
     "modern-landscape": {
       "pages": 37,
-      "narrative": 0.2669,
-      "doc": "fcab139ba0928f6fd5783c7d66fbc268bd523dadac5b3af43ad758b2543b7738",
-      "view": "b942d22b6a95bae0b273692566373e10e02892eda8fb8dd0134db110a651f9c9",
-      "print": "8ce79205e1c5e3b6ec58c2d96d42b5a8ad80622eaeb3982791d2dfd93da7898d"
+      "narrative": 0.2747,
+      "doc": "8f370447716138cb080b125c17a27dfe2773c2afb00caef4e14a3a72815e3232",
+      "view": "bd6c1391ef1d5ec20450c8b6e07e9d3924c8f1c9192e337389d679027870dadd",
+      "print": "2198d31a8c635a91e36fd61b5b870e77a53b7dd48cdba0ef8b26c8a6f2b38665"
     },
     "geometric-portrait": {
       "pages": 39,
-      "narrative": 0.3879,
-      "doc": "63f2008dde5333e218464c81f163531d4d587ecd5735b7af28fed4861150807e",
-      "view": "67e594af43efe6bc2b5d87c8d60ec360c8e8c9cdb3c25aef1b28cee825537999",
-      "print": "762a61ad289c3049f29061683208e8af3f86a6d381466e98f31615ee9ed67806"
+      "narrative": 0.3001,
+      "doc": "5f808b150075c4e0326f8b06544fb1b90514cd38048bdfba7b3b2c790613f851",
+      "view": "f264ac9670e83dd0a189d60d462e6dc0b5fd1195952f37855be8e0bb10f999a5",
+      "print": "61a5ae1da1b4cf592b1d80862508a77a579a3e0fb6f5b989fe5b86935a9a4cc2"
     },
     "geometric-landscape": {
       "pages": 37,
-      "narrative": 0.3025,
-      "doc": "c8e18f5c86a76b8625f325fcb60cef492c6a91f34e25fc347011b9653a3c9602",
-      "view": "2fe21392230174b4f82266751a9ff609041f8e6154fe24ee51adf7c512e4c6c4",
-      "print": "2f05f4d95e1f5d4e1fce82cef8f7f36fddaec8aaffd9536983cfb387ad7573cf"
+      "narrative": 0.3097,
+      "doc": "e0c5a812eb0ff324bd2e0e2e1d23ea07d728646b0e4b39ed9a3ab2137fc36eeb",
+      "view": "6c537f0f0326c3bcb09dde8ba45cea7f79001864b7b02fd966218029fff1bfce",
+      "print": "60dec262a496bbd255ab7d20d609629a81f4d91e49f7a957bddb9da09dce416d"
     },
     "scrapbook-portrait": {
       "pages": 39,
-      "narrative": 0.4074,
-      "doc": "fdc811eac84ca0bb18b91e9d570b8d5f339b3c695513d4e61769761c44c3e789",
-      "view": "cf32711feb3b1be7c023bf4b5bb6530ae55f0de006c85ea6e7eb010ac7eb63dd",
-      "print": "8c5f1ab5dbb0a5c39289213f261972eede5d92ac80ea2806ba9c742982c42b2b"
+      "narrative": 0.3177,
+      "doc": "8d35f2d4192c9f218b8febdcdf03344c23267f0ea8ce33c49fec368ea5e34450",
+      "view": "9d9876cb26db9a8e729e4b55741a8e8e5829d2bbd17b0c2d7cf7b284c06b7999",
+      "print": "b322be6d149d8e270163331b4b341b6a4ecc01424c18772bb8737506e30f52fd"
     },
     "scrapbook-landscape": {
       "pages": 37,
-      "narrative": 0.3295,
-      "doc": "00c9441a3db3e68faf75e3205dae85f7fc7ac84bf2fb2eff0c64016f65c28ecc",
-      "view": "8878be0ba92ec6bc93f5d1896b55f72371dff4d1701ed4e8edffe118c89cb9ca",
-      "print": "c3c806da245cf8ff70562ea2f2ef2e36a93022191895811f5f7316591b8871e1"
+      "narrative": 0.3322,
+      "doc": "fc5215253240f52a2fa03ac215593a668629d5286df7aad50edb37b46add3d4d",
+      "view": "71fdf02efe0b536206605009030f57490cf6c114b851bcf3a57ae93f8252617e",
+      "print": "baa3ff372d471ee310cce55b4f5ad136338da6b4fe46854b1fc8f9d611d87aac"
     },
     "magazine-portrait": {
       "pages": 39,
-      "narrative": 0.3437,
-      "doc": "3b0f0992099ffba84e0ad9f71d133a68580262cc9edab80707fb6f471039b657",
-      "view": "5c550c1ff02aae102cde5a739865cd7db787125ce64f78106d7222a9741fe27d",
-      "print": "a4d26d3812dc7b9bb89e916b5d434e4d1299a36149f89343377d43c62efe9e82"
+      "narrative": 0.2654,
+      "doc": "a6f9eb788a55a4edc161b41680328f91ea1bf01b96a8e24375091f607013ca3e",
+      "view": "2c8db4e21ce19ae210673fbc8163a5f723ee5de3e89119b9052428c943df75ca",
+      "print": "c22c4e34b0168ca07739b8aae66f057ddf8506ac1de3769b90b61e19fdee8494"
     },
     "magazine-landscape": {
       "pages": 37,
-      "narrative": 0.2668,
-      "doc": "959ba00ed58fa12e6e2a34b0fa9f3411e578095997b3dcec25f355bc63f69c0f",
-      "view": "ccc2b8a9d3e6456f85660f07422f1a3b5f887c3f674f006e492393eb63ab704c",
-      "print": "9091f92f460c1672a1f218cad3bfebe29d4e9404d7853311656b3de90d41d0be"
+      "narrative": 0.2746,
+      "doc": "09a4d11238f0d80a027c57c7fe5e803e3988aac3a107426539db928de97c84f4",
+      "view": "d3c87f745b50a335c3df1d1adfdd52f5abcf6ac472a64d7f573db5e953bdfc44",
+      "print": "feff02e955a260f4e0977156636ff6a2c6a105c303ca33c9c2709a71dc9a76e0"
     },
     "editorial-portrait": {
       "pages": 39,
-      "narrative": 0.3884,
-      "doc": "6f75cc27988b01aec6dbe8a92181af9848eca1e3e8a0ee33a0eb7d6a0bd36699",
-      "view": "efa565e44c6dd9eeabe3a3b214b90ed7980a5a1afda65ca007f4425afbaf1808",
-      "print": "5da0fa2675dbb8c46ecac4de1789a25b3747e83e3afb8ed422084852696c2e04"
+      "narrative": 0.3006,
+      "doc": "633393291735f4a28b0590dcec4a7653e39ca8ec20e51f50d00463cb5317826d",
+      "view": "30a667dc8dbf4894788d1b1f66fbac7dcb13a3bc2c8e8486b38e4c78c2aa2a42",
+      "print": "550a9b7b4b9978669be5d4a30a15820a86c7bdf4b805dcc6c3599d2fec82683e"
     },
     "editorial-landscape": {
       "pages": 37,
-      "narrative": 0.3044,
-      "doc": "d79e984e94b0d92081d7749b43dcfaa728e75e0ed110987626bf2942e7c87ff1",
-      "view": "e5f45cd782ff44e8f0536258e6665f86a61a73c1aa21a76995f37e4b98395f88",
-      "print": "42bdcc2e12172594a246f047945e5fafebea9b77bd635c494a464797866fddfa"
+      "narrative": 0.3117,
+      "doc": "2cd851c6849c5745162c2ef7838bd4b2215d0718732d28afa613da57712d718e",
+      "view": "2ce4dcaa261149d6229f63b24e177430ee916fc9d875de2aeeb8ef1868ba1ff1",
+      "print": "f7efa40da1ef740fc3083044a86ace3667b5f097ec2ed54f5ddb48f01a3ee52c"
     }
   },
   "arabic": {
     "classic-portrait": {
       "pages": 18,
-      "narrative": 0.352,
-      "doc": "bd88fd694357a0da1d1a00427ec0d586a34c62ab782e3d5285e814952133884c",
-      "view": "29bae00ba96a0b9465759d1e334b9775515fb9851b75f97d711d5639e5c7ffae",
-      "print": "738eb1c63e1f741e9ca49e29145bf70e83816bcbeb10ce5ce3b3fe2b6d6d16ec"
+      "narrative": 0.2896,
+      "doc": "03c72a0cbd6777b52eb39dbeef3496aeee213a50874387c5b7085e7df6e133d3",
+      "view": "46bb7aea66b653b2986e31ec533fc494c50a0cb722e412330fdaef05ad7e708b",
+      "print": "6651d7c1a08f973cb4411b0f6f9dbf81e8d6eabba46e40bcb1fe0dce7c01ca21"
     },
     "classic-landscape": {
       "pages": 16,
-      "narrative": 0.3128,
-      "doc": "28a784737f5f33713e422ed768e239e85bc8e5c798b62c5fe41797cd2773b6d9",
-      "view": "5bcfa994feab9639804c25fefab6e6e4b05bd8324b931baf8cea94789a6e4a5c",
-      "print": "9dd7efbcedbf0f525188eb07b65f772b51ff6d5a9c96d23ca030118d285ff050"
+      "narrative": 0.3207,
+      "doc": "62ed2c9ecf63f29db80c993a64bc83456f5009ee438f26dfdb96748dc772a5aa",
+      "view": "24e72bbc67dd91fc96e7cd1f852ea7e9e3209529a8bb0a0afb3f5507afb6fa0c",
+      "print": "ec8b71db083e0e48e73052905caf1be6deb83cc6aa2a39154d3962f15528e45e"
     },
     "modern-portrait": {
       "pages": 18,
-      "narrative": 0.3059,
-      "doc": "15362504c6dc0b3f84cbb7f2df39b80de98e12409bf5101e5645c0dc48976266",
-      "view": "b63457b925e54965a6a58ce8958576e43b59a4796157c8341ddc35311257e056",
-      "print": "4bc5b44ba8590f717e4e66d6ae345c8db3635635515daface5f819ecdcb12340"
+      "narrative": 0.2478,
+      "doc": "dfb477c35c0c1a0a04cdda2e8bc4175ba81a5def9a5459f0aa95af6643bbce2f",
+      "view": "70c793d14347a4245a57b36a5b6693dcac8a89684c566b1499d6c500b3cf1fce",
+      "print": "c8f3e89e362934c0f4dbaa5b0e21c033084543352dca61e6d7bd58c1bc80caec"
     },
     "modern-landscape": {
       "pages": 16,
-      "narrative": 0.2856,
-      "doc": "043f48f9ae8c1b76fded4c0b9c9b5638b28fb91214e755496b780cb347349c70",
-      "view": "3dae59d5b1c96833f6140fd80260a2940f935ad44a44747ac83a827cc0ae5fc2",
-      "print": "e924c499531479be178dbff6940d1e929d7c6731eb0ea22046121c11475c1c89"
+      "narrative": 0.2934,
+      "doc": "4ecf4dd17c78cba6a26571131461a27fc5fabc14979400814320caebe24fc947",
+      "view": "a06b1bce84db5d4443cabf291ff074ac61e4c1920c231ad3df95858bef47b243",
+      "print": "9bcf0e1942c5ca4ed635c5a58fbe93f50456136f7c7aebfb4218a795534af746"
     },
     "geometric-portrait": {
       "pages": 18,
-      "narrative": 0.3427,
-      "doc": "7a06399752b41cb306a94ee08d0f9e35f96a31593a8aff77fb4b2f6e775e41b6",
-      "view": "f1b3ae3f5650ce034763eccd24aac66ecf91ac704cdaf7245ad2ee977372418e",
-      "print": "ae355c8f992a1dd2e40864b53acab1c83a7cc9e34ea608924a38995050d7d8cc"
+      "narrative": 0.2811,
+      "doc": "df7e29fa1febf6dc2db39ee2f0a0e53d99fd0700bbbe83a0299a1a8bc05dd080",
+      "view": "4b366e3a1de42621a7aa722a769ee42b422db0e2d0b3e3fa831705ef149dd9e2",
+      "print": "b6364492d8a20ebed4b2a72c57bc4fb1334aa474567ff66a082a2bd4c0bcf3ac"
     },
     "geometric-landscape": {
       "pages": 16,
-      "narrative": 0.314,
-      "doc": "9eaaa1f60575216caa60e86b8917d3a1abff1d76fe100c20c6df5ad518227c8b",
-      "view": "b73925ed45e9323368a3217fff68f30df8a86eee72cd61659f16e77399169c66",
-      "print": "8d4d135a46839ff22e6c186b0be0a287d5637125e3330b5cbe77c74b3d47b3f7"
+      "narrative": 0.3219,
+      "doc": "e2dc960d63eb17047ac34694b9e659daa37dbf3bbe64c801bf97c61eecdfbf65",
+      "view": "951627a65ec2802647bea7a3e1a1e3c9f0cea0262e73abb676fc41563ce2e5e1",
+      "print": "a1de234063a6cb0a3e56f456fbc90284fcba2407f36476e8c949ab000b644fd5"
     },
     "scrapbook-portrait": {
       "pages": 18,
-      "narrative": 0.359,
-      "doc": "04a82860261a3b34c59556d8a4da1e666c79bbad256afae4fcb6fb13212cc46b",
-      "view": "6c30c142d1648b38d06b035f3326707c665cee03f4252579331ee585cb43fded",
-      "print": "b36fda3ef3690678e3859cdd0ee61ac05d39f501f34ee209e09f87235b4b47b0"
+      "narrative": 0.296,
+      "doc": "0c1ce940173b3f6e74c52be2cd4c659eadf4fede630fef4cf763d298188c4942",
+      "view": "28b7b0f2708551b77136fed812fc8a23dba6967bec72429a69d8baf0b7c81b9b",
+      "print": "6efac5540c3a29716740accd5fbc063b5512b3f16407669155ff48f6933426ee"
     },
     "scrapbook-landscape": {
       "pages": 16,
-      "narrative": 0.3386,
-      "doc": "538735240667710205584eda7bceedc8f212632d02af059519349a1a8e738282",
-      "view": "4505ab3718fc22e54be96388ed0e47c38a426ea5649145ec87c9116d7300992d",
-      "print": "9700b90616096ecdc8ca17f48410fad6879cd2d7f7a5f729312ea534d98331b6"
+      "narrative": 0.3422,
+      "doc": "1df8854d49e2cbb3e72ccf6b957359c4d9f0ce5a8ce9812fc84c9ceb62f05477",
+      "view": "683d33e45915eb84ccbb0350bbe33925dfa21dc3d8322e872399a1075046967e",
+      "print": "b18b6e8387f75958775050198ee8117b1277015ffe78b597f29cc62d7eae660b"
     },
     "magazine-portrait": {
       "pages": 18,
-      "narrative": 0.3059,
-      "doc": "8a170bc45acd3ba8af3a0093b287e06a2d2325ceb2d748b41f3202adec5774d7",
-      "view": "9b92b8fa1fa47b3f479bda59d36332af8d2221ad5d6a4b1b1c9a7e0ad8565124",
-      "print": "025a289e261621f4b7e50ba43c4385b0f9b48cc6a7b56ba6c75569aafbc4d6b2"
+      "narrative": 0.2478,
+      "doc": "a5a842f125c523255e7ad7036522838b6be08f63057fc9ad445f90d86f0f5322",
+      "view": "4e7a18e982e8b49df779fb8dcf90c78ef162392af10404f4ea09c04ee1f84291",
+      "print": "3a85356341048b37640e81a4d66ef9384d22af2b75355cec30af48634ebc9b19"
     },
     "magazine-landscape": {
       "pages": 16,
-      "narrative": 0.2853,
-      "doc": "031429aa2ac28e25055009ec7630e1675e4c1949afdd208839c6a37e37bd8539",
-      "view": "d5033e16375f6c6d6cfd1c721df7898c4b47f6fc21ad2bc9d4bc2d271b038563",
-      "print": "b48bd73b3c24b7bea5bb4676ad548b3a9e475b8f5e8e0b305f6a9719bb7c755b"
+      "narrative": 0.2931,
+      "doc": "818ddf597f533ed6fef65458e0fbfbab0521cb8ca54533203f9e905cb526b52f",
+      "view": "43ee5da7f840d33b40f1098fecf9188ba9bb2681934618417a0a74ba7e23f5b2",
+      "print": "6c9390496e793c581accc36ffe01aa23dc703b2bb7db2b0ab1f6e0d6ccd3e221"
     },
     "editorial-portrait": {
       "pages": 18,
-      "narrative": 0.3415,
-      "doc": "c1c401b2a18ab8e3e5e57940ce99adeaba5c28cf50e3ca6e3674f9488fc549ed",
-      "view": "8ce650e8cd627c52993efc08cd026d58a51775379e282fb6be1d5f82870b3863",
-      "print": "a71802c3282eb36baef6d0087f1fbec6eb1579d34145b6623844b4f5e4dcd63b"
+      "narrative": 0.2799,
+      "doc": "576e30ee7dfb7639473b749ee2e841ce35ace597369a4fb91a5de5de0bbf6ad9",
+      "view": "75dfe5950ce035c0a3701bb633c697cdc68671d5284ada0016de9b16ae3b859a",
+      "print": "fe6b3ca6e99bc9abfdb87366cd88e6ddb205cb16abce9a1e2b594ccb8fcfed63"
     },
     "editorial-landscape": {
       "pages": 16,
-      "narrative": 0.3154,
-      "doc": "33b575fc518b06b32a728cebdafc649f89af0747ad031e430722d195bb2cb769",
-      "view": "e76d7caeb4c320c6121fd6f5876746a58c100d8adc5245396226a7ca6f3cb3f2",
-      "print": "a8b3dc6116fa6ba9a2ac6eaca7ae7c1e9d598a61a72507a92ddba5ad90e1d691"
+      "narrative": 0.3234,
+      "doc": "4cc61dcb7b69553cd2605c71726e0eb407f564bb0a76518eecd0c47cc6b653cb",
+      "view": "a20916703eb8c3ddd220a1be35c5dfacda9fc51cd5cfa6d680c16bcc1c0e3d92",
+      "print": "9c1688431ff44e3b2981b4694c2e14a0ebc4c0caafec22b5bc047375c134eefa"
     }
   },
   "low-res": {
     "classic-portrait": {
       "pages": 13,
-      "narrative": 0.3534,
-      "doc": "32e2f74308432bb97129bf85b177d0b7f7bc1ad23abb6f06f0e2d13fc215758f",
-      "view": "28e6cd997a1ffb2f3655cbf3453e29fa1ed7a1f2d00dbbd92f8442363745df4b",
-      "print": "6ebe7da8f914153ea5e31e92e10776138e104e7fefd8de965115fde781f5e576"
+      "narrative": 0.2943,
+      "doc": "193dc4cc61ab7865ffcea9b25f7ab25d56f311b51a659cf50799a7bd7cbead4b",
+      "view": "ddb628be046c94959baca99b2a72bfba864272feaf5b5a7afc6f259433084fec",
+      "print": "1d99222f4ff02cdd0a36e2925f234f914cfba93b25241e02ea64990648d3a5e9"
     },
     "classic-landscape": {
       "pages": 12,
-      "narrative": 0.3099,
-      "doc": "d2f6c730b5fd1937e9ce9443fd7420a22dbdc633fdd36ff66b0cae7ed8a74534",
-      "view": "a5803de3b1ca085f825ce2685640557405c71a33c9d3be87d902446b1c8bcbb9",
-      "print": "dd482be8389063c5c6b66a2dcf0992ff90420d8215b36e9f005c3795bbb2181f"
+      "narrative": 0.3094,
+      "doc": "d88f46b94d7cb667e69ef9788a7d888a54eee7a5a67aba480ed96128ec9ee077",
+      "view": "e99b58a32877f6b7113d4ba89ecf075db922568ec2349ab3a9144fa168547e2e",
+      "print": "79d9cd1e58ec3c2a42ca064144613480c54b0fccab5ef77ee9d0aca3a1c847bb"
     },
     "modern-portrait": {
       "pages": 13,
-      "narrative": 0.3117,
-      "doc": "d85c8a85460875d1a95fd4e0af42384f96007952b1fa559d3c108db7c04c717b",
-      "view": "d1630ef9809433b8fa6d2661aeb72197c3fa15a8ff7a391e2a74386bfb5c1000",
-      "print": "5e743a17fbf59f4e831964f9f64fc7812b467ac1b935f677aae174d85923ec81"
+      "narrative": 0.2559,
+      "doc": "aba65cff50043ce1d5f3621fbe323e9e6a805b5b1b3c34e3c5d441f83f2a4ee2",
+      "view": "d93471f3a10e805298aacfe34e2b4de826cb9dc322705c83bca5914d3cbfd782",
+      "print": "37144f1880231a4a36dbe52d53cce2bfa59ee451e51f36b799d0e8eeb26c5416"
     },
     "modern-landscape": {
       "pages": 12,
-      "narrative": 0.289,
-      "doc": "34b8d3b7026f2b63b13b15b2468708d6885881221be7e03c09f43af177e2c874",
-      "view": "8c3b5d438096cff09e49b3823a5680b3fc84d16e1fac8ebc5105e8701d6fdc32",
-      "print": "0e08bfdf2d8eb8191497f4e7a4efb455598cf41e14ec0be73561e712901b03e2"
+      "narrative": 0.2883,
+      "doc": "f12897796e7bf0d64ab9d4607edbdfeee85a65543b058040f444f0aeb3e1ad09",
+      "view": "855acca75cf980f0c101f7d64ddd925cc7db22bd5c2a0ccd9cd679e68e624d6f",
+      "print": "65ad91f818b0042c6214117949252efe2fc2e7b7cc60ebc39479023e8e420a9d"
     },
     "geometric-portrait": {
       "pages": 13,
-      "narrative": 0.3432,
-      "doc": "3e831c5c4ad7976805482fa2cea54306e53839a094d75681830012d910b03486",
-      "view": "5d1c0ba18f7e0c61514948b3dbfdf42412f4815eca7304f42350348a24f11b90",
-      "print": "aee9a22604760e14b7893ae0c7d9bc704c10d76d5b3850a95970d14ec2bbf7b6"
+      "narrative": 0.2847,
+      "doc": "43209654721e7cf88b102bc41ca877fd097caa75472129779ca57e7e31ced987",
+      "view": "089153318c7be1276a15571c7b74b98afcdc7f0a2b37824a38c02cdef17b864f",
+      "print": "466fcb9e01a9357f8fcd76977453b04f9fecdc1a3f40b69a8aad2aab14e317b7"
     },
     "geometric-landscape": {
       "pages": 12,
-      "narrative": 0.3153,
-      "doc": "1a54421834f2b1edb5258e8a30e2f8065c37b2cebf2efeb684e9e9ae0bd90474",
-      "view": "eef31700390fb55edbb6a0d49d5d6e23251ca4ba3f4f85fd19202e8211f37363",
-      "print": "13378ea5591861ccddfeef3cd3efbc4860a9965eff05789b2b477658fefe9e41"
+      "narrative": 0.3149,
+      "doc": "45e4d5c6ba9f401148f8f43df0e981d0358ed0edfa9f4bbc5872d81173f1267b",
+      "view": "1f5d70de06e27fa9c5b8006565aefb0fef9cd3fb6b3a051ae54d46616b18e5ee",
+      "print": "1978b1f3244dd7893a45786339b6df2a7a43ed26d9655f56e4aac9e1fc7900ad"
     },
     "scrapbook-portrait": {
       "pages": 13,
-      "narrative": 0.3572,
-      "doc": "2cade6769be0e3c67a26daa40b04cfe6485c4c72e1afe7c85eb41e85656ed14f",
-      "view": "6f721503c91957180769176f79b8f411e58675264f006157a2f9666802da73d8",
-      "print": "a92484fc68fbc04e0b3be46fd133bbf8ef0693b68343bcf8a4f6db3a7a70d02d"
+      "narrative": 0.2978,
+      "doc": "e9e7bd1fcc92c44eaf2b3ba74ad15b33bdaad933396e86b36fdef76c7642ea36",
+      "view": "aee9c19fbe248135a8b9740123f37cfea240a44c0953ab77c84bf6ca059a866f",
+      "print": "9c375a088c88f946016796ab7745df076c8b7b51cc62468bdd3fb68b343a1b1b"
     },
     "scrapbook-landscape": {
       "pages": 12,
-      "narrative": 0.3276,
-      "doc": "ecc38c21b0e31cb50e8ba8140a371119a71447a2a2f89d93045eb68fa0d94064",
-      "view": "00fe07992aebeed9389f58658c7dd4f9bc80e79c3a4f34518b2de6d809c8766d",
-      "print": "021eb3135710fe4ab18b7bea305500aec23ece509661a09e2fbe7729156e3f89"
+      "narrative": 0.3281,
+      "doc": "7869422bb71dd2e3838d7859da7057276a71e16292c210e244520a92e13cf8a1",
+      "view": "78f2892887d7a172274befedc2c62c99ec84e6dc68e0d63e7fe7a7f23b9ae5b5",
+      "print": "41cf9481cdd209a0cf309da202ddbc71fa9f434e3ab994354f3b9b4beef01bdc"
     },
     "magazine-portrait": {
       "pages": 13,
-      "narrative": 0.3117,
-      "doc": "cd9a629804ccaa43782be180c38821c080fd726bf6cb46eb62607d2444b8bfef",
-      "view": "8e7a73f3abc7e2df64ec2d0203da52cb911e9fb9fe0c698faafd5328ac9b23a9",
-      "print": "bf44153c505571bfee9ebf079b4cbbc5f4840b4d6ed327cdcdb2e0797a458043"
+      "narrative": 0.2559,
+      "doc": "262618a9c041829714c50d091db0d215e6506a63e7e49f2ca269d5e67d587546",
+      "view": "8403d9e867e830e4cc5b3de7dc0e5e75640811d0b496d48808d858b8e3222e42",
+      "print": "831d3d82ca17e755b5c3cc1bd14256942a39e09436078e31a7248fa82445bbb2"
     },
     "magazine-landscape": {
       "pages": 12,
-      "narrative": 0.2926,
-      "doc": "db8cbcfbfb731c917fa0f3020ab629e3d0c5379b690a03320c8ac6b3b229ddfe",
-      "view": "aa295ceae9e1e647aa6eb282e87ad85b93956d6d5807c6f83c15e2962724b0d0",
-      "print": "2b2c5cc99729c01fb3a52420b3fae843098fac9ec3699f13df9ca6975437b2a4"
+      "narrative": 0.2919,
+      "doc": "5cabb1cb98614428c116b3ef51383f54ee19212a4e4acff874c9ff8ba06ad0c6",
+      "view": "72112d20adf68f680f2e01db13ce5e4dd74b5ca40d907a6f1e7e71259c93403d",
+      "print": "617fd81cc719c5b36e284d02401fa65bc439618c4cfc8558d1c2db35804bd797"
     },
     "editorial-portrait": {
       "pages": 13,
-      "narrative": 0.3429,
-      "doc": "f0d972a7241af057d6e2f827f52cee3cb9096754cc96b9f6591b9fc49d4af298",
-      "view": "20818447b2f6cd8e831309699c607a87c863e658e713ee8c956c70df96b5d2dd",
-      "print": "2681b0195aefe6d971b1611fbf386a1e9892b0af74c74786c16fbab836ab33d7"
+      "narrative": 0.2844,
+      "doc": "e67446ee20bd08b192d1f83c4246cccbd80fdf0e634a560928d8546825dc2dcf",
+      "view": "55ad6297ff79252fa0bf34b9d43574d55f1622ff6b653e9a745f474168732081",
+      "print": "98fcd04f566403bd10fda38c5cc672120765aa3ad15397d93eab2b4ea8063da6"
     },
     "editorial-landscape": {
       "pages": 12,
-      "narrative": 0.317,
-      "doc": "444468021e71c01c81d7c6303f84147138f09f60624c311181b87ecdc443877b",
-      "view": "115d0e8f3d6588f6797a75a6ddb064b13e3f7c44fb1c1ebe77672b4259205e91",
-      "print": "5b62db5df514e96159d406d84bf527defe33011f96bf1ab3cdf37ce146362a89"
+      "narrative": 0.3165,
+      "doc": "65ede446270eb2c16fdb30f7860d131c3a4afe6140a6958ed90aba3e6c9f1f63",
+      "view": "4525871d2c9285cb16f7329681610a22e6b1745dc83c2d16e01ad55034fb1003",
+      "print": "34c640f44f6d44a3dfc2484c5e4b693d6697ba74d914086dfa97cbc760c48147"
     }
   }
 }
