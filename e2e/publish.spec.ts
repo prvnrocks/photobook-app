@@ -330,7 +330,8 @@ test("PDF (paid): failed job and daily cap show copy and allow a retry", async (
   await page.getByTestId("pdf-download").click();
   const status = page.getByTestId("pdf-status");
   await expect(status).toHaveAttribute("data-state", "error", { timeout: 10_000 });
-  await expect(status).toContainText("We couldn't make your PDF — try again");
+  // Task 10: a failed job says what happened in plain words (render_timeout → "took too long").
+  await expect(status).toContainText("Making the PDF took too long — try again in a minute");
   await expect(page.getByTestId("pdf-download")).toHaveText("Try again");
   await expect(page.getByTestId("pdf-download")).toBeEnabled();
   await noHorizontalOverflow(page);
