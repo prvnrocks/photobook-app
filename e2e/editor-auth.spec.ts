@@ -316,9 +316,14 @@ test("c. after 0900: save 200 + rev bump + persisted; 409 stale; 422 page_limit;
   expect(stale.body).toMatchObject({ error: "conflict" });
   expect((await bookRow()).title).toBe("E2E edited title");
 
-  const big = structuredClone(after.doc) as { pages: { id: string }[] };
+  const big = structuredClone(after.doc) as { pages: { id: string; texts?: { id: string }[] }[] };
   const first = big.pages[0];
-  while (big.pages.length < 21) big.pages.push({ ...structuredClone(first), id: `x${big.pages.length}`, slots: [] } as never);
+  // Task 7 storybook pages carry page texts whose ids must stay unique (else the 422 is invalid_doc).
+  while (big.pages.length < 21) {
+    const k = big.pages.length;
+    const texts = first.texts?.map((t) => ({ ...structuredClone(t), id: `${t.id}-x${k}` }));
+    big.pages.push({ ...structuredClone(first), id: `x${k}`, slots: [], ...(texts ? { texts } : {}) } as never);
+  }
   const limit = await putDoc(big, Number(after.doc_rev));
   expect(limit.status).toBe(422);
   expect(limit.body).toMatchObject({ error: "page_limit" });

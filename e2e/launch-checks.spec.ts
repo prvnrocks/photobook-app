@@ -182,8 +182,12 @@ test.describe("unsubscribe against the live DB", () => {
     await page.goto(`/auth/confirm?token_hash=${link.properties!.hashed_token}&type=magiclink&next=/dashboard`);
     await expect(page).toHaveURL(/\/dashboard$/);
     for (const id of [warned, quiet]) {
-      const res = await page.goto(`/books/${id}/edit`);
+      // An empty draft's editor sends it on into the wizard (a redirect that can abort the "load" of
+      // the first document) — wait for the editor response itself, then for the page to settle.
+      const res = await page.goto(`/books/${id}/edit`, { waitUntil: "commit" });
       expect(res?.status()).toBeLessThan(400);
+      await page.waitForLoadState("load").catch(() => {});
+      await page.waitForTimeout(1_000);
     }
     const w1 = await row(warned);
     const q1 = await row(quiet);

@@ -50,7 +50,6 @@ import {
   cardRadio,
   createBookViaWizard,
   waitForSortingOrReview,
-  wizardStepUrl,
   type WizardOptions,
 } from "./helpers/create-book";
 
@@ -504,13 +503,9 @@ async function choosePhotos(s: Session, files: string[], press?: (t: Locator, la
   return at;
 }
 
-/** M20: step 7 (Review) → "Generate album" → editor. */
+/** Task 8: step 6 (the storybook job) opens the editor by itself when done — no step 7 / Generate tap. */
 async function reviewThenEditor(s: Session, timeout: number) {
-  await s.page.waitForURL(wizardStepUrl(s.bookId, "7"), { timeout });
-  const gen = s.page.getByTestId("wizard-generate");
-  await expect(gen).toBeEnabled({ timeout: 60_000 });
-  await gen.tap();
-  await waitForEditor(s, 120_000);
+  await waitForEditor(s, timeout);
 }
 
 async function waitForEditor(s: Session, timeout: number) {
@@ -601,7 +596,7 @@ test.afterAll(async () => {
   expect(runsLeft).toBe(0);
 });
 
-test("first run: landing → login → wizard → choose photos → story → design → build → review → editor → Share → WhatsApp (≤ 8 taps from the step-2 Continue)", async ({ browser }) => {
+test("first run: landing → login → wizard → choose photos → story → design → storybook (step 6) → editor → Share → WhatsApp (≤ 7 taps from the step-2 Continue)", async ({ browser }) => {
   test.setTimeout(900_000);
   const s = await newSession(browser, { analytics: ANALYTICS });
   const page = s.page;
@@ -678,26 +673,21 @@ test("first run: landing → login → wizard → choose photos → story → de
   await expect(page.getByTestId("upload-progress")).toBeVisible({ timeout: 60_000 });
   await screen(8, "upload");
 
-  // 5. Build screen = wizard step 6 (replay) with the photo fan, in place on /books/new (M20).
+  // 5. Build screen = wizard step 6 (Task 8: the storybook job, "Your memories are becoming a
+  //    story.", replay) in place on /books/new.
   await waitForSortingOrReview(page, s.bookId, 420_000);
   const buildUrlAt = Date.now();
   let buildShot = false;
-  const strip = page.getByTestId("build-photo-fan");
-  if (await strip.waitFor({ state: "visible", timeout: 20_000 }).then(() => true, () => false)) {
-    await imagesSettled(page);
+  const gen6 = page.getByTestId("wizard-step-story-generation");
+  if (await gen6.waitFor({ state: "visible", timeout: 20_000 }).then(() => true, () => false)) {
     if (new URL(page.url()).searchParams.get("step") === "6") {
       await screen(9, "build");
       buildShot = true;
     }
   }
   console.log(`[m13-run] build screen shot=${buildShot}`);
-  // 6. Step 7 Review (M20, D-072): what the AI kept, chapters, captions → "Generate album" (counted).
-  await page.waitForURL(wizardStepUrl(s.bookId, "7"), { timeout: 420_000 });
-  const gen = page.getByTestId("wizard-generate");
-  await expect(gen).toBeEnabled({ timeout: 60_000 });
+  // 6. The finished storybook opens the editor by itself (no step 7 Review / "Generate album" tap).
   const reviewAt = Date.now();
-  await screen(10, "review");
-  await tap(gen, "Generate album (step 7)");
   await waitForEditor(s, 420_000);
   const editorAt = Date.now();
   await expect.poll(() => s.firstPage.editor !== undefined, { timeout: 60_000 }).toBe(true);
@@ -748,13 +738,13 @@ test("first run: landing → login → wizard → choose photos → story → de
     console.log(`[m13-run] ai_build_done props=${JSON.stringify(Object.keys(build?.properties ?? {}).filter((k) => !k.startsWith("$")))} published first=${String(published?.properties.first)}`);
   }
 
-  // Task 5 re-baseline (was M20 / D-072: ≤ 5 from the creating Continue, ≤ 4 after the photos): the
-  // Photos, Story and Design steps each need one tap now → 8 app taps from the step-2 Continue that
-  // creates the book (Continue, Choose photos, Continue, Skip for now, Create my book, Generate album,
-  // Share, WhatsApp) and 6 after the photos were chosen. Exact on purpose: an extra tap must show up.
+  // Task 8 re-baseline (Task 5: 8 / 6): the Photos, Story and Design steps each need one tap and the
+  // finished storybook opens the editor by itself → 7 app taps from the step-2 Continue that creates
+  // the book (Continue, Choose photos, Continue, Skip for now, Create my book, Share, WhatsApp) and 5
+  // after the photos were chosen. Exact on purpose: an extra tap must show up.
   const tapsAfterPhotos = taps.filter((t) => t.at > photosChosen);
-  expect(taps.length, taps.map((t) => t.label).join(" | ")).toBeLessThanOrEqual(8);
-  expect(tapsAfterPhotos.length, tapsAfterPhotos.map((t) => t.label).join(" | ")).toBeLessThanOrEqual(6);
+  expect(taps.length, taps.map((t) => t.label).join(" | ")).toBeLessThanOrEqual(7);
+  expect(tapsAfterPhotos.length, tapsAfterPhotos.map((t) => t.label).join(" | ")).toBeLessThanOrEqual(5);
 
   const firstPreview = Math.min(
     ...[s.firstPage["build-fan"], s.firstPage["review-cover"], s.firstPage.editor].filter((v): v is number => v !== undefined),

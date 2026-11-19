@@ -295,7 +295,9 @@ function fortyPages(base: Record<string, unknown>, photoIds: string[]): Record<s
   const pool = [...photoIds];
   const pages: typeof doc.pages = [];
   for (let i = 0; i < PAGES; i++) {
-    const l = LAYOUT_CYCLE[i % LAYOUT_CYCLE.length];
+    // Task 10: a page with neither a photo nor text is "blank" and blocks the PDF (422 not_ready) —
+    // once the 40 photos are used up, the rest of the pages get a caption layout (text, empty slot).
+    const l = pool.length > 0 ? LAYOUT_CYCLE[i % LAYOUT_CYCLE.length] : { id: "one-portrait", photos: 1, caption: true };
     const slots = Array.from({ length: l.photos }, () => ({ photoId: pool.shift() ?? null, crop: { x: 0.5, y: 0.5, zoom: 1 } }));
     let caption: Caption | null = null;
     if (i === ARABIC_PAGE_INDEX) caption = { text: ARABIC_CAPTION, font: "Cairo", align: "center", source: "user" };

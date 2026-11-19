@@ -12,8 +12,11 @@
  *   5 Design (format-* and style-* labels on one screen; six style cards since M30, travel defaults to
  *     Magazine — D-090; a "Recommended" badge = choice-badge) → wizard-design-continue ("Create my
  *     book"): saves the design and asks for the first build.
- *   6 Create (the build, ?step=6) and 7 Preview (?step=7) render in place; "Generate album"
- *     (wizard-generate) is the one navigation, to /books/<id>/edit.
+ *   6 Create (?step=6) renders in place. Since Task 8 it is the storybook generation screen ("Your
+ *     memories are becoming a story.", wizard-step-story-generation): Design's Continue starts the
+ *     storybook job and, when it is done, the wizard opens /books/<id>/edit by itself — there is no
+ *     step 7 for a new book. 7 Preview + "Generate album" (wizard-generate) remain only for books made
+ *     by the old album flow (a book whose active job is an album build).
  *
  * Specs written before Task 5 call createBookViaWizard(page, { format, style }), upload their photos,
  * then wait for step 6 / 7. That still works: the options are remembered per page, and
@@ -227,8 +230,9 @@ export async function answerStory(page: Page, opts: WizardOptions = {}): Promise
 
 /**
  * Step 5: choose the shape (always clicked — default portrait) and, when given, the style; then
- * "Create my book" (saves the design when it differs and asks for the first build). Does not wait
- * for step 6 — use waitForSortingOrReview / waitForReview.
+ * "Create my book" (saves the design when it differs and asks for the first build). Waits only until
+ * the wizard has left step 5 (the button is busy meanwhile — a second walk must not press it again);
+ * use waitForSortingOrReview / waitForReview for step 6 / the editor.
  */
 export async function chooseDesign(page: Page, opts: WizardOptions = {}): Promise<void> {
   await expectWizardStep(page, 5, 30_000);
@@ -247,6 +251,9 @@ export async function chooseDesign(page: Page, opts: WizardOptions = {}): Promis
   if (opts.expectStyle) await expect(cardRadio(page, `style-${opts.expectStyle}`)).toBeChecked();
   await opts.beforeContinue?.(5);
   await pressOn(opts, page.getByTestId("wizard-design-continue"), "Create my book (step 5: design)");
+  await expect
+    .poll(async () => /\/edit$/.test(new URL(page.url()).pathname) || (await currentWizardStep(page)) !== 5, { timeout: 120_000 })
+    .toBe(true);
 }
 
 /**
@@ -270,40 +277,62 @@ export async function finishBookSetup(page: Page, opts?: WizardOptions, timeout 
 
 /**
  * After photos were picked on step 3: finish Story + Design (finishBookSetup) when still needed, then
- * wait until the wizard is on step 6 (the build) or already 7.
+ * wait until the wizard is on step 6 (the build), already 7 (old album flow) or — a fast storybook
+ * run — already in the editor (Task 8: step 6 opens it by itself).
  */
-export async function waitForSortingOrReview(page: Page, bookId: string, timeout = 240_000): Promise<6 | 7> {
+export async function waitForSortingOrReview(page: Page, bookId: string, timeout = 240_000): Promise<6 | 7 | "editor"> {
   await finishBookSetup(page, undefined, timeout);
-  await page.waitForURL(wizardStepUrl(bookId), { timeout });
-  return new URL(page.url()).searchParams.get("step") === "6" ? 6 : 7;
+  const steps = wizardStepUrl(bookId);
+  const edit = new RegExp(`/books/${bookId}/edit$`);
+  await page.waitForURL((u) => steps.test(u.pathname + u.search) || edit.test(u.pathname), { timeout });
+  const u = new URL(page.url());
+  if (edit.test(u.pathname)) return "editor";
+  return u.searchParams.get("step") === "6" ? 6 : 7;
 }
 
-/** Wait for step 7 (Preview) to be ready to generate (the run finished). Finishes Story + Design first when still needed. */
-export async function waitForReview(page: Page, bookId: string, timeout = 420_000): Promise<void> {
+/** The editor of a book (a new book's step 6 opens it by itself when the storybook job is done). */
+export const editorUrl = (bookId: string) => new RegExp(`/books/${bookId}/edit$`);
+
+/**
+ * Wait until the first run finished: the editor opened by itself (Task 8 storybook flow — the normal
+ * case) or, for a book made by the old album flow, step 7 (Preview) is ready to generate. Finishes
+ * Story + Design first when still needed. Returns which one it reached.
+ */
+export async function waitForReview(page: Page, bookId: string, timeout = 420_000): Promise<"editor" | 7> {
   await finishBookSetup(page, undefined, timeout);
-  await page.waitForURL(wizardStepUrl(bookId, "7"), { timeout });
+  const edit = editorUrl(bookId);
+  const step7 = wizardStepUrl(bookId, "7");
+  await page.waitForURL((u) => edit.test(u.pathname) || step7.test(u.pathname + u.search), { timeout });
+  if (edit.test(new URL(page.url()).pathname)) {
+    await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 60_000 });
+    return "editor";
+  }
   await expectWizardStep(page, 7, 60_000);
   await expect(page.getByTestId("wizard-generate")).toBeEnabled({ timeout: 60_000 });
+  return 7;
 }
 
 /**
- * Step 7 → editor: "Generate album" (confirmAlbumAction redirects; soft navigation) and wait for the
- * editor shell. `press` = tap-counting wrapper.
+ * → editor. On step 7 (old album flow): "Generate album" (confirmAlbumAction redirects; soft
+ * navigation). Already in the editor (Task 8: step 6 opened it): only waits for the editor shell.
+ * `press` = tap-counting wrapper.
  */
 export async function generateAlbum(
   page: Page,
   bookId: string,
   opts: { press?: WizardOptions["press"]; timeout?: number } = {},
 ): Promise<void> {
-  const btn = page.getByTestId("wizard-generate");
-  await expect(btn).toBeEnabled({ timeout: 60_000 });
-  if (opts.press) await opts.press(btn, "Generate album (step 7)");
-  else await btn.click();
-  await page.waitForURL(new RegExp(`/books/${bookId}/edit$`), { timeout: opts.timeout ?? 120_000 });
+  if (!editorUrl(bookId).test(new URL(page.url()).pathname)) {
+    const btn = page.getByTestId("wizard-generate");
+    await expect(btn).toBeEnabled({ timeout: 60_000 });
+    if (opts.press) await opts.press(btn, "Generate album (step 7)");
+    else await btn.click();
+  }
+  await page.waitForURL(editorUrl(bookId), { timeout: opts.timeout ?? 120_000 });
   await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 60_000 });
 }
 
-/** Photos picked on step 3 → story → design → build → preview → Generate album → editor (the whole first run). */
+/** Photos picked on step 3 → story → design → step 6 (storybook job) → editor (the whole first run). */
 export async function finishWizardToEditor(page: Page, bookId: string, opts: { timeout?: number } = {}): Promise<void> {
   await waitForReview(page, bookId, opts.timeout ?? 420_000);
   await generateAlbum(page, bookId);

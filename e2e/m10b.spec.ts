@@ -55,7 +55,7 @@ import { expect, test, type Browser, type BrowserContext, type Page } from "@pla
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { buildEvent, postEvent } from "../scripts/stripe-signed-event.mjs";
 import { hasCaptionArea } from "../src/lib/ai/captions";
-import { createBookViaWizard, finishWizardToEditor, waitForSortingOrReview, wizardStepUrl } from "./helpers/create-book";
+import { createBookViaWizard, finishWizardToEditor, waitForSortingOrReview } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live M10b gate");
@@ -278,9 +278,8 @@ async function uploadAndBuild(id: string, files: { name: string; mimeType: strin
   // book" — the build starts there, for any number of photos (fewer than 5: step 6 starts it the
   // plain way; no "Make my book now" button any more).
   // M20: step 6 in place on /books/new?book=<id>&step=6.
+  // Task 8: step 6 is the storybook job; it opens the editor by itself when done (no step 7).
   await waitForSortingOrReview(page, id, 180_000);
-  await page.waitForURL(wizardStepUrl(id), { timeout: 60_000 });
-  // M20 (D-072): step 7 (Review) → "Generate album" → the editor.
   await finishWizardToEditor(page, id, { timeout: 420_000 });
 }
 
@@ -404,19 +403,22 @@ test("a. form Landscape + Modern → upload → build (replay) → modern landsc
   test.setTimeout(600_000);
   const t0 = Date.now();
   bookId = await createViaForm("A5_LANDSCAPE", "modern", TITLE);
+  // Task 5: the shape + style are chosen on step 5 (after the photos) — the row holds a provisional
+  // design until then; the chosen design is checked after the build below.
   const created = await bookRow();
-  expect({ format: created.format, design_style: created.design_style }).toEqual({ format: "A5_LANDSCAPE", design_style: "modern" });
   expect(created.max_pages).toBe(FREE_MAX);
 
   await uploadAndBuild(bookId, await makeSynthetic(page, 10, 1200, 900, "m10b"));
   console.log(`[a] create→editor ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 
   const { doc, format, design_style, page_count } = await bookRow();
+  expect({ format, design_style }).toEqual({ format: "A5_LANDSCAPE", design_style: "modern" });
   expect(doc.version).toBe(2);
   expect(doc.format).toBe(format);
   expect(doc.style.designStyle).toBe(design_style);
   expect(doc.cover.layout).toMatch(/^m-l-cover-/);
-  const foreign = doc.pages.map((p) => p.layout).filter((l) => !l.startsWith("m-l-"));
+  // Task 7: storybook pages use the style's own templates ("st-m-l-…" for modern landscape).
+  const foreign = doc.pages.map((p) => p.layout).filter((l) => !/^(st-)?m-l-/.test(l));
   expect(foreign).toEqual([]);
   expect(spreadProblems(doc)).toEqual([]);
   expect(page_count).toBe(doc.pages.length);
@@ -728,9 +730,10 @@ test("f. form Portrait + Classic → upload → build → stored v1; an editor l
   test.skip(!migrated, "migration 1900 not applied (books.format/design_style missing)");
   test.setTimeout(600_000);
   classicId = await createViaForm("A5_PORTRAIT", "classic", "Family Day");
+  await uploadAndBuild(classicId, await makeSynthetic(page, 3, 900, 1200, "m10b-classic"));
+  // Task 5: the design is chosen on step 5 (after the photos) — checked after the build.
   const created = await bookRow(classicId);
   expect({ format: created.format, design_style: created.design_style }).toEqual({ format: "A5_PORTRAIT", design_style: "classic" });
-  await uploadAndBuild(classicId, await makeSynthetic(page, 3, 900, 1200, "m10b-classic"));
 
   const v2Keys = (d: StoredDoc) => {
     const raw = JSON.stringify(d);

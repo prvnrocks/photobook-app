@@ -6,42 +6,45 @@
  * language control) → step-2 Continue creates the book (provisional design) and stays on the SAME
  * document → step 3 photos (upload only, no build) → step 4 story ("Every memory has a story.",
  * optional) → step 5 design (shape + style, recommended; "Create my book" saves it and asks for the
- * first build) → step 6 the build → step 7 preview → "Generate album" → the editor.
- * URLs /books/new?book=<id>&step=3…7. /books/<id>/upload|build send fresh books into the wizard.
+ * first build) → step 6. Since Task 8 step 6 is the storybook job ("Your memories are becoming a
+ * story.", four real stages, Stop); when it is done the wizard REPLACES its entry with the editor
+ * (one document navigation). Step 7 (Preview / "Generate album") is only for books of the old album
+ * flow and is no longer reached by a new book.
+ * URLs /books/new?book=<id>&step=3…6. /books/<id>/upload|build send fresh books into the wizard.
  *
  * Signed out (any server): /books/start → /books/new; /books/new and a book-step URL need sign-in.
  *
  * LIVE (E2E_AUTH=1, hosted Supabase; server: next start with AI_MODE=replay, empty ANTHROPIC_API_KEY,
  * dummy Stripe / CRON, NEXT_PUBLIC_APP_URL = its own origin). ONE throwaway user
  * `e2e+m20-<random>@example.com` (admin createUser + generateLink, no email). Serial:
- *   a. 375 continuous run (book A, Arabic title on an en-US browser): steps 1–7 audited + shot, no
- *      document navigation from step 1 to step 7 (window marker, performance.timeOrigin, document /
+ *   a. 375 continuous run (book A, Arabic title on an en-US browser): steps 1–6 audited + shot, no
+ *      document navigation from step 1 to step 6 (window marker, performance.timeOrigin, document /
  *      RSC requests) with the band / stepper / wizard the same DOM nodes; books row (title, occasion,
- *      format, design_style, caption_lang 'ar'); step 7 toggle (DB, no remount, no reload); Generate
- *      → editor as a soft navigation; locked stepper on 6/7; ?trigger=rebuild stays classic.
+ *      format, design_style, caption_lang 'ar'); step 6 storybook stages; done → the editor replaces
+ *      the wizard entry (exactly one document navigation, history length unchanged); locked stepper
+ *      on 6; ?trigger=rebuild stays classic.
  *   b. 375 history rules (book B): Back before any pick → step 4 edit, 1 book; M19 BUG-3 double /
  *      triple Back (same document, after a hard leave, after a soft leave) never shows a create wizard
  *      holding the old answers, still exactly 1 book; edit + save returns to 5; tone follows occasion.
- *   c. 375 (book B continued): refresh restores 5; Back while uploading stays on 5; refresh on 6
- *      resumes (no 2nd run); Back after the run stays on 6/7; refresh on 7; Generate from the
- *      hard-loaded step 7 → editor (soft navigation).
+ *   c. 375 (book B continued): refresh restores 3/4/5; Back while uploading stays on 3; refresh on 6
+ *      re-attaches to the same storybook run (no 2nd run) → editor; Back from the editor never shows
+ *      Design again; hard loads of ?step=6 / ?step=7 of the finished book land in the editor.
  *   d. 375 create-mode details: step-1 Arabic dir=auto, suggestion chip, back / forward 1–4, refresh on
  *      3, deep link bounce, stepper clicks on done steps 1–3, Start over (≥ 44 px), entry redirects
  *      (/books/<fresh>/upload → step 5, /build → step 6, no loops).
- *   e. 1280 continuous run (book D): steps 1–7 audited + shot, layout jump 6 → 7 measured.
- *   f. reduced motion (375, book E): no running CSS animation / transition on steps 1–7, static
- *      review count, no view transition.
+ *   e. 1280 continuous run (book D): steps 1–6 audited + shot, one document until the editor.
+ *   f. reduced motion (375, book E): no running CSS animation / transition on steps 1–6 (incl. the
+ *      storybook stages), no view transition.
  *   g. (E2E_ANALYTICS=1, server built with NEXT_PUBLIC_POSTHOG_KEY=phc_e2e_fake +
  *      NEXT_PUBLIC_POSTHOG_HOST=https://ph.e2e.invalid, intercepted) book_created exactly once for a
  *      wizard create, not again after step-5 Back + save.
- *   i. (M20b, only when the server runs AI_MODE=off — probed via the wizard API's aiOn; prod-like) step 5
- *      upload only (no sorting / auto-start text) → step 6 rule checklist (data-sort-phase progresses,
- *      ≥ 2.7 s) → step 7 ai_off banner → toggle → refresh stays 7 → Generate → editor (soft); 0
- *      document navigations 5 → 7; exactly 1 agent run (mode rule); fresh /build → wizard step 6;
- *      ?trigger=rebuild stays classic.
+ *   i. (M20b, only when the server runs AI_MODE=off — probed via the wizard API's aiOn; prod-like) step 3
+ *      upload only (no sorting / auto-start text) → step 6 rule storybook run (honest "Made without AI"
+ *      line, no AI wording) → editor; 0 document navigations 3 → 6; exactly 1 agent run (storybook,
+ *      mode rule); fresh /build → wizard step 6; ?trigger=rebuild stays classic.
  *   z. audit summary (no horizontal scroll, ≥ 44 px targets, one h1, visible focus, AA contrast incl.
  *      the leather band measured against its lightest point).
- * Screenshots: docs/design/m20-step{1..7}-{375,1280}.png (dir override: M20_SHOT_DIR).
+ * Screenshots: docs/design/m20-step{1..6}-{375,1280}.png (dir override: M20_SHOT_DIR).
  * afterAll (always): storage under `<uid>/`, the user (books/photos cascade), then the replay
  * agent_runs this user created (ids captured first). Per-test timeouts only. Logs: counts only.
  */
@@ -58,10 +61,8 @@ import {
   createBookViaWizard,
   expectWizardStep,
   finishBookSetup,
-  generateAlbum,
   STORY_HEADLINE,
   storyFields,
-  waitForReview,
   waitForWizardHydrated,
   walkWizardToOccasion,
   wizardContinue,
@@ -89,6 +90,9 @@ const SHOT_DIR = process.env.M20_SHOT_DIR || path.join(__dirname, "..", "docs", 
 const BUCKETS = ["photos", "exports"];
 const UUID = "[0-9a-f-]{36}";
 const ARABIC_TITLE = "رحلتنا إلى العين";
+/** Task 8: the headline of step 6 (the storybook job). */
+const STORY_GEN_HEADLINE = "Your memories are becoming a story.";
+const editorUrl = (id: string) => new RegExp(`/books/${id}/edit$`);
 const TAB_STOPS = 6;
 const PH_HOST = process.env.E2E_POSTHOG_HOST ?? "https://ph.e2e.invalid";
 const PHONE_UA =
@@ -274,7 +278,8 @@ test.describe("m20 wizard (live)", () => {
 
   /** Replay ticks take ~0 ms: hold every run API response so step 6 stays on screen. Records run ids. */
   async function holdRunResponses(p: Page, delayMs: number) {
-    await p.route(/\/api\/ai\/runs(\/|\?|$)/, async (route) => {
+    // the album build routes (old flow) and the storybook job start (Task 8; its ticks are not held)
+    await p.route(/\/api\/ai\/(runs(\/|\?|$)|story-runs$)/, async (route) => {
       let res;
       try {
         res = await route.fetch();
@@ -415,7 +420,7 @@ test.describe("m20 wizard (live)", () => {
     expect(runsLeft).toBe(0);
   });
 
-  test("a. 375 continuous: steps 1–7 on one document, row + caption_lang ar, review toggle, Generate → editor (soft)", async () => {
+  test("a. 375 continuous: steps 1–6 on one document, row + caption_lang ar, storybook step 6 → the editor replaces the wizard entry", async () => {
     test.setTimeout(600_000);
     const { page, nav } = phone;
 
@@ -490,7 +495,8 @@ test.describe("m20 wizard (live)", () => {
     await holdRunResponses(page, 2_500);
     const runPosts: string[] = [];
     page.on("request", (r) => {
-      if (r.method() === "POST" && new URL(r.url()).pathname === "/api/ai/runs") runPosts.push(r.url());
+      // the album build (old flow) or the storybook job start (Task 8) — never its ticks
+      if (r.method() === "POST" && ["/api/ai/runs", "/api/ai/story-runs"].includes(new URL(r.url()).pathname)) runPosts.push(r.url());
     });
     await pickPhotos(page, 6, 100);
     await expect(page.getByTestId("upload-wizard-back")).toHaveCount(0);
@@ -562,79 +568,36 @@ test.describe("m20 wizard (live)", () => {
     await page.waitForURL(wizardStepUrl(bookA, "6"), { timeout: 240_000 });
     await expectWizardStep(page, 6, 30_000);
     expect(await bookRow(bookA)).toMatchObject({ format: "A5_LANDSCAPE", design_style: "scrapbook" }); // saved before the build
-    await expect(page.getByTestId("build-photo-fan")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId("build-progress")).toHaveAttribute("data-variant", "wizard");
-    await expect(page.getByTestId("build-checklist")).toBeVisible();
-    await expect(page.getByTestId("build-keep-open")).toBeVisible();
+    // Task 8: step 6 is the storybook job — the headline, four real stages, Stop; no percentage.
+    await expect(page.getByTestId("wizard-step-story-generation")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("wizard-headline")).toHaveText(STORY_GEN_HEADLINE);
+    await expect(page.getByTestId("story-stages").locator("li")).toHaveCount(4);
+    await expect(page.getByTestId("story-stop")).toBeVisible({ timeout: 30_000 });
     for (const n of [1, 2, 3, 4, 5]) await expect(page.getByTestId(`wizard-step-${n}-button`)).toHaveCount(0);
     await audit(page, "step 6 (375)", { tab: false });
     await shot(page, 6, 375);
-    const fan = await page
-      .getByTestId("build-photo-fan")
-      .evaluate((el) => {
-        const imgs = Array.from(el.querySelectorAll("img"));
-        return { imgs: imgs.length, loaded: imgs.filter((i) => i.complete && i.naturalWidth > 0).length };
-      })
-      .catch(() => null);
-    console.log(`[a] step-6 fan ${JSON.stringify(fan)}`);
-    expect(fan?.loaded ?? 0).toBeGreaterThan(0);
+    expect(await page.getByTestId("wizard-step-story-generation").innerText()).not.toContain("%");
 
-    await page.waitForURL(wizardStepUrl(bookA, "7"), { timeout: 420_000 });
-    await expectWizardStep(page, 7, 60_000);
-    await expect(page.getByTestId("wizard-generate")).toBeEnabled({ timeout: 60_000 });
-    await page.unrouteAll({ behavior: "ignoreErrors" });
-    for (const n of [1, 2, 3, 4, 5, 6]) await expect(page.getByTestId(`wizard-step-${n}-button`)).toHaveCount(0);
-    await expect(page.getByTestId("review-kept")).toHaveText(/\d+/);
-    await audit(page, "step 7 (375)");
-    await shot(page, 7, 375);
-
-    // NO document navigation from step 1 to step 7; the band / stepper / wizard are the same nodes.
-    const s7 = await docState(page);
+    // NO document navigation from step 1 to step 6; the band / stepper / wizard are the same nodes.
+    const s6 = await docState(page);
     console.log(`[a] rsc requests: ${nav.rsc.map((u) => u.replace(/[0-9a-f-]{36}/g, ":id")).join(" ")}`);
-    console.log(`[a] step1→7 docs=${nav.docs.length} rsc=${nav.rsc.length} actions=${nav.actions} frameNav=${nav.frameNav} state=${JSON.stringify(s7)}`);
+    console.log(`[a] step1→6 docs=${nav.docs.length} rsc=${nav.rsc.length} actions=${nav.actions} frameNav=${nav.frameNav} state=${JSON.stringify(s6)}`);
     expect(nav.docs).toEqual([]);
-    expect(s7).toMatchObject({ doc: mark.doc, timeOrigin: mark.timeOrigin, navEntries: 1, band: true, stepper: true, wizard: true });
+    expect(s6).toMatchObject({ doc: mark.doc, timeOrigin: mark.timeOrigin, navEntries: 1, band: true, stepper: true, wizard: true });
+    const historyAt6 = await page.evaluate(() => history.length);
 
-    // Toggle a photo on step 7: persisted, no wizard remount, no reload (revalidatePath re-render).
-    const tile = page.getByTestId("review-panel").getByTestId("review-tile").first();
-    const photoId = (await tile.getAttribute("data-photo-id")) ?? "";
-    const before = (await tile.getAttribute("data-state")) ?? "";
-    expect(photoId).toMatch(new RegExp(`^${UUID}$`));
-    const actionsBefore = nav.actions;
-    const rscBefore = nav.rsc.length;
-    await tile.click();
-    await expect
-      .poll(async () => {
-        const { data } = await admin.from("photos").select("status, user_override").eq("id", photoId).single();
-        return data as { status: string; user_override: boolean } | null;
-      }, { timeout: 30_000 })
-      .toEqual({ status: before === "kept" ? "dropped" : "kept", user_override: true });
-    await page.waitForTimeout(2_000); // let the action's re-render land
-    const afterToggle = await docState(page);
-    console.log(`[a] toggle actions=${nav.actions - actionsBefore} docs=${nav.docs.length} rsc=${nav.rsc.length} state=${JSON.stringify(afterToggle)}`);
-    expect(nav.actions - actionsBefore).toBeGreaterThanOrEqual(1);
-    // 910fb34: toggles pass { revalidate: false } — no RSC request for /books/new per tap.
-    const toggleRsc = nav.rsc.slice(rscBefore).filter((u) => u.startsWith("/books/new"));
-    console.log(`[a] toggle rsc requests to /books/new: ${toggleRsc.length}`);
-    expect(toggleRsc).toEqual([]);
-    expect(nav.docs).toEqual([]);
-    expect(afterToggle).toMatchObject({ doc: mark.doc, band: true, stepper: true, wizard: true });
-    await expectWizardStep(page, 7);
-    await expect(page.locator(`[data-testid="review-tile"][data-photo-id="${photoId}"]`)).toHaveAttribute(
-      "data-state",
-      before === "kept" ? "dropped" : "kept",
-    );
-
-    // Generate → editor: a soft navigation (same document).
-    await page.getByTestId("wizard-generate").click();
-    await page.waitForURL(new RegExp(`/books/${bookA}/edit$`), { timeout: 120_000 });
+    // Done → the editor: the wizard REPLACES its own entry (exactly one document navigation, no new
+    // history entry; Task 8 req. 7 — there is no step 7 for a new book).
+    await page.waitForURL(editorUrl(bookA), { timeout: 420_000 });
     await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 60_000 });
-    const atEditor = await page.evaluate(() => ({ doc: (window as unknown as { __m20doc?: string }).__m20doc ?? null, timeOrigin: performance.timeOrigin }));
-    console.log(`[a] generate → editor docs=${JSON.stringify(nav.docs)} sameDoc=${atEditor.doc === mark.doc}`);
-    expect(nav.docs).toEqual([]);
-    expect(atEditor).toEqual({ doc: mark.doc, timeOrigin: mark.timeOrigin });
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    console.log(`[a] step 6 → editor docs=${JSON.stringify(nav.docs.map((u) => u.replace(bookA, ":id")))}`);
+    expect(nav.docs).toEqual([`/books/${bookA}/edit`]);
+    expect(await page.evaluate(() => history.length)).toBe(historyAt6);
     expect(await bookRow(bookA)).toMatchObject({ occasion: "graduation", format: "A5_LANDSCAPE", design_style: "scrapbook", caption_lang: "ar" });
-    expect((await runsOf(bookA)).length).toBe(1);
+    const runsA = await runsOf(bookA);
+    expect(runsA.length).toBe(1);
+    expect(runsA[0]).toMatchObject({ trigger: "storybook", state: "done" });
     expect(runPosts).toHaveLength(1); // one build request for the whole wizard, from the Design step
   });
 
@@ -827,10 +790,10 @@ test.describe("m20 wizard (live)", () => {
     urlDesync.push(...urlFindings);
   });
 
-  test("c. 375: refresh at 3/4/5/6/7 restores (story answers + design pick included); Back while uploading stays on 3; after the run stays 6/7; Generate from hard-loaded 7", async () => {
+  test("c. 375: refresh at 3/4/5/6 restores (story answers + design pick included); Back while uploading stays on 3; refresh on 6 re-attaches → editor; the finished book never shows the wizard again", async () => {
     test.setTimeout(600_000);
     test.skip(!bookB, "needs book B");
-    const { page, nav } = phone;
+    const { page } = phone;
     await page.goto(`/books/new?book=${bookB}&step=3`);
     await expectWizardStep(page, 3, 30_000);
     // Refresh on 3 → 3.
@@ -898,51 +861,46 @@ test.describe("m20 wizard (live)", () => {
     await holdRunResponses(page, 3_000);
     await page.getByTestId("wizard-design-continue").click();
 
-    // Step 6 → refresh resumes the same run (never a second one).
+    // Step 6 → refresh re-attaches to the same storybook run (never a second one) → the editor.
     await page.waitForURL(wizardStepUrl(bookB, "6"), { timeout: 240_000 });
     expect(await bookRow(bookB)).toMatchObject({ format: "A5_LANDSCAPE", design_style: "classic" });
     await expectWizardStep(page, 6, 30_000);
     await page.reload();
-    await expectWizardStep(page, 6, 30_000);
-    expect(new URL(page.url()).searchParams.get("step")).toBe("6");
-    await expect(page.getByTestId("build-progress")).toBeVisible({ timeout: 30_000 });
-
-    await page.waitForURL(wizardStepUrl(bookB, "7"), { timeout: 420_000 });
-    await expectWizardStep(page, 7, 60_000);
+    await expectWizardStep(page, 6, 30_000).catch(async (e) => {
+      // a fast replay run may already have finished: then the reload lands in the editor
+      if (!editorUrl(bookB).test(new URL(page.url()).pathname)) throw e;
+    });
+    if (!editorUrl(bookB).test(new URL(page.url()).pathname)) {
+      expect(new URL(page.url()).searchParams.get("step")).toBe("6");
+      await expect(page.getByTestId("wizard-step-story-generation")).toBeVisible({ timeout: 30_000 });
+    }
+    await page.waitForURL(editorUrl(bookB), { timeout: 420_000 });
+    await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 60_000 });
     await page.unrouteAll({ behavior: "ignoreErrors" });
     const runs = await runsOf(bookB);
     console.log(`[c] runs after refresh on 6: ${runs.map((r) => `${r.trigger}:${r.state}`).join(",")}`);
     expect(runs.length).toBe(1);
+    expect(runs[0]).toMatchObject({ trigger: "storybook", state: "done" });
 
-    // Back after the run → stays on 6/7 (sorting was replaced; ≤ 5 locked).
+    // Back from the editor after the run → never Design again (the wizard entry was replaced; the
+    // older step entries are gated to the editor or a locked step 6).
     await page.goBack({ waitUntil: "commit" }).catch(() => null);
-    await page.waitForTimeout(1_500);
+    await page.waitForTimeout(3_000);
     const afterBack = await page.evaluate(() => ({
       url: location.pathname + location.search,
       step: document.querySelector('[data-testid="new-book-wizard"]')?.getAttribute("data-step") ?? null,
+      editor: document.querySelector('[data-testid="editor-shell"]') !== null,
     }));
-    console.log(`[c] Back after run → ${JSON.stringify(afterBack)}`);
-    expect(["6", "7"]).toContain(afterBack.step);
-    if (!new RegExp(`^/books/new\\?book=${bookB}&step=${afterBack.step}$`).test(afterBack.url)) {
-      urlDesync.push(`c Back after run: step ${afterBack.step} shown at ${afterBack.url}`);
-    }
+    console.log(`[c] Back after run → ${JSON.stringify({ ...afterBack, url: afterBack.url.replace(bookB, ":id") })}`);
+    expect(afterBack.editor || afterBack.step === "6" || afterBack.step === "7", "Back after the run: editor or a locked step 6/7, never ≤ 5").toBe(true);
     expect((await runsOf(bookB)).length).toBe(1);
 
-    // Refresh on 7 → 7, then Generate from this hard-loaded step 7 → editor (soft navigation).
-    await page.goto(`/books/new?book=${bookB}&step=7`);
-    await expectWizardStep(page, 7, 60_000);
-    await page.reload();
-    await expectWizardStep(page, 7, 60_000);
-    await expect(page.getByTestId("wizard-generate")).toBeEnabled({ timeout: 60_000 });
-    const mark = await markDocument(page);
-    nav.reset();
-    await page.getByTestId("wizard-generate").click();
-    await page.waitForURL(new RegExp(`/books/${bookB}/edit$`), { timeout: 120_000 });
-    await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 60_000 });
-    const at = await page.evaluate(() => ({ doc: (window as unknown as { __m20doc?: string }).__m20doc ?? null, timeOrigin: performance.timeOrigin }));
-    console.log(`[c] hard-loaded 7 → editor docs=${JSON.stringify(nav.docs)} sameDoc=${at.doc === mark.doc}`);
-    expect(nav.docs).toEqual([]);
-    expect(at).toEqual({ doc: mark.doc, timeOrigin: mark.timeOrigin });
+    // Hard loads of the finished book's step 6 / 7 URLs → the editor (the gate), no second run.
+    for (const n of [6, 7]) {
+      await page.goto(`/books/new?book=${bookB}&step=${n}`);
+      await page.waitForURL(editorUrl(bookB), { timeout: 60_000 });
+      await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 60_000 });
+    }
     expect((await runsOf(bookB)).length).toBe(1);
   });
 
@@ -1033,7 +991,7 @@ test.describe("m20 wizard (live)", () => {
     expect((await runsOf(fresh)).length).toBe(0);
   });
 
-  test("e. 1280: steps 1–7 audited + screenshots, one document, layout jump 6 → 7 measured", async ({ browser }) => {
+  test("e. 1280: steps 1–6 audited + screenshots, one document until the editor", async ({ browser }) => {
     test.setTimeout(600_000);
     const desk = await newContext(browser, DESKTOP);
     const { page, nav } = desk;
@@ -1080,32 +1038,26 @@ test.describe("m20 wizard (live)", () => {
       // Photos → Continue → Story (audited, skipped) → Design (audited, portrait + Magazine) → Create my book.
       await finishBookSetup(page);
       await page.waitForURL(wizardStepUrl(id, "6"), { timeout: 240_000 });
-      await expect(page.getByTestId("build-photo-fan")).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId("wizard-step-story-generation")).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId("story-stages").locator("li")).toHaveCount(4);
       await audit(page, "step 6 (1280)", { tab: false });
       await shot(page, 6, 1280);
       const geo6 = await layoutGeometry(page);
-      await page.waitForURL(wizardStepUrl(id, "7"), { timeout: 420_000 });
-      await expectWizardStep(page, 7, 60_000);
-      await expect(page.getByTestId("wizard-generate")).toBeEnabled({ timeout: 60_000 });
-      await page.unrouteAll({ behavior: "ignoreErrors" });
-      const geo7 = await layoutGeometry(page);
-      console.log(`[e] layout 6→7 step6=${JSON.stringify(geo6)} step7=${JSON.stringify(geo7)}`);
-      await audit(page, "step 7 (1280)");
-      await shot(page, 7, 1280);
-      const s7 = await docState(page);
-      console.log(`[e] step1→7 docs=${nav.docs.length} rsc=${nav.rsc.length} actions=${nav.actions} state=${JSON.stringify(s7)}`);
+      const s6 = await docState(page);
+      console.log(`[e] layout step6=${JSON.stringify(geo6)} step1→6 docs=${nav.docs.length} rsc=${nav.rsc.length} actions=${nav.actions} state=${JSON.stringify(s6)}`);
       expect(nav.docs).toEqual([]);
-      expect(s7).toMatchObject({ doc: mark.doc, timeOrigin: mark.timeOrigin, band: true, stepper: true, wizard: true });
-      await page.getByTestId("wizard-generate").click();
-      await page.waitForURL(new RegExp(`/books/${id}/edit$`), { timeout: 120_000 });
+      expect(s6).toMatchObject({ doc: mark.doc, timeOrigin: mark.timeOrigin, band: true, stepper: true, wizard: true });
+      // Task 8: done → the editor replaces the wizard entry (one document navigation).
+      await page.waitForURL(editorUrl(id), { timeout: 420_000 });
       await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 60_000 });
-      expect(nav.docs).toEqual([]);
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      expect(nav.docs).toEqual([`/books/${id}/edit`]);
     } finally {
       await desk.context.close();
     }
   });
 
-  test("f. reduced motion (375): no running animation on steps 1–7, static review count, no view transition", async ({ browser }) => {
+  test("f. reduced motion (375): no running animation on steps 1–6 (incl. the storybook stages), no view transition", async ({ browser }) => {
     test.setTimeout(600_000);
     const rm = await newContext(browser, PHONE, { reducedMotion: true });
     const { page } = rm;
@@ -1134,18 +1086,14 @@ test.describe("m20 wizard (live)", () => {
       await sample("step 3 uploading");
       await finishBookSetup(page);
       await page.waitForURL(wizardStepUrl(id, "6"), { timeout: 240_000 });
-      await expect(page.getByTestId("build-photo-fan")).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId("wizard-step-story-generation")).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId("story-stop")).toBeVisible({ timeout: 30_000 });
       await sample("step 6");
-      await page.waitForURL(wizardStepUrl(id, "7"), { timeout: 420_000 });
-      await expect(page.getByTestId("wizard-generate")).toBeEnabled({ timeout: 60_000 });
+      await expect(page.locator('[data-testid^="story-stage-"][data-status="running"]').first()).toBeVisible({ timeout: 60_000 }).catch(() => {});
+      if (await page.getByTestId("wizard-step-story-generation").isVisible().catch(() => false)) await sample("step 6 running");
+      await page.waitForURL(editorUrl(id), { timeout: 420_000 });
+      await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 60_000 });
       await page.unrouteAll({ behavior: "ignoreErrors" });
-      // The count-up shows the final number straight away.
-      const kept = await page.getByTestId("review-kept").textContent();
-      const visual = await page.getByTestId("review-kept-visual").textContent();
-      const n = /(\d+)/.exec(kept ?? "")?.[1];
-      console.log(`[f] review kept sr="${(kept ?? "").replace(/\d+/g, "N")}" visualHasFinal=${(visual ?? "").includes(n ?? "§")}`);
-      expect(visual ?? "").toContain(n ?? "§");
-      await sample("step 7");
       console.log(`[f] samples ${samples.join(" | ")}`);
     } finally {
       await rm.context.close();
@@ -1197,13 +1145,14 @@ test.describe("m20 wizard (live)", () => {
     // The step is what matters (never back on Design with a run going). The address can be left on the
     // refused entry's ?step=5 (the app router's late restore, as in test c): a URL finding, not a failure.
     if (!new RegExp(`step=[67]$`).test(st.url)) urlDesync.push(`h Back after Create my book: step ${st.step} shown at ${st.url.replace(id, ":id")}`);
-    await page.waitForURL(wizardStepUrl(id, "7"), { timeout: 420_000 });
+    // Task 8: the storybook run finishes in the editor (no step 7).
+    await page.waitForURL(editorUrl(id), { timeout: 420_000 });
     await page.unrouteAll({ behavior: "ignoreErrors" });
     expect((await runsOf(id)).length).toBe(1);
     expect(await bookRow(id)).toMatchObject({ format: "A5_PORTRAIT", design_style: "geometric" });
   });
 
-  test("i. AI off (prod-like): step 3 upload only → story + design → step 6 rule sorting → step 7 ai_off review → Generate → editor; 1 rule run", async ({ browser }) => {
+  test("i. AI off (prod-like): step 3 upload only → story + design → step 6 rule storybook run (Made without AI) → editor; 1 rule run", async ({ browser }) => {
     // M20b. Runs only against a server in AI_MODE=off (probed via the wizard API's aiOn; E2E_AI_MODE
     // set to anything else skips before creating a book).
     test.skip(!!process.env.E2E_AI_MODE && process.env.E2E_AI_MODE !== "off", "server is not AI_MODE=off");
@@ -1237,39 +1186,26 @@ test.describe("m20 wizard (live)", () => {
       const aiOn = ((await probe.json()) as { aiOn?: boolean }).aiOn;
       test.skip(aiOn !== false, "server has AI on (run with AI_MODE=off)");
 
-      // Same document from here to the editor; record what the DOM ever shows (step 5 never shows
-      // sorting / auto-start text; step 6 phases + rule rows; timing of 6 → 7).
+      // Same document from here to step 6; record what the DOM ever shows (the Photos step never
+      // shows sorting / auto-start text; step 6's stages and outcome line). The step-6 records are
+      // also sent as console lines, because the finished run REPLACES the page with the editor.
+      const outcomeLines: string[] = [];
+      page.on("console", (m) => {
+        const t = m.text();
+        if (t.startsWith("[m20i] ")) outcomeLines.push(t.slice(7));
+      });
       const mark = await markDocument(page);
       nav.reset();
       await page.evaluate(() => {
-        type Rec = {
-          sortingNext: boolean;
-          autoStarting: boolean;
-          photosSortingText: string[];
-          doneHint: string | null;
-          phases: string[];
-          rules: string[];
-          labels: string[];
-          barDone: string[];
-          t6: number | null;
-          t7: number | null;
-        };
-        const rec: Rec = {
-          sortingNext: false,
-          autoStarting: false,
-          photosSortingText: [],
-          doneHint: null,
-          phases: [],
-          rules: [],
-          labels: [],
-          barDone: [],
-          t6: null,
-          t7: null,
-        };
+        type Rec = { sortingNext: boolean; autoStarting: boolean; photosSortingText: string[]; doneHint: string | null };
+        const rec: Rec = { sortingNext: false, autoStarting: false, photosSortingText: [], doneHint: null };
         (window as unknown as { __m20bRec: Rec }).__m20bRec = rec;
         const q = (s: string) => document.querySelector(s);
-        const pushNew = (arr: string[], v: string | null | undefined) => {
-          if (v != null && arr[arr.length - 1] !== v) arr.push(v);
+        const sent = new Set<string>();
+        const send = (line: string) => {
+          if (sent.has(line)) return;
+          sent.add(line);
+          console.log(`[m20i] ${line}`);
         };
         const check = () => {
           if (q('[data-testid="upload-sorting-next"]')) rec.sortingNext = true;
@@ -1284,17 +1220,12 @@ test.describe("m20 wizard (live)", () => {
           }
           const hint = q('[data-testid="upload-done-hint"]');
           if (hint) rec.doneHint = (hint.textContent ?? "").trim();
-          if (rec.t6 === null && q('[data-testid="wizard-step-sorting"]')) rec.t6 = performance.now();
-          if (rec.t7 === null && q('[data-testid="wizard-step-review"]')) rec.t7 = performance.now();
-          const bp = q('[data-testid="build-progress"][data-variant="wizard"]');
-          if (bp) {
-            pushNew(rec.phases, bp.getAttribute("data-sort-phase"));
-            pushNew(rec.rules, bp.getAttribute("data-rules") ?? "none");
-            pushNew(rec.barDone, q('[data-testid="build-sort-bar"]')?.getAttribute("data-done"));
-            for (const li of Array.from(bp.querySelectorAll('[data-testid^="build-step-"]'))) {
-              const t = (li.textContent ?? "").trim();
-              if (t && !rec.labels.includes(t)) rec.labels.push(t);
-            }
+          const gen = q('[data-testid="wizard-step-story-generation"]');
+          if (gen) {
+            send("step6");
+            for (const li of Array.from(gen.querySelectorAll('[data-testid^="story-stage-"][data-status]'))) send(`stage ${li.getAttribute("data-testid")} ${li.getAttribute("data-status")} ${(li.textContent ?? "").trim()}`);
+            const out = q('[data-testid="story-outcome"]');
+            if (out) send(`outcome ${(out.textContent ?? "").trim()}`);
           }
         };
         new MutationObserver(check).observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
@@ -1302,64 +1233,30 @@ test.describe("m20 wizard (live)", () => {
       });
 
       await pickPhotos(page, 6, 900);
-      // Task 5: the Photos step uploads only (its recorder below proves it never shows sorting /
-      // starting text) and then offers Continue; Story (skipped) + Design follow, and the rule build
-      // is asked for on "Create my book".
+      // Task 5: the Photos step uploads only (its recorder proves it never shows sorting / starting
+      // text) and then offers Continue; Story (skipped) + Design follow, and "Create my book" starts the
+      // storybook job, which runs without AI (rule plan, deterministic pages).
       await expect(page.getByTestId("upload-wizard-continue")).toBeVisible({ timeout: 180_000 });
       expect((await runsOf(id)).length).toBe(0);
-      await finishBookSetup(page);
-      await page.waitForURL(wizardStepUrl(id, "6"), { timeout: 60_000 });
-      await expectWizardStep(page, 6, 30_000);
-      await expect(page.getByTestId("build-progress")).toHaveAttribute("data-rules", "true");
-      await waitForReview(page, id, 120_000);
-      await expect(page.getByTestId("review-banner-ai_off")).toBeVisible();
-
-      type Rec = { sortingNext: boolean; autoStarting: boolean; photosSortingText: string[]; doneHint: string | null; phases: string[]; rules: string[]; labels: string[]; barDone: string[]; t6: number | null; t7: number | null };
+      type Rec = { sortingNext: boolean; autoStarting: boolean; photosSortingText: string[]; doneHint: string | null };
       const rec = await page.evaluate(() => (window as unknown as { __m20bRec: Rec }).__m20bRec);
-      const sortingMs = rec.t6 !== null && rec.t7 !== null ? Math.round(rec.t7 - rec.t6) : null;
-      console.log(`[i] rec ${JSON.stringify({ ...rec, t6: undefined, t7: undefined, sortingMs })}`);
+      await finishBookSetup(page);
+      await page.waitForURL((u) => wizardStepUrl(id, "6").test(u.pathname + u.search) || editorUrl(id).test(u.pathname), { timeout: 60_000 });
+      // 0 document navigations from step 3 to step 6; same wizard nodes.
+      if (!editorUrl(id).test(new URL(page.url()).pathname)) {
+        expect(nav.docs).toEqual([]);
+        expect(await docState(page)).toMatchObject({ doc: mark.doc, timeOrigin: mark.timeOrigin, navEntries: 1, band: true, stepper: true, wizard: true });
+      }
+      await page.waitForURL(editorUrl(id), { timeout: 180_000 });
+      await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 60_000 });
+      console.log(`[i] rec ${JSON.stringify(rec)} step6=${JSON.stringify(outcomeLines)}`);
       expect(rec.sortingNext, "upload-sorting-next never shown").toBe(false);
       expect(rec.autoStarting, "upload-auto-starting never shown").toBe(false);
       expect(rec.photosSortingText, "the Photos step never shows sorting / starting text").toEqual([]);
       expect(rec.doneHint).toBeTruthy();
-      expect(rec.rules).toEqual(["true"]);
-      expect(rec.phases.length, `phases progressed: ${rec.phases.join("→")}`).toBeGreaterThanOrEqual(3);
-      expect(rec.phases[rec.phases.length - 1]).toBe("ready");
-      for (const label of ["Leaving out duplicates and very blurry photos", "Grouping your photos by date and place", "Laying out your pages"]) {
-        expect(rec.labels.some((l) => l.includes(label)), `rule row "${label}"`).toBe(true);
-      }
-      expect(rec.labels.some((l) => /Finding places and moments|Checking for duplicates/.test(l)), "no AI wording").toBe(false);
-      expect(sortingMs ?? 0, "step 6 shown ≥ 2.7 s").toBeGreaterThanOrEqual(2_700);
-
-      // 0 document navigations step 5 → 7; same wizard nodes.
-      expect(nav.docs).toEqual([]);
-      expect(await docState(page)).toMatchObject({ doc: mark.doc, timeOrigin: mark.timeOrigin, navEntries: 1, band: true, stepper: true, wizard: true });
-
-      // Toggle one photo (persisted).
-      const tile = page.getByTestId("review-panel").getByTestId("review-tile").first();
-      const photoId = (await tile.getAttribute("data-photo-id")) ?? "";
-      const before = (await tile.getAttribute("data-state")) ?? "";
-      const want = before === "kept" ? "dropped" : "kept";
-      await tile.click();
-      await expect
-        .poll(async () => (await admin.from("photos").select("status, user_override").eq("id", photoId).single()).data, { timeout: 30_000 })
-        .toEqual({ status: want, user_override: true });
-      await expect(page.locator(`[data-testid="review-tile"][data-photo-id="${photoId}"]`)).toHaveAttribute("data-state", want);
-
-      // Refresh on step 7 stays on 7 (no 2nd run), the toggle is kept.
-      await page.reload();
-      await expectWizardStep(page, 7, 60_000);
-      expect(new URL(page.url()).searchParams.get("step")).toBe("7");
-      await expect(page.getByTestId("review-banner-ai_off")).toBeVisible({ timeout: 30_000 });
-      await page.getByTestId(`review-tab-${want}`).first().click(); // the tile lives in its tab after a reload
-      await expect(page.locator(`[data-testid="review-tile"][data-photo-id="${photoId}"]`)).toHaveAttribute("data-state", want);
-      const reloaded = await page.evaluate(() => performance.timeOrigin);
-      nav.reset();
-
-      // Generate → editor (soft navigation from the hard-loaded step 7).
-      await generateAlbum(page, id);
-      expect(nav.docs).toEqual([]);
-      expect(await page.evaluate(() => performance.timeOrigin)).toBe(reloaded);
+      expect(outcomeLines).toContain("step6");
+      expect(outcomeLines.some((l) => l.startsWith("outcome Made without AI")), "the honest rule-run line on step 6").toBe(true);
+      expect(nav.docs).toEqual([`/books/${id}/edit`]);
 
       if (ANALYTICS) {
         await page.waitForTimeout(5_000); // posthog batches
@@ -1374,7 +1271,7 @@ test.describe("m20 wizard (live)", () => {
       for (const r of runs ?? []) runIds.add((r as { id: string }).id);
       console.log(`[i] runs ${JSON.stringify((runs ?? []).map((r) => `${r.mode}:${r.trigger}:${r.state}`))}`);
       expect(runs ?? []).toHaveLength(1);
-      expect(runs?.[0]).toMatchObject({ mode: "rule", trigger: "build", state: "done" });
+      expect(runs?.[0]).toMatchObject({ mode: "rule", trigger: "storybook", state: "done" });
 
       // Entry redirects with AI off: a fresh book's /build → the wizard (not classic); ?trigger=rebuild
       // of the built book stays classic. HTTP only (a browser visit would start a run).

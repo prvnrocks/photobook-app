@@ -8,9 +8,9 @@
  * (scripts/stripe-signed-event.mjs) — the same path a real Stripe event takes (webhook → RPC).
  *
  * Flow (serial, one throwaway user `e2e+m9smoke-<random>@example.com`, admin generateLink sign-in):
- *   a. creation wizard (M19): /books/new steps 1–4 (Travel, Portrait, Modern) → step 5 upload → pick
- *      6 synthetic JPEGs → the first build starts by itself (replay, step 6) → editor: edit one caption
- *      (Saved ✓, persisted) → Share = publish ("Your book is live"; the caption is in the snapshot)
+ *   a. creation wizard: Title, Occasion (Travel) → Photos (6 synthetic JPEGs) → Story (skip) → Design
+ *      (Portrait, Modern) → step 6 storybook job (replay) → the editor opens: edit one story page text
+ *      (Saved ✓, persisted) → Share = publish ("Your book is live"; the words are in the snapshot)
  *   b. anonymous phone visit of /b/<slug> at 375 px: watermark + "Made with" footer, no horizontal
  *      overflow, last page = free end card with the "Create yours" CTA
  *   c. owner taps "Upgrade this book — AED 39" (dummy key → error, nothing paid), then a signed
@@ -148,9 +148,10 @@ async function makeSynthetic(p: Page, n: number) {
   return list.map((b64, i) => ({ name: `smoke-${i + 1}.jpg`, mimeType: "image/jpeg", buffer: Buffer.from(b64, "base64") }));
 }
 
+type SmokePage = { caption?: { text?: string } | null; texts?: { text?: string }[] };
 type BookRow = {
-  doc: { pages?: { caption?: { text?: string } | null }[] };
-  published_doc: { cover?: { title?: string }; pages?: { caption?: { text?: string } | null }[] } | null;
+  doc: { pages?: SmokePage[] };
+  published_doc: { cover?: { title?: string }; pages?: SmokePage[] } | null;
   slug: string | null;
   expires_at: string | null;
   is_paid: boolean;
@@ -167,8 +168,9 @@ async function bookRow(id = bookId): Promise<BookRow> {
   return data as unknown as BookRow;
 }
 
-function hasCaption(pages: { caption?: { text?: string } | null }[] | undefined): boolean {
-  return (pages ?? []).some((p) => p.caption?.text === CAPTION);
+/** The smoke's words are on a page — as a caption (album) or a story page text (storybook, Task 7). */
+function hasCaption(pages: SmokePage[] | undefined): boolean {
+  return (pages ?? []).some((p) => p.caption?.text === CAPTION || (p.texts ?? []).some((t) => t.text === CAPTION));
 }
 
 async function noHorizontalOverflow(p: Page) {
@@ -359,22 +361,17 @@ test("a. login → wizard → upload (step 5) → automatic AI build (replay, st
   // M20: step 6 (the build) renders in place on /books/new?book=<id>&step=6.
   await finishBookSetup(page);
   await page.waitForURL(wizardStepUrl(bookId, "6"), { timeout: 240_000 });
-  // M19 T7 / M20 T7: the first build is wizard step 6 — a fan of the draft's photos + a 3-row checklist.
-  await expect(page.getByTestId("build-photo-fan")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId("build-step-sift")).toBeVisible();
-  // The fan's photos really load (signed 512 px thumbs), not just placeholders.
-  const draftImgs = () =>
-    page
-      .locator('[data-testid="build-photo-fan"] img')
-      .evaluateAll((imgs) => imgs.filter((i) => (i as HTMLImageElement).complete && (i as HTMLImageElement).naturalWidth > 0).length);
-  await expect.poll(draftImgs, { timeout: 15_000 }).toBeGreaterThan(0);
+  // Task 8: the first build is wizard step 6 — the storybook job ("Your memories are becoming a
+  // story.") with its four real stages.
+  await expect(page.getByTestId("wizard-step-story-generation")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("story-stages").locator("li")).toHaveCount(4);
   await noHorizontalOverflow(page);
   await page.screenshot({ path: test.info().outputPath("m13-build-375.png"), fullPage: true });
   const setup = (await admin.from("books").select("occasion, tone, design_style").eq("id", bookId).single()).data;
   expect(setup).toEqual({ occasion: "travel", tone: "fun", design_style: "modern" });
-  // M20 (D-072): the build hands over to step 7 (Review) → "Generate album" → the editor
-  // (review stays reachable from the "AI kept X of Y" chip).
-  await waitForReview(page, bookId, 420_000);
+  // Task 8: the finished storybook opens the editor by itself (review stays reachable from the
+  // "AI kept X of Y" chip).
+  expect(await waitForReview(page, bookId, 420_000)).toBe("editor");
   await noHorizontalOverflow(page);
   await generateAlbum(page, bookId);
   await noHorizontalOverflow(page);
@@ -384,23 +381,24 @@ test("a. login → wizard → upload (step 5) → automatic AI build (replay, st
   await page.waitForLoadState("networkidle").catch(() => {});
   await page.screenshot({ path: test.info().outputPath("m13-editor-chip-375.png") });
 
-  // Editor: walk the carousel to the first page with a caption target and type a new caption.
+  // Editor: walk the carousel to the first page with a story text (a storybook's words live in page
+  // texts, Task 7) and type new words.
   const cur = page.locator('[data-testid="carousel-item"][aria-hidden="false"]');
   let steps = 0;
   for (; steps < 25; steps++) {
-    if ((await cur.getByTestId("caption-target").count()) > 0) break;
+    if ((await cur.getByTestId("page-text-target").count()) > 0) break;
     await page.getByTestId("carousel-next").click();
     await page.waitForTimeout(400);
   }
-  console.log(`[a] caption target after ${steps} carousel steps`);
-  const target = cur.getByTestId("caption-target");
-  await expect(target).toHaveCount(1);
+  console.log(`[a] page text target after ${steps} carousel steps`);
+  const target = cur.getByTestId("page-text-target").first();
+  await expect(target).toBeVisible();
   await target.click();
-  const input = page.getByTestId("caption-input");
+  const input = page.getByTestId("page-text-input");
   await expect(input).toBeVisible();
   await expect(input).toHaveAttribute("dir", "auto");
   await input.fill(CAPTION);
-  await expect(cur.getByTestId("page-caption")).toHaveText(CAPTION);
+  await expect(cur.getByText(CAPTION)).toBeVisible();
   await expect(page.getByTestId("save-status")).toHaveAttribute("data-state", "saved", { timeout: 15_000 });
   await noHorizontalOverflow(page);
   await page.keyboard.press("Escape");

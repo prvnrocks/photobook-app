@@ -221,10 +221,16 @@ async function putDoc(doc: unknown, baseRev: number): Promise<{ status: number; 
  */
 function withPages(doc: Record<string, unknown>, n: number): Record<string, unknown> {
   type Slot = { photoId: string | null; crop: unknown };
-  const big = structuredClone(doc) as { pages: { id: string; slots: Slot[] }[] };
+  type Text = { id: string };
+  const big = structuredClone(doc) as { pages: { id: string; slots: Slot[]; texts?: Text[] }[] };
   const first = big.pages[0];
   const emptySlots = () => first.slots.map((s) => ({ ...structuredClone(s), photoId: null }));
-  while (big.pages.length < n) big.pages.push({ ...structuredClone(first), id: `p21x${big.pages.length}`, slots: emptySlots() });
+  // Task 7 storybook pages carry page texts whose ids must stay unique across the doc.
+  const texts = (k: number) => (first.texts ? first.texts.map((t) => ({ ...structuredClone(t), id: `${t.id}-p21x${k}` })) : undefined);
+  while (big.pages.length < n) {
+    const k = big.pages.length;
+    big.pages.push({ ...structuredClone(first), id: `p21x${k}`, slots: emptySlots(), ...(first.texts ? { texts: texts(k) } : {}) });
+  }
   return big as unknown as Record<string, unknown>;
 }
 

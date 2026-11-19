@@ -1,7 +1,8 @@
 /**
  * Task 5 — the complete book-creation wizard with the Story and Design steps, at 375 px.
  * Order: 1 Title → 2 Occasion (book created) → 3 Photos (upload only) → 4 Story ("Every memory has a
- * story.") → 5 Design (shape + style, "Recommended") → 6 Create → 7 Preview → the editor.
+ * story.") → 5 Design (shape + style, "Recommended") → 6 Create (since Task 8: the storybook job, "Your
+ * memories are becoming a story.") → the editor opens by itself (no step 7 for a new book).
  *
  * LIVE only (E2E_AUTH=1, hosted Supabase; server: next start with AI_MODE=replay and an empty
  * ANTHROPIC_API_KEY — never a live Anthropic call). ONE throwaway user
@@ -10,7 +11,8 @@
  *      keeps them; saved on Continue; a reload on step 4 shows them again; storybooks.context holds
  *      exactly those answers (source "user", the server's question text, skipped false, nothing
  *      else); Design shows "Recommended" on a shape and a style, both overridden by hand → the book
- *      row has the manual format / design_style; Create → Preview → editor; context unchanged.
+ *      row has the manual format / design_style; step 6 (one storybook run) → editor; context
+ *      unchanged; the finished book's dashboard card opens the editor, not the wizard.
  *   b. Baby: "Skip for now" → context skipped true, answers [], no invented text; flow completes.
  *   c. Birthday can be chosen and asks two questions (book left on step 4 for f).
  *   d. Wedding: the visible prompts mention the occasion and the important moments.
@@ -20,7 +22,7 @@
  *   f. A book left on step 4 / 5 opens in the wizard from its dashboard card (not the editor); an
  *      old-numbering URL ?book=<id>&step=5 of a book without photos lands on Photos, no error.
  *   g. AI off (E2E_OFF_URL = a second server with AI_MODE=off; skipped when unset): Story + Design
- *      → rule build → Preview → editor; the answers are stored all the same.
+ *      → rule storybook run (step 6) → editor; the answers are stored all the same.
  *   s. Screenshots of Story and Design at 375 and 1280 (TASK5_SHOT_DIR, default the test output dir
  *      — never the repo).
  * afterAll (always): storage under `<uid>/`, the user (books / photos / storybooks cascade), then the
@@ -37,7 +39,6 @@ import {
   continueFromPhotos,
   createBookViaWizard,
   expectWizardStep,
-  generateAlbum,
   STORY_HEADLINE,
   storyFields,
   waitForReview,
@@ -250,7 +251,8 @@ test.describe("task 5 story wizard (live)", () => {
     const [q1, q2] = storyQuestionsFor("travel");
     const runPosts: string[] = [];
     const onRequest = (r: { method(): string; url(): string }) => {
-      if (r.method() === "POST" && new URL(r.url()).pathname === "/api/ai/runs") runPosts.push("run");
+      // the album build (old flow) or the storybook job start (Task 8) — never the job's ticks
+      if (r.method() === "POST" && ["/api/ai/runs", "/api/ai/story-runs"].includes(new URL(r.url()).pathname)) runPosts.push("run");
     };
     page.on("request", onRequest);
 
@@ -331,6 +333,10 @@ test.describe("task 5 story wizard (live)", () => {
     // fixtures → Portrait), both preselected; the provisional row is the same pair.
     await page.getByTestId("story-continue").tap();
     await expectWizardStep(page, 5, 30_000);
+    // Continue saves the step again (a full replace: same answers, next rev) — this is the context
+    // the build starts from; the build itself must never write into it (checked after the run).
+    const ctxBeforeBuild = (await storyContext(travelBook))!.context;
+    expect(ctxBeforeBuild.answers).toEqual(expectedAnswers);
     await expect(page.getByTestId("design-shape").getByTestId("choice-badge")).toHaveCount(1, { timeout: 30_000 });
     await expect(page.getByTestId("format-A5_PORTRAIT").getByTestId("choice-badge")).toHaveText("Recommended");
     await expect(page.getByTestId("design-style").getByTestId("choice-badge")).toHaveCount(1);
@@ -352,22 +358,33 @@ test.describe("task 5 story wizard (live)", () => {
     await shot(page, "design-375-manual");
     await page.getByTestId("wizard-design-continue").tap();
 
-    // Create → Preview → editor; the row ends with the manual design; one build request, one run.
-    await waitForReview(page, travelBook);
-    expect(await bookRow(travelBook)).toMatchObject({ format: "A5_LANDSCAPE", design_style: "classic", occasion: "travel" });
-    await generateAlbum(page, travelBook);
+    // Task 8: step 6 runs the storybook job and opens the editor by itself (no Preview step); the row
+    // ends with the manual design; one start request, one storybook run.
+    await expectWizardStep(page, 6, 60_000);
+    await expect(page.getByTestId("wizard-step-story-generation")).toBeVisible({ timeout: 30_000 });
+    expect(await waitForReview(page, travelBook)).toBe("editor");
+    await expect(page).toHaveURL(new RegExp(`/books/${travelBook}/edit$`));
     const row = await bookRow(travelBook);
-    expect(row).toMatchObject({ format: "A5_LANDSCAPE", design_style: "classic" });
-    expect(row.album_confirmed_at).not.toBeNull();
+    expect(row).toMatchObject({ format: "A5_LANDSCAPE", design_style: "classic", occasion: "travel" });
     expect(row.page_count).toBeGreaterThan(0);
     expect(runPosts).toHaveLength(1);
     const runs = await runsOf(travelBook);
     expect(runs.length).toBe(1);
+    expect(runs[0]).toMatchObject({ trigger: "storybook", state: "done" });
     // The build read the context, it never wrote into it.
     const after = await storyContext(travelBook);
-    expect(after!.context).toEqual(ctx);
+    expect(after!.context).toEqual(ctxBeforeBuild);
     console.log(`[a] answers=${(ctx.answers as unknown[]).length} rev=${String(ctx.rev)} runs=${runs.length} mode=${runs[0]?.mode} pages=${row.page_count}`);
     page.off("request", onRequest);
+
+    // The finished storybook's dashboard card opens the editor, never the wizard again.
+    await page.goto("/dashboard");
+    const card = page.getByTestId("book-card").filter({ hasText: "Task five travel" });
+    await expect(card).toHaveCount(1, { timeout: 30_000 });
+    console.log(`[a] finished storybook card href=${((await card.getAttribute("href")) ?? "").replace(travelBook, "<id>")} confirmed=${row.album_confirmed_at !== null} ai_status=${row.ai_status}`);
+    await card.click();
+    await page.waitForURL(new RegExp(`/books/${travelBook}/edit$`), { timeout: 30_000 });
+    await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 60_000 });
   });
 
   test("b. Baby: Skip for now → context skipped true, answers [], nothing invented; the flow completes", async () => {
@@ -396,8 +413,7 @@ test.describe("task 5 story wizard (live)", () => {
     await expectWizardStep(page, 5, 30_000);
 
     await chooseDesign(page, { format: "A5_PORTRAIT" });
-    await waitForReview(page, id);
-    await generateAlbum(page, id);
+    expect(await waitForReview(page, id)).toBe("editor");
     const after = await storyContext(id);
     expect(after!.context).toMatchObject({ skipped: true, answers: [], storyTone: null, note: null, people: [], places: [], facts: [] });
     const runs = await runsOf(id);
@@ -662,10 +678,26 @@ test.describe("task 5 story wizard (live)", () => {
     // The recommendation needs no AI: badges show with AI off too.
     await expect(page.getByTestId("design-shape").getByTestId("choice-badge")).toHaveCount(1, { timeout: 30_000 });
     await expect(page.getByTestId("design-style").getByTestId("choice-badge")).toHaveCount(1);
+    // Task 8: the rule storybook run on step 6 says so honestly ("Made without AI"), then the editor
+    // replaces the page — the line is shown for < 1 s, so it is recorded in the page and sent as a
+    // console line that survives the navigation.
+    const outcomes: string[] = [];
+    const onConsole = (m: { text(): string }) => {
+      if (m.text().startsWith("[task5-outcome] ")) outcomes.push(m.text().slice(16));
+    };
+    page.on("console", onConsole);
+    await page.evaluate(() => {
+      let last = "";
+      new MutationObserver(() => {
+        const t = document.querySelector('[data-testid="story-outcome"]')?.textContent?.trim() ?? "";
+        if (t && t !== last) console.log(`[task5-outcome] ${(last = t)}`);
+      }).observe(document.body, { subtree: true, childList: true, characterData: true });
+    });
     await chooseDesign(page, { format: "A5_LANDSCAPE", style: "scrapbook" });
-    await waitForReview(page, id);
-    await expect(page.getByTestId("review-banner-ai_off")).toBeVisible();
-    await generateAlbum(page, id);
+    expect(await waitForReview(page, id)).toBe("editor");
+    page.off("console", onConsole);
+    console.log(`[g] step-6 outcome lines=${outcomes.length}`);
+    expect(outcomes.some((t) => t.startsWith("Made without AI"))).toBe(true);
     expect(new URL(page.url()).origin).toBe(new URL(OFF_URL).origin);
 
     const row = await bookRow(id);
@@ -673,7 +705,7 @@ test.describe("task 5 story wizard (live)", () => {
     expect(row.page_count).toBeGreaterThan(0);
     const runs = await runsOf(id);
     expect(runs.length).toBe(1);
-    expect(runs[0]).toMatchObject({ mode: "rule", state: "done" });
+    expect(runs[0]).toMatchObject({ mode: "rule", state: "done", trigger: "storybook" });
     const stored = await storyContext(id);
     expect(stored!.context).toMatchObject({
       occasion: "family",

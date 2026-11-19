@@ -455,15 +455,16 @@ test("a. new book → upload → build (replay) → editor at 1024 shows facing 
   bookId = await createBookViaWizard(page, { occasion: "travel", format: "A5_PORTRAIT", style: "classic", goto: false });
   await page.getByTestId("upload-input").setInputFiles(await makeSynthetic(page, 6));
   // M13 T6: no Build tap — the first build starts by itself once the upload settles (≥ 5 photos).
-  // M20: step 6 (sorting) / 7 (review) in place on /books/new?book=<id>&step=6|7.
+  // Task 8: step 6 (the storybook job) in place on /books/new?book=<id>&step=6 → the editor opens by itself.
   await waitForSortingOrReview(page, bookId, 180_000);
-  // M20 (D-072): the build hands over to step 7 (Review) → "Generate album" → the editor.
   await finishWizardToEditor(page, bookId, { timeout: 420_000 });
   await expect(page.getByTestId("editor-shell")).toBeVisible();
   console.log(`[a] upload→editor ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 
   const row = await bookRow();
-  expect(row.doc.version).toBe(1); // nothing v2 yet → stored as v1 (rollback-safe)
+  // Task 7/8: a new book is a composed storybook — its page texts make the stored doc v2 from the start
+  // (the M10a "v1 until a v2 feature" rule applies to old album docs only).
+  expect(row.doc.version).toBe(2);
   expect(row.doc.pages.length).toBeGreaterThanOrEqual(2);
 
   await expect(page.getByTestId("page-carousel")).toHaveAttribute("data-mode", "spread");

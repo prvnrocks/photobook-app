@@ -6,9 +6,11 @@
  *   landing "Start your book" → login (simulated: admin generateLink → /auth/confirm, no email) →
  *   new book form (occasion = Travel, everything else default) → Continue to photos → Choose photos
  *   (M19: the form is now the 4-step creation wizard — walked with Travel + Portrait + defaults. This
- *   spec records the pre-M13 path ("Build my album", review Continue) and is not a gate.)
+ *   spec recorded the pre-M13 path ("Build my album", review Continue) and is not a gate. Since Task 8 it
+ *   walks today's path: Photos → Story (skip) → Design → step 6 storybook job → the editor opens.)
  *   (native picker = filechooser, excluded) → upload + finalize → Build my album → build (replay) →
- *   review → Continue → editor (first page preview) → Done → Publish → Send on WhatsApp (wa.me stubbed).
+ *   editor (first page preview) → Done → Publish → Send on WhatsApp (wa.me stubbed). "reviewVisible" in
+ *   the summary now marks the editor opening.
  *
  * Records (console `[m13-baseline]` lines + a JSON summary):
  *   - app taps (every tap the user must make; login typing and the native picker excluded)
@@ -37,7 +39,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { createBookViaWizard } from "./helpers/create-book";
+import { createBookViaWizard, expectWizardStep, wizardStepUrl } from "./helpers/create-book";
 
 const ENABLED = process.env.E2E_AUTH === "1";
 test.skip(!ENABLED, "set E2E_AUTH=1 to run the live M13 baseline walkthrough");
@@ -345,7 +347,7 @@ test.afterAll(async () => {
   expect(runsLeft).toBe(0);
 });
 
-test("baseline: landing → login → new book → upload 40 → build → review → editor → Done → publish → WhatsApp", async () => {
+test("baseline: landing → login → new book → upload 40 → story (skip) → design → storybook (step 6) → editor → Done → publish → WhatsApp", async () => {
   test.setTimeout(900_000);
 
   // 1. Landing
@@ -359,7 +361,7 @@ test("baseline: landing → login → new book → upload 40 → build → revie
   await expect(page.getByTestId("login-email")).toBeVisible();
   await screen("login");
   await page.goto(`/auth/confirm?token_hash=${await signInHash()}&type=magiclink&next=/books/new`);
-  await expect(page).toHaveURL(/\/books\/new$/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/books\/new(\?step=1)?$/, { timeout: 30_000 });
 
   // 3. M19 creation wizard — first-time user takes the defaults, picks the required occasion + shape.
   await screen("new-book");
@@ -378,28 +380,32 @@ test("baseline: landing → login → new book → upload 40 → build → revie
   await expect(page.getByTestId("upload-progress")).toBeVisible({ timeout: 60_000 });
   await page.waitForTimeout(1500);
   await screen("upload-progress");
-  await expect(page.getByTestId("upload-summary")).toBeVisible({ timeout: 420_000 });
+  // Task 5 order: the Photos step uploads only and then offers Continue.
+  await expect(page.getByTestId("upload-wizard-continue")).toBeVisible({ timeout: 420_000 });
   mark("uploadSummary");
   await noHorizontalOverflow();
-  await screen("upload-summary");
+  await screen("upload-done");
 
-  // 5. Build (replay) — auto-advances to review.
-  await tap(page.getByTestId("build-album"), "Build my album");
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/build$/, { timeout: 30_000 });
-  await expect(page.getByTestId("build-progress")).toBeVisible({ timeout: 30_000 });
+  // 5. Story (the defaults: skipped) → Design (the recommendation kept) → "Create my book" starts the
+  //    storybook job (Task 8: step 6 "Your memories are becoming a story.", replay) → the editor opens
+  //    by itself when it is done (no review / preview step for a new book).
+  await tap(page.getByTestId("upload-wizard-continue"), "Continue (photos)");
+  await expectWizardStep(page, 4, 30_000);
+  await screen("story");
+  await tap(page.getByTestId("story-skip"), "Skip for now (story)");
+  await expectWizardStep(page, 5, 30_000);
+  await expect(page.locator('input[name="wizard-format"]:checked')).toHaveCount(1, { timeout: 30_000 });
+  await screen("design");
+  await tap(page.getByTestId("wizard-design-continue"), "Create my book (design)");
+  await page.waitForURL(wizardStepUrl(bookId, "6"), { timeout: 60_000 });
+  await expect(page.getByTestId("wizard-step-story-generation")).toBeVisible({ timeout: 30_000 });
   mark("buildVisible");
-  await screen("build");
-  await page.waitForURL(/\/books\/[0-9a-f-]{36}\/review$/, { timeout: 420_000 });
-  await expect(page.getByRole("status").filter({ hasText: "Loading your album…" })).toHaveCount(0, { timeout: 30_000 });
-  await expect(page.getByTestId("review-continue")).toBeVisible({ timeout: 30_000 });
-  mark("reviewVisible");
-  await noHorizontalOverflow();
-  await screen("review");
+  await screen("story-generation");
 
-  // 6. Review → Continue → editor.
-  await tap(page.getByTestId("review-continue"), "Continue (review)");
-  await page.waitForURL(new RegExp(`/books/${bookId}/edit$`), { timeout: 30_000 });
+  // 6. The editor (opened by step 6).
+  await page.waitForURL(new RegExp(`/books/${bookId}/edit$`), { timeout: 420_000 });
   await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 30_000 });
+  mark("reviewVisible"); // = the editor opened (kept name: summary keys compare with the M13 record)
   // First book page preview: any rendered book page (cover included) inside the viewport …
   const inView = `(el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth; }`;
   await expect
@@ -441,12 +447,9 @@ test("baseline: landing → login → new book → upload 40 → build → revie
     await page.waitForTimeout(300);
   }
 
-  // 7. Done → publish screen.
-  await tap(page.getByTestId("editor-done"), "Done (editor)");
+  // 7. Share (M13 T9: the editor's Done/Share button publishes) → the share screen, live.
+  await tap(page.getByTestId("editor-done"), "Share (editor: publishes)");
   await expect(page).toHaveURL(new RegExp(`/books/${bookId}/publish$`), { timeout: 30_000 });
-  await expect(page.getByTestId("publish-button")).toBeVisible({ timeout: 30_000 });
-  await screen("publish-draft");
-  await tap(page.getByTestId("publish-button"), "Publish");
   await expect(page.getByTestId("publish-message")).toHaveText("Your book is live", { timeout: 60_000 });
   await expect(page.getByTestId("share-whatsapp")).toBeVisible();
   mark("sharedLink");

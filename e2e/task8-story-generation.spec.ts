@@ -5,10 +5,15 @@
 //   npx playwright test e2e/task8-story-generation.spec.ts --workers=1
 //   (against another server: TASK8_BASE=http://localhost:3118 …)
 //
-// The signed-in end-to-end round (a real book through Design → step 6 → editor, refresh mid-run,
-// Stop / Try again, Rewrite story against the API) is in the "live" block below: it only runs with
-// E2E_AUTH=1 (deferred until after Task 10 — not run as part of Task 8).
-import { expect, test, type Page } from "@playwright/test";
+// The signed-in round (a real book through Design → step 6 → editor, refresh mid-run, Stop /
+// Continue my story) is in the "live" block below: it only runs with E2E_AUTH=1 against a
+// `next start` replay server (the dev-fixture tests above skip there — their routes 404).
+import { randomBytes } from "node:crypto";
+import path from "node:path";
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import sharp from "sharp";
+import { createBookViaWizard, finishBookSetup, wizardStepUrl } from "./helpers/create-book";
 
 const BASE = process.env.TASK8_BASE ?? "";
 const W = 375;
@@ -177,18 +182,146 @@ test.describe("editor Story actions (dev fixture)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------- live (deferred)
+// ---------------------------------------------------------------------------- live (signed-in)
+//
+// E2E_AUTH=1 against a `next start` server with AI_MODE=replay and an empty ANTHROPIC_API_KEY (hosted
+// Supabase). ONE throwaway user `e2e+task8-<random>@example.com` (admin generateLink, no email).
+// Every tick (POST /api/ai/story-runs/<id>/advance) is delayed 1.5 s on the test side so a refresh
+// and a Stop land while the job runs. The editor's Story actions on a real book are covered by
+// e2e/storybook-full-flow.spec.ts. afterAll (always): storage under `<uid>/`, the user, its runs.
 
 test.describe("live storybook generation (E2E_AUTH=1, signed-in, hosted DB)", () => {
-  test.skip(process.env.E2E_AUTH !== "1", "signed-in e2e deferred until after Task 10");
-  test("Design → step 6 → stages advance → refresh re-attaches → editor opens; Stop / Continue; Rewrite story", async () => {
-    // Written for the final end-to-end round (uses e2e/helpers like task5-story-wizard.spec.ts):
-    //   1. sign in a test user, create a book through steps 1–5 with 6 photos (AI_MODE=replay)
-    //   2. Design Continue → URL ?step=6, headline "Your memories are becoming a story.", rows advance
-    //   3. reload mid-run → same run id continues (no second POST /api/ai/story-runs)
-    //   4. Stop → "You stopped this"; Continue my story → finishes; the editor opens (no step 7)
-    //   5. editor: Story → View chapters, Regenerate page + Undo, Rewrite story (shorter) on AI text
-    //   6. AI_MODE=off variant: "Made without AI" outcome line in the editor
-    test.fixme(true, "run in the post-Task-10 live round");
+  test.skip(process.env.E2E_AUTH !== "1", "set E2E_AUTH=1 (signed-in, hosted DB, replay server)");
+  test.describe.configure({ mode: "serial" });
+  test.use({ viewport: { width: W, height: 812 }, hasTouch: true, isMobile: true });
+
+  let admin: SupabaseClient;
+  let uid = "";
+  let email = "";
+  let bookId = "";
+  let ctx: BrowserContext;
+  let page: Page;
+  const startPosts: string[] = [];
+
+  const listAll = async (bucket: string, prefix: string): Promise<string[]> => {
+    const out: string[] = [];
+    const walk = async (p: string, depth: number) => {
+      const res = await admin.storage.from(bucket).list(p, { limit: 1000 });
+      if (res.error) throw new Error(`storage list failed (${res.error.message})`);
+      for (const e of res.data ?? []) {
+        if (e.id || depth >= 3) out.push(`${p}/${e.name}`);
+        else await walk(`${p}/${e.name}`, depth + 1);
+      }
+    };
+    await walk(prefix, 0);
+    return out;
+  };
+  const runsOf = async () =>
+    ((await admin.from("agent_runs").select("id, state, trigger, mode, error_code").eq("book_id", bookId).order("started_at")).data ?? []) as { id: string; state: string; trigger: string; mode: string; error_code: string | null }[];
+
+  test.beforeAll(async ({ browser }, info) => {
+    if (!process.env.SUPABASE_SECRET_KEY) process.loadEnvFile(path.join(__dirname, "..", ".env.local"));
+    admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY!, { auth: { persistSession: false, autoRefreshToken: false } });
+    email = `e2e+task8-${randomBytes(6).toString("hex")}@example.com`;
+    const { data, error } = await admin.auth.admin.createUser({ email, email_confirm: true });
+    if (error || !data.user) throw new Error(`createUser failed (${error?.code ?? "no user"})`);
+    uid = data.user.id;
+    ctx = await browser.newContext({ viewport: { width: W, height: 812 }, baseURL: String(info.project.use.baseURL ?? ""), hasTouch: true, isMobile: true });
+    page = await ctx.newPage();
+    page.on("request", (r) => {
+      if (r.method() === "POST" && new URL(r.url()).pathname === "/api/ai/story-runs") startPosts.push("start");
+    });
+    await page.route(/\/api\/ai\/story-runs\/[0-9a-f-]{36}\/advance$/, async (route) => {
+      await new Promise((r) => setTimeout(r, 1_500));
+      await route.continue().catch(() => {});
+    });
+    const link = await admin.auth.admin.generateLink({ type: "magiclink", email });
+    if (link.error || !link.data.properties?.hashed_token) throw new Error("generateLink failed");
+    await page.goto(`/auth/confirm?token_hash=${link.data.properties.hashed_token}&type=magiclink&next=/books/new`);
+    await expect(page).toHaveURL(/\/books\/new(\?step=1)?$/, { timeout: 30_000 });
+  });
+
+  test.afterAll(async () => {
+    test.setTimeout(120_000);
+    if (!uid) return;
+    await ctx?.close().catch(() => {});
+    const runIds = ((await admin.from("agent_runs").select("id").eq("user_id", uid)).data ?? []).map((r) => (r as { id: string }).id);
+    let removed = 0;
+    for (const bucket of ["photos", "exports"]) {
+      const paths = await listAll(bucket, uid);
+      for (let i = 0; i < paths.length; i += 100) await admin.storage.from(bucket).remove(paths.slice(i, i + 100));
+      removed += paths.length;
+    }
+    const { error } = await admin.auth.admin.deleteUser(uid);
+    if (runIds.length) await admin.from("agent_runs").delete().in("id", runIds);
+    let left = 0;
+    for (const bucket of ["photos", "exports"]) left += (await listAll(bucket, uid)).length;
+    const books = (await admin.from("books").select("id", { count: "exact", head: true }).eq("user_id", uid)).count ?? 0;
+    const runsLeft = runIds.length ? ((await admin.from("agent_runs").select("id", { count: "exact", head: true }).in("id", runIds)).count ?? 0) : 0;
+    console.log(`[task8 cleanup] objects removed=${removed} left=${left} books=${books} runs=${runIds.length} runsLeft=${runsLeft} userDeleted=${!error}`);
+    expect(error).toBeNull();
+    expect(left + books + runsLeft).toBe(0);
+  });
+
+  test("Design → step 6 → stages advance → refresh re-attaches → Stop / Continue my story → the editor opens (no step 7)", async () => {
+    test.setTimeout(600_000);
+    bookId = await createBookViaWizard(page, { title: "Task eight live", occasion: "family", goto: false });
+    await page.getByTestId("upload-input").setInputFiles(await syntheticJpegs(6));
+    await finishBookSetup(page);
+    await page.waitForURL(wizardStepUrl(bookId, "6"), { timeout: 240_000 });
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Your memories are becoming a story.");
+    await expect(page.getByTestId("story-stages").locator("li")).toHaveCount(4);
+    await expect(page.getByTestId("story-stage-discovering-detail")).toHaveText(/^\d+ photos?$/, { timeout: 60_000 });
+    const [first] = await runsOf();
+    expect(first).toMatchObject({ trigger: "storybook", mode: "replay" });
+    expect(startPosts).toHaveLength(1);
+
+    // refresh mid-run → the same run continues (no second start)
+    await page.reload();
+    await expect(page.getByTestId("wizard-step-story-generation")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("story-progress")).toHaveAttribute("data-phase", "running", { timeout: 30_000 });
+    expect(startPosts).toHaveLength(1);
+    expect((await runsOf()).map((r) => r.id)).toEqual([first.id]);
+
+    // Stop → "You stopped this"; Continue my story → a new run continues and finishes in the editor
+    await page.getByTestId("story-stop").click();
+    await expect(page.getByTestId("story-stopped")).toHaveAttribute("data-code", "cancelled", { timeout: 30_000 });
+    await expect(page.getByTestId("story-stopped-reason")).toContainText("You stopped this");
+    await expect(page.getByTestId("story-try-again")).toHaveText("Continue my story");
+    await page.screenshot({ path: test.info().outputPath("task8-live-stopped.png"), fullPage: true });
+    const stopped = await runsOf();
+    expect(stopped[0]).toMatchObject({ id: first.id, state: "failed", error_code: "cancelled" });
+    await page.getByTestId("story-try-again").click();
+    await page.waitForURL(new RegExp(`/books/${bookId}/edit$`), { timeout: 420_000 });
+    await expect(page.getByTestId("editor-shell")).toBeVisible({ timeout: 60_000 });
+    const runs = await runsOf();
+    console.log(`[task8 live] runs=${runs.map((r) => `${r.trigger}:${r.state}`).join(",")} starts=${startPosts.length}`);
+    expect(runs).toHaveLength(2);
+    expect(runs[1]).toMatchObject({ trigger: "storybook", state: "done" });
+    const doc = (await admin.from("books").select("doc").eq("id", bookId).single()).data as { doc: { pages?: unknown[] } };
+    expect(doc.doc.pages?.length ?? 0).toBeGreaterThan(0);
+    // the editor's Story tool is there on a real storybook
+    await expect(page.getByTestId("editor-tool-story")).toBeVisible({ timeout: 30_000 });
   });
 });
+
+/** `n` distinct noisy JPEGs made in node (no canvas): sharp is a dependency of the app. */
+function syntheticJpegs(n: number) {
+  return Promise.all(
+    Array.from({ length: n }, async (_, i) => {
+      const w = 900;
+      const h = 1200;
+      const raw = Buffer.alloc(w * h * 3);
+      let s = (i + 1) * 2654435761;
+      for (let p = 0; p < raw.length; p += 3) {
+        s = (s * 1664525 + 1013904223) >>> 0;
+        const block = ((Math.floor(p / 3 / w / 100) * 9 + Math.floor(((p / 3) % w) / 100)) * 37 + i * 101) % 255;
+        raw[p] = (block + (s & 31)) % 255;
+        raw[p + 1] = (block * 3 + ((s >> 5) & 31)) % 255;
+        raw[p + 2] = (block * 7 + ((s >> 10) & 31)) % 255;
+      }
+      const buffer = await sharp(raw, { raw: { width: w, height: h, channels: 3 } }).jpeg({ quality: 90 }).toBuffer();
+      return { name: `task8-${i + 1}.jpg`, mimeType: "image/jpeg", buffer };
+    }),
+  );
+}
