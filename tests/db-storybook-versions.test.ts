@@ -218,7 +218,8 @@ describe("story_ai_calls", () => {
     await recordStoryCall(rec({ runId: run(7), scope: "block", kind: "rewrite", chapterId: null }));
     await recordStoryCall(rec({ runId: run(8), scope: "plan", kind: "plan", chapterId: null, storybookVersion: null }));
     await recordStoryCall(rec({ runId: run(9), userId: OTHER }));
-    expect(await countStoryRuns(BOOK, USER)).toEqual({ plans: 1, writes: 2, chapterRegens: 1, rewrites: 2 });
+    // Task 7 (2700): + composes (scope "compose").
+    expect(await countStoryRuns(BOOK, USER)).toEqual({ plans: 1, writes: 2, chapterRegens: 1, rewrites: 2, composes: 0 });
   });
 
   it("today's live spend; a missing table means unavailable, zero counts and zero spend", async () => {
@@ -229,7 +230,7 @@ describe("story_ai_calls", () => {
     expect(await storyUsageAvailable()).toBe(true);
     delete db.state.tables.story_ai_calls;
     expect(await storyUsageAvailable()).toBe(false);
-    expect(await countStoryRuns(BOOK, USER)).toEqual({ plans: 0, writes: 0, chapterRegens: 0, rewrites: 0 });
+    expect(await countStoryRuns(BOOK, USER)).toEqual({ plans: 0, writes: 0, chapterRegens: 0, rewrites: 0, composes: 0 });
     expect(await getTodayStorySpendUsd()).toBe(0);
     await expect(recordStoryCall(rec())).rejects.toMatchObject({ name: "StoryAiCallsError", code: "PGRST205" });
   });
