@@ -5,6 +5,7 @@
 //   npm run dev            (AI is replay-only in dev; this script never calls AI)
 //   node scripts/sheet-probe.mjs "<sheet query>" [out.png] [--width 1300] [--scale 2] [--base http://localhost:3000]
 //   e.g. node scripts/sheet-probe.mjs "sheet=magazine-portrait&ar=1" /tmp/mag-p-ar.png
+//   Task 7 story templates: node scripts/sheet-probe.mjs "sheet=modern-landscape&lang=ar" --path /dev-story-compose
 //
 // Overflow method (lessons M29): on the text element itself, count the DISTINCT line tops of its
 // client rects × the computed line-height and compare with the panel's text box — never
@@ -23,6 +24,8 @@ const flag = (name, def) => {
 const width = Number(flag("width", "1300"));
 const scale = Number(flag("scale", "2"));
 const base = flag("base", "http://localhost:3000");
+// Task 7: `--path /dev-story-compose` probes the storybook template sheets (sheet=<style>-<shape>[&lang=ar]).
+const path = flag("path", "/dev-book-page");
 const [query, out] = args;
 if (!query) {
   console.error('usage: node scripts/sheet-probe.mjs "sheet=magazine-portrait[&ar=1][&desc=0][&cw=coral]" [out.png]');
@@ -31,7 +34,7 @@ if (!query) {
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width, height: 900 }, deviceScaleFactor: scale });
-await page.goto(`${base}/dev-book-page?${query}`, { waitUntil: "networkidle" });
+await page.goto(`${base}${path}?${query}`, { waitUntil: "networkidle" });
 await page.evaluate(async () => {
   document.querySelectorAll("nextjs-portal").forEach((e) => e.remove());
   await document.fonts.ready;

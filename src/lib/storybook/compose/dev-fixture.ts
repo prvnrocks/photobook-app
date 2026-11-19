@@ -114,3 +114,36 @@ export function storyFixture(opts: StoryFixtureOptions): { storybook: Storybook;
   };
   return { storybook, photos };
 }
+
+// ---------------------------------------------------------------------------- contact sheets
+
+const PALETTE = ["#8FB3C9", "#C9A27E", "#9FB88B", "#D6C08A", "#7F8FA6", "#C98B7E", "#86B5AE", "#B7A3C7"] as const;
+
+/**
+ * Deterministic placeholder photos (inline SVG, no text, no network) at each photo's own pixel
+ * size: a flat colour field with a sun disc at the photo's focus point (or a third of the way in),
+ * so crops and orientations read on screenshots exactly the same on every machine.
+ */
+export function devStoryRenderPhotos(photos: readonly ComposePhoto[]): Record<string, { url: string; width: number | null; height: number | null }> {
+  return Object.fromEntries(
+    photos.map((p, i) => {
+      const w = p.width ?? 1200;
+      const h = p.height ?? 900;
+      const fx = (p.focus?.x ?? 0.33) * w;
+      const fy = (p.focus?.y ?? 0.4) * h;
+      const r = Math.round(Math.min(w, h) * 0.14);
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect width="${w}" height="${h}" fill="${PALETTE[i % PALETTE.length]}"/><rect y="${Math.round(h * 0.68)}" width="${w}" height="${Math.round(h * 0.32)}" fill="#00000022"/><circle cx="${Math.round(fx)}" cy="${Math.round(fy)}" r="${r}" fill="#FFFFFFCC"/></svg>`;
+      return [p.id, { url: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`, width: p.width, height: p.height }];
+    }),
+  );
+}
+
+/** Longest texts the AI writes (WORD_BOUNDS max) — what the overflow probe sets in every panel. */
+export function maxText(kind: NarrativeKind, lang: "en" | "ar", seed = 1): string {
+  const words = kind === "caption" || kind === "pull_quote" ? 18 : kind === "paragraph" ? 60 : 70;
+  const clauses = Math.ceil(words / (lang === "ar" ? 3 : 4));
+  const text = replayText(lang, seed, Math.min(12, clauses));
+  // replayText caps at 12 clauses: top up with a second block's words to reach the word count
+  const extra = clauses > 12 ? ` ${replayText(lang, seed + 50, clauses - 12)}` : "";
+  return (text + extra).split(/\s+/).slice(0, words).join(" ").replace(/[,،]?$/, ".");
+}
