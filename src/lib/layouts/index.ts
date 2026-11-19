@@ -29,6 +29,7 @@ import { MAGAZINE_PORTRAIT_COVERS, MAGAZINE_PORTRAIT_LAYOUTS } from "./magazine/
 import { MAGAZINE_LANDSCAPE_COVERS, MAGAZINE_LANDSCAPE_LAYOUTS } from "./magazine/landscape";
 import { EDITORIAL_PORTRAIT_COVERS, EDITORIAL_PORTRAIT_LAYOUTS } from "./editorial/portrait";
 import { EDITORIAL_LANDSCAPE_COVERS, EDITORIAL_LANDSCAPE_LAYOUTS } from "./editorial/landscape";
+import { STORY_LAYOUTS } from "./story";
 
 /** The M1–M10a catalogue: classic A5 portrait. Order and geometry frozen (goldens, AI prompt cache). */
 export const CLASSIC_PORTRAIT_LAYOUTS: readonly Layout[] = [
@@ -98,7 +99,15 @@ export const LAYOUT_IDS: readonly string[] = LAYOUTS.map((l) => l.id);
 
 export const COVER_LAYOUT_ID = "cover";
 
-const BY_ID = new Map(LAYOUTS.map((l) => [l.id, l]));
+/**
+ * Task 7: storybook page templates (chapter openings with an intro, storytelling, closing
+ * reflections — ./story). Known to getLayout (render, validation, edit ops) but deliberately NOT
+ * part of LAYOUTS, so layoutsFor / autolayout / the album Storyteller catalogue / the layout picker
+ * are unchanged. Only the storybook page composer places them.
+ */
+export { STORY_LAYOUTS, isStoryLayoutId } from "./story";
+
+const BY_ID = new Map([...LAYOUTS, ...STORY_LAYOUTS].map((l) => [l.id, l]));
 
 export function getLayout(id: string): Layout | undefined {
   return BY_ID.get(id);
