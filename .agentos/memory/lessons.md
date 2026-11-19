@@ -182,3 +182,5 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-18, machine) Full vitest + next dev + 3 Playwright workers makes this Mac swap and eats disk — run gates sequentially, ≤ 2 workers, watch df.
 - (2026-11-18, e2e) A spread's description is drawn on the right half; find the page that draws it. Measure a grid in one evaluate, not several boundingBox() calls across a scroll.
 - (2026-11-18, AI) Synthetic e2e photos make the live Curator keep 1 of 12 — a live quality sample needs real photos.
+- (2026-11-19, Task 9) Before naming a new table, grep tests for name guards (an M3 test forbids the superseded `ai_usage` table) — the ledger became `ai_usage_ledger`.
+- (2026-11-19, Task 9) New server defaults that hit the DB (meters, cap checks) break unit tests that assert "no console output": give every service a dep for them and set it in the shared fixtures (story-fixtures overSpendCap / meterFor).
