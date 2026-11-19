@@ -102,7 +102,7 @@ describe("authorized grants (server-only, admin allow-list)", () => {
         },
         update: (row: unknown) => {
           updates.push(row);
-          const chain = { eq: () => chain, is: () => chain, select: async () => ({ data: [{ id: "g1" }], error: null }) };
+          const chain = { eq: () => chain, is: () => chain, lt: () => chain, select: async () => ({ data: [{ id: "g1" }], error: null }) };
           return chain;
         },
       }),

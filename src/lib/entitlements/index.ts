@@ -9,6 +9,7 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isUuid } from "@/lib/uuid";
+import { raiseGrantPageLimit } from "./page-limit";
 import { resolveEntitlement, type BookEntitlement, type EntitlementFacts } from "./resolve";
 
 export type { BookEntitlement, EntitlementSource, EntitlementTier } from "./resolve";
@@ -60,5 +61,19 @@ export async function getEntitlementTier(bookId: string, deps: EntitlementDeps =
     return (await getBookEntitlement(bookId, deps))?.tier ?? "preview";
   } catch {
     return "preview";
+  }
+}
+
+/**
+ * Task 10: a book with an active grant gets the paid page limit (for grants made before this
+ * existed). Called by the storybook job before it plans / composes. Never throws (best effort —
+ * a failure only means the old 20-page limit stays).
+ */
+export async function ensureGrantPageLimit(ent: BookEntitlement | null): Promise<void> {
+  if (!ent || ent.source !== "grant" || ent.isPaid) return;
+  try {
+    if (!(await raiseGrantPageLimit(createAdminClient(), ent.bookId))) console.error("[entitlements] grant_page_limit_failed");
+  } catch {
+    console.error("[entitlements] grant_page_limit_failed");
   }
 }

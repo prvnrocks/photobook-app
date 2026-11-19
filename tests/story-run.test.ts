@@ -535,6 +535,22 @@ describe("storybook job: free preview without a full entitlement (Task 9)", () =
     expect(s.deps.countPreviewRuns).toHaveBeenCalledWith(BOOK);
   });
 
+  it("Task 10: a granted full book gets the paid page limit before it plans; a preview never asks", async () => {
+    const g = await setup({ tier: "full" });
+    const grant = resolveEntitlement({ bookId: BOOK, isPaid: false, maxPages: 20, orderStatus: null, hasActiveGrant: true }, { pages: 5, maxRuns: 3 });
+    g.deps.getEntitlement = vi.fn(async () => grant);
+    g.deps.ensurePageLimit = vi.fn(async () => {});
+    await drive(g.deps, await start(g.deps));
+    expect(g.deps.ensurePageLimit).toHaveBeenCalledWith(grant);
+    expect(grant.limits.maxPages).toBe(100);
+    expect(parseStoryCursor(g.table.rows.get([...g.table.rows.keys()][0]!)!.cursor)).toMatchObject({ tier: "full", planPages: 100 });
+
+    const p = await setup({ tier: "preview" });
+    p.deps.ensurePageLimit = vi.fn(async () => {});
+    await drive(p.deps, await start(p.deps));
+    expect(p.deps.ensurePageLimit).not.toHaveBeenCalled();
+  });
+
   it("a run without model calls (AI off) is not capped, and a paid book is never capped", async () => {
     const off = await setup({ tier: "preview", mode: "off" });
     off.deps.countPreviewRuns = vi.fn(async () => 99);

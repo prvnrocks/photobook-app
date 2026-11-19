@@ -11,7 +11,7 @@
 //
 // The client never supplies any of these facts.
 
-import { limitsFor } from "@/lib/ai/limits";
+import { LIMITS, limitsFor } from "@/lib/ai/limits";
 import { readPreviewConfig, type PreviewConfig } from "./preview";
 
 export type EntitlementTier = "preview" | "full";
@@ -26,7 +26,7 @@ export type BookEntitlement = {
   /** PDF export (and every other paid-only output) — is_paid only, never a grant. */
   canExportPdf: boolean;
   limits: {
-    /** books.max_pages (20 free / 100 paid; the DB trigger enforces it). */
+    /** books.max_pages (20 free / 100 paid; the DB trigger enforces it). A grant: the paid limit (Task 10). */
     maxPages: number;
     /** Interior pages of a storybook preview (meaningful when tier = preview). */
     previewPages: number;
@@ -50,7 +50,11 @@ export function resolveEntitlement(f: EntitlementFacts, preview: PreviewConfig =
   const isPaid = f.isPaid === true;
   const source: EntitlementSource = isPaid ? (f.orderStatus === "comped" ? "comp" : "stripe") : f.hasActiveGrant ? "grant" : "none";
   const limits = limitsFor(isPaid);
-  const maxPages = typeof f.maxPages === "number" && Number.isFinite(f.maxPages) && f.maxPages > 0 ? Math.floor(f.maxPages) : limits.maxPages;
+  const stored = typeof f.maxPages === "number" && Number.isFinite(f.maxPages) && f.maxPages > 0 ? Math.floor(f.maxPages) : limits.maxPages;
+  // Task 10: a full grant composes the whole storybook, so it gets the paid page limit (books.max_pages
+  // is raised to match by grantBookEntitlement / ensureGrantPageLimit). PDF / watermark / permanent
+  // link stay is_paid-only (D-093).
+  const maxPages = source === "grant" ? Math.max(stored, LIMITS.paid.maxPages) : stored;
   return {
     bookId: f.bookId,
     tier: source === "none" ? "preview" : "full",

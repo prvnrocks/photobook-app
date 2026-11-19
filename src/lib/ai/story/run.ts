@@ -42,7 +42,7 @@ import { getCurrentUser } from "@/lib/auth/current-user";
 import { getMyBook, type MyBook } from "@/lib/db/books";
 import { listPhotosForOrganize, listVision, type OrganizePhotoRow } from "@/lib/db/photo-organize";
 import { getCurrentStorybook } from "@/lib/db/storybooks";
-import { getBookEntitlement, type BookEntitlement } from "@/lib/entitlements";
+import { ensureGrantPageLimit, getBookEntitlement, type BookEntitlement } from "@/lib/entitlements";
 import { clusterPhotosIntoMoments, OrganizeError } from "@/lib/photos/organize";
 import { userOwnedElements } from "@/lib/storybook/compose";
 import {
@@ -114,6 +114,8 @@ export interface StoryRunDeps {
   composeStorybookPages(bookId: string, opts: { rule: boolean; beforeSave: () => Promise<boolean>; maxPages?: number }): Promise<{ pages: number; warnings: number; ai: ComposeAiStatus; saved: boolean }>;
   /** Task 9: the book's entitlement (preview / full) from server facts — never from the client. */
   getEntitlement(bookId: string): Promise<BookEntitlement | null>;
+  /** Task 10: give a granted book the paid page limit before planning / composing (optional; never throws). */
+  ensurePageLimit?(ent: BookEntitlement | null): Promise<void>;
   /** Task 9: finished LIVE preview runs of the book (the preview regeneration cap). */
   countPreviewRuns(bookId: string): Promise<number>;
   resolveMode(): AiMode;
@@ -157,6 +159,7 @@ export function defaultStoryRunDeps(): StoryRunDeps {
       }
     },
     getEntitlement: (bookId) => getBookEntitlement(bookId),
+    ensurePageLimit: ensureGrantPageLimit,
     countPreviewRuns: agentRunsDb.countPreviewRuns,
     analysisBatch: () => readPhotoAiConfig().concurrency * 2,
     now: () => Date.now(),
@@ -600,6 +603,8 @@ async function tick(runId: string, token: string, t0: number, budgetMs: number, 
       // Task 9: the tier this run works for — from server facts, fixed for the run.
       const ent = await deps.getEntitlement(book.id);
       const tier: "preview" | "full" = ent?.tier === "full" ? "full" : "preview";
+      // Task 10: a granted (non-Stripe) full book composes up to the paid page limit, not 20.
+      if (tier === "full") await deps.ensurePageLimit?.(ent);
       const prev = await deps.getPreviousStoryRun(book.id, run.id);
       const prevCursor = prev && (prev.state === "failed" || prev.state === "done") ? parseStoryCursor(prev.cursor) : null;
       if (prev && prevCursor && prev.state === "failed") {

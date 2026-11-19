@@ -7,7 +7,9 @@ import "server-only";
 //
 // Nothing here logs ids or the reason text.
 
+import { LIMITS } from "@/lib/ai/limits";
 import { isAdminUser } from "@/lib/auth/is-admin";
+import { raiseGrantPageLimit } from "./page-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isUuid } from "@/lib/uuid";
 
@@ -32,9 +34,11 @@ export async function grantBookEntitlement(input: { bookId: string; adminUserId:
   if (book.error) return { ok: false, error: "failed" };
   if (!book.data) return { ok: false, error: "not_found" };
   const { error } = await db.from("book_entitlements").insert({ book_id: input.bookId, reason: input.reason.trim(), granted_by: input.adminUserId });
-  if (!error) return { ok: true, status: "granted" };
-  if (error.code === "23505") return { ok: true, status: "already_granted" };
-  return { ok: false, error: "failed" };
+  if (error && error.code !== "23505") return { ok: false, error: "failed" };
+  // Task 10: the full storybook needs the paid page limit to be composed and saved (editor saves,
+  // composer and publish all read books.max_pages). Never touches is_paid.
+  if (!(await raiseGrantPageLimit(db, input.bookId))) return { ok: false, error: "failed" };
+  return { ok: true, status: error ? "already_granted" : "granted" };
 }
 
 export async function revokeBookEntitlement(input: { bookId: string; adminUserId: string }, deps: GrantDeps = {}): Promise<RevokeResult> {
@@ -47,5 +51,13 @@ export async function revokeBookEntitlement(input: { bookId: string; adminUserId
     .is("revoked_at", null)
     .select("id");
   if (error) return { ok: false, error: "failed" };
+  // Task 10: back to the free page limit, but only when the book still fits in it (an unpaid book
+  // with more pages keeps its limit so the owner's next save doesn't fail; they can delete pages).
+  const db = (deps.client ?? createAdminClient)();
+  const book = await db.from("books").select("id, is_paid, page_count, max_pages").eq("id", input.bookId).maybeSingle();
+  const row = book.data as { is_paid?: boolean; page_count?: number; max_pages?: number } | null;
+  if (!book.error && row && row.is_paid === false && typeof row.page_count === "number" && row.page_count <= LIMITS.free.maxPages && (row.max_pages ?? 0) > LIMITS.free.maxPages) {
+    await db.from("books").update({ max_pages: LIMITS.free.maxPages }).eq("id", input.bookId).eq("is_paid", false);
+  }
   return { ok: true, revoked: data?.length ?? 0 };
 }
