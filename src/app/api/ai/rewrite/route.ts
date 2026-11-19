@@ -45,6 +45,8 @@ import { type NextRequest } from "next/server";
 import { resolveAiMode } from "@/lib/ai/client";
 import { rewriteCaption } from "@/lib/ai/agents/rewriter";
 import { isAiBudgetExhausted } from "@/lib/ai/budget";
+import { isOverSpendCap } from "@/lib/ai/spend-caps";
+import { getEntitlementTier } from "@/lib/entitlements";
 import { limitsFor } from "@/lib/ai/limits";
 import { sanitizeMemory } from "@/lib/ai/memory";
 import { analysisOf } from "@/lib/ai/orchestrator";
@@ -60,6 +62,7 @@ import {
 import type { UserMemory } from "@/lib/ai/schemas";
 import { getTransport } from "@/lib/ai/transport-factory";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { rateLimitResponse } from "@/lib/http/rate-limit";
 import { isSameOrigin } from "@/lib/auth/same-origin";
 import { CAPTION_LANGS, DEFAULT_TONE, OCCASIONS, TONES, type CaptionLang, type Occasion, type Tone } from "@/lib/book/options";
 import { parseBookDoc } from "@/lib/book/schema";
@@ -87,6 +90,9 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) return json({ error: "unauthenticated" }, 401);
+    // Task 9: per-user rate limit (429 + Retry-After) before any work
+    const limited = await rateLimitResponse("ai_rewrite", user.id);
+    if (limited) return limited;
 
     // Streamed size check (M5 review S2): an oversized body is never buffered whole.
     const read = await readBodyWithLimit(request, REWRITE_MAX_BODY_BYTES);
@@ -114,6 +120,8 @@ export async function POST(request: NextRequest) {
     if (mode === "off" || !transport) return json({ error: "ai_off" }, 503);
     // D-059: checked before any run is created (never throws; a failed spend query fails open).
     if (mode === "live" && (await isAiBudgetExhausted())) return json({ error: "budget_exhausted" }, 429);
+    // Task 9: per-book / per-user spending caps (same answer: the editor says AI is taking a break)
+    if (mode === "live" && (await isOverSpendCap({ userId: user.id, bookId: book.id, tier: await getEntitlementTier(book.id) }))) return json({ error: "budget_exhausted" }, 429);
 
     // Server-side context (never from the client).
     const savedDoc = parseBookDoc(book.doc);

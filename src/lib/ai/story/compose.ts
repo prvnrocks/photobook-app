@@ -40,6 +40,10 @@ import type { Json } from "@/lib/supabase/database.types";
 import { composeStoryDoc, mergeComposition, userOwnedElements, type ComposePhoto, type ComposeReport, type PageIntentChoice } from "@/lib/storybook/compose";
 import type { Storybook } from "@/lib/storybook/types";
 import { isUuid } from "@/lib/uuid";
+import { isOverSpendCap } from "@/lib/ai/spend-caps";
+import { createUsageMeter } from "@/lib/ai/usage/meter";
+import type { UsageMeter } from "@/lib/ai/usage/types";
+import { getEntitlementTier } from "@/lib/entitlements";
 import { readStoryAiConfig, type StoryAiConfig } from "./config";
 import {
   acceptIntents,
@@ -98,6 +102,10 @@ export type ComposeDeps = {
   usageCounts?: (bookId: string, userId: string) => Promise<StoryUsageCounts>;
   record?: (rec: StoryCallRecord) => Promise<void>;
   budgetExhausted?: () => Promise<boolean>;
+  /** Task 9: true when a per-book / per-user spending cap is reached (never throws). */
+  overSpendCap?: (userId: string, bookId: string) => Promise<boolean>;
+  /** Task 9: usage ledger (default: ai_usage_ledger, operation compose, bucket from the entitlement). */
+  meter?: UsageMeter;
   mode?: AiMode;
   transport?: AgentTransport | null;
   config?: StoryAiConfig;
@@ -125,6 +133,10 @@ async function defaultBudgetExhausted(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function defaultOverSpendCap(userId: string, bookId: string): Promise<boolean> {
+  return isOverSpendCap({ userId, bookId, tier: await getEntitlementTier(bookId) });
 }
 
 const NO_FIXTURES_DIR = "/nonexistent/story-compose-replay";
@@ -162,6 +174,12 @@ export async function composeStorybookPages(
      * job was not stopped meanwhile, so a cancelled job never writes the doc.
      */
     beforeSave?: () => Promise<boolean>;
+    /**
+     * Task 9: hard cap of the pages the COMPOSER makes (a free preview: 4–6 interior pages), below
+     * the book's own limit. Server-chosen only. Pages the user made themselves are kept on top
+     * (their own work, no AI); the publish gate caps what an unpaid storybook can share.
+     */
+    maxPages?: number;
   } = {},
   deps: ComposeDeps = {},
 ): Promise<ComposeStorybookResult> {
@@ -189,6 +207,7 @@ export async function composeStorybookPages(
   const runId = (deps.newRunId ?? randomUUID)();
   const ai = await pageIntents({ userId, book, storybook, photos, design, lang, runId, deps });
 
+  const pageCap = typeof opts.maxPages === "number" && Number.isInteger(opts.maxPages) && opts.maxPages >= 1 ? Math.min(book.max_pages, opts.maxPages + owned.pages.length) : book.max_pages;
   const fresh = composeStoryDoc({
     storybook,
     photos,
@@ -196,7 +215,7 @@ export async function composeStorybookPages(
     lang,
     occasion,
     bookTitle: book.title,
-    maxPages: book.max_pages,
+    maxPages: pageCap,
     intents: ai.intents,
     reserved: { pageIds: owned.pageIds, photoIds: owned.photoIds, pageCount: owned.pages.length },
     style: current?.meta?.story ? current.style : undefined,
@@ -244,6 +263,7 @@ async function pageIntents(a: IntentArgs): Promise<{ intents: Map<string, PageIn
     const counts = await (deps.usageCounts ?? countStoryRuns)(a.book.id, a.userId);
     if ((counts.composes ?? 0) >= limitsFor(a.book.is_paid).maxStoryComposes) return { intents: undefined, status: "limit_reached", ignored: 0 };
     if (await (deps.budgetExhausted ?? defaultBudgetExhausted)()) return { intents: undefined, status: "budget_exhausted", ignored: 0 };
+    if (await (deps.overSpendCap ?? defaultOverSpendCap)(a.userId, a.book.id)) return { intents: undefined, status: "budget_exhausted", ignored: 0 };
   } else canRecord = await (deps.usageAvailable ?? storyUsageAvailable)().catch(() => false);
   const transport = deps.transport === undefined ? transportFor(mode) : deps.transport;
   if (!transport) return { intents: undefined, status: "off", ignored: 0 };
@@ -255,6 +275,7 @@ async function pageIntents(a: IntentArgs): Promise<{ intents: Map<string, PageIn
       step = row;
     },
     addRunTotals: async () => {},
+    meter: deps.meter ?? createUsageMeter({ userId: a.userId, bookId: a.book.id, flow: "storybook", operation: "compose" }),
   };
   const result = await runAgentStep({
     runId: a.runId,

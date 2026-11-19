@@ -9,6 +9,7 @@
 // Logs carry error codes only — never ids, colours, coordinates, places or dates.
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { checkRateLimit } from "@/lib/http/rate-limit";
 import { isSameOrigin } from "@/lib/auth/same-origin";
 import { finalizeBook } from "@/lib/photos/finalize";
 import { ingestBookPhotos } from "@/lib/photos/ingest";
@@ -89,6 +90,9 @@ export async function POST(
   try {
     const user = await getCurrentUser();
     if (!user) return fail(401, "unauthenticated");
+    // Task 9: per-user rate limit on top of the per-book 10 s claim (many books in a loop)
+    const limit = await checkRateLimit("finalize", user.id);
+    if (!limit.allowed) return fail(429, "rate_limited", { "retry-after": String(limit.retryAfterSeconds) });
 
     const { id } = await params;
     if (!isUuid(id)) return fail(404, "not_found");

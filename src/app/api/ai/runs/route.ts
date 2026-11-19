@@ -31,6 +31,7 @@ import { z } from "zod";
 import { isAutoBuildRefusal, startAutoBuild } from "@/lib/ai/auto-build";
 import { startRun, type StartResult } from "@/lib/ai/orchestrator";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { rateLimitResponse } from "@/lib/http/rate-limit";
 import { isSameOrigin } from "@/lib/auth/same-origin";
 import { docOrigin } from "@/lib/book/replaceable";
 import { getActiveRunForBook, getLatestRunForBook, hasFinishedLiveAiRun } from "@/lib/db/agent-runs";
@@ -59,6 +60,9 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) return json({ error: "unauthenticated" }, 401);
+    // Task 9: per-user rate limit (429 + Retry-After) before any work
+    const limited = await rateLimitResponse("ai_runs", user.id);
+    if (limited) return limited;
 
     const text = await request.text();
     if (text.length > MAX_BODY_BYTES) return json({ error: "invalid_body" }, 400);

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+// Task 9: the per-user rate limiter has its own tests (tests/task9-rate-limit.test.ts)
+vi.mock("@/lib/http/rate-limit", () => ({ checkRateLimit: async () => ({ allowed: true }), rateLimitResponse: async () => null }));
 
 // M7 T5: upgrade server actions over src/lib/db/upgrade.ts with an in-memory admin client
 // (books + orders, incl. orders_one_pending_per_book / stripe_session_id uniqueness) and a fake

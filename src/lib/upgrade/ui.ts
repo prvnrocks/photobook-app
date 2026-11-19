@@ -27,6 +27,8 @@ export function upgradeErrorCopy(code: StartUpgradeErrorCode): string {
       return "Please sign in again";
     case "needs_review":
       return "Something went wrong with an earlier payment for this book. We'll sort it out — contact support and mention this book.";
+    case "rate_limited":
+      return "Too many tries — wait a few minutes and try again";
     default:
       return "Couldn't start payment — try again";
   }

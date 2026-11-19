@@ -11,6 +11,8 @@ export const START_UPGRADE_ERROR_CODES = [
   "unavailable",
   /** An earlier payment for this book needs manual review (charged but not fulfilled) — contact support. */
   "needs_review",
+  /** Task 9: too many checkout attempts by this user in a short time. */
+  "rate_limited",
   "failed",
 ] as const;
 

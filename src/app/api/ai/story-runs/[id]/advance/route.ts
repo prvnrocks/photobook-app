@@ -2,6 +2,7 @@
 // (src/lib/ai/story/run.ts). The Create step / regenerate sheet loops it until `done`.
 //   200 StoryRunView
 //   202 { leased: true } + Retry-After: 2 — another tick holds the lease (second tab, a slow tick)
+//   429 { error: 'rate_limited' } + Retry-After — Task 9: too many ticks by this user
 //   401 | 403 | 404 { error: 'not_found' } (also for other run kinds) | 503 | 500
 // A tick does ONE unit of model work at most past its 40 s soft budget (one plan, one chapter, one
 // composition, or analysis batches); the lease (240 s) is the hard bound, so maxDuration must stay
@@ -12,6 +13,7 @@ import { getCurrentUser } from "@/lib/auth/current-user";
 import { isSameOrigin } from "@/lib/auth/same-origin";
 import { getStoryRunForOwner } from "@/lib/db/agent-runs";
 import { errorCodeOf, json, unavailableIfTimeout } from "@/lib/http/json";
+import { rateLimitResponse } from "@/lib/http/rate-limit";
 import { isUuid } from "@/lib/uuid";
 
 export const runtime = "nodejs";
@@ -23,6 +25,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const user = await getCurrentUser();
     if (!user) return json({ error: "unauthenticated" }, 401);
+    // Task 9: a runaway client loop is cut off (429 + Retry-After); a normal job ticks far below it
+    const limited = await rateLimitResponse("story_tick", user.id);
+    if (limited) return limited;
     const { id } = await params;
     if (!isUuid(id)) return json({ error: "not_found" }, 404);
     // Ownership via RLS before the tick (which writes with the admin client).

@@ -22,6 +22,7 @@ import { buildCheckoutParams, validateUpgradeSession } from "@/lib/payments/sess
 import { UPGRADE } from "@/lib/pricing";
 import { getStripe, isPaymentsEnabled } from "@/lib/stripe";
 import type { StartUpgradeCheckoutResult, UpgradeStatusResult } from "@/lib/upgrade/types";
+import { checkRateLimit } from "@/lib/http/rate-limit";
 import { isUuid } from "@/lib/uuid";
 
 /** A stored open session is reused only if it stays open for at least this long. */
@@ -133,6 +134,8 @@ export async function startUpgradeCheckout(bookId: string, returnTo?: string): P
   const userId = user.id.toLowerCase();
 
   try {
+    // Task 9: per-user rate limit on Checkout session creation (fails open without migration 2900)
+    if (!(await checkRateLimit("checkout", userId)).allowed) return { error: "rate_limited" };
     const target = await getUpgradeTarget(id, userId);
     if (!target) return { error: "not_found" };
     if (target.isPaid) return { error: "already_paid" };

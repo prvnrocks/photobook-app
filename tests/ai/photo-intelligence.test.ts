@@ -139,7 +139,8 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("photo intelligence: configuration", () => {
   it("defaults", () => {
-    expect(readPhotoAiConfig({})).toEqual({ model: "claude-opus-5-5", modelFallback: false, ...PHOTO_AI_DEFAULTS });
+    // Task 9: photo descriptions default to the smaller model
+    expect(readPhotoAiConfig({})).toEqual({ model: "claude-sonnet-5-5", modelFallback: false, ...PHOTO_AI_DEFAULTS });
   });
 
   it("reads model, concurrency, timeout and retries from the environment, clamped to safe bounds", () => {
@@ -156,8 +157,9 @@ describe("photo intelligence: configuration", () => {
   });
 
   it("an unknown model falls back to the default and says so; every selectable model has a price", () => {
-    expect(readPhotoAiConfig({ AI_PHOTO_MODEL: "gpt-4o" })).toMatchObject({ model: "claude-opus-5-5", modelFallback: true });
-    expect(readPhotoAiConfig({ AI_PHOTO_MODEL: "claude-haiku-5-5" })).toMatchObject({ model: "claude-opus-5-5", modelFallback: true });
+    expect(readPhotoAiConfig({ AI_PHOTO_MODEL: "gpt-4o" })).toMatchObject({ model: "claude-sonnet-5-5", modelFallback: true });
+    expect(readPhotoAiConfig({ AI_PHOTO_MODEL: "claude-haiku-5-5" })).toMatchObject({ model: "claude-sonnet-5-5", modelFallback: true });
+    expect(readPhotoAiConfig({ AI_PHOTO_MODEL: "claude-opus-5-5" })).toMatchObject({ model: "claude-opus-5-5", modelFallback: false });
     for (const m of PHOTO_MODELS) expect(PRICING[m], m).toBeDefined();
   });
 });

@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 vi.mock("server-only", () => ({}));
+// Task 9: the per-user rate limiter has its own tests (tests/task9-rate-limit.test.ts)
+vi.mock("@/lib/http/rate-limit", () => ({ checkRateLimit: async () => ({ allowed: true }), rateLimitResponse: async () => null }));
 
 const mocks = vi.hoisted(() => ({
   user: null as { id: string } | null,

@@ -11,6 +11,9 @@
 //   409 { error: 'already_running', runId | null }          — runId null: an album build is running
 //   409 { error: 'user_edited' } | 409 { error: 'no_photos' }
 //   422 { error: 'unsupported_design' }
+//   402 { error: 'preview_limit' }                         — Task 9: the free previews of this book are
+//                                                            used up (unlock the full book to continue)
+//   429 { error: 'rate_limited' } + Retry-After             — Task 9: too many starts by this user
 //   503 { error: 'story_unavailable' }                      — migration 2800 missing (nothing written)
 //   500 { error: 'server_error' }
 // Logs carry error codes only.
@@ -21,6 +24,7 @@ import { getCurrentUser } from "@/lib/auth/current-user";
 import { isSameOrigin } from "@/lib/auth/same-origin";
 import { AgentRunsQueryError, getLatestStoryRunForBook } from "@/lib/db/agent-runs";
 import { errorCodeOf, json, unavailableIfTimeout } from "@/lib/http/json";
+import { rateLimitResponse } from "@/lib/http/rate-limit";
 import { isUuid } from "@/lib/uuid";
 
 export const runtime = "nodejs";
@@ -37,6 +41,8 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) return json({ error: "unauthenticated" }, 401);
+    const limited = await rateLimitResponse("story_runs", user.id);
+    if (limited) return limited;
     const text = await request.text();
     if (text.length > MAX_BODY_BYTES) return json({ error: "invalid_body" }, 400);
     let raw: unknown;
@@ -63,6 +69,8 @@ export async function POST(request: NextRequest) {
         return json({ error: result.error }, 409);
       case "unsupported_design":
         return json({ error: "unsupported_design" }, 422);
+      case "preview_limit":
+        return json({ error: "preview_limit" }, 402);
       default:
         return json({ error: "not_found" }, 404);
     }

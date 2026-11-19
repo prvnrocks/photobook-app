@@ -16,6 +16,7 @@ import { REWRITE_KINDS } from "@/lib/ai/story/prompts";
 import { rewritePageText } from "@/lib/ai/story/rewrite-page-text";
 import { StoryError } from "@/lib/ai/story/service";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { rateLimitResponse } from "@/lib/http/rate-limit";
 import { isSameOrigin } from "@/lib/auth/same-origin";
 import { errorCodeOf, json, unavailableIfTimeout } from "@/lib/http/json";
 import { STORY_TONES } from "@/lib/story/questions";
@@ -39,6 +40,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const user = await getCurrentUser();
     if (!user) return json({ error: "unauthenticated" }, 401);
+    // Task 9: per-user rate limit (429 + Retry-After) before any work
+    const limited = await rateLimitResponse("story_rewrite", user.id);
+    if (limited) return limited;
     const { id } = await params;
     if (!isUuid(id)) return json({ error: "not_found" }, 404);
     const raw = await request.text();

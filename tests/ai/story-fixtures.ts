@@ -1,5 +1,6 @@
 // Shared fixture for the Task 6 story tests: one book with 24 photos in 6 stored moments, a memory
 // context, an in-memory version store and a scripted "live" transport. No DB, no network.
+import type { UsageEvent } from "@/lib/ai/usage/types";
 import { vi } from "vitest";
 import type { StoryAiConfig } from "@/lib/ai/story/config";
 import { storyPlanReplaySynth, storyRewriteReplaySynth, storyWriteReplaySynth } from "@/lib/ai/story/replay";
@@ -147,6 +148,7 @@ export function world(over: Partial<StoryDeps> & { script?: Record<number, Scrip
   };
   const reads = { photos: vi.fn(async () => rows), vision: vi.fn(async () => visionRows(rows, perMoment)), moments: vi.fn(async () => over.moments ?? storedMoments(rows, perMoment)), dupes: vi.fn(async () => []), context: vi.fn(async () => (over.context === undefined ? memory() : over.context)) };
   let run = 0;
+  const usage: (UsageEvent & { kind: string })[] = [];
   const deps: StoryDeps = {
     ownerOf: async (id) => (id === BOOK ? { userId: USER, book: over.theBook ?? book() } : null),
     listPhotos: reads.photos,
@@ -164,6 +166,9 @@ export function world(over: Partial<StoryDeps> & { script?: Record<number, Scrip
     usageCounts: async () => ({ plans: 0, writes: 0, chapterRegens: 0, rewrites: 0, ...over.counts }),
     record: async (r) => void records.push(r),
     budgetExhausted: async () => false,
+    // Task 9: spending caps off and the usage ledger captured in memory (no DB)
+    overSpendCap: async () => false,
+    meterFor: (_owner, kind) => ({ record: async (ev) => void usage.push({ ...ev, kind }) }),
     mode: "live",
     transport,
     config: CONFIG,
@@ -172,7 +177,7 @@ export function world(over: Partial<StoryDeps> & { script?: Record<number, Scrip
     newRunId: () => pid(900 + ++run),
     ...Object.fromEntries(Object.entries(over).filter(([k]) => !["script", "rows", "perMoment", "context", "theBook", "counts", "moments"].includes(k))),
   };
-  return { deps, requests, records, versions, reads, rows };
+  return { deps, requests, records, versions, reads, rows, usage };
 }
 
 /** The user message of a request as one string. */

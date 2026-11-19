@@ -26,7 +26,7 @@ import { z } from "zod";
 import { checkDailyAiBudget } from "@/lib/ai/budget";
 import { AGENT_TIMEOUT_MS, EFFORT, resolveAiMode, type AiMode } from "@/lib/ai/client";
 import { estimateCallCostUsd } from "@/lib/ai/cost";
-import { isOverDailyBudget, limitsFor, readDailyBudgetUsd } from "@/lib/ai/limits";
+import { isOverDailyBudget, LIMITS, limitsFor, readDailyBudgetUsd } from "@/lib/ai/limits";
 import { runAgentStep, type AgentStepRecord, type StepLogger, type StepResult } from "@/lib/ai/run-step";
 import { cachedSystem, type AgentName, type AgentRequest, type AgentTransport, type Effort } from "@/lib/ai/transport";
 import { getTransport } from "@/lib/ai/transport-factory";
@@ -45,6 +45,10 @@ import type { Chapter, Moment, NarrativeBlock, NarrativeKind, StoryPage, StoryPa
 import { aiProvenance, aiRewrite, isProtectedPage, isUserOwned, mergeAiDraft, userEdit, type MergeReport } from "@/lib/storybook/versioning";
 import { clipText, codePointLength } from "@/lib/text/clip";
 import { isUuid } from "@/lib/uuid";
+import { isOverSpendCap } from "@/lib/ai/spend-caps";
+import { createUsageMeter } from "@/lib/ai/usage/meter";
+import type { UsageMeter } from "@/lib/ai/usage/types";
+import { getEntitlementTier } from "@/lib/entitlements";
 import { readStoryAiConfig, type StoryAiConfig } from "./config";
 import { MAX_FACT_REFS, MAX_PHOTO_REFS, WORD_BOUNDS, checkBlock, countWords, type BlockDraft, type GroundingContext, type GroundingIssue, type GroundingIssueCode } from "./grounding";
 import { buildStoryInputs, factRefsToStore, groundingFacts, groundingPhoto, type StoryInputs, type StoryPhoto } from "./inputs";
@@ -76,6 +80,7 @@ import {
   type StoryPlanOutput,
   type WriterSlot,
 } from "./prompts";
+import { previewSelection } from "./preview";
 import { storyPlanReplaySynth, storyRewriteReplaySynth, storyWriteReplaySynth } from "./replay";
 import { SKELETON_SHARES } from "./skeleton";
 
@@ -129,6 +134,16 @@ export type StoryDeps = {
   record?: (rec: StoryCallRecord) => Promise<void>;
   /** True when the daily AI budget is used up (pipeline + photo analysis + story spend). */
   budgetExhausted?: () => Promise<boolean>;
+  /** Task 9: true when a per-book / per-user spending cap is reached (never throws). */
+  overSpendCap?: (owner: { userId: string; book: StoryBook }) => Promise<boolean>;
+  /**
+   * Task 9 (server-chosen, never from a client): the page budget a plan is made for. A free preview
+   * plans the WHOLE paid book (LIMITS.paid.maxPages) so that completing it after payment reuses the
+   * plan. Default: the book's own limit (limitsFor(is_paid).maxPages).
+   */
+  planMaxPages?: number;
+  /** Task 9: usage ledger factory per call kind (default: ai_usage_ledger, bucket from the entitlement). */
+  meterFor?: (owner: { userId: string; bookId: string }, kind: StoryCallKind) => UsageMeter | undefined;
   mode?: AiMode;
   transport?: AgentTransport | null;
   config?: StoryAiConfig;
@@ -183,6 +198,10 @@ async function defaultBudgetExhausted(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function defaultOverSpendCap(owner: { userId: string; book: StoryBook }): Promise<boolean> {
+  return isOverSpendCap({ userId: owner.userId, bookId: owner.book.id, tier: await getEntitlementTier(owner.book.id) });
 }
 
 /** A directory that never holds fixtures: the shared tests/fixtures/ai files answer the ALBUM pipeline's agents. */
@@ -258,6 +277,8 @@ async function liveGate(
           : counts.rewrites >= limits.maxStoryBlockRewrites;
   if (over) return { block: "limit_reached", canRecord: true };
   if (await (deps.budgetExhausted ?? defaultBudgetExhausted)()) return { block: "budget_exhausted", canRecord: true };
+  // Task 9: per-book / per-user spending caps → the same plain "budget" outcome, no call
+  if (await (deps.overSpendCap ?? defaultOverSpendCap)(owner)) return { block: "budget_exhausted", canRecord: true };
   return { block: null, canRecord: true };
 }
 
@@ -293,6 +314,7 @@ async function call<T, S>(s: Session, a: CallArgs<T, S>): Promise<StepResult<S>>
       step = row;
     },
     addRunTotals: async () => {},
+    meter: s.deps.meterFor ? s.deps.meterFor({ userId: s.userId, bookId: s.book.id }, a.kind) : createUsageMeter({ userId: s.userId, bookId: s.book.id, flow: "storybook", operation: a.kind }),
   };
   const result = await runAgentStep<T, S>({
     runId: s.runId,
@@ -346,6 +368,11 @@ async function call<T, S>(s: Session, a: CallArgs<T, S>): Promise<StepResult<S>>
   return result;
 }
 
+/** A server-chosen page budget (1–100), else the fallback. */
+function pageBudget(wanted: number | undefined, fallback: number): number {
+  return typeof wanted === "number" && Number.isInteger(wanted) && wanted >= 1 && wanted <= LIMITS.paid.maxPages ? wanted : fallback;
+}
+
 function failureOf(r: Extract<StepResult<unknown>, { ok: false }>): StoryError {
   return r.status === "refused" ? new StoryError("refused") : new StoryError("model_error", String(r.code), r.retryable);
 }
@@ -383,7 +410,7 @@ export async function planStory(bookId: string, deps: StoryDeps = {}): Promise<S
   const inputs = await loadInputs(owner, deps, null);
   if (inputs.photos.length === 0) throw new StoryError("no_photos");
 
-  const maxPages = limitsFor(owner.book.is_paid).maxPages;
+  const maxPages = pageBudget(deps.planMaxPages, limitsFor(owner.book.is_paid).maxPages);
   const base = { bookId: owner.book.id, inputs, maxPages, promptVersion: STORY_PLANNER_PROMPT_VERSION };
   const rule = (reason: PlanFallbackReason) => assemblePlan({ ...base, outline: ruleOutline(inputs), source: "rule", fallbackReason: reason, model: null });
   if (mode === "off") return rule("ai_off");
@@ -704,6 +731,13 @@ export type StoryWriteStepOptions = {
    * blocks / locked pages survive).
    */
   textless?: boolean;
+  /** Task 9: the page budget the plan was made for (planStory planMaxPages). Default: the book's limit. */
+  planMaxPages?: number;
+  /**
+   * Task 9: free preview — write only the chapters of previewSelection(plan, previewPages) and
+   * store only those pages (no closing page). Absent = the whole book.
+   */
+  previewPages?: number;
 };
 
 export type StoryWriteStepResult =
@@ -726,12 +760,14 @@ export async function writeStoryStep(bookId: string, storyPlan: StoryPlan, opts:
     maxGroups: Math.max(1, Math.floor(opts.maxGroups ?? 1)),
     skip: new Set(opts.skip ?? []),
     textless: opts.textless === true,
+    planMaxPages: opts.planMaxPages,
+    previewPages: opts.previewPages,
   };
   const out = await writeStoryImpl(bookId, storyPlan, {}, deps, control);
   return out.kind === "pending" ? out : { kind: "done", state: control.state, result: out.result, written: out.written, total: out.total };
 }
 
-type StepControl = { state: StoryWriteState; maxGroups: number; skip: Set<string>; textless: boolean };
+type StepControl = { state: StoryWriteState; maxGroups: number; skip: Set<string>; textless: boolean; planMaxPages?: number; previewPages?: number };
 type ImplResult = StoryWriteStepResult | { kind: "done"; result: StoryWriteResult; state: null; written: number; total: number };
 
 /** Never called: a textless step makes no model call. */
@@ -759,7 +795,7 @@ async function writeStoryImpl(bookId: string, storyPlan: StoryPlan, opts: { chap
   const inputs = await loadInputs(owner, deps, current);
   if (inputs.photos.length === 0) throw new StoryError("no_photos");
   const limits = limitsFor(owner.book.is_paid);
-  const planIssues = checkPlanAgainstBook(plan, owner.book.id, inputs, limits.maxPages);
+  const planIssues = checkPlanAgainstBook(plan, owner.book.id, inputs, pageBudget(step?.planMaxPages, limits.maxPages));
   if (planIssues.length) throw new StoryError("invalid_plan", planIssues[0]!.code);
 
   const chapterMode = opts.chapterId !== undefined;
@@ -870,7 +906,12 @@ async function writeStoryImpl(bookId: string, storyPlan: StoryPlan, opts: { chap
     const slots = plan.skeleton.pages.filter((p) => p.chapterId === c.id && !protectedIds.has(p.id)).flatMap((p) => p.blocks.map((b): Slot => ({ blockId: b.id, kind: b.kind, pageId: p.id, pagePhotos: aliasesOf(p.photoIds) })));
     return { chapterId: c.id, scopeId: c.id, slots, allowed, promptPhotos: allowed };
   });
-  const closingSlots = plan.skeleton.pages.filter((p) => p.kind === "closing" && !protectedIds.has(p.id)).flatMap((p) => p.blocks.map((b): Slot => ({ blockId: b.id, kind: b.kind, pageId: p.id, pagePhotos: [] })));
+  // Task 9: a free preview writes only the chapters it shows (and never the closing page)
+  const preview = step?.previewPages ? previewSelection(plan, step.previewPages) : null;
+  if (preview) {
+    for (let i = groups.length - 1; i >= 0; i--) if (!preview.groups.includes(groups[i]!.scopeId)) groups.splice(i, 1);
+  }
+  const closingSlots = preview ? [] : plan.skeleton.pages.filter((p) => p.kind === "closing" && !protectedIds.has(p.id)).flatMap((p) => p.blocks.map((b): Slot => ({ blockId: b.id, kind: b.kind, pageId: p.id, pagePhotos: [] })));
   if (closingSlots.length) {
     const heroes = plan.chapters.map((c) => photoById.get(c.beats.heroPhotoId)).filter((p): p is StoryPhoto => !!p).slice(0, MAX_PHOTO_REFS);
     groups.push({ chapterId: null, scopeId: "closing", slots: closingSlots, allowed: inputs.photos, promptPhotos: heroes });
@@ -966,12 +1007,13 @@ async function writeStoryImpl(bookId: string, storyPlan: StoryPlan, opts: { chap
     beat: beatOf(i, plan.moments.length, m.photoIds.some((id) => heroIds.has(id))),
     summary: null,
   }));
-  const pages: StoryPage[] = plan.skeleton.pages.flatMap((p) => {
+  const previewIds = preview ? new Set(preview.pageIds) : null;
+  const pages: StoryPage[] = plan.skeleton.pages.filter((p) => !previewIds || previewIds.has(p.id)).flatMap((p) => {
     const blocks = p.blocks.filter((b) => accepted.has(b.id)).map((b) => toBlock(b.id, accepted.get(b.id)!, inputs.lang, aiProvenance(version)));
     const page = composePage({ id: p.id, chapterId: p.chapterId, momentId: p.momentId, photoIds: p.photoIds, layoutId: null, userLocked: false }, p.kind, p.narrativeShare, blocks);
     return page ? [page] : [];
   });
-  const chapters: Chapter[] = plan.chapters.map((c) => ({
+  const chapters: Chapter[] = plan.chapters.filter((c) => !preview || preview.groups.includes(c.id)).map((c) => ({
     id: c.id,
     title: { text: c.title, provenance: aiProvenance(version) },
     momentIds: c.momentIds,

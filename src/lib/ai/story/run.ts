@@ -31,7 +31,7 @@ import "server-only";
 
 import { checkDailyAiBudget } from "@/lib/ai/budget";
 import { resolveAiMode, type AiMode } from "@/lib/ai/client";
-import { limitsFor } from "@/lib/ai/limits";
+import { LIMITS, limitsFor } from "@/lib/ai/limits";
 import { analyzePhotos, PhotoIntelligenceError, type AnalyzePhotosResult } from "@/lib/ai/photo-intelligence/analyze";
 import { readPhotoAiConfig } from "@/lib/ai/photo-intelligence/config";
 import { bookDesignOf, isSupportedDesign } from "@/lib/book/book-design";
@@ -42,6 +42,7 @@ import { getCurrentUser } from "@/lib/auth/current-user";
 import { getMyBook, type MyBook } from "@/lib/db/books";
 import { listPhotosForOrganize, listVision, type OrganizePhotoRow } from "@/lib/db/photo-organize";
 import { getCurrentStorybook } from "@/lib/db/storybooks";
+import { getBookEntitlement, type BookEntitlement } from "@/lib/entitlements";
 import { clusterPhotosIntoMoments, OrganizeError } from "@/lib/photos/organize";
 import { userOwnedElements } from "@/lib/storybook/compose";
 import {
@@ -63,6 +64,7 @@ import type { Json } from "@/lib/supabase/database.types";
 import { isSupabaseTimeout, SupabaseUnavailableError } from "@/lib/supabase/deadline";
 import { composeStorybookPages, ComposeError, type ComposeAiStatus } from "./compose";
 import { StoryPlanSchema, type StoryPlan } from "./plan";
+import { previewSelection } from "./preview";
 import { newStoryWriteState, planStory, StoryError, storyWriteGroups, StoryWriteStateSchema, writeStoryStep, type StoryWriteState } from "./service";
 
 // ---------------------------------------------------------------------------------------------
@@ -107,9 +109,13 @@ export interface StoryRunDeps {
   cancelStoryRunRow(runId: string, progress: Json): Promise<boolean>;
   analyzePhotos(photoIds: readonly string[]): Promise<AnalyzePhotosResult[]>;
   clusterPhotosIntoMoments(bookId: string): Promise<{ moments: readonly unknown[]; pending: { quality: number } }>;
-  planStory(bookId: string, opts: { rule: boolean }): Promise<StoryPlan>;
+  planStory(bookId: string, opts: { rule: boolean; maxPages?: number }): Promise<StoryPlan>;
   writeStoryStep: typeof writeStoryStep;
-  composeStorybookPages(bookId: string, opts: { rule: boolean; beforeSave: () => Promise<boolean> }): Promise<{ pages: number; warnings: number; ai: ComposeAiStatus; saved: boolean }>;
+  composeStorybookPages(bookId: string, opts: { rule: boolean; beforeSave: () => Promise<boolean>; maxPages?: number }): Promise<{ pages: number; warnings: number; ai: ComposeAiStatus; saved: boolean }>;
+  /** Task 9: the book's entitlement (preview / full) from server facts — never from the client. */
+  getEntitlement(bookId: string): Promise<BookEntitlement | null>;
+  /** Task 9: finished LIVE preview runs of the book (the preview regeneration cap). */
+  countPreviewRuns(bookId: string): Promise<number>;
   resolveMode(): AiMode;
   /** True when the global daily AI budget is used up. Never throws (fails open). */
   isOverDailyAiBudget(): Promise<boolean>;
@@ -136,10 +142,10 @@ export function defaultStoryRunDeps(): StoryRunDeps {
     cancelStoryRunRow: agentRunsDb.cancelStoryRunRow,
     analyzePhotos: (ids) => analyzePhotos(ids),
     clusterPhotosIntoMoments: (bookId) => clusterPhotosIntoMoments(bookId),
-    planStory: (bookId, opts) => planStory(bookId, opts.rule ? { mode: "off" } : {}),
+    planStory: (bookId, opts) => planStory(bookId, { ...(opts.rule ? { mode: "off" as const } : {}), ...(opts.maxPages ? { planMaxPages: opts.maxPages } : {}) }),
     writeStoryStep,
     composeStorybookPages: async (bookId, opts) => {
-      const r = await composeStorybookPages(bookId, { beforeSave: opts.beforeSave }, opts.rule ? { mode: "off" } : {});
+      const r = await composeStorybookPages(bookId, { beforeSave: opts.beforeSave, ...(opts.maxPages ? { maxPages: opts.maxPages } : {}) }, opts.rule ? { mode: "off" } : {});
       return { pages: r.doc.pages.length, warnings: r.report.warnings.length, ai: r.report.ai.status, saved: r.rev !== null };
     },
     resolveMode: () => resolveAiMode(),
@@ -150,6 +156,8 @@ export function defaultStoryRunDeps(): StoryRunDeps {
         return false;
       }
     },
+    getEntitlement: (bookId) => getBookEntitlement(bookId),
+    countPreviewRuns: agentRunsDb.countPreviewRuns,
     analysisBatch: () => readPhotoAiConfig().concurrency * 2,
     now: () => Date.now(),
   };
@@ -181,6 +189,14 @@ export type StoryCursor = {
   };
   compose: { attempts: number; done: boolean; pages: number | null; warnings: number; ai: ComposeAiStatus | null };
   resumedFrom: string | null;
+  /** Task 9: entitlement tier the run works for (set on the first tick; null = not set yet). */
+  tier: "preview" | "full" | null;
+  /** Task 9: interior pages of the preview (tier preview). */
+  previewPages: number | null;
+  /** Task 9: the page budget `plan` was made for (a preview plans the whole paid book). */
+  planPages: number | null;
+  /** Task 9: the preview run this run completes (same plan, preview chapters reused). */
+  continuedFrom: string | null;
 };
 
 export function initialStoryCursor(): StoryCursor {
@@ -198,6 +214,10 @@ export function initialStoryCursor(): StoryCursor {
     write: { state: null, attempts: {}, conflicts: 0, done: false, how: null },
     compose: { attempts: 0, done: false, pages: null, warnings: 0, ai: null },
     resumedFrom: null,
+    tier: null,
+    previewPages: null,
+    planPages: null,
+    continuedFrom: null,
   };
 }
 
@@ -248,6 +268,10 @@ export function parseStoryCursor(raw: unknown): StoryCursor | null {
       ai: typeof ai === "string" ? (ai as ComposeAiStatus) : null,
     },
     resumedFrom: typeof raw.resumedFrom === "string" ? raw.resumedFrom : base.resumedFrom,
+    tier: raw.tier === "preview" || raw.tier === "full" ? raw.tier : null,
+    previewPages: typeof raw.previewPages === "number" && raw.previewPages >= 1 ? nat(raw.previewPages) : null,
+    planPages: typeof raw.planPages === "number" && raw.planPages >= 1 ? nat(raw.planPages) : null,
+    continuedFrom: typeof raw.continuedFrom === "string" ? raw.continuedFrom : null,
   };
 }
 
@@ -279,6 +303,8 @@ export function resumeCursor(prev: StoryCursor, photoSig: string, prevRunId: str
   if (!samePhotos || !prev.plan) return { cursor: c, stage: "discovering" };
   c.plan = prev.plan;
   c.photoSig = prev.photoSig;
+  c.planPages = prev.planPages;
+  c.continuedFrom = prev.continuedFrom;
   c.notes = prev.notes.filter((n) => n === "plan_rule" || n === "photos_unanalysed");
   if (prev.write.done) {
     c.write = { ...prev.write, attempts: {}, conflicts: 0 };
@@ -294,12 +320,52 @@ export function resumeCursor(prev: StoryCursor, photoSig: string, prevRunId: str
   return { cursor: c, stage: "discovering" };
 }
 
+/**
+ * Task 9 — "Complete my book": the cursor a FULL run starts from when the book's newest finished run
+ * made the free preview. Reuses the preview's plan (made for the whole paid book), its analysis /
+ * quality stages and every chapter it wrote; only the remaining chapters are written. The photo
+ * analysis is re-checked like any resume (cached: no model call for an analysed photo). When the
+ * photos changed since the preview, the plan is not reused (a plan for other photos would not
+ * validate) and the run plans again.
+ */
+export function continueCursor(prev: StoryCursor, photoSig: string, prevRunId: string): { cursor: StoryCursor; stage: StoryRunStage } {
+  const c = initialStoryCursor();
+  c.initialized = true;
+  c.continuedFrom = prevRunId;
+  c.analysis = { ...prev.analysis, done: false, retries: {} };
+  c.quality = { done: prev.quality.done, calls: 0 };
+  c.moments = prev.moments;
+  const samePhotos = prev.photoSig !== null && prev.photoSig === photoSig;
+  if (!samePhotos || !prev.plan) return { cursor: c, stage: "discovering" };
+  c.plan = prev.plan;
+  c.photoSig = prev.photoSig;
+  c.planPages = prev.planPages;
+  c.notes = prev.notes.filter((n) => n === "plan_rule" || n === "photos_unanalysed");
+  if (prev.write.state) {
+    const groups = Object.fromEntries(Object.entries(prev.write.state.groups).filter(([, g]) => g.status === "ok"));
+    // a new run id: the completion is its own "write" for the per-book limit
+    c.write.state = { ...newStoryWriteState(), groups };
+  }
+  return { cursor: c, stage: "discovering" };
+}
+
+/** Task 9: the write groups this run writes — the preview's chapters, or the whole book. */
+function runWriteGroups(c: StoryCursor, plan: StoryPlan): string[] {
+  return c.tier === "preview" && c.previewPages ? previewSelection(plan, c.previewPages).groups : storyWriteGroups(plan);
+}
+
+/** Task 9: page budget for a NEW plan: a preview plans the whole paid book so completing it reuses the plan. */
+function planBudget(tier: "preview" | "full", ent: BookEntitlement | null): number {
+  return tier === "preview" ? LIMITS.paid.maxPages : (ent?.limits.maxPages ?? LIMITS.paid.maxPages);
+}
+
 // ---------------------------------------------------------------------------------------------
 // Progress (what the owner may read)
 
 function chaptersWritten(c: StoryCursor): number {
   if (!c.plan || !c.write.state) return 0;
-  return c.plan.chapters.filter((ch) => c.write.state!.groups[ch.id] !== undefined).length;
+  const wanted = new Set(runWriteGroups(c, c.plan));
+  return c.plan.chapters.filter((ch) => wanted.has(ch.id) && c.write.state!.groups[ch.id] !== undefined).length;
 }
 
 /** Builds agent_runs.progress from the cursor and the run state. `failedAt` marks the stage a failure stopped at. */
@@ -318,13 +384,16 @@ export function storyProgressOf(c: StoryCursor, state: StoryRunState, mode: stri
   p.stages.discovering = { status: statusOf("discovering"), done: c.analysis.analysed, total: c.analysis.total };
   if (rule && p.stages.discovering.status === "done") p.stages.discovering = { status: "skipped" };
   p.stages.organizing = { status: statusOf("organizing"), moments: c.moments, chapters: c.plan ? c.plan.chapters.length : null };
-  const groups = c.plan ? storyWriteGroups(c.plan) : [];
+  const groups = c.plan ? runWriteGroups(c, c.plan) : [];
+  const chapterTotal = groups.filter((g) => g !== "closing").length;
   const written = chaptersWritten(c);
-  const closingNext = !!c.plan && written >= c.plan.chapters.length && groups.includes("closing") && !c.write.state?.groups.closing;
-  p.stages.writing = { status: statusOf("writing"), done: written, chapters: c.plan ? c.plan.chapters.length : null, ...(closingNext && statusOf("writing") === "running" ? { closing: true } : {}) };
+  const closingNext = !!c.plan && written >= chapterTotal && groups.includes("closing") && !c.write.state?.groups.closing;
+  p.stages.writing = { status: statusOf("writing"), done: written, chapters: c.plan ? chapterTotal : null, ...(closingNext && statusOf("writing") === "running" ? { closing: true } : {}) };
   if ((c.write.how === "textless" || c.write.how === "kept") && p.stages.writing.status === "done") p.stages.writing = { status: "skipped", chapters: c.plan?.chapters.length ?? null };
   p.stages.designing = { status: statusOf("designing"), pages: c.compose.pages };
   p.outcome = outcome;
+  if (c.tier === "preview" && c.previewPages) p.preview = { pages: c.compose.pages ?? c.previewPages };
+  if (c.continuedFrom) p.continued = true;
   return p;
 }
 
@@ -357,7 +426,7 @@ export function storyRunView(run: Pick<RunForTick, "id" | "state" | "progress" |
 
 export type StartStoryResult =
   | { ok: true; runId: string; mode: "live" | "replay" | "rule"; view: StoryRunView }
-  | { ok: false; error: "not_found" | "already_running" | "user_edited" | "unsupported_design" | "no_photos" };
+  | { ok: false; error: "not_found" | "already_running" | "user_edited" | "unsupported_design" | "no_photos" | "preview_limit" };
 
 export async function startStoryRun(input: { bookId: string; userId: string }, deps: StoryRunDeps = defaultStoryRunDeps()): Promise<StartStoryResult> {
   const book = await deps.getBook(input.bookId);
@@ -378,6 +447,16 @@ export async function startStoryRun(input: { bookId: string; userId: string }, d
     notes.push("budget_exhausted");
   }
   const limits = limitsFor(book.is_paid === true);
+  // Task 9: without a full entitlement the run makes the free preview; live previews per book are
+  // capped server-side (repeated "Regenerate" can't buy more AI than the preview allows). Runs that
+  // make no model call (AI off / over budget) cost nothing and are not capped.
+  if (mode === "live") {
+    const ent = await deps.getEntitlement(book.id);
+    if (!ent || ent.tier === "preview") {
+      const used = await deps.countPreviewRuns(book.id);
+      if (used >= (ent?.limits.maxPreviewRuns ?? 1)) return { ok: false, error: "preview_limit" };
+    }
+  }
   const create = (m: typeof mode) =>
     deps.createRunCapped({ bookId: book.id, userId: input.userId, trigger: "storybook", mode: m, dailyCap: limits.maxLiveBuildsPerUserPerDay, rebuildCap: limits.maxRebuilds, enforce: m === "live" });
   let created = await create(mode);
@@ -518,13 +597,30 @@ async function tick(runId: string, token: string, t0: number, budgetMs: number, 
       // First real tick: maybe continue a failed / cancelled run of this book (same photos).
       const notes = cursor?.notes ?? [];
       cursor = cursor ?? initialStoryCursor();
+      // Task 9: the tier this run works for — from server facts, fixed for the run.
+      const ent = await deps.getEntitlement(book.id);
+      const tier: "preview" | "full" = ent?.tier === "full" ? "full" : "preview";
       const prev = await deps.getPreviousStoryRun(book.id, run.id);
-      const prevCursor = prev && prev.state === "failed" ? parseStoryCursor(prev.cursor) : null;
-      if (prev && prevCursor) {
+      const prevCursor = prev && (prev.state === "failed" || prev.state === "done") ? parseStoryCursor(prev.cursor) : null;
+      if (prev && prevCursor && prev.state === "failed") {
         const rows = await deps.listPhotos(book.id, book.user_id);
         const resumed = resumeCursor(prevCursor, photoSigOf(rows), prev.id);
         cursor = { ...resumed.cursor, notes: [...new Set([...notes, ...resumed.cursor.notes])] };
         stage = resumed.stage;
+      } else if (prev && prevCursor && prev.state === "done" && prevCursor.tier === "preview" && tier === "full") {
+        // "Complete my book": continue the paid book from the preview's plan and chapters.
+        const rows = await deps.listPhotos(book.id, book.user_id);
+        const continued = continueCursor(prevCursor, photoSigOf(rows), prev.id);
+        cursor = { ...continued.cursor, notes: [...new Set([...notes, ...continued.cursor.notes])] };
+        stage = continued.stage;
+      }
+      cursor.tier = tier;
+      cursor.previewPages = tier === "preview" ? (ent?.limits.previewPages ?? 5) : null;
+      // a plan made for a smaller budget than this run needs is not reused (re-planned)
+      if (cursor.plan && tier === "full" && cursor.planPages !== null && ent && cursor.planPages < Math.min(ent.limits.maxPages, LIMITS.paid.maxPages) && !cursor.write.done) {
+        cursor.plan = null;
+        cursor.photoSig = null;
+        cursor.write.state = null;
       }
       cursor.initialized = true;
     }
@@ -671,9 +767,10 @@ async function organize(ctx: Ctx): Promise<boolean> {
   c.planAttempts++;
   await save(ctx);
   const rule = ctx.mode === "rule" || c.planAttempts > MAX_PLAN_ATTEMPTS;
+  const budget = c.planPages ?? planBudget(c.tier ?? "preview", await ctx.deps.getEntitlement(ctx.bookId));
   let plan: StoryPlan;
   try {
-    plan = await ctx.deps.planStory(ctx.bookId, { rule });
+    plan = await ctx.deps.planStory(ctx.bookId, { rule, maxPages: budget });
   } catch (e) {
     if (e instanceof StoryError && (e.code === "no_photos" || e.code === "not_found")) throw new RunFailure(e.code, "organizing");
     throw e;
@@ -681,6 +778,7 @@ async function organize(ctx: Ctx): Promise<boolean> {
   ctx.worked = true;
   const rows = await ctx.deps.listPhotos(ctx.bookId, ctx.userId);
   c.plan = plan;
+  c.planPages = budget;
   c.photoSig = photoSigOf(rows);
   if (plan.source !== "ai" && ctx.mode !== "rule") {
     note(ctx, "plan_rule");
@@ -710,7 +808,7 @@ async function write(ctx: Ctx): Promise<boolean> {
   if (ctx.mode === "rule") return storeWithoutNewText(ctx, plan);
 
   const state = c.write.state ?? newStoryWriteState();
-  const groups = storyWriteGroups(plan);
+  const groups = runWriteGroups(c, plan);
   const skip = groups.filter((g) => !state.groups[g] && (c.write.attempts[g] ?? 0) >= MAX_GROUP_ATTEMPTS);
   // the group this step will call the model for (writeStoryStep skips the given-up ones first)
   const target = groups.find((g) => !state.groups[g] && !skip.includes(g));
@@ -720,7 +818,7 @@ async function write(ctx: Ctx): Promise<boolean> {
   if (!(await stillOurs(ctx))) throw new StaleLease();
   let r: Awaited<ReturnType<typeof writeStoryStep>>;
   try {
-    r = await ctx.deps.writeStoryStep(ctx.bookId, plan, { state, maxGroups: 1, skip });
+    r = await ctx.deps.writeStoryStep(ctx.bookId, plan, { state, maxGroups: 1, skip, ...writeScope(c) });
   } catch (e) {
     if (!(e instanceof StoryError)) throw e;
     ctx.worked = true;
@@ -738,6 +836,7 @@ async function write(ctx: Ctx): Promise<boolean> {
           // the photos changed under the plan: plan once more
           c.replanned = true;
           c.plan = null;
+          c.planPages = null;
           c.write.state = null;
           ctx.state = "organizing";
           await save(ctx);
@@ -770,6 +869,11 @@ async function write(ctx: Ctx): Promise<boolean> {
   return true;
 }
 
+/** Task 9: the plan's page budget and, for a preview, its page count — passed to every write step. */
+function writeScope(c: StoryCursor): { planMaxPages?: number; previewPages?: number } {
+  return { ...(c.planPages ? { planMaxPages: c.planPages } : {}), ...(c.tier === "preview" && c.previewPages ? { previewPages: c.previewPages } : {}) };
+}
+
 /**
  * No (more) model text: keep what this run already wrote, else keep the book's current story,
  * else store the plan's pages without text — the design stage then still makes a book.
@@ -790,7 +894,7 @@ async function storeWithoutNewText(ctx: Ctx, plan: StoryPlan): Promise<boolean> 
   }
   if (!(await stillOurs(ctx))) throw new StaleLease();
   try {
-    const r = await ctx.deps.writeStoryStep(ctx.bookId, plan, { state: written && c.write.state ? c.write.state : newStoryWriteState(), textless: true });
+    const r = await ctx.deps.writeStoryStep(ctx.bookId, plan, { state: written && c.write.state ? c.write.state : newStoryWriteState(), textless: true, ...writeScope(c) });
     if (r.kind === "done") c.write.state = r.state;
   } catch (e) {
     if (e instanceof StoryError && (e.code === "no_photos" || e.code === "not_found")) throw new RunFailure(e.code, "writing");
@@ -820,7 +924,7 @@ async function design(ctx: Ctx): Promise<boolean> {
   if (c.compose.attempts > MAX_COMPOSE_ATTEMPTS) throw new RunFailure("conflict", "designing");
   await save(ctx);
   try {
-    const r = await ctx.deps.composeStorybookPages(ctx.bookId, { rule: ctx.mode === "rule", beforeSave: () => stillOurs(ctx) });
+    const r = await ctx.deps.composeStorybookPages(ctx.bookId, { rule: ctx.mode === "rule", beforeSave: () => stillOurs(ctx), ...(c.tier === "preview" && c.previewPages ? { maxPages: c.previewPages } : {}) });
     ctx.worked = true;
     if (!r.saved) throw new StaleLease(); // stopped (or lease lost) right before the save: nothing written
     c.compose = { attempts: c.compose.attempts, done: true, pages: r.pages, warnings: r.warnings, ai: r.ai };
@@ -841,8 +945,10 @@ async function design(ctx: Ctx): Promise<boolean> {
 async function finish(ctx: Ctx): Promise<StoryAdvanceResult> {
   const outcome = storyOutcome(ctx.cursor, ctx.mode);
   const aiStatus = ctx.mode === "rule" ? null : outcome.ai === "full" ? "ok" : outcome.ai === "partial" ? "partial" : "failed";
-  // The cursor keeps the plan (a later "Regenerate" starts fresh); written text is dropped.
-  const cursor: StoryCursor = { ...ctx.cursor, write: { ...ctx.cursor.write, state: ctx.cursor.write.state ? { ...ctx.cursor.write.state, groups: {} } : null } };
+  // The cursor keeps the plan (a later "Regenerate" starts fresh); written text is dropped — except
+  // for a preview (Task 9): its chapters are kept so "Complete my book" never writes them again.
+  const keepText = ctx.cursor.tier === "preview";
+  const cursor: StoryCursor = keepText ? ctx.cursor : { ...ctx.cursor, write: { ...ctx.cursor.write, state: ctx.cursor.write.state ? { ...ctx.cursor.write.state, groups: {} } : null } };
   const progress = storyProgressOf(cursor, "done", ctx.mode, null, outcome);
   const ok = await ctx.deps.checkpointRun(ctx.run.id, ctx.token, {
     state: "done",

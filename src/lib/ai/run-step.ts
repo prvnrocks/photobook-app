@@ -8,7 +8,8 @@
 
 import type { z } from "zod";
 import { AI_MODEL } from "./client";
-import { costUsd } from "./cost";
+import { costOf, isPriced } from "./cost";
+import { usageErrorCode, type UsageEvent, type UsageMeter } from "./usage/types";
 import {
   isTransportError,
   TransportError,
@@ -68,6 +69,11 @@ export interface RunTotalsDelta {
 export interface StepLogger {
   insertStep(row: AgentStepRecord): Promise<void>;
   addRunTotals(runId: string, delta: RunTotalsDelta): Promise<void>;
+  /**
+   * Task 9: usage ledger for this logger's calls (one event per attempt: "retried" for every
+   * attempt that is retried, then the final ok / failed / refused). Absent = not metered.
+   */
+  meter?: UsageMeter;
 }
 
 export interface RetryOptions {
@@ -98,6 +104,8 @@ export interface RunAgentStepArgs<T, S> {
   toLogOutput: (data: S) => unknown;
   transport: AgentTransport;
   logger: StepLogger;
+  /** Task 9: usage ledger (overrides logger.meter). */
+  meter?: UsageMeter;
   retry?: RetryOptions;
   now?: () => number;
 }
@@ -129,12 +137,25 @@ export async function runAgentStep<T, S>(args: RunAgentStepArgs<T, S>): Promise<
   const backoff = args.retry?.backoffMs ?? defaultBackoffMs;
   const sleep = args.retry?.sleep ?? defaultSleep;
   const t0 = now();
+  const requestedModel = args.request.model ?? AI_MODEL;
+  const meter = args.meter ?? args.logger.meter;
+  const mode = args.transport.kind;
+  /** Task 9: one usage event per attempt. A meter never fails the call. */
+  const emit = async (ev: Omit<UsageEvent, "agent" | "runId" | "mode">) => {
+    if (!meter) return;
+    try {
+      await meter.record({ agent: args.agent, runId: args.runId, mode, ...ev });
+    } catch {
+      /* best effort: the agent_steps row (or the caller's own log) still records the call */
+    }
+  };
 
   let response: AgentResponse<T> | null = null;
   let failure: TransportError | null = null;
   let retries = 0;
 
   for (;;) {
+    const ta = now();
     try {
       response = await args.transport.parse(args.request);
       failure = null;
@@ -144,6 +165,8 @@ export async function runAgentStep<T, S>(args: RunAgentStepArgs<T, S>): Promise<
       if (!failure.retryable || retries >= maxRetries) break;
       const wait = Math.max(0, backoff(retries, failure));
       if (deadline !== undefined && now() + wait + requestTimeout >= deadline) break;
+      // This attempt failed and WILL be retried: record it (no usage comes back from a failed request).
+      await emit({ model: requestedModel, status: "retried", attempt: retries + 1, error: usageErrorCode(failure.code), usage: { ...ZERO_USAGE }, costUsd: 0, priced: isPriced(requestedModel), latencyMs: Math.max(0, now() - ta) });
       await sleep(wait);
       retries++;
     }
@@ -164,7 +187,17 @@ export async function runAgentStep<T, S>(args: RunAgentStepArgs<T, S>): Promise<
     model: string,
     latencyMs: number,
   ) => {
-    const cost = costUsd(model, usage);
+    const { usd: cost, priced } = costOf(model, usage);
+    await emit({
+      model,
+      status: row.status === "ok" ? "ok" : row.status === "refused" ? "refused" : "failed",
+      attempt: retries + 1,
+      error: row.status === "ok" ? null : usageErrorCode((row.error ?? "unknown").split(":")[0]),
+      usage,
+      costUsd: cost,
+      priced,
+      latencyMs,
+    });
     await args.logger.insertStep({
       ...base,
       ...row,
@@ -185,8 +218,6 @@ export async function runAgentStep<T, S>(args: RunAgentStepArgs<T, S>): Promise<
     });
     return cost;
   };
-
-  const requestedModel = args.request.model ?? AI_MODEL;
 
   // Transport failure (after retries): logged with cost 0. Known under-count: a request that timed
   // out (or lost its connection) AFTER it was sent may still be billed by the API, but no usage

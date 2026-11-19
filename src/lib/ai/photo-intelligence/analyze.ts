@@ -39,6 +39,10 @@ import { loadThumbBase64 } from "@/lib/db/photos";
 import { PhotoAnalysisSchema, PhotoVisionSchema, STORY_LIMITS } from "@/lib/storybook/schemas";
 import type { PhotoAnalysis, PhotoVision } from "@/lib/storybook/types";
 import { clipText } from "@/lib/text/clip";
+import { isOverSpendCap } from "@/lib/ai/spend-caps";
+import { createUsageMeter } from "@/lib/ai/usage/meter";
+import type { UsageMeter } from "@/lib/ai/usage/types";
+import { getEntitlementTier } from "@/lib/entitlements";
 import { readPhotoAiConfig, type PhotoAiConfig } from "./config";
 import {
   PHOTO_MAX_TOKENS,
@@ -88,6 +92,10 @@ export type PhotoIntelligenceDeps = {
   countAnalysed?: (bookId: string, userId: string) => Promise<number>;
   /** True when the daily AI budget is used up (pipeline spend + photo-analysis spend). */
   budgetExhausted?: () => Promise<boolean>;
+  /** Task 9: true when a per-book / per-user spending cap is reached (never throws). */
+  overSpendCap?: (photo: OwnPhoto) => Promise<boolean>;
+  /** Task 9: usage ledger (default: ai_usage_ledger, operation photo_analysis, bucket from the entitlement). */
+  meter?: UsageMeter;
   mode?: AiMode;
   transport?: AgentTransport | null;
   config?: PhotoAiConfig;
@@ -111,6 +119,10 @@ async function defaultBudgetExhausted(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function defaultOverSpendCap(photo: OwnPhoto): Promise<boolean> {
+  return isOverSpendCap({ userId: photo.user_id, bookId: photo.book_id, tier: await getEntitlementTier(photo.book_id) });
 }
 
 /** Deterministic replay answer (local dev, previews, tests) — never derived from the image. */
@@ -264,6 +276,8 @@ async function callModel(a: {
     const used = await (deps.countAnalysed ?? countAnalysedPhotos)(photo.book_id, photo.user_id);
     if (used >= limitsFor(photo.bookIsPaid).maxAnalyzedPhotos) throw new PhotoIntelligenceError("limit_reached");
     if (await (deps.budgetExhausted ?? defaultBudgetExhausted)()) throw new PhotoIntelligenceError("budget_exhausted");
+    // Task 9: per-book / per-user spending caps (a cap reached stops analysis like the daily budget)
+    if (await (deps.overSpendCap ?? defaultOverSpendCap)(photo)) throw new PhotoIntelligenceError("budget_exhausted", "spend_cap");
   }
 
   const transport = deps.transport === undefined ? transportFor(mode) : deps.transport;
@@ -277,6 +291,7 @@ async function callModel(a: {
       step = row;
     },
     addRunTotals: async () => {},
+    meter: deps.meter ?? createUsageMeter({ userId: photo.user_id, bookId: photo.book_id, flow: "storybook", operation: "photo_analysis" }),
   };
 
   const result = await runAgentStep({

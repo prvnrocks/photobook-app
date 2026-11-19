@@ -74,6 +74,13 @@ export type StoryRunProgress = {
   stages: Record<StoryRunStage, StoryStageProgress>;
   /** Set when the run finished (done). */
   outcome: StoryRunOutcome | null;
+  /**
+   * Task 9: present when the run makes the free PREVIEW (no full entitlement): how many interior
+   * pages it shows. The editor shows the unlock banner from it.
+   */
+  preview?: { pages: number };
+  /** Task 9: the run completes a book from its earlier preview (same plan, no re-analysis). */
+  continued?: true;
 };
 
 /** What the client sees of a run (GET / advance / start answers). */
@@ -153,7 +160,17 @@ export function parseStoryProgress(raw: unknown, state: StoryRunState): StoryRun
         warnings: countOrNull(oc.warnings) ?? 0,
       }
     : null;
-  return { v: 1, kind: "storybook", phase: isStoryRunState(o.phase) ? o.phase : state, stages, outcome };
+  const pv = obj(o.preview);
+  const previewPages = pv ? countOrNull(pv.pages) : null;
+  return {
+    v: 1,
+    kind: "storybook",
+    phase: isStoryRunState(o.phase) ? o.phase : state,
+    stages,
+    outcome,
+    ...(previewPages !== null && previewPages > 0 ? { preview: { pages: previewPages } } : {}),
+    ...(o.continued === true ? { continued: true as const } : {}),
+  };
 }
 
 // ---------------------------------------------------------------------------- copy

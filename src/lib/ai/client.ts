@@ -4,18 +4,17 @@ import "server-only";
 // Server-only: the API key is read here and nowhere else (tests/boundaries.test.ts enforces it).
 
 import Anthropic from "@anthropic-ai/sdk";
+import { DEFAULT_PRICING } from "./pricing";
 
 /** Default model for every agent step. Steps may override per request (AgentRequest.model). */
 export const AI_MODEL = "claude-opus-5-5";
 
-/** USD per million tokens. Cache write = 5-minute TTL (1.25x input). Keyed by model id. */
-export const PRICING: Readonly<
-  Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }>
-> = {
-  "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
-  /** Selectable for photo analysis only (AI_PHOTO_MODEL, src/lib/ai/photo-intelligence/config.ts). */
-  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 },
-};
+/**
+ * Default USD per million tokens (cache write = 5-minute TTL, 1.25x input), keyed by model id.
+ * The EFFECTIVE prices are src/lib/ai/pricing.ts readPricing(): these defaults merged with the
+ * AI_PRICING_JSON override (Task 9) — cost code reads that, never this constant directly.
+ */
+export const PRICING = DEFAULT_PRICING;
 
 /**
  * Effort per agent (Opus 5.5 always thinks; depth is controlled by output_config.effort).

@@ -25,6 +25,7 @@ import type { RunCheckpointPatch, RunForTick } from "@/lib/db/agent-runs";
 import { outcomeCopy, stageRows, storyErrorCopy, type StoryRunView } from "@/lib/storybook/run/progress";
 import type { Json } from "@/lib/supabase/database.types";
 import { SupabaseUnavailableError } from "@/lib/supabase/deadline";
+import { resolveEntitlement, type BookEntitlement } from "@/lib/entitlements/resolve";
 import { BOOK, USER, world } from "./ai/story-fixtures";
 
 // ---------------------------------------------------------------------------- in-memory agent_runs
@@ -106,7 +107,11 @@ function runsTable() {
 
 // ---------------------------------------------------------------------------- the world of one book
 
-type Over = { mode?: "live" | "replay" | "off"; overBudget?: boolean; script?: NonNullable<Parameters<typeof world>[0]>["script"]; analyze?: (ids: readonly string[]) => AnalyzePhotosResult[]; compose?: StoryRunDeps["composeStorybookPages"]; dailyCap?: number; photos?: number };
+function entitlement(tier: "preview" | "full"): BookEntitlement {
+  return resolveEntitlement({ bookId: BOOK, isPaid: tier === "full", maxPages: tier === "full" ? 100 : 20, orderStatus: tier === "full" ? "paid" : null, hasActiveGrant: false }, { pages: 5, maxRuns: 3 });
+}
+
+type Over = { tier?: "preview" | "full"; mode?: "live" | "replay" | "off"; overBudget?: boolean; script?: NonNullable<Parameters<typeof world>[0]>["script"]; analyze?: (ids: readonly string[]) => AnalyzePhotosResult[]; compose?: StoryRunDeps["composeStorybookPages"]; dailyCap?: number; photos?: number };
 
 async function setup(over: Over = {}) {
   const w = world({ script: over.script });
@@ -133,20 +138,23 @@ async function setup(over: Over = {}) {
       return out;
     }),
     clusterPhotosIntoMoments: vi.fn(async () => ({ moments: [1, 2, 3, 4, 5, 6], pending: { quality: 0 } })),
-    planStory: vi.fn(async (_bookId: string, opts: { rule: boolean }) => {
+    planStory: vi.fn(async (_bookId: string, opts: { rule: boolean; maxPages?: number }) => {
       // the AI plan comes from the scripted transport; the rule plan from mode "off"
-      const plan = await planStory(BOOK, { ...w.deps, ...(opts.rule || over.mode === "off" ? { mode: "off" as const } : {}) });
+      const plan = await planStory(BOOK, { ...w.deps, ...(opts.maxPages ? { planMaxPages: opts.maxPages } : {}), ...(opts.rule || over.mode === "off" ? { mode: "off" as const } : {}) });
       if (opts.rule) rulePlan = plan;
       return plan;
     }),
     writeStoryStep: vi.fn((bookId, plan, opts) => writeStoryStep(bookId, plan, opts, { ...w.deps, ...(over.mode === "off" ? { mode: "off" as const } : {}) })),
     composeStorybookPages:
       over.compose ??
-      vi.fn(async (_bookId: string, opts: { rule: boolean; beforeSave: () => Promise<boolean> }) => {
+      vi.fn(async (_bookId: string, opts: { rule: boolean; beforeSave: () => Promise<boolean>; maxPages?: number }) => {
         const saved = await opts.beforeSave();
         if (saved) doc.written++;
-        return { pages: 18, warnings: 0, ai: opts.rule ? ("off" as const) : ("used" as const), saved };
+        return { pages: opts.maxPages ?? 18, warnings: 0, ai: opts.rule ? ("off" as const) : ("used" as const), saved };
       }),
+    // Task 9: Task 8's scenarios run as entitled (full) books; the preview suite sets tier "preview"
+    getEntitlement: vi.fn(async () => entitlement(over.tier ?? "full")),
+    countPreviewRuns: vi.fn(async () => [...table.rows.values()].filter((r) => r.mode === "live" && r.state === "done" && (r.cursor as { tier?: string }).tier === "preview").length),
     resolveMode: () => over.mode ?? "live",
     isOverDailyAiBudget: async () => over.overBudget === true,
     analysisBatch: () => 8,
@@ -431,7 +439,7 @@ describe("storybook job: failures", () => {
     expect(last).toMatchObject({ state: "done", aiStatus: null, mode: "rule" });
     expect(s.deps.analyzePhotos).not.toHaveBeenCalled();
     expect(s.w.requests).toHaveLength(0);
-    expect(s.deps.planStory).toHaveBeenCalledWith(BOOK, { rule: true });
+    expect(s.deps.planStory).toHaveBeenCalledWith(BOOK, { rule: true, maxPages: 100 });
     expect(s.deps.composeStorybookPages).toHaveBeenCalledWith(BOOK, expect.objectContaining({ rule: true }));
     expect(s.w.versions.at(-1)!.pages.flatMap((p) => p.blocks)).toEqual([]);
     expect(last.progress.outcome).toMatchObject({ ai: "none", notes: ["ai_off"] });

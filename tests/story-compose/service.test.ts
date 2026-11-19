@@ -60,6 +60,9 @@ function world(over: { theBook?: ComposeBook; script?: Script; counts?: number; 
     usageCounts: async () => ({ plans: 0, writes: 0, chapterRegens: 0, rewrites: 0, composes: over.counts ?? 0 }),
     record: async (r) => void records.push(r),
     budgetExhausted: async () => over.budget ?? false,
+    // Task 9: spending caps off, usage ledger captured in memory (no DB)
+    overSpendCap: async () => false,
+    meter: { record: async () => undefined },
     mode: over.mode ?? "live",
     transport,
     config: { model: "claude-opus-5-5", modelFallback: false, timeoutMs: 90_000, retries: 0 },

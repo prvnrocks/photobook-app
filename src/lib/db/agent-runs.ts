@@ -13,6 +13,8 @@ import "server-only";
 // only act when the token still matches, so a stale tick (its lease expired
 // and another tick claimed the run) can't free or overwrite the new tick's work.
 import type { AgentStepRecord, RunTotalsDelta, StepLogger } from "@/lib/ai/run-step";
+import { createUsageMeter } from "@/lib/ai/usage/meter";
+import type { UsageMeter } from "@/lib/ai/usage/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json, Tables } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
@@ -345,6 +347,7 @@ export function stepLogger(runId: string): StepLogger {
   };
 
   return {
+    meter: runUsageMeter(runId),
     async insertStep(row: AgentStepRecord): Promise<void> {
       if (!isUuid(row.runId) || row.runId !== runId) {
         throw new AgentRunsQueryError("insert step", "run_mismatch");
@@ -366,6 +369,30 @@ export function stepLogger(runId: string): StepLogger {
       void delta;
       if (totalsRunId !== runId) throw new AgentRunsQueryError("add run totals", "run_mismatch");
       await serial(() => syncRunTotals(runId));
+    },
+  };
+}
+
+/**
+ * Task 9: usage ledger of an album run (build / rebuild / ✨ rewrite): the run's user and book are
+ * read once, on the first live event; the bucket comes from the book's entitlement (flow "album":
+ * free → other, full → paid). Never throws (createUsageMeter swallows and logs codes).
+ */
+export function runUsageMeter(runId: string): UsageMeter {
+  let inner: Promise<UsageMeter> | null = null;
+  const load = async (): Promise<UsageMeter> => {
+    try {
+      const { data } = await createAdminClient().from("agent_runs").select("user_id, book_id").eq("id", runId).maybeSingle();
+      return createUsageMeter({ userId: data?.user_id ?? null, bookId: data?.book_id ?? null, flow: "album" });
+    } catch {
+      return createUsageMeter({ userId: null, bookId: null, flow: "album", tier: "preview" });
+    }
+  };
+  return {
+    async record(ev) {
+      if (ev.mode !== "live") return;
+      inner ??= load();
+      await (await inner).record(ev);
     },
   };
 }
@@ -904,4 +931,25 @@ export async function cancelStoryRunRow(runId: string, progress: Json): Promise<
     .select("id");
   if (error) throw new AgentRunsQueryError("cancel story run", error.code);
   return (data?.length ?? 0) === 1;
+}
+
+/**
+ * Task 9: finished LIVE storybook runs of the book that made the free preview (cursor.tier =
+ * 'preview', set server-side on the run's first tick) — the per-book preview regeneration cap.
+ * Admin client (the cursor is never client-readable); callers check ownership first. Runs that
+ * made no model call (mode 'rule') and unfinished / failed runs (a "Try again" resumes them
+ * without new spend) are not counted.
+ */
+export async function countPreviewRuns(bookId: string): Promise<number> {
+  if (!isUuid(bookId)) return 0;
+  const { count, error } = await createAdminClient()
+    .from("agent_runs")
+    .select("id", { count: "exact", head: true })
+    .eq("book_id", bookId)
+    .eq("trigger", STORYBOOK_RUN_TRIGGER)
+    .eq("mode", "live")
+    .eq("state", "done")
+    .eq("cursor->>tier", "preview");
+  if (error) throw new AgentRunsQueryError("count preview runs", error.code);
+  return count ?? 0;
 }

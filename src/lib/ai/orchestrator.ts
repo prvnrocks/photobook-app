@@ -101,6 +101,8 @@ import { critiqueBook, criticMaxTokens } from "./agents/critic";
 import { MAX_RETRY_ISSUES, planAlbum } from "./agents/storyteller";
 import { buildBatches } from "./batches";
 import { isAiBudgetExhausted } from "./budget";
+import { isOverSpendCap } from "./spend-caps";
+import { getEntitlementTier } from "@/lib/entitlements";
 import {
   buildCaptionContext,
   checkBookCaptions,
@@ -270,6 +272,11 @@ export interface OrchestratorDeps {
    * Checked before a LIVE run is created. Must never throw (fails open). Missing → never over.
    */
   isOverDailyAiBudget?: () => Promise<boolean>;
+  /**
+   * Task 9: per-book / per-user spending caps (src/lib/ai/spend-caps.ts), checked with the daily
+   * budget before a LIVE run is created. Must never throw. Missing → never over.
+   */
+  isOverSpendCap?: (input: { bookId: string; userId: string }) => Promise<boolean>;
   /** Optional override of cursorByteLimit() (tests). */
   maxCursorBytes?: () => number;
   // memory (D-032)
@@ -308,6 +315,7 @@ export function defaultDeps(): OrchestratorDeps {
     // Re-sums agent_steps into agent_runs.total_* (idempotent) and returns the total.
     getRunCostUsd: async (runId) => (await agentRunsDb.syncRunTotals(runId)).costUsd,
     isOverDailyAiBudget: () => isAiBudgetExhausted(),
+    isOverSpendCap: async ({ bookId, userId }) => isOverSpendCap({ userId, bookId, tier: await getEntitlementTier(bookId) }),
     getUserMemory: async (userId) => (await getUserMemoryAdmin(userId))?.prefs ?? null,
     resolveMode: () => resolveAiMode(),
     transportFor: (mode) => getTransport(mode),
@@ -964,6 +972,10 @@ export async function startRun(input: StartInput, deps: OrchestratorDeps = defau
   // D-059: over the global daily budget → no run row, no model call, nothing counted. The book
   // keeps its rule album (written at finalize, D-016). Replay costs nothing and is never refused.
   if (aiMode === "live" && (await overDailyBudget(deps))) {
+    return { ok: false, error: "limit", limit: "budget_exhausted" };
+  }
+  // Task 9: per-book / per-user spending caps — same outcome (rule album kept, "AI is taking a break").
+  if (aiMode === "live" && deps.isOverSpendCap && (await deps.isOverSpendCap({ bookId: book.id, userId: input.userId }).catch(() => false))) {
     return { ok: false, error: "limit", limit: "budget_exhausted" };
   }
   const limits = limitsFor(book.is_paid === true);

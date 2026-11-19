@@ -16,6 +16,8 @@ export type StoryStartOutcome =
   | { kind: "no_photos" } // 409
   | { kind: "unsupported_design" } // 422
   | { kind: "story_unavailable" } // 503 story_unavailable (migration missing) — permanent until deployed
+  | { kind: "preview_limit" } // 402 (Task 9): the free previews of this book are used up
+  | { kind: "rate_limited"; retryAfterMs: number } // 429 (Task 9): too many starts
   | { kind: "invalid" } // 400
   | CommonFailure;
 
@@ -93,6 +95,11 @@ export async function startStory(bookId: string, opts: Opts = {}): Promise<Story
   if (res.status === 422) return { kind: "unsupported_design" };
   if (res.status === 400) return { kind: "invalid" };
   if (res.status === 503 && body?.error === "story_unavailable") return { kind: "story_unavailable" };
+  if (res.status === 402 && body?.error === "preview_limit") return { kind: "preview_limit" };
+  if (res.status === 429) {
+    const header = res.headers.get("retry-after");
+    return { kind: "rate_limited", retryAfterMs: header ? parseRetryAfter(header) : DEFAULT_UNAVAILABLE_WAIT_MS };
+  }
   return commonFailure(res);
 }
 
@@ -111,7 +118,8 @@ export async function advanceStory(runId: string, opts: Opts = {}): Promise<Stor
   if (!isUuid(runId)) return { kind: "not_found" };
   const res = await send(opts.fetchImpl ?? defaultFetch, `/api/ai/story-runs/${runId}/advance`, { method: "POST", signal: opts.signal });
   if (!res) return { kind: "network" };
-  if (res.status === 202) {
+  // 202 another tick holds the lease; 429 (Task 9) the tick rate limit — both: wait Retry-After, tick again
+  if (res.status === 202 || res.status === 429) {
     const header = res.headers.get("retry-after");
     return { kind: "leased", retryAfterMs: header ? parseRetryAfter(header) : DEFAULT_LEASE_WAIT_MS };
   }
@@ -144,6 +152,10 @@ export function storyStartErrorCopy(out: StoryStartOutcome): string {
       return "This book's style can't be laid out yet. Pick another style.";
     case "story_unavailable":
       return "Making stories isn't available right now. Please try again later.";
+    case "preview_limit":
+      return "You've used the free previews for this book. Unlock the full book to make the whole story.";
+    case "rate_limited":
+      return "That's a lot of tries in a short time. Wait a few minutes and try again.";
     case "signed_out":
       return "You've been signed out. Sign in again to continue.";
     case "not_found":

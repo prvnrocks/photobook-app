@@ -1,6 +1,6 @@
 // Story Planner / Narrative Writer configuration from environment variables. Pure (env is a parameter).
 //
-//   AI_STORY_MODEL          model id for planning, writing and rewriting   default AI_MODEL
+//   AI_STORY_MODEL          model id for planning, writing and rewriting   default AI_MODEL (Opus, the stronger model)
 //   AI_STORY_TIMEOUT_MS     hard timeout of one plan / chapter request      default 90000 (10000–180000)
 //   AI_STORY_MAX_RETRIES    retries of 429 / 5xx / timeouts                 default 2 (0–4)
 //
@@ -9,11 +9,16 @@
 // fallbacks, and every model there has a price in PRICING so the stored cost is real). Anything
 // else falls back to the default and is reported in `modelFallback`.
 
-import { DEFAULT_PHOTO_MODEL, PHOTO_MODELS, type PhotoModel } from "@/lib/ai/photo-intelligence/config";
+import { PHOTO_MODELS, type PhotoModel } from "@/lib/ai/photo-intelligence/config";
 
 export const STORY_MODELS = PHOTO_MODELS;
 export type StoryModel = PhotoModel;
-export const DEFAULT_STORY_MODEL: StoryModel = DEFAULT_PHOTO_MODEL;
+/**
+ * Task 9: narrative writing (plan, chapters, rewrites, page intent) keeps the STRONGER model by
+ * default — the same id as AI_MODEL (Opus) — while photo descriptions default to a smaller one. Configurable with
+ * AI_STORY_MODEL.
+ */
+export const DEFAULT_STORY_MODEL: StoryModel = "claude-opus-5-5"; // = AI_MODEL (tests/ai/task9-metering.test.ts)
 
 export const STORY_AI_DEFAULTS = { timeoutMs: 90_000, retries: 2 } as const;
 const BOUNDS = { timeoutMs: [10_000, 180_000], retries: [0, 4] } as const;

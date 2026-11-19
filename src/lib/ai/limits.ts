@@ -107,3 +107,24 @@ export function isOverDailyBudget(spendUsd: number, budgetUsd: number | null): b
   const spend = Number.isFinite(spendUsd) && spendUsd > 0 ? spendUsd : 0;
   return spend >= budgetUsd;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Task 9: spending caps per book and per user (USD, live spend in the ai_usage_ledger ledger)
+
+/**
+ * Defaults; each can be overridden by env (src/lib/ai/spend-caps.ts readSpendCaps):
+ *   AI_CAP_BOOK_PREVIEW_USD  a book WITHOUT a full entitlement (free preview / free album), all time
+ *   AI_CAP_BOOK_FULL_USD     a book WITH a full entitlement (paid / comped / granted), all time
+ *   AI_CAP_USER_DAY_USD      one user, all books, per Asia/Dubai day
+ *   AI_CAP_USER_MONTH_USD    one user, all books, per Asia/Dubai calendar month
+ * Checked before every live model call (photo analysis, story plan / write / rewrite / compose, album
+ * run start, ✨ rewrite). Reaching a cap stops further AI for that scope; the user keeps a book made
+ * without (more) AI and a plain message. These are abuse ceilings well above a normal book
+ * (a live 12-photo album cost ≈ $0.10–0.13, 2026-11-18).
+ */
+export const SPEND_CAPS = {
+  bookPreviewUsd: 2,
+  bookFullUsd: 15,
+  userDayUsd: 20,
+  userMonthUsd: 100,
+} as const;

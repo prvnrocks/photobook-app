@@ -55,6 +55,7 @@ import type { BookDoc } from "@/lib/book/types";
 import type { PrintPhotoSourceRow } from "@/lib/db/print";
 import { getAccessSecret } from "@/lib/publish/access-cookie";
 import type { Json } from "@/lib/supabase/database.types";
+import { resolveEntitlement } from "@/lib/entitlements/resolve";
 import { isUuid } from "@/lib/uuid";
 import { chromeConfigured } from "./browser";
 import { isPdfRenderError } from "./errors";
@@ -165,7 +166,11 @@ export async function requestExport(
   for (;;) {
     const book = await getMyBook(bookId);
     if (!book) return { ok: false, error: "not_found" };
-    const check = canExport({ isPaid: book.is_paid === true, doc: book.doc, maxPages: book.max_pages });
+    // Task 9: the PDF gate goes through the entitlement abstraction — canExportPdf is is_paid only
+    // (Stripe webhook / comp); an authorized storybook grant never unlocks it. create_export_job
+    // re-checks the live is_paid in the database.
+    const entitlement = resolveEntitlement({ bookId, isPaid: book.is_paid === true, maxPages: book.max_pages, orderStatus: null, hasActiveGrant: false });
+    const check = canExport({ isPaid: entitlement.canExportPdf, doc: book.doc, maxPages: book.max_pages });
     if (!check.ok) return { ok: false, error: check.reason };
     if (book.doc_rev === null) return { ok: false, error: "unavailable" }; // migration 0900 missing
     if (!exportAvailable(opts.env)) return { ok: false, error: "unavailable" };
