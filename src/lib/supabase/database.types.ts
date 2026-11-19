@@ -163,6 +163,121 @@ export type Database = {
           },
         ]
       }
+      ai_usage_ledger: {
+        Row: {
+          attempt: number
+          book_id: string | null
+          cache_read_tokens: number
+          cache_write_tokens: number
+          cost_bucket: string
+          cost_usd: number
+          created_at: string
+          error: string | null
+          id: string
+          input_tokens: number
+          latency_ms: number
+          mode: string
+          model: string
+          operation: string
+          output_tokens: number
+          priced: boolean
+          run_id: string | null
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          attempt?: number
+          book_id?: string | null
+          cache_read_tokens?: number
+          cache_write_tokens?: number
+          cost_bucket: string
+          cost_usd?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          input_tokens?: number
+          latency_ms?: number
+          mode: string
+          model: string
+          operation: string
+          output_tokens?: number
+          priced?: boolean
+          run_id?: string | null
+          status: string
+          user_id?: string | null
+        }
+        Update: {
+          attempt?: number
+          book_id?: string | null
+          cache_read_tokens?: number
+          cache_write_tokens?: number
+          cost_bucket?: string
+          cost_usd?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          input_tokens?: number
+          latency_ms?: number
+          mode?: string
+          model?: string
+          operation?: string
+          output_tokens?: number
+          priced?: boolean
+          run_id?: string | null
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_ledger_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      book_entitlements: {
+        Row: {
+          book_id: string
+          created_at: string
+          granted_by: string | null
+          id: string
+          reason: string
+          revoked_at: string | null
+          source: string
+          tier: string
+        }
+        Insert: {
+          book_id: string
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          reason: string
+          revoked_at?: string | null
+          source?: string
+          tier?: string
+        }
+        Update: {
+          book_id?: string
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          reason?: string
+          revoked_at?: string | null
+          source?: string
+          tier?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "book_entitlements_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       book_unlock_attempts: {
         Row: {
           book_id: string
@@ -1072,6 +1187,26 @@ export type Database = {
           usd: number
         }[]
       }
+      admin_ai_usage_by_bucket: {
+        Args: { p_days: number }
+        Returns: {
+          calls: number
+          cost_bucket: string
+          day: string
+          failed: number
+          retried: number
+          unpriced: number
+          usd: number
+        }[]
+      }
+      ai_usage_totals: {
+        Args: { p_book: string | null; p_user: string | null }
+        Returns: {
+          book_usd: number
+          user_day_usd: number
+          user_month_usd: number
+        }[]
+      }
       claim_agent_run: {
         Args: { p_lease_seconds: number; p_run_id: string }
         Returns: string
@@ -1138,6 +1273,10 @@ export type Database = {
           photo_id: string
           user_id: string
         }[]
+      }
+      cleanup_rate_limits: {
+        Args: { p_hours: number }
+        Returns: number
       }
       cleanup_unlock_attempts: {
         Args: { p_hours: number }
@@ -1242,6 +1381,10 @@ export type Database = {
       }
       reap_stale_agent_runs: {
         Args: { p_hours: number }
+        Returns: number
+      }
+      rate_limit_hit: {
+        Args: { p_bucket: string; p_limit: number; p_window_seconds: number }
         Returns: number
       }
       record_stripe_order_event: {

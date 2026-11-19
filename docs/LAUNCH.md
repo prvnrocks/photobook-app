@@ -215,8 +215,16 @@ Preview origin (e.g. the branch alias of a `staging` branch) that is also in the
       `designing`; `claim_agent_run`, `create_agent_run_capped` and `reap_stale_agent_runs` re-created with every
       existing behaviour kept). Without it the wizard's Create step cannot start a story (503, nothing written).
       Needs 2700. Then run `rls_check.sql` → 187.
+- [ ] **Privacy + AI metering: push `20261124002900_privacy_metering.sql` BEFORE deploying the Task 9 code**
+      (additive: `ai_usage_ledger` — one number-only row per model attempt with model, tokens, cost, latency,
+      status / attempt and `cost_bucket` preview | paid | other; `ai_usage_totals` + `admin_ai_usage_by_bucket`;
+      `book_entitlements` — authorized full-storybook grants, never a payment and never the PDF; the
+      `private.rate_limit_windows` limiter with `rate_limit_hit` / `cleanup_rate_limits`). Without it the code
+      keeps working but caps and the rate limiter fail open and no ledger rows are written. Needs 2800. Optional
+      env: `AI_PRICING_JSON`, `AI_CAP_*`, `AI_PREVIEW_*` (see `docs/PRIVACY-DATA.md` and `.env.example`). Then run
+      `rls_check.sql` → 190.
 - [ ] Supabase → SQL Editor → paste the whole of `supabase/tests/rls_check.sql` → Run. Expected: an error panel
-      starting with **`RLS OK — all 187 checks passed`** (186 before 2800, 185 before 2700, 184 before 2600, 181 before 2500, 180 before 2400, 179 before 2300, 177 before 2200, 176 before 2100, 175 before 2000, 173 before 1900) (raised on purpose; it rolls everything back). Anything
+      starting with **`RLS OK — all 190 checks passed`** (187 before 2900, 186 before 2800, 185 before 2700, 184 before 2600, 181 before 2500, 180 before 2400, 179 before 2300, 177 before 2200, 176 before 2100, 175 before 2000, 173 before 1900) (raised on purpose; it rolls everything back). Anything
       else (`RLS FAIL [...]`, permission denied) is a blocker.
 - [ ] Verify `private.auth_user_email` works (the warning emails depend on it; needs `postgres` to read
       `auth.users`):

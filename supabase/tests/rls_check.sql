@@ -78,7 +78,10 @@
 --      scope 'compose' accepted, unknown values still rejected)
 --      and 20261123002800_storybook_runs.sql (agent_runs trigger
 --      'storybook' + stage states only for it, never queued, one active run
---      per book shared with builds, claim leases it, owner can't write runs).
+--      per book shared with builds, claim leases it, owner can't write runs)
+--      and 20261124002900_privacy_metering.sql (ai_usage_ledger, book
+--      entitlements and the rate limiter: service role only, no text columns,
+--      value checks, spend totals, one active grant per book, window counts).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -87,7 +90,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 187 checks passed
+--       RLS OK — all 190 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -142,6 +145,13 @@ declare
   book_sb    uuid;
   run_sb     uuid;
   run_rw2    uuid;
+  book_mt    uuid;
+  book_mt2   uuid;
+  t9_usd1    numeric;
+  t9_usd2    numeric;
+  t9_usd3    numeric;
+  t9_wait    integer;
+  t9_bucket  text := 'rls_check:' || md5(random()::text);
   book_p     uuid;
   ip_1       text;
   ip_2       text;
@@ -4446,6 +4456,202 @@ begin
   begin
     update public.agent_runs set state = 'done' where id = run_sb;
     raise exception 'RLS FAIL [storybook runs]: owner can update a storybook run';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  checks := checks + 1;
+
+  -- ===========================================================================
+  -- 2900 ai usage ledger: ai_usage + ai_usage_totals (Task 9)
+  -- ===========================================================================
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  insert into public.books (user_id, title) values (uid_a, 'RLS check metering') returning id into book_mt;
+  insert into public.books (user_id, title) values (uid_a, 'RLS check metering 2') returning id into book_mt2;
+  set local role service_role;
+  insert into public.ai_usage_ledger (user_id, book_id, operation, model, mode, status, attempt, error, input_tokens, output_tokens,
+                               cost_usd, priced, latency_ms, cost_bucket)
+  values (uid_a, book_mt, 'photo_analysis', 'claude-sonnet-5-5', 'live', 'ok', 1, null, 1200, 200, 0.0044, true, 3100, 'preview'),
+         (uid_a, book_mt, 'plan', 'claude-opus-5-5', 'live', 'retried', 1, 'rate_limited', 0, 0, 0, true, 900, 'preview'),
+         (uid_a, book_mt, 'plan', 'claude-opus-5-5', 'live', 'ok', 2, null, 2400, 900, 0.0276, true, 8200, 'preview'),
+         (uid_a, book_mt2, 'curator', 'claude-opus-5-5', 'live', 'failed', 3, 'timeout', 0, 0, 0, true, 60000, 'other'),
+         (uid_a, book_mt2, 'write', 'claude-next', 'live', 'ok', 1, null, 100, 100, 0.5, false, 100, 'paid'),
+         (uid_a, book_mt, 'write', 'claude-opus-5-5', 'replay', 'ok', 1, null, 0, 0, 9, true, 0, 'preview');
+  select t.book_usd, t.user_day_usd, t.user_month_usd into t9_usd1, t9_usd2, t9_usd3
+    from public.ai_usage_totals(uid_a, book_mt) as t;
+  -- replay rows never count; the book total is that book only, the user totals cover both books
+  if t9_usd1 <> 0.032 or t9_usd2 <> 0.532 or t9_usd3 <> 0.532 then
+    raise exception 'RLS FAIL [ai usage]: totals wrong (book %, day %, month %)', t9_usd1, t9_usd2, t9_usd3;
+  end if;
+  if (select count(*) from public.admin_ai_usage_by_bucket(1) where cost_bucket = 'preview') <> 1 then
+    raise exception 'RLS FAIL [ai usage]: bucket report missing the preview bucket';
+  end if;
+  begin
+    insert into public.ai_usage_ledger (operation, model, mode, status, cost_bucket) values ('caption', 'm', 'live', 'ok', 'other');
+    raise exception 'RLS FAIL [ai usage]: unknown operation accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.ai_usage_ledger (operation, model, mode, status, cost_bucket) values ('plan', 'm', 'live', 'ok', 'free');
+    raise exception 'RLS FAIL [ai usage]: unknown cost bucket accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.ai_usage_ledger (operation, model, mode, status, cost_bucket) values ('plan', 'm', 'live', 'failed', 'other');
+    raise exception 'RLS FAIL [ai usage]: failed row without an error code accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.ai_usage_ledger (operation, model, mode, status, error, cost_bucket) values ('plan', 'm', 'live', 'retried', 'A sentence of text', 'other');
+    raise exception 'RLS FAIL [ai usage]: free text accepted as error code';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.ai_usage_ledger (operation, model, mode, status, attempt, cost_bucket) values ('plan', 'm', 'live', 'ok', 0, 'other');
+    raise exception 'RLS FAIL [ai usage]: attempt 0 accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.ai_usage_ledger (operation, model, mode, status, cost_usd, cost_bucket) values ('plan', 'm', 'live', 'ok', -1, 'other');
+    raise exception 'RLS FAIL [ai usage]: negative cost accepted';
+  exception when check_violation then null;
+  end;
+  -- the table has no column that could hold prompt, photo or narrative text
+  if exists (
+    select 1 from information_schema.columns
+     where table_schema = 'public' and table_name = 'ai_usage_ledger'
+       and (data_type in ('json', 'jsonb') or column_name in ('text', 'prompt', 'content', 'output', 'input', 'description', 'caption', 'path', 'url'))
+  ) then
+    raise exception 'RLS FAIL [ai usage]: a content column exists';
+  end if;
+  reset role;
+  -- deleting the book keeps the (number-only) rows, without the book id: the user's spend does not reset
+  delete from public.books where id = book_mt2;
+  set local role service_role;
+  if (select count(*) from public.ai_usage_ledger where user_id = uid_a and book_id is null) <> 2 then
+    raise exception 'RLS FAIL [ai usage]: rows of a deleted book were not kept with book_id null';
+  end if;
+  select t.user_day_usd into t9_usd2 from public.ai_usage_totals(uid_a, null) as t;
+  if t9_usd2 <> 0.532 then
+    raise exception 'RLS FAIL [ai usage]: deleting a book reset the user spend (%)', t9_usd2;
+  end if;
+  reset role;
+  -- no client access at all
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  begin
+    select count(*) into n from public.ai_usage_ledger;
+    raise exception 'RLS FAIL [ai usage]: owner can select the ledger';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.ai_usage_ledger (user_id, operation, model, mode, status, cost_bucket) values (uid_a, 'plan', 'm', 'live', 'ok', 'other');
+    raise exception 'RLS FAIL [ai usage]: owner can insert into the ledger';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.ai_usage_totals(uid_a, book_mt);
+    raise exception 'RLS FAIL [ai usage]: owner can execute ai_usage_totals';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  set local role anon;
+  begin
+    select count(*) into n from public.ai_usage_ledger;
+    raise exception 'RLS FAIL [ai usage]: anon can select the ledger';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  checks := checks + 1;
+
+  -- ===========================================================================
+  -- 2900 book entitlements: authorized grants (Task 9)
+  -- ===========================================================================
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  set local role service_role;
+  insert into public.book_entitlements (book_id, reason) values (book_mt, 'support grant');
+  begin
+    insert into public.book_entitlements (book_id, reason) values (book_mt, 'second grant');
+    raise exception 'RLS FAIL [book entitlements]: two active grants for one book';
+  exception when unique_violation then null;
+  end;
+  update public.book_entitlements set revoked_at = now() where book_id = book_mt;
+  insert into public.book_entitlements (book_id, reason) values (book_mt, 'grant again');
+  begin
+    insert into public.book_entitlements (book_id, reason, tier) values (book_mt2, 'x', 'pdf');
+    raise exception 'RLS FAIL [book entitlements]: unknown tier accepted';
+  exception when check_violation or foreign_key_violation then null;
+  end;
+  begin
+    insert into public.book_entitlements (book_id, reason, source) values (book_mt, 'x', 'stripe');
+    raise exception 'RLS FAIL [book entitlements]: a grant posing as a payment accepted';
+  exception when check_violation or unique_violation then null;
+  end;
+  begin
+    insert into public.book_entitlements (book_id, reason) values (book_a, '   ');
+    raise exception 'RLS FAIL [book entitlements]: blank reason accepted';
+  exception when check_violation then null;
+  end;
+  -- a grant never marks the book paid (PDF / watermark / permanent link stay tied to is_paid)
+  if (select is_paid from public.books where id = book_mt) then
+    raise exception 'RLS FAIL [book entitlements]: a grant set books.is_paid';
+  end if;
+  reset role;
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  begin
+    select count(*) into n from public.book_entitlements;
+    raise exception 'RLS FAIL [book entitlements]: owner can select grants';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.book_entitlements (book_id, reason) values (book_a, 'self grant');
+    raise exception 'RLS FAIL [book entitlements]: owner can grant themselves';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  checks := checks + 1;
+
+  -- ===========================================================================
+  -- 2900 rate limiter: private.rate_limit_windows + rate_limit_hit (Task 9)
+  -- ===========================================================================
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  set local role service_role;
+  if public.rate_limit_hit(t9_bucket, 2, 3600) <> 0 or public.rate_limit_hit(t9_bucket, 2, 3600) <> 0 then
+    raise exception 'RLS FAIL [rate limit]: hits within the limit were refused';
+  end if;
+  t9_wait := public.rate_limit_hit(t9_bucket, 2, 3600);
+  if t9_wait < 1 or t9_wait > 3600 then
+    raise exception 'RLS FAIL [rate limit]: the third hit was allowed or has no retry-after (%)', t9_wait;
+  end if;
+  -- another bucket is independent
+  if public.rate_limit_hit('rls_check:' || md5('other' || random()::text), 2, 3600) <> 0 then
+    raise exception 'RLS FAIL [rate limit]: buckets are not independent';
+  end if;
+  begin
+    perform public.rate_limit_hit('story_runs:' || uid_a::text, 2, 60);
+    raise exception 'RLS FAIL [rate limit]: a raw user id accepted as bucket key';
+  exception when invalid_parameter_value then null;
+  end;
+  if public.cleanup_rate_limits(1) < 0 then
+    raise exception 'RLS FAIL [rate limit]: cleanup failed';
+  end if;
+  reset role;
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  begin
+    perform public.rate_limit_hit(t9_bucket, 1000, 60);
+    raise exception 'RLS FAIL [rate limit]: owner can execute rate_limit_hit';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    select count(*) into n from private.rate_limit_windows;
+    raise exception 'RLS FAIL [rate limit]: owner can read the windows';
   exception when insufficient_privilege then null;
   end;
   reset role;

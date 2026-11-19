@@ -127,7 +127,7 @@ function effectiveTablePrivileges(): Acl {
 const sorted = (s: Set<string> | undefined) => [...(s ?? [])].sort();
 
 /** Tables with RLS on and no policies: only the service role (BYPASSRLS) touches them. */
-const SERVICE_ROLE_ONLY_TABLES = ["agent_steps", "book_unlock_attempts", "photo_analyses", "story_ai_calls"];
+const SERVICE_ROLE_ONLY_TABLES = ["agent_steps", "book_unlock_attempts", "photo_analyses", "story_ai_calls", "ai_usage_ledger", "book_entitlements"];
 
 describe("migrations: files", () => {
   it("found the migration files and parsed them", () => {
@@ -3269,9 +3269,9 @@ describe("migrations: storybook runs (2800, Task 8)", () => {
     return start < 0 ? "" : body.slice(start, body.indexOf("$$;", body.indexOf("$$", start) + 2));
   };
 
-  it("is the latest migration, comes right after 2700, migration-first header with a rollback note", () => {
+  it("comes right after 2700 and right before 2900 (latest until then), migration-first header with a rollback note", () => {
     expect(m, `${name} missing`).toBeDefined();
-    expect(files[files.length - 1]).toBe(name);
+    expect(files.indexOf("20261124002900_privacy_metering.sql")).toBe(files.indexOf(name) + 1);
     expect(files.indexOf(name)).toBe(files.indexOf("20261122002700_story_compose_kind.sql") + 1);
     const raw = readFileSync(join(process.cwd(), "supabase", "migrations", name), "utf8");
     expect(raw).toMatch(/Deploy order/);
@@ -3333,10 +3333,83 @@ describe("migrations: storybook runs (2800, Task 8)", () => {
     expect(states).toEqual(["discovering", "organizing", "writing", "designing"]);
   });
 
-  it("rls_check.sql covers 2800 and counts 187 checks", () => {
+  it("rls_check.sql covers 2800 (187 checks then; 2900 → 190)", () => {
     const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
     expect(rls).toContain(name);
     expect(rls).toContain("RLS FAIL [storybook runs]");
-    expect(rls).toContain("RLS OK — all 187 checks passed");
+  });
+});
+
+describe("migrations: privacy + AI metering (2900, Task 9)", () => {
+  const name = "20261124002900_privacy_metering.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const flat = sql.replace(/\s+/g, " ");
+  const body = sql.replace(/--.*$/gm, "").replace(/\s+/g, " ").trim();
+
+  it("is the latest migration, comes right after 2800, migration-first header with a rollback note", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files[files.length - 1]).toBe(name);
+    expect(files.indexOf(name)).toBe(files.indexOf("20261123002800_storybook_runs.sql") + 1);
+    const raw = readFileSync(join(process.cwd(), "supabase", "migrations", name), "utf8");
+    expect(raw).toMatch(/Deploy order/);
+    expect(raw).toMatch(/Rollback/);
+  });
+
+  it("is purely additive: no drop, no alter of an existing table, no security definer, RLS never disabled", () => {
+    expect(body).not.toMatch(/\bdrop\s+(table|index|function|policy|constraint|column)/);
+    expect(body).not.toMatch(/alter table public\.(books|photos|orders|agent_runs|agent_steps|photo_analyses|story_ai_calls|profiles)\b/);
+    expect(body).not.toMatch(/security definer/);
+    expect(body).not.toMatch(/disable row level security/);
+  });
+
+  it("ai_usage_ledger: service role only, number-only columns, statuses incl. retried, three cost buckets, set null on delete", () => {
+    expect(flat).toContain("alter table public.ai_usage_ledger enable row level security;");
+    expect(flat).toContain("revoke all on table public.ai_usage_ledger from anon, authenticated, public;");
+    expect(flat).toContain("constraint ai_usage_ledger_status_check check (status in ('ok', 'failed', 'refused', 'retried'))");
+    expect(flat).toContain("constraint ai_usage_ledger_bucket_check check (cost_bucket in ('preview', 'paid', 'other'))");
+    expect(flat).toContain("user_id uuid references auth.users (id) on delete set null");
+    expect(flat).toContain("book_id uuid references public.books (id) on delete set null");
+    expect(flat).toMatch(/priced boolean not null/);
+    const table = flat.slice(flat.indexOf("create table public.ai_usage_ledger ("), flat.indexOf("create index ai_usage_ledger_user_id"));
+    expect(table).not.toMatch(/\bjsonb?\b/);
+    expect(table).not.toMatch(/\b(prompt|description|caption|narrative|content|path|url)\b/);
+  });
+
+  it("the code's operations and buckets match the migration", () => {
+    const src = readFileSync(join(process.cwd(), "src", "lib", "ai", "usage", "types.ts"), "utf8");
+    const ops = JSON.parse(/export const AI_OPERATIONS = (\[[^\]]*\]) as const;/.exec(src)![1]!) as string[];
+    for (const op of ops) expect(flat).toContain(`'${op}'`);
+    const buckets = JSON.parse(/export const COST_BUCKETS = (\[[^\]]*\]) as const;/.exec(src)![1]!) as string[];
+    expect(buckets).toEqual(["preview", "paid", "other"]);
+  });
+
+  it("book_entitlements: grants only (tier full, source grant), one active per book, service role only", () => {
+    expect(flat).toContain("constraint book_entitlements_tier_check check (tier = 'full')");
+    expect(flat).toContain("constraint book_entitlements_source_check check (source = 'grant')");
+    expect(flat).toContain("create unique index book_entitlements_one_active_idx on public.book_entitlements (book_id) where revoked_at is null;");
+    expect(flat).toContain("revoke all on table public.book_entitlements from anon, authenticated, public;");
+    // a grant never touches books.is_paid
+    expect(body).not.toMatch(/update public\.books/);
+  });
+
+  it("rate limiter: private table, hashed bucket keys, invoker functions with EXECUTE revoked from clients", () => {
+    expect(flat).toContain("create table private.rate_limit_windows (");
+    expect(flat).toContain("check (bucket ~ '^[a-z_]{1,32}:[0-9a-f]{32}$')");
+    for (const sig of ["rate_limit_hit(text, integer, integer)", "cleanup_rate_limits(integer)", "ai_usage_totals(uuid, uuid)", "admin_ai_usage_by_bucket(integer)"]) {
+      expect(flat).toContain(`revoke all on function public.${sig} from public, anon, authenticated;`);
+      expect(flat).toContain(`grant execute on function public.${sig} to service_role;`);
+    }
+    expect((body.match(/security invoker/g) ?? []).length).toBe(4);
+    expect((body.match(/set search_path = ''/g) ?? []).length).toBe(4);
+  });
+
+  it("rls_check.sql covers 2900 and counts 190 checks; database.types.ts lists the new objects", () => {
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain(name);
+    for (const tag of ["ai usage", "book entitlements", "rate limit"]) expect(rls).toContain(`RLS FAIL [${tag}]`);
+    expect(rls).toContain("RLS OK — all 190 checks passed");
+    const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
+    for (const t of ["ai_usage_ledger: {", "book_entitlements: {", "ai_usage_totals: {", "rate_limit_hit: {", "cleanup_rate_limits: {", "admin_ai_usage_by_bucket: {"]) expect(types).toContain(t);
   });
 });
