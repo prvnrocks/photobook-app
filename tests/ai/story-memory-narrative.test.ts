@@ -50,6 +50,11 @@ const FX = JSON.parse(readFileSync(new URL("../fixtures/ai/story/memory-v3.json"
   };
 };
 
+// v4: the chapter story page lines (subtitle / headline / closing line) of the same recorded pools
+const FX4 = JSON.parse(readFileSync(new URL("../fixtures/ai/story/memory-v4.json", import.meta.url), "utf8")) as Record<"personal" | "observational" | "commentary", Pick<Pool, "subtitle" | "headline" | "closing_line">>;
+Object.assign(FX.writer.personal, FX4.personal);
+Object.assign(FX.writer.observational, FX4.observational);
+
 // ---------------------------------------------------------------------------- one café visit, 30 near-identical photos
 
 const T0 = Date.parse("2026-05-30T13:47:00Z");
@@ -361,13 +366,16 @@ describe("planStory + writeStory with the brief (recorded outputs)", () => {
     expect(texts.length).toBeGreaterThan(0);
     for (const t of texts) {
       expect(t).not.toMatch(/\b(?:we|our|my|brother|reunion)\b/i);
-      expect(FX.writer.observational.intro.concat(FX.writer.observational.paragraph, FX.writer.observational.caption, FX.writer.observational.closing, FX.writer.observational.pull_quote)).toContain(t);
+      const o = FX.writer.observational;
+      // v4: a subtitle is stored as "<verified place> · <phrase>" (no place here → the phrase)
+      // (v4 captions are optional one-liners: a neutral caption of the first draft may stay — it passed every observational check)
+      expect(o.intro.concat(o.paragraph, o.caption, o.closing, o.pull_quote, o.subtitle, o.headline, o.closing_line, FX.writer.personal.caption)).toContain(t.replace(/^Dubai · /, ""));
     }
   });
 
   it("photo-shoot commentary from the model is repaired once, then dropped — never stored", async () => {
     const rows = cafeRows(SERVICE_PHOTOS);
-    const commentary: Pool = { intro: [`${FX.writer.commentary[0]} It was the start of the afternoon by the arches.`], paragraph: FX.writer.commentary, caption: ["Shot after shot by the wall."], pull_quote: ["Every angle by the arches."], closing: [`${FX.writer.commentary[2]} The afternoon by the arches ended there, with the cups empty.`] };
+    const commentary: Pool = { intro: [`${FX.writer.commentary[0]} It was the start of the afternoon by the arches.`], paragraph: FX.writer.commentary, caption: ["Shot after shot by the wall."], pull_quote: ["Every angle by the arches."], closing: [`${FX.writer.commentary[2]} The afternoon by the arches ended there, with the cups empty.`], ...FX4.commentary };
     const w = world({ rows, listVision: async () => cafeVision(rows), moments: [], context: reunion(), theBook, script: allCalls(scripted(FX.reunionBrief, commentary)) });
     const plan = await planStory(BOOK, w.deps);
     const result = await writeStory(BOOK, plan, {}, w.deps);
@@ -385,8 +393,8 @@ describe("planStory + writeStory with the brief (recorded outputs)", () => {
     // the user edits one block in the editor → a user-owned block in version 2
     const v1 = w.versions.at(-1)!;
     const edited = structuredClone(v1);
-    const page = edited.pages.find((p) => p.blocks.some((b) => b.kind === "paragraph"))!;
-    const block = page.blocks.find((b) => b.kind === "paragraph")!;
+    const page = edited.pages.find((p) => p.blocks.some((b) => b.kind === "intro"))!;
+    const block = page.blocks.find((b) => b.kind === "intro")!;
     block.text = "Edited by hand: the coffee was my idea.";
     block.provenance = userEdit(block.provenance, "2026-11-19T10:00:00.000Z");
     w.versions.push({ ...edited, version: 2, parentVersion: 1, origin: "user" });

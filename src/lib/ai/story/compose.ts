@@ -33,7 +33,8 @@ import { OccasionSchema, parseBookDoc, validateBookDoc } from "@/lib/book/schema
 import type { BookDoc } from "@/lib/book/types";
 import { getMyBook, saveDocIfRev, type MyBook } from "@/lib/db/books";
 import { getTodayPhotoAnalysisSpendUsd } from "@/lib/db/photo-analyses";
-import { listDuplicateGroups, listPhotosForOrganize, listQuality, type OrganizePhotoRow, type StoredQuality } from "@/lib/db/photo-organize";
+import { listDuplicateGroups, listPhotosForOrganize, listQuality, listVision, type OrganizePhotoRow, type StoredQuality } from "@/lib/db/photo-organize";
+import { bookSoftIds, VISION_BLUR_RE } from "@/lib/photos/quality";
 import type { DuplicateGroup } from "@/lib/photos/duplicates";
 import { composeSignalsOf } from "@/lib/storybook/compose/contrast";
 import { countStoryRuns, getTodayStorySpendUsd, recordStoryCall, storyUsageAvailable, type StoryCallRecord, type StoryUsageCounts } from "@/lib/db/story-ai-calls";
@@ -101,6 +102,8 @@ export type ComposeDeps = {
   listQuality?: typeof listQuality;
   /** Duplicate groups (the composer keeps lookalike photos off one page). A failed read = no groups. */
   listDuplicateGroups?: typeof listDuplicateGroups;
+  /** Story v4: Task 3 photo analyses (lookalike + softness signals). A failed read = none. */
+  listVision?: typeof listVision;
   save?: typeof saveDocIfRev;
   usageAvailable?: () => Promise<boolean>;
   usageCounts?: (bookId: string, userId: string) => Promise<StoryUsageCounts>;
@@ -150,12 +153,20 @@ function transportFor(mode: AiMode): AgentTransport | null {
 }
 
 /** The book's placeable photos for the composer: ready + kept, original size, quality focus. */
-export function composePhotosOf(rows: readonly OrganizePhotoRow[], quality: readonly StoredQuality[], duplicateGroups: readonly Pick<DuplicateGroup, "key" | "photoIds">[] = []): ComposePhoto[] {
+export function composePhotosOf(rows: readonly OrganizePhotoRow[], quality: readonly StoredQuality[], duplicateGroups: readonly Pick<DuplicateGroup, "key" | "photoIds">[] = [], vision: ReadonlyMap<string, unknown> = new Map()): ComposePhoto[] {
   const q = new Map(quality.map((x) => [x.photoId, x]));
   const groupOf = new Map<string, string>();
   for (const g of duplicateGroups) for (const id of g.photoIds) if (!groupOf.has(id)) groupOf.set(id, g.key);
-  return rows
-    .filter((r) => r.status === "kept")
+  const kept = rows.filter((r) => r.status === "kept");
+  // story v4: whole-frame softness against the book's own sharpness (+ quality flags, the analysis' note)
+  const soft = bookSoftIds(
+    kept.map((r) => {
+      const s = q.get(r.id);
+      const v = vision.get(r.id) as { description?: unknown } | undefined;
+      return { id: r.id, variance: typeof s?.raw?.laplacianVariance === "number" ? s.raw.laplacianVariance : null, flat: !!s?.flags?.includes("flat"), flags: s?.flags ?? null, visionBlurry: typeof v?.description === "string" && VISION_BLUR_RE.test(v.description) };
+    }),
+  );
+  return kept
     .map((r) => {
       const s = q.get(r.id);
       const fx = s?.raw?.weightX;
@@ -163,7 +174,7 @@ export function composePhotosOf(rows: readonly OrganizePhotoRow[], quality: read
       const focus = typeof fx === "number" && typeof fy === "number" && Number.isFinite(fx) && Number.isFinite(fy) ? { x: fx, y: fy } : null;
       // lookalike signals (phash, capture time, scene, people, colour, duplicate group) for the
       // composer's "no lookalike photos on one page" step
-      return { id: r.id, width: r.width, height: r.height, quality: s ? s.overall : null, focus, ...composeSignalsOf(r, groupOf.get(r.id) ?? null) };
+      return { id: r.id, width: r.width, height: r.height, quality: s ? s.overall : null, focus, ...composeSignalsOf(r, groupOf.get(r.id) ?? null, vision.get(r.id)), ...(soft.has(r.id) ? { soft: true } : {}) };
     });
 }
 
@@ -199,14 +210,18 @@ export async function composeStorybookPages(
 
   const storybook: Storybook | null = await (deps.getCurrent ?? getCurrentStorybook)(book.id, userId);
   if (!storybook) throw new ComposeError("no_story");
-  const [rows, quality, groups] = await Promise.all([
+  const [rows, quality, groups, vision] = await Promise.all([
     (deps.listPhotos ?? listPhotosForOrganize)(book.id, userId),
     (deps.listQuality ?? listQuality)(book.id, userId),
     Promise.resolve()
       .then(() => (deps.listDuplicateGroups ?? listDuplicateGroups)(book.id, userId))
       .catch((): DuplicateGroup[] => []),
+    // story v4: the Task 3 analyses carry the lookalike signals of storybook photos (a failed read = none)
+    Promise.resolve()
+      .then(() => (deps.listVision ?? listVision)(book.id, userId))
+      .catch(() => new Map<string, unknown>()),
   ]);
-  const photos = composePhotosOf(rows, quality, groups);
+  const photos = composePhotosOf(rows, quality, groups, vision ?? new Map());
   const lang = book.caption_lang === "ar" ? "ar" : "en";
   const occasionParsed = OccasionSchema.safeParse(book.occasion);
   const occasion = occasionParsed.success ? occasionParsed.data : "other";

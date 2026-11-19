@@ -1,0 +1,36 @@
+{
+  "_comment": "Story v4 chapter story page lines (synthetic, recorded shape of story-write-4 output) merged into the memory-v3 pools by tests/ai/story-memory-narrative.test.ts. No real user content.",
+  "personal": {
+    "subtitle": [
+      "An afternoon with my brother"
+    ],
+    "headline": [
+      "After a long time, one easy afternoon."
+    ],
+    "closing_line": [
+      "Finally in one place, my brother and me."
+    ]
+  },
+  "observational": {
+    "subtitle": [
+      "A slow afternoon in shade"
+    ],
+    "headline": [
+      "The afternoon moves at the pace of shade."
+    ],
+    "closing_line": [
+      "The light softens along the arches."
+    ]
+  },
+  "commentary": {
+    "subtitle": [
+      "Every angle of the arches"
+    ],
+    "headline": [
+      "Shot after shot under the arches."
+    ],
+    "closing_line": [
+      "One more photo before the light went."
+    ]
+  }
+}

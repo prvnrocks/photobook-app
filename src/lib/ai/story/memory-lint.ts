@@ -42,6 +42,10 @@ export type MemoryLintContext = {
    * normalised tokens). Used only when the block cites at least one fact.
    */
   allowedEmotions?: ReadonlySet<string>;
+  /** v4: kinds of the cited facts (answer / note / person … — the user's own words about the memory). */
+  citedFactKinds?: readonly string[];
+  /** v4: the block kind — a headline / closing line / intro may use a warm line the user's words ground. */
+  kind?: string;
 };
 
 /** Words that make the camera / the photographs the subject of the story. */
@@ -57,6 +61,8 @@ const COMMENTARY_PATTERNS: readonly RegExp[] = [
   /\b(?:the|our|my|these|those|their|its|more|every|each|all\s+the)\s+(?:photos?|pictures?|images?|snaps?|frames?)\s+(?:got|get|gets|took|take|takes|kept|keep|keeps|came|come|comes|turned|turns|continued|began|begin|started|start|went|piled|rolled|show|shows|showed|capture|captures|captured|caught|moved|shifted|grew|loosened|changed|followed)\b/i,
   /\b(?:took|take|takes|taking|snap|snaps|snapped|grabbed|grab)\s+(?:a\s+|some\s+|more\s+|our\s+|the\s+|a\s+few\s+|another\s+)?(?:photos?|pictures?|snaps?)\b/i,
   /\b(?:one\s+more|another|a\s+few\s+more|more)\s+(?:photos?|pictures?)\b/i,
+  // v4: the book itself is not the story ("the name on the cover", "the title of this book")
+  /\b(?:name|title|words?)\s+on\s+(?:the|its|our)\s+cover\b|\bthe\s+cover\s+(?:says|reads)\b|\bthe\s+(?:book['’]s\s+)?title\s+(?:says|reads|is)\b/i,
 ];
 
 const GENERIC_PATTERNS: readonly { id: string; re: RegExp }[] = [
@@ -74,10 +80,34 @@ const GENERIC_PATTERNS: readonly { id: string; re: RegExp }[] = [
   { id: "heres_to", re: /\bhere['’]?s\s+to\b/i },
   { id: "testament", re: /\ba\s+testament\s+to\b/i },
   { id: "the_beauty_of", re: /\bthe\s+(?:beauty|power|magic|meaning|joy|gift)\s+of\b/i },
-  { id: "meant_everything", re: /\bmeant\s+(?:the\s+world|everything|so\s+much)\b|\bworth\s+(?:the\s+wait|every\s+(?:second|minute|mile))\b/i },
+  { id: "meant_everything", re: /\bmeant\s+(?:the\s+world|everything|so\s+much)\b|\bworth\s+every\s+(?:second|minute|mile)\b/i },
   { id: "beyond_words", re: /\bwords\s+(?:can['’]?t|cannot|could\s+not|couldn['’]?t)\b|\bmore\s+than\s+words\b|\bspeaks?\s+volumes\b|\bsaid\s+it\s+all\b/i },
   { id: "full_circle", re: /\bfull\s+circle\b|\bthe\s+start\s+of\s+something\b/i },
 ];
+
+/**
+ * v4 (allowed voice): warm, simple lines that are filler in general but SINCERE when the user's own
+ * words ground them — "Some moments are worth the wait." after the user said they met again after a
+ * long time. Allowed only in personal mode, only in a headline / closing line / intro, and only when
+ * the block cites a fact of the user's own (answer / note / fact / person / place) whose words match
+ * `groundedBy`; anywhere else they are generic_language like the patterns above.
+ */
+const SOFT_GENERIC: readonly { id: string; re: RegExp; groundedBy: RegExp }[] = [
+  { id: "worth_the_wait", re: /\bworth\s+the\s+wait(?:ing)?\b/i, groundedBy: /\b(?:long\s+time|years?|months?|finally|wait(?:ed|ing)?|apart|again|ages|since|reunion|reunit\w*|first\s+time|missed|at\s+last|after\s+so\s+long)\b/i },
+];
+const SOFT_KINDS = new Set(["headline", "closing_line", "intro"]);
+const USER_FACT_KINDS = new Set(["answer", "note", "fact", "person", "place"]);
+
+/** A soft generic line used outside what grounds it: the pattern id, or null. */
+function softGenericIssue(text: string, ctx: MemoryLintContext): string | null {
+  for (const p of SOFT_GENERIC) {
+    if (!p.re.test(text)) continue;
+    const userTexts = ctx.citedFactTexts.filter((_, i) => USER_FACT_KINDS.has(ctx.citedFactKinds?.[i] ?? ""));
+    const ok = ctx.mode === "personal" && SOFT_KINDS.has(ctx.kind ?? "") && userTexts.some((t) => p.groundedBy.test(t));
+    if (!ok) return p.id;
+  }
+  return null;
+}
 
 /** Claims about what was SAID (needs a fact, or a visible activity for talking / laughing). */
 const CONVERSATION_TOKENS = new Set("talk talks talked talking chat chats chatted chatting spoke speak speaks speaking conversation conversations discussed discussing reminisced reminiscing reminisce confided confiding stories laughed laughing laughter joked joking jokes gossip gossiped".split(" "));
@@ -91,6 +121,8 @@ const SEPARATION_PATTERNS: readonly RegExp[] = [
   /\bsince\s+(?:we|they|i)\s+(?:last|had\s+last|were\s+last)\b/i,
   /\bfirst\s+time\s+in\s+(?:years|months|ages|a\s+long\s+time|forever|so\s+long)\b/i,
   /\ball\s+(?:these|those)\s+(?:years|months)\b|\bso\s+many\s+(?:years|months)\b|\bin\s+ages\b|\bfor\s+ages\b/i,
+  // v4: "after a long time" / "after so long" — how long anyone waited is the user's to say
+  /\bafter\s+(?:such\s+|so\s+|a\s+)?(?:a\s+)?(?:long\s+(?:time|while|wait)|so\s+long|all\s+(?:this|that)\s+time|(?:so\s+much|all\s+the)\s+time\s+apart|years|months)\b/i,
 ];
 /** Emotion words: a block may use one only when the user's words support it. */
 const EMOTION_TOKENS = new Set(
@@ -136,6 +168,11 @@ export function genericLanguageIssue(text: string): string | null {
   return GENERIC_PATTERNS.find((p) => p.re.test(text))?.id ?? null;
 }
 
+/** Plan texts (titles / arcs) never get the soft allowance: generic or soft-generic is rejected. */
+export function planGenericIssue(text: string): string | null {
+  return genericLanguageIssue(text) ?? SOFT_GENERIC.find((p) => p.re.test(text))?.id ?? null;
+}
+
 /** All memory-narrative findings of one block. English only (Arabic → []). */
 export function memoryLint(text: string, lang: "en" | "ar", ctx: MemoryLintContext): MemoryLintFinding[] {
   if (lang !== "en") return [];
@@ -147,6 +184,7 @@ export function memoryLint(text: string, lang: "en" | "ar", ctx: MemoryLintConte
   if (poseIssue(text)) add("photo_commentary", "pose");
   const generic = genericLanguageIssue(text);
   if (generic) add("generic_language", "inspirational");
+  if (softGenericIssue(text, ctx)) add("generic_language", "inspirational");
 
   const factTokens = tokenSet(ctx.citedFactTexts);
   const factText = ctx.citedFactTexts.join(" . ");

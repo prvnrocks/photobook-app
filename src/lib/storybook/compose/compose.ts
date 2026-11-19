@@ -40,12 +40,12 @@ import type { Occasion } from "@/lib/book/options";
 import { styleCaptionFont } from "@/lib/design/styles";
 import { getLayout } from "@/lib/layouts";
 import { storyBaseId } from "@/lib/layouts/story";
-import { isApprovedTemplate, layoutNarrativeShare, type TemplateFamily } from "@/lib/layouts/templates";
+import { getPageTemplate, isApprovedTemplate, layoutNarrativeShare, type TemplateFamily } from "@/lib/layouts/templates";
 import { STORY_BALANCE } from "@/lib/storybook/schemas";
 import type { NarrativeBlock, Storybook, StoryPage } from "@/lib/storybook/types";
 import { clipCodePoints, clipText } from "@/lib/text/clip";
-import { contrastPhotos } from "./contrast";
-import { photoShape, selectPageTemplate } from "./select";
+import { contrastPhotos, LOOKALIKE, photoSimilarity } from "./contrast";
+import { CHAPTER_STORY_LINE_ROLES, photoShape, selectPageTemplate } from "./select";
 import { validatePageLayout } from "./validate";
 import type { ComposePhoto, ComposeText, ComposeWarning, PageEmphasis, PageIntentChoice, SelectResult } from "./types";
 
@@ -182,7 +182,9 @@ function buildUnits(sb: Storybook, input: ComposeInput, warn: (pageId: string, c
           units.push({ ...base, id, primary: true, family: "storytelling", photos: [], texts: mains.slice(0, 1) });
           break;
         }
-        units.push({ ...base, id, primary: true, family: "chapter_opening", photos: photos.slice(0, 1), texts: mains.slice(0, 1) });
+        // story v4: the chapter story lines travel with the paragraph (one chapter story page)
+        const lines = texts.filter((t) => CHAPTER_STORY_LINE_ROLES.includes(t.role));
+        units.push({ ...base, id, primary: true, family: "chapter_opening", photos: photos.slice(0, 1), texts: [...mains.slice(0, 1), ...lines] });
         for (const [k, extra] of chunk(photos.slice(1), MAX_PHOTOS).entries()) units.push({ ...base, id: `${id}-x${k > 0 ? k + 1 : ""}`, primary: false, family: photoFamily(extra.length), photos: extra, texts: [], targetShare: 0 });
         break;
       }
@@ -290,6 +292,69 @@ function contrastUnits(sb: Storybook, units: Unit[], warn: (pageId: string, code
   });
 }
 
+/**
+ * Story v4 (user test: an out-of-focus photo printed large): a soft photo on a page of one or two
+ * photos — where every slot is hero / half-page size — moves to the fullest photo page of its
+ * chapter that has room (≤ 5 photos, no soft photo yet, no lookalike of it), where a small grid slot
+ * takes it (select.ts refuses soft photos in slots over SOFT_MAX_AREA). A page left empty is dropped
+ * (content wins over the page count); with nowhere to go it gets a page of its own (framed small)
+ * while the budget allows.
+ */
+function softToGrids(units: Unit[], budget: number, warn: (pageId: string, code: ComposeWarning["code"]) => void): void {
+  for (let i = 0; i < units.length; i++) {
+    const u = units[i]!;
+    if (!isPhotoUnit(u) || u.photos.length > 2) continue;
+    for (const soft of u.photos.filter((p) => p.soft)) {
+      let best = -1;
+      units.forEach((t, k) => {
+        if (k === i || !isPhotoUnit(t) || t.chapterId !== u.chapterId || t.photos.length < 2 || t.photos.length >= MAX_PHOTOS - 1 || t.texts.length > 0) return;
+        if (t.photos.some((p) => p.soft || photoSimilarity(p, soft) >= LOOKALIKE)) return;
+        if (best < 0 || t.photos.length > units[best]!.photos.length || (t.photos.length === units[best]!.photos.length && Math.abs(k - i) < Math.abs(best - i))) best = k;
+      });
+      if (best < 0) {
+        // nowhere to tuck it in: a page of its own (framed small) while the budget allows
+        if (u.photos.length === 2 && units.length < budget) {
+          u.photos = u.photos.filter((p) => p.id !== soft.id);
+          units.splice(i + 1, 0, { ...u, id: `${u.id}-s`, primary: false, family: "hero", photos: [soft], texts: [], targetShare: 0 });
+          warn(u.id, "photos_moved");
+        }
+        continue;
+      }
+      const t = units[best]!;
+      u.photos = u.photos.filter((p) => p.id !== soft.id);
+      t.photos = [...t.photos, soft];
+      t.family = photoFamily(t.photos.length);
+      warn(t.id, "photos_moved");
+    }
+    if (u.photos.length === 0 && u.texts.length === 0) {
+      units.splice(i, 1);
+      i--;
+    } else if (u.photos.length > 0) u.family = photoFamily(u.photos.length);
+  }
+}
+
+/**
+ * Story v4 (user test: lookalike pairs still shared a page): when the re-dealer could not separate a
+ * lookalike pair (every page of the chapter is full of the same scene), the later photo gets a page
+ * of its own, one page further on (not facing its twin), while the page budget allows.
+ */
+function splitLookalikes(units: Unit[], budget: number, warn: (pageId: string, code: ComposeWarning["code"]) => void): void {
+  for (let i = 0; i < units.length && units.length < budget; i++) {
+    const u = units[i]!;
+    if (!isPhotoUnit(u) || u.photos.length < 2) continue;
+    let at = -1;
+    for (let a = 0; a < u.photos.length && at < 0; a++) for (let b = a + 1; b < u.photos.length && at < 0; b++) if (photoSimilarity(u.photos[a]!, u.photos[b]!) >= LOOKALIKE) at = b;
+    if (at < 0) continue;
+    const photo = u.photos[at]!;
+    u.photos = u.photos.filter((_, k) => k !== at);
+    u.family = photoFamily(u.photos.length);
+    const next = units[i + 1]?.chapterId === u.chapterId ? i + 2 : i + 1;
+    units.splice(Math.min(next, units.length), 0, { ...u, id: `${u.id}-l`, primary: false, family: "hero", photos: [photo], texts: [], targetShare: 0 });
+    warn(u.id, "lookalikes_separated");
+    i--; // the page may hold another pair
+  }
+}
+
 function chapterOf(sb: Storybook, storyChapterId: string, lang: "en" | "ar"): Chapter {
   const c = sb.chapters.find((x) => x.id === storyChapterId);
   const moments = (c?.momentIds ?? []).map((id) => sb.moments.find((m) => m.id === id)).filter((m): m is NonNullable<typeof m> => !!m);
@@ -317,6 +382,7 @@ export function measureBalance(doc: Pick<BookDoc, "pages" | "chapters">, targetS
         if (bind === "pageCaption") return p.caption !== null;
         if (bind === "chapterTitle") return !!chapter?.title.trim();
         if (bind === "dateLabel") return !!chapter?.dateLabel.trim();
+        if (bind === "chapterLabel") return !!chapter;
         return false;
       }),
     );
@@ -336,6 +402,8 @@ export function composeStoryDoc(input: ComposeInput): ComposeResult {
   const units = buildUnits(sb, input, warn, blocks);
   fitBudget(units, budget, sb.target.narrativeShare);
   contrastUnits(sb, units, warn);
+  softToGrids(units, budget, warn);
+  splitLookalikes(units, budget, warn);
 
   const style: BookDoc["style"] = input.style
     ? { ...input.style, designStyle: design.designStyle }
@@ -431,7 +499,8 @@ export function composeStoryDoc(input: ComposeInput): ComposeResult {
     if (!r.ok && r.reason === "text_overflow") {
       const main = u.texts.find((t) => MAIN.includes(t.role));
       const roomLeft = room() > 0;
-      if (main && u.photos.length > 0 && roomLeft) {
+      const storyPage = u.texts.some((t) => CHAPTER_STORY_LINE_ROLES.includes(t.role));
+      if (main && u.photos.length > 0 && roomLeft && !storyPage) {
         // the paragraph moves to its own text page right after this one
         warn(u.id, "paragraph_moved");
         const textFamily: TemplateFamily = u.family === "closing" ? "closing" : "storytelling";
@@ -483,6 +552,16 @@ export function composeStoryDoc(input: ComposeInput): ComposeResult {
       warn(u.id, "repeat_forced");
       r = selectPageTemplate({ ...intentBase, avoid: family === "chapter_opening" && lastOpener ? [lastOpener] : [], relax: true }, u.photos, content);
     }
+    // story v4: a chapter story page refused only for its photo (crop / subject / dpi) reads as
+    // "text_unplaced" (the older openers cannot take its lines) — keep the chapter page, relaxed,
+    // before giving its lines up
+    if (!r.ok && r.reason === "text_unplaced" && u.texts.some((t) => CHAPTER_STORY_LINE_ROLES.includes(t.role))) {
+      const again = selectPageTemplate({ ...intentBase, relax: true, avoid: prev ? [prev] : [] }, u.photos, content);
+      if (again.ok) {
+        warn(u.id, "relaxed");
+        r = again;
+      }
+    }
     if (!r.ok && r.reason === "text_unplaced" && u.texts.length > 0) {
       const keep = u.texts.filter((t) => MAIN.includes(t.role) && (family === "storytelling" || family === "closing" || family === "chapter_opening"));
       warn(u.id, "text_unplaced");
@@ -519,7 +598,8 @@ export function composeStoryDoc(input: ComposeInput): ComposeResult {
     pages.push(page);
     placedUnits.push(u);
     recent.push(r.templateId);
-    if (family === "chapter_opening") lastOpener = r.templateId;
+    // a chapter story page is the book's one chapter design: it may repeat from chapter to chapter
+    if (family === "chapter_opening" && !getPageTemplate(r.templateId)?.chapterStory) lastOpener = r.templateId;
   }
 
   // chapters: every chapter a page refers to, in storybook order

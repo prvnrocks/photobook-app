@@ -102,7 +102,8 @@ export const ChapterSchemaV2 = ChapterSchema.extend({
 // feature (usesV2Features). `source`: "ai" (Story Writer) or "user" (typed in the editor — never
 // overwritten by a recomposition). `blockRef` = the storybook NarrativeBlock id it came from.
 
-export const PAGE_TEXT_ROLES = ["intro", "paragraph", "pull_quote", "closing", "caption"] as const;
+// Story v4 adds the chapter story page's lines: subtitle, headline, closing_line (additive).
+export const PAGE_TEXT_ROLES = ["intro", "paragraph", "pull_quote", "closing", "caption", "subtitle", "headline", "closing_line"] as const;
 /** UTF-16 units — the same cap as one storybook narrative block (STORY_LIMITS.narrativeText). */
 export const PAGE_TEXT_MAX = 900;
 /** Texts per page = pageText panels a layout may have (n 0..PAGE_TEXTS_MAX-1). */
@@ -399,6 +400,8 @@ export const TEXT_BINDINGS = [
   "coverLine",
   // Task 7: page.texts[panel === n] — a storybook intro / paragraph / pull quote / closing.
   "pageText",
+  // Story v4: "Chapter One" … — generated from the page's chapter position in doc.chapters (never stored).
+  "chapterLabel",
 ] as const;
 export const TextBindingSchema = z.enum(TEXT_BINDINGS);
 /**
@@ -592,6 +595,8 @@ export const LayoutTextSchema = z.strictObject({
     .optional(),
   /** Story-text fix: "start" = the text sits at the top of its box (next to its accent bar). Omitted = vertically centred. */
   valign: z.literal("start").optional(),
+  /** Story v4: set this panel in italic (Latin text only; Arabic never slants). Omitted = the role's own style. */
+  italic: z.literal(true).optional(),
   /**
    * Story-text fix: the page region this text owns for the photo / narrative balance (the box plus
    * the white space around it up to the photos and the trim). Never rendered. Omitted = the box.

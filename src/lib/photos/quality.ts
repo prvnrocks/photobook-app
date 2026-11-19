@@ -195,15 +195,41 @@ export function upgradeStoredScores(q: Pick<QualityScores, "version" | "exposure
 export const BOOK_BLUR = {
   /** Fewer scored photos than this: only the absolute floor applies (no distribution to compare with). */
   minPhotos: 6,
-  /** A photo must have at least 10× less Laplacian energy than the book's median (log10 units)… */
-  minDropLog: 1,
+  /** A photo must have at least ~8× less Laplacian energy than the book's median (log10 units)… (story v4: 1 → 0.9) */
+  minDropLog: 0.9,
   /** …or 3 robust standard deviations below it when the book itself varies a lot. */
   madFactor: 3,
   /** …and stay below this absolute variance (a book of very detailed photos never flags a merely calm one). */
   ceilingVariance: 250,
-  /** With the vision model's own "blurred / out of focus" note, half the relative drop is enough. */
-  visionDropLog: 0.5,
+  /** With the vision model's own "blurred / out of focus" note, a third of the relative drop is enough (story v4: 0.5 → 0.3). */
+  visionDropLog: 0.3,
 } as const;
+
+/**
+ * Story v4: whole-frame SOFTNESS (kept in the book, never printed large). A photo is soft when
+ *   - its quality flags say soft / blurry, or its variance is below QUALITY_THRESHOLDS.softVariance;
+ *   - the analysis' own note says blurred / out of focus;
+ *   - (≥ BOOK_BLUR.minPhotos measured, not flat) its Laplacian energy is at least SOFT.dropLog
+ *     (≈ 3×) below the book's median AND below SOFT.ceilingVariance.
+ * Every blurry photo (bookBlurryIds) is soft too.
+ */
+export const SOFT = { dropLog: 0.5, ceilingVariance: 600 } as const;
+
+export function bookSoftIds(items: readonly (BlurInput & { flags?: readonly string[] | null })[]): Set<string> {
+  const out = bookBlurryIds(items);
+  for (const i of items) {
+    if (i.flags?.includes("soft") || i.flags?.includes("blurry") || i.visionBlurry) out.add(i.id);
+    if (typeof i.variance === "number" && Number.isFinite(i.variance) && i.variance < QUALITY_THRESHOLDS.softVariance && !i.flat) out.add(i.id);
+  }
+  const measured = items.filter((i): i is BlurInput & { variance: number } => typeof i.variance === "number" && Number.isFinite(i.variance) && i.variance >= 0);
+  if (measured.length < BOOK_BLUR.minPhotos) return out;
+  const logs = measured.map((i) => Math.log10(1 + i.variance));
+  const med = median(logs);
+  measured.forEach((i, k) => {
+    if (!i.flat && i.variance < SOFT.ceilingVariance && med - logs[k]! >= SOFT.dropLog) out.add(i.id);
+  });
+  return out;
+}
 
 export type BlurInput = {
   id: string;

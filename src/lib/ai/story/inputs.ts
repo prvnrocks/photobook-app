@@ -6,7 +6,8 @@
 
 import { createHash } from "node:crypto";
 import { OCCASIONS, type CaptionLang, type Occasion } from "@/lib/book/options";
-import type { OrganizePhotoRow, StoredMoment } from "@/lib/db/photo-organize";
+import type { OrganizePhotoRow, StoredMoment, StoredQuality } from "@/lib/db/photo-organize";
+import { bookSoftIds, VISION_BLUR_RE } from "@/lib/photos/quality";
 import type { DuplicateGroup } from "@/lib/photos/duplicates";
 import { clusterMoments, dateRangeLabel, type MomentPhoto, type MomentVision } from "@/lib/photos/moments";
 import type { StoryTone } from "@/lib/story/questions";
@@ -29,6 +30,15 @@ export type StoryPhoto = {
   activities: string[];
   storyRole: string | null;
   atmosphere: string | null;
+  /**
+   * v4 (hero choice, code only — never sent in a prompt): people the vision model counted
+   * (Photo Intelligence, else the Curator note), and the Curator's quality 1–10. Absent / null =
+   * not analysed.
+   */
+  peopleCount?: number | null;
+  quality?: number | null;
+  /** v4: whole-frame soft / out of focus (quality.ts bookSoftIds) — never the chapter's hero. */
+  soft?: boolean;
 };
 export type StoryMoment = { id: string; photoIds: string[]; label: string; dateLabel: string | null; place: string | null; heroPhotoId: string | null };
 export type StoryFact = {
@@ -120,6 +130,13 @@ function visionOf(raw: unknown) {
   return v.success ? v.data : null;
 }
 
+/** A whole number field of the Curator note (photos.ai), or null. */
+function curatorNumber(ai: unknown, key: "peopleCount" | "quality", min: number, max: number): number | null {
+  if (!ai || typeof ai !== "object") return null;
+  const v = (ai as Record<string, unknown>)[key];
+  return typeof v === "number" && Number.isInteger(v) && v >= min && v <= max ? v : null;
+}
+
 const dateSource = (v: string | null) => (v === "exif" || v === "file" ? v : null);
 
 /** Kept photos: not dropped, and only one member of every duplicate group (the preferred one). */
@@ -144,11 +161,21 @@ export function buildStoryInputs(args: {
   duplicateGroups: readonly DuplicateGroup[];
   context: MemoryContext | null;
   knownFacts?: readonly StoryFactRef[];
+  /** v4: stored photo quality (sharpness → soft photos are never a chapter hero). Absent = none. */
+  quality?: readonly StoredQuality[];
 }): StoryInputs {
   const kept = keptPhotos(args.photos, args.duplicateGroups).slice(0, STORY_LIMITS.photosPerBook);
   const keptIds = new Set(kept.map((p) => p.id));
   const rowById = new Map(kept.map((p) => [p.id, p]));
   const visions = new Map(kept.map((p) => [p.id, visionOf(args.vision.get(p.id))]));
+  const qualityOf = new Map((args.quality ?? []).map((q) => [q.photoId, q]));
+  const soft = bookSoftIds(
+    kept.map((p) => {
+      const q = qualityOf.get(p.id);
+      const d = visions.get(p.id)?.description;
+      return { id: p.id, variance: typeof q?.raw?.laplacianVariance === "number" ? q.raw.laplacianVariance : null, flat: !!q?.flags?.includes("flat"), flags: q?.flags ?? null, visionBlurry: !!d && VISION_BLUR_RE.test(d) };
+    }),
+  );
 
   // stored moments are used when they cover every kept photo exactly once; otherwise the photos
   // are grouped in memory (nothing is stored here)
@@ -204,6 +231,9 @@ export function buildStoryInputs(args: {
         activities: v ? [...v.activities] : [],
         storyRole: v?.storyRole ?? null,
         atmosphere: v?.atmosphere.label ?? null,
+        peopleCount: v?.peopleCount ?? curatorNumber(row.ai, "peopleCount", 0, 200),
+        quality: curatorNumber(row.ai, "quality", 1, 10),
+        ...(soft.has(id) ? { soft: true } : {}),
       });
     }
   }
@@ -236,7 +266,7 @@ export const isPersonalFact = (f: Pick<StoryFact, "kind">) => f.kind === "answer
 
 /** Grounding view of one photo. */
 export function groundingPhoto(p: StoryPhoto): GroundingPhoto {
-  return { place: p.place, dateLabel: p.dateLabel, evidence: [p.description ?? "", ...p.objects, ...p.activities].join(" . "), objects: p.objects };
+  return { place: p.place, dateLabel: p.dateLabel, evidence: [p.description ?? "", ...p.objects, ...p.activities].join(" . "), objects: p.objects, people: p.peopleCount ?? null };
 }
 export function groundingFacts(facts: readonly StoryFact[]): Map<string, GroundingFact> {
   return new Map(facts.map((f) => [f.id, { kind: f.kind, text: f.text }]));

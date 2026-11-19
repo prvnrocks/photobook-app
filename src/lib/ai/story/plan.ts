@@ -12,7 +12,8 @@ import { z } from "zod";
 import { CAPTION_LANGS } from "@/lib/book/options";
 import { NARRATIVE_KINDS, STORY_LIMITS, STORY_PAGE_KINDS } from "@/lib/storybook/schemas";
 import { clipText } from "@/lib/text/clip";
-import { ARC_MAX_CHARS, TITLE_MAX_CHARS, checkPlanText, type GroundingIssue, type PlanTextContext } from "./grounding";
+import { ARC_MAX_CHARS, TITLE_MAX_CHARS, TITLE_MAX_WORDS, checkPlanText, type GroundingIssue, type PlanTextContext } from "./grounding";
+import { pickChapterHero } from "./chapter-page";
 import type { StoryInputs, StoryMoment } from "./inputs";
 import { buildSkeleton, type Skeleton } from "./skeleton";
 import { StoryBriefSchema, type StoryBrief } from "@/lib/storybook/brief";
@@ -122,7 +123,7 @@ export type ChapterRange = { min: number; max: number; target: number };
  * 3); 40–60 → 3–4; > 60 → 4–6. Never more chapters than moments ("do not force unnecessary
  * chapters": one moment is one chapter, whatever the count says).
  */
-export function chapterCountRange(photoCount: number, momentCount: number): ChapterRange {
+export function chapterCountRange(photoCount: number, momentCount: number, visitCount?: number): ChapterRange {
   const base: ChapterRange =
     photoCount < 10
       ? { min: 1, max: 1, target: 1 }
@@ -134,7 +135,18 @@ export function chapterCountRange(photoCount: number, momentCount: number): Chap
             ? { min: 3, max: 4, target: 4 }
             : { min: 4, max: 6, target: photoCount > 100 ? 6 : 5 };
   const cap = Math.max(1, momentCount);
-  return { min: Math.min(base.min, cap), max: Math.min(base.max, cap), target: Math.min(base.target, cap) };
+  // v4: one visit (scenes of one day at one place) may be ONE chapter — the minimum and the rule
+  // planner's target follow the visits; the planner may still split a long visit up to the cap
+  const visits = Math.max(1, Math.min(cap, visitCount ?? cap));
+  return { min: Math.min(base.min, visits), max: Math.min(base.max, cap), target: Math.min(base.target, visits) };
+}
+
+/**
+ * v4: visits = moments that share a day and a place (scenes of one café visit are one visit). A
+ * moment without a date is its own visit. One visit is one chapter (one chapter story page).
+ */
+export function visitCountOf(moments: readonly Pick<StoryMoment, "id" | "dateLabel" | "place">[]): number {
+  return new Set(moments.map((m) => (m.dateLabel ? `${m.dateLabel}|${m.place ?? ""}` : m.id))).size;
 }
 
 export const wantsClosing = (photoCount: number) => photoCount >= 10;
@@ -169,6 +181,19 @@ function defaultHero(moments: readonly StoryMoment[]): string {
   return biggest.heroPhotoId ?? biggest.photoIds[0]!;
 }
 
+/**
+ * v4: the chapter's hero = the photo that best shows who the story is about (chapter-page.ts
+ * pickChapterHero over the chapter's analysed photos); `preferred` (the planner's / the moment's
+ * pick) wins a tie. Falls back to the largest moment's hero when nothing is analysed.
+ */
+export function chapterHero(inputs: StoryInputs, momentIds: readonly string[], preferred: string | null, brief?: Pick<StoryBrief, "relationships"> | null): string {
+  const ids = new Set(momentIds);
+  const photos = inputs.photos.filter((p) => ids.has(p.momentId));
+  const moments = inputs.moments.filter((m) => ids.has(m.id));
+  const fallback = preferred && photos.some((p) => p.id === preferred) ? preferred : defaultHero(moments);
+  return pickChapterHero(photos, inputs, { preferred: fallback, brief }) ?? fallback;
+}
+
 /** Neutral titles / arc used when a moment label cannot be a title (too long once clipped, a stock phrase …). */
 const FALLBACK_TITLES: Record<"en" | "ar", readonly string[]> = {
   en: ["The beginning", "Along the way", "Later on", "Further on", "Near the end", "The last pages"],
@@ -183,7 +208,7 @@ const FALLBACK_ARC: Record<"en" | "ar", string> = { en: "Photos from this part o
  * grounding check a model outline has to pass.
  */
 export function ruleOutline(inputs: StoryInputs): PlanOutline {
-  const range = chapterCountRange(inputs.photos.length, inputs.moments.length);
+  const range = chapterCountRange(inputs.photos.length, inputs.moments.length, visitCountOf(inputs.moments));
   const used = new Set<string>();
   const chapters = splitMoments(inputs.moments, range.target).map((group, i): StoryPlanChapter => {
     const momentIds = group.map((m) => m.id);
@@ -191,14 +216,17 @@ export function ruleOutline(inputs: StoryInputs): PlanOutline {
     const bySize = [...group].sort((a, b) => b.photoIds.length - a.photoIds.length);
     const fallbacks = FALLBACK_TITLES[inputs.lang];
     const candidates = [
-      ...bySize.flatMap((m) => [m.label, ...(m.dateLabel ? [`${m.label} · ${m.dateLabel}`, m.dateLabel] : [])]).filter((t) => [...t].length <= TITLE_MAX_CHARS),
+      // v4: a long "<subject> · <place>" label also offers its subject alone (titles are ≤ 5 words)
+      ...bySize.flatMap((m) => [m.label, ...(m.label.includes(" · ") ? [m.label.split(" · ")[0]!.trim()] : []), ...(m.dateLabel ? [`${m.label} · ${m.dateLabel}`] : [])]).filter((t) => t && [...t].length <= TITLE_MAX_CHARS),
+      // v4: a neutral title reads better in the header band than a bare date
       fallbacks[i % fallbacks.length]!,
+      ...bySize.flatMap((m) => (m.dateLabel ? [m.dateLabel] : [])),
     ];
     const title = candidates.find((t) => !used.has(t.toLowerCase()) && checkPlanText("t", "title", t, ctx).length === 0) ?? fallbacks[i % fallbacks.length]!;
     used.add(title.toLowerCase());
     const labels = clipText([...new Set(group.map((m) => m.label))].join("; "), ARC_MAX_CHARS, "");
     const arc = labels && checkPlanText("a", "arc", labels, ctx).length === 0 ? labels : FALLBACK_ARC[inputs.lang];
-    return { id: `c${i + 1}`, title, momentIds, arc, beats: { heroPhotoId: defaultHero(group), narrativeMomentIds: momentIds } };
+    return { id: `c${i + 1}`, title, momentIds, arc, beats: { heroPhotoId: chapterHero(inputs, momentIds, null), narrativeMomentIds: [] } };
   });
   return { title: null, subtitle: null, chapters };
 }
@@ -220,6 +248,7 @@ export function chapterTextContext(inputs: StoryInputs, momentIds: readonly stri
     metadata: [...moments.flatMap((m) => [m.label, m.dateLabel, m.place]), ...photos.flatMap((p) => [p.place, p.dateLabel])].filter((x): x is string => !!x),
     evidence: photos.map((p) => [p.description ?? "", ...p.objects, ...p.activities].join(" . ")),
     avoid: inputs.avoid,
+    maxWords: TITLE_MAX_WORDS,
   };
 }
 
@@ -229,7 +258,7 @@ export function chapterTextContext(inputs: StoryInputs, momentIds: readonly stri
  */
 export function checkOutline(outline: PlanOutline, inputs: StoryInputs, opts: { allowDuplicateTitles?: boolean } = {}): PlanIssue[] {
   const issues: PlanIssue[] = [];
-  const range = chapterCountRange(inputs.photos.length, inputs.moments.length);
+  const range = chapterCountRange(inputs.photos.length, inputs.moments.length, visitCountOf(inputs.moments));
   const n = outline.chapters.length;
   if (n < range.min || n > range.max) issues.push({ code: "chapter_count" });
   if (outline.chapters.some((c) => c.momentIds.length === 0)) issues.push({ code: "empty_chapter" });
@@ -260,7 +289,8 @@ export function checkOutline(outline: PlanOutline, inputs: StoryInputs, opts: { 
 export function acceptedBookTitle(text: string | null, inputs: StoryInputs): string | null {
   const t = (text ?? "").replace(/\s+/g, " ").trim();
   if (!t) return null;
-  const ctx = chapterTextContext(inputs, inputs.moments.map((m) => m.id));
+  // the book title / subtitle keep the 60-character limit only (the 5-word limit is for chapter titles)
+  const ctx = { ...chapterTextContext(inputs, inputs.moments.map((m) => m.id)), maxWords: undefined };
   return checkPlanText("title", "title", t, ctx).length === 0 ? t : null;
 }
 

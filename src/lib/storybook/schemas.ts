@@ -313,7 +313,13 @@ export const ChapterSchema = z
 
 // ---------------------------------------------------------------------------- ④ Story Writing
 
-export const NARRATIVE_KINDS = ["intro", "paragraph", "pull_quote", "caption", "closing"] as const;
+/**
+ * Story v4 (chapter story page): `subtitle` (the chapter's "<place> · <short phrase>" line under its
+ * title), `headline` (one bold line, ≤ 8 words) and `closing_line` (one italic line, ≤ 10 words)
+ * join the chapter page next to its `intro` (the one meaning paragraph). Additive: every older
+ * storybook still parses (no migration needed).
+ */
+export const NARRATIVE_KINDS = ["intro", "paragraph", "pull_quote", "caption", "closing", "subtitle", "headline", "closing_line"] as const;
 
 /** One piece of narrative text on a page. The unit of user editing and of AI rewriting. */
 export const NarrativeBlockSchema = z

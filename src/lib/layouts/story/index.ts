@@ -39,7 +39,7 @@ export const STORY_TEMPLATE_KINDS = ["open-a", "open-b", "open-c", "tell-1a", "t
 export const STORY_PHOTO_KINDS = ["hero-full", "hero-cap", "grid-2", "grid-2b", "grid-3", "grid-3b", "grid-4", "grid-4b", "grid-5", "grid-5b", "grid-6", "grid-6b"] as const;
 export type StoryTextKind = (typeof STORY_TEMPLATE_KINDS)[number];
 export type StoryPhotoKind = (typeof STORY_PHOTO_KINDS)[number];
-export type StoryTemplateKind = StoryTextKind | StoryPhotoKind;
+export type StoryTemplateKind = StoryTextKind | StoryPhotoKind | "chap-a" | "chap-b" | "chap-c";
 
 /**
  * The missing photo templates per style × format: what templates.ts can NOT tag from the existing
@@ -117,6 +117,8 @@ interface PhotoPlan {
  * size meant for chapter descriptions.
  */
 export const STORY_BODY_SIZE = { maxMm: 4.05, minMm: 3.5 } as const;
+/** Story v4: chapter-opening intros start at the body size; a long one may still shrink to the old body-role minimum (2.8 mm). */
+export const OPENER_BODY_SIZE = { maxMm: STORY_BODY_SIZE.maxMm, minMm: 2.8 } as const;
 
 const PW = 148;
 const PH = 210;
@@ -373,12 +375,15 @@ function buildOne(style: DesignStyle, format: BookFormat, kind: StoryTextKind, p
   // Closings keep the body size range too but stay centred; openers keep the role's (unchanged).
   // The text-only closing (close-0) also starts under its bar, a third of the way down the page.
   const story = kind.startsWith("tell");
-  const top: Partial<LayoutText> = story || kind === "close-0" ? { valign: "start" } : {};
+  const opener = kind.startsWith("open");
+  // story v4 (user test: a short intro set at caption size in a big dark panel): openers start at the
+  // body-copy size and sit at the top of their box; only a long intro shrinks to the role's minimum.
+  const top: Partial<LayoutText> = story || opener || kind === "close-0" ? { valign: "start" } : {};
   if (plan.date) texts.push(t("dateLabel", plan.date, "year", inks?.date));
   if (plan.chapter) texts.push(t("chapterTitle", plan.chapter, "chapter", inks?.chapter));
   if (plan.quote) texts.push(t("pageText", plan.quote, "chapter", inks?.quote, { n: 1, ...top }));
   const area = story && n > 0 ? { area: pctRect(textRegion(plan.main, plan.photos, W, H), W, H) } : {};
-  texts.push(t("pageText", plan.main, "body", inks?.body, { n: 0, ...(story || kind.startsWith("close") ? { size: { ...STORY_BODY_SIZE } } : {}), ...top, ...area }));
+  texts.push(t("pageText", plan.main, "body", inks?.body, { n: 0, ...(story || kind.startsWith("close") ? { size: { ...STORY_BODY_SIZE } } : opener ? { size: { ...OPENER_BODY_SIZE } } : {}), ...top, ...area }));
 
   const blocks: LayoutBlock[] = [];
   if (panelled) blocks.push({ box: pctRect(plan.panel!, W, H), fill: "panel", layer: "under" });
@@ -517,6 +522,219 @@ export function storyVariantsOf(baseId: string): readonly string[] {
 
 export const isStoryVariantId = (id: string): boolean => BASE_OF.has(id);
 
+// --- chapter story pages (story v4) -----------------------------------------------------------------
+//
+// The first page of every chapter in a v4 storybook: a header band (generated "CHAPTER ONE" label,
+// the chapter title, an italic "<place> · <phrase>" subtitle), ONE hero photo, a bold headline,
+// the one meaning paragraph, a thin divider and an italic closing line. Page text panels:
+//   n 0 intro (the paragraph) · n 1 subtitle · n 2 headline · n 3 closing_line
+// (templates.ts maps the roles from the kind). Two arrangements per format so both photo
+// orientations sit without a heavy crop: A5 portrait chap-a = wide photo under the band, chap-b =
+// a near-square photo (portrait or landscape); A5 landscape chap-a = a full-height portrait photo
+// beside the text column, chap-b = the band across the top and a near-square photo beside the text.
+// Every text keeps ≥ 10 mm from the left/right trim and ≥ 8 mm from top/bottom; the paragraph box
+// holds the longest paragraph the writer may return (70 words, EN and AR) at 10 pt with the 8 %
+// margin (tests/story-compose/chapter-story.test.ts). Each text owns its region (LayoutText.area) so
+// the narrative share counts the band and the white space around the lines, never twice.
+
+export const STORY_CHAPTER_KINDS = ["chap-a", "chap-b", "chap-c"] as const;
+export type StoryChapterKind = (typeof STORY_CHAPTER_KINDS)[number];
+/** Page text panel of each chapter story line. */
+export const CHAPTER_STORY_PANELS = { intro: 0, subtitle: 1, headline: 2, closing_line: 3 } as const;
+
+/** Type sizes (mm on the page) of the chapter story lines; the paragraph takes STORY_BODY_SIZE (10–11.5 pt). */
+export const CHAPTER_STORY_SIZES = {
+  label: { maxMm: 2.7, minMm: 2.3 },
+  title: { maxMm: 7.6, minMm: 4.6 },
+  subtitle: { maxMm: 3.7, minMm: 3.0 },
+  headline: { maxMm: 5.6, minMm: 4.2 },
+  closing: { maxMm: 4.0, minMm: 3.4 },
+} as const;
+
+interface ChapterPlan {
+  name: string;
+  photo: Box;
+  prefers: "portrait" | "landscape" | "any";
+  band: Box;
+  label: Box;
+  title: Box;
+  subtitle: Box;
+  headline: Box;
+  body: Box;
+  closing: Box;
+  /** Divider line between the paragraph and the closing line (y = its top, x0..x1 span of the text column). */
+  rule: { y: number; x0: number; x1: number };
+  /** Text regions (areas) — label / title / subtitle split the band; the rest split the text side. */
+  areas: { label: Box; title: Box; subtitle: Box; headline: Box; body: Box; closing: Box };
+}
+
+const PORTRAIT_CHAPTER: Record<StoryChapterKind, ChapterPlan> = {
+  "chap-a": {
+    name: "Chapter story: header band, wide photo, headline, story and closing line",
+    photo: [0, 42, PW, 120],
+    prefers: "landscape",
+    band: [0, 0, PW, 42],
+    label: [12, 9, 136, 14],
+    title: [12, 15, 136, 28],
+    subtitle: [12, 29, 136, 37],
+    headline: [12, 124, 136, 136],
+    body: [12, 138, 136, 184],
+    closing: [12, 189, 136, 202],
+    rule: { y: 186.4, x0: 12, x1: 136 },
+    areas: { label: [0, 0, PW, 14.5], title: [0, 14.5, PW, 28.5], subtitle: [0, 28.5, PW, 42], headline: [0, 120, PW, 137], body: [0, 137, PW, 186], closing: [0, 186, PW, PH] },
+  },
+  "chap-b": {
+    name: "Chapter story: header band, framed photo, headline, story and closing line",
+    photo: [32, 46, 116, 122],
+    prefers: "any",
+    band: [0, 0, PW, 42],
+    label: [12, 9, 136, 14],
+    title: [12, 15, 136, 28],
+    subtitle: [12, 29, 136, 37],
+    headline: [12, 125, 136, 136],
+    body: [12, 138, 136, 184],
+    closing: [12, 189, 136, 202],
+    rule: { y: 186.4, x0: 12, x1: 136 },
+    areas: { label: [0, 0, PW, 14.5], title: [0, 14.5, PW, 28.5], subtitle: [0, 28.5, PW, 42], headline: [0, 122, PW, 137], body: [0, 137, PW, 186], closing: [0, 186, PW, PH] },
+  },
+  // a tall phone photo (9:16 … 3:4) beside the headline and the story
+  "chap-c": {
+    name: "Chapter story: header band, tall photo beside headline and story, closing line",
+    photo: [0, 42, 70, 182],
+    prefers: "portrait",
+    band: [0, 0, PW, 42],
+    label: [12, 9, 136, 14],
+    title: [12, 15, 136, 28],
+    subtitle: [12, 29, 136, 37],
+    headline: [78, 47, 136, 68],
+    body: [78, 70, 136, 184],
+    closing: [12, 189, 136, 202],
+    rule: { y: 186.4, x0: 12, x1: 136 },
+    areas: { label: [0, 0, PW, 14.5], title: [0, 14.5, PW, 28.5], subtitle: [0, 28.5, PW, 42], headline: [70, 42, PW, 69], body: [70, 69, PW, 186], closing: [0, 186, PW, PH] },
+  },
+};
+
+const LANDSCAPE_CHAPTER: Record<StoryChapterKind, ChapterPlan> = {
+  "chap-a": {
+    name: "Chapter story: tall photo, header band, headline, story and closing line",
+    photo: [0, 0, 100, LH],
+    prefers: "portrait",
+    band: [100, 0, LW, 44],
+    label: [110, 9, 200, 14],
+    title: [110, 15, 200, 28],
+    subtitle: [110, 29, 200, 38],
+    headline: [110, 49, 200, 61],
+    body: [110, 63, 200, 124],
+    closing: [110, 129, 200, 140],
+    rule: { y: 126.4, x0: 110, x1: 200 },
+    areas: { label: [100, 0, LW, 14.5], title: [100, 14.5, LW, 28.5], subtitle: [100, 28.5, LW, 44], headline: [100, 44, LW, 62], body: [100, 62, LW, 126], closing: [100, 126, LW, LH] },
+  },
+  "chap-b": {
+    name: "Chapter story: header band across, photo beside headline, story and closing line",
+    photo: [0, 34, 104, LH],
+    prefers: "any",
+    band: [0, 0, LW, 34],
+    label: [10, 8, 200, 12],
+    title: [10, 12.5, 200, 23.5],
+    subtitle: [10, 24, 200, 31],
+    headline: [112, 40, 200, 52],
+    body: [112, 54, 200, 124],
+    closing: [112, 129, 200, 140],
+    rule: { y: 126.4, x0: 112, x1: 200 },
+    areas: { label: [0, 0, LW, 12.25], title: [0, 12.25, LW, 23.75], subtitle: [0, 23.75, LW, 34], headline: [104, 34, LW, 53], body: [104, 53, LW, 126], closing: [104, 126, LW, LH] },
+  },
+  // chap-a mirrored: the text column on the left, a tall photo on the right
+  "chap-c": {
+    name: "Chapter story: header band, headline, story and closing line beside a tall photo",
+    photo: [110, 0, LW, LH],
+    prefers: "portrait",
+    band: [0, 0, 110, 44],
+    label: [10, 9, 100, 14],
+    title: [10, 15, 100, 28],
+    subtitle: [10, 29, 100, 38],
+    headline: [10, 49, 100, 61],
+    body: [10, 63, 100, 124],
+    closing: [10, 129, 100, 140],
+    rule: { y: 126.4, x0: 10, x1: 100 },
+    areas: { label: [0, 0, 110, 14.5], title: [0, 14.5, 110, 28.5], subtitle: [0, 28.5, 110, 44], headline: [0, 44, 110, 62], body: [0, 62, 110, 126], closing: [0, 126, 110, LH] },
+  },
+};
+
+/** Header band fill + the colour of its texts, per style (the band reads as the storybook's chapter header). */
+const CHAPTER_BAND: Record<DesignStyle, { fill: LayoutBlock["fill"]; label: TextInk; title: TextInk; rule: LayoutBlock["fill"]; headlineFont: LayoutText["font"] }> = {
+  classic: { fill: "panel", label: "paper", title: "paper", rule: "ink", headlineFont: "title" },
+  modern: { fill: "panel", label: "paper", title: "paper", rule: "ink", headlineFont: "year" },
+  geometric: { fill: "accent", label: "paper", title: "paper", rule: "accent", headlineFont: "title" },
+  scrapbook: { fill: "panel", label: "paper", title: "paper", rule: "accent", headlineFont: "title" },
+  magazine: { fill: "panel", label: "accentOnDark", title: "paper", rule: "accentOnLight", headlineFont: "title" },
+  editorial: { fill: "panel", label: "paper", title: "paper", rule: "accentOnLight", headlineFont: "title" },
+};
+
+export const chapterStoryKindOf = (id: string): StoryChapterKind | null => {
+  const m = /^st-[a-z]+-[pl]-(chap-[abc])$/.exec(id);
+  return m ? (m[1] as StoryChapterKind) : null;
+};
+
+function buildChapter(style: DesignStyle, format: BookFormat, kind: StoryChapterKind): Layout {
+  const portrait = format === "A5_PORTRAIT";
+  const W = portrait ? PW : LW;
+  const H = portrait ? PH : LH;
+  const plan = (portrait ? PORTRAIT_CHAPTER : LANDSCAPE_CHAPTER)[kind];
+  const d = DRESS[style];
+  const band = CHAPTER_BAND[style];
+  // The photo: trim edges inset by the style (a framed style keeps a 4 mm gap under the band too).
+  let photo = inset(plan.photo, d.inset, W, H);
+  if (d.inset > 0) {
+    const gap = (edge: number, bandEdge: number) => Math.abs(edge - bandEdge) < 1e-6;
+    if (gap(photo[1], plan.band[3]) && plan.band[0] <= photo[0] + 1e-6 && plan.band[2] >= photo[2] - 1e-6) photo = [photo[0], photo[1] + 4, photo[2], photo[3]];
+  }
+  const slot: LayoutSlotDef = { ...pctRect(photo, W, H) };
+  if (d.shape) slot.shape = d.shape;
+  if (style === "scrapbook") {
+    slot.frame = { kind: "border", mm: 2.5, hex: "#FBF8F1" };
+    slot.shadow = "lifted";
+  }
+  const align: LayoutText["align"] = d.align;
+  const t = (bind: LayoutText["bind"], box: Box, area: Box, font: LayoutText["font"], ink: TextInk, extra: Partial<LayoutText> = {}): LayoutText => ({
+    bind,
+    box: pctRect(box, W, H),
+    align,
+    font,
+    ink,
+    area: pctRect(area, W, H),
+    ...extra,
+  });
+  const texts: LayoutText[] = [
+    t("chapterLabel", plan.label, plan.areas.label, "year", band.label, { size: { ...CHAPTER_STORY_SIZES.label } }),
+    t("chapterTitle", plan.title, plan.areas.title, "chapter", band.title, { size: { ...CHAPTER_STORY_SIZES.title } }),
+    t("pageText", plan.subtitle, plan.areas.subtitle, "subtitle", band.title, { n: CHAPTER_STORY_PANELS.subtitle, italic: true, size: { ...CHAPTER_STORY_SIZES.subtitle } }),
+    t("pageText", plan.headline, plan.areas.headline, band.headlineFont, "ink", { n: CHAPTER_STORY_PANELS.headline, size: { ...CHAPTER_STORY_SIZES.headline }, valign: "start" }),
+    t("pageText", plan.body, plan.areas.body, "body", "ink", { n: CHAPTER_STORY_PANELS.intro, size: { ...STORY_BODY_SIZE }, valign: "start" }),
+    t("pageText", plan.closing, plan.areas.closing, "body", "muted", { n: CHAPTER_STORY_PANELS.closing_line, italic: true, size: { ...CHAPTER_STORY_SIZES.closing } }),
+  ];
+  // The divider: a short centred rule under centred text, else a rule at the text's start (both
+  // hidden with the closing line).
+  const ruleW = 22;
+  const x0 = align === "center" ? (plan.rule.x0 + plan.rule.x1 - ruleW) / 2 : plan.rule.x0;
+  const blocks: LayoutBlock[] = [
+    { box: pctRect(plan.band, W, H), fill: band.fill, layer: "under" },
+    { box: pctRect([x0, plan.rule.y, x0 + ruleW, plan.rule.y + 0.5], W, H), fill: band.rule, layer: "under", when: "pageText", n: CHAPTER_STORY_PANELS.closing_line },
+  ];
+  return {
+    id: storyTemplateId(style, format, kind),
+    name: plan.name,
+    role: "page",
+    style,
+    format,
+    photoCount: 1,
+    prefers: [plan.prefers],
+    slots: [slot],
+    caption: null,
+    texts,
+    blocks,
+  };
+}
+
 const STYLES: readonly DesignStyle[] = ["classic", "modern", "geometric", "scrapbook", "magazine", "editorial"];
 const FORMATS: readonly BookFormat[] = ["A5_PORTRAIT", "A5_LANDSCAPE"];
 
@@ -531,6 +749,10 @@ export const STORY_LAYOUTS: readonly Layout[] = STYLES.flatMap((style) =>
     ...STORY_PHOTO_KINDS.filter((k) => STORY_PHOTO_GAPS[`${style}/${format}`].includes(k)).map((kind) => buildPhoto(style, format, kind)),
     ...STORY_TEMPLATE_KINDS.flatMap((kind) => buildVariants(style, format, kind)),
   ]),
+).concat(
+  // Story v4 chapter story pages — appended after every older template so the older catalogue
+  // order (and every golden built from it) is unchanged.
+  STYLES.flatMap((style) => FORMATS.flatMap((format) => STORY_CHAPTER_KINDS.map((kind) => buildChapter(style, format, kind)))),
 );
 
 const STORY_IDS = new Set(STORY_LAYOUTS.map((l) => l.id));

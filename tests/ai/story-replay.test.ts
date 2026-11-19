@@ -14,8 +14,7 @@ import { buildFacts, buildStoryInputs, factHash, factRefsToStore } from "@/lib/a
 import { StoryPlanSchema } from "@/lib/ai/story/plan";
 import { replayText, REPLAY_CLAUSES_PER_BLOCK } from "@/lib/ai/story/replay";
 import { planStory, rewriteNarrativeBlock, writeStory } from "@/lib/ai/story/service";
-import { isBalanced } from "@/lib/storybook/balance";
-import { STORY_BALANCE, StorybookSchema } from "@/lib/storybook/schemas";
+import { StorybookSchema } from "@/lib/storybook/schemas";
 import { BOOK, book, memory, photoRows, storedMoments, visionRows, world } from "./story-fixtures";
 
 // Task 6: the whole pipeline in REPLAY mode with the real ReplayTransport (no transport mock):
@@ -35,7 +34,7 @@ describe("replay end to end", () => {
     expect(StoryPlanSchema.safeParse(plan).success).toBe(true);
     expect(plan).toMatchObject({ source: "ai", fallbackReason: null, photoCount: 24, closing: true, lang });
     expect(plan.chapters).toHaveLength(3);
-    expect(isBalanced(plan.skeleton.balance)).toBe(true);
+    expect(plan.skeleton.balance.narrativeShare).toBeLessThanOrEqual(0.4); // v4: the 35 % target is a ceiling
 
     // the plan survives a JSON round trip (it may come back from a client)
     const result = await writeStory(BOOK, JSON.parse(JSON.stringify(plan)), {}, w.deps);
@@ -44,20 +43,22 @@ describe("replay end to end", () => {
     expect(result.issues).toEqual([]);
     expect(s.chapters).toHaveLength(3);
     expect(s).toMatchObject({ version: 1, origin: "ai", lang });
-    expect(Math.abs(result.balance.drift)).toBeLessThanOrEqual(STORY_BALANCE.tolerance);
-    expect(isBalanced(result.balance)).toBe(true);
+    expect(result.balance.narrativeShare).toBeLessThanOrEqual(0.4);
     const blocks = s.pages.flatMap((p) => p.blocks);
     expect(blocks.map((b) => b.id)).toEqual(plan.skeleton.pages.flatMap((p) => p.blocks.map((b) => b.id)));
-    expect(blocks.map((b) => b.kind)).toEqual(expect.arrayContaining(["intro", "paragraph", "caption", "closing"]));
+    // v4: chapter story pages (intro + subtitle + headline + closing line), captions, the closing page — no paragraphs
+    expect(blocks.map((b) => b.kind)).toEqual(expect.arrayContaining(["intro", "subtitle", "headline", "closing_line", "caption", "closing"]));
+    expect(blocks.some((b) => b.kind === "paragraph")).toBe(false);
     for (const b of blocks) {
       expect(b.groundedIn.length).toBeGreaterThan(0);
-      expect(countWords(b.text)).toBeGreaterThanOrEqual(WORD_BOUNDS[b.kind].min);
-      expect(countWords(b.text)).toBeLessThanOrEqual(WORD_BOUNDS[b.kind].max);
+      const words = countWords(b.kind === "subtitle" ? b.text.replace(/^[^·]+ · /, "") : b.text);
+      expect(words).toBeGreaterThanOrEqual(WORD_BOUNDS[b.kind].min);
+      expect(words).toBeLessThanOrEqual(WORD_BOUNDS[b.kind].max);
     }
     // every photo is placed exactly once
     expect(s.pages.flatMap((p) => p.photoIds).sort()).toEqual(w.rows.map((r) => r.id).sort());
 
-    const target = s.pages.find((p) => p.kind === "mixed")!.blocks[0]!;
+    const target = blocks.find((b) => b.kind === "caption")!;
     const rewrite = await rewriteNarrativeBlock(`${BOOK}/${target.id}`, { kind: "shorter" }, {}, w.deps);
     expect(rewrite.stored).toBe(true);
     expect(StorybookSchema.safeParse(rewrite.storybook).success).toBe(true);
@@ -96,7 +97,7 @@ describe("replay end to end", () => {
     expect(storybook.chapters.length).toBe(n < 10 ? 1 : n < 20 ? 2 : n < 40 ? 3 : 4);
     expect(storybook.pages.some((p) => p.kind === "closing")).toBe(n >= 10);
     expect(storybook.pages.length).toBeLessThanOrEqual(20);
-    if (n >= 10) expect(isBalanced(balance)).toBe(true);
+    if (n >= 10) expect(balance.narrativeShare).toBeLessThanOrEqual(0.4);
   });
 });
 

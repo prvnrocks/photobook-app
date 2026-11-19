@@ -255,14 +255,25 @@ describe("grounding: hard word bounds at the edges", () => {
     const { min, max } = WORD_BOUNDS[kind];
     const ctx = lang === "en" ? en() : ar();
     const at = (n: number) => codes(words(lang, n), ["p1"], ctx, kind);
-    expect(at(min - 1)).toEqual(["too_short"]);
+    // a 1-word minimum (the v4 subtitle phrase): zero words is an empty block
+    expect(at(min - 1)).toEqual([min === 1 ? "empty" : "too_short"]);
     expect(at(min)).toEqual([]);
     expect(at(max)).toEqual([]);
     expect(at(max + 1)).toEqual(["too_long"]);
   });
 
   it("the bounds are the ones in the brief", () => {
-    expect(WORD_BOUNDS).toMatchObject({ intro: { min: 30, max: 70, target: [35, 65] }, paragraph: { min: 20, max: 60, target: [25, 55] }, caption: { min: 5, max: 18 }, pull_quote: { min: 5, max: 18 }, closing: { min: 30, max: 70, target: [35, 65] } });
+    // v4: intro = the chapter page's one paragraph; captions ≤ 12 words; the chapter page lines
+    expect(WORD_BOUNDS).toMatchObject({
+      intro: { min: 35, max: 70, target: [40, 60] },
+      paragraph: { min: 20, max: 60, target: [25, 55] },
+      caption: { min: 3, max: 12 },
+      pull_quote: { min: 5, max: 18 },
+      closing: { min: 30, max: 70, target: [35, 65] },
+      subtitle: { min: 1, max: 5 },
+      headline: { min: 3, max: 8 },
+      closing_line: { min: 3, max: 10 },
+    });
   });
 });
 

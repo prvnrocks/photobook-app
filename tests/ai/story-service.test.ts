@@ -20,7 +20,7 @@ import { StoryPlanSchema, type StoryPlan } from "@/lib/ai/story/plan";
 import { STORY_PLANNER_SYSTEM_PROMPT, STORY_REWRITER_SYSTEM_PROMPT, STORY_WRITER_SYSTEM_PROMPT, STORY_PLANNER_PROMPT_VERSION, STORY_REWRITER_PROMPT_VERSION, STORY_WRITER_PROMPT_VERSION } from "@/lib/ai/story/prompts";
 import { planStory, rewriteNarrativeBlock, StoryError, writeStory } from "@/lib/ai/story/service";
 import { TransportError, type AgentRequest } from "@/lib/ai/transport";
-import { isBalanced, storybookBalance } from "@/lib/storybook/balance";
+import { storybookBalance } from "@/lib/storybook/balance";
 import { StorybookSchema } from "@/lib/storybook/schemas";
 import type { Storybook } from "@/lib/storybook/types";
 import { userEdit } from "@/lib/storybook/versioning";
@@ -65,10 +65,12 @@ describe("story config", () => {
       expect(prompt).toMatch(/Modern Standard Arabic written natively/);
       expect(prompt.length).toBeGreaterThan(2400); // long enough to cache
     }
-    expect(STORY_WRITER_SYSTEM_PROMPT).toMatch(/35–65 words/);
-    expect(STORY_WRITER_SYSTEM_PROMPT).toMatch(/25–55 words/);
-    expect(STORY_WRITER_SYSTEM_PROMPT).toMatch(/caption: [^\n]*5–18 words/);
-    expect([STORY_PLANNER_PROMPT_VERSION, STORY_WRITER_PROMPT_VERSION, STORY_REWRITER_PROMPT_VERSION]).toEqual(["story-plan-3", "story-write-3", "story-rewrite-3"]);
+    // v4: the chapter story page — one paragraph of 40–60 words, short lines, captions ≤ 12 words
+    expect(STORY_WRITER_SYSTEM_PROMPT).toMatch(/intro: [^\n]*40–60 words/);
+    expect(STORY_WRITER_SYSTEM_PROMPT).toMatch(/headline: one line, 3–8 words/);
+    expect(STORY_WRITER_SYSTEM_PROMPT).toMatch(/closing_line: one line, 3–10 words/);
+    expect(STORY_WRITER_SYSTEM_PROMPT).toMatch(/caption: [^\n]*3–12 words/);
+    expect([STORY_PLANNER_PROMPT_VERSION, STORY_WRITER_PROMPT_VERSION, STORY_REWRITER_PROMPT_VERSION]).toEqual(["story-plan-4", "story-write-4", "story-rewrite-4"]);
   });
 });
 
@@ -104,10 +106,12 @@ describe("planStory", () => {
     expect(plan).toMatchObject({ source: "ai", fallbackReason: null, bookId: BOOK, photoCount: 24, closing: true, lang: "en", contextRev: 3 });
     expect(plan.chapters).toHaveLength(3);
     expect(plan.chapters.flatMap((c) => c.momentIds)).toEqual(["m1", "m2", "m3", "m4", "m5", "m6"]);
-    expect(isBalanced(plan.skeleton.balance)).toBe(true);
+    // v4: the 35 % narrative target is a ceiling (text on the chapter pages, photo-led pages)
+    expect(plan.skeleton.balance.narrativeShare).toBeLessThanOrEqual(0.4);
+    expect(plan.skeleton.pages.filter((p) => p.kind === "chapter_opener")).toHaveLength(3);
     // usage: one row, tokens and cost, no text
     expect(w.records).toEqual([
-      { userId: USER, bookId: BOOK, runId: pid(901), kind: "plan", scope: "plan", chapterId: null, storybookVersion: null, model: "claude-opus-5-5", promptVersion: "story-plan-3", mode: "live", usage: { input: 1800, output: 600, cacheRead: 1500, cacheWrite: 0 }, costUsd: costUsd("claude-opus-5-5", { input: 1800, output: 600, cacheRead: 1500, cacheWrite: 0 }), latencyMs: 2345, status: "ok" },
+      { userId: USER, bookId: BOOK, runId: pid(901), kind: "plan", scope: "plan", chapterId: null, storybookVersion: null, model: "claude-opus-5-5", promptVersion: "story-plan-4", mode: "live", usage: { input: 1800, output: 600, cacheRead: 1500, cacheWrite: 0 }, costUsd: costUsd("claude-opus-5-5", { input: 1800, output: 600, cacheRead: 1500, cacheWrite: 0 }), latencyMs: 2345, status: "ok" },
     ]);
   });
 
@@ -262,7 +266,7 @@ describe("planStory", () => {
     const plan = await planStory(BOOK, w.deps);
     expect(plan).toMatchObject({ source: "rule", fallbackReason: "ai_off" });
     expect(plan.chapters).toHaveLength(3);
-    expect(plan.chapters.map((c) => c.title)).toEqual(["Walking on a beach · Abu Dhabi", "Scenery", "Details"]);
+    expect(plan.chapters.map((c) => c.title)).toEqual(["Walking on a beach", "Scenery", "Details"]);
     expect(w.requests).toHaveLength(0);
     expect(await code(planStory(BOOK, world({ rows: [] }).deps))).toBe("no_photos");
     expect(await code(planStory(BOOK, world({ rows: photoRows(3).map((r) => ({ ...r, status: "dropped" })) }).deps))).toBe("no_photos");
@@ -315,7 +319,11 @@ describe("writeStory", () => {
     }
     const [c1, c2, , closing] = w.requests.map(userText);
     expect(c1).toContain("WRITE THESE BLOCKS OF CHAPTER c1");
-    expect(c1).toMatch(/b1 · intro · 35–65 words \(hard limits 30–70\) · photos on its page: p\d+/);
+    expect(c1).toMatch(/b1 · intro · 40–60 words \(hard limits 35–70\) · photos on its page: p\d+/);
+    expect(c1).toMatch(/b2 · subtitle · 1–5 words/);
+    expect(c1).toMatch(/b3 · headline · 3–8 words/);
+    expect(c1).toMatch(/b4 · closing_line · 3–10 words/);
+    expect(c1).toContain('SUBTITLE PLACE: "Abu Dhabi"');
     expect(c1).toContain("ALREADY WRITTEN\n(nothing yet)");
     expect(c1).not.toContain("p9 "); // only this chapter's photos
     expect(c2).toMatch(/ALREADY WRITTEN \(do not repeat\)\nc1 intro: "/);
@@ -325,13 +333,12 @@ describe("writeStory", () => {
     const s = result.storybook;
     expect(StorybookSchema.safeParse(s).success).toBe(true);
     expect(s).toMatchObject({ bookId: BOOK, version: 1, parentVersion: null, origin: "ai", lang: "en", contextRev: 3, target: { photoShare: 0.65, narrativeShare: 0.35 } });
-    expect(s.generator).toEqual({ pipeline: "balanced-storybook-1", model: "claude-opus-5-5", prompts: { planner: "story-plan-3", writer: "story-write-3" } });
+    expect(s.generator).toEqual({ pipeline: "balanced-storybook-1", model: "claude-opus-5-5", prompts: { planner: "story-plan-4", writer: "story-write-4" } });
     expect(result.merge).toBeNull();
     expect(result.issues).toEqual([]);
     expect(result.balance).toEqual(storybookBalance(s));
-    expect(isBalanced(result.balance)).toBe(true);
     expect(s.chapters.map((c) => c.id)).toEqual(["c1", "c2", "c3"]);
-    expect(s.chapters[0]!.title).toEqual({ text: "Walking on a beach · Abu Dhabi", provenance: { source: "ai", rev: 1, aiVersion: 1, editedAt: null } });
+    expect(s.chapters[0]!.title).toEqual({ text: "Walking on a beach", provenance: { source: "ai", rev: 1, aiVersion: 1, editedAt: null } });
     expect(s.pages[s.pages.length - 1]).toMatchObject({ kind: "closing", narrativeShare: 1, photoIds: [] });
 
     // every planned block was written, cites at least one photo of ITS chapter and passes grounding again
@@ -346,8 +353,10 @@ describe("writeStory", () => {
         const chapter = s.chapters.find((c) => c.id === page.chapterId);
         const allowed = inputs.photos.filter((p) => (chapter ? chapter.momentIds.includes(p.momentId) : true));
         for (const id of b.groundedIn) expect(allowed.map((p) => p.id)).toContain(id);
+        // v4: a subtitle is checked as the phrase the writer wrote (the place in front comes from the metadata)
+        if (b.kind === "subtitle" && page.chapterId === "c1") expect(b.text).toMatch(/^Abu Dhabi · /);
         const issues = checkBlock(
-          { blockId: b.id, kind: b.kind, text: b.text, photoRefs: b.groundedIn.map((id) => byId.get(id)!.alias), factRefs: b.factRefs ?? [] },
+          { blockId: b.id, kind: b.kind, text: b.kind === "subtitle" ? b.text.replace(/^[^·]+ · /, "") : b.text, photoRefs: b.groundedIn.map((id) => byId.get(id)!.alias), factRefs: b.factRefs ?? [] },
           { lang: "en", photos: new Map(allowed.map((p) => [p.alias, groundingPhoto(p)])), facts: groundingFacts(inputs.facts), otherTexts: all.filter((o) => o.id !== b.id).map((o) => o.text) },
         );
         expect(issues).toEqual([]);
@@ -372,7 +381,7 @@ describe("writeStory", () => {
       ["write", "book", "closing", 1, "ok"],
     ]);
     for (const r of w.records) {
-      expect(r).toMatchObject({ userId: USER, bookId: BOOK, runId: pid(901), mode: "live", model: "claude-opus-5-5", promptVersion: "story-write-3", latencyMs: 2345, usage: { input: 1800, output: 600, cacheRead: 1500, cacheWrite: 0 } });
+      expect(r).toMatchObject({ userId: USER, bookId: BOOK, runId: pid(901), mode: "live", model: "claude-opus-5-5", promptVersion: "story-write-4", latencyMs: 2345, usage: { input: 1800, output: 600, cacheRead: 1500, cacheWrite: 0 } });
       expect(r.costUsd).toBe(costUsd("claude-opus-5-5", r.usage));
       expect(r.costUsd).toBeGreaterThan(0);
       expect(Object.keys(r).sort()).toEqual(["bookId", "chapterId", "costUsd", "kind", "latencyMs", "mode", "model", "promptVersion", "runId", "scope", "status", "storybookVersion", "usage", "userId"]);
@@ -440,13 +449,14 @@ describe("writeStory", () => {
     expect(blocksOf(s).map((b) => b.id)).not.toContain("b1");
     expect(blocksOf(s).map((b) => b.id)).not.toContain("b2");
     const planPages = w.plan.skeleton.pages.filter((p) => p.blocks.some((b) => b.id === "b1" || b.id === "b2"));
+    // v4: b1 (the paragraph) and b2 (the subtitle) sit on chapter 1's story page — its other lines stay
     for (const planned of planPages) {
       const page = s.pages.find((p) => p.id === planned.id)!;
-      expect(page).toMatchObject({ blocks: [], narrativeShare: 0, photoIds: planned.photoIds });
-      expect(page.kind).toBe(planned.kind === "mixed" ? "photo" : planned.kind);
+      expect(page).toMatchObject({ kind: planned.kind, photoIds: planned.photoIds });
+      expect(page.blocks.map((b) => b.id)).toEqual(planned.blocks.map((b) => b.id).filter((id) => id !== "b1" && id !== "b2"));
     }
     expect(StorybookSchema.safeParse(s).success).toBe(true);
-    expect(result.balance.narrativeShare).toBeLessThan(w.plan.skeleton.balance.narrativeShare);
+    expect(result.balance.narrativeShare).toBeLessThanOrEqual(w.plan.skeleton.balance.narrativeShare);
     expect(w.versions[0]).toEqual(s);
   });
 
@@ -517,10 +527,10 @@ describe("writeStory", () => {
     const first = (await writeStory(BOOK, w.plan, {}, w.deps)).storybook;
     // the user edits: one block's text, one chapter title, and locks one page
     const edited = structuredClone(first);
-    const blockPage = edited.pages.find((p) => p.chapterId === "c1" && p.kind === "mixed")!;
+    const blockPage = edited.pages.find((p) => p.chapterId === "c1" && p.kind === "chapter_opener")!;
     blockPage.blocks[0] = { ...blockPage.blocks[0]!, text: "Sara and I, the first evening. My own words.", provenance: userEdit(blockPage.blocks[0]!.provenance, "2026-11-18T11:00:00.000Z") };
     edited.chapters[1]!.title = { text: "Our dunes", provenance: userEdit(edited.chapters[1]!.title.provenance, "2026-11-18T11:00:00.000Z") };
-    const locked = edited.pages.find((p) => p.chapterId === "c3" && p.blocks.length > 0 && p.kind !== "chapter_opener")!;
+    const locked = edited.pages.find((p) => p.chapterId === "c3" && p.blocks.length > 0)!;
     locked.userLocked = true;
     edited.title = { text: "Two sisters, one road", provenance: userEdit(edited.title.provenance, "2026-11-18T11:00:00.000Z") };
     w.versions[0] = structuredClone(edited);
@@ -717,8 +727,10 @@ describe("writeStory", () => {
     expect(all.length).toBeGreaterThan(5);
     for (const b of all) {
       expect(b.lang).toBe("ar");
-      expect(b.text).toMatch(/[؀-ۿ]/);
-      expect(b.text).not.toMatch(/[A-Za-z]/);
+      // v4: a subtitle starts with the verified place exactly as the metadata names it
+      const text = b.kind === "subtitle" ? b.text.replace(/^Abu Dhabi · /, "") : b.text;
+      expect(text).toMatch(/[؀-ۿ]/);
+      expect(text).not.toMatch(/[A-Za-z]/);
     }
     expect(userText(w.requests[0]!)).toContain("LANGUAGE: ar");
     const english = (_r: AgentRequest<unknown>, good: unknown) => ({ blocks: (good as Blocks).blocks.map((b) => ({ ...b, text: "The quiet lantern glows beside the open door tonight." })) });
@@ -728,6 +740,9 @@ describe("writeStory", () => {
     expect(bad.issues.map((i) => i.code)).toContain("wrong_script");
   });
 });
+
+/** v4: the first chapter story page's paragraph (the main text a rewrite test works on). */
+const introOf = (s: Storybook) => s.pages.find((p) => p.kind === "chapter_opener")!.blocks.find((b) => b.kind === "intro")!;
 
 async function written(over: Parameters<typeof world>[0] = {}) {
   const w = await planned(over);
@@ -739,7 +754,7 @@ async function written(over: Parameters<typeof world>[0] = {}) {
 describe("rewriteNarrativeBlock", () => {
   it("ONE rewriter call (effort low, 15 s); a new version in which ONLY that block changed", async () => {
     const w = await written();
-    const target = w.storybook.pages.find((p) => p.kind === "mixed")!.blocks[0]!;
+    const target = introOf(w.storybook);
     const result = await rewriteNarrativeBlock(`${BOOK}/${target.id}`, { kind: "shorter" }, {}, w.deps);
     const [req] = w.calls();
     expect(w.calls()).toHaveLength(1);
@@ -748,7 +763,7 @@ describe("rewriteNarrativeBlock", () => {
     const text = userText(req!);
     expect(text).not.toMatch(UUID);
     expect(text).toContain("CHANGE: shorter");
-    expect(text).toContain(`${target.id} · paragraph · stay within 20–60 words`);
+    expect(text).toContain(`${target.id} · intro · stay within 35–70 words`);
     expect(text).toContain(JSON.stringify(target.text));
 
     expect(result.stored).toBe(true);
@@ -758,13 +773,13 @@ describe("rewriteNarrativeBlock", () => {
     expect(changed.text).not.toBe(target.text);
     expect(changed.text.split(/\s+/).length).toBeLessThan(target.text.split(/\s+/).length);
     expect(changed.provenance).toEqual({ source: "ai", rev: 2, aiVersion: 2, editedAt: null });
-    expect(result.proposal).toEqual({ blockId: target.id, kind: "paragraph", text: changed.text, lang: "en", groundedIn: changed.groundedIn, factRefs: [] });
+    expect(result.proposal).toEqual({ blockId: target.id, kind: "intro", text: changed.text, lang: "en", groundedIn: changed.groundedIn, factRefs: [] });
     // everything else identical
     const strip = (x: Storybook) => ({ ...x, version: 0, parentVersion: 0, origin: "", generator: null, createdAt: "", facts: null, pages: x.pages.map((p) => ({ ...p, blocks: p.blocks.map((b) => (b.id === target.id ? null : b)) })) });
     expect(strip(s)).toEqual(strip(w.storybook));
-    expect(s.generator.prompts).toEqual({ planner: "story-plan-3", writer: "story-write-3", rewriter: "story-rewrite-3" });
+    expect(s.generator.prompts).toEqual({ planner: "story-plan-4", writer: "story-write-4", rewriter: "story-rewrite-4" });
     expect(w.versions).toHaveLength(2);
-    expect(w.records.at(-1)).toMatchObject({ kind: "rewrite", scope: "block", storybookVersion: 2, promptVersion: "story-rewrite-3", status: "ok" });
+    expect(w.records.at(-1)).toMatchObject({ kind: "rewrite", scope: "block", storybookVersion: 2, promptVersion: "story-rewrite-4", status: "ok" });
   });
 
   it("accepts the composite id and a plain id with opts.bookId; anything else is not_found", async () => {
@@ -783,14 +798,14 @@ describe("rewriteNarrativeBlock", () => {
   it("a user-written block is protected (no call); with propose it returns a proposal and stores nothing", async () => {
     const w = await written();
     const edited = structuredClone(w.storybook);
-    const block = edited.pages.find((p) => p.kind === "mixed")!.blocks[0]!;
+    const block = introOf(edited);
     block.text = "The road ran beside the water and the light stayed with it all the way to the dunes that evening.";
     block.provenance = userEdit(block.provenance, "2026-11-18T11:00:00.000Z");
     w.versions[0] = structuredClone(edited);
     expect(await code(rewriteNarrativeBlock(`${BOOK}/${block.id}`, { kind: "regenerate" }, {}, w.deps))).toBe("protected");
     expect(w.calls()).toHaveLength(0);
     const result = await rewriteNarrativeBlock(`${BOOK}/${block.id}`, { kind: "regenerate" }, { propose: true }, w.deps);
-    expect(result).toMatchObject({ stored: false, storybook: null, proposal: { blockId: block.id, kind: "paragraph", lang: "en" } });
+    expect(result).toMatchObject({ stored: false, storybook: null, proposal: { blockId: block.id, kind: "intro", lang: "en" } });
     expect(result.proposal.text).not.toBe(block.text);
     expect(result.proposal.groundedIn.length).toBeGreaterThan(0);
     expect(w.calls()).toHaveLength(1);
@@ -801,7 +816,7 @@ describe("rewriteNarrativeBlock", () => {
   it("a block on a locked page is protected too", async () => {
     const w = await written();
     const locked = structuredClone(w.storybook);
-    const page = locked.pages.find((p) => p.kind === "mixed")!;
+    const page = locked.pages.find((p) => p.kind === "chapter_opener")!;
     page.userLocked = true;
     w.versions[0] = locked;
     expect(await code(rewriteNarrativeBlock(`${BOOK}/${page.blocks[0]!.id}`, { kind: "shorter" }, {}, w.deps))).toBe("protected");
@@ -835,7 +850,7 @@ describe("rewriteNarrativeBlock", () => {
 
   it("'shorter' that is not shorter, 'longer' that is not longer and an unchanged text are rejected", async () => {
     const w = await written();
-    const block = w.storybook.pages.find((p) => p.kind === "mixed")!.blocks[0]!;
+    const block = introOf(w.storybook);
     const same = world({ script: { 0: (_r, good) => ({ ...(good as object), text: block.text }), 1: (_r, good) => ({ ...(good as object), text: block.text }) } });
     try {
       await rewriteNarrativeBlock(`${BOOK}/${block.id}`, { kind: "shorter" }, {}, { ...w.deps, transport: same.deps.transport });

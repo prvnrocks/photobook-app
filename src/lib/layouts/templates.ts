@@ -32,7 +32,7 @@ import type { BookFormat, DesignStyle, Layout, Orientation, PageTextRole, Rect }
 import { roleFont, type TextRole } from "@/lib/design/styles";
 import { getLayout, LAYOUTS, STORY_LAYOUTS } from "./index";
 import { layoutShowsDescription } from "./description";
-import { isStoryLayoutId, isStoryVariantId, storyBaseId, storyVariantsOf, type StoryTemplateKind } from "./story";
+import { chapterStoryKindOf, isStoryLayoutId, isStoryVariantId, storyBaseId, storyVariantsOf, type StoryTemplateKind } from "./story";
 
 export const TEMPLATE_FAMILIES = ["chapter_opening", "hero", "collage", "storytelling", "closing"] as const;
 export type TemplateFamily = (typeof TEMPLATE_FAMILIES)[number];
@@ -70,6 +70,11 @@ export interface PageTemplate {
   panels: readonly TemplatePanel[];
   /** The page shows the chapter title + date (chapter openings). */
   chapterTitle: boolean;
+  /**
+   * Story v4: a chapter story page (header band, hero, headline, paragraph, closing line) — its
+   * panels take intro (0), subtitle (1), headline (2) and closing_line (3).
+   */
+  chapterStory: boolean;
   /** Text area / (text area + photo area), from the layout geometry. */
   narrativeShare: number;
   /** One photo covering ≥ 60 % of the page: refused below MIN_DPI. */
@@ -90,6 +95,8 @@ export interface PageTemplate {
 
 const MAIN_ROLES: readonly PageTextRole[] = ["intro", "paragraph", "closing"];
 const QUOTE_ROLES: readonly PageTextRole[] = ["pull_quote", "caption"];
+/** Story v4 chapter story panels: n → the one role it takes. */
+const CHAPTER_STORY_ROLES: Readonly<Record<number, readonly PageTextRole[]>> = { 0: ["intro"], 1: ["subtitle"], 2: ["headline"], 3: ["closing_line"] };
 
 const round4 = (n: number) => Math.round(n * 10000) / 10000;
 /** A rect clipped to the page (spread / bleed-free), its area in %². */
@@ -107,7 +114,7 @@ export function templateFamilyOf(layout: Layout): TemplateFamily | null {
     const kind = storyKindOf(layout.id);
     if (!kind) return null;
     if (kind === "hero-small") return "hero";
-    if (kind.startsWith("open")) return "chapter_opening";
+    if (kind.startsWith("open") || kind.startsWith("chap")) return "chapter_opening";
     if (kind.startsWith("tell")) return "storytelling";
     if (kind.startsWith("close")) return "closing";
     return kind.startsWith("hero") ? "hero" : "collage";
@@ -122,10 +129,12 @@ export function templateFamilyOf(layout: Layout): TemplateFamily | null {
 /** Text panels a story page uses, in panel order: pageText panels, then the caption area. */
 function panelsOf(layout: Layout): TemplatePanel[] {
   const out: TemplatePanel[] = [];
+  const chapterStory = chapterStoryKindOf(layout.id) !== null;
   for (const t of layout.texts ?? []) {
     if (t.bind !== "pageText") continue;
     const n = t.n ?? 0;
-    out.push({ n, roles: n === 0 ? MAIN_ROLES : QUOTE_ROLES, rect: t.box, font: t.font, ...(t.size ? { size: t.size } : {}) });
+    const roles = chapterStory ? (CHAPTER_STORY_ROLES[n] ?? []) : n === 0 ? MAIN_ROLES : QUOTE_ROLES;
+    out.push({ n, roles, rect: t.box, font: t.font, ...(t.size ? { size: t.size } : {}) });
   }
   out.sort((a, b) => a.n - b.n);
   if (layout.caption) {
@@ -143,7 +152,7 @@ export function layoutNarrativeShare(layout: Layout, shown?: (bind: string, n: n
   let text = 0;
   for (const t of layout.texts ?? []) {
     if (t.bind === "pageCaption" || t.bind === "chapterDescription") continue;
-    if (t.bind !== "pageText" && t.bind !== "chapterTitle" && t.bind !== "dateLabel") continue;
+    if (t.bind !== "pageText" && t.bind !== "chapterTitle" && t.bind !== "dateLabel" && t.bind !== "chapterLabel") continue;
     if (shown && !shown(t.bind, t.n ?? 0)) continue;
     text += clippedArea(t.area ?? t.box);
   }
@@ -169,6 +178,7 @@ function buildTemplate(layout: Layout, family: TemplateFamily): PageTemplate {
     minPhotoPx,
     panels: panelsOf(layout),
     chapterTitle: !!layout.texts?.some((t) => t.bind === "chapterTitle"),
+    chapterStory: chapterStoryKindOf(layout.id) !== null,
     narrativeShare: layoutNarrativeShare(layout),
     fullBleed,
     isNew: isStoryLayoutId(layout.id),

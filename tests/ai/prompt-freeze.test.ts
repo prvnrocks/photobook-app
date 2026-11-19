@@ -134,21 +134,25 @@ describe("prompt + schema freeze (pre-M30 styles)", () => {
 // v2 → v3 (2026-11-19, memory narrative) was intended too: the planner returns a StoryBrief with the
 // outline (schema changed), the writer / rewriter get the brief, never write about the photography or
 // poses, no generic inspirational lines, personal vs observational mode; versions story-plan-3 /
-// story-write-3 / story-rewrite-3. A new change: bump the version constant in
+// story-write-3 / story-rewrite-3. v3 → v4 (2026-11-19, chapter story page) was intended too: one
+// chapter story page per chapter (subtitle phrase / headline / ONE paragraph / closing line), photo-led
+// pages with optional captions, a labelled style example about a different memory, the planner's
+// paragraph moments dropped (schema changed), book-specific examples removed; versions story-plan-4 /
+// story-write-4 / story-rewrite-4. A new change: bump the version constant in
 // src/lib/ai/story/prompts.ts and re-record these.
 const STORY_PROMPTS: Record<string, { version: string; system: string; schema: string }> = {
-  planner: { version: "story-plan-3", system: "304e2de00e036c657824c1dfaa664e8041826986f635938c8cad4c9d62f7a161", schema: "7b106c150dc18e4a68e487d46c2f7e1635802f8bc130f50d66e78cab90370075" },
-  writer: { version: "story-write-3", system: "d1b7a0c9521c2c6c8ab9ef9811c7cd01ea35ee4401b34b614f31c8b1c429e86a", schema: "c7233b3f34b51e8eda3a82fbe70a8bcdede446ba6bc817fd0ac7387636782eac" },
-  rewriter: { version: "story-rewrite-3", system: "8f3a07925fd782897c8067a96a4e35693069142ec4b13d24c2ef432422359230", schema: "d77f0265b840e30177fafcdd4a3ad0a714f00aa9b4c5766a9a9fcd920e6b5f33" },
+  planner: { version: "story-plan-4", system: "3610806090436d1330a44f45f469491f9cca07433091f266099e6ea17bdbf3f7", schema: "d64670e9d6ed217d3744f407d273913b2f4c518c4fa4d5eb1053774411cf679d" },
+  writer: { version: "story-write-4", system: "24fa7c9c6022d28c3ef9799d082de7ddeef9619e95f1dd1e14e6afdf2a24c47f", schema: "c7233b3f34b51e8eda3a82fbe70a8bcdede446ba6bc817fd0ac7387636782eac" },
+  rewriter: { version: "story-rewrite-4", system: "835b9f42a8c9f420e7fecf7d871c6b8f11f87e73d555d9b83172de460f3a5e94", schema: "d77f0265b840e30177fafcdd4a3ad0a714f00aa9b4c5766a9a9fcd920e6b5f33" },
 };
 
-describe("storybook prompt freeze (v3)", () => {
+describe("storybook prompt freeze (v4)", () => {
   const current = {
     planner: { version: StoryPrompts.STORY_PLANNER_PROMPT_VERSION, system: StoryPrompts.STORY_PLANNER_SYSTEM_PROMPT, schema: schemaJson(StoryPrompts.StoryPlanAiSchema) },
     writer: { version: StoryPrompts.STORY_WRITER_PROMPT_VERSION, system: StoryPrompts.STORY_WRITER_SYSTEM_PROMPT, schema: schemaJson(StoryPrompts.StoryBlocksAiSchema) },
     rewriter: { version: StoryPrompts.STORY_REWRITER_PROMPT_VERSION, system: StoryPrompts.STORY_REWRITER_SYSTEM_PROMPT, schema: schemaJson(StoryPrompts.StoryRewriteAiSchema) },
   } as const;
-  it.each(Object.keys(STORY_PROMPTS) as (keyof typeof current)[])("%s: version, system text and schema are the recorded v3", (agent) => {
+  it.each(Object.keys(STORY_PROMPTS) as (keyof typeof current)[])("%s: version, system text and schema are the recorded v4", (agent) => {
     expect(current[agent].version).toBe(STORY_PROMPTS[agent]!.version);
     expect(sha(current[agent].system)).toBe(STORY_PROMPTS[agent]!.system);
     expect(sha(current[agent].schema)).toBe(STORY_PROMPTS[agent]!.schema);
@@ -168,7 +172,10 @@ describe("storybook prompt freeze (v3)", () => {
     expect(w).toContain("NEVER CLAIM");
     expect(w).toContain("NEVER WRITE ABOUT THE PHOTOGRAPHY");
     expect(w).toContain("Never describe poses or gestures");
-    expect(w).toContain("Write about why the moments matter, not merely what appears in the photographs.");
+    // v4: the chapter story page and its lines
+    expect(w).toContain("THE CHAPTER PAGE");
+    expect(w).toContain("STYLE EXAMPLE — for the SHAPE and TONE only");
+    expect(w).toContain("closing_line: one line");
     expect(w).toContain("MODE observational");
     expect(w).toContain("some bonds never fade");
     expect(current.planner.system).toContain("THE STORY BRIEF (brief)");

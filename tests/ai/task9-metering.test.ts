@@ -400,7 +400,8 @@ describe("rewriting text never repeats photo analysis (Task 9)", () => {
     vi.mocked(analyzeModule.analyzePhotos).mockClear();
     w.reads.vision.mockClear();
     const before = w.requests.length;
-    const target = storybook.pages.find((p) => p.kind === "mixed")!.blocks[0]!;
+    // story v4: the chapter story page's paragraph (no mixed pages any more)
+    const target = storybook.pages.find((p) => p.kind === "chapter_opener")!.blocks[0]!;
     await rewriteNarrativeBlock(`${BOOK}/${target.id}`, { kind: "shorter" }, {}, w.deps);
     expect(w.requests.slice(before).map((r) => r.agent)).toEqual(["rewriter"]);
     expect(w.reads.vision).toHaveBeenCalled();

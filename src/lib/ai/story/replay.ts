@@ -27,8 +27,8 @@ const LIST = 37;
 export const REPLAY_CLAUSES_PER_BLOCK = 12;
 
 const CLAUSES: Record<"en" | "ar", Record<NarrativeKind, number>> = {
-  en: { intro: 10, paragraph: 9, caption: 3, pull_quote: 3, closing: 10 }, // 4 words per clause
-  ar: { intro: 10, paragraph: 9, caption: 3, pull_quote: 3, closing: 10 }, // 3 words per clause
+  en: { intro: 10, paragraph: 9, caption: 3, pull_quote: 3, closing: 10, subtitle: 1, headline: 1, closing_line: 2 }, // 4 words per clause
+  ar: { intro: 12, paragraph: 9, caption: 3, pull_quote: 3, closing: 10, subtitle: 1, headline: 2, closing_line: 3 }, // 3 words per clause
 };
 
 function clause(lang: "en" | "ar", g: number, first: boolean): string {
@@ -78,7 +78,6 @@ export const storyPlanReplaySynth: ReplaySynth = (meta, ctx) => {
       arc: String(c.arc ?? ""),
       momentIds: strings(c.momentIds),
       heroPhoto: String(c.heroPhoto ?? ""),
-      paragraphMoments: strings(c.paragraphMoments),
     })),
   };
 };

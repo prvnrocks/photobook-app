@@ -7,6 +7,8 @@
 //       a fixture storybook composed deterministically: cover + every page, each in a
 //       <figure data-family data-page-id> (screenshots pick pages by family); similar=1 gives the
 //       photos lookalike signals in near-identical pairs (contrasting-sets check)
+//   …&v4=1[&sample=1]: the story v4 skeleton (chapter story pages; sample=1 = readable synthetic
+//       chapter lines for screenshots); chapter story figures carry data-chapter-story="true"
 //   ?sheet=modern-portrait[&lang=ar][&all=1]
 //       every new story template of that style + format with the longest AI texts (overflow probe)
 
@@ -39,7 +41,7 @@ export default async function DevStoryCompose({ searchParams }: { searchParams: 
   const count = Math.min(120, Math.max(1, Number(one(sp.photos) ?? 24) || 24));
   const lowRes = (one(sp.lowres) ?? "5").split(",").map(Number).filter((n) => Number.isInteger(n) && n > 0);
   const design = { format, designStyle: style };
-  const f = storyFixture({ photos: count, lang, design, lowRes, lookalikes: one(sp.similar) === "1" });
+  const f = storyFixture({ photos: count, lang, design, lowRes, lookalikes: one(sp.similar) === "1", ...(one(sp.v4) === "1" ? { skeleton: "v4" as const, sample: one(sp.sample) === "1" } : {}) });
   const r = composeStoryDoc({ storybook: f.storybook, photos: f.photos, design, lang, occasion: "travel", bookTitle: null, maxPages: Number(one(sp.max) ?? 20) || 20 });
   return (
     <Book
@@ -64,7 +66,7 @@ function Book({ doc, photos, mode, lang, title }: { doc: BookDoc; photos: Return
           <BookPage doc={doc} page="cover" mode={mode} photos={photos} captionLang={lang} priority />
         </figure>
         {doc.pages.map((p, i) => (
-          <figure key={p.id} className="shadow-md" data-family={getPageTemplate(p.layout)?.family ?? "other"} data-page-id={p.id}>
+          <figure key={p.id} className="shadow-md" data-family={getPageTemplate(p.layout)?.family ?? "other"} data-page-id={p.id} {...(getPageTemplate(p.layout)?.chapterStory ? { "data-chapter-story": "true" } : {})}>
             <BookPage doc={doc} page={i} mode={mode} photos={photos} captionLang={lang} priority />
           </figure>
         ))}

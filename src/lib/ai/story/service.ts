@@ -35,12 +35,12 @@ import { getCurrentUser } from "@/lib/auth/current-user";
 import { BOOK_FORMATS, DESIGN_STYLES } from "@/lib/book/schema";
 import { getMyBook } from "@/lib/db/books";
 import { getTodayPhotoAnalysisSpendUsd } from "@/lib/db/photo-analyses";
-import { listDuplicateGroups, listMoments, listPhotosForOrganize, listVision } from "@/lib/db/photo-organize";
+import { listDuplicateGroups, listMoments, listPhotosForOrganize, listQuality, listVision, type StoredQuality } from "@/lib/db/photo-organize";
 import { countStoryRuns, getTodayStorySpendUsd, recordStoryCall, storyUsageAvailable, type StoryCallKind, type StoryCallRecord, type StoryCallScope, type StoryUsageCounts } from "@/lib/db/story-ai-calls";
 import { appendStorybookVersion, getCurrentStorybook, getMemoryContext } from "@/lib/db/storybooks";
 import { isStoryTone, type StoryTone } from "@/lib/story/questions";
 import { balanceOf, storybookBalance, type StoryBalance } from "@/lib/storybook/balance";
-import { STORY_BALANCE, STORY_LIMITS, StorybookSchema } from "@/lib/storybook/schemas";
+import { NARRATIVE_KINDS, STORY_BALANCE, STORY_LIMITS, StorybookSchema } from "@/lib/storybook/schemas";
 import type { Chapter, Moment, NarrativeBlock, NarrativeKind, StoryPage, StoryPageKind, Storybook } from "@/lib/storybook/types";
 import { aiProvenance, aiRewrite, isProtectedPage, isUserOwned, mergeAiDraft, userEdit, type MergeReport } from "@/lib/storybook/versioning";
 import { clipText, codePointLength } from "@/lib/text/clip";
@@ -50,9 +50,10 @@ import { createUsageMeter } from "@/lib/ai/usage/meter";
 import type { UsageMeter } from "@/lib/ai/usage/types";
 import { getEntitlementTier } from "@/lib/entitlements";
 import { readStoryAiConfig, type StoryAiConfig } from "./config";
-import { MAX_FACT_REFS, MAX_PHOTO_REFS, WORD_BOUNDS, checkBlock, countWords, type BlockDraft, type GroundingContext, type GroundingIssue, type GroundingIssueCode } from "./grounding";
+import { LINE_KINDS, MAX_FACT_REFS, MAX_PHOTO_REFS, WORD_BOUNDS, checkBlock, countWords, type BlockDraft, type GroundingContext, type GroundingIssue, type GroundingIssueCode } from "./grounding";
 import { buildStoryInputs, factRefsToStore, groundingFacts, groundingPhoto, type StoryInputs, type StoryPhoto } from "./inputs";
-import { StoryPlanSchema, acceptedBookTitle, applyPinned, assemblePlan, chapterCountRange, checkOutline, checkPlanAgainstBook, pinnedStructure, ruleOutline, wantsClosing, type PlanFallbackReason, type PlanOutline, type StoryPlan } from "./plan";
+import { chapterPlace, composeSubtitle, splitSubtitle } from "./chapter-page";
+import { StoryPlanSchema, acceptedBookTitle, applyPinned, assemblePlan, chapterCountRange, chapterHero, visitCountOf, checkOutline, checkPlanAgainstBook, pinnedStructure, ruleOutline, wantsClosing, type PlanFallbackReason, type PlanOutline, type StoryPlan } from "./plan";
 import { acceptBrief, allowedEmotionsOf, briefToAi, revalidateBrief, ruleBrief, type StoryBrief } from "./brief";
 import {
   REWRITE_KINDS,
@@ -124,6 +125,8 @@ export type StoryDeps = {
   ownerOf?: (bookId: string) => Promise<{ userId: string; book: StoryBook } | null>;
   listPhotos?: typeof listPhotosForOrganize;
   listVision?: typeof listVision;
+  /** v4: stored photo quality (sharpness: a soft photo is never a chapter hero). A failed read = none. */
+  listQuality?: typeof listQuality;
   listMoments?: typeof listMoments;
   listDuplicateGroups?: typeof listDuplicateGroups;
   getContext?: typeof getMemoryContext;
@@ -249,14 +252,18 @@ async function openBook(bookId: string, deps: StoryDeps): Promise<{ userId: stri
 
 async function loadInputs(owner: { userId: string; book: StoryBook }, deps: StoryDeps, current: Storybook | null): Promise<StoryInputs> {
   const { userId, book } = owner;
-  const [photos, vision, storedMoments, duplicateGroups, context] = await Promise.all([
+  const [photos, vision, storedMoments, duplicateGroups, context, quality] = await Promise.all([
     (deps.listPhotos ?? listPhotosForOrganize)(book.id, userId),
     (deps.listVision ?? listVision)(book.id, userId),
     (deps.listMoments ?? listMoments)(book.id, userId),
     (deps.listDuplicateGroups ?? listDuplicateGroups)(book.id, userId),
     (deps.getContext ?? getMemoryContext)(book.id, userId),
+    // v4: sharpness for the hero choice (a failed read = no quality: nothing is called soft by it)
+    Promise.resolve()
+      .then(() => (deps.listQuality ?? listQuality)(book.id, userId))
+      .catch((): StoredQuality[] => []),
   ]);
-  return buildStoryInputs({ book, photos, vision, storedMoments, duplicateGroups, context, knownFacts: current?.facts ?? [] });
+  return buildStoryInputs({ book, photos, vision, storedMoments, duplicateGroups, context, knownFacts: current?.facts ?? [], quality: quality ?? [] });
 }
 
 /**
@@ -386,7 +393,7 @@ function failureOf(r: Extract<StepResult<unknown>, { ok: false }>): StoryError {
 
 // ---------------------------------------------------------------------------- planStory
 
-function outlineFromModel(out: StoryPlanOutput, inputs: StoryInputs): PlanOutline {
+function outlineFromModel(out: StoryPlanOutput, inputs: StoryInputs, brief?: StoryBrief | null): PlanOutline {
   const idByAlias = new Map(inputs.photos.map((p) => [p.alias, p.id]));
   const momentById = new Map(inputs.moments.map((m) => [m.id, m]));
   return {
@@ -398,8 +405,10 @@ function outlineFromModel(out: StoryPlanOutput, inputs: StoryInputs): PlanOutlin
       const hero = idByAlias.get(c.heroPhoto);
       // a hero outside the chapter is a cheap mistake: fixed in code, not worth a second call
       const fallback = [...moments].sort((a, b) => b.photoIds.length - a.photoIds.length)[0];
-      const heroPhotoId = hero && own.has(hero) ? hero : (fallback?.heroPhotoId ?? fallback?.photoIds[0] ?? inputs.photos[0]!.id);
-      return { id: `c${i + 1}`, title: c.title, arc: c.arc, momentIds: c.momentIds, beats: { heroPhotoId, narrativeMomentIds: c.paragraphMoments.filter((m) => c.momentIds.includes(m)) } };
+      const suggested = hero && own.has(hero) ? hero : (fallback?.heroPhotoId ?? fallback?.photoIds[0] ?? inputs.photos[0]!.id);
+      // v4: the model's pick is a suggestion; code chooses the photo that best shows who the story is about
+      const heroPhotoId = moments.length ? chapterHero(inputs, c.momentIds.filter((id) => momentById.has(id)), suggested, brief) : suggested;
+      return { id: `c${i + 1}`, title: c.title, arc: c.arc, momentIds: c.momentIds, beats: { heroPhotoId, narrativeMomentIds: [] } };
     }),
   };
 }
@@ -437,14 +446,14 @@ export async function planStory(bookId: string, deps: StoryDeps = {}): Promise<S
   if (!transport) return rule("ai_off");
 
   const s: Session = { ...owner, mode, live, config, deps, now: deps.now ?? Date.now, runId: (deps.newRunId ?? randomUUID)(), scope: "plan", version: null, transport, canRecord, spent: 0, okCalls: 0 };
-  const range = chapterCountRange(inputs.photos.length, inputs.moments.length);
+  const range = chapterCountRange(inputs.photos.length, inputs.moments.length, visitCountOf(inputs.moments));
   const closing = wantsClosing(inputs.photos.length);
   const aliasById = new Map(inputs.photos.map((p) => [p.id, p.alias]));
   const replayOutline = baseOutline();
   const scenarioMeta = {
     lang: inputs.lang,
     brief: briefToAi(ruleBrief(inputs, { promptVersion: STORY_PLANNER_PROMPT_VERSION }), inputs),
-    chapters: replayOutline.chapters.map((c) => ({ title: c.title, arc: c.arc, momentIds: c.momentIds, heroPhoto: aliasById.get(c.beats.heroPhotoId), paragraphMoments: c.beats.narrativeMomentIds })),
+    chapters: replayOutline.chapters.map((c) => ({ title: c.title, arc: c.arc, momentIds: c.momentIds, heroPhoto: aliasById.get(c.beats.heroPhotoId) })),
   };
 
   let feedback: { codes: string[] } | undefined;
@@ -475,7 +484,7 @@ export async function planStory(bookId: string, deps: StoryDeps = {}): Promise<S
     }
     // v3: the brief is validated field by field; whatever cannot be traced is replaced by the rules
     aiBrief = acceptBrief(result.data.brief, inputs, { source: "ai", model: result.model, promptVersion: STORY_PLANNER_PROMPT_VERSION });
-    const fresh = outlineFromModel(result.data, inputs);
+    const fresh = outlineFromModel(result.data, inputs, aiBrief);
     const outline = pinned ? applyPinned(pinned, fresh, inputs) : fresh;
     const issues = checkOutline(outline, inputs);
     if (issues.length === 0) {
@@ -504,6 +513,8 @@ type WriteContext = {
   maxRunCostUsd: number;
   /** v3: the validated story brief the writer follows. */
   brief: StoryBrief;
+  /** v4: accepted subtitles / headlines / closing lines (no chapter may echo another's). */
+  lineTexts: string[];
 };
 
 function groundingContext(w: WriteContext, allowed: readonly StoryPhoto[]): GroundingContext {
@@ -517,6 +528,7 @@ function groundingContext(w: WriteContext, allowed: readonly StoryPhoto[]): Grou
     narrator: w.inputs.narrator,
     mode: w.inputs.mode,
     allowedEmotions: allowedEmotionsOf(w.brief),
+    otherLines: w.lineTexts,
   };
 }
 
@@ -546,12 +558,15 @@ async function writeSlots(
 ): Promise<SlotsOutcome> {
   const { s, inputs, plan } = w;
   const ctx = groundingContext(w, a.allowed);
+  // v4: the verified place the subtitle phrase is shown after ("<place> · <phrase>")
+  const chapterMoments = a.chapterId ? (plan.chapters.find((c) => c.id === a.chapterId)?.momentIds ?? []) : [];
+  const subtitlePlace = a.chapterId ? chapterPlace(inputs, chapterMoments, w.brief) : null;
   const request = (slots: readonly Slot[], repair?: { blockId: string; codes: string[] }[], written: readonly { label: string; text: string }[] = a.alreadyWritten) => ({
     agent: "caption_writer" as const,
     chapterId: a.scopeId,
     promptVersion: STORY_WRITER_PROMPT_VERSION,
     system: STORY_WRITER_SYSTEM_PROMPT,
-    userText: writerUserText({ inputs, plan, chapterId: a.chapterId, slots, photos: a.promptPhotos, alreadyWritten: written, repair, usedOpenings: openingsOf(w.bookTexts), brief: w.brief }),
+    userText: writerUserText({ inputs, plan, chapterId: a.chapterId, slots, photos: a.promptPhotos, alreadyWritten: written, repair, usedOpenings: openingsOf(w.bookTexts), brief: w.brief, subtitlePlace, usedLines: [...w.lineTexts] }),
     schema: StoryBlocksAiSchema,
     strictSchema: StoryBlocksStrictSchema,
     toLogOutput: blocksLogOutput,
@@ -571,13 +586,19 @@ async function writeSlots(
   const chapterTexts: string[] = [...(a.chapterTexts ?? [])];
   const check = (slot: Slot, blocks: readonly StoryBlockOutput[]): GroundingIssue[] => {
     const out = blocks.find((b) => b.blockId === slot.blockId);
+    // v4: a caption is optional — an empty (or missing) caption is a photo page without one, not a failure
+    if (slot.kind === "caption" && (!out || !out.text.trim())) return [];
     if (!out) return [{ blockId: slot.blockId, code: "empty", detail: "missing" }];
-    const draft: BlockDraft = { blockId: slot.blockId, kind: slot.kind, text: out.text, photoRefs: out.photoRefs, factRefs: out.factRefs };
+    // v4: the subtitle is checked as the phrase the writer wrote; the verified place is put in front after
+    const phrase = slot.kind === "subtitle" ? composeSubtitle(null, out.text) : out.text;
+    const draft: BlockDraft = { blockId: slot.blockId, kind: slot.kind, text: phrase, photoRefs: out.photoRefs, factRefs: out.factRefs };
     const issues = checkBlock(draft, { ...ctx, chapterTexts });
     if (issues.length === 0) {
+      const text = slot.kind === "subtitle" ? composeSubtitle(subtitlePlace, phrase) : out.text;
+      if (LINE_KINDS.includes(slot.kind)) w.lineTexts.push(phrase);
       accepted.set(slot.blockId, {
         kind: slot.kind,
-        text: out.text,
+        text,
         photoIds: [...new Set(out.photoRefs.map((r) => w.photoByAlias.get(r)?.id).filter((x): x is string => !!x))].slice(0, MAX_PHOTO_REFS),
         factRefs: out.factRefs.slice(0, MAX_FACT_REFS),
       });
@@ -639,7 +660,16 @@ async function writeSlots(
   return { ok: true, accepted, issues: dropped };
 }
 
-const DEFAULT_SHARE: Record<NarrativeKind, number> = { intro: SKELETON_SHARES.opener, paragraph: SKELETON_SHARES.mixed, caption: SKELETON_SHARES.caption, pull_quote: SKELETON_SHARES.caption, closing: SKELETON_SHARES.closing };
+const DEFAULT_SHARE: Record<NarrativeKind, number> = {
+  intro: SKELETON_SHARES.opener,
+  paragraph: SKELETON_SHARES.mixed,
+  caption: SKELETON_SHARES.caption,
+  pull_quote: SKELETON_SHARES.caption,
+  closing: SKELETON_SHARES.closing,
+  subtitle: SKELETON_SHARES.opener,
+  headline: SKELETON_SHARES.opener,
+  closing_line: SKELETON_SHARES.opener,
+};
 
 /**
  * A page with its text, or — when its block was dropped — the same page without: the photos
@@ -746,7 +776,7 @@ export async function writeStory(bookId: string, storyPlan: StoryPlan, opts: { c
 
 // ---------------------------------------------------------------------------- writeStoryStep (Task 8)
 
-const AcceptedSchema = z.strictObject({ kind: z.enum(["intro", "paragraph", "pull_quote", "caption", "closing"]), text: z.string().min(1).max(4000), photoIds: z.array(z.string().max(64)).max(MAX_PHOTO_REFS), factRefs: z.array(z.string().max(64)).max(MAX_FACT_REFS) });
+const AcceptedSchema = z.strictObject({ kind: z.enum(NARRATIVE_KINDS), text: z.string().min(1).max(4000), photoIds: z.array(z.string().max(64)).max(MAX_PHOTO_REFS), factRefs: z.array(z.string().max(64)).max(MAX_FACT_REFS) });
 const IssueSchema = z.strictObject({ blockId: z.string().max(64), code: z.string().max(40), detail: z.string().max(64).optional() });
 const GroupStateSchema = z.discriminatedUnion("status", [
   z.strictObject({ status: z.literal("ok"), blocks: z.array(z.tuple([z.string().regex(/^b[1-9]\d{0,3}$/), AcceptedSchema])).max(200), issues: z.array(IssueSchema).max(100) }),
@@ -886,7 +916,7 @@ async function writeStoryImpl(bookId: string, storyPlan: StoryPlan, opts: { chap
   const aliasesOf = (ids: readonly string[]) => ids.map((id) => photoById.get(id)?.alias).filter((x): x is string => !!x);
   // v3: the plan's brief is untrusted like the rest of the plan — checked again against the book now
   const brief = revalidateBrief(plan.brief, inputs, STORY_PLANNER_PROMPT_VERSION);
-  const w: WriteContext = { s, inputs, plan, photoByAlias, bookAliases: new Set(photoByAlias.keys()), bookTexts: [], maxRunCostUsd: limits.maxRunCostUsd, brief };
+  const w: WriteContext = { s, inputs, plan, photoByAlias, bookAliases: new Set(photoByAlias.keys()), bookTexts: [], maxRunCostUsd: limits.maxRunCostUsd, brief, lineTexts: [] };
   const nowIso = new Date(now()).toISOString();
   const generator = { pipeline: STORY_PIPELINE, model: config.model, prompts: { planner: plan.generator.promptVersion, writer: STORY_WRITER_PROMPT_VERSION } };
   const photosOfChapter = (momentIds: readonly string[]) => inputs.photos.filter((p) => momentIds.includes(p.momentId));
@@ -911,6 +941,7 @@ async function writeStoryImpl(bookId: string, storyPlan: StoryPlan, opts: { chap
     const slots = targets.flatMap((t) => t.slots);
     const rewriting = new Set(targets.map((t) => t.page.id));
     w.bookTexts.push(...current.pages.filter((p) => !rewriting.has(p.id)).flatMap((p) => p.blocks.map((b) => b.text)));
+    w.lineTexts.push(...current.pages.filter((p) => !rewriting.has(p.id)).flatMap((p) => p.blocks.filter((b) => LINE_KINDS.includes(b.kind)).map((b) => (b.kind === "subtitle" ? splitSubtitle(b.text).phrase : b.text))));
     const earlier = current.chapters
       .slice(0, current.chapters.indexOf(chapter))
       .flatMap((c) => current.pages.filter((p) => p.chapterId === c.id && p.kind === "chapter_opener").flatMap((p) => p.blocks.filter((b) => b.kind === "intro").map((b) => ({ label: `${c.id} intro`, text: b.text }))));
@@ -962,6 +993,7 @@ async function writeStoryImpl(bookId: string, storyPlan: StoryPlan, opts: { chap
   const protectedPages = (current?.pages ?? []).filter(isProtectedPage);
   const protectedIds = new Set(protectedPages.map((p) => p.id));
   w.bookTexts.push(...protectedPages.flatMap((p) => p.blocks.map((b) => b.text)));
+  w.lineTexts.push(...protectedPages.flatMap((p) => p.blocks.filter((b) => LINE_KINDS.includes(b.kind)).map((b) => (b.kind === "subtitle" ? splitSubtitle(b.text).phrase : b.text))));
   const accepted = new Map<string, Accepted>();
   const issues: GroundingIssue[] = [];
   const earlier: { label: string; text: string }[] = [];
@@ -991,8 +1023,11 @@ async function writeStoryImpl(bookId: string, storyPlan: StoryPlan, opts: { chap
   let pending = false;
   const keepAccepted = (g: (typeof groups)[number], got: ReadonlyMap<string, Accepted>) => {
     for (const [id, b] of got) accepted.set(id, b);
-    const intro = g.slots.find((x) => x.kind === "intro" && got.has(x.blockId));
-    if (intro) earlier.push({ label: `${g.scopeId} intro`, text: got.get(intro.blockId)!.text });
+    for (const x of g.slots) {
+      const b = got.get(x.blockId);
+      if (!b) continue;
+      if (x.kind === "intro" || x.kind === "headline" || x.kind === "closing_line") earlier.push({ label: `${g.scopeId} ${x.kind}`, text: b.text });
+    }
   };
   for (const g of groups) {
     if (g.slots.length === 0) continue;
@@ -1003,7 +1038,10 @@ async function writeStoryImpl(bookId: string, storyPlan: StoryPlan, opts: { chap
       if (done.status === "ok") {
         attempted++;
         const got = new Map(done.blocks.filter(([id]) => g.slots.some((x) => x.blockId === id)));
-        for (const b of got.values()) w.bookTexts.push(b.text);
+        for (const b of got.values()) {
+          w.bookTexts.push(b.text);
+          if (LINE_KINDS.includes(b.kind)) w.lineTexts.push(b.kind === "subtitle" ? splitSubtitle(b.text).phrase : b.text);
+        }
         keepAccepted(g, got);
         issues.push(...(done.issues as GroundingIssue[]));
       } else if (done.status === "failed") {
@@ -1210,7 +1248,11 @@ export async function rewriteNarrativeBlock(blockId: string, instruction: Rewrit
     mode: inputs.mode,
     allowedEmotions: allowedEmotionsOf(brief),
   };
-  const words = countWords(block.text);
+  // v4: a subtitle is rewritten as its phrase; the verified place in front of it stays
+  const sub = block.kind === "subtitle" ? splitSubtitle(block.text) : null;
+  const blockText = sub ? sub.phrase : block.text;
+  ctx.otherLines = current.pages.flatMap((p) => p.blocks.filter((b) => b.id !== block.id && LINE_KINDS.includes(b.kind)).map((b) => (b.kind === "subtitle" ? splitSubtitle(b.text).phrase : b.text)));
+  const words = countWords(blockText);
   const bounds = WORD_BOUNDS[block.kind];
   const pagePhotos = page.photoIds.map((id) => photoById.get(id)?.alias).filter((x): x is string => !!x);
 
@@ -1224,7 +1266,7 @@ export async function rewriteNarrativeBlock(blockId: string, instruction: Rewrit
       chapterId: page.chapterId ?? (page.kind === "closing" ? "closing" : null),
       promptVersion: STORY_REWRITER_PROMPT_VERSION,
       system: STORY_REWRITER_SYSTEM_PROMPT,
-      userText: rewriterUserText({ inputs, tone: how.tone ?? inputs.storyTone, block: { id: block.id, kind: block.kind, text: block.text, words }, instruction: how.kind, note: how.note, range: bounds, pagePhotos, photos: promptPhotos, retry, brief }),
+      userText: rewriterUserText({ inputs, tone: how.tone ?? inputs.storyTone, block: { id: block.id, kind: block.kind, text: blockText, words }, instruction: how.kind, note: how.note, range: bounds, pagePhotos, photos: promptPhotos, retry, brief }),
       schema: StoryRewriteAiSchema,
       strictSchema: StoryRewriteStrictSchema,
       toLogOutput: rewriteLogOutput,
@@ -1237,15 +1279,16 @@ export async function rewriteNarrativeBlock(blockId: string, instruction: Rewrit
     });
     if (!result.ok) throw failureOf(result);
     const out = result.data;
-    const issues = checkBlock({ blockId: block.id, kind: block.kind, text: out.text, photoRefs: out.photoRefs, factRefs: out.factRefs }, ctx).map((i) => i.code);
-    const after = countWords(out.text);
-    if (collapse(out.text) === collapse(block.text)) issues.push("unchanged");
+    const outText = sub ? composeSubtitle(null, out.text) : out.text;
+    const issues = checkBlock({ blockId: block.id, kind: block.kind, text: outText, photoRefs: out.photoRefs, factRefs: out.factRefs }, ctx).map((i) => i.code);
+    const after = countWords(outText);
+    if (collapse(outText) === collapse(blockText)) issues.push("unchanged");
     if (how.kind === "shorter" && after >= words) issues.push("not_shorter");
     if (how.kind === "longer" && after <= words) issues.push("not_longer");
     if (issues.length === 0) {
       accepted = {
         kind: block.kind,
-        text: out.text,
+        text: sub ? composeSubtitle(sub.place, outText) : outText,
         photoIds: [...new Set(out.photoRefs.map((r) => photoByAlias.get(r)?.id).filter((x): x is string => !!x))].slice(0, MAX_PHOTO_REFS),
         factRefs: out.factRefs.slice(0, MAX_FACT_REFS),
       };

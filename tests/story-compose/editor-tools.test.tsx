@@ -133,6 +133,51 @@ describe("page text tool", () => {
   });
 });
 
+describe("page text tool on a story v4 chapter story page", () => {
+  const fv4 = storyFixture({ photos: 24, design, skeleton: "v4", sample: true });
+  const v4Doc = (): BookDoc => composeStoryDoc({ storybook: fv4.storybook, photos: fv4.photos, design, lang: "en", occasion: "travel", bookTitle: null, maxPages: 20 }).doc;
+  const setValue = (el: HTMLInputElement | HTMLTextAreaElement, value: string) => {
+    const proto = el instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
+    act(() => {
+      Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(el, value);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  };
+
+  it("edits title, subtitle, headline, story and closing line in one panel; each field is its own undo step", () => {
+    const d = v4Doc();
+    const i = d.pages.findIndex((p) => getPageTemplate(p.layout)?.chapterStory);
+    expect(i).toBeGreaterThanOrEqual(0);
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    act(() => root!.render(<Harness doc={d} selection={{ kind: "text", pageIdx: i, panel: 2 }} />));
+    expect(q("page-text-editor")!.getAttribute("data-chapter-story")).toBe("true");
+    const fields = ["title", "subtitle", "headline", "intro", "closing_line"].map((k) => q<HTMLInputElement | HTMLTextAreaElement>(`page-text-field-${k}`)!);
+    for (const f of fields) expect(f.getAttribute("dir")).toBe("auto");
+    // the tapped line (panel 2 = headline) takes the focus
+    expect(document.activeElement).toBe(fields[2]);
+    const chapterId = d.pages[i]!.chapterId!;
+    setValue(fields[0]!, "Our own title");
+    setValue(fields[2]!, "A line in our own words.");
+    setValue(fields[4]!, "We kept the evening.");
+    const page = () => live.state!.doc.pages[i]!;
+    expect(live.state!.doc.chapters.find((c) => c.id === chapterId)!.title).toBe("Our own title");
+    expect(page().texts!.find((t) => t.panel === 2)).toMatchObject({ role: "headline", text: "A line in our own words.", source: "user" });
+    expect(page().texts!.find((t) => t.panel === 3)).toMatchObject({ role: "closing_line", text: "We kept the evening.", source: "user" });
+    act(() => q("undo")!.click());
+    expect(page().texts!.find((t) => t.panel === 3)!.text).toBe(d.pages[i]!.texts!.find((t) => t.panel === 3)!.text);
+    expect(page().texts!.find((t) => t.panel === 2)!.text).toBe("A line in our own words.");
+    act(() => q("undo")!.click());
+    expect(page().texts!.find((t) => t.panel === 2)!.text).toBe(d.pages[i]!.texts!.find((t) => t.panel === 2)!.text);
+    act(() => q("undo")!.click());
+    expect(live.state!.doc.chapters.find((c) => c.id === chapterId)!.title).toBe(d.chapters.find((c) => c.id === chapterId)!.title);
+    // emptying a line removes it (the divider hides with the closing line)
+    setValue(q<HTMLTextAreaElement>("page-text-field-closing_line")!, " ");
+    expect(page().texts!.some((t) => t.panel === 3)).toBe(false);
+  });
+});
+
 describe("Replace photo on a storybook page", () => {
   it("relays out only that page when the new photo no longer fits; ordinary albums keep replacePhoto", () => {
     const d = storyDoc();

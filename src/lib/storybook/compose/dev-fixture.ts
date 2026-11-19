@@ -4,6 +4,7 @@
 // DB, no AI and no network. Never used by the product.
 
 import { buildSkeleton } from "@/lib/ai/story/skeleton";
+import { buildSkeletonV3 } from "@/lib/ai/story/skeleton-v3";
 import { replayText } from "@/lib/ai/story/replay";
 import type { BookDesign } from "@/lib/book/book-design";
 import { STORY_BALANCE } from "@/lib/storybook/schemas";
@@ -18,7 +19,7 @@ export const FIXTURE_BOOK_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 export const fixturePhotoId = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
 /** Replay clause counts per block kind (src/lib/ai/story/replay.ts CLAUSES). */
-const CLAUSES: Record<NarrativeKind, number> = { intro: 10, paragraph: 9, caption: 3, pull_quote: 3, closing: 10 };
+const CLAUSES: Record<NarrativeKind, number> = { intro: 10, paragraph: 9, caption: 3, pull_quote: 3, closing: 10, subtitle: 1, headline: 1, closing_line: 2 };
 
 export type StoryFixtureOptions = {
   photos: number;
@@ -35,7 +36,39 @@ export type StoryFixtureOptions = {
    * phone burst does. Default off: the goldens' fixture photos carry no signals.
    */
   lookalikes?: boolean;
+  /**
+   * Story v4: "v4" = chapter story pages (the live skeleton); default "v3" = the skeleton every
+   * storybook written before v4 has — the Task 7 goldens are built from it, so they also prove
+   * older storybooks still compose unchanged.
+   */
+  skeleton?: "v3" | "v4";
+  /** Story v4 screenshots: readable synthetic chapter-page lines instead of the replay word lists. */
+  sample?: boolean;
 };
+
+/** Synthetic chapter story lines for the dev screenshots (invented; no user content). */
+const CHAPTER_SAMPLE = {
+  en: {
+    subtitle: ["Abu Dhabi · Three days by the water", "A slow morning in the old town", "The long drive home"],
+    headline: ["Some trips start long before you leave.", "The old town kept its own pace.", "Nobody wanted the last day to end."],
+    intro: [
+      "We had talked about this trip for most of the year, and when the first morning came there was no plan beyond the water. The children ran ahead to the shore while we carried the bags, and the week settled into the easy rhythm we had hoped for.",
+      "On the second day the lanes of the old town slowed everyone down. We stopped at every lantern stall, shared one long lunch under a canopy, and let the afternoon decide where we went next, which was mostly nowhere in particular.",
+      "The last day was quieter. We packed slowly, walked the shore one more time and kept the car windows open on the long road back, the sand still in our shoes and nobody in a hurry to talk about going home.",
+    ],
+    closing_line: ["The first evening set the tone for every one after.", "Some streets are best walked without a map.", "We brought the quiet home with us."],
+  },
+  ar: {
+    subtitle: ["أبوظبي · ثلاثة أيام قرب الماء", "صباح هادئ في المدينة القديمة", "طريق العودة الطويل"],
+    headline: ["بعض الرحلات تبدأ قبل السفر بكثير.", "كان للمدينة القديمة إيقاعها الخاص.", "لم يرغب أحد في انتهاء اليوم الأخير."],
+    intro: [
+      "تحدثنا عن هذه الرحلة معظم العام، وحين جاء الصباح الأول لم تكن لدينا خطة سوى الماء. ركض الأطفال نحو الشاطئ بينما حملنا الحقائب، واستقر الأسبوع على الإيقاع الهادئ الذي تمنيناه طويلًا.",
+      "في اليوم الثاني أبطأت أزقة المدينة القديمة خطوات الجميع. توقفنا عند كل كشك للفوانيس، وتشاركنا غداءً طويلًا تحت مظلة، وتركنا العصر يقرر وجهتنا التالية.",
+      "كان اليوم الأخير أهدأ. حزمنا أمتعتنا ببطء، ومشينا على الشاطئ مرة أخيرة، وأبقينا نوافذ السيارة مفتوحة طوال طريق العودة، والرمل ما زال في أحذيتنا.",
+    ],
+    closing_line: ["حدد المساء الأول طابع كل ما تلاه.", "بعض الشوارع أجمل حين تمشيها بلا خريطة.", "عدنا ومعنا ذلك الهدوء."],
+  },
+} as const;
 
 /** Mixed orientations: every 3rd photo portrait, every 7th square, the rest landscape 4:3. */
 export function fixturePhotos(count: number, lowRes: readonly number[] = [], lookalikes = false): ComposePhoto[] {
@@ -94,7 +127,8 @@ export function storyFixture(opts: StoryFixtureOptions): { storybook: Storybook;
     const own = moments.filter((_, k) => Math.floor((k * chapterCount) / moments.length) === c);
     return { id: `c${c + 1}`, momentIds: own.map((m) => m.id), heroPhotoId: own[0]!.photoIds[own[0]!.photoIds.length > 1 ? 1 : 0]!, narrativeMomentIds: own.slice(0, 1).map((m) => m.id) };
   }).filter((c) => c.momentIds.length > 0);
-  const skeleton = buildSkeleton({ moments, chapters, closing: photos.length >= 10, maxPages: opts.maxPages ?? 20 });
+  const skeletonInput = { moments, chapters, closing: photos.length >= 10, maxPages: opts.maxPages ?? 20 };
+  const skeleton = opts.skeleton === "v4" ? buildSkeleton(skeletonInput) : buildSkeletonV3(skeletonInput);
   const createdAt = "2026-11-18T10:00:00.000Z";
   const storybook: Storybook = {
     v: 1,
@@ -131,7 +165,7 @@ export function storyFixture(opts: StoryFixtureOptions): { storybook: Storybook;
       blocks: p.blocks.map((b) => ({
         id: b.id,
         kind: b.kind,
-        text: replayText(lang, Number(b.id.slice(1)), CLAUSES[b.kind]),
+        text: sampleLine(opts.sample ? lang : null, b.kind, p.chapterId) ?? replayText(lang, Number(b.id.slice(1)), CLAUSES[b.kind]),
         lang,
         provenance: aiProvenance(1),
         groundedIn: p.photoIds.slice(0, 1),
@@ -143,6 +177,13 @@ export function storyFixture(opts: StoryFixtureOptions): { storybook: Storybook;
     createdAt,
   };
   return { storybook, photos };
+}
+
+function sampleLine(lang: "en" | "ar" | null, kind: NarrativeKind, chapterId: string | null): string | null {
+  if (!lang || !chapterId) return null;
+  const i = (Number(chapterId.slice(1)) - 1) % 3;
+  const set = CHAPTER_SAMPLE[lang] as Record<string, readonly string[]>;
+  return set[kind]?.[i] ?? null;
 }
 
 // ---------------------------------------------------------------------------- contact sheets
@@ -173,7 +214,7 @@ export function devStoryRenderPhotos(photos: readonly ComposePhoto[]): Record<st
 
 /** Longest texts the AI writes (WORD_BOUNDS max) — what the overflow probe sets in every panel. */
 export function maxText(kind: NarrativeKind, lang: "en" | "ar", seed = 1): string {
-  const words = kind === "caption" || kind === "pull_quote" ? 18 : kind === "paragraph" ? 60 : 70;
+  const words = kind === "pull_quote" ? 18 : kind === "caption" ? 12 : kind === "subtitle" ? 5 : kind === "headline" ? 8 : kind === "closing_line" ? 10 : kind === "paragraph" ? 60 : 70;
   const clauses = Math.ceil(words / (lang === "ar" ? 3 : 4));
   const text = replayText(lang, seed, Math.min(12, clauses));
   // replayText caps at 12 clauses: top up with a second block's words to reach the word count

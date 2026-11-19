@@ -35,7 +35,7 @@ describe("page texts: schema", () => {
   it("accepts a valid text and rejects bad ids, roles, blank text, > 900 units, two texts in one panel", () => {
     expect(parseBookDoc(doc()).ok).toBe(true);
     expect(parseBookDoc(doc({ texts: [text({ id: "TX 1" })] })).ok).toBe(false);
-    expect(parseBookDoc(doc({ texts: [text({ role: "headline" as never })] })).ok).toBe(false);
+    expect(parseBookDoc(doc({ texts: [text({ role: "banner" as never })] })).ok).toBe(false);
     expect(parseBookDoc(doc({ texts: [text({ text: "   " })] })).ok).toBe(false);
     expect(parseBookDoc(doc({ texts: [text({ text: "a".repeat(901) })] })).ok).toBe(false);
     expect(parseBookDoc(doc({ texts: [text(), text({ id: "tx-b2" })] })).ok).toBe(false);

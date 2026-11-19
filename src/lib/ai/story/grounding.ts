@@ -51,15 +51,26 @@
 //      fact.
 
 import type { NarrativeKind } from "@/lib/storybook/types";
-import { genericLanguageIssue, memoryLint, photoCommentaryIssue, type StoryMode } from "./memory-lint";
+import { memoryLint, photoCommentaryIssue, planGenericIssue, type StoryMode } from "./memory-lint";
+import { GUARDED_EXAMPLE_LINES } from "./style-example";
 
+// Story v4: intro = the chapter page's ONE paragraph about meaning (35–70 words); subtitle = the
+// short phrase after "<place> · " (the place is added in code from verified facts); headline ≤ 8
+// words; closing_line ≤ 10 words; captions on photo-led pages ≤ 12 words.
 export const WORD_BOUNDS: Record<NarrativeKind, { min: number; max: number; target: readonly [number, number] }> = {
-  intro: { min: 30, max: 70, target: [35, 65] },
+  intro: { min: 35, max: 70, target: [40, 60] },
   paragraph: { min: 20, max: 60, target: [25, 55] },
-  caption: { min: 5, max: 18, target: [6, 16] },
+  caption: { min: 3, max: 12, target: [4, 12] },
   pull_quote: { min: 5, max: 18, target: [6, 16] },
   closing: { min: 30, max: 70, target: [35, 65] },
+  subtitle: { min: 1, max: 5, target: [2, 5] },
+  headline: { min: 3, max: 8, target: [4, 8] },
+  closing_line: { min: 3, max: 10, target: [4, 10] },
 };
+/** Story v4: one-line kinds — may cite facts only (like the closing), checked for repeats across chapters. */
+export const LINE_KINDS: readonly NarrativeKind[] = ["subtitle", "headline", "closing_line"];
+/** Story v4: chapter titles are short (≤ 5 words, like the reference "Together Again"). */
+export const TITLE_MAX_WORDS = 5;
 export const TITLE_MAX_CHARS = 60;
 export const ARC_MAX_CHARS = 200;
 /** UTF-16 units — NarrativeBlockSchema.text (STORY_LIMITS.narrativeText). */
@@ -94,6 +105,7 @@ export const GROUNDING_ISSUE_CODES = [
   "unsupported_claim", // what was said, why / how long people were apart (v3)
   "claimed_emotion", // an emotion word the user's words do not support (v3)
   "wrong_voice", // "I" / "we" in a third-person book (v3)
+  "example_copy", // reuses words of the prompt's style example or the reference mock-up (v4)
   // rewrite only
   "unchanged",
   "not_shorter",
@@ -116,6 +128,8 @@ export type GroundingPhoto = {
   evidence: string;
   /** The vision model's object list (v2 inventory check: what counts as a concrete thing). */
   objects?: readonly string[];
+  /** v4: people the vision model counted (null / absent = not analysed). */
+  people?: number | null;
 };
 export type GroundingFact = { kind: string; text: string };
 
@@ -127,6 +141,8 @@ export type GroundingContext = {
   bookPhotos?: ReadonlySet<string>;
   /** All memory facts of the book by id. */
   facts: ReadonlyMap<string, GroundingFact>;
+  /** v4: the one-line texts (subtitles / headlines / closing lines) of OTHER chapters — no line may echo one. */
+  otherLines?: readonly string[];
   /** Text of every OTHER block of the storybook (repetition check). */
   otherTexts: readonly string[];
   /** Things the user asked not to mention. */
@@ -791,7 +807,7 @@ export function inventoryIssue(text: string, kind: NarrativeKind, objects: reado
     }
   }
   // a caption / pull quote is one line: as many concrete things as a list sentence is a list
-  return (kind === "caption" || kind === "pull_quote") && total >= INVENTORY_LIMITS.perSentence ? "sentence" : null;
+  return (kind === "caption" || kind === "pull_quote" || LINE_KINDS.includes(kind)) && total >= INVENTORY_LIMITS.perSentence ? "sentence" : null;
 }
 
 /** "he" / "she" … in the text when no fact of the user gives a word of that gender. English only. */
@@ -859,7 +875,7 @@ export function checkBlock(block: BlockDraft, ctx: GroundingContext): GroundingI
   const factRefs = [...new Set(block.factRefs)];
   if (photoRefs.length > MAX_PHOTO_REFS || factRefs.length > MAX_FACT_REFS) push("too_many_refs");
   if (photoRefs.length + factRefs.length === 0) push("no_refs");
-  else if (block.kind !== "closing" && photoRefs.length === 0) push("no_refs", "no_photo");
+  else if (block.kind !== "closing" && !LINE_KINDS.includes(block.kind) && photoRefs.length === 0) push("no_refs", "no_photo");
   const citedPhotos: GroundingPhoto[] = [];
   for (const ref of photoRefs) {
     const p = ctx.photos.get(ref);
@@ -901,11 +917,74 @@ export function checkBlock(block: BlockDraft, ctx: GroundingContext): GroundingI
   }
   const dup = nearDuplicateIssue(text, ctx.chapterTexts ?? []);
   if (dup) push("near_duplicate", dup);
+  // v4: a headline / closing line / subtitle never echoes another chapter's line
+  if (LINE_KINDS.includes(block.kind) && repeatedLineIssue(text, ctx.otherLines ?? [])) push("near_duplicate", "line");
+  // v4: never the style example's or the reference's own words
+  if (exampleCopyIssue(text)) push("example_copy", "style_example");
+  // v4: "together" / "the two of us" needs people in the chapter's photos
+  if (ctx.lang === "en" && togetherWithoutPeople(text, [...ctx.photos.values()], citedFacts)) push("unsupported_claim", "together_no_people");
 
   // 6. memory narrative (v3): no photo-shoot commentary, no filler, no claims the sources can't know
-  for (const f of memoryLint(text, ctx.lang, { citedFactTexts: citedFacts.map((f) => f.text), evidenceTexts: citedPhotos.map(evidenceText), mode: ctx.mode, narrator: ctx.narrator, allowedEmotions: ctx.allowedEmotions })) push(f.code, f.detail);
+  for (const f of memoryLint(text, ctx.lang, { citedFactTexts: citedFacts.map((f) => f.text), citedFactKinds: citedFacts.map((f) => f.kind), evidenceTexts: citedPhotos.map(evidenceText), mode: ctx.mode, narrator: ctx.narrator, allowedEmotions: ctx.allowedEmotions, kind: block.kind })) push(f.code, f.detail);
   return issues;
 }
+
+/** Content words of a short line (normalised, singular, no function words). */
+function lineWords(text: string): Set<string> {
+  return new Set(contentSeq(text));
+}
+
+/**
+ * v4: a one-line text (headline / closing line / subtitle) that repeats another chapter's line —
+ * the same words (normalised), the same first three words, or most of the same content words.
+ */
+export function repeatedLineIssue(text: string, others: readonly string[]): boolean {
+  const norm = (t: string) => tokenize(t).map((x) => x.norm).join(" ");
+  const own = norm(text);
+  const ownWords = lineWords(text);
+  const head = own.split(" ").slice(0, 3).join(" ");
+  for (const o of others) {
+    const other = norm(o);
+    if (!other) continue;
+    if (other === own) return true;
+    if (head.split(" ").length === 3 && other.split(" ").slice(0, 3).join(" ") === head) return true;
+    const ow = lineWords(o);
+    if (ownWords.size >= 2 && ow.size >= 2 && overlapOf(ownWords, ow) >= 0.6) return true;
+  }
+  return false;
+}
+
+const GUARDED_SEQS: readonly string[][] = GUARDED_EXAMPLE_LINES.map((l) => tokenize(l).map((t) => t.norm));
+
+/** v4: four or more words in a row of the style example / the reference mock-up (or the whole of a short one). */
+export function exampleCopyIssue(text: string): boolean {
+  const seq = tokenize(text).map((t) => t.norm);
+  const joined = ` ${seq.join(" ")} `;
+  for (const g of GUARDED_SEQS) {
+    if (g.length < 4) {
+      if (g.length >= 2 && joined.includes(` ${g.join(" ")} `) && seq.length <= g.length + 1) return true;
+      continue;
+    }
+    for (let i = 0; i + 4 <= g.length; i++) if (joined.includes(` ${g.slice(i, i + 4).join(" ")} `)) return true;
+  }
+  return false;
+}
+
+const TOGETHER_RE = /\btogether\b|\bthe\s+two\s+of\s+(?:us|them)\b|\beach\s+other\b|\bside\s+by\s+side\b|\breunit(?:ed|ing|e)\b|\breunion\b/i;
+
+/**
+ * v4: "together" language in a chapter whose analysed photos show nobody (landscapes, food, a pet
+ * alone) — unless the user's cited words say it. Unanalysed photos never count as "nobody".
+ */
+export function togetherWithoutPeople(text: string, photos: readonly Pick<GroundingPhoto, "people">[], cited: readonly GroundingFact[]): boolean {
+  const known = photos.filter((p) => typeof p.people === "number");
+  if (known.length === 0) return false;
+  // nobody in the photos: no "together" at all unless the user's cited words say it
+  if (TOGETHER_RE.test(text) && !cited.some((f) => TOGETHER_RE.test(f.text)) && known.every((p) => p.people === 0)) return true;
+  // nobody photographed WITH anyone: never describe a shot of them together (they may still have been together)
+  return TOGETHER_SHOT_RE.test(text) && known.every((p) => (p.people ?? 0) <= 1);
+}
+const TOGETHER_SHOT_RE = /\bside\s+by\s+side\b|\barm\s+in\s+arm\b|\bshoulder\s+to\s+shoulder\b|\bthe\s+two\s+of\s+(?:us|them)\b|\bboth\s+of\s+(?:us|them)\b|\bin\s+(?:one|the\s+same)\s+(?:frame|picture|photo)\b/i;
 
 export type PlanTextContext = {
   lang: "en" | "ar";
@@ -916,6 +995,8 @@ export type PlanTextContext = {
   /** Vision evidence of the chapter's photos. */
   evidence: readonly string[];
   avoid?: readonly string[];
+  /** v4: most words a title may have (chapter titles; absent = no word limit). */
+  maxWords?: number;
 };
 
 /**
@@ -931,6 +1012,7 @@ export function checkPlanText(id: string, kind: "title" | "arc", text: string, c
     if (!issues.some((i) => i.code === code && i.detail === detail)) issues.push(detail ? { blockId: id, code, detail } : { blockId: id, code });
   };
   if ([...t].length > (kind === "title" ? TITLE_MAX_CHARS : ARC_MAX_CHARS)) push("too_long");
+  if (kind === "title" && ctx.maxWords !== undefined && countWords(t) > ctx.maxWords) push("too_long", "words");
   const facts = [...ctx.facts];
   const trusted = vocabOf([...facts.map((f) => f.text), ...ctx.metadata], occasionGroups(facts));
   const evidence = vocabOf([...ctx.evidence, ...ctx.metadata]);
@@ -939,7 +1021,7 @@ export function checkPlanText(id: string, kind: "title" | "arc", text: string, c
   // v3: a title or an arc about the camera ("The first photos") steers the writer to commentary
   if (ctx.lang === "en") {
     if (photoCommentaryIssue(t)) push("photo_commentary", "camera_subject");
-    if (genericLanguageIssue(t)) push("generic_language", "inspirational");
+    if (planGenericIssue(t)) push("generic_language", "inspirational");
   }
   return issues;
 }

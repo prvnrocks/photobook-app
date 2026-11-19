@@ -29,6 +29,19 @@ export type ComposePhoto = {
   color?: string | null;
   /** Duplicate / similar-shot group: two photos of one group never share a page. */
   group?: string | null;
+  // --- Task 3 analysis signals (story v4: "alike" = the same subject in the same setting / pose) ---
+  /** What the photo shows (photo_analyses objects, normalised, lower case). */
+  objects?: readonly string[] | null;
+  /** What is happening (photo_analyses activities, lower case). */
+  activities?: readonly string[] | null;
+  /** The analysis' story role (establishing / portrait / detail …): the shot type. */
+  storyRole?: string | null;
+  /**
+   * Story v4: a soft photo — whole-frame softness against the book's own sharpness, a soft /
+   * blurry quality flag, or the analysis' own "blurred / out of focus" note. Kept in the book, but
+   * never given a hero-size slot (select.ts evalSlot) nor picked as a chapter hero.
+   */
+  soft?: boolean;
 };
 
 export const PAGE_EMPHASES = ["photo", "balanced", "text"] as const;
@@ -58,7 +71,7 @@ export type PageIntent = {
 export type ComposeText = { key: string; role: PageTextRole; text: string };
 export type TemplateContent = { texts: readonly ComposeText[] };
 
-export const SELECT_WARNINGS = ["orientation_miss", "crop_heavy", "crop_subject", "low_dpi", "dpi_below_target", "repeat_recent", "preferred_ignored"] as const;
+export const SELECT_WARNINGS = ["orientation_miss", "crop_heavy", "crop_subject", "low_dpi", "dpi_below_target", "repeat_recent", "preferred_ignored", "soft_large"] as const;
 export type SelectWarning = (typeof SELECT_WARNINGS)[number];
 
 export const NO_FIT_REASONS = ["no_template", "photo_count", "text_unplaced", "text_overflow", "crop", "low_dpi", "repeat"] as const;

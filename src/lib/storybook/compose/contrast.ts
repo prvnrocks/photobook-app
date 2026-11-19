@@ -78,11 +78,41 @@ function orient(p: Pick<ComposePhoto, "width" | "height">): "p" | "l" | "s" | nu
 
 export const sameGroup = (a: Pick<ComposePhoto, "group">, b: Pick<ComposePhoto, "group">) => !!a.group && a.group === b.group;
 
-/** How alike two photos look, 0..1, from the signals both carry (0 when they share none). */
+/** Jaccard overlap of two lower-case word bags (head words of the analysis' object / activity lists). */
+function bagOverlap(a: readonly string[] | null | undefined, b: readonly string[] | null | undefined): number | null {
+  if (!a?.length || !b?.length) return null;
+  const words = (xs: readonly string[]) => new Set(xs.flatMap((x) => x.toLowerCase().split(/[^a-z\u0600-\u06ff]+/u)).filter((w) => w.length >= 3 && !BAG_STOP.has(w)).map((w) => w.replace(/(?:es|s)$/u, "")));
+  const A = words(a);
+  const B = words(b);
+  if (A.size === 0 || B.size === 0) return null;
+  let inter = 0;
+  for (const w of A) if (B.has(w)) inter++;
+  return inter / (A.size + B.size - inter);
+}
+const BAG_STOP = new Set(["the", "and", "with", "for", "from", "into", "onto", "near", "some", "two", "three", "person", "people", "man", "woman"]);
+
+/**
+ * How alike two photos look, 0..1, from the signals both carry (0 when they share none).
+ * Story v4: the Task 3 analysis counts as much as the pixels — the same things in the frame
+ * (objects), the same activity, the same shot type (story role) and the same people count read as
+ * "the same subject in the same setting / pose" even minutes apart (two close-ups of one cup in
+ * front of one sign; one person posing twice at one wall).
+ */
 export function photoSimilarity(a: ComposePhoto, b: ComposePhoto): number {
   if (sameGroup(a, b)) return 1;
   let s = 0;
   let evidence = 0;
+  const objects = bagOverlap(a.objects, b.objects);
+  if (objects !== null) {
+    evidence++;
+    s += objects >= 0.5 ? 0.25 : objects >= 0.3 ? 0.12 : objects === 0 ? -0.1 : 0;
+  }
+  const activities = bagOverlap(a.activities, b.activities);
+  if (activities !== null) {
+    evidence++;
+    s += activities >= 0.5 ? 0.1 : 0;
+  }
+  if (a.storyRole && b.storyRole) s += a.storyRole === b.storyRole ? 0.05 : -0.05;
   if (a.phash && b.phash) {
     const h = hammingHex(a.phash, b.phash);
     if (Number.isFinite(h)) {
@@ -95,13 +125,17 @@ export function photoSimilarity(a: ComposePhoto, b: ComposePhoto): number {
   if (ta !== null && tb !== null) {
     evidence++;
     const dt = Math.abs(ta - tb) / 1000;
-    s += dt <= 30 ? 0.25 : dt <= 120 ? 0.15 : dt <= 600 ? 0.05 : 0;
+    s += dt <= 30 ? 0.25 : dt <= 120 ? 0.15 : dt <= 600 ? 0.1 : dt <= 1800 ? 0.05 : 0;
   }
   if (a.scene && b.scene) {
     evidence++;
     s += a.scene === b.scene ? 0.2 : -0.15;
     const people = (a.scene === "portrait" || a.scene === "group") && a.scene === b.scene;
     if (people && typeof a.people === "number" && typeof b.people === "number") s += a.people === b.people ? 0.1 : -0.05;
+  } else if (typeof a.people === "number" && typeof b.people === "number") {
+    // no scene (analysis-only photos): the same people count is still a hint of the same pose
+    evidence++;
+    s += a.people === b.people ? (a.people > 0 ? 0.1 : 0.05) : -0.05;
   }
   const ca = rgb(a.color);
   const cb = rgb(b.color);
@@ -267,6 +301,38 @@ export function contrastPhotos(units: ContrastUnit[]): ContrastResult {
         } else result.setAside.push(photo.id);
       }
     }
+
+    // 3. (story v4) a lookalike pair no swap could separate: move one of the two to a page of the
+    //    chapter with room where it has no lookalike (never set aside — they are different photos)
+    for (const a of members) {
+      const ua = units[a]!;
+      for (let guard = 0; guard < 6; guard++) {
+        let at = -1;
+        for (let i = 0; i < ua.photos.length && at < 0; i++)
+          for (let j = i + 1; j < ua.photos.length && at < 0; j++)
+            if (sim(ua.photos[i]!, ua.photos[j]!) >= LOOKALIKE) at = !ua.pinned.has(ua.photos[j]!.id) ? j : !ua.pinned.has(ua.photos[i]!.id) ? i : -1;
+        if (at < 0 || ua.photos.length <= 1) break;
+        const photo = ua.photos[at]!;
+        const before0 = localCost([a]);
+        ua.photos.splice(at, 1);
+        let target: { b: number; gain: number } | null = null;
+        for (const b of members) {
+          const ub = units[b]!;
+          if (b === a || ub.photos.length >= ub.capacity || ub.photos.length === 0 || ub.photos.some((y) => sameGroup(y, photo) || sim(y, photo) >= LOOKALIKE)) continue;
+          const before = before0 + localCost([b]);
+          ub.photos.push(photo);
+          const gain = before - localCost([a, b]);
+          ub.photos.pop();
+          if (gain > MIN_GAIN && (!target || gain > target.gain + 1e-9)) target = { b, gain };
+        }
+        if (!target) {
+          ua.photos.splice(at, 0, photo);
+          break;
+        }
+        units[target.b]!.photos.push(photo);
+        result.moved.push(photo.id);
+      }
+    }
   }
   return result;
 }
@@ -279,16 +345,23 @@ export function contrastPhotos(units: ContrastUnit[]): ContrastResult {
 export function composeSignalsOf(
   row: { phash?: string | null; taken_at?: string | null; date_source?: string | null; color?: string | null; ai?: unknown },
   group?: string | number | null,
-): Pick<ComposePhoto, "phash" | "takenAt" | "scene" | "people" | "color" | "group"> {
+  vision?: unknown,
+): Pick<ComposePhoto, "phash" | "takenAt" | "scene" | "people" | "color" | "group" | "objects" | "activities" | "storyRole"> {
   const ai = row.ai && typeof row.ai === "object" && !Array.isArray(row.ai) ? (row.ai as Record<string, unknown>) : null;
-  const scene = typeof ai?.scene === "string" ? (ai.scene as ComposePhoto["scene"]) : null;
-  const people = typeof ai?.peopleCount === "number" && Number.isFinite(ai.peopleCount) ? ai.peopleCount : null;
+  // story v4: the Task 3 analysis (photo_analyses) — storybook photos usually have no Curator note
+  const v = vision && typeof vision === "object" && !Array.isArray(vision) ? (vision as Record<string, unknown>) : null;
+  const sceneRaw = typeof ai?.scene === "string" ? ai.scene : typeof v?.scene === "string" ? v.scene : null;
+  const peopleRaw = typeof ai?.peopleCount === "number" ? ai.peopleCount : typeof v?.peopleCount === "number" ? v.peopleCount : null;
+  const list = (x: unknown) => (Array.isArray(x) ? x.filter((y): y is string => typeof y === "string").map((y) => y.toLowerCase().trim()).filter(Boolean).slice(0, 12) : null);
   return {
     phash: typeof row.phash === "string" && /^[0-9a-f]+$/i.test(row.phash) ? row.phash.toLowerCase() : null,
     takenAt: row.taken_at && row.date_source !== "file" ? row.taken_at : null,
-    scene,
-    people,
+    scene: sceneRaw as ComposePhoto["scene"],
+    people: typeof peopleRaw === "number" && Number.isFinite(peopleRaw) ? peopleRaw : null,
     color: typeof row.color === "string" && /^#[0-9a-f]{6}$/i.test(row.color) ? row.color.toLowerCase() : null,
     group: group === null || group === undefined ? null : String(group),
+    objects: list(v?.objects),
+    activities: list(v?.activities),
+    storyRole: typeof v?.storyRole === "string" ? v.storyRole : null,
   };
 }

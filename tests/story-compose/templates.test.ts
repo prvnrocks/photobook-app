@@ -5,7 +5,7 @@ import { pageMm } from "@/lib/book/format";
 import { STICKERS } from "@/lib/design/stickers";
 import { getLayout, LAYOUTS, STORY_LAYOUTS, isStoryLayoutId } from "@/lib/layouts";
 import { layoutsFor } from "@/lib/book/spreads";
-import { STORY_BODY_SIZE, STORY_PHOTO_GAPS, STORY_PHOTO_KINDS, STORY_TEMPLATE_KINDS, storyTemplateId } from "@/lib/layouts/story";
+import { OPENER_BODY_SIZE, STORY_BODY_SIZE, STORY_PHOTO_GAPS, STORY_PHOTO_KINDS, STORY_TEMPLATE_KINDS, storyTemplateId } from "@/lib/layouts/story";
 import { panelFontMm, panelTextMetrics } from "@/lib/book/render";
 import { roleFont } from "@/lib/design/styles";
 import { maxText } from "@/lib/storybook/compose/dev-fixture";
@@ -116,7 +116,8 @@ describe("template registry", () => {
   });
 
   it("main text panels hold the longest AI block (70 words) in EN and AR with an 8 % margin", () => {
-    for (const t of pageTemplates().filter((x) => x.isNew)) {
+    // (story v4 chapter story pages: their own per-line capacities in chapter-story.test.ts)
+    for (const t of pageTemplates().filter((x) => x.isNew && !x.chapterStory)) {
       for (const p of t.panels.filter((x) => x.n === 0)) {
         for (const lang of ["en", "ar"] as const) expect(panelCapacityWords(t, p, lang, 0.92), `${t.id} ${lang}`).toBeGreaterThanOrEqual(WORD_BOUNDS.intro.max);
       }
@@ -145,11 +146,11 @@ describe("story text sizing (fix: tiny paragraph in a huge box)", () => {
       expect(main.size, t.id).toEqual(STORY_BODY_SIZE);
       expect(main.valign, t.id).toBe("start");
     }
-    // openers keep the role's own size and centring (unchanged look)
-    for (const t of pageTemplates().filter((x) => x.isNew && x.family === "chapter_opening")) {
+    // story v4: openers start at the body-copy size at the top of their box (a long intro may shrink to 2.8 mm)
+    for (const t of pageTemplates().filter((x) => x.isNew && x.family === "chapter_opening" && !x.chapterStory)) {
       const main = getLayout(t.id)!.texts!.find((x) => x.bind === "pageText")!;
-      expect(main.size, t.id).toBeUndefined();
-      expect(main.valign, t.id).toBeUndefined();
+      expect(main.size, t.id).toEqual(OPENER_BODY_SIZE);
+      expect(main.valign, t.id).toBe("start");
     }
   });
 

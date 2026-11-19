@@ -64,7 +64,7 @@ const QUESTIONS: readonly StoryQuestion[] = [
     kind: "relationship",
     prompt: "Who is in these photos, to you?",
     hint: "We only use what you write here — we never guess who people are.",
-    placeholder: "e.g. My brother and me",
+    placeholder: "e.g. My parents and the kids",
     suggestions: ["My brother", "My sister", "My partner", "Friends", "Family"],
   },
   {
@@ -72,7 +72,7 @@ const QUESTIONS: readonly StoryQuestion[] = [
     kind: "moment",
     prompt: "One short memory from that time",
     hint: "A sentence is enough.",
-    placeholder: "e.g. The first coffee we had together in ages",
+    placeholder: "e.g. The first time we were all in one place",
     suggestions: [],
   },
 ];

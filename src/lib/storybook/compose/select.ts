@@ -57,10 +57,14 @@ export const REPEAT_WINDOW = 3;
 export const CAPTION_MAX_UNITS = 200;
 /** Fixed caption size on the page: CAPTION_FONT_SIZE_CQW 2.6 % of a 148 mm wide page (same mm on landscape). */
 export const CAPTION_SIZE_MM = 3.848;
+/** Story v4: the largest share of the page a soft (out-of-focus) photo may fill — hero-small (≈ 26 %) and grid slots pass, heroes do not. */
+export const SOFT_MAX_AREA = 0.3;
 /** Cost of an EMPTY paragraph box (× the empty share of its height) when choosing a fitted variant. */
 export const BLANK_WEIGHT = 6;
 
 const MAIN: readonly PageTextRole[] = ["intro", "paragraph", "closing"];
+/** Story v4: the lines that only a chapter story page holds. */
+export const CHAPTER_STORY_LINE_ROLES: readonly PageTextRole[] = ["subtitle", "headline", "closing_line"];
 const r4 = (n: number) => Math.round(n * 10000) / 10000;
 
 export type PhotoShape = { orient: "portrait" | "landscape" | "square"; ratio: number | null };
@@ -160,6 +164,12 @@ export function evalSlot(t: PageTemplate, layout: Layout, i: number, p: ComposeP
   const areaShare = (slot.w * slot.h) / 10000;
   if (p.role === "hero" && t.photoCount > 1 && layout.slots.some((s) => s.w * s.h > slot.w * slot.h + 1e-6)) cost += 1;
   if (typeof p.quality === "number" && p.quality < 40 && areaShare > 0.5) cost += 1;
+  // story v4: a soft photo never gets a hero-size slot (it stays in the book, framed small or in a grid)
+  if (p.soft && areaShare > SOFT_MAX_AREA) {
+    cost += 6;
+    if (relax) warnings.push("soft_large");
+    else reject ??= "crop";
+  }
   return { cost, reject, warnings };
 }
 
@@ -237,6 +247,25 @@ type TextPlan = { ok: true; texts: TextAssignment[] } | { ok: false; reason: "te
 
 /** Panels for every text of `content` on template `t` (see the header rules). */
 export function placeTexts(t: PageTemplate, content: TemplateContent, lang: "en" | "ar", slack = CAPACITY_SLACK, atMax = false): TextPlan {
+  // Story v4: chapter story lines (subtitle / headline / closing line) only sit on a chapter story
+  // page, and a chapter story page is only used for a v4 chapter page (one with such a line) — an
+  // older intro-only chapter opening keeps its open-* template (older books compose as before).
+  const storyLines = content.texts.filter((x) => CHAPTER_STORY_LINE_ROLES.includes(x.role));
+  if (t.chapterStory || storyLines.length > 0) {
+    if (!t.chapterStory) return { ok: false, reason: "text_unplaced", detail: storyLines[0]!.role };
+    if (storyLines.length === 0) return { ok: false, reason: "text_unplaced", detail: "chapter_story_without_lines" };
+    const out: TextAssignment[] = [];
+    const seen = new Set<number>();
+    for (const x of content.texts) {
+      const panel = t.panels.find((p) => p.n >= 0 && p.roles.includes(x.role));
+      if (!panel || seen.has(panel.n)) return { ok: false, reason: "text_unplaced", detail: x.role };
+      seen.add(panel.n);
+      if (!textFits(t, panel, x.text, lang, slack, false)) return { ok: false, reason: "text_overflow", detail: `panel_${panel.n}` };
+      out.push({ key: x.key, panel: panel.n });
+    }
+    // empty chapter story panels are allowed (a line the writer could not ground is left out)
+    return { ok: true, texts: out };
+  }
   const mains = content.texts.filter((x) => MAIN.includes(x.role));
   const quotes = content.texts.filter((x) => !MAIN.includes(x.role));
   const main = t.panels.find((p) => p.n === 0);

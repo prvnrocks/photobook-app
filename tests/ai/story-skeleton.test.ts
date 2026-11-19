@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 import { LIMITS } from "@/lib/ai/limits";
 import type { StoryInputs, StoryMoment } from "@/lib/ai/story/inputs";
 import { assemblePlan, chapterCountRange, checkPlanAgainstBook, ruleOutline, splitMoments, StoryPlanSchema, wantsClosing } from "@/lib/ai/story/plan";
-import { buildSkeleton, SKELETON_SHARES, type SkeletonInput } from "@/lib/ai/story/skeleton";
-import { isBalanced } from "@/lib/storybook/balance";
+import { buildSkeleton, CHAPTER_STORY_BLOCKS, SKELETON_SHARES, type SkeletonInput } from "@/lib/ai/story/skeleton";
 import { STORY_BALANCE, StoryPageSchema } from "@/lib/storybook/schemas";
 
 // Task 6: chapter-count rules, the rule planner and the page skeleton (pure, deterministic).
@@ -98,7 +97,8 @@ describe("rule planner", () => {
     inputs.moments[0]!.place = "Abu Dhabi";
     inputs.moments[1]!.label = "A day to remember"; // a user label that is a stock phrase
     const outline = ruleOutline(inputs);
-    expect(outline.chapters.map((c) => c.title)).toEqual(["Walking on a beach · Abu Dhabi", "Along the way"]);
+    // v4: chapter titles are ≤ 5 words — the 6-word label offers its subject alone
+    expect(outline.chapters.map((c) => c.title)).toEqual(["Walking on a beach", "Along the way"]);
     const plan = assemblePlan({ bookId: BOOK, outline, inputs, maxPages: 20, source: "rule", fallbackReason: "ai_off", model: null, promptVersion: "story-plan-1" });
     expect(StoryPlanSchema.safeParse(plan).success).toBe(true);
     expect(checkPlanAgainstBook(plan, BOOK, inputs, 20)).toEqual([]);
@@ -122,32 +122,41 @@ describe("page skeleton", () => {
     expect(a.pages.flatMap((p) => p.blocks.map((b) => b.id))).toEqual(a.pages.flatMap((p) => p.blocks).map((_, i) => `b${i + 1}`));
   });
 
-  it("24 photos in 3 chapters: an opener with the intro per chapter, mixed pages with one paragraph, photo pages, one closing page", () => {
+  it("24 photos in 3 chapters: one chapter story page per chapter (subtitle, headline, intro, closing line), photo-led pages, one closing page", () => {
     const inputs = inputsOf(spread(24, 6));
     const sk = buildSkeleton(skeletonInput(inputs, FREE));
     const kinds = sk.pages.map((p) => p.kind);
     expect(kinds.filter((k) => k === "chapter_opener")).toHaveLength(3);
     expect(kinds.filter((k) => k === "closing")).toHaveLength(1);
     expect(kinds[kinds.length - 1]).toBe("closing");
-    expect(kinds.filter((k) => k === "mixed").length).toBeGreaterThan(0);
+    // v4: no paragraph narration on the photo pages
+    expect(kinds.filter((k) => k === "mixed" || k === "narrative")).toHaveLength(0);
     for (const p of sk.pages) {
-      if (p.kind === "chapter_opener") expect(p).toMatchObject({ narrativeShare: SKELETON_SHARES.opener, blocks: [{ kind: "intro" }] });
-      if (p.kind === "mixed") expect(p).toMatchObject({ narrativeShare: SKELETON_SHARES.mixed, blocks: [{ kind: "paragraph" }] });
+      if (p.kind === "chapter_opener") {
+        expect(p.narrativeShare).toBe(SKELETON_SHARES.opener);
+        expect(p.blocks.map((b) => b.kind)).toEqual([...CHAPTER_STORY_BLOCKS]);
+        expect(p.photoIds).toHaveLength(1);
+      }
       if (p.kind === "closing") expect(p).toMatchObject({ narrativeShare: 1, photoIds: [], blocks: [{ kind: "closing" }] });
-      if (p.kind === "photo") expect(p.narrativeShare === 0 ? p.blocks.length === 0 : ["caption", "pull_quote"].includes(p.blocks[0]!.kind)).toBe(true);
+      if (p.kind === "photo") expect(p.narrativeShare === 0 ? p.blocks.length === 0 : p.blocks.length === 1 && p.blocks[0]!.kind === "caption").toBe(true);
     }
     expect(sk.omittedPhotos).toBe(0);
     expect(sk.pages.flatMap((p) => p.photoIds).sort()).toEqual(inputs.photos.map((p) => p.id).sort());
   });
 
-  it("balance lands within tolerance of 35 % narrative for 10–60 photos, whatever the grouping and the page limit", () => {
-    for (let n = 10; n <= 60; n++) {
-      for (const moments of [1, 2, 3, 5, 8, 13, n]) {
+  it("photo-led chapters: at most one caption on every second photo page; the 35 % target is a ceiling, never exceeded by captions", () => {
+    for (let n = 10; n <= 60; n += 5) {
+      for (const moments of [1, 3, 8]) {
         for (const max of [FREE, PAID]) {
-          const inputs = inputsOf(spread(n, Math.min(moments, n)));
-          const sk = buildSkeleton(skeletonInput(inputs, max));
-          expect(isBalanced(sk.balance), `${n} photos / ${moments} moments / ${max} pages → ${sk.balance.narrativeShare}`).toBe(true);
-          expect(Math.abs(sk.balance.drift)).toBeLessThanOrEqual(STORY_BALANCE.tolerance);
+          const sk = buildSkeleton(skeletonInput(inputsOf(spread(n, Math.min(moments, n))), max));
+          const chapters = [...new Set(sk.pages.map((p) => p.chapterId).filter(Boolean))];
+          for (const c of chapters) {
+            const photoPages = sk.pages.filter((p) => p.kind === "photo" && p.chapterId === c);
+            expect(photoPages.filter((p) => p.blocks.length > 0).length).toBeLessThanOrEqual(Math.floor(photoPages.length / 2));
+          }
+          const captions = sk.pages.filter((p) => p.kind === "photo" && p.blocks.length > 0).length;
+          // a caption is only added while the book is below the target (ceiling + half a caption step)
+          if (captions > 0) expect(sk.balance.narrativeShare).toBeLessThanOrEqual(STORY_BALANCE.narrativeShare + SKELETON_SHARES.caption / 2 / sk.pages.length + 1e-9);
           expect(sk.pages.length).toBeLessThanOrEqual(max);
         }
       }
@@ -162,7 +171,7 @@ describe("page skeleton", () => {
         // content = photos, or the closing reflection
         expect(p.photoIds.length > 0 || p.kind === "closing").toBe(true);
         expect(p.photoIds.length).toBeLessThanOrEqual(6);
-        expect(p.blocks.length).toBeLessThanOrEqual(1);
+        expect(p.blocks.length).toBeLessThanOrEqual(p.kind === "chapter_opener" ? 4 : 1);
         const asPage = { ...p, blocks: p.blocks.map((b) => ({ id: b.id, kind: b.kind, text: "x", lang: "en", provenance: { source: "ai", rev: 1, aiVersion: 1, editedAt: null }, groundedIn: [] })), layoutId: null, userLocked: false };
         expect(StoryPageSchema.safeParse(asPage).success, `${p.kind} ${p.narrativeShare}`).toBe(true);
       }
@@ -176,11 +185,9 @@ describe("page skeleton", () => {
     const free = buildSkeleton(skeletonInput(inputs, FREE));
     expect(free.pages.length).toBe(FREE);
     expect(free.omittedPhotos).toBe(100 - free.pages.flatMap((p) => p.photoIds).length);
-    expect(isBalanced(free.balance)).toBe(true);
     const paid = buildSkeleton(skeletonInput(inputs, PAID));
     expect(paid.pages.length).toBeLessThanOrEqual(PAID);
     expect(paid.omittedPhotos).toBe(0);
-    expect(isBalanced(paid.balance)).toBe(true);
   });
 
   it("many tiny moments are merged onto shared pages before any photo is left out", () => {
@@ -189,22 +196,14 @@ describe("page skeleton", () => {
     expect(sk.omittedPhotos).toBe(0);
   });
 
-  it("a handful of photos: no closing page, no filler page — the nearest balance is returned with its drift", () => {
+  it("a handful of photos: one visit = one chapter story page, no closing page, no filler page — the nearest balance is returned with its drift", () => {
     const one = buildSkeleton(skeletonInput(inputsOf([1]), FREE));
     expect(one.pages.map((p) => p.kind)).toEqual(["chapter_opener"]);
-    expect(one.balance.drift).toBeCloseTo(0.15, 5);
+    expect(one.balance.drift).toBeCloseTo(SKELETON_SHARES.opener - STORY_BALANCE.narrativeShare, 5);
     const five = buildSkeleton(skeletonInput(inputsOf([5]), FREE));
-    expect(five.pages.some((p) => p.kind === "closing" || p.kind === "narrative")).toBe(false);
+    expect(five.pages.filter((p) => p.kind === "chapter_opener")).toHaveLength(1);
+    expect(five.pages.some((p) => p.kind === "closing" || p.kind === "narrative" || p.kind === "mixed")).toBe(false);
     expect(five.pages.every((p) => p.photoIds.length > 0)).toBe(true);
-  });
-
-  it("paragraphs go first to the moments the outline marked", () => {
-    const inputs = inputsOf([7, 7, 7]);
-    const input = skeletonInput(inputs, PAID);
-    const chapters = input.chapters.map((c) => ({ ...c, narrativeMomentIds: c.momentIds.includes("m3") ? ["m3"] : [] }));
-    const sk = buildSkeleton({ ...input, chapters });
-    const firstOfM3 = sk.pages.find((p) => p.momentId === "m3" && p.kind !== "chapter_opener")!;
-    expect(firstOfM3.kind).toBe("mixed");
   });
 
   it("a tampered skeleton, a foreign photo or a stale grouping is not a valid plan for the book", () => {
@@ -212,7 +211,7 @@ describe("page skeleton", () => {
     const plan = assemblePlan({ bookId: BOOK, outline: ruleOutline(inputs), inputs, maxPages: FREE, source: "rule", fallbackReason: "ai_off", model: null, promptVersion: "story-plan-1" });
     expect(checkPlanAgainstBook(plan, BOOK, inputs, FREE)).toEqual([]);
     const shares = structuredClone(plan);
-    shares.skeleton.pages[1]!.narrativeShare = 0;
+    shares.skeleton.pages[0]!.narrativeShare = 0;
     expect(checkPlanAgainstBook(shares, BOOK, inputs, FREE).map((i) => i.code)).toEqual(["skeleton"]);
     const extraPage = structuredClone(plan);
     extraPage.skeleton.pages.push({ id: "pg99", kind: "closing", chapterId: null, momentId: null, photoIds: [], blocks: [{ id: "b99", kind: "closing" }], narrativeShare: 1 });

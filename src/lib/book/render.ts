@@ -7,6 +7,7 @@ import { isPhotoFilterId, type PhotoFilterId } from "@/lib/design/photo-filters"
 import { getLayout } from "@/lib/layouts";
 import { captionTextAttrs, isMainlyArabic } from "@/lib/review/ui";
 import { cropToStyle, DEFAULT_CROP, type CropStyle } from "./crop";
+import { chapterLabel } from "./chapter-label";
 import {
   ARABIC_CAPTION_FONTS,
   captionFontFamily,
@@ -1001,6 +1002,11 @@ function boundText(doc: BookDoc, bind: TextBinding, owner: BookPage | null, n = 
     // M30: a cover line = the title of chapter `n` (doc order); no such chapter → not drawn.
     case "coverLine":
       return doc.chapters[n]?.title ?? "";
+    // Story v4: "CHAPTER ONE" from the chapter's position (Arabic when its title is Arabic).
+    case "chapterLabel": {
+      const i = owner?.chapterId ? doc.chapters.findIndex((c) => c.id === owner.chapterId) : -1;
+      return i < 0 ? "" : chapterLabel(i, isMainlyArabic(doc.chapters[i]!.title) ? "ar" : "en");
+    }
   }
 }
 
@@ -1162,7 +1168,8 @@ function textPanels(
       fontSizeCqw: round4((sizeMm / page.w) * 100),
       lineHeight: leading.lineHeight,
       ...(leading.padEm ? { padEm: leading.padEm } : {}),
-      typography: typographyOf(f),
+      // Story v4: an italic panel (closing line) slants Latin text only — never Arabic.
+      typography: t.italic && !isMainlyArabic(text) ? { ...typographyOf(f), fontStyle: "italic" } : typographyOf(f),
       ...(quarter ? { quarter: { deg: t.rotate as 90 | -90, inner: quarterInner(boxWmm, boxHmm) } } : t.rotate ? { rotate: t.rotate } : {}),
       ...(colours && t.ink ? { color: colours[INK_COLOUR[t.ink]] } : {}),
       ...(t.bind === "pageText" ? { textId: pageTextOf(owner, t.n ?? 0)?.id } : {}),
@@ -1306,7 +1313,7 @@ export function pageRenderModel(
   }
 
   const texts = layout.texts
-    ? textPanels(doc, layout, owner, offset, captionLang, ["chapterTitle", "dateLabel", "chapterDescription", "pageText"])
+    ? textPanels(doc, layout, owner, offset, captionLang, ["chapterTitle", "dateLabel", "chapterDescription", "pageText", "chapterLabel"])
     : [];
   // Decorations are layout artwork: drawn on orphaned right halves too (like the background).
   const decorations = layout.decorations ? renderDecorations(layout, doc.occasion, offset) : [];

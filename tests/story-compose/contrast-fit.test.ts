@@ -239,7 +239,46 @@ describe("contrasting photo sets", () => {
   });
 
   it("composeSignalsOf: reads the photos row (file dates dropped, bad values null)", () => {
-    expect(composeSignalsOf({ phash: "A1B2C3D4E5F60718", taken_at: "2026-10-12T09:00:00Z", date_source: "exif", color: "#B0764A", ai: { scene: "food", peopleCount: 0 } }, 3)).toEqual({ phash: "a1b2c3d4e5f60718", takenAt: "2026-10-12T09:00:00Z", scene: "food", people: 0, color: "#b0764a", group: "3" });
-    expect(composeSignalsOf({ phash: null, taken_at: "2026-10-12T09:00:00Z", date_source: "file", color: "red", ai: null })).toEqual({ phash: null, takenAt: null, scene: null, people: null, color: null, group: null });
+    const none = { objects: null, activities: null, storyRole: null };
+    expect(composeSignalsOf({ phash: "A1B2C3D4E5F60718", taken_at: "2026-10-12T09:00:00Z", date_source: "exif", color: "#B0764A", ai: { scene: "food", peopleCount: 0 } }, 3)).toEqual({ phash: "a1b2c3d4e5f60718", takenAt: "2026-10-12T09:00:00Z", scene: "food", people: 0, color: "#b0764a", group: "3", ...none });
+    expect(composeSignalsOf({ phash: null, taken_at: "2026-10-12T09:00:00Z", date_source: "file", color: "red", ai: null })).toEqual({ phash: null, takenAt: null, scene: null, people: null, color: null, group: null, ...none });
+  });
+
+  it("story v4: storybook photos without a Curator note take scene / people / objects / activities / role from the Task 3 analysis", () => {
+    const vision = { scene: "portrait", peopleCount: 1, objects: ["Wall", "palm tree"], activities: ["posing by a wall"], storyRole: "portrait" };
+    expect(composeSignalsOf({ phash: null, taken_at: null, ai: null }, null, vision)).toMatchObject({ scene: "portrait", people: 1, objects: ["wall", "palm tree"], activities: ["posing by a wall"], storyRole: "portrait" });
+  });
+});
+
+describe("story v4: 'alike' uses the analysis — same subject, same setting, same pose, minutes apart", () => {
+  const cup = (n: number, minute: number, phash: string): ComposePhoto =>
+    P(n, { phash, takenAt: new Date(Date.UTC(2026, 4, 30, 13, minute)).toISOString(), scene: "food", people: 0, objects: ["iced coffee cup", "shop sign"], activities: ["holding a cup"], storyRole: "detail", color: "#a07850" });
+  const pose = (n: number, minute: number, phash: string): ComposePhoto =>
+    P(n, { width: 3000, height: 4000, phash, takenAt: new Date(Date.UTC(2026, 4, 30, 14, minute)).toISOString(), scene: "portrait", people: 1, objects: ["stone wall", "palm tree"], activities: ["standing against a wall"], storyRole: "portrait", color: "#c8b08a" });
+
+  it("two close-ups of one cup in front of one sign, 4 minutes apart and dHash 14 bits apart, read as lookalikes", () => {
+    expect(photoSimilarity(cup(1, 0, "ffff0000ffff0000"), cup(2, 4, "ffff0000ffff3fff"))).toBeGreaterThanOrEqual(LOOKALIKE);
+  });
+  it("the same person in the same pose at the same wall, minutes apart, reads as lookalikes", () => {
+    expect(photoSimilarity(pose(1, 0, "0f0f0f0f0f0f0f0f"), pose(2, 6, "0f0f0f0f0f0fffff"))).toBeGreaterThanOrEqual(LOOKALIKE);
+  });
+  it("a cup close-up and a wide street view are not alike", () => {
+    const wide = P(9, { scene: "landscape", people: 3, objects: ["street", "cars"], activities: ["walking"], storyRole: "establishing", takenAt: new Date(Date.UTC(2026, 4, 30, 13, 2)).toISOString(), phash: "0000ffff0000ffff", color: "#5b7fa6" });
+    expect(photoSimilarity(cup(1, 0, "ffff0000ffff0000"), wide)).toBeLessThan(0.45);
+  });
+  it("the re-dealer separates such pairs: lookalike pairs per page drop to zero when the chapter has other photos", () => {
+    const others = [
+      P(9, { scene: "landscape", people: 3, objects: ["street", "cars"], activities: ["walking"], storyRole: "establishing", phash: "0000ffff0000ffff", color: "#5b7fa6" }),
+      P(10, { scene: "group", people: 4, objects: ["fountain", "benches"], activities: ["sitting"], storyRole: "action", phash: "00ff00ff00ff00ff", color: "#6f9a5b" }),
+    ];
+    const units: ContrastUnit[] = [
+      { id: "a", chapterId: "c1", momentId: "m1", family: "collage", photos: [cup(1, 0, "ffff0000ffff0000"), cup(2, 4, "ffff0000ffff3fff")], pinned: new Set(), capacity: 6 },
+      { id: "b", chapterId: "c1", momentId: "m1", family: "collage", photos: [pose(3, 0, "0f0f0f0f0f0f0f0f"), pose(4, 6, "0f0f0f0f0f0fffff")], pinned: new Set(), capacity: 6 },
+      { id: "c", chapterId: "c1", momentId: "m1", family: "collage", photos: others, pinned: new Set(), capacity: 6 },
+    ];
+    const pairs = () => units.reduce((n, u) => n + u.photos.filter((x, i) => u.photos.some((y, j) => j > i && photoSimilarity(x, y) >= LOOKALIKE)).length, 0);
+    expect(pairs()).toBe(2);
+    contrastPhotos(units);
+    expect(pairs()).toBe(0);
   });
 });

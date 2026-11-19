@@ -1,29 +1,35 @@
-// Page skeleton of a Balanced Storybook (Task 6). Pure and deterministic: the same outline
-// always gives the same pages, block ids and shares.
+// Page skeleton of a Balanced Storybook (Task 6; story v4 2026-11-19). Pure and deterministic: the
+// same outline always gives the same pages, block ids and shares.
 //
-// The 65 / 35 photo / narrative balance is met BY CONSTRUCTION here, in code — the model never
-// decides page kinds or shares. Page area model (see src/lib/storybook/balance.ts): every inner
-// page counts once and `narrativeShare` is the part of it given to text.
+// Story v4 — "a story book, not a photo tour": every chapter opens on ONE chapter story page
+// (header band with the chapter title and a subtitle, the hero photo, a headline, ONE paragraph
+// about why the moment matters and a closing line); the rest of the chapter is photo-led — no
+// paragraph narration, only short captions where they add meaning. The book closes on the closing
+// reflection page (books with ≥ 10 photos). Page area model (src/lib/storybook/balance.ts): every
+// inner page counts once and `narrativeShare` is the part of it given to text.
 //
-//   chapter_opener   the chapter's hero photo + the chapter intro            share 0.50
-//   mixed            photos of one moment + one paragraph                    share 0.40
-//   photo            photos, optionally with a short caption / pull quote    share 0.10 / 0
-//   closing          the closing reflection (no photos)                      share 1.00
+//   chapter_opener   chapter story page: subtitle, headline, intro, closing_line  share 0.60
+//   photo            photos, optionally with a short caption                      share 0.10 / 0
+//   closing          the closing reflection (no photos)                           share 1.00
 //
-// Steps: (1) one opener per chapter, the remaining photos of each moment on photo pages —
-// 2 per page, more per page (up to 6) when the book's page limit needs it, then neighbouring
-// pages are merged, and only as a last resort the last pages of the largest moments are left out
-// (reported in `omittedPhotos`); (2) photo pages are turned into mixed pages, first in the
-// moments the outline marked for a paragraph, until the narrative area is within one page-step
-// of 35 %; (3) captions close the rest of the gap. No page is ever created to hit the ratio:
-// when the photos do not allow it (a handful of photos) the nearest result is returned and
-// `balance.drift` says how far off it is.
+// Steps: (1) one chapter story page per chapter, the remaining photos of each moment on photo
+// pages — 2 per page, more per page (up to 6) when the book's page limit needs it, then
+// neighbouring pages are merged, and only as a last resort the last pages of the largest moments
+// are left out (reported in `omittedPhotos`); (2) captions towards the 35 % narrative target, at
+// most one on every second photo page of a chapter (photo-led pages stay photo-led). The 65 / 35
+// target is now a CEILING the skeleton approaches, not a promise: with text only on the chapter
+// page and short captions a photo-rich book lands below it, and `balance.drift` says by how much
+// (D-109). No page is ever created to hit the ratio.
 
 import { balanceOf, type StoryBalance } from "@/lib/storybook/balance";
 import { STORY_BALANCE, STORY_LIMITS } from "@/lib/storybook/schemas";
 import type { NarrativeKind, StoryPageKind } from "@/lib/storybook/types";
 
-export const SKELETON_SHARES = { opener: 0.5, mixed: 0.4, caption: 0.1, closing: 1 } as const;
+/** Bumped when the page skeleton changes (stored plans with another skeleton are re-planned). 4 = chapter story pages. */
+export const SKELETON_VERSION = 4;
+export const SKELETON_SHARES = { opener: 0.6, mixed: 0.4, caption: 0.1, closing: 1 } as const;
+/** The chapter story page's lines (block ids follow this order; the paragraph first — it is the page's main text, the template places each line by its kind). */
+export const CHAPTER_STORY_BLOCKS: readonly NarrativeKind[] = ["intro", "subtitle", "headline", "closing_line"];
 export const SKELETON_PHOTOS_PER_PAGE = { preferred: 2, max: STORY_LIMITS.photosPerPage } as const;
 
 export type SkeletonMoment = { id: string; photoIds: readonly string[] };
@@ -42,7 +48,7 @@ export type SkeletonPage = {
 };
 export type Skeleton = { pages: SkeletonPage[]; omittedPhotos: number; balance: StoryBalance };
 
-type Draft = { kind: StoryPageKind; chapterId: string | null; momentId: string | null; photoIds: string[]; block: NarrativeKind | null; hundredths: number };
+type Draft = { kind: StoryPageKind; chapterId: string | null; momentId: string | null; photoIds: string[]; blocks: NarrativeKind[]; hundredths: number };
 
 /** Splits `items` into ceil(n / per) groups of nearly equal size, in order. */
 function chunk<T>(items: readonly T[], per: number): T[][] {
@@ -63,13 +69,13 @@ function layOut(input: SkeletonInput, per: number): Draft[] {
   const pages: Draft[] = [];
   for (const c of input.chapters) {
     const heroMoment = c.momentIds.find((id) => momentById.get(id)?.photoIds.includes(c.heroPhotoId)) ?? c.momentIds[0] ?? null;
-    pages.push({ kind: "chapter_opener", chapterId: c.id, momentId: heroMoment, photoIds: [c.heroPhotoId], block: "intro", hundredths: 50 });
+    pages.push({ kind: "chapter_opener", chapterId: c.id, momentId: heroMoment, photoIds: [c.heroPhotoId], blocks: [...CHAPTER_STORY_BLOCKS], hundredths: Math.round(SKELETON_SHARES.opener * 100) });
     for (const mid of c.momentIds) {
       const rest = (momentById.get(mid)?.photoIds ?? []).filter((id) => id !== c.heroPhotoId);
-      for (const photoIds of chunk(rest, per)) pages.push({ kind: "photo", chapterId: c.id, momentId: mid, photoIds, block: null, hundredths: 0 });
+      for (const photoIds of chunk(rest, per)) pages.push({ kind: "photo", chapterId: c.id, momentId: mid, photoIds, blocks: [], hundredths: 0 });
     }
   }
-  if (input.closing) pages.push({ kind: "closing", chapterId: null, momentId: null, photoIds: [], block: "closing", hundredths: 100 });
+  if (input.closing) pages.push({ kind: "closing", chapterId: null, momentId: null, photoIds: [], blocks: ["closing"], hundredths: 100 });
   return pages;
 }
 
@@ -119,68 +125,26 @@ function fit(pages: Draft[], maxPages: number): number {
   return omitted;
 }
 
-function balancePages(pages: Draft[], input: SkeletonInput): void {
+/**
+ * Captions towards the narrative target: on photo pages only, at most one on every second photo
+ * page of a chapter (spread evenly through it), none when the book is already at the target.
+ * The writer may leave a caption out when it would not add meaning (service.ts).
+ */
+function balancePages(pages: Draft[]): void {
   const targetHundredths = Math.round(STORY_BALANCE.narrativeShare * 100) * pages.length;
   let gap = targetHundredths - pages.reduce((s, p) => s + p.hundredths, 0);
-  const photoPages = () => pages.filter((p) => p.kind === "photo" && p.block === null);
-
-  // paragraph candidates, in priority order
-  const wanted = new Set(input.chapters.flatMap((c) => c.narrativeMomentIds.map((m) => `${c.id}/${m}`)));
-  const firstOfMoment = new Map<string, Draft>();
-  const sizeOfMoment = new Map<string, number>();
-  for (const p of pages) {
-    if (p.kind !== "photo") continue;
-    const key = `${p.chapterId}/${p.momentId}`;
-    if (!firstOfMoment.has(key)) firstOfMoment.set(key, p);
-    sizeOfMoment.set(key, (sizeOfMoment.get(key) ?? 0) + p.photoIds.length);
-  }
-  const firsts = [...firstOfMoment.entries()];
-  const order: Draft[] = [
-    ...firsts.filter(([k]) => wanted.has(k)).map(([, p]) => p),
-    ...firsts
-      .filter(([k]) => !wanted.has(k))
-      .map(([k, p], i) => ({ p, size: sizeOfMoment.get(k)!, i }))
-      .sort((a, b) => b.size - a.size || a.i - b.i)
-      .map((x) => x.p),
-  ];
-  const taken = new Set(order);
-  const others = pages.filter((p) => p.kind === "photo" && !taken.has(p));
-  // the remaining pages alternate (every second one first) so paragraphs spread through the book
-  order.push(...others.filter((_, i) => i % 2 === 0), ...others.filter((_, i) => i % 2 === 1));
-
-  const mixedStep = Math.round(SKELETON_SHARES.mixed * 100);
   const captionStep = Math.round(SKELETON_SHARES.caption * 100);
+  if (gap < captionStep / 2) return;
+  const chapters = [...new Set(pages.filter((p) => p.kind === "photo").map((p) => p.chapterId))];
+  // candidates: every second photo page of each chapter (the 2nd, 4th …), chapters interleaved
+  const perChapter = chapters.map((c) => pages.filter((p) => p.kind === "photo" && p.chapterId === c).filter((_, i) => i % 2 === 1));
+  const order: Draft[] = [];
+  for (let i = 0; perChapter.some((l) => i < l.length); i++) for (const l of perChapter) if (l[i]) order.push(l[i]!);
   for (const p of order) {
-    if (gap < mixedStep) break; // a smaller gap is closed with captions
-    p.kind = "mixed";
-    p.block = "paragraph";
-    p.hundredths = mixedStep;
-    gap -= mixedStep;
-  }
-  const free = photoPages();
-  const captions = Math.max(0, Math.min(free.length, Math.round(gap / captionStep)));
-  for (let i = 0; i < captions; i++) {
-    const p = free[Math.floor((i * free.length) / captions)]!;
-    p.block = "caption";
+    if (gap < captionStep / 2) break;
+    p.blocks = ["caption"];
     p.hundredths = captionStep;
     gap -= captionStep;
-  }
-  if (gap >= mixedStep / 2) {
-    const p = pages.find((x) => x.kind === "photo");
-    if (p) {
-      gap -= mixedStep - p.hundredths;
-      p.kind = "mixed";
-      p.block = "paragraph";
-      p.hundredths = mixedStep;
-    }
-  }
-  // one pull quote per chapter that has at least two captions (the second one)
-  const seen = new Map<string | null, number>();
-  for (const p of pages) {
-    if (p.block !== "caption") continue;
-    const n = (seen.get(p.chapterId) ?? 0) + 1;
-    seen.set(p.chapterId, n);
-    if (n === 2) p.block = "pull_quote";
   }
 }
 
@@ -189,7 +153,7 @@ export function buildSkeleton(input: SkeletonInput): Skeleton {
   let drafts = layOut(input, SKELETON_PHOTOS_PER_PAGE.preferred);
   for (let per = SKELETON_PHOTOS_PER_PAGE.preferred + 1; drafts.length > maxPages && per <= SKELETON_PHOTOS_PER_PAGE.max; per++) drafts = layOut(input, per);
   const omittedPhotos = fit(drafts, maxPages);
-  balancePages(drafts, input);
+  balancePages(drafts);
 
   let block = 0;
   const pages: SkeletonPage[] = drafts.map((d, i) => ({
@@ -198,7 +162,7 @@ export function buildSkeleton(input: SkeletonInput): Skeleton {
     chapterId: d.chapterId,
     momentId: d.momentId,
     photoIds: [...d.photoIds],
-    blocks: d.block ? [{ id: `b${++block}`, kind: d.block }] : [],
+    blocks: d.blocks.map((kind) => ({ id: `b${++block}`, kind })),
     narrativeShare: d.hundredths / 100,
   }));
   return { pages, omittedPhotos, balance: balanceOf(pages) };

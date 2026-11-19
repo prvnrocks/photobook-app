@@ -290,7 +290,7 @@ wizard or the editor yet. Three server functions, each proving book ownership fi
   `story_ai_calls` row (migration 2600, service role only: kind, scope, chapter, version, model, prompt version,
   tokens, cost, latency, error code — no text). Live calls are refused while the table is missing.
 - **Config**: `AI_STORY_MODEL` (allow-list = photo models), `AI_STORY_TIMEOUT_MS`, `AI_STORY_MAX_RETRIES`.
-  Prompt versions: `story-plan-3`, `story-write-3`, `story-rewrite-3` (`prompts.ts`, static system prompts, frozen by
+  Prompt versions: `story-plan-4`, `story-write-4`, `story-rewrite-4` (`prompts.ts`, static system prompts, frozen by
   `tests/ai/prompt-freeze.test.ts`).
 - **v2 narrative (2026-11-19)**: live v1 output read as object inventories with repeated beats and an inferred "he".
   v2 prompts ask for a story arc built on the user's answers (opening → what happened in order → closing beat), ONE
@@ -327,6 +327,33 @@ wizard or the editor yet. Three server functions, each proving book ownership fi
   ≤ 40 % (near-identical duplicates / blurry excepted). **Regenerate story** = a run after a finished one with the
   same photos: analysis / filters / moments reused, the previous plan's chapter structure pinned (identical page
   skeleton), only brief → plan → write, then the design stage (`regenerateCursor`, `regenerateStory`).
+- **v4 chapter story page (2026-11-19, "a story book, not a photo tour")**: every chapter opens on ONE chapter story
+  page and the rest of the chapter is photo-led. Skeleton (`skeleton.ts`, v4; the pre-v4 one is kept as
+  `skeleton-v3.ts` for the legacy fixture storybooks): chapter_opener = blocks `intro` (ONE 35–70-word paragraph about
+  why the moment matters), `subtitle` (1–5-word phrase; code puts the verified place in front: "<place> · <phrase>",
+  `chapter-page.ts chapterPlace` = the chapter's photo-metadata place, else the brief's location, else none),
+  `headline` (3–8 words), `closing_line` (3–10 words); photo pages get at most one optional caption (≤ 12 words) on
+  every second page; the closing page keeps the book's closing reflection. No `mixed` / paragraph pages. Planner
+  `story-plan-4`: chapter titles ≤ 5 words, hero = who the story is about (paragraph moments dropped). The **hero is
+  chosen in code** (`pickChapterHero`): the subject comes from the user's words (relationship → ≥ 2 people, solo trip →
+  1, a pet → the animal) else from the photos (people majority → people, else the best scene); never a detail / object
+  close-up when better exists, never a soft photo; with no photo of two people together, the sharpest solo photo with
+  the setting visible; the model's pick only breaks a tie. Writer `story-write-4`: the chapter page (one labelled
+  STYLE EXAMPLE about a different memory, `style-example.ts`), optional captions (empty = none), "LINES ALREADY USED",
+  "SUBTITLE PLACE" and "PEOPLE IN THESE PHOTOS" lines. Lints: `example_copy` (4+ words in a row of the example or the
+  user's reference mock-up), short lines never echo another chapter's (`near_duplicate` / `line`), "together" needs
+  people in the photos and no "side by side" when every photo shows one person (`unsupported_claim`), "after a long
+  time" needs the user's words, warm lines like "worth the wait" pass only in personal mode, in a headline / closing
+  line / intro, citing a user fact that grounds them; the book's cover / title are never the subject. New template
+  family `st-<style>-<p|l>-chap-a|b|c` (`src/lib/layouts/story`, all 6 styles × 2 formats): header band (generated
+  `chapterLabel` "CHAPTER ONE" / "الفصل الأول", chapter title, italic subtitle), hero (wide / framed / tall 9:16),
+  headline, paragraph at 10–11.5 pt, divider (hidden with the closing line), italic closing line (Latin only). The
+  composer uses it only for a page with chapter story lines (older intro-only storybooks keep open-*). The editor's
+  Text tool edits title / subtitle / headline / story / closing line together (one undo step per field). Composer
+  (same rules for every book): "alike" also uses the Task 3 analysis (objects, activities, story role, people count)
+  — the production loader now reads `photo_analyses`; unresolvable lookalike pairs get their own page; soft photos
+  (`bookSoftIds`: book-relative whole-frame softness, quality flags, the analysis' "out of focus" note) never take a
+  slot over 30 % of the page (moved into a grid, else framed small); openers start at body size, top-aligned.
 - **Replay** (`replay.ts`): deterministic, grounded synthesisers behind the service's own `ReplayTransport` (the shared
   `tests/fixtures/ai` files belong to the album pipeline and are not read).
 - **Errors** (`StoryError.code`): `not_found`, `no_photos`, `ai_off`, `invalid_plan`, `no_story`, `invalid_instruction`,
