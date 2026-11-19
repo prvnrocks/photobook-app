@@ -12,6 +12,7 @@ import { PublishPanelView, type PublishActions } from "@/components/publish/Publ
 import { SHARE_BACK_LINK, SHARE_BODY, shareChipKind } from "@/components/publish/share-page-classes";
 import { ShareBand } from "@/components/publish/ShareBand";
 import { shareSlots } from "@/components/publish/share-slots";
+import type { ReadinessView } from "@/lib/print/copy";
 import { UpgradeCancelledNotice } from "@/components/upgrade/UpgradeCancelledNotice";
 import type { PublishCompare } from "@/lib/publish/compare";
 import { DEV_PUBLISH_STATES, DEV_PUBLISH_URL, devPublishState, type DevPublishStateName } from "@/lib/publish/dev-fixture";
@@ -38,6 +39,7 @@ export function DevPublishClient({
   preview,
   reduceMotion = false,
   toolbar = true,
+  readiness = null,
 }: {
   name: DevPublishStateName;
   result: "ok" | "conflict" | "conflict2" | "failed";
@@ -48,6 +50,8 @@ export function DevPublishClient({
   preview: PublishPreview;
   reduceMotion?: boolean;
   toolbar?: boolean;
+  /** Task 10: print checks for the PDF card (paid states). */
+  readiness?: ReadinessView | null;
 }) {
   const [state, setState] = useState<PublishState>(() => devPublishState(name));
   const [reduce, setReduce] = useState(reduceMotion);
@@ -82,7 +86,7 @@ export function DevPublishClient({
 
   const refresh = () => setState(next.current);
   const status = shareStatus(state, new Date());
-  const slots = shareSlots({ bookId: BOOK_ID, title, state, preview, compare, paymentsEnabled, refresh });
+  const slots = shareSlots({ bookId: BOOK_ID, title, state, preview, compare, paymentsEnabled, refresh, readiness });
 
   return (
     <main className="flex w-full flex-1 flex-col" data-dev-reduce-motion={reduce ? "" : undefined} data-testid="publish-main">
