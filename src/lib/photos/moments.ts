@@ -11,12 +11,23 @@
 // Photos without a timestamp are never dropped: they join the moment they most resemble
 // (content or place), else they form their own "undated" moments. Either way the grouping is
 // reported as uncertain so the user can check it.
+//
+// Scenes (v2): one long moment (a single visit, no GPS change, no 20-minute gap) is split into
+// scenes at gaps that are long FOR THIS SET — at least `sceneMinGapSeconds` and `sceneGapFactor`
+// × the moment's median gap — or at half that gap when what the photos show changes. Segments
+// smaller than `sceneMinSize` join the neighbour across the shorter gap, and a moment gets at most
+// one scene per `scenePhotosPer` photos. Moments under `sceneMinPhotos` photos stay whole.
+//
+// Labels (v2) describe the SCENE, never one photo's detail: a setting several photos show
+// ("At the café"), else a shared scene-level activity (not a pose like "holding a cup"), else a
+// scene category, else the date. A setting seen in a few photos of one visit (same day, close
+// together in time and place) labels the visit's other scenes too.
 
 import { haversineKm } from "./geo-cluster";
 import type { DuplicateGroup } from "./duplicates";
 import type { QualityFlag } from "./quality";
 
-export const MOMENTS_VERSION = 1;
+export const MOMENTS_VERSION = 2;
 
 export const MOMENT_DEFAULTS = {
   /** Gaps up to this many minutes never count toward a break. */
@@ -38,11 +49,26 @@ export const MOMENT_DEFAULTS = {
   joinKm: 0.5,
   /** Up to this many collage candidates per moment. */
   collagePerMoment: 4,
+  /** A moment with fewer photos is never split into scenes. */
+  sceneMinPhotos: 12,
+  /** A scene break needs a gap of at least this many seconds … */
+  sceneMinGapSeconds: 45,
+  /** … and at least this many times the moment's median gap. */
+  sceneGapFactor: 12,
+  /** At half that gap, a change of content (overlap below this) is a break too. */
+  sceneContentCut: 0.2,
+  /** Smallest scene; smaller segments join a neighbour. */
+  sceneMinSize: 4,
+  /** At most one scene per this many photos. */
+  scenePhotosPer: 6,
+  /** Moments this close in time (hours) and place (visitKm) form one visit for setting labels. */
+  visitHours: 3,
+  visitKm: 1,
 } as const;
 export type MomentConfig = { [K in keyof typeof MOMENT_DEFAULTS]: number };
 export type MomentOptions = Partial<MomentConfig>;
 
-export type MomentVision = { scene: string; objects: readonly string[]; activities: readonly string[]; storyRole?: string; peopleCount?: number };
+export type MomentVision = { scene: string; objects: readonly string[]; activities: readonly string[]; storyRole?: string; peopleCount?: number; /** Used for setting labels only ("a café table"). */ description?: string };
 
 export type MomentPhoto = {
   id: string;
@@ -214,6 +240,30 @@ export function dateRangeLabel(startMs: number, endMs: number): string {
 const SCENE_LABEL: Record<string, string | undefined> = { portrait: "Portraits", group: "People together", landscape: "Scenery", food: "Food", detail: "Details" };
 const cap = (s: string) => (s ? s[0]!.toUpperCase() + s.slice(1) : s);
 
+/** Settings a photo description / object list can show → the scene label. Generic nouns only, never a named place. */
+/** A whole-word, case-insensitive matcher that also works next to accented letters ("café"). */
+const word = (src: string) => new RegExp(`(?<![\\p{L}])(?:${src})(?![\\p{L}])`, "iu");
+
+export const SETTINGS: readonly { id: string; re: RegExp; label: string }[] = [
+  { id: "cafe", re: word(String.raw`(?:caf[eé]s?|coffee ?shops?|coffeehouses?)`), label: "At the café" },
+  { id: "restaurant", re: word(String.raw`(?:restaurants?|diners?|dining rooms?)`), label: "At the restaurant" },
+  { id: "beach", re: word(String.raw`(?:beach(?:es)?|shorelines?|seashores?)`), label: "At the beach" },
+  { id: "pool", re: word(String.raw`(?:swimming pools?|poolside|pools?)`), label: "By the pool" },
+  { id: "park", re: word(String.raw`(?:parks|park|playgrounds?)`), label: "In the park" },
+  { id: "garden", re: word(String.raw`gardens?`), label: "In the garden" },
+  { id: "desert", re: word(String.raw`(?:deserts?|sand dunes?|dunes)`), label: "In the desert" },
+  { id: "market", re: word(String.raw`(?:markets?|souks?|bazaars?)`), label: "At the market" },
+  { id: "mall", re: word(String.raw`(?:malls?|shopping cent(?:re|er)s?)`), label: "At the mall" },
+  { id: "museum", re: word(String.raw`(?:museums?|galler(?:y|ies)|exhibitions?)`), label: "At the museum" },
+  { id: "kitchen", re: word(String.raw`kitchens?`), label: "In the kitchen" },
+  { id: "street", re: word(String.raw`(?:streets?|sidewalks?|alleys?|alleyways?)`), label: "Out on the street" },
+  { id: "mountains", re: word(String.raw`(?:mountains?|hiking trails?)`), label: "In the mountains" },
+  { id: "airport", re: word(String.raw`(?:airports?|terminal building)`), label: "At the airport" },
+  { id: "water", re: word(String.raw`(?:boats?|yachts?|dhows?|ferr(?:y|ies))`), label: "On the water" },
+];
+/** Activities that describe a pose or a single gesture, not what a scene is about. */
+const POSE_ACTIVITY = /^(?:holding|posing|smiling|looking|standing|sitting|leaning|resting|wearing|covering|raising|giving|showing|facing|touching|pointing|gesturing|taking a (?:photo|picture|selfie))\b/i;
+
 function top<T extends string>(values: T[]): { value: T; count: number } | null {
   const counts = new Map<T, number>();
   for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
@@ -222,12 +272,34 @@ function top<T extends string>(values: T[]): { value: T; count: number } | null 
   return best;
 }
 
+/** Setting ids one photo shows (description + objects). */
+function settingsOf(p: MomentPhoto): string[] {
+  if (!p.vision) return [];
+  const text = [p.vision.description ?? "", ...p.vision.objects].join(" . ");
+  return SETTINGS.filter((s) => s.re.test(text)).map((s) => s.id);
+}
+
+/** The setting most photos show, when it clearly leads: ≥ `min` photos and ≥ 2× the runner-up. */
+export function dominantSetting(photos: readonly MomentPhoto[], min: number): { id: string; label: string; support: number } | null {
+  const counts = new Map<string, number>();
+  for (const p of photos) for (const id of new Set(settingsOf(p))) counts.set(id, (counts.get(id) ?? 0) + 1);
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+  const [first, second] = ranked;
+  if (!first || first[1] < min || (second && first[1] < 2 * second[1])) return null;
+  return { id: first[0], label: SETTINGS.find((s) => s.id === first[0])!.label, support: first[1] };
+}
+
 /**
  * Label from evidence only. Every part is listed in `evidence` with its source and how many
- * photos support it; a part is used only when enough photos agree. No evidence → the date; no
- * date either → "Undated photos".
+ * photos support it; a part is used only when enough photos agree, and it always describes the
+ * scene (setting / activity / category) — never a single object. `visitSetting` = a setting the
+ * surrounding visit shows (photos of the same visit), used when the moment's own photos do not
+ * show one. No evidence → the date; no date either → "Undated photos".
  */
-export function labelMoment(photos: readonly MomentPhoto[]): { label: string; dateLabel: string | null; place: string | null; evidence: LabelEvidence[] } {
+export function labelMoment(
+  photos: readonly MomentPhoto[],
+  visitSetting: { id: string; label: string; support: number; of: number } | null = null,
+): { label: string; dateLabel: string | null; place: string | null; evidence: LabelEvidence[] } {
   const evidence: LabelEvidence[] = [];
   const n = photos.length;
 
@@ -242,18 +314,21 @@ export function labelMoment(photos: readonly MomentPhoto[]): { label: string; da
   let subject: string | null = null;
   const described = photos.filter((p) => p.vision);
   if (described.length > 0) {
-    const activity = top(described.flatMap((p) => [...new Set(p.vision!.activities.map((a) => a.toLowerCase().trim()).filter(Boolean))]));
-    const object = top(described.flatMap((p) => [...new Set(p.vision!.objects.map((a) => a.toLowerCase().trim()).filter(Boolean))]));
+    const own = dominantSetting(described, Math.max(2, Math.ceil(described.length * 0.3)));
+    const activity = top(described.flatMap((p) => [...new Set(p.vision!.activities.map((a) => a.toLowerCase().trim()).filter((a) => a && !POSE_ACTIVITY.test(a)))]));
     const scene = top(described.map((p) => p.vision!.scene));
-    if (activity && activity.count / described.length >= 0.4 && activity.count >= Math.min(2, described.length)) {
+    if (own) {
+      subject = own.label;
+      evidence.push({ kind: "scene", source: "vision", value: own.id, support: own.support, of: described.length });
+    } else if (visitSetting) {
+      subject = visitSetting.label;
+      evidence.push({ kind: "scene", source: "vision", value: visitSetting.id, support: visitSetting.support, of: visitSetting.of });
+    } else if (activity && activity.count / described.length >= 0.5 && activity.count >= Math.min(2, described.length)) {
       subject = cap(activity.value);
       evidence.push({ kind: "activity", source: "vision", value: activity.value, support: activity.count, of: described.length });
     } else if (scene && SCENE_LABEL[scene.value] && scene.count / described.length >= 0.6) {
       subject = SCENE_LABEL[scene.value]!;
       evidence.push({ kind: "scene", source: "vision", value: scene.value, support: scene.count, of: described.length });
-    } else if (object && object.count / described.length >= 0.6 && object.count >= Math.min(2, described.length)) {
-      subject = cap(object.value);
-      evidence.push({ kind: "object", source: "vision", value: object.value, support: object.count, of: described.length });
     }
   }
 
@@ -270,6 +345,68 @@ export function labelMoment(photos: readonly MomentPhoto[]): { label: string; da
 }
 
 // ---------------------------------------------------------------------------- clustering
+
+const median = (xs: readonly number[]) => {
+  const s = [...xs].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length === 0 ? 0 : s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
+};
+
+/**
+ * Splits one dated moment into scenes (see the header). Returns the photo index ranges
+ * [start, end) in time order; one range = the moment stays whole. Deterministic.
+ */
+export function sceneRanges(photos: readonly MomentPhoto[], o: MomentConfig): [number, number][] {
+  const n = photos.length;
+  if (n < o.sceneMinPhotos) return [[0, n]];
+  const t = photos.map((p) => ms(p.takenAt)!);
+  const gaps = t.slice(1).map((x, i) => (x - t[i]!) / 1000);
+  const threshold = Math.max(o.sceneMinGapSeconds, o.sceneGapFactor * median(gaps));
+  const tokens = photos.map((p) => contentTokens(p.vision));
+  const window = (from: number, to: number) => {
+    const out = new Set<string>();
+    for (let i = Math.max(0, from); i < Math.min(n, to); i++) for (const x of tokens[i]!) out.add(x);
+    return out;
+  };
+  // cut i = between photo i and i + 1
+  const cuts: number[] = [];
+  gaps.forEach((g, i) => {
+    if (g >= threshold) cuts.push(i);
+    else if (g >= threshold / 2) {
+      const before = window(i - 2, i + 1);
+      const after = window(i + 1, i + 4);
+      if (before.size > 0 && after.size > 0 && jaccard(before, after) < o.sceneContentCut) cuts.push(i);
+    }
+  });
+  let ranges: [number, number][] = [];
+  let start = 0;
+  for (const c of cuts) {
+    ranges.push([start, c + 1]);
+    start = c + 1;
+  }
+  ranges.push([start, n]);
+  const gapBefore = (r: [number, number]) => (r[0] > 0 ? gaps[r[0] - 1]! : Infinity);
+  const mergeAt = (i: number) => {
+    // merge ranges[i] and ranges[i + 1]
+    ranges = [...ranges.slice(0, i), [ranges[i]![0], ranges[i + 1]![1]], ...ranges.slice(i + 2)];
+  };
+  // segments that are too small join the neighbour across the shorter gap
+  for (;;) {
+    const i = ranges.findIndex((r) => r[1] - r[0] < o.sceneMinSize);
+    if (i < 0 || ranges.length === 1) break;
+    if (i === 0) mergeAt(0);
+    else if (i === ranges.length - 1) mergeAt(i - 1);
+    else mergeAt(gapBefore(ranges[i]!) <= gapBefore(ranges[i + 1]!) ? i - 1 : i);
+  }
+  // at most one scene per scenePhotosPer photos: merge across the shortest gaps
+  const maxScenes = Math.max(1, Math.floor(n / o.scenePhotosPer));
+  while (ranges.length > maxScenes) {
+    let best = 0;
+    for (let i = 1; i + 1 < ranges.length; i++) if (gapBefore(ranges[i + 1]!) < gapBefore(ranges[best + 1]!)) best = i;
+    mergeAt(best);
+  }
+  return ranges;
+}
 
 export type ClusterResult = { moments: Moment[]; uncertain: UncertainGrouping[] };
 
@@ -314,6 +451,27 @@ export function clusterMoments(photos: readonly MomentPhoto[], options: MomentOp
       }
       addPhoto(current, p);
     }
+  }
+  // scenes: split long single-visit moments (pending entries follow their photos)
+  for (let k = drafts.length - 1; k >= 0; k--) {
+    const d = drafts[k]!;
+    const ranges = sceneRanges(d.photos, o);
+    if (ranges.length < 2) continue;
+    const parts = ranges.map(([a, b], j) => {
+      const part = newDraft();
+      for (const p of d.photos.slice(a, b)) addPhoto(part, p);
+      part.breakScore = j === 0 ? d.breakScore : null;
+      return part;
+    });
+    const partOf = (id: string) => parts.find((x) => x.photos.some((p) => p.id === id)) ?? parts[0]!;
+    for (const u of pending) {
+      if (u.draft === d) {
+        u.draft = partOf(u.photoIds[u.photoIds.length - 1]!);
+        u.draft.reasons.add(u.reason);
+      }
+      if (u.other === d) u.other = partOf(u.photoIds[0]!);
+    }
+    drafts.splice(k, 1, ...parts);
   }
   for (const d of drafts) {
     const file = d.photos.filter((p) => p.dateSource !== "exif");
@@ -380,13 +538,33 @@ export function clusterMoments(photos: readonly MomentPhoto[], options: MomentOp
   }
 
   const all = [...drafts, ...undatedDrafts];
+  // visits: neighbouring dated moments close in time and place share what their photos show
+  const visitSetting = new Map<Draft, { id: string; label: string; support: number; of: number }>();
+  for (let i = 0; i < drafts.length; ) {
+    let j = i + 1;
+    while (j < drafts.length) {
+      const prev = drafts[j - 1]!;
+      const next = drafts[j]!;
+      const gapH = (ms(next.photos[0]!.takenAt)! - ms(prev.photos[prev.photos.length - 1]!.takenAt)!) / 3_600_000;
+      const a = centroid(prev);
+      const b = centroid(next);
+      if (gapH > o.visitHours || (a && b && haversineKm(a, b) > o.visitKm)) break;
+      j++;
+    }
+    const visit = drafts.slice(i, j);
+    const photosOfVisit = visit.flatMap((d) => d.photos);
+    const described = photosOfVisit.filter((p) => p.vision).length;
+    const setting = visit.length > 1 ? dominantSetting(photosOfVisit, 2) : null;
+    if (setting) for (const d of visit) visitSetting.set(d, { ...setting, of: described });
+    i = j;
+  }
   const keyOf = new Map<Draft, string>();
   const moments: Moment[] = all.map((d, position) => {
     const ids = d.photos.map((p) => p.id);
     const firstId = d.undated ? [...ids].sort()[0]! : ids[0]!;
     const key = `m:${firstId}`;
     keyOf.set(d, key);
-    const { label, dateLabel, place, evidence } = labelMoment(d.photos);
+    const { label, dateLabel, place, evidence } = labelMoment(d.photos, visitSetting.get(d) ?? null);
     const times = d.photos.map((p) => ms(p.takenAt)).filter((t): t is number => t !== null);
     const reasons = [...d.reasons].sort();
     let confidence = d.undated ? 0.4 : 0.9;

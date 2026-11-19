@@ -18,7 +18,7 @@ const TITLE = "Ten days by the water";
 
 function progress(state: DevStoryRunState): StoryRunProgress {
   const p = emptyStoryProgress("writing");
-  p.stages.discovering = { status: "done", done: 40, total: 40 };
+  p.stages.discovering = { status: "done", done: 40, total: 40, similar: 9, blurry: 1 };
   p.stages.organizing = { status: "done", moments: 7, chapters: 3 };
   if (state === "running") p.stages.writing = { status: "running", done: 1, chapters: 3 };
   if (state === "cancelled") {

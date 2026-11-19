@@ -375,7 +375,8 @@ describe("moment clustering", () => {
     const { moments } = clusterMoments([mp(1, { vision: BEACH }), mp(2, { vision: DINNER }), mp(3, { vision: BEACH }), mp(4, { vision: HIKE })]);
     expect(keysOf(moments)).toEqual([[1, 3], [2], [4]]);
     expect(moments.every((m) => m.uncertainReasons.includes("no_timestamp"))).toBe(true);
-    expect(moments.map((m) => m.label)).toEqual(["Walking on a beach", "Eating dinner", "Hiking on a trail"]);
+    // v2: a setting two photos show wins; a single photo's setting is not enough (activity instead)
+    expect(moments.map((m) => m.label)).toEqual(["At the beach", "Eating dinner", "Hiking on a trail"]);
   });
 
   it("file dates (not EXIF) are weak evidence: grouped, but flagged", () => {
@@ -406,13 +407,18 @@ describe("moment labels are grounded in evidence", () => {
       exif(3, "2026-10-12T09:10:00Z", { place: "Muscat", vision: { ...BEACH, activities: [] } }),
     ];
     const l = labelMoment(photos);
-    expect(l.label).toBe("Walking on a beach · Muscat");
+    expect(l.label).toBe("At the beach · Muscat");
     expect(l.place).toBe("Muscat");
     expect(l.evidence).toEqual([
       { kind: "place", source: "metadata", value: "Muscat", support: 3, of: 3 },
-      { kind: "activity", source: "vision", value: "walking on a beach", support: 2, of: 3 },
+      { kind: "scene", source: "vision", value: "beach", support: 3, of: 3 },
       { kind: "date", source: "timestamp", value: "12 Oct 2026", support: 3, of: 3 },
     ]);
+    // without a setting word, a shared scene-level activity is the subject
+    const walk = { ...BEACH, objects: ["sea", "palm tree"] };
+    const w = labelMoment(photos.map((p, i) => ({ ...p, vision: i === 2 ? { ...walk, activities: [] } : walk })));
+    expect(w.label).toBe("Walking on a beach · Muscat");
+    expect(w.evidence[1]).toEqual({ kind: "activity", source: "vision", value: "walking on a beach", support: 2, of: 3 });
   });
 
   it("weak evidence is not used: a place on a minority of photos, an activity seen once among many", () => {
@@ -428,11 +434,14 @@ describe("moment labels are grounded in evidence", () => {
     expect(l.evidence.map((e) => e.kind)).toEqual(["date"]);
   });
 
-  it("falls back from activity to scene to object, then to the date, then to 'Undated photos'", () => {
+  it("falls back from setting to activity to scene, then to the date, then to 'Undated photos' — never one object", () => {
     const portrait: MomentVision = { scene: "portrait", objects: ["hat"], activities: [] };
     expect(labelMoment([mp(1, { vision: portrait }), mp(2, { vision: portrait })]).label).toBe("Portraits");
+    // v2: an object every photo shows is NOT a label (it was "Vintage car"), and neither is a pose
     const cars: MomentVision = { scene: "other", objects: ["vintage car"], activities: [] };
-    expect(labelMoment([mp(1, { vision: cars }), mp(2, { vision: cars })]).label).toBe("Vintage car");
+    expect(labelMoment([mp(1, { vision: cars }), mp(2, { vision: cars })]).label).toBe("Undated photos");
+    const cup: MomentVision = { scene: "other", objects: ["cup"], activities: ["holding a cup", "posing"] };
+    expect(labelMoment([exif(1, "2026-10-12T09:00:00Z", { vision: cup }), exif(2, "2026-10-12T09:01:00Z", { vision: cup }), exif(3, "2026-10-12T09:02:00Z", { vision: cup })]).label).toBe("12 Oct 2026");
     expect(labelMoment([exif(1, "2026-10-12T09:00:00Z")]).label).toBe("12 Oct 2026");
     expect(labelMoment([mp(1)])).toEqual({ label: "Undated photos", dateLabel: null, place: null, evidence: [] });
   });
@@ -440,7 +449,7 @@ describe("moment labels are grounded in evidence", () => {
   it("a label only ever contains words from the inputs (place, vision terms) or the fixed scene names", () => {
     const photos = [exif(1, "2026-10-12T09:00:00Z", { place: "Wadi Shab", vision: HIKE }), exif(2, "2026-10-12T09:20:00Z", { place: "Wadi Shab", vision: HIKE })];
     const { moments } = clusterMoments(photos);
-    expect(moments[0]!.label).toBe("Hiking on a trail · Wadi Shab");
+    expect(moments[0]!.label).toBe("In the mountains · Wadi Shab");
     for (const e of moments[0]!.labelEvidence) expect(["metadata", "vision", "timestamp"]).toContain(e.source);
   });
 
@@ -654,7 +663,7 @@ describe("clusterPhotosIntoMoments", () => {
     expect(r.quality.every((q) => q.basis === "pixels")).toBe(true);
     expect(r.duplicateGroups).toEqual([{ key: pid(1), kind: "near", photoIds: [pid(1), pid(2)], preferredPhotoId: pid(1), preferredSource: "auto" }]);
     expect(keysOf(r.moments)).toEqual([[1, 2, 3], [4], [5]]);
-    expect(r.moments.map((m) => m.label)).toEqual(["Walking on a beach · Muscat", "Eating dinner", "Undated photos"]);
+    expect(r.moments.map((m) => m.label)).toEqual(["At the beach · Muscat", "Eating dinner", "Undated photos"]);
     expect(r.moments[0]!.heroPhotoId).not.toBe(pid(2));
     expect(r.candidates.find((c) => c.photoId === pid(2))).toMatchObject({ role: "alternate", reason: "duplicate" });
     expect(r.uncertain).toEqual([{ kind: "moment", reason: "no_evidence", momentKey: `m:${pid(5)}`, photoIds: [pid(5)] }]);
@@ -725,7 +734,7 @@ describe("clusterPhotosIntoMoments", () => {
   it("is refused for a book the caller does not own, and works for an empty book", async () => {
     await expect(clusterPhotosIntoMoments(BOOK, server({ photos: [row(1)], owner: null }).deps)).rejects.toMatchObject({ code: "not_found" });
     const empty = await clusterPhotosIntoMoments(BOOK, server({ photos: [] }).deps);
-    expect(empty).toEqual({ bookId: BOOK, photos: 0, quality: [], duplicateGroups: [], candidates: [], moments: [], uncertain: [], pending: { quality: 0, vision: 0 } });
+    expect(empty).toEqual({ bookId: BOOK, photos: 0, quality: [], filters: [], duplicateGroups: [], candidates: [], moments: [], uncertain: [], pending: { quality: 0, vision: 0 } });
   });
 
   it("dropped photos are still grouped and listed as alternates — never removed", async () => {

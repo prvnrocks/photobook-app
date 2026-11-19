@@ -38,6 +38,10 @@ export type OrganizePhotoRow = {
   blur_score: number | null;
   ai: Json | null;
   status: string;
+  /** Optional in fixtures; read for the storybook's photo filters (never changed when true). */
+  user_override?: boolean;
+  drop_reason?: string | null;
+  color?: string | null;
 };
 
 /** Ready photos of the user's book, oldest first. */
@@ -45,7 +49,7 @@ export async function listPhotosForOrganize(bookId: string, userId: string): Pro
   if (!isUuid(bookId) || !isUuid(userId)) return [];
   const { data, error } = await createAdminClient()
     .from("photos")
-    .select("id, fingerprint, phash, thumb_path, width, height, taken_at, date_source, lat, lng, place, blur_score, ai, status")
+    .select("id, fingerprint, phash, thumb_path, width, height, taken_at, date_source, lat, lng, place, blur_score, ai, status, user_override, drop_reason, color")
     .eq("book_id", bookId)
     .eq("user_id", userId)
     .eq("upload_state", "ready")

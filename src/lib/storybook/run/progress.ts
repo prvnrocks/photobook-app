@@ -56,6 +56,9 @@ export type StoryStageProgress = {
   pages?: number | null;
   /** writing: the closing page is being written (after the last chapter). */
   closing?: boolean;
+  /** discovering: photos set aside as duplicates / similar shots, and as clearly blurry (real counts). */
+  similar?: number | null;
+  blurry?: number | null;
 };
 
 export type StoryRunOutcome = {
@@ -137,7 +140,7 @@ export function isStoryRunState(v: unknown): v is StoryRunState {
 function parseStage(raw: unknown): StoryStageProgress {
   const o = obj(raw) ?? {};
   const out: StoryStageProgress = { status: isOneOf(STAGE_STATUSES, o.status) ? o.status : "pending" };
-  for (const k of ["done", "total", "moments", "chapters", "pages"] as const) {
+  for (const k of ["done", "total", "moments", "chapters", "pages", "similar", "blurry"] as const) {
     const n = countOrNull(o[k]);
     if (n !== null) out[k] = n;
   }
@@ -190,9 +193,13 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 export function stageDetail(stage: StoryRunStage, p: StoryStageProgress): string | null {
   switch (stage) {
     case "discovering": {
-      if (p.status === "skipped") return "Sorted without AI";
+      const aside = [
+        typeof p.similar === "number" && p.similar > 0 ? `${p.similar} similar set aside` : null,
+        typeof p.blurry === "number" && p.blurry > 0 ? `${p.blurry} blurry` : null,
+      ].filter((x): x is string => !!x);
+      if (p.status === "skipped") return ["Sorted without AI", ...aside].join(" · ");
       if (typeof p.total === "number" && p.total > 0 && typeof p.done === "number") {
-        if (p.status === "done") return plural(p.total, "photo", "photos");
+        if (p.status === "done") return [plural(p.total, "photo", "photos"), ...aside].join(" · ");
         return `${Math.min(p.done, p.total)} of ${p.total} photos`;
       }
       return null;

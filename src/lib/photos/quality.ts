@@ -4,17 +4,26 @@
 // between images measured at that size. They rank photos against each other; they are never a
 // reason to delete anything.
 //
-//   sharpness    variance of the 3×3 Laplacian (blur.ts) on a log scale
+//   sharpness    variance of the 3×3 Laplacian (blur.ts) on a log scale. v2: the scale reaches
+//                100 only at variance 20 000 (v1 saturated at 1 000, so most real phone photos
+//                scored 100 and blur could not be told apart)
 //   exposure     luma histogram: mean brightness, clipped shadows / highlights, tonal range
 //   composition  HEURISTIC from the edge-energy map: how close the visual weight sits to the
 //                centre or a rule-of-thirds point, and how much of it is pressed against the frame
 //
 // QUALITY_VERSION is stored with every score: bump it when a formula changes and old rows are
-// recomputed.
+// recomputed (a v1 row is upgraded from its stored raw measurements without the image:
+// upgradeStoredScores).
+//
+// "Blurry" for the storybook is decided per BOOK (bookBlurryIds): a photo is set aside only when
+// it is a clear outlier against the book's own sharpness distribution AND below an absolute
+// ceiling, or below the absolute floor. A Laplacian cannot tell a soft-but-sharp photo (sky, a
+// plain wall) from a blurred one, so texture-free ("flat") photos are never flagged by the
+// relative rule.
 
 import { laplacianVariance } from "@/lib/image/blur";
 
-export const QUALITY_VERSION = 1;
+export const QUALITY_VERSION = 2;
 
 export const QUALITY_FLAGS = ["blurry", "soft", "underexposed", "overexposed", "low_contrast", "flat"] as const;
 export type QualityFlag = (typeof QUALITY_FLAGS)[number];
@@ -23,8 +32,8 @@ export const QUALITY_THRESHOLDS = {
   /** Laplacian variance below which a 512 px image is unusably blurry (= fallback.ts EXTREME_BLUR_MAX). */
   blurryVariance: 10,
   softVariance: 40,
-  /** Variance that maps to sharpness 100. */
-  sharpVariance: 1000,
+  /** Variance that maps to sharpness 100 (v1: 1 000 — saturated on most phone photos). */
+  sharpVariance: 20000,
   darkMean: 45,
   brightMean: 215,
   clipLowShare: 0.35,
@@ -165,6 +174,79 @@ export function scoreImage(gray: Float32Array, w: number, h: number): QualitySco
       weightY: round4(comp.weightY),
     },
   };
+}
+
+/**
+ * A stored score of an older version, re-derived from its raw measurements (no image needed).
+ * Null when the raw numbers are missing (the photo is then measured again).
+ */
+export function upgradeStoredScores(q: Pick<QualityScores, "version" | "exposure" | "composition" | "flags" | "raw">): QualityScores | null {
+  if (q.version === QUALITY_VERSION) return null;
+  const variance = Number(q.raw?.laplacianVariance);
+  if (!Number.isFinite(variance) || variance < 0) return null;
+  const sharpness = sharpnessFromVariance(variance);
+  const flags: QualityFlag[] = q.flags.filter((f) => f !== "blurry" && f !== "soft");
+  if (variance < QUALITY_THRESHOLDS.blurryVariance) flags.unshift("blurry");
+  else if (variance < QUALITY_THRESHOLDS.softVariance) flags.unshift("soft");
+  const overall = round1(QUALITY_WEIGHTS.sharpness * sharpness + QUALITY_WEIGHTS.exposure * q.exposure + QUALITY_WEIGHTS.composition * q.composition);
+  return { version: QUALITY_VERSION, sharpness, exposure: q.exposure, composition: q.composition, overall, flags, raw: { ...q.raw } };
+}
+
+export const BOOK_BLUR = {
+  /** Fewer scored photos than this: only the absolute floor applies (no distribution to compare with). */
+  minPhotos: 6,
+  /** A photo must have at least 10× less Laplacian energy than the book's median (log10 units)… */
+  minDropLog: 1,
+  /** …or 3 robust standard deviations below it when the book itself varies a lot. */
+  madFactor: 3,
+  /** …and stay below this absolute variance (a book of very detailed photos never flags a merely calm one). */
+  ceilingVariance: 250,
+  /** With the vision model's own "blurred / out of focus" note, half the relative drop is enough. */
+  visionDropLog: 0.5,
+} as const;
+
+export type BlurInput = {
+  id: string;
+  /** Laplacian variance of the 512 px copy, null when unmeasured. */
+  variance: number | null;
+  /** Texture-free photo ("flat"): nothing to judge sharpness by. */
+  flat: boolean;
+  /** The photo description says the picture is blurred / out of focus. */
+  visionBlurry?: boolean;
+};
+
+const median = (xs: readonly number[]) => {
+  const s = [...xs].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
+};
+
+/** Words in a photo description that say the picture itself is blurred. */
+export const VISION_BLUR_RE = /\b(?:blurry|blurred|out[\s-]of[\s-]focus|motion blur|unfocused|smeared)\b/i;
+
+/**
+ * Photos of one book that are clearly blurry (ids). Pure and deterministic.
+ *   - variance below the absolute floor (QUALITY_THRESHOLDS.blurryVariance) → blurry, always;
+ *   - book-relative (≥ BOOK_BLUR.minPhotos measured): log10(1 + variance) at least
+ *     max(minDropLog, madFactor × 1.4826 × MAD) below the book's median AND variance below
+ *     ceilingVariance, never for a flat photo;
+ *   - the vision note "blurred / out of focus" lowers the relative drop to visionDropLog (same ceiling).
+ */
+export function bookBlurryIds(items: readonly BlurInput[]): Set<string> {
+  const out = new Set<string>();
+  const measured = items.filter((i): i is BlurInput & { variance: number } => typeof i.variance === "number" && Number.isFinite(i.variance) && i.variance >= 0);
+  for (const i of measured) if (i.variance < QUALITY_THRESHOLDS.blurryVariance) out.add(i.id);
+  if (measured.length < BOOK_BLUR.minPhotos) return out;
+  const logs = measured.map((i) => Math.log10(1 + i.variance));
+  const med = median(logs);
+  const mad = median(logs.map((l) => Math.abs(l - med)));
+  const drop = Math.max(BOOK_BLUR.minDropLog, BOOK_BLUR.madFactor * 1.4826 * mad);
+  measured.forEach((i, k) => {
+    if (i.flat || i.variance >= BOOK_BLUR.ceilingVariance) return;
+    const below = med - logs[k]!;
+    if (below >= drop || (i.visionBlurry && below >= BOOK_BLUR.visionDropLog)) out.add(i.id);
+  });
+  return out;
 }
 
 /** RGB(A) bytes → luma (Rec. 601), the input of scoreImage. */

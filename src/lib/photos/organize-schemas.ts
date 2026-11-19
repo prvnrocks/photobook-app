@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { CANDIDATE_ROLES, UNCERTAIN_REASONS } from "./moments";
+import { FILTER_REASONS } from "./filter";
 import { QUALITY_FLAGS } from "./quality";
 
 const uuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
@@ -96,6 +97,8 @@ export const OrganizeResultSchema = z
     uncertain: z.array(UncertainGroupingSchema),
     /** Work left for a later call (bounded runs) and data that was not available. */
     pending: z.object({ quality: z.number().int().min(0), vision: z.number().int().min(0) }).strict(),
+    /** Kept photos a storybook sets aside (decisions; the storybook job writes photos.status / drop_reason). */
+    filters: z.array(z.object({ photoId: uuid, reason: z.enum(FILTER_REASONS) }).strict()),
   })
   .strict()
   .superRefine((r, ctx) => {

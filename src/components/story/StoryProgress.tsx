@@ -56,7 +56,7 @@ export function StageList({ progress, starting = false }: { progress: StoryRunPr
               <span className="sr-only"> ({r.statusText})</span>
             </span>
             {r.detail ? (
-              <span className="text-xs text-muted-foreground tabular-nums" data-testid={`story-stage-${r.stage}-detail`}>
+              <span className="break-words text-xs text-muted-foreground tabular-nums" data-testid={`story-stage-${r.stage}-detail`}>
                 {r.detail}
               </span>
             ) : null}

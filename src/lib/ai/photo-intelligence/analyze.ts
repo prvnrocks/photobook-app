@@ -323,7 +323,7 @@ function curatorNotes(ai: unknown): PhotoAnalysis["ai"] {
 /** Photo row + vision result → PhotoAnalysis. Timestamps, GPS, place and size are metadata only. */
 export function toPhotoAnalysis(photo: OwnPhoto, vision: PhotoVision): PhotoAnalysis {
   const keep = photo.status !== "dropped";
-  const known = (DROP_REASONS as readonly string[]).includes(photo.drop_reason ?? "") || photo.drop_reason === "user_removed";
+  const known = (DROP_REASONS as readonly string[]).includes(photo.drop_reason ?? "") || photo.drop_reason === "user_removed" || photo.drop_reason === "similar";
   const dropReason = keep ? null : known ? (photo.drop_reason as PhotoAnalysis["dropReason"]) : "other";
   const width = photo.width ?? 0;
   const height = photo.height ?? 0;

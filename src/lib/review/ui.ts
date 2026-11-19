@@ -25,6 +25,7 @@ const REASON_LABELS: Record<string, string> = {
   screenshot: "Screenshot",
   blurry: "Blurry",
   duplicate: "Duplicate",
+  similar: "Similar shot",
   document: "Document",
   poor_quality: "Poor quality",
   irrelevant: "Not relevant",

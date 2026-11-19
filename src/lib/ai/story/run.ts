@@ -9,7 +9,10 @@ import "server-only";
 //             → release. A tick that loses its lease (expired, re-claimed, or Stop) writes nothing
 //             more and answers "leased".
 //   stages  → discovering  analyzePhotos (Task 3, cached per image) in batches, then
-//                          clusterPhotosIntoMoments (Task 4: quality ≤ 150 per call, duplicates)
+//                          clusterPhotosIntoMoments (Task 4: quality ≤ 150 per call, duplicates),
+//                          then the photo filters: duplicates / similar shots / clearly blurry
+//                          photos are set aside (photos.status 'dropped' + drop_reason, never for
+//                          a photo the user decided about; restorable in the editor) BEFORE the plan
 //             organizing   moments + planStory (Task 6; the plan is kept in the cursor)
 //             writing      writeStoryStep — ONE chapter group per tick (Task 6 hook), the written
 //                          blocks are kept in the cursor until the version is stored
@@ -44,7 +47,9 @@ import { listPhotosForOrganize, listVision, type OrganizePhotoRow } from "@/lib/
 import { getCurrentStorybook } from "@/lib/db/storybooks";
 import { ensureGrantPageLimit, getBookEntitlement, type BookEntitlement } from "@/lib/entitlements";
 import { newAiCopyCache, type AiCopyCache } from "@/lib/photos/ai-copy-cache";
+import { filterCounts, type FilterCounts, type FilterDecision } from "@/lib/photos/filter";
 import { clusterPhotosIntoMoments, OrganizeError } from "@/lib/photos/organize";
+import { setAsideFilteredPhotos } from "@/lib/db/photos";
 import { userOwnedElements } from "@/lib/storybook/compose";
 import {
   CANCELLED_CODE,
@@ -116,7 +121,13 @@ export interface StoryRunDeps {
   /** `opts.aiCopyCache`: this tick's memory of the AI copies read (the quality stage reuses them). */
   analyzePhotos(photoIds: readonly string[], opts?: { bookId: string; aiCopyCache?: AiCopyCache }): Promise<AnalyzePhotosResult[]>;
   /** `ownerId`: the book's owner as proved by this tick's getBook (skips re-reading it). */
-  clusterPhotosIntoMoments(bookId: string, ownerId?: string, aiCopyCache?: AiCopyCache): Promise<{ moments: readonly unknown[]; pending: { quality: number } }>;
+  clusterPhotosIntoMoments(bookId: string, ownerId?: string, aiCopyCache?: AiCopyCache): Promise<{ moments: readonly unknown[]; pending: { quality: number }; filters?: readonly FilterDecision[] }>;
+  /**
+   * Sets the given kept photos aside (duplicate / similar / blurry; never a user-decided photo) and
+   * returns how many photos of the book are set aside per reason now. Optional: without it nothing
+   * is set aside.
+   */
+  applyPhotoFilters?(bookId: string, userId: string, decisions: readonly FilterDecision[]): Promise<FilterCounts>;
   planStory(bookId: string, opts: { rule: boolean; maxPages?: number }): Promise<StoryPlan>;
   writeStoryStep: typeof writeStoryStep;
   composeStorybookPages(bookId: string, opts: { rule: boolean; beforeSave: () => Promise<boolean>; maxPages?: number }): Promise<{ pages: number; warnings: number; ai: ComposeAiStatus; saved: boolean }>;
@@ -157,6 +168,10 @@ export function defaultStoryRunDeps(): StoryRunDeps {
     analyzePhotos: (ids, opts) => analyzePhotos(ids, opts ? { bookHint: opts.bookId, aiCopyCache: opts.aiCopyCache } : {}),
     clusterPhotosIntoMoments: (bookId, ownerId, aiCopyCache) =>
       clusterPhotosIntoMoments(bookId, { ...(ownerId ? { ownerOf: async (id: string) => (id === bookId ? ownerId : null) } : {}), ...(aiCopyCache ? { aiCopyCache } : {}) }),
+    applyPhotoFilters: async (bookId, userId, decisions) => {
+      await setAsideFilteredPhotos(bookId, decisions);
+      return filterCounts(await listPhotosForOrganize(bookId, userId));
+    },
     planStory: (bookId, opts) => planStory(bookId, { ...(opts.rule ? { mode: "off" as const } : {}), ...(opts.maxPages ? { planMaxPages: opts.maxPages } : {}) }),
     writeStoryStep,
     composeStorybookPages: async (bookId, opts) => {
@@ -189,6 +204,8 @@ export type StoryCursor = {
   notes: OutcomeNote[];
   analysis: { done: boolean; analysed: number; total: number; failed: string[]; retries: Record<string, number> };
   quality: { done: boolean; calls: number };
+  /** Photos set aside by the filters per reason (null = filters not applied yet). */
+  filtered: FilterCounts | null;
   moments: number | null;
   plan: StoryPlan | null;
   planAttempts: number;
@@ -222,6 +239,7 @@ export function initialStoryCursor(): StoryCursor {
     notes: [],
     analysis: { done: false, analysed: 0, total: 0, failed: [], retries: {} },
     quality: { done: false, calls: 0 },
+    filtered: null,
     moments: null,
     plan: null,
     planAttempts: 0,
@@ -264,6 +282,7 @@ export function parseStoryCursor(raw: unknown): StoryCursor | null {
       retries: numRecord(raw.analysis.retries),
     },
     quality: { done: raw.quality.done === true, calls: nat(raw.quality.calls) },
+    filtered: isObj(raw.filtered) ? { duplicate: nat(raw.filtered.duplicate), similar: nat(raw.filtered.similar), blurry: nat(raw.filtered.blurry) } : null,
     moments: typeof raw.moments === "number" ? nat(raw.moments) : null,
     plan: plan ? plan.data : null,
     planAttempts: nat(raw.planAttempts),
@@ -314,6 +333,7 @@ export function resumeCursor(prev: StoryCursor, photoSig: string, prevRunId: str
   c.resumedFrom = prevRunId;
   c.analysis = { ...prev.analysis, done: false, retries: {} };
   c.quality = { done: prev.quality.done, calls: 0 };
+  c.filtered = prev.filtered;
   c.moments = prev.moments;
   const samePhotos = prev.photoSig !== null && prev.photoSig === photoSig;
   if (!samePhotos || !prev.plan) return { cursor: c, stage: "discovering" };
@@ -350,6 +370,7 @@ export function continueCursor(prev: StoryCursor, photoSig: string, prevRunId: s
   c.continuedFrom = prevRunId;
   c.analysis = { ...prev.analysis, done: false, retries: {} };
   c.quality = { done: prev.quality.done, calls: 0 };
+  c.filtered = prev.filtered;
   c.moments = prev.moments;
   const samePhotos = prev.photoSig !== null && prev.photoSig === photoSig;
   if (!samePhotos || !prev.plan) return { cursor: c, stage: "discovering" };
@@ -399,6 +420,10 @@ export function storyProgressOf(c: StoryCursor, state: StoryRunState, mode: stri
   const rule = mode === "rule";
   p.stages.discovering = { status: statusOf("discovering"), done: c.analysis.analysed, total: c.analysis.total };
   if (rule && p.stages.discovering.status === "done") p.stages.discovering = { status: "skipped" };
+  if (c.filtered) {
+    p.stages.discovering.similar = c.filtered.duplicate + c.filtered.similar;
+    p.stages.discovering.blurry = c.filtered.blurry;
+  }
   p.stages.organizing = { status: statusOf("organizing"), moments: c.moments, chapters: c.plan ? c.plan.chapters.length : null };
   const groups = c.plan ? runWriteGroups(c, c.plan) : [];
   const chapterTotal = groups.filter((g) => g !== "closing").length;
@@ -882,13 +907,41 @@ async function discover(ctx: Ctx): Promise<boolean> {
     ctx.worked = true;
     c.quality.calls++;
     c.moments = res.moments.length;
-    if (res.pending.quality === 0 || c.quality.calls >= MAX_QUALITY_CALLS) c.quality.done = true;
+    if (res.pending.quality === 0 || c.quality.calls >= MAX_QUALITY_CALLS) {
+      c.quality.done = true;
+      await applyFilters(ctx, res.filters ?? []);
+    }
+    await save(ctx);
+    return true;
+  }
+  if (c.filtered === null && ctx.deps.applyPhotoFilters) {
+    // a resumed run whose filters were not applied yet: decisions are recomputed (no model call)
+    if (!(await stillOurs(ctx))) throw new StaleLease();
+    const res = await ctx.deps.clusterPhotosIntoMoments(ctx.bookId, ctx.userId, ctx.aiCopies);
+    ctx.worked = true;
+    c.moments = res.moments.length;
+    await applyFilters(ctx, res.filters ?? []);
     await save(ctx);
     return true;
   }
   ctx.state = "organizing";
   await save(ctx);
   return true;
+}
+
+/**
+ * Sets the filtered photos aside (before the plan, so the story never uses them). A failed write
+ * never fails the run: the story is then made from all kept photos and nothing is reported.
+ */
+async function applyFilters(ctx: Ctx, decisions: readonly FilterDecision[]): Promise<void> {
+  if (!ctx.deps.applyPhotoFilters) return;
+  if (!(await stillOurs(ctx))) throw new StaleLease();
+  try {
+    ctx.cursor.filtered = await ctx.deps.applyPhotoFilters(ctx.bookId, ctx.userId, decisions);
+  } catch (e) {
+    if (e instanceof SupabaseUnavailableError || isSupabaseTimeout(e)) throw e;
+    ctx.cursor.filtered = { duplicate: 0, similar: 0, blurry: 0 };
+  }
 }
 
 // ---- stage 2: organizing -------------------------------------------------------------------------

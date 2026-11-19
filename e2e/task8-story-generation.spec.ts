@@ -50,7 +50,7 @@ test.describe("step 6 — Your memories are becoming a story. (dev fixture)", ()
     const rows = page.getByTestId("story-stages").locator("li");
     await expect(rows).toHaveCount(4);
     await expect(page.getByTestId("story-stage-discovering")).toContainText("Discovering your best moments");
-    await expect(page.getByTestId("story-stage-discovering-detail")).toHaveText("40 photos");
+    await expect(page.getByTestId("story-stage-discovering-detail")).toHaveText("40 photos · 9 similar set aside · 1 blurry");
     await expect(page.getByTestId("story-stage-organizing-detail")).toHaveText("7 moments · 3 chapters");
     await expect(page.getByTestId("story-stage-writing")).toHaveAttribute("data-status", "running");
     await expect(page.getByTestId("story-stage-writing-detail")).toHaveText("Chapter 2 of 3");
@@ -271,7 +271,8 @@ test.describe("live storybook generation (E2E_AUTH=1, signed-in, hosted DB)", ()
     await page.waitForURL(wizardStepUrl(bookId, "6"), { timeout: 240_000 });
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Your memories are becoming a story.");
     await expect(page.getByTestId("story-stages").locator("li")).toHaveCount(4);
-    await expect(page.getByTestId("story-stage-discovering-detail")).toHaveText(/^\d+ photos?$/, { timeout: 60_000 });
+    // "N photos" (+ " · k similar set aside · j blurry" when the filters set photos aside)
+    await expect(page.getByTestId("story-stage-discovering-detail")).toHaveText(/^\d+ photos?(?: · \d+ similar set aside)?(?: · \d+ blurry)?$/, { timeout: 60_000 });
     const [first] = await runsOf();
     expect(first).toMatchObject({ trigger: "storybook", mode: "replay" });
     expect(startPosts).toHaveLength(1);

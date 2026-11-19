@@ -27,7 +27,8 @@ import { outcomeCopy, stageRows, storyErrorCopy, type StoryRunView } from "@/lib
 import type { Json } from "@/lib/supabase/database.types";
 import { SupabaseUnavailableError } from "@/lib/supabase/deadline";
 import { resolveEntitlement, type BookEntitlement } from "@/lib/entitlements/resolve";
-import { BOOK, USER, world } from "./ai/story-fixtures";
+import { BOOK, USER, pid, world } from "./ai/story-fixtures";
+import { filterCounts } from "@/lib/photos/filter";
 
 // ---------------------------------------------------------------------------- in-memory agent_runs
 
@@ -744,5 +745,49 @@ describe("storybook job: one tick reads each AI copy once", () => {
     expect(batches.every((b) => b.bookId === BOOK && b.aiCopyCache === batches[0]!.aiCopyCache)).toBe(true);
     expect(cluster).toHaveLength(1);
     expect(cluster[0]).toEqual([BOOK, USER, batches[0]!.aiCopyCache]);
+  });
+});
+
+describe("storybook job: photo filters (duplicates / similar shots / blurry)", () => {
+  it("sets the filtered photos aside BEFORE the plan, reports real counts in step 6, and the story never uses them", async () => {
+    const { deps, w } = await setup();
+    const decisions = [
+      { photoId: pid(2), reason: "similar" as const },
+      { photoId: pid(3), reason: "duplicate" as const },
+      { photoId: pid(9), reason: "blurry" as const },
+    ];
+    deps.clusterPhotosIntoMoments = vi.fn(async () => ({ moments: [1, 2, 3, 4, 5, 6], pending: { quality: 0 }, filters: decisions }));
+    const apply = vi.fn(async (_book: string, _user: string, ds: readonly { photoId: string; reason: "duplicate" | "similar" | "blurry" }[]) => {
+      // the DB writer: only kept, not user-decided rows change
+      for (const d of ds) {
+        const r = w.rows.find((x) => x.id === d.photoId)!;
+        if (r.status === "kept" && !r.user_override) Object.assign(r, { status: "dropped", drop_reason: d.reason });
+      }
+      return filterCounts(w.rows);
+    });
+    deps.applyPhotoFilters = apply;
+    const runId = await start(deps);
+    const views = await drive(deps, runId);
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply.mock.calls[0]![2]).toEqual(decisions);
+    const last = views.at(-1)!;
+    expect(stageRows(last.progress)[0]!.detail).toBe("24 photos · 2 similar set aside · 1 blurry");
+    // the plan was made from the 21 photos still in the book
+    const planned = (deps.planStory as ReturnType<typeof vi.fn>).mock.results[0]!.value as Promise<StoryPlan>;
+    const plan = await planned;
+    expect(plan.photoCount).toBe(21);
+    const used = new Set(plan.moments.flatMap((m) => m.photoIds));
+    for (const d of decisions) expect(used.has(d.photoId)).toBe(false);
+  });
+
+  it("a filter write that fails never fails the run (nothing is reported as set aside)", async () => {
+    const { deps } = await setup();
+    deps.clusterPhotosIntoMoments = vi.fn(async () => ({ moments: [1], pending: { quality: 0 }, filters: [{ photoId: pid(2), reason: "similar" as const }] }));
+    deps.applyPhotoFilters = vi.fn(async () => {
+      throw new Error("write failed");
+    });
+    const views = await drive(deps, await start(deps));
+    expect(views.at(-1)!.state).toBe("done");
+    expect(stageRows(views.at(-1)!.progress)[0]!.detail).toBe("24 photos");
   });
 });

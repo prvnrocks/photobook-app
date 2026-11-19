@@ -104,8 +104,8 @@ export const VersionOriginSchema = z.enum(VERSION_ORIGINS);
 /** What a photo can do in a story. A SUGGESTION from the vision model; the planner decides. */
 export const STORY_PHOTO_ROLES = ["establishing", "action", "portrait", "detail", "emotion", "closing"] as const;
 
-/** photos.drop_reason is free text (Curator reasons + the user's own removal); anything else is "other". */
-export const STORY_DROP_REASONS = [...DROP_REASONS, "user_removed", "other"] as const;
+/** photos.drop_reason is free text (Curator reasons, the storybook's "similar" shots, the user's own removal); anything else is "other". */
+export const STORY_DROP_REASONS = [...DROP_REASONS, "similar", "user_removed", "other"] as const;
 
 export const VISION_LIMITS = { objects: 12, objectText: 40, activities: 6, activityText: 60 } as const;
 

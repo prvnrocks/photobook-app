@@ -503,6 +503,29 @@ export async function writeCuration(bookId: string, rows: CurationWrite[]): Prom
   }
 }
 
+/**
+ * Storybook photo filters (duplicate / similar / blurry): marks the given photos as set aside.
+ * Admin client, filtered by book. Only rows that are kept AND not decided by the user
+ * (`user_override = false`) change — a user's own keep / restore always wins. Never deletes.
+ */
+export async function setAsideFilteredPhotos(bookId: string, decisions: readonly { photoId: string; reason: "duplicate" | "similar" | "blurry" }[]): Promise<void> {
+  if (!isUuid(bookId)) return;
+  const admin = createAdminClient();
+  for (const reason of ["duplicate", "similar", "blurry"] as const) {
+    const ids = decisions.filter((d) => d.reason === reason && isUuid(d.photoId)).map((d) => d.photoId);
+    for (const batch of chunks(ids)) {
+      const { error } = await admin
+        .from("photos")
+        .update({ status: "dropped", drop_reason: reason })
+        .eq("book_id", bookId)
+        .eq("user_override", false)
+        .eq("status", "kept")
+        .in("id", batch);
+      if (error) throw new PhotosQueryError("set aside photos", error.code);
+    }
+  }
+}
+
 /** drop_reason written when the user removes a photo themselves. */
 export const USER_DROP_REASON = "user_removed";
 

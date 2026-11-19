@@ -6,7 +6,8 @@ import "server-only";
 //   clusterPhotosIntoMoments(bookId)  the full structured result, stored per book
 //
 // Every function checks ownership with the caller's session first. None of them changes
-// photos.status, deletes a file or calls the model: vision data is read from what Task 3 already
+// photos.status, deletes a file or calls the model (clusterPhotosIntoMoments only RETURNS the
+// storybook's set-aside decisions in `filters`; the storybook job writes them): vision data is read from what Task 3 already
 // stored, and a photo without it is simply grouped with less evidence.
 // Incremental: quality rows and vision rows are per photo, so a later call only scores the new
 // photos; grouping itself is recomputed from all photos (pure, milliseconds) and the user's
@@ -38,7 +39,8 @@ import { PhotoVisionSchema } from "@/lib/storybook/schemas";
 import { detectDuplicates, type DetectDuplicatesOptions, type DupPhoto, type DuplicateGroup } from "./duplicates";
 import { MOMENTS_VERSION, clusterMoments, rankCandidates, type MomentOptions, type MomentPhoto, type MomentVision } from "./moments";
 import { OrganizeResultSchema, type OrganizeResult, type PhotoQuality } from "./organize-schemas";
-import { QUALITY_VERSION, lumaOf, scoreImage, sharpnessFromVariance, type QualityScores } from "./quality";
+import { decidePhotoFilters, type FilterPhoto, type SimilarOptions } from "./filter";
+import { QUALITY_VERSION, lumaOf, scoreImage, sharpnessFromVariance, upgradeStoredScores, type QualityScores } from "./quality";
 
 export const ORGANIZE_ERRORS = ["not_found", "not_ready", "no_ai_copy", "undecodable"] as const;
 export type OrganizeErrorCode = (typeof ORGANIZE_ERRORS)[number];
@@ -76,6 +78,7 @@ export type OrganizeDeps = {
   replaceMoments?: typeof replaceMoments;
   duplicateOptions?: DetectDuplicatesOptions;
   momentOptions?: MomentOptions;
+  similarOptions?: SimilarOptions;
   maxQualityPerRun?: number;
 };
 
@@ -203,7 +206,7 @@ export async function preferDuplicate(bookId: string, photoId: string, deps: Pic
 
 function visionOf(raw: unknown): MomentVision | null {
   const v = PhotoVisionSchema.safeParse(raw);
-  return v.success ? { scene: v.data.scene, objects: v.data.objects, activities: v.data.activities, storyRole: v.data.storyRole, peopleCount: v.data.peopleCount } : null;
+  return v.success ? { scene: v.data.scene, objects: v.data.objects, activities: v.data.activities, storyRole: v.data.storyRole, peopleCount: v.data.peopleCount, description: v.data.description } : null;
 }
 
 const overlap = (a: readonly string[], b: readonly string[]) => {
@@ -231,8 +234,29 @@ export async function clusterPhotosIntoMoments(bookId: string, deps: OrganizeDep
     (deps.listMoments ?? listMoments)(bookId, userId),
   ]);
 
-  // 1. quality: stored rows of the current version, then score the missing ones (bounded)
+  // 1. quality: stored rows of the current version (older rows upgraded from their raw numbers,
+  //    no image needed), then score the missing ones (bounded)
   const quality = new Map<string, PhotoQuality>(storedQuality.filter((q) => q.version === QUALITY_VERSION).map((q) => [q.photoId, toQuality(q)]));
+  /** Laplacian variance + "flat" per photo (book-relative blur in the filters). */
+  const blurRaw = new Map<string, { variance: number | null; flat: boolean }>();
+  for (const q of storedQuality) if (q.version === QUALITY_VERSION) blurRaw.set(q.photoId, { variance: Number.isFinite(Number(q.raw?.laplacianVariance)) ? Number(q.raw.laplacianVariance) : null, flat: q.flags.includes("flat") });
+  const photoIds = new Set(photos.map((p) => p.id));
+  const upgraded: { key: { photoId: string; bookId: string; userId: string }; q: QualityScores }[] = [];
+  for (const q of storedQuality) {
+    if (quality.has(q.photoId) || !photoIds.has(q.photoId)) continue;
+    const up = upgradeStoredScores(q);
+    if (!up) continue;
+    upgraded.push({ key: { photoId: q.photoId, bookId, userId }, q: up });
+    quality.set(q.photoId, toQuality({ ...up, photoId: q.photoId }));
+    blurRaw.set(q.photoId, { variance: up.raw.laplacianVariance, flat: up.flags.includes("flat") });
+  }
+  if (upgraded.length > 0) {
+    try {
+      await (deps.saveQualities ?? (deps.saveQuality ? async (rows: typeof upgraded) => { for (const r of rows) await deps.saveQuality!(r.key, r.q); } : saveQualities))(upgraded);
+    } catch {
+      // kept in memory for this call; the next call upgrades again (cheap, no image)
+    }
+  }
   const missing = photos.filter((p) => !quality.has(p.id) && p.thumb_path);
   const batch = missing.slice(0, Math.max(0, deps.maxQualityPerRun ?? QUALITY_MAX_PER_RUN));
   // A photo counts as scored only once its scores are stored (unchanged). The scores of the batch
@@ -244,6 +268,7 @@ export async function clusterPhotosIntoMoments(bookId: string, deps: OrganizeDep
       try {
         const scores = await scoreOne(p, bookId, userId, deps);
         quality.set(p.id, toQuality({ ...scores, photoId: p.id }));
+        blurRaw.set(p.id, { variance: scores.raw.laplacianVariance, flat: scores.flags.includes("flat") });
       } catch {
         // unscored: the provisional value below is used; a later call tries again
       }
@@ -268,6 +293,7 @@ export async function clusterPhotosIntoMoments(bookId: string, deps: OrganizeDep
       try {
         if (!stored) await (deps.saveQuality ?? saveQuality)({ photoId: p.id, bookId, userId }, scores);
         quality.set(p.id, toQuality({ ...scores, photoId: p.id }));
+        blurRaw.set(p.id, { variance: scores.raw.laplacianVariance, flat: scores.flags.includes("flat") });
       } catch {
         // unscored: a later call tries again
       }
@@ -329,6 +355,27 @@ export async function clusterPhotosIntoMoments(bookId: string, deps: OrganizeDep
     return c.role === "hero" ? { ...c, role: "collage" as const } : c;
   });
 
+  // 5. what a storybook sets aside (decisions only — written by the storybook job)
+  const filterPhotos: FilterPhoto[] = photos.map((p, i) => ({
+    id: p.id,
+    fingerprint: p.fingerprint || null,
+    imageSha256: hashes.get(p.id) ?? null,
+    phash: p.phash,
+    takenAt: p.taken_at,
+    dateSource: dateSource(p.date_source),
+    width: p.width,
+    height: p.height,
+    quality: quality.get(p.id)?.overall ?? null,
+    blurScore: p.blur_score,
+    status: p.status,
+    userOverride: p.user_override === true,
+    color: p.color ?? null,
+    vision: momentPhotos[i]!.vision,
+    variance: blurRaw.get(p.id)?.variance ?? null,
+    flat: blurRaw.get(p.id)?.flat ?? false,
+  }));
+  const filters = decidePhotoFilters(filterPhotos, duplicateGroups, deps.similarOptions);
+
   await (deps.replaceDuplicateGroups ?? replaceDuplicateGroups)(bookId, userId, duplicateGroups);
   await (deps.replaceMoments ?? replaceMoments)(bookId, userId, moments, MOMENTS_VERSION);
 
@@ -341,6 +388,7 @@ export async function clusterPhotosIntoMoments(bookId: string, deps: OrganizeDep
     moments,
     uncertain: clustered.uncertain,
     pending: { quality: pendingQuality, vision: pendingVision },
+    filters,
   };
   return OrganizeResultSchema.parse(result);
 }
