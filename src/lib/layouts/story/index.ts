@@ -20,14 +20,20 @@
 
 import type { BookFormat, DesignStyle, Layout, LayoutBlock, LayoutDecoration, LayoutSlotDef, LayoutText, Rect, TextInk } from "@/lib/book/types";
 
-/** The ten text template kinds every style × format gets, in catalogue order. */
-export const STORY_TEMPLATE_KINDS = ["open-a", "open-b", "tell-1a", "tell-1b", "tell-2", "tell-3", "tell-0", "tell-0q", "close-0", "close-1"] as const;
+/**
+ * The fourteen text template kinds every style × format gets, in catalogue order. Variants exist so a
+ * page never has to repeat its neighbour and so both photo orientations fit without a heavy crop:
+ * open-c / tell-1c take the orientation open-a,b / tell-1a,b do not. hero-small (a framed photo of
+ * ~90 mm with a caption) is the low-resolution fallback: a photo too small for a full-bleed hero
+ * still prints at ≥ 150 dpi there.
+ */
+export const STORY_TEMPLATE_KINDS = ["open-a", "open-b", "open-c", "tell-1a", "tell-1b", "tell-1c", "tell-2", "tell-2b", "tell-3", "tell-3b", "tell-0", "tell-0q", "close-0", "close-1", "hero-small"] as const;
 /**
  * Photo template kinds (hero = 1 photo, grid = collage), generated ONLY where the existing catalogue
  * has no tagged hero / collage template of that kind for a style × format (STORY_PHOTO_GAPS) —
  * existing layouts are reused wherever they exist.
  */
-export const STORY_PHOTO_KINDS = ["hero-full", "hero-cap", "grid-2", "grid-3", "grid-4", "grid-5", "grid-6"] as const;
+export const STORY_PHOTO_KINDS = ["hero-full", "hero-cap", "grid-2", "grid-2b", "grid-3", "grid-3b", "grid-4", "grid-4b", "grid-5", "grid-5b", "grid-6", "grid-6b"] as const;
 export type StoryTextKind = (typeof STORY_TEMPLATE_KINDS)[number];
 export type StoryPhotoKind = (typeof STORY_PHOTO_KINDS)[number];
 export type StoryTemplateKind = StoryTextKind | StoryPhotoKind;
@@ -35,22 +41,25 @@ export type StoryTemplateKind = StoryTextKind | StoryPhotoKind;
 /**
  * The missing photo templates per style × format: what templates.ts can NOT tag from the existing
  * catalogue (a single page with 1–6 photos, no chapter title panel, no chapter description panel).
+ * The composer never puts the same template on two consecutive pages, so every photo count needs
+ * TWO templates: hero = one without and one with a caption (hero-full / hero-cap); 2–6 photos =
+ * grid-N when the catalogue has one such layout, grid-N + grid-Nb when it has none.
  * tests/story-compose/templates.test.ts recomputes this table from the catalogue and fails when
- * it drifts. hero-full = 1 photo without caption, hero-cap = 1 photo with caption, grid-N = N photos.
+ * it drifts.
  */
 export const STORY_PHOTO_GAPS: Readonly<Record<`${DesignStyle}/${BookFormat}`, readonly StoryPhotoKind[]>> = {
-  "classic/A5_PORTRAIT": ["grid-5", "grid-6"],
-  "classic/A5_LANDSCAPE": ["grid-5", "grid-6"],
-  "modern/A5_PORTRAIT": ["hero-cap"],
-  "modern/A5_LANDSCAPE": [],
-  "geometric/A5_PORTRAIT": ["hero-full", "hero-cap", "grid-3", "grid-4", "grid-5", "grid-6"],
-  "geometric/A5_LANDSCAPE": ["hero-full", "hero-cap", "grid-3", "grid-4", "grid-5", "grid-6"],
-  "scrapbook/A5_PORTRAIT": ["hero-full", "hero-cap", "grid-2", "grid-6"],
-  "scrapbook/A5_LANDSCAPE": ["hero-full", "hero-cap", "grid-2", "grid-4", "grid-6"],
-  "magazine/A5_PORTRAIT": ["hero-cap", "grid-2", "grid-3", "grid-4", "grid-5", "grid-6"],
-  "magazine/A5_LANDSCAPE": ["hero-full"],
-  "editorial/A5_PORTRAIT": ["hero-full", "grid-4"],
-  "editorial/A5_LANDSCAPE": ["hero-full", "hero-cap", "grid-4"],
+  "classic/A5_PORTRAIT": ["grid-3", "grid-4", "grid-5", "grid-5b", "grid-6", "grid-6b"],
+  "classic/A5_LANDSCAPE": ["grid-3", "grid-4", "grid-5", "grid-5b", "grid-6", "grid-6b"],
+  "modern/A5_PORTRAIT": ["hero-cap", "grid-2", "grid-3", "grid-4", "grid-5", "grid-6"],
+  "modern/A5_LANDSCAPE": ["grid-4", "grid-5", "grid-6"],
+  "geometric/A5_PORTRAIT": ["hero-full", "hero-cap", "grid-2", "grid-3", "grid-3b", "grid-4", "grid-4b", "grid-5", "grid-5b", "grid-6", "grid-6b"],
+  "geometric/A5_LANDSCAPE": ["hero-full", "hero-cap", "grid-2", "grid-3", "grid-3b", "grid-4", "grid-4b", "grid-5", "grid-5b", "grid-6", "grid-6b"],
+  "scrapbook/A5_PORTRAIT": ["hero-full", "hero-cap", "grid-2", "grid-2b", "grid-3", "grid-4", "grid-5", "grid-6", "grid-6b"],
+  "scrapbook/A5_LANDSCAPE": ["hero-full", "hero-cap", "grid-2", "grid-2b", "grid-3", "grid-4", "grid-4b", "grid-5", "grid-6", "grid-6b"],
+  "magazine/A5_PORTRAIT": ["hero-cap", "grid-2", "grid-2b", "grid-3", "grid-3b", "grid-4", "grid-4b", "grid-5", "grid-5b", "grid-6", "grid-6b"],
+  "magazine/A5_LANDSCAPE": ["hero-full", "grid-2", "grid-3", "grid-5", "grid-6"],
+  "editorial/A5_PORTRAIT": ["hero-full", "grid-2", "grid-4", "grid-4b", "grid-5", "grid-6"],
+  "editorial/A5_LANDSCAPE": ["hero-full", "hero-cap", "grid-2", "grid-3", "grid-4", "grid-4b", "grid-5", "grid-6"],
 };
 
 /** Short id code of each design style in a story template id: `st-<code>-<p|l>-<kind>`. */
@@ -84,6 +93,8 @@ interface Plan {
   centred?: boolean;
   /** A dark panel behind the opener / closing text (magazine). */
   panel?: Box;
+  /** hero-small only: a caption area instead of story text panels. */
+  caption?: Box;
 }
 
 /** A photo template: slots + an optional caption area (no story text panels). */
@@ -101,29 +112,39 @@ const LH = 148;
 const G = 2.5;
 
 const PORTRAIT_PLANS: Record<StoryTextKind, Plan> = {
-  "open-a": { name: "Chapter opening: photo above, title and intro below", photos: [[0, 0, PW, 96]], prefers: ["landscape"], date: [12, 104, 136, 110], chapter: [12, 111, 136, 126], main: [12, 129, 136, 200], panel: [0, 96, PW, PH] },
-  "open-b": { name: "Chapter opening: title and intro above, photo below", photos: [[0, 106, PW, PH]], prefers: ["landscape"], date: [12, 12, 136, 18], chapter: [12, 19, 136, 34], main: [12, 37, 136, 98], panel: [0, 0, PW, 106] },
+  "open-a": { name: "Chapter opening: photo above, title and intro below", photos: [[0, 0, PW, 110]], prefers: ["any"], date: [12, 117, 136, 123], chapter: [12, 124, 136, 139], main: [12, 142, 136, 200], panel: [0, 110, PW, PH] },
+  "open-b": { name: "Chapter opening: title and intro above, photo below", photos: [[0, 92, PW, PH]], prefers: ["any"], date: [12, 12, 136, 18], chapter: [12, 19, 136, 34], main: [12, 37, 136, 84], panel: [0, 0, PW, 92] },
+  "open-c": { name: "Chapter opening: tall photo, title and intro below", photos: [[0, 0, PW, 136]], prefers: ["portrait"], date: [12, 142, 136, 148], chapter: [12, 149, 136, 163], main: [12, 166, 136, 200], panel: [0, 136, PW, PH] },
   "tell-1a": { name: "Story: photo above, paragraph below", photos: [[0, 0, PW, 110]], prefers: ["landscape"], main: [12, 120, 136, 200] },
+  "tell-1c": { name: "Story: portrait photo, paragraph below", photos: [[24, 12, 124, 146]], prefers: ["portrait"], main: [12, 154, 136, 200] },
   "tell-1b": { name: "Story: paragraph above, photo below", photos: [[0, 100, PW, PH]], prefers: ["landscape"], main: [12, 12, 136, 92] },
-  "tell-2": { name: "Story: two photos and a paragraph", photos: [[0, 0, (PW - G) / 2, 104], [(PW + G) / 2, 0, PW, 104]], prefers: ["portrait", "portrait"], main: [12, 114, 136, 200] },
+  "tell-2": { name: "Story: two photos and a paragraph", photos: [[0, 0, (PW - G) / 2, 88], [(PW + G) / 2, 0, PW, 88]], prefers: ["any", "any"], main: [12, 98, 136, 200] },
   "tell-3": { name: "Story: three photos and a paragraph", photos: [[0, 0, PW, 74], [0, 74 + G, (PW - G) / 2, 140], [(PW + G) / 2, 74 + G, PW, 140]], prefers: ["landscape", "any", "any"], main: [12, 150, 136, 200] },
+  "tell-2b": { name: "Story: paragraph above two photos", photos: [[0, 120, (PW - G) / 2, PH], [(PW + G) / 2, 120, PW, PH]], prefers: ["any", "any"], main: [12, 12, 136, 110] },
+  "tell-3b": { name: "Story: paragraph above three photos", photos: [[0, 72, PW, 140], [0, 140 + G, (PW - G) / 2, PH], [(PW + G) / 2, 140 + G, PW, PH]], prefers: ["landscape", "any", "any"], main: [12, 12, 136, 62] },
   "tell-0": { name: "Story: text page", photos: [], prefers: [], main: [16, 30, 132, 180] },
   "tell-0q": { name: "Story: pull quote and text", photos: [], prefers: [], quote: [16, 22, 132, 62], main: [16, 72, 132, 190] },
   "close-0": { name: "Closing reflection", photos: [], prefers: [], main: [18, 40, 130, 170], centred: true, panel: [0, 0, PW, PH] },
   "close-1": { name: "Closing reflection with a photo", photos: [[34, 20, 114, 80]], prefers: ["landscape"], main: [16, 92, 132, 190], centred: true },
+  "hero-small": { name: "1 framed photo with caption (small)", photos: [[29, 44, 119, 134]], prefers: ["any"], main: [0, 0, 0, 0], caption: [18, 144, 130, 166] },
 };
 
 const LANDSCAPE_PLANS: Record<StoryTextKind, Plan> = {
-  "open-a": { name: "Chapter opening: photo left, title and intro right", photos: [[0, 0, 108, LH]], prefers: ["portrait"], date: [118, 14, 200, 20], chapter: [118, 22, 200, 40], main: [118, 44, 200, 136], panel: [108, 0, LW, LH] },
-  "open-b": { name: "Chapter opening: title and intro left, photo right", photos: [[102, 0, LW, LH]], prefers: ["portrait"], date: [10, 14, 92, 20], chapter: [10, 22, 92, 40], main: [10, 44, 92, 136], panel: [0, 0, 102, LH] },
+  "open-a": { name: "Chapter opening: photo left, title and intro right", photos: [[0, 0, 118, LH]], prefers: ["any"], date: [128, 14, 200, 20], chapter: [128, 22, 200, 40], main: [128, 44, 200, 136], panel: [118, 0, LW, LH] },
+  "open-b": { name: "Chapter opening: title and intro left, photo right", photos: [[92, 0, LW, LH]], prefers: ["any"], date: [10, 14, 82, 20], chapter: [10, 22, 82, 40], main: [10, 44, 82, 136], panel: [0, 0, 92, LH] },
+  "open-c": { name: "Chapter opening: wide photo left, title and intro right", photos: [[0, 0, 126, LH]], prefers: ["landscape"], date: [136, 14, 200, 20], chapter: [136, 22, 200, 40], main: [136, 44, 200, 136], panel: [126, 0, LW, LH] },
   "tell-1a": { name: "Story: photo left, paragraph right", photos: [[0, 0, 112, LH]], prefers: ["portrait"], main: [122, 14, 200, 134] },
+  "tell-1c": { name: "Story: wide photo above, paragraph below", photos: [[0, 0, LW, 96]], prefers: ["landscape"], main: [14, 104, 196, 138] },
   "tell-1b": { name: "Story: paragraph left, photo right", photos: [[98, 0, LW, LH]], prefers: ["portrait"], main: [10, 14, 88, 134] },
-  "tell-2": { name: "Story: two photos and a paragraph", photos: [[0, 0, 120, (LH - G) / 2], [0, (LH + G) / 2, 120, LH]], prefers: ["landscape", "landscape"], main: [130, 14, 200, 134] },
+  "tell-2": { name: "Story: two photos and a paragraph", photos: [[0, 0, (LW - G) / 2, 84], [(LW + G) / 2, 0, LW, 84]], prefers: ["any", "any"], main: [14, 92, 196, 138] },
   "tell-3": { name: "Story: three photos and a paragraph", photos: [[0, 0, (LW - 2 * G) / 3, 80], [(LW - 2 * G) / 3 + G, 0, (2 * (LW - 2 * G)) / 3 + G, 80], [(2 * (LW - 2 * G)) / 3 + 2 * G, 0, LW, 80]], prefers: ["any", "any", "any"], main: [14, 90, 196, 138] },
+  "tell-2b": { name: "Story: paragraph above two photos", photos: [[0, 62, (LW - G) / 2, LH], [(LW + G) / 2, 62, LW, LH]], prefers: ["any", "any"], main: [14, 10, 196, 52] },
+  "tell-3b": { name: "Story: paragraph above three photos", photos: [[0, 62, (LW - 2 * G) / 3, LH], [(LW - 2 * G) / 3 + G, 62, (2 * (LW - 2 * G)) / 3 + G, LH], [(2 * (LW - 2 * G)) / 3 + 2 * G, 62, LW, LH]], prefers: ["portrait", "portrait", "portrait"], main: [14, 10, 196, 52] },
   "tell-0": { name: "Story: text page", photos: [], prefers: [], main: [30, 20, 180, 128] },
   "tell-0q": { name: "Story: pull quote and text", photos: [], prefers: [], quote: [30, 16, 180, 44], main: [30, 52, 180, 132] },
   "close-0": { name: "Closing reflection", photos: [], prefers: [], main: [36, 26, 174, 122], centred: true, panel: [0, 0, LW, LH] },
   "close-1": { name: "Closing reflection with a photo", photos: [[20, 30, 96, 118]], prefers: ["portrait"], main: [106, 24, 192, 124], centred: true },
+  "hero-small": { name: "1 framed photo with caption (small)", photos: [[60, 16, 150, 106]], prefers: ["any"], main: [0, 0, 0, 0], caption: [36, 114, 174, 134] },
 };
 
 const PCAP: Box = [14, 183, 134, 202];
@@ -138,6 +159,11 @@ const PORTRAIT_PHOTO_PLANS: Record<StoryPhotoKind, PhotoPlan> = {
   "grid-4": { name: "4 photos with caption", photos: [[0, 0, pMid[0], (176 - G) / 2], [pMid[1], 0, PW, (176 - G) / 2], [0, (176 + G) / 2, pMid[0], 176], [pMid[1], (176 + G) / 2, PW, 176]], prefers: ["any", "any", "any", "any"], caption: PCAP },
   "grid-5": { name: "5 photos with caption", photos: [[0, 0, pMid[0], 86], [pMid[1], 0, PW, 86], [0, 86 + G, (PW - 2 * G) / 3, 176], [(PW - 2 * G) / 3 + G, 86 + G, (2 * (PW - 2 * G)) / 3 + G, 176], [(2 * (PW - 2 * G)) / 3 + 2 * G, 86 + G, PW, 176]], prefers: ["any", "any", "portrait", "portrait", "portrait"], caption: PCAP },
   "grid-6": { name: "6 photos with caption", photos: [0, 1, 2].flatMap((r) => { const h = (176 - 2 * G) / 3; const y0 = r * (h + G); return [[0, y0, pMid[0], y0 + h], [pMid[1], y0, PW, y0 + h]] as Box[]; }), prefers: ["landscape", "landscape", "landscape", "landscape", "landscape", "landscape"], caption: PCAP },
+  "grid-2b": { name: "2 photos side by side with caption", photos: [[0, 0, pMid[0], 176], [pMid[1], 0, PW, 176]], prefers: ["portrait", "portrait"], caption: PCAP },
+  "grid-3b": { name: "3 photos: one tall, two stacked", photos: [[0, 0, pMid[0], 176], [pMid[1], 0, PW, (176 - G) / 2], [pMid[1], (176 + G) / 2, PW, 176]], prefers: ["portrait", "any", "any"], caption: PCAP },
+  "grid-4b": { name: "4 photos: one wide, three below", photos: [[0, 0, PW, 110], ...[0, 1, 2].map((c) => { const w = (PW - 2 * G) / 3; return [c * (w + G), 110 + G, c * (w + G) + w, 176] as Box; })], prefers: ["landscape", "any", "any", "any"], caption: PCAP },
+  "grid-5b": { name: "5 photos: one wide, four below", photos: [[0, 0, PW, 96], [0, 96 + G, pMid[0], (96 + G + 176 - G) / 2], [pMid[1], 96 + G, PW, (96 + G + 176 - G) / 2], [0, (96 + G + 176 + G) / 2, pMid[0], 176], [pMid[1], (96 + G + 176 + G) / 2, PW, 176]], prefers: ["landscape", "landscape", "landscape", "landscape", "landscape"], caption: PCAP },
+  "grid-6b": { name: "6 photos in three columns", photos: [0, 1].flatMap((r) => { const h = (176 - G) / 2; const y0 = r * (h + G); const w = (PW - 2 * G) / 3; return [0, 1, 2].map((c) => [c * (w + G), y0, c * (w + G) + w, y0 + h] as Box); }), prefers: ["portrait", "portrait", "portrait", "portrait", "portrait", "portrait"], caption: PCAP },
 };
 const lMid = half(0, LW);
 const LANDSCAPE_PHOTO_PLANS: Record<StoryPhotoKind, PhotoPlan> = {
@@ -148,6 +174,11 @@ const LANDSCAPE_PHOTO_PLANS: Record<StoryPhotoKind, PhotoPlan> = {
   "grid-4": { name: "4 photos with caption", photos: [[0, 0, lMid[0], (120 - G) / 2], [lMid[1], 0, LW, (120 - G) / 2], [0, (120 + G) / 2, lMid[0], 120], [lMid[1], (120 + G) / 2, LW, 120]], prefers: ["landscape", "landscape", "landscape", "landscape"], caption: LCAP },
   "grid-5": { name: "5 photos with caption", photos: [[0, 0, lMid[0], 120], [lMid[1], 0, (lMid[1] + LW - G) / 2, (120 - G) / 2], [(lMid[1] + LW + G) / 2, 0, LW, (120 - G) / 2], [lMid[1], (120 + G) / 2, (lMid[1] + LW - G) / 2, 120], [(lMid[1] + LW + G) / 2, (120 + G) / 2, LW, 120]], prefers: ["portrait", "any", "any", "any", "any"], caption: LCAP },
   "grid-6": { name: "6 photos with caption", photos: [0, 1].flatMap((r) => { const h = (120 - G) / 2; const y0 = r * (h + G); const w = (LW - 2 * G) / 3; return [0, 1, 2].map((c) => [c * (w + G), y0, c * (w + G) + w, y0 + h] as Box); }), prefers: ["any", "any", "any", "any", "any", "any"], caption: LCAP },
+  "grid-2b": { name: "2 photos: one large, one small", photos: [[0, 0, 130, 120], [130 + G, 0, LW, 120]], prefers: ["landscape", "portrait"], caption: LCAP },
+  "grid-3b": { name: "3 photos in a row", photos: [0, 1, 2].map((c) => { const w = (LW - 2 * G) / 3; return [c * (w + G), 0, c * (w + G) + w, 120] as Box; }), prefers: ["portrait", "portrait", "portrait"], caption: LCAP },
+  "grid-4b": { name: "4 photos: two tall, two wide", photos: [[0, 0, (lMid[0] - G) / 2, 120], [(lMid[0] + G) / 2, 0, lMid[0], 120], [lMid[1], 0, LW, (120 - G) / 2], [lMid[1], (120 + G) / 2, LW, 120]], prefers: ["portrait", "portrait", "landscape", "landscape"], caption: LCAP },
+  "grid-5b": { name: "5 photos: three above, two below", photos: [...[0, 1, 2].map((c) => { const w = (LW - 2 * G) / 3; return [c * (w + G), 0, c * (w + G) + w, (120 - G) / 2] as Box; }), [0, (120 + G) / 2, lMid[0], 120], [lMid[1], (120 + G) / 2, LW, 120]], prefers: ["any", "any", "any", "landscape", "landscape"], caption: LCAP },
+  "grid-6b": { name: "6 photos: four above, two below", photos: [...[0, 1, 2, 3].map((c) => { const w = (LW - 3 * G) / 4; return [c * (w + G), 0, c * (w + G) + w, (120 - G) / 2] as Box; }), [0, (120 + G) / 2, lMid[0], 120], [lMid[1], (120 + G) / 2, LW, 120]], prefers: ["any", "any", "any", "any", "landscape", "landscape"], caption: LCAP },
 };
 
 /** How a design style dresses the shared plans. */
@@ -243,10 +274,14 @@ function tapeOver(d: Dress, boxes: readonly Box[], W: number, H: number): Layout
 }
 
 function buildPhoto(style: DesignStyle, format: BookFormat, kind: StoryPhotoKind): Layout {
+  const plan = (format === "A5_PORTRAIT" ? PORTRAIT_PHOTO_PLANS : LANDSCAPE_PHOTO_PLANS)[kind];
+  return { ...buildPhotoFrom(style, format, plan), id: storyTemplateId(style, format, kind) };
+}
+
+function buildPhotoFrom(style: DesignStyle, format: BookFormat, plan: PhotoPlan): Layout {
   const portrait = format === "A5_PORTRAIT";
   const W = portrait ? PW : LW;
   const H = portrait ? PH : LH;
-  const plan = (portrait ? PORTRAIT_PHOTO_PLANS : LANDSCAPE_PHOTO_PLANS)[kind];
   const d = DRESS[style];
   const caption = plan.caption ? pctRect(plan.caption, W, H) : null;
   // Design styles type the caption through a pageCaption panel on the same box (catalogue rule).
@@ -254,7 +289,7 @@ function buildPhoto(style: DesignStyle, format: BookFormat, kind: StoryPhotoKind
     caption && style !== "classic" ? [{ bind: "pageCaption", box: caption, align: d.align === "start" ? "start" : "center", font: "caption", ...(d.ink ? { ink: "muted" as const } : {}) }] : [];
   const decorations = tapeOver(d, plan.photos, W, H);
   return {
-    id: storyTemplateId(style, format, kind),
+    id: "",
     name: plan.name,
     role: "page",
     style,
@@ -273,12 +308,13 @@ function buildOne(style: DesignStyle, format: BookFormat, kind: StoryTextKind): 
   const W = portrait ? PW : LW;
   const H = portrait ? PH : LH;
   const plan = (portrait ? PORTRAIT_PLANS : LANDSCAPE_PLANS)[kind];
+  if (plan.caption) return { ...buildPhotoFrom(style, format, plan), id: storyTemplateId(style, format, kind) };
   const d = DRESS[style];
   const n = plan.photos.length;
   const slots = dressSlots(d, plan.photos, W, H);
 
   // A dark text panel: magazine openers (open-a / open-b) and the text-only closing.
-  const panelled = !!d.panel && !!plan.panel && (kind === "open-a" || kind === "open-b" || kind === "close-0");
+  const panelled = !!d.panel && !!plan.panel && (kind.startsWith("open") || kind === "close-0");
   const inks = panelled ? { ...d.panel!, quote: d.panel!.body } : d.ink;
   const align = plan.centred ? "center" : d.align;
 

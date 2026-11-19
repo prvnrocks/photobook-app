@@ -74,6 +74,8 @@ export interface PageTemplate {
   fullBleed: boolean;
   /** A Task 7 layout (./story) rather than a tagged existing one. */
   isNew: boolean;
+  /** The small framed hero: the low-resolution fallback (chosen only when a bigger slot is refused). */
+  fallback: boolean;
 }
 
 const MAIN_ROLES: readonly PageTextRole[] = ["intro", "paragraph", "closing"];
@@ -94,6 +96,7 @@ export function templateFamilyOf(layout: Layout): TemplateFamily | null {
   if (isStoryLayoutId(layout.id)) {
     const kind = storyKindOf(layout.id);
     if (!kind) return null;
+    if (kind === "hero-small") return "hero";
     if (kind.startsWith("open")) return "chapter_opening";
     if (kind.startsWith("tell")) return "storytelling";
     if (kind.startsWith("close")) return "closing";
@@ -141,6 +144,7 @@ function buildTemplate(layout: Layout, family: TemplateFamily): PageTemplate {
     const mm = printSlotSizeMm(layout, i, layout.format) ?? { w: 0, h: 0 };
     return { w: Math.ceil((mm.w / 25.4) * TARGET_DPI), h: Math.ceil((mm.h / 25.4) * TARGET_DPI) };
   });
+  // A hero whose one photo covers ≥ 60 % of the page prints large: refused below MIN_DPI.
   const fullBleed = layout.photoCount === 1 && !!layout.slots[0] && clippedArea(layout.slots[0]) >= 6000;
   return {
     id: layout.id,
@@ -155,6 +159,7 @@ function buildTemplate(layout: Layout, family: TemplateFamily): PageTemplate {
     narrativeShare: layoutNarrativeShare(layout),
     fullBleed,
     isNew: isStoryLayoutId(layout.id),
+    fallback: storyKindOf(layout.id) === "hero-small",
   };
 }
 

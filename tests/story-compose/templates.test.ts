@@ -63,11 +63,12 @@ describe("story layouts (data)", () => {
     for (const style of DESIGN_STYLES) {
       for (const format of BOOK_FORMATS) {
         const tagged = LAYOUTS.filter((l) => l.style === style && l.format === format && templateFamilyOf(l) !== null);
-        const has = (n: number, caption?: boolean) => tagged.some((l) => l.photoCount === n && (caption === undefined || (l.caption !== null) === caption));
+        const count = (n: number, caption?: boolean) => tagged.filter((l) => l.photoCount === n && (caption === undefined || (l.caption !== null) === caption)).length;
         const gaps = STORY_PHOTO_KINDS.filter((k) => {
-          if (k === "hero-full") return !has(1, false);
-          if (k === "hero-cap") return !has(1, true);
-          return !has(Number(k.slice(5)));
+          if (k === "hero-full") return count(1, false) === 0;
+          if (k === "hero-cap") return count(1, true) === 0;
+          const n = Number(k.slice(5, 6));
+          return k.endsWith("b") ? count(n) === 0 : count(n) < 2;
         });
         expect(STORY_PHOTO_GAPS[`${style}/${format}`], `${style}/${format}`).toEqual(gaps);
       }
@@ -80,7 +81,9 @@ describe("template registry", () => {
     for (const style of DESIGN_STYLES) {
       for (const format of BOOK_FORMATS) {
         for (const f of TEMPLATE_FAMILIES) expect(templatesFor(style, format, f).length, `${style}/${format}/${f}`).toBeGreaterThan(0);
-        for (let n = 1; n <= 6; n++) expect(templatesFor(style, format).some((t) => (t.family === "hero" || t.family === "collage") && t.photoCount === n), `${style}/${format} ${n}`).toBe(true);
+        // ≥ 2 per photo count, so two neighbouring pages never have to share a template.
+        for (let n = 1; n <= 6; n++) expect(templatesFor(style, format).filter((t) => (t.family === "hero" || t.family === "collage") && t.photoCount === n).length, `${style}/${format} ${n}`).toBeGreaterThanOrEqual(2);
+        for (let n = 1; n <= 3; n++) expect(templatesFor(style, format, "storytelling").filter((t) => t.photoCount === n).length, `${style}/${format} story ${n}`).toBeGreaterThanOrEqual(2);
         expect(templatesFor(style, format, "chapter_opening").length).toBeGreaterThanOrEqual(2);
         for (const kind of STORY_TEMPLATE_KINDS) expect(getPageTemplate(storyTemplateId(style, format, kind))).toBeDefined();
       }

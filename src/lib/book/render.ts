@@ -860,11 +860,13 @@ export function panelTextMetrics(
   f: Pick<ResolvedRoleFont, "font" | "textTransform" | "letterSpacing">,
   style: DesignStyle | null | undefined,
   slack = 1,
+  /** A fixed type size (mm) instead of the fitter's — page captions render at one size (CAPTION_FONT_SIZE_CQW). */
+  fixedSizeMm?: number,
 ): { sizeMm: number; neededMm: number; lines: number; fits: boolean } {
   const leading = panelLeading(style, role, f);
   const charEm = panelCharEm(f);
   const lineGrow = panelLineGrow(f);
-  const sizeMm = panelFontMm(text, role, boxWmm, boxHmm * slack, {
+  const sizeMm = fixedSizeMm ?? panelFontMm(text, role, boxWmm, boxHmm * slack, {
     charEm,
     lineGrow,
     ...(leading.padEm ? { lineHeight: leading.lineHeight, padEm: leading.padEm[0] + leading.padEm[1] } : {}),
