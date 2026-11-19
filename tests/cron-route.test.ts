@@ -7,8 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-const mocks = vi.hoisted(() => ({ runCleanup: vi.fn() }));
+const mocks = vi.hoisted(() => ({ runCleanup: vi.fn(), logMonitoringAlerts: vi.fn(async () => 0) }));
 vi.mock("@/lib/cleanup/run", () => ({ runCleanup: mocks.runCleanup }));
+vi.mock("@/lib/monitoring/summary", () => ({ logMonitoringAlerts: mocks.logMonitoringAlerts }));
 
 const route = await import("@/app/api/cron/cleanup/route");
 const { isAuthorizedCron, safeEqual } = await import("@/lib/cleanup/cron-auth");
@@ -66,6 +67,8 @@ describe("GET /api/cron/cleanup", () => {
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(await res.json()).toEqual(OK_COUNTS);
     expect(mocks.runCleanup).toHaveBeenCalledTimes(1);
+    // Task 10: one monitoring alert pass after the sweeps
+    expect(mocks.logMonitoringAlerts).toHaveBeenCalledTimes(1);
   });
 
   it("500 with counts when a sweep failed; 500 without details when the run throws", async () => {
