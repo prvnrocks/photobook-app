@@ -56,6 +56,9 @@ vi.mock("@/lib/db/agent-runs", () => ({
   hasAnyRunForBook: async () => mocks.hasRun,
   getActiveRunForBook: async () => null,
   countLiveRebuilds: async () => 0,
+  // Task 8: the newest job (none of these books has a storybook job)
+  getLatestBookRun: async () => null,
+  isStoryRunTrigger: (t: unknown) => t === "storybook",
 }));
 vi.mock("@/lib/db/photos", () => ({
   listUploadState: async () => mocks.uploadRows,
