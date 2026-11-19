@@ -55,7 +55,7 @@ describe("wizard steps (7)", () => {
   it("lists the seven steps with names, icons and headlines", () => {
     expect(WIZARD_STEPS.map((s) => s.id)).toEqual(["title", "occasion", "photos", "story", "design", "sorting", "review"]);
     // Task 5 order: Title, Occasion, Photos, Story, Design, Create (the AI build), Preview.
-    expect(ALL.map(wizardStepName)).toEqual(["Title", "Occasion", "Photos", "Story", "Design", "Create", "Preview"]);
+    expect(ALL.map(wizardStepName)).toEqual(["Title", "Occasion", "Photos", "Story", "Design", "Create", "Edit"]);
     expect(ALL.map(wizardStepIcon)).toEqual(["pen-line", "heart", "images", "feather", "palette", "sparkles", "book-open-check"]);
     // Short enough for the 375 px compact label ("Step N of 7 · Name") and the 7-up stepper.
     for (const n of ALL) expect(wizardStepName(n).length).toBeLessThanOrEqual(8);
@@ -195,9 +195,9 @@ describe("WizardStepper", () => {
     expect(html).toMatch(/data-testid="wizard-step-label">Step 4 of 7<\/span>/);
     expect(tagOf(html, "wizard-step-name")).toContain("sm:hidden");
     expect(html).toMatch(/data-testid="wizard-step-name"><span aria-hidden="true"> · <\/span>Story<\/span>/);
-    for (const name of ["Title", "Occasion", "Photos", "Story", "Design", "Create", "Preview"]) expect(html).toContain(name);
+    for (const name of ["Title", "Occasion", "Photos", "Story", "Design", "Create", "Edit"]) expect(html).toContain(name);
     // The seven names appear in the new order.
-    const order = ["Title", "Occasion", "Photos", "Story", "Design", "Create", "Preview"].map((n) => html.lastIndexOf(`>${n}<`));
+    const order = ["Title", "Occasion", "Photos", "Story", "Design", "Create", "Edit"].map((n) => html.lastIndexOf(`>${n}<`));
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(html).toContain("sm:not-sr-only");

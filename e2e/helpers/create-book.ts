@@ -85,7 +85,7 @@ export const WIZARD_PHOTOS_URL = /\/books\/new\?book=([0-9a-f-]{36})&step=3$/;
 export const wizardStepUrl = (bookId: string, steps = "[67]") => new RegExp(`/books/new\\?book=${bookId}&step=${steps}$`);
 export const WIZARD_TOTAL = 7;
 /** Stepper names, in order (Task 5). */
-export const WIZARD_STEP_NAMES = ["Title", "Occasion", "Photos", "Story", "Design", "Create", "Preview"] as const;
+export const WIZARD_STEP_NAMES = ["Title", "Occasion", "Photos", "Story", "Design", "Create", "Edit"] as const;
 export const STORY_HEADLINE = "Every memory has a story.";
 
 /** The options createBookViaWizard was given, for the later Story / Design steps of the same page. */

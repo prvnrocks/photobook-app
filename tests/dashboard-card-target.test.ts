@@ -38,6 +38,16 @@ describe("bookCardStep / bookCardHref", () => {
     expect(bookCardHref({ ...base, page_count: 10, photo_count: 30, ai_status: "idle", album_confirmed: true })).toBe(`/books/${ID}/edit`);
   });
 
+  it("a finished storybook (doc.meta.story set), unedited and unconfirmed → editor, not back into the wizard", () => {
+    for (const ai_status of ["idle", null]) {
+      expect(bookCardHref({ ...base, page_count: 10, photo_count: 30, ai_status, storybook: true })).toBe(`/books/${ID}/edit`);
+    }
+    // a storybook run still going keeps the build page
+    expect(bookCardHref({ ...base, page_count: 10, photo_count: 30, ai_status: RUNNING_AI_STATUSES[0], storybook: true })).toBe(
+      `/books/${ID}/build`,
+    );
+  });
+
   it("built and user-edited → editor", () => {
     expect(bookCardHref({ ...base, page_count: 10, photo_count: 30, ai_status: "done", user_edited: true })).toBe(
       `/books/${ID}/edit`,

@@ -312,6 +312,13 @@ export function StepStory({
                   onClick={() => {
                     if (draftRef.current.storyTone === id) patch({ storyTone: null });
                   }}
+                  // Space on an already-checked radio fires no click in Chromium: clear it here too.
+                  onKeyDown={(e) => {
+                    if (e.key === " " && draftRef.current.storyTone === id) {
+                      e.preventDefault();
+                      patch({ storyTone: null });
+                    }
+                  }}
                   className="sr-only"
                 />
                 <span

@@ -272,6 +272,21 @@ describe("StepStory — answering", () => {
     expect(lastSave()[1].storyTone).toBeNull();
   });
 
+  it("keyboard: Space on the chosen tone clears it (Chromium fires no click there)", async () => {
+    await mount();
+    await click(toneRadio("heartfelt"));
+    expect(toneRadio("heartfelt").checked).toBe(true);
+    await act(async () => {
+      toneRadio("heartfelt").dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true }));
+    });
+    expect(STORY_TONES.filter((t) => toneRadio(t).checked)).toEqual([]);
+    // Space on an unchosen tone is left to the browser (no clear, no change from the handler)
+    await act(async () => {
+      toneRadio("elegant").dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true }));
+    });
+    expect(STORY_TONES.filter((t) => toneRadio(t).checked)).toEqual([]);
+  });
+
   it("Enter in a field continues (keyboard); a field never grows a line break", async () => {
     await mount();
     await type(field(q1.id), "My\nsister");

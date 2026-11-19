@@ -30,6 +30,8 @@ export interface BookCardState {
    * editor (which itself redirects a running build to /build or an empty album to the classic pages).
    */
   album_confirmed?: boolean;
+  /** Task 8 follow-up: the storybook composer made the pages (doc.meta.story) → a finished book, editor. */
+  storybook?: boolean;
 }
 
 export type BookCardStep = "upload" | "build" | "edit";
@@ -53,7 +55,7 @@ export function bookCardHref(b: BookCardState): string {
   // upload — so a draft album with NO AI run yet (ai_status idle), not edited and not confirmed, is a
   // book the user left mid-wizard. Open → back into the wizard (step 5; the server gate moves it to the
   // right step), not the editor: one edit there would lock the book out of its first AI build.
-  if (step === "edit" && b.album_confirmed !== true && !b.user_edited && (b.ai_status ?? "idle") === "idle") {
+  if (step === "edit" && b.album_confirmed !== true && b.storybook !== true && !b.user_edited && (b.ai_status ?? "idle") === "idle") {
     return wizardHref(b.id, 5);
   }
   if (step === "build" && !(RUNNING_AI_STATUSES as readonly string[]).includes(b.ai_status ?? "")) {

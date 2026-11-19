@@ -2,7 +2,7 @@
 // wizard on /books/new — 1 title → 2 occasion (the book is created on step-2 Continue, with a
 // provisional design) → 3 photos → 4 story ("Every memory has a story.", optional) → 5 design (page
 // shape + book style, recommended from the photos / occasion; the first build is requested on its
-// Continue) → 6 create (the first build) → 7 preview. Each step has a short stepper name, a
+// Continue) → 6 create (the first build) → 7 edit (the editor; old album books still get the in-wizard preview). Each step has a short stepper name, a
 // lucide icon id (mapped to components in WizardStepper, so this module stays icon-free) and a headline.
 // Pure: only pure data modules (book options, design defaults) are imported — no zod, no React — so
 // first-load client islands can use it. Tested in node (tests/m20-wizard-chrome.test.tsx).
@@ -20,7 +20,7 @@ export const WIZARD_STEPS = [
   { id: "story", name: "Story", icon: "feather", headline: "Every memory has a story." },
   { id: "design", name: "Design", icon: "palette", headline: "Choose your book design" },
   { id: "sorting", name: "Create", icon: "sparkles", headline: "Sorting your photos" },
-  { id: "review", name: "Preview", icon: "book-open-check", headline: "Preview and personalize" },
+  { id: "review", name: "Edit", icon: "book-open-check", headline: "Preview and personalize" },
 ] as const satisfies readonly { id: string; name: string; icon: WizardStepIcon; headline: string }[];
 
 export type WizardStepId = (typeof WIZARD_STEPS)[number]["id"];

@@ -48,6 +48,8 @@ export type BookListItem = Pick<
   user_edited: boolean;
   /** books.album_confirmed_at is set (migration 2000, M20c) — the card never opens the wizard. */
   album_confirmed: boolean;
+  /** doc.meta.story is set (read as doc->meta->story->version): the storybook composer made these pages. */
+  storybook?: boolean;
   /** books.format (migration 1900, D-063); an unknown value reads as the column default. */
   format: BookFormat;
   /** books.design_style (migration 1900, D-063); an unknown value reads as the column default. */
@@ -150,7 +152,7 @@ export async function listMyBooks(): Promise<BookListItem[]> {
 // No pre-1900 retry for format / design_style: like published_doc (pre-1000), the list assumes
 // the migration is applied everywhere (M10b is deployed).
 const BOOK_LIST_COLUMNS =
-  "id, title, updated_at, page_count, published_at, is_paid, ai_status, slug, expires_at, draft_warning_sent_at, format, design_style, album_confirmed_at, user_edited:doc->meta->userEdited, generator:doc->meta->>generator, cover_title:doc->cover->>title, live:published_doc->version, cover_photo:doc->cover->>photoId, first_photo:doc->pages->0->slots->0->>photoId, photos(count)";
+  "id, title, updated_at, page_count, published_at, is_paid, ai_status, slug, expires_at, draft_warning_sent_at, format, design_style, album_confirmed_at, user_edited:doc->meta->userEdited, story_version:doc->meta->story->version, generator:doc->meta->>generator, cover_title:doc->cover->>title, live:published_doc->version, cover_photo:doc->cover->>photoId, first_photo:doc->pages->0->slots->0->>photoId, photos(count)";
 
 /** Same lifetime as the other thumb-only list (review grid). */
 export const COVER_THUMB_TTL_SECONDS = REVIEW_URL_TTL_SECONDS;
@@ -160,7 +162,7 @@ const COVER_ID_CHUNK = 100;
 
 type BookListRow = Omit<
   BookListItem,
-  "photo_count" | "user_edited" | "album_confirmed" | "published" | "format" | "designStyle" | "coverThumbUrl" | "displayTitle"
+  "photo_count" | "user_edited" | "album_confirmed" | "storybook" | "published" | "format" | "designStyle" | "coverThumbUrl" | "displayTitle"
 > & {
   album_confirmed_at?: unknown;
   /** doc->meta->>generator / doc->cover->>title (text or null) — only for displayTitle. */
@@ -169,6 +171,8 @@ type BookListRow = Omit<
   format: unknown;
   design_style: unknown;
   user_edited: unknown;
+  /** doc->meta->story->version (number or null). */
+  story_version?: unknown;
   /** published_doc->version: null/absent when there is no live snapshot. */
   live: unknown;
   /** doc->cover->>photoId / doc->pages->0->slots->0->>photoId (text or null). */
@@ -258,6 +262,7 @@ function toBookListItem(row: BookListRow, coverThumbUrl: string | null): BookLis
     photo_count: typeof count === "number" && Number.isFinite(count) ? count : 0,
     user_edited: row.user_edited === true,
     album_confirmed: albumConfirmedOf(row.album_confirmed_at),
+    storybook: typeof row.story_version === "number",
     format: format.success ? format.data : DEFAULT_FORMAT,
     designStyle: designStyle.success ? designStyle.data : DEFAULT_DESIGN_STYLE,
     coverThumbUrl,
