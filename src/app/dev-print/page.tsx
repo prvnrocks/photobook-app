@@ -30,6 +30,10 @@ import {
   withDevBackgrounds,
 } from "@/lib/book/dev-preview";
 import { m30EditorDoc } from "@/lib/book/dev-m30";
+import { DESIGN_STYLES } from "@/lib/book/schema";
+import type { BookFormat, DesignStyle } from "@/lib/book/types";
+import { composeStoryDoc } from "@/lib/storybook/compose";
+import { devStoryRenderPhotos, storyFixture } from "@/lib/storybook/compose/dev-fixture";
 import { devSampleDoc, devSamplePhotos, parseDevSample } from "@/lib/book/dev-sample";
 import { pageMm, sheetMm, type SizeMm } from "@/lib/book/format";
 import type { BookDoc } from "@/lib/book/types";
@@ -89,11 +93,16 @@ export default async function DevPrintPreview({
   // `?sample=modern-portrait|modern-landscape` (M10c: also geometric-|scrapbook-portrait|landscape, `-ar` for Arabic) (M10b A9): the modern sample book instead of the fixture.
   const sample = parseDevSample(sp.sample);
   const m30 = sp.m30 === "magazine" || sp.m30 === "editorial" ? sp.m30 : null;
-  const captionLang = m30 && sp.ar !== "1" ? "en" : "ar";
-  const format = m30 ? parseDevFormat(sp.format) : sample ? devSampleDoc(sample).format : parseDevFormat(sp.format);
+  // `?story=<style>` (+ `&format=landscape`, `&ar=1`) (Task 7): a composed 24-photo fixture storybook.
+  const story = typeof sp.story === "string" && (DESIGN_STYLES as readonly string[]).includes(sp.story) ? (sp.story as DesignStyle) : null;
+  const captionLang = (m30 || story) && sp.ar !== "1" ? "en" : "ar";
+  const format = m30 || story ? parseDevFormat(sp.format) : sample ? devSampleDoc(sample).format : parseDevFormat(sp.format);
+  const storyBook = story ? devStoryPrintBook(story, format, captionLang) : null;
   const bgKind = parseDevBackgrounds(sp.bg);
   const lead = sample ? intParam(sp.lead, 0, 60) : null;
-  const base = m30
+  const base = storyBook
+    ? storyBook.doc
+    : m30
     ? m30EditorDoc(m30, format, { arabic: sp.ar === "1", descriptions: sp.desc !== "0" })
     : sample
       ? lead
@@ -103,7 +112,7 @@ export default async function DevPrintPreview({
   const doc = bgKind ? withDevBackgrounds(base, bgKind) : base;
   const sheet = sheetMm(format);
   const trim = pageMm(format);
-  const photos = m30 || sample ? devSamplePhotos() : bgKind ? devPreviewPhotosWithBackgrounds() : devPreviewPhotos();
+  const photos = storyBook ? storyBook.photos : m30 || sample ? devSamplePhotos() : bgKind ? devPreviewPhotosWithBackgrounds() : devPreviewPhotos();
   if (typeof sp.sheets === "string") {
     const m = /^(\d{1,3})-(\d{1,3})$/.exec(sp.sheets);
     const sheets = m ? printSheetTargets(doc.pages.length, Number(m[1]), Number(m[2])) : null;
@@ -122,7 +131,7 @@ export default async function DevPrintPreview({
     return <PrintDocument doc={doc} photos={shown} captionLang={captionLang} sheets={sheets} />;
   }
   const pick = ["full-page", "one-portrait", "two-vertical", "three-mixed"];
-  const pages = sample || m30
+  const pages = sample || m30 || story
     ? doc.pages.map((_p, i) => i)
     : pick.map((id) => doc.pages.findIndex((p) => p.layout === id)).filter((i) => i >= 0);
   const targets: (number | "cover")[] = ["cover", ...pages];
@@ -142,4 +151,12 @@ export default async function DevPrintPreview({
       </div>
     </main>
   );
+}
+
+/** Task 7: a composed fixture storybook (24 photos, one low-res) + its placeholder photos. */
+function devStoryPrintBook(style: DesignStyle, format: BookFormat, lang: "en" | "ar") {
+  const design = { format, designStyle: style };
+  const f = storyFixture({ photos: 24, lang, design, lowRes: [5] });
+  const doc = composeStoryDoc({ storybook: f.storybook, photos: f.photos, design, lang, occasion: "travel", bookTitle: null, maxPages: 20 }).doc;
+  return { doc, photos: devStoryRenderPhotos(f.photos) };
 }
