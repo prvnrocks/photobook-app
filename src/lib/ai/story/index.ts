@@ -8,3 +8,5 @@ export { GROUNDING_ISSUE_CODES, WORD_BOUNDS, TITLE_MAX_CHARS } from "./grounding
 export type { GroundingIssue, GroundingIssueCode } from "./grounding";
 export { REWRITE_KINDS } from "./prompts";
 export type { RewriteKind } from "./prompts";
+export { composeStorybookPages, ComposeError, COMPOSE_ERRORS, COMPOSE_AI_STATUSES } from "./compose";
+export type { ComposeErrorCode, ComposeDeps, ComposeBook, ComposeStorybookResult, ComposeAiStatus } from "./compose";
