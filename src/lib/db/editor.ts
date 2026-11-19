@@ -13,7 +13,8 @@ import "server-only";
 // Errors carry only the operation and a Postgres/Storage code.
 import { resolveAiMode, type AiMode } from "@/lib/ai/client";
 import { limitsFor } from "@/lib/ai/limits";
-import { BUILD_RUN_TRIGGERS, getRewritesUsed } from "@/lib/db/agent-runs";
+import { BUILD_RUN_TRIGGERS, getRewritesUsed, STORYBOOK_RUN_TRIGGER } from "@/lib/db/agent-runs";
+import { storyRunViewOf, type StoryRunView } from "@/lib/storybook/run/progress";
 import { getMyBook } from "@/lib/db/books";
 import { PHOTOS_BUCKET } from "@/lib/db/photos";
 import type { CaptionLang, Occasion, Tone } from "@/lib/book/options";
@@ -105,6 +106,11 @@ export type EditorData = {
   albumConfirmed: boolean;
   /** Upload-finished photos (kept + dropped), oldest first. */
   photos: EditorPhoto[];
+  /**
+   * Task 8: the book's newest storybook job (owner columns only), null = none. Read error → null
+   * (the editor then just shows no outcome line / no running regeneration).
+   */
+  latestStoryRun?: StoryRunView | null;
 };
 
 type PhotoRow = {
@@ -196,6 +202,20 @@ async function activeBuildRun(
   return data?.id ?? null;
 }
 
+/** Task 8: the newest storybook run of the book as a client view, or null. */
+async function latestStoryRun(supabase: Awaited<ReturnType<typeof createClient>>, bookId: string): Promise<StoryRunView | null> {
+  const { data, error } = await supabase
+    .from("agent_runs")
+    .select("id, state, progress, ai_status, error_code, mode")
+    .eq("book_id", bookId)
+    .eq("trigger", STORYBOOK_RUN_TRIGGER)
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new EditorQueryError("load story run", error.code);
+  return data ? storyRunViewOf(data) : null;
+}
+
 /** True when the book has any build/rebuild run (any state). Rewrite runs don't count. */
 async function hasAnyBuildRun(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -246,12 +266,13 @@ export async function getEditorData(bookId: string): Promise<EditorData | null> 
   if (!book) return null;
 
   const supabase = await createClient();
-  const [rows, rewritesUsed, activeBuildRunId, publish, hasBuildRun] = await Promise.all([
+  const [rows, rewritesUsed, activeBuildRunId, publish, hasBuildRun, storyRun] = await Promise.all([
     listReadyPhotoRows(supabase, book.id),
     getRewritesUsed(book.id, supabase),
     activeBuildRun(supabase, book.id),
     loadPublishState(supabase, book.id),
     hasAnyBuildRun(supabase, book.id).catch(() => true),
+    latestStoryRun(supabase, book.id).catch(() => null),
   ]);
   const signed = await signRows(supabase, rows);
 
@@ -298,6 +319,7 @@ export async function getEditorData(bookId: string): Promise<EditorData | null> 
     hasBuildRun,
     albumConfirmed: albumConfirmedOf(book.album_confirmed_at),
     photos,
+    latestStoryRun: storyRun,
   };
 }
 

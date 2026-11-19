@@ -50,9 +50,11 @@ export function toEditorShellData(data: EditorData, now: Date = new Date()): Edi
       generator: data.doc.meta?.generator ?? "rule",
       userEdited: albumEditedByUser(data.doc),
       hasBuildRun: data.hasBuildRun,
+      storybook: !!data.doc.meta?.story || (data.latestStoryRun ?? null) !== null,
     }),
     rewritesUsed: data.rewritesUsed,
     rewritesLeft: data.rewritesLeft,
+    ...(data.latestStoryRun ? { story: { latest: data.latestStoryRun } } : {}),
     photos: data.photos.map((p) => ({
       id: p.id,
       status: p.status,

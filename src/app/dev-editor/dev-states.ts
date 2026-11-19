@@ -18,6 +18,9 @@ import {
 import { withDevPagesData } from "@/lib/editor/dev-pages-fixture";
 import { aiSummary, type AiSummary } from "@/lib/editor/ai-summary";
 import type { EditorShellData } from "@/lib/editor/types";
+import { composeStoryDoc } from "@/lib/storybook/compose";
+import { devStoryRenderPhotos, storyFixture } from "@/lib/storybook/compose/dev-fixture";
+import type { StoryRunView } from "@/lib/storybook/run/progress";
 
 const DEV_EDITOR_STATES = ["readOnly", "conflict", "makeWithAi", "aiSummary", "linkExpired", "paid"] as const;
 
@@ -108,10 +111,50 @@ export type DevEditorFixtureOptions = {
   state: DevEditorState | null;
   /** `?style=magazine|editorial`: an M30 book (wins over `sample` and `pages`). */
   m30?: { style: M30SheetStyle; arabic: boolean; descriptions: boolean } | null;
+  /** `?story=1` (Task 8): a composed storybook; value = the outcome line to show (or null). */
+  story?: { outcome: "partial" | "none" | null } | null;
 };
+
+/**
+ * `?story=1` (Task 8): the editor on a composed storybook (Task 7 fixture: 24 photos, 3 chapters, AI
+ * texts with blockRefs) — the Story tool and its sheet. `&outcome=partial|none` adds a finished job
+ * whose outcome line shows under the band.
+ */
+export function withDevStoryBook(data: EditorShellData, outcome: "partial" | "none" | null): EditorShellData {
+  const design = { format: "A5_PORTRAIT" as const, designStyle: "classic" as const };
+  const f = storyFixture({ photos: 24, lang: "en", design, lowRes: [5] });
+  const doc = composeStoryDoc({ storybook: f.storybook, photos: f.photos, design, lang: "en", occasion: "travel", bookTitle: null, maxPages: 20 }).doc;
+  const urls = devStoryRenderPhotos(f.photos);
+  const latest: StoryRunView | null = outcome
+    ? {
+        runId: "00000000-0000-4000-8000-000000000999",
+        state: "done",
+        done: true,
+        aiStatus: outcome === "none" ? null : "partial",
+        errorCode: null,
+        mode: outcome === "none" ? "rule" : "replay",
+        progress: {
+          v: 1,
+          kind: "storybook",
+          phase: "done",
+          stages: { discovering: { status: "done", done: 24, total: 24 }, organizing: { status: "done", moments: 6, chapters: 3 }, writing: { status: "done", done: 3, chapters: 3 }, designing: { status: "done", pages: doc.pages.length } },
+          outcome: outcome === "none" ? { ai: "none", notes: ["ai_off"], warnings: 0 } : { ai: "partial", notes: ["chapter_failed"], warnings: 1 },
+        },
+      }
+    : null;
+  return {
+    ...data,
+    book: { ...data.book, title: doc.cover.title, occasion: "travel", captionLang: "en" },
+    doc,
+    aiPath: { makeWithAi: false, redoWithAi: false },
+    ...(latest ? { story: { latest } } : {}),
+    photos: f.photos.map((p) => ({ id: p.id, status: "kept" as const, userOverride: false, width: p.width, height: p.height, webUrl: urls[p.id]?.url ?? null, thumbUrl: urls[p.id]?.url ?? null })),
+  };
+}
 
 /** The dev editor's fixture data + AI summary for the query options (built on the server page). */
 export function devEditorFixture(o: DevEditorFixtureOptions): { data: EditorShellData; summary: AiSummary | null } {
+  if (o.story) return withDevEditorState(withDevStoryBook(devEditorData(o.mode, o.ai), o.story.outcome), o.state);
   if (o.m30) {
     const book = withDevM30Book(devEditorData(o.mode, o.ai), o.m30.style, o.format, o.m30);
     const d = o.paid ? { ...book, book: { ...book.book, isPaid: true, maxPages: 100 } } : book;

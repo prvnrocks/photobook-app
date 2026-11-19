@@ -252,6 +252,22 @@ export class AutosaveScheduler {
     return this.inflight;
   }
 
+  /**
+   * Task 8: the server wrote `doc` at `rev` itself (the "Regenerate story" job composed the book).
+   * When nothing is unsaved, that becomes the saved state: the editor then applies the same doc
+   * object as ONE edit (no save is sent for it), and an Undo afterwards saves the previous doc on
+   * top of `rev` — so the regeneration can be reverted like any edit. Returns false (and changes
+   * nothing) while something is unsaved or saving has stopped.
+   */
+  adopt(doc: BookDoc, rev: number): boolean {
+    if (this.disposed || isTerminal(this.status) || this.hasUnsaved() || !Number.isSafeInteger(rev) || rev < 0) return false;
+    this.savedDoc = doc;
+    this.baseRev = rev;
+    this.opts.onSaved?.(rev, doc);
+    this.setStatus({ kind: "saved", savedAt: null });
+    return true;
+  }
+
   /** Stop timers; an in-flight request still completes but changes nothing afterwards. */
   dispose(): void {
     this.disposed = true;

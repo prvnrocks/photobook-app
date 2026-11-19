@@ -12,6 +12,7 @@
 // `?style=magazine|editorial` (M30 T13): a small magazine / editorial book from the real catalogue —
 // chapter descriptions (pages 1 and 5–6), an empty description area (page 3), an AI-picked accent
 // colourway; with `&format=landscape`, `&ar=1` (Arabic text) and `&desc=0` (no descriptions at all).
+// `?story=1[&outcome=partial|none]` (Task 8): a composed storybook — the Story tool / sheet (use `&ai=replay`).
 // `?state=readOnly|conflict|makeWithAi|aiSummary|linkExpired|paid`: named screenshot states (M22 T7,
 // ./dev-states.ts) — conflict makes one edit after load so its banner shows.
 // Upgrade sheet: enabled when the server has Stripe keys (M7 T6); `?upgrade=cancelled` → cancel notice.
@@ -56,6 +57,7 @@ export default async function DevEditorPage({
     lightVeil: params.bgveil === "light50",
     sample: parseDevSample(params.sample),
     state,
+    story: params.story === "1" ? { outcome: params.outcome === "partial" || params.outcome === "none" ? params.outcome : null } : null,
   });
   return <DevEditorClient mode={mode} data={data} summary={summary} paymentsEnabled={isPaymentsEnabled()} bg={bg} state={state} />;
 }

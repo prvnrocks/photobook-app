@@ -5,7 +5,9 @@
 // run()/Panel receives (same object).
 
 import { createContext, useContext } from "react";
+import type { BookDoc } from "@/lib/book/types";
 import type { EditorState } from "@/lib/editor/store";
+import type { StoryRunView } from "@/lib/storybook/run/progress";
 import type { AiSessionBlock } from "@/lib/editor/caption-tools";
 import type { EditorAiPath } from "@/lib/editor/ai-path";
 import type { EditorShellBook, EditorAiMode } from "@/lib/editor/types";
@@ -28,6 +30,8 @@ export interface EditorContextValue {
     flush(): void;
     /** Send pending saves and wait for them (useAutosave().settle) — e.g. before a PDF export. */
     settle?(): Promise<SaveState>;
+    /** Task 8: adopt a doc the server wrote at `rev` as saved (then apply it as one edit). */
+    adopt?(doc: BookDoc, rev: number): boolean;
   };
   ai: {
     mode: EditorAiMode;
@@ -54,6 +58,13 @@ export interface EditorContextValue {
    * opens the photo picker beside it, and panels stay open until the user closes them. Absent = false.
    */
   sidebar?: boolean;
+  /**
+   * Task 8: the book's newest storybook job (outcome of the last generation, or a regeneration
+   * still running). Absent = none / not a storybook.
+   */
+  story?: { latest: StoryRunView | null };
+  /** Task 8: opens the "Regenerate story" dialog (EditorShell). Absent = not available (dev / tests). */
+  storyRegen?: { open(): void };
   /** Id of the tool whose Panel is open, or null. */
   activeTool: string | null;
   openTool(id: string): void;

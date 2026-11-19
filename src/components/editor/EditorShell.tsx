@@ -39,6 +39,7 @@ import { PageCarousel, SpreadCarouselPlaceholder } from "./PageCarousel";
 import { cn } from "@/lib/utils";
 import { PageStrip } from "./PageStrip";
 import { SaveBanner, SaveStatus } from "./SaveStatus";
+import { StoryOutcomeNotice } from "./StoryOutcomeNotice";
 import { EDITOR_TOOLS, panelOnSelect, visibleTools } from "./tools/registry";
 import type { EditorTool } from "./tools/types";
 import { useAutosave } from "./useAutosave";
@@ -49,6 +50,8 @@ import { useSpreadMode } from "./useSpreadMode";
 
 // On demand: the flipbook (page-flip) and viewer CSS stay out of the editor's first load.
 const DraftPreview = dynamic(() => import("@/components/viewer/DraftPreview"), { ssr: false });
+// Task 8: "Regenerate story" — loaded when opened (or when a regeneration is still running).
+const StoryRegenDialog = dynamic(() => import("./StoryRegenDialog"), { ssr: false });
 
 export type EditorShellProps = {
   data: EditorShellData;
@@ -98,6 +101,20 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
   const [aiBlocked, setAiBlocked] = useState<AiSessionBlock | null>(null);
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  // Task 8: a regeneration still running when the editor loads re-opens its dialog (resume).
+  const runningRegen = data.story?.latest && !data.story.latest.done && data.doc.pages.length > 0 ? data.story.latest : null;
+  const [regenOpen, setRegenOpen] = useState(runningRegen !== null);
+  const [regenInitial, setRegenInitial] = useState(runningRegen);
+  const storyRegen = useMemo(
+    () => ({
+      open: () => {
+        setRegenInitial(null);
+        setRegenOpen(true);
+      },
+    }),
+    [],
+  );
+  const closeRegen = useCallback(() => setRegenOpen(false), []);
   const openPreview = useCallback(() => setPreviewOpen(true), []);
   const closePreview = useCallback(() => setPreviewOpen(false), []);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -131,7 +148,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
       actions,
       photos,
       readOnly: state.readOnly,
-      save: { status: autosave.status, flush: autosave.flush, settle: autosave.settle },
+      save: { status: autosave.status, flush: autosave.flush, settle: autosave.settle, adopt: autosave.adopt },
       ai: {
         mode: data.aiMode,
         rewritesUsed: rewrites.used,
@@ -141,13 +158,15 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
         blockSession: setAiBlocked,
       },
       aiPath,
+      story: data.story,
+      storyRegen: saveEnabled ? storyRegen : undefined,
       spread,
       sidebar,
       activeTool,
       openTool,
       closeTool,
     }),
-    [data.book, paymentsEnabled, data.aiMode, state, actions, photos, autosave.status, autosave.flush, autosave.settle, rewrites, setRewrites, aiBlocked, aiPath, spread, sidebar, activeTool, openTool, closeTool],
+    [data.book, paymentsEnabled, data.aiMode, state, actions, photos, autosave.status, autosave.flush, autosave.settle, autosave.adopt, rewrites, setRewrites, aiBlocked, aiPath, data.story, saveEnabled, storyRegen, spread, sidebar, activeTool, openTool, closeTool],
   );
 
   const registry = useMemo(() => toolsProp ?? (extraTools ? [...EDITOR_TOOLS, ...extraTools] : EDITOR_TOOLS), [toolsProp, extraTools]);
@@ -242,6 +261,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
         />
 
         <SaveBanner status={autosave.status} bookId={data.book.id} />
+        {data.story?.latest ? <StoryOutcomeNotice view={data.story.latest} /> : null}
         {aiPath.makeWithAi ? (
           // Not dismissible: the only way into the AI for this book. Photos stay one tap away in
           // More → "See all photos".
@@ -283,6 +303,7 @@ export function EditorShell({ data, transport: transportProp, tools: toolsProp, 
           ) : null}
           <EditorToastHost />
         </div>
+        {regenOpen ? <StoryRegenDialog bookId={data.book.id} initial={regenInitial} onClose={closeRegen} /> : null}
         {previewOpen ? (
           <DraftPreview doc={state.doc} photos={photos.web} captionLang={data.book.captionLang} isPaid={data.book.isPaid} onClose={closePreview} />
         ) : null}

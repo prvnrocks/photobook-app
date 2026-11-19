@@ -5,6 +5,7 @@
 import type { BookDoc } from "@/lib/book/types";
 import type { CaptionLang, Occasion, Tone } from "@/lib/book/options";
 import type { FreeLinkState } from "@/lib/publish/free-link";
+import type { StoryRunView } from "@/lib/storybook/run/progress";
 import type { EditorAiPath } from "./ai-path";
 
 /** Mirrors AiMode in src/lib/ai/client.ts (server-only). */
@@ -49,4 +50,6 @@ export type EditorShellData = {
   rewritesUsed: number;
   rewritesLeft: number;
   photos: EditorShellPhoto[];
+  /** Task 8: the book's newest storybook job (outcome line, a regeneration still running). Absent = none. */
+  story?: { latest: StoryRunView | null };
 };

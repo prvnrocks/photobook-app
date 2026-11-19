@@ -18,6 +18,7 @@ export const NO_AI_PATH: EditorAiPath = { makeWithAi: false, redoWithAi: false }
 
 /**
  * - AI off (D-024) or the album has user edits (D-037 #2: AI runs can't overwrite it) → neither;
+ * - a storybook (Task 8) → neither (automatic first draft; "Regenerate story" lives in the Story tool);
  * - rule album and no build run ever → "Make it with AI";
  * - otherwise (an AI album, or a run that fell back / failed) → "Redo with AI" (review decides
  *   between Redo / Try AI again and shows the rebuilds left).
@@ -27,8 +28,14 @@ export function editorAiPath(input: {
   generator: Generator | null | undefined;
   userEdited: boolean;
   hasBuildRun: boolean;
+  /**
+   * Task 8: the book is (or is becoming) a storybook — a composed doc or a storybook job. Its first
+   * draft is generated automatically and it is redone with "Regenerate story" (the Story tool), so
+   * neither album entry ("Make it with AI", "Redo with AI") is shown.
+   */
+  storybook?: boolean;
 }): EditorAiPath {
-  if (input.aiMode === "off" || input.userEdited) return NO_AI_PATH;
+  if (input.aiMode === "off" || input.userEdited || input.storybook === true) return NO_AI_PATH;
   if (input.generator !== "ai" && !input.hasBuildRun) return { makeWithAi: true, redoWithAi: false };
   return { makeWithAi: false, redoWithAi: true };
 }

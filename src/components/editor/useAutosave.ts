@@ -30,6 +30,8 @@ export function useAutosave(opts: {
   settle: () => Promise<SaveState>;
   /** books.doc_rev as of the last successful save (baseRev until then). */
   rev: number | null;
+  /** Task 8: adopt a doc the server wrote at `rev` as the saved state (AutosaveScheduler.adopt). */
+  adopt: (doc: BookDoc, rev: number) => boolean;
 } {
   const { doc, baseRev, enabled, transport } = opts;
   const [status, setStatus] = useState<SaveState>(() =>
@@ -86,5 +88,6 @@ export function useAutosave(opts: {
     async (): Promise<SaveState> => (scheduler ? drainSaves(scheduler) : { kind: "readOnly" }),
     [scheduler],
   );
-  return { status, flush, hasUnsaved, settle, rev };
+  const adopt = useCallback((d: BookDoc, r: number) => scheduler?.adopt(d, r) ?? false, [scheduler]);
+  return { status, flush, hasUnsaved, settle, rev, adopt };
 }
