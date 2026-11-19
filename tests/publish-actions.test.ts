@@ -41,7 +41,7 @@ const fake = vi.hoisted(() => {
       update: (payload: unknown) => builder(table, "update", payload),
     }),
   };
-  return { state, admin, revalidatePath: vi.fn(), learnFromBook: vi.fn(), getCoverPhoto: vi.fn() };
+  return { state, admin, revalidatePath: vi.fn(), learnFromBook: vi.fn(), getCoverPhoto: vi.fn(), getBookEntitlement: vi.fn() };
 });
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => fake.admin }));
@@ -51,8 +51,9 @@ vi.mock("@/lib/db/photos", () => ({ listPlaceablePhotos: async () => fake.state.
 vi.mock("@/lib/db/cover-thumb", () => ({ getCoverPhoto: fake.getCoverPhoto }));
 vi.mock("@/lib/ai/learn-from-book", () => ({ learnFromBook: fake.learnFromBook }));
 vi.mock("next/cache", () => ({ revalidatePath: fake.revalidatePath }));
+vi.mock("@/lib/entitlements", () => ({ getBookEntitlement: fake.getBookEntitlement }));
 
-const { publishBookAction, unpublishBookAction, setBookPasswordAction, getPublishState, shareBookAction } = await import(
+const { publishBookAction, unpublishBookAction, resetShareLinkAction, setBookPasswordAction, getPublishState, shareBookAction } = await import(
   "@/app/books/[id]/publish/actions"
 );
 const { verifyPassword } = await import("@/lib/publish/password");
@@ -115,6 +116,7 @@ beforeEach(() => {
   fake.learnFromBook.mockReset().mockResolvedValue("updated");
   fake.revalidatePath.mockReset();
   fake.getCoverPhoto.mockReset().mockResolvedValue(null);
+  fake.getBookEntitlement.mockReset().mockResolvedValue({ tier: "preview", source: "none", isPaid: false, canExportPdf: false, limits: { maxPages: 20, previewPages: 5, maxPreviewRuns: 3, maxRunCostUsd: 1.5 } });
   logs = [];
   vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => void logs.push(a.map(String).join(" ")));
   vi.spyOn(console, "log").mockImplementation((...a: unknown[]) => void logs.push(a.map(String).join(" ")));
@@ -647,5 +649,78 @@ describe("getPublishState", () => {
     expect(await getPublishState(BOOK)).toEqual({ ok: false, error: "not_found" });
     fake.state.user = null;
     expect(await getPublishState(BOOK)).toEqual({ ok: false, error: "signed_out" });
+  });
+});
+
+// ---------------------------------------------------------------------------- Task 9
+
+describe("resetShareLinkAction (Task 9: revocable links)", () => {
+  it("revokes for good: published_doc AND slug cleared (expiry kept), the old /b page is purged", async () => {
+    fake.state.results.push({ data: { slug: "summer-AbCdEfGh12" }, error: null }, { data: [{ id: BOOK }], error: null });
+    expect(await resetShareLinkAction(BOOK)).toEqual({ ok: true });
+    const [u] = updates();
+    expect(u.payload).toEqual({ published_doc: null, slug: null });
+    expect(u.calls).toEqual([
+      ["eq", "id", BOOK],
+      ["eq", "user_id", USER],
+      ["select", "id"],
+    ]);
+    expect(fake.revalidatePath).toHaveBeenCalledWith("/b/summer-AbCdEfGh12");
+  });
+
+  it("the next publish makes a NEW slug (the old link never comes back)", async () => {
+    // after a reset the row has slug null but keeps published_at / expires_at
+    const first = new Date(NOW.getTime() - 3 * DAY).toISOString();
+    const expiry = new Date(NOW.getTime() + 27 * DAY).toISOString();
+    fake.state.results.push({ data: row({ slug: null, published_at: first, expires_at: expiry, published_rev: 6 }), error: null }, { data: [{ id: BOOK }], error: null });
+    const r = await publishBookAction(BOOK);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.slug).not.toBe("summer-AbCdEfGh12");
+    expect(isValidSlug(r.slug)).toBe(true);
+    // the free-link clock does not reset
+    expect(r.expiresAt).toBe(expiry);
+    expect(updates()[0].calls).toContainEqual(["is", "slug", null]);
+  });
+
+  it("owner only: someone else's book / signed out → no write", async () => {
+    fake.state.mine = null;
+    expect(await resetShareLinkAction(BOOK)).toEqual({ ok: false, error: "not_found" });
+    fake.state.mine = { id: BOOK };
+    fake.state.user = null;
+    expect(await resetShareLinkAction(BOOK)).toEqual({ ok: false, error: "signed_out" });
+    expect(await resetShareLinkAction("not-a-uuid")).toEqual({ ok: false, error: "signed_out" });
+    expect(updates()).toHaveLength(0);
+  });
+
+  it("a DB error → failed, logged as a code only", async () => {
+    fake.state.results.push({ data: null, error: { code: "57014" } });
+    expect(await resetShareLinkAction(BOOK)).toEqual({ ok: false, error: "failed" });
+    expect(logs).toEqual(["[reset-link] failed (57014)"]);
+  });
+});
+
+describe("publish caps an unpaid AI storybook at its preview pages (Task 9)", () => {
+  const storyDoc = (pages: number) => ({ ...doc(pages), meta: { generator: "ai" as const, generatorVersion: 1, runId: null, userEdited: false, story: { v: 1 as const, version: 2, hashes: {} } } });
+
+  it("a free storybook with more pages than the preview → preview_limit, nothing written", async () => {
+    fake.state.results.push({ data: row({ doc: storyDoc(8) }), error: null });
+    expect(await publishBookAction(BOOK)).toEqual({ ok: false, error: "preview_limit" });
+    expect(updates()).toHaveLength(0);
+    expect(fake.getBookEntitlement).toHaveBeenCalledWith(BOOK);
+  });
+
+  it("the preview itself publishes; a granted (full) storybook publishes all its pages; paid books and classic albums never ask", async () => {
+    fake.state.results.push({ data: row({ doc: storyDoc(5) }), error: null }, { data: [{ id: BOOK }], error: null });
+    expect((await publishBookAction(BOOK)).ok).toBe(true);
+    fake.getBookEntitlement.mockResolvedValueOnce({ tier: "full", source: "grant", isPaid: false, canExportPdf: false, limits: { maxPages: 20, previewPages: 5, maxPreviewRuns: 3, maxRunCostUsd: 1.5 } });
+    fake.state.results.push({ data: row({ doc: storyDoc(8) }), error: null }, { data: [{ id: BOOK }], error: null });
+    expect((await publishBookAction(BOOK)).ok).toBe(true);
+    fake.getBookEntitlement.mockClear();
+    fake.state.results.push({ data: row({ doc: storyDoc(12), is_paid: true, max_pages: 100 }), error: null }, { data: [{ id: BOOK }], error: null });
+    expect((await publishBookAction(BOOK)).ok).toBe(true);
+    fake.state.results.push({ data: row({ doc: doc(12) }), error: null }, { data: [{ id: BOOK }], error: null });
+    expect((await publishBookAction(BOOK)).ok).toBe(true);
+    expect(fake.getBookEntitlement).not.toHaveBeenCalled();
   });
 });

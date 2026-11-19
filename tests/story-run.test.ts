@@ -19,7 +19,8 @@ import type { AnalyzePhotosResult } from "@/lib/ai/photo-intelligence/analyze";
 import { ComposeError } from "@/lib/ai/story/compose";
 import type { StoryPlan } from "@/lib/ai/story/plan";
 import { advanceStoryRun, cancelStoryRun, MAX_GROUP_ATTEMPTS, parseStoryCursor, startStoryRun, type StoryRunDeps } from "@/lib/ai/story/run";
-import { planStory, writeStoryStep } from "@/lib/ai/story/service";
+import { previewSelection } from "@/lib/ai/story/preview";
+import { planStory, storyWriteGroups, writeStoryStep } from "@/lib/ai/story/service";
 import { TransportError } from "@/lib/ai/transport";
 import type { RunCheckpointPatch, RunForTick } from "@/lib/db/agent-runs";
 import { outcomeCopy, stageRows, storyErrorCopy, type StoryRunView } from "@/lib/storybook/run/progress";
@@ -494,5 +495,87 @@ describe("storybook job: failures", () => {
     expect(await advanceStoryRun(id, {}, s.deps)).toEqual({ notFound: true });
     expect(await cancelStoryRun(id, s.deps)).toEqual({ notFound: true });
     expect(s.table.claim).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------- Task 9: free preview
+
+describe("storybook job: free preview without a full entitlement (Task 9)", () => {
+  it("a 5-page preview: the plan covers the WHOLE paid book, only the preview's chapters are written, the composer is capped", async () => {
+    const s = await setup({ tier: "preview" });
+    const runId = await start(s.deps);
+    const last = (await drive(s.deps, runId)).at(-1)!;
+    expect(last.state).toBe("done");
+    expect(s.deps.planStory).toHaveBeenCalledWith(BOOK, { rule: false, maxPages: 100 });
+    expect(s.deps.composeStorybookPages).toHaveBeenCalledWith(BOOK, expect.objectContaining({ maxPages: 5 }));
+    const cursor = parseStoryCursor(s.table.rows.get(runId)!.cursor)!;
+    expect(cursor).toMatchObject({ tier: "preview", previewPages: 5, planPages: 100 });
+    const sel = previewSelection(cursor.plan!, 5);
+    expect(sel.groups.length).toBeGreaterThanOrEqual(1);
+    expect(sel.groups.length).toBeLessThan(cursor.plan!.chapters.length);
+    // one writer call per preview chapter, none for the rest of the book or the closing page
+    expect(s.w.requests.filter((r) => r.agent === "caption_writer")).toHaveLength(sel.groups.length);
+    const stored = s.w.versions.at(-1)!;
+    expect(stored.pages.length).toBeLessThanOrEqual(5);
+    expect(stored.pages.every((p) => sel.pageIds.includes(p.id))).toBe(true);
+    expect(stored.pages.some((p) => p.kind === "closing")).toBe(false);
+    expect(stored.chapters.map((c) => c.id)).toEqual(sel.groups);
+    expect(last.progress.preview).toEqual({ pages: 5 });
+    // the preview's chapters stay in the finished run's cursor for "Complete my book"
+    expect(Object.keys(cursor.write.state!.groups).sort()).toEqual([...sel.groups].sort());
+  });
+
+  it("repeated starts can't buy more AI: after 3 finished live previews the 4th start is preview_limit (no run row)", async () => {
+    const s = await setup({ tier: "preview" });
+    for (let i = 0; i < 3; i++) expect((await drive(s.deps, await start(s.deps))).at(-1)!.state).toBe("done");
+    const rows = s.table.rows.size;
+    expect(await startStoryRun({ bookId: BOOK, userId: USER }, s.deps)).toEqual({ ok: false, error: "preview_limit" });
+    expect(s.table.rows.size).toBe(rows);
+    // the count is server-side (finished live preview runs), whatever the client sends
+    expect(s.deps.countPreviewRuns).toHaveBeenCalledWith(BOOK);
+  });
+
+  it("a run without model calls (AI off) is not capped, and a paid book is never capped", async () => {
+    const off = await setup({ tier: "preview", mode: "off" });
+    off.deps.countPreviewRuns = vi.fn(async () => 99);
+    expect((await startStoryRun({ bookId: BOOK, userId: USER }, off.deps)).ok).toBe(true);
+    const paid = await setup({ tier: "full" });
+    paid.deps.countPreviewRuns = vi.fn(async () => 99);
+    expect((await startStoryRun({ bookId: BOOK, userId: USER }, paid.deps)).ok).toBe(true);
+    expect(paid.deps.countPreviewRuns).not.toHaveBeenCalled();
+  });
+
+  it("after payment, 'Complete my book' reuses the preview's analysis, plan and chapters — only the rest is written", async () => {
+    const s = await setup({ tier: "preview" });
+    const previewId = await start(s.deps);
+    await drive(s.deps, previewId);
+    const previewCursor = parseStoryCursor(s.table.rows.get(previewId)!.cursor)!;
+    const sel = previewSelection(previewCursor.plan!, 5);
+    const previewText = s.w.versions.at(-1)!.pages.flatMap((p) => p.blocks.map((b) => [b.id, b.text]));
+    const plans = vi.mocked(s.deps.planStory).mock.calls.length;
+    const analyses = vi.mocked(s.deps.analyzePhotos).mock.calls.length;
+    const writerCalls = s.w.requests.filter((r) => r.agent === "caption_writer").length;
+
+    // the Stripe webhook marked the book paid → the entitlement is now full
+    s.deps.getEntitlement = vi.fn(async () => entitlement("full"));
+    const runId = await start(s.deps);
+    const last = (await drive(s.deps, runId)).at(-1)!;
+    expect(last.state).toBe("done");
+    expect(vi.mocked(s.deps.planStory).mock.calls.length).toBe(plans); // no new plan
+    expect(vi.mocked(s.deps.analyzePhotos).mock.calls.length).toBe(analyses); // cached: no new analysis
+    const groups = storyWriteGroups(previewCursor.plan!);
+    const remaining = groups.filter((g) => !sel.groups.includes(g));
+    expect(s.w.requests.filter((r) => r.agent === "caption_writer").length - writerCalls).toBe(remaining.length);
+    const cursor = parseStoryCursor(s.table.rows.get(runId)!.cursor)!;
+    expect(cursor).toMatchObject({ tier: "full", continuedFrom: previewId, planPages: 100 });
+    expect(last.progress.continued).toBe(true);
+    expect(last.progress.preview).toBeUndefined();
+    expect(s.deps.composeStorybookPages).toHaveBeenLastCalledWith(BOOK, expect.not.objectContaining({ maxPages: expect.anything() }));
+    // the full book keeps the preview's words and adds the rest (closing included)
+    const full = s.w.versions.at(-1)!;
+    const fullText = new Map(full.pages.flatMap((p) => p.blocks.map((b) => [b.id, b.text] as const)));
+    for (const [id, text] of previewText) expect(fullText.get(id)).toBe(text);
+    expect(full.pages.length).toBeGreaterThan(5);
+    expect(full.chapters.length).toBe(previewCursor.plan!.chapters.length);
   });
 });
