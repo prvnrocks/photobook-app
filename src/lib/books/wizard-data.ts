@@ -16,7 +16,8 @@ import { displayBookTitle } from "@/lib/book/display-title";
 import { CAPTION_LANGS, type CaptionLang } from "@/lib/book/options";
 import { docOrigin } from "@/lib/book/replaceable";
 import { detailsLockReason } from "@/lib/book/setup";
-import { getActiveRunForBook, hasAnyRunForBook, type OwnerRun } from "@/lib/db/agent-runs";
+import { getActiveRunForBook, getLatestBookRun, hasAnyRunForBook, isStoryRunTrigger, type OwnerRun } from "@/lib/db/agent-runs";
+import { storyRunViewOf, type StoryRunView } from "@/lib/storybook/run/progress";
 import { getMyBook, type MyBook } from "@/lib/db/books";
 import { touchWarnedDraft } from "@/lib/db/draft-activity";
 import { listUploadState } from "@/lib/db/photos";
@@ -79,10 +80,19 @@ export type WizardStep3Data = WizardStepBase & {
   dailyCap: number;
 };
 
-/** Step 6 — what StepSorting passes to <BuildProgress variant="wizard"> + <PhotoFan>. */
+/**
+ * Step 6 — Task 8: the storybook generation screen (StepStoryGeneration) reads `story`; a book whose
+ * active job is an old album build (mid-run during a deploy) still gets StepSorting with
+ * <BuildProgress variant="wizard"> + <PhotoFan> from the other fields.
+ */
 export type WizardStep6Data = WizardStepBase & {
   step: 6;
+  /** The book's newest storybook run (Task 8), when it is the newest job of the book; null = none. */
+  story: StoryRunView | null;
+  /** Active ALBUM build run (old flow) — never a storybook run. */
   activeRunId: string | null;
+  /** The book already has pages (a stopped regeneration can offer "Open my book"). */
+  hasDoc: boolean;
   /** The active-run read failed (≠ "no run"): BuildProgress POSTs and the server decides (409 already_running). */
   readError: boolean;
   trigger: "build";
@@ -145,10 +155,17 @@ function baseOf(book: MyBook, aiOn: boolean, resolved: WizardTarget): WizardStep
   };
 }
 
+/** The newest job → the gate's storyRun input (only when that job is a storybook run). */
+function storyGateOf(latest: OwnerRun | null): WizardGateInput["storyRun"] {
+  if (!latest || !isStoryRunTrigger(latest.trigger)) return null;
+  const finished = latest.state === "done" || latest.state === "failed";
+  return { active: !finished, state: finished ? (latest.state as "done" | "failed") : null };
+}
+
 function gate(
   book: MyBook,
   requested: WizardDataStep | WizardOpenStep,
-  runs: { hasRun: boolean; active: OwnerRun | null; readError: boolean },
+  runs: { hasRun: boolean; active: OwnerRun | null; readError: boolean; latest?: OwnerRun | null },
   aiOn: boolean,
   photoCount?: number,
 ): WizardTarget {
@@ -164,6 +181,7 @@ function gate(
     albumConfirmed: albumConfirmedOf(book.album_confirmed_at),
     aiOn,
     photoCount,
+    storyRun: storyGateOf(runs.latest ?? null),
   };
   return resolveWizardStep(input);
 }
@@ -180,18 +198,21 @@ function settle<T>(p: Promise<T>): Promise<Settled<T>> {
 async function step3(book: MyBook, userId: string, aiOn: boolean, requested: WizardOpenStep): Promise<WizardStep3Data> {
   // Same reads as the upload page: a run read error counts as "no run" for the Uploader (the
   // server still decides: auto start → not_first); `resolved` keeps it apart as readError.
-  const [rows, hasRunRead, activeRead] = await Promise.all([
+  const [rows, hasRunRead, activeRead, latestRead] = await Promise.all([
     listUploadState(book.id),
     settle(hasAnyRunForBook(book.id)),
     settle(getActiveRunForBook(book.id)),
+    settle(getLatestBookRun(book.id)),
   ]);
   const hasRun = hasRunRead.ok ? hasRunRead.value : false;
   const active = activeRead.ok ? activeRead.value : null;
+  const latest = latestRead.ok ? latestRead.value : null;
   const { existing, readyCount, pendingCount } = uploadExisting(rows);
-  const firstRun: FirstRunState = active ? "active" : hasRun ? "done" : "none";
+  const storyActive = latest !== null && isStoryRunTrigger(latest.trigger) && latest.state !== "done" && latest.state !== "failed";
+  const firstRun: FirstRunState = active || storyActive ? "active" : hasRun ? "done" : "none";
   const limits = limitsFor(book.is_paid);
   return {
-    ...baseOf(book, aiOn, gate(book, requested, { hasRun, active, readError: !hasRunRead.ok || !activeRead.ok }, aiOn, rows.length)),
+    ...baseOf(book, aiOn, gate(book, requested, { hasRun, active, readError: !hasRunRead.ok || !activeRead.ok, latest }, aiOn, rows.length)),
     step: 3,
     userId,
     existing,
@@ -206,17 +227,21 @@ async function step3(book: MyBook, userId: string, aiOn: boolean, requested: Wiz
 
 async function step6(book: MyBook, aiOn: boolean, auto: boolean): Promise<WizardStep6Data> {
   // A read error is not "no run" (build page): keep it apart so ?auto=1 never strands a queued run.
-  const [activeRead, hasRunRead, fanUrls] = await Promise.all([
+  const [activeRead, hasRunRead, fanUrls, latestRead] = await Promise.all([
     settle(getActiveRunForBook(book.id)),
     settle(hasAnyRunForBook(book.id)),
     loadFanUrls(book.id, draftDoc(book.doc)),
+    settle(getLatestBookRun(book.id)),
   ]);
   const active = activeRead.ok ? activeRead.value : null;
   const hasRun = hasRunRead.ok ? hasRunRead.value : false;
-  const readError = !activeRead.ok || !hasRunRead.ok;
+  const latest = latestRead.ok ? latestRead.value : null;
+  const readError = !activeRead.ok || !hasRunRead.ok || !latestRead.ok;
   return {
-    ...baseOf(book, aiOn, gate(book, 6, { hasRun, active, readError }, aiOn)),
+    ...baseOf(book, aiOn, gate(book, 6, { hasRun, active, readError, latest }, aiOn)),
     step: 6,
+    story: latest && isStoryRunTrigger(latest.trigger) ? storyRunViewOf(latest) : null,
+    hasDoc: docHasContent(book.doc),
     activeRunId: active?.id ?? null,
     readError: !activeRead.ok,
     trigger: "build",
@@ -233,12 +258,13 @@ async function step7(book: MyBook, userId: string, aiOn: boolean): Promise<Wizar
   // Review reads throw on error (→ 503 / error boundary, as on the review page), so the active
   // run is known here. The extra run-exists read for the gate is best effort: unknown counts as
   // "a run exists" — step 7 was asked for and loaded, and bouncing to step 6 could POST a build.
-  const [review, hasRunRead] = await Promise.all([
+  const [review, hasRunRead, latestRead] = await Promise.all([
     loadReviewState(book, resolveAiMode()),
     settle(hasAnyRunForBook(book.id)),
+    settle(getLatestBookRun(book.id)),
   ]);
   const hasRun = hasRunRead.ok ? hasRunRead.value : true;
-  const resolved = gate(book, 7, { hasRun, active: review.activeRun, readError: false }, aiOn);
+  const resolved = gate(book, 7, { hasRun, active: review.activeRun, readError: false, latest: latestRead.ok ? latestRead.value : null }, aiOn);
   return {
     ...baseOf(book, aiOn, resolved),
     step: 7,

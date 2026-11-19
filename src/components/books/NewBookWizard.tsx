@@ -93,6 +93,7 @@ import "./wizard/steps/sorting-motion.css";
 import "./wizard/steps/review-motion.css";
 import type { StoryDraft } from "./wizard/steps/StepStory";
 import type { WizardBookFacts, WizardBookStep, WizardStepDataMap } from "./wizard/steps/WizardDataSteps";
+import type { StoryRunView } from "@/lib/storybook/run/progress";
 
 export type NewBookWizardMode =
   | { kind: "create" }
@@ -306,6 +307,8 @@ export function NewBookWizard({ initialStep, mode, dashboardBack, initialData }:
   const autoRef = useRef(false);
   /** M20b: the Design step's build request answer (resolved or pending), followed by step 6. */
   const handoverRef = useRef<Promise<AutoStartOutcome> | null>(null);
+  /** Task 8: the storybook job the Design step started, handed to step 6 (survives the step remount). */
+  const storyHandoverRef = useRef<StoryRunView | null>(null);
   /** Story step: the client copy of the answers (null = not opened in this session → it loads). */
   const [storyDraft, setStoryDraft] = useState<StoryDraft | null>(null);
   /**
@@ -920,6 +923,7 @@ export function NewBookWizard({ initialStep, mode, dashboardBack, initialData }:
                 leaving={leaving}
                 autoRef={autoRef}
                 handoverRef={handoverRef}
+                storyHandoverRef={storyHandoverRef}
                 headlineId={HEADLINE_ID}
                 factsRef={factsRef}
                 story={{ occasion: draft.occasion, value: storyDraft, onChange: setStoryDraft }}

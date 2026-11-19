@@ -88,6 +88,22 @@ export type StoryRunView = {
   mode: "live" | "replay" | "rule";
 };
 
+/** A storybook agent_runs row (owner columns are enough) → the client view. */
+export function storyRunViewOf(run: { id: string; state: string; progress: unknown; ai_status: string | null; error_code: string | null; mode: string }): StoryRunView {
+  const state: StoryRunState = isStoryRunState(run.state) ? run.state : "failed";
+  const ai = run.ai_status;
+  const mode = run.mode === "live" || run.mode === "replay" || run.mode === "rule" ? run.mode : "rule";
+  return {
+    runId: run.id,
+    state,
+    progress: parseStoryProgress(run.progress, state),
+    done: state === "done" || state === "failed",
+    aiStatus: ai === "ok" || ai === "partial" || ai === "failed" ? ai : null,
+    errorCode: run.error_code ?? null,
+    mode,
+  };
+}
+
 export function emptyStoryProgress(phase: StoryRunState = "discovering"): StoryRunProgress {
   return {
     v: 1,

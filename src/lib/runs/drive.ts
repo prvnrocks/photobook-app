@@ -23,8 +23,15 @@ export type DriveError = "signed_out" | "not_found" | "unavailable" | "server_un
 /** Why a back-off happened: the connection (no answer) or the server (5xx / 503). */
 export type RetryCause = "network" | "server";
 
-export type DriveResult =
-  | { kind: "done"; tick: RunTick }
+/**
+ * Task 8: the loop is generic over the tick type, so the storybook job (src/lib/storybook/run/client.ts)
+ * reuses it; the album build keeps RunTick (the default).
+ */
+export type TickLike = { done: boolean };
+export type AdvanceOutcomeOf<T extends TickLike> = { kind: "tick"; tick: T } | Exclude<AdvanceOutcome, { kind: "tick" }>;
+
+export type DriveResult<T extends TickLike = RunTick> =
+  | { kind: "done"; tick: T }
   | { kind: "aborted" }
   | { kind: "error"; error: DriveError };
 
@@ -106,10 +113,10 @@ export const abortableSleep: SleepFn = (ms, signal) =>
     signal?.addEventListener("abort", done, { once: true });
   });
 
-export type DriveOptions = {
+export type DriveOptions<T extends TickLike = RunTick> = {
   runId: string;
-  advance: (runId: string, signal?: AbortSignal) => Promise<AdvanceOutcome>;
-  onTick?: (tick: RunTick) => void;
+  advance: (runId: string, signal?: AbortSignal) => Promise<AdvanceOutcomeOf<T>>;
+  onTick?: (tick: T) => void;
   /** Called before each back-off wait (e.g. to show "Reconnecting…" / "Taking longer than usual"). */
   onRetry?: (failures: number, waitMs: number, cause: RetryCause) => void;
   signal?: AbortSignal;
@@ -130,25 +137,25 @@ function childController(parent?: AbortSignal): { ctrl: AbortController; dispose
   return { ctrl, dispose: () => parent.removeEventListener("abort", onAbort) };
 }
 
-type Attempt = { kind: "outcome"; out: AdvanceOutcome } | { kind: "timeout" } | { kind: "woken" };
+type Attempt<T extends TickLike> = { kind: "outcome"; out: AdvanceOutcomeOf<T> } | { kind: "timeout" } | { kind: "woken" };
 
 /**
  * One advance request with a deadline and wake-replacement. Resolves as soon as the request
  * answers, times out or is replaced — never waits on an advance that ignores its signal.
  */
-function attemptAdvance(
+function attemptAdvance<T extends TickLike>(
   runId: string,
-  advance: DriveOptions["advance"],
+  advance: DriveOptions<T>["advance"],
   signal: AbortSignal | undefined,
   timers: DriveTimers,
   timeoutMs: number,
   waker: DriveWaker | undefined,
-): Promise<Attempt> {
+): Promise<Attempt<T>> {
   const { ctrl, dispose } = childController(signal);
   const startedAt = timers.now();
-  return new Promise<Attempt>((resolve) => {
+  return new Promise<Attempt<T>>((resolve) => {
     let settled = false;
-    const finish = (a: Attempt, abort: boolean) => {
+    const finish = (a: Attempt<T>, abort: boolean) => {
       if (settled) return;
       settled = true;
       timers.clear(timer);
@@ -166,7 +173,7 @@ function attemptAdvance(
     // Outer abort: stop waiting; the caller's abort check returns "aborted".
     const onOuterAbort = () => finish({ kind: "woken" }, false);
     signal?.addEventListener("abort", onOuterAbort, { once: true });
-    let p: Promise<AdvanceOutcome>;
+    let p: Promise<AdvanceOutcomeOf<T>>;
     try {
       p = advance(runId, ctrl.signal);
     } catch {
@@ -192,7 +199,7 @@ async function wakeableSleep(sleep: SleepFn, ms: number, signal: AbortSignal | u
   }
 }
 
-export async function driveRun(opts: DriveOptions): Promise<DriveResult> {
+export async function driveRun<T extends TickLike = RunTick>(opts: DriveOptions<T>): Promise<DriveResult<T>> {
   const { runId, advance, onTick, onRetry, signal, sleep: rawSleep = abortableSleep, waker } = opts;
   const timers = opts.timers ?? defaultTimers;
   const timeoutMs = opts.requestTimeoutMs ?? REQUEST_TIMEOUT_MS;
@@ -223,7 +230,7 @@ export async function driveRun(opts: DriveOptions): Promise<DriveResult> {
     unsubscribeReset?.();
   }
 
-  async function step(out: AdvanceOutcome): Promise<DriveResult | null> {
+  async function step(out: AdvanceOutcomeOf<T>): Promise<DriveResult<T> | null> {
     switch (out.kind) {
       case "tick":
         failures = 0;
@@ -256,8 +263,8 @@ export async function driveRun(opts: DriveOptions): Promise<DriveResult> {
   }
 }
 
-export type StartRetryOptions = {
-  start: () => Promise<StartOutcome>;
+export type StartRetryOptions<O extends { kind: string } = StartOutcome> = {
+  start: () => Promise<O>;
   sleep?: SleepFn;
   /** Checked before each retry and after each wait (screen left / replaced). */
   shouldStop?: () => boolean;
@@ -269,15 +276,15 @@ export type StartRetryOptions = {
  * at most MAX_TRANSIENT_TRIES attempts; any other outcome is returned at once. Safe to repeat:
  * if an earlier attempt created the run, the retry gets 409 already_running with its id.
  */
-export async function startWithRetry(opts: StartRetryOptions): Promise<StartOutcome> {
+export async function startWithRetry<O extends { kind: string } = StartOutcome>(opts: StartRetryOptions<O>): Promise<O> {
   const { start, sleep = abortableSleep, shouldStop = () => false, onRetry } = opts;
   let failures = 0;
   for (;;) {
-    let out: StartOutcome;
+    let out: O;
     try {
       out = await start();
     } catch {
-      out = { kind: "network" };
+      out = { kind: "network" } as O;
     }
     if (!isTransient(out)) return out;
     failures++;

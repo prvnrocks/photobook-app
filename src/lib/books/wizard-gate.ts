@@ -57,6 +57,14 @@ export type WizardGateInput = {
    * Omitted / unknown → the requested step is kept (old callers, read errors).
    */
   photoCount?: number;
+  /**
+   * Task 8: the book's newest job is a storybook generation run (trigger 'storybook') — its state, or
+   * null / omitted when the newest job is an album build (old flow) or there is none. An active one
+   * shows step 6 (the generation screen) and resumes it; a finished one opens the editor (the
+   * storybook opens there directly — step 7 Preview is only for books made by the old album flow);
+   * a failed / stopped one shows step 6 with its reason and "Try again".
+   */
+  storyRun?: { active: boolean; state: "done" | "failed" | null } | null;
 };
 
 /** books.album_confirmed_at → WizardGateInput.albumConfirmed (a non-empty timestamp string = confirmed). */
@@ -78,6 +86,9 @@ function clampStep(n: number): WizardRequestStep {
  *                                                 over an active run: the editor's own redirect
  *                                                 sends a running build / rebuild to /books/[id]/build
  *                                                 (classic for a rebuild), never back here
+ *  2s. Task 8 storybook run: active → 6 (resume it); done → "editor" (the finished storybook opens
+ *                                                 in the editor directly); failed / stopped → 6
+ *                                                 (its reason + "Try again")
  *  2. active run                                → 6 ("classic" for a rebuild) — resume, never
  *                                                 start a 2nd run (AI off too, M20b)
  *  3. run read error                            → requested ≤5 with details unlocked: the open step
@@ -100,6 +111,12 @@ export function resolveWizardStep(input: WizardGateInput): WizardTarget {
 
   if (input.docOrigin.userEdited || input.detailsLock === "user_edited") return "editor";
   if (input.albumConfirmed) return "editor";
+  const story = input.storyRun ?? null;
+  if (story?.active) return buildScreen;
+  if (story && !input.active) {
+    if (story.state === "done") return "editor";
+    if (story.state === "failed") return buildScreen;
+  }
   if (input.active) return input.activeTrigger === "rebuild" ? "classic" : buildScreen;
   if (input.readError) return requested <= 5 && input.detailsLock === null ? openStep(requested, input.photoCount) : buildScreen;
   if (input.hasRun) return 7;

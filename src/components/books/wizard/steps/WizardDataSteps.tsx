@@ -1,21 +1,22 @@
 "use client";
 // Steps 3–7 of the /books/new wizard (M20 T6, D-072; Task 5 order) in one code-split chunk (G5: none
 // of this is in the route's first load; NewBookWizard prefetches it on idle from step 2):
-//   3 Photos (StepPhotos), 4 Story (StepStory), 5 Design (StepDesign), 6 Create (StepSorting),
-//   7 Preview (StepReview).
+//   3 Photos (StepPhotos), 4 Story (StepStory), 5 Design (StepDesign), 6 Create (Task 8:
+//   StepStoryGeneration — "Your memories are becoming a story."; StepSorting only for a book whose
+//   active job is an old album build), 7 Preview (StepReview — books made by the old album flow).
 // Steps 3, 6 and 7 load their data from GET /api/books/<id>/wizard?step=N when the wizard doesn't hold
 // it yet (createBookAction's step-3 data and hard-load server props arrive pre-filled) and follow the
 // server gate when the book has moved on (another tab: 3 → 6 / 7, editor, classic build). Steps 4 and
 // 5 need no such data: they work from the book's setup the wizard holds and their own server actions.
 // Never navigates itself except through `leave` (editor / classic build / login; the gate's "editor"
 // replaces the wizard entry — M20c).
-// The first build is asked for HERE, when the Design step is left (never on the Photos step): the
-// design is saved first (only when it differs), then POST /api/ai/runs { auto: true }
-// (requestAutoBuildSettled). A quick answer is mapped by the flow (`autoStart`); a slow one goes to
-// step 6 as a pending answer through `handoverRef` (`autoStartPending`, M20b: one request = one run —
-// while it's held, step 6 never skips to 7 on the gate's "finished" answer, so a rule build (AI off)
-// that finished inside the POST still plays its checklist). Fewer photos than the automatic build
-// wants → step 6 starts the build the plain way (`buildRequested`).
+// Task 8: the automatic first draft is asked for HERE, when the Design step is left (never on the
+// Photos step): the design is saved first (only when it differs), then POST /api/ai/story-runs
+// (startStory, one request per tap). A started job's view is handed to step 6
+// (`storyHandoverRef`) so it shows the job at once; already_running → step 6 follows the job the
+// server reports; a refused start stays on step 5 with the reason (Continue asks again); an edited
+// album → the editor. One click = one request (the button is busy meanwhile) and the server keeps
+// one job per book whatever the client does. Finished → the editor directly (replace).
 
 import { useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { Notice } from "@/components/app/Notice";
@@ -26,11 +27,14 @@ import { fetchWizardStep, type WizardDataByStep, type WizardDataStepNumber } fro
 import { flowEditorHref, type AutoStartError, type FlowAction } from "@/lib/books/wizard-flow";
 import type { DesignRecommendation } from "@/lib/design/recommend";
 import { limitCopy } from "@/lib/runs/stage-copy";
-import { AUTO_BUILD_MIN_PHOTOS, requestAutoBuildSettled, type AutoStartOutcome } from "@/lib/upload/auto-build-client";
+import { startStory, storyStartErrorCopy, type StoryStartOutcome } from "@/lib/storybook/run/client";
+import type { StoryRunView } from "@/lib/storybook/run/progress";
+import type { AutoStartOutcome } from "@/lib/upload/auto-build-client";
 import { StepDesign } from "./StepDesign";
 import { StepPhotos } from "./StepPhotos";
 import { StepReview } from "./StepReview";
 import { StepSorting } from "./StepSorting";
+import { StepStoryGeneration } from "./StepStoryGeneration";
 import { StepStory, type StoryDraft } from "./StepStory";
 
 export type WizardStepDataMap = { [S in WizardDataStepNumber]?: WizardDataByStep[S] };
@@ -85,9 +89,17 @@ export type WizardDataStepsProps = {
   story: WizardStoryProps;
   design: WizardDesignProps;
   factsRef: MutableRefObject<WizardBookFacts>;
-  /** Test seam: the build request (defaults to requestAutoBuildSettled). */
-  requestBuild?: (bookId: string) => Promise<AutoStartOutcome>;
+  /**
+   * Task 8: the started job's first view, handed from the Design step to step 6. Owned by the wizard
+   * (this component remounts per step). Absent → a local ref (tests).
+   */
+  storyHandoverRef?: MutableRefObject<StoryRunView | null>;
+  /** Test seam: the storybook start request (defaults to startStory, one attempt per tap). */
+  requestStory?: (bookId: string) => Promise<StoryStartOutcome>;
 };
+
+/** One attempt per tap (the button is busy meanwhile; a failure shows its reason and Continue asks again). */
+const defaultRequestStory = (bookId: string) => startStory(bookId);
 
 /**
  * How long the Design step waits for the build request's answer before moving on to step 6 with the
@@ -131,7 +143,8 @@ export function WizardDataSteps({
   story,
   design,
   factsRef,
-  requestBuild = requestAutoBuildSettled,
+  requestStory = defaultRequestStory,
+  storyHandoverRef: storyHandoverProp,
 }: WizardDataStepsProps) {
   const [loadError, setLoadError] = useState<keyof typeof LOAD_ERRORS | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
@@ -139,6 +152,11 @@ export function WizardDataSteps({
   const haveData = dataStep === null || stepData[dataStep] !== undefined;
   /** Design step: saving / asking for the build. */
   const [starting, setStarting] = useState(false);
+  /** Design step: why the story could not start (null = no problem). */
+  const [startError, setStartError] = useState<string | null>(null);
+  /** The started job's first view, handed to step 6 (Task 8). */
+  const localStoryHandover = useRef<StoryRunView | null>(null);
+  const storyHandoverRef = storyHandoverProp ?? localStoryHandover;
   const startingRef = useRef(false);
   const aliveRef = useRef(true);
   useEffect(() => {
@@ -177,13 +195,14 @@ export function WizardDataSteps({
   }, [dataStep, bookId, haveData, reloadToken, autoRef, handoverRef, dispatch, leave, setStepData]);
 
   /**
-   * Design → Create: save the design (when it differs), then ask for the first build — the only
-   * place the wizard does (never on the Photos step).
+   * Design → Create (Task 8): save the design (when it differs), then start the storybook job — the
+   * only place the wizard does (never on the Photos step).
    */
   async function startBuild() {
     if (startingRef.current) return;
     startingRef.current = true;
     setStarting(true);
+    setStartError(null);
     const done = () => {
       startingRef.current = false;
       if (aliveRef.current) setStarting(false);
@@ -195,34 +214,30 @@ export function WizardDataSteps({
       saved = false;
     }
     if (!saved) return done();
-    // Fewer photos than the automatic build asks for: the server would answer not_ready (after its
-    // retry wait) — step 6 starts the build the plain way at once.
-    const ready = factsRef.current.ready;
-    if (ready !== null && ready < AUTO_BUILD_MIN_PHOTOS) {
+    let out: StoryStartOutcome;
+    try {
+      out = await requestStory(bookId);
+    } catch {
+      out = { kind: "network" };
+    }
+    if (out.kind === "started" || out.kind === "already_running") {
+      storyHandoverRef.current = out.kind === "started" ? out.view : null;
       autoRef.current = false;
       handoverRef.current = null;
       dispatch({ type: "buildRequested" });
+      // The user stepped back while the request was out: the job exists all the same → step 6.
+      dispatch({ type: "runStarted" });
       return done();
     }
-    const request = requestBuild(bookId).catch((): AutoStartOutcome => ({ kind: "error" }));
-    const quick = await Promise.race([
-      request,
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), DESIGN_HANDOVER_GRACE_MS)),
-    ]);
-    if (quick === null) {
-      // Still on its way: step 6 shows the build and follows the answer there (M20b).
-      autoRef.current = true;
-      handoverRef.current = request;
-      dispatch({ type: "autoStartPending" });
+    if (out.kind === "user_edited") {
+      dispatch({ type: "autoStart", outcome: { kind: "user_edited" }, retried: true, activeAtLoad: false });
       return done();
     }
-    autoRef.current = quick.kind === "started";
-    const hasRun = quick.kind === "started" || quick.kind === "already_running";
-    // A run to follow on step 6 (incl. a rule run already done inside the POST, M20b).
-    handoverRef.current = hasRun ? Promise.resolve(quick) : null;
-    dispatch({ type: "autoStart", outcome: quick, retried: true, activeAtLoad: false });
-    // The user stepped back while the request was out: the run exists all the same → the build step.
-    if (hasRun) dispatch({ type: "runStarted" });
+    if (out.kind === "signed_out") {
+      done();
+      return leave(loginHref());
+    }
+    if (aliveRef.current) setStartError(storyStartErrorCopy(out));
     done();
   }
 
@@ -289,10 +304,26 @@ export function WizardDataSteps({
         onRecommendation={design.onRecommendation}
         locked={design.locked}
         error={design.error}
-        buildError={buildErrorCopy(design.buildError, factsRef.current)}
+        buildError={startError ?? buildErrorCopy(design.buildError, factsRef.current)}
         pending={starting || leaving}
         onBack={() => dispatch({ type: "back" })}
         onContinue={() => void startBuild()}
+      />
+    );
+  }
+  if (step === 6 && s6 && ((s6.story ?? null) !== null || !s6.activeRunId)) {
+    return (
+      <StepStoryGeneration
+        data={s6}
+        headlineId={headlineId}
+        handover={storyHandoverRef.current && storyHandoverRef.current.runId !== s6.story?.runId ? storyHandoverRef.current : null}
+        onDone={() => {
+          storyHandoverRef.current = null;
+          // Task 8 (req. 7): the finished storybook opens in the editor; the wizard entry is replaced
+          // (the gate sends this book to the editor from now on).
+          leave(flowEditorHref(bookId), { replace: true });
+        }}
+        onOpenBook={s6.hasDoc ? () => leave(flowEditorHref(bookId), { replace: true }) : undefined}
       />
     );
   }

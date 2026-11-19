@@ -168,6 +168,27 @@ function renderSteps(stepData: WizardStepDataMap = { 6: STEP6 }) {
   return { dispatch, updates };
 }
 
+/**
+ * Task 8: through WizardDataSteps, step 6 without an active ALBUM run is the storybook screen
+ * (tests/task8-story-step.test.tsx). StepSorting's own start path (no run id: it POSTs the build)
+ * is still exercised here directly, wired the way WizardDataSteps wires it.
+ */
+function renderSortingAlone(data: Step6) {
+  const dispatch = vi.fn();
+  act(() =>
+    root.render(
+      <StepSorting
+        data={data}
+        headlineId="wizard-headline"
+        onDone={() => dispatch({ type: "buildDone" })}
+        onStopped={(reason) => dispatch({ type: "buildStopped", reason })}
+        onResumed={() => dispatch({ type: "buildResumed" })}
+      />,
+    ),
+  );
+  return { dispatch };
+}
+
 // --- truthful mapping ------------------------------------------------------------------------------
 
 describe("checklist + photo phase per RunState (pure)", () => {
@@ -262,7 +283,7 @@ describe("stop states → calm card + buildStopped", () => {
     ["failed at start", { kind: "started", runId: RUN, mode: "live", state: "failed" }, "build-error", "failed", true],
   ] as const)("%s", async (_name, outcome, testId, reason, retry) => {
     mocks.startRun.mockResolvedValue(outcome);
-    const { dispatch } = renderSteps({ 6: noRun });
+    const { dispatch } = renderSortingAlone(noRun);
     await flush();
     const card = $(testId)!;
     expect(card).not.toBeNull();
@@ -343,7 +364,7 @@ describe("finished → ready moment → step 7 (with prefetched data)", () => {
   it("rule run done at start → rule rows play through (M20b), then the ready moment, then buildDone", async () => {
     mocks.startRun.mockResolvedValue({ kind: "started", runId: RUN, mode: "rule", state: "done" });
     mocks.fetchWizardStep.mockResolvedValue({ ok: false, error: "failed" });
-    const { dispatch } = renderSteps({ 6: { ...STEP6, activeRunId: null } as Step6 });
+    const { dispatch } = renderSortingAlone({ ...STEP6, activeRunId: null } as Step6);
     await flush();
     expect($("build-ready")).toBeNull(); // replaying the rule rows first
     expect($("build-progress")!.getAttribute("data-rules")).toBe("true");

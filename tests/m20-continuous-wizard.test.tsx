@@ -145,6 +145,13 @@ vi.mock("@/components/books/wizard/steps/StepSorting", () => ({
     </div>
   ),
 }));
+vi.mock("@/components/books/wizard/steps/StepStoryGeneration", () => ({
+  StepStoryGeneration: (p: { data: { story: { runId: string } | null }; onDone: Cb; onOpenBook?: Cb; handover?: { runId: string } | null }) => (
+    <div data-testid="stub-story-gen" data-run={p.data.story?.runId ?? ""} data-handover={p.handover ? p.handover.runId : "no"}>
+      <button type="button" data-testid="stub-story-done" onClick={p.onDone} />
+    </div>
+  ),
+}));
 vi.mock("@/components/books/wizard/steps/StepReview", () => ({
   StepReview: (p: { data: { counts: { kept: number } }; onConfirm: Cb }) => (
     <div data-testid="stub-review" data-kept={p.data.counts.kept}>
@@ -204,7 +211,7 @@ const { WIZARD_CONFIRMED_STORAGE_KEY, rememberAlbumConfirmed, forgetAlbumConfirm
   "@/lib/books/wizard-confirmed"
 );
 const { Uploader } = await import("@/components/upload/Uploader");
-const { DESIGN_HANDOVER_GRACE_MS, BUILD_START_FAILED } = await import("@/components/books/wizard/steps/WizardDataSteps");
+await import("@/components/books/wizard/steps/WizardDataSteps");
 const { designPickStorageKey, serializeDesignPick } = await import("@/lib/books/design-choice");
 const { WIZARD_DRAFT_STORAGE_KEY, serializeWizardDraft, EMPTY_WIZARD_DRAFT } = await import("@/lib/books/wizard-steps");
 type Props = import("@/components/books/NewBookWizard").NewBookWizardProps;
@@ -223,7 +230,7 @@ const step3 = (over: Record<string, unknown> = {}) => ({
   firstRun: "none", dailyCap: 3, ...over,
 });
 const step6 = (over: Record<string, unknown> = {}) => ({
-  ...base(6), activeRunId: RUN, readError: false, trigger: "build", dailyCap: 3, auto: false, fanUrls: [], ...over,
+  ...base(6), story: null, activeRunId: RUN, hasDoc: false, readError: false, trigger: "build", dailyCap: 3, auto: false, fanUrls: [], ...over,
 });
 const step7 = (over: Record<string, unknown> = {}) => ({
   ...base(7), photos: [], albumPhotoIds: [], aiUsed: true, userEdited: false, building: false,
@@ -246,6 +253,7 @@ beforeEach(() => {
   for (const m of [mocks.createBookAction, mocks.updateBookSetupAction, mocks.push, mocks.replace, mocks.trackEvent, mocks.track]) m.mockReset();
   served = { "3": step3(), "6": step6(), "7": step7() };
   fetchMock = vi.fn(async (url: string) => {
+    if (url === "/api/ai/story-runs") return storyStarted();
     if (url.startsWith("/api/ai/runs")) {
       return new Response(JSON.stringify({ runId: RUN, mode: "live", state: "queued" }), { status: 201 });
     }
@@ -319,6 +327,14 @@ async function waitFor(check: () => void, timeout = 1500) {
 const edit = (bookId = BOOK) => ({ kind: "edit" as const, bookId, draft: DRAFT, designLock: null });
 const wizardFetches = () => fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.includes("/wizard"));
 const buildPosts = () => fetchMock.mock.calls.filter((c) => String(c[0]) === "/api/ai/runs");
+/** Task 8: the Design step's start of the storybook job. */
+const storyPosts = () => fetchMock.mock.calls.filter((c) => String(c[0]) === "/api/ai/story-runs");
+const storyView = (state = "discovering") => ({ runId: RUN, state, progress: {}, done: false, aiStatus: null, errorCode: null, mode: "live" });
+const storyStarted = () => new Response(JSON.stringify({ runId: RUN, mode: "live", view: storyView() }), { status: 201 });
+const serveStory = (handler: () => Promise<Response> | Response) =>
+  fetchMock.mockImplementation(async (u: string) =>
+    u === "/api/ai/story-runs" ? handler() : new Response(JSON.stringify(served[new URL(u, "http://x").searchParams.get("step") ?? ""]), { status: 200 }),
+  );
 /** A book that already has photos (what the server sends on a hard load of steps 3–5). */
 const withPhotos = (over: Record<string, unknown> = {}) =>
   step3({ existing: Array.from({ length: 6 }, (_, i) => ({ id: `p${i}`, fingerprint: `f${i}`, upload_state: "ready" })), readyCount: 6, hasDoc: true, ...over });
@@ -517,67 +533,63 @@ describe("Task 5: Photos → Story → Design — the build starts on step-5 Con
     expect(buildPosts()).toEqual([]);
   });
 
-  it("Design Continue with the stored design unchanged: no save, ONE build request → step 6 (push, ?auto=1 data) → 7 (replace) → editor", async () => {
+  it("Task 8: Design Continue with the stored design unchanged: no save, ONE story request → step 6 (push) → finished → the editor (replace)", async () => {
     await mountDesign();
-    served["6"] = step6({ auto: true });
+    served["6"] = step6({ activeRunId: null, story: storyView() });
+    const replace = vi.spyOn(wizardWindow, "replace").mockImplementation(() => {});
     await click($("stub-design-continue"));
-    await waitFor(() => expect($("stub-sorting")).toBeTruthy());
+    await waitFor(() => expect($("stub-story-gen")).toBeTruthy());
     expect(mocks.updateBookSetupAction).not.toHaveBeenCalled();
-    expect(buildPosts()).toHaveLength(1);
-    expect(JSON.parse(String((buildPosts()[0][1] as RequestInit).body))).toEqual({ bookId: BOOK, auto: true });
+    expect(storyPosts()).toHaveLength(1);
+    expect(JSON.parse(String((storyPosts()[0][1] as RequestInit).body))).toEqual({ bookId: BOOK });
+    expect(buildPosts()).toEqual([]); // the old album build is never asked for
     expect(shownStep()).toBe("6");
     expect(url()).toBe(`/books/new?book=${BOOK}&step=6`);
     expect(window.history.state).toMatchObject({ wizardStep: 6, wizardPrev: 5 }); // pushed
-    const len = window.history.length;
-    const content = $("wizard-content");
-    expect($("wizard-aside")).toBeTruthy(); // the build step keeps the live preview aside
-    expect(wizardFetches()).toEqual([`/api/books/${BOOK}/wizard?step=6&auto=1`]);
-    expect($("stub-sorting").getAttribute("data-auto")).toBe("true");
-    expect($("stub-sorting").getAttribute("data-handover")).toBe("yes");
+    expect(wizardFetches()).toEqual([`/api/books/${BOOK}/wizard?step=6`]);
+    expect($("stub-story-gen").getAttribute("data-run")).toBe(RUN); // the job the server reports
+    expect($("stub-sorting")).toBeNull();
 
-    await click($("stub-done"));
-    await waitFor(() => expect($("stub-review")).toBeTruthy());
-    expect(shownStep()).toBe("7");
-    expect(url()).toBe(`/books/new?book=${BOOK}&step=7`);
-    expect(window.history.length).toBe(len); // the build step replaced
-    // Preview drops the aside and takes the full library width — same content column node.
-    expect($("wizard-aside")).toBeNull();
-    expect($("wizard-content")).toBe(content);
-    expect($("wizard-content").className).not.toContain("max-w-");
-    expect($("stub-review").getAttribute("data-kept")).toBe("9");
+    await click($("stub-story-done"));
+    expect(replace).toHaveBeenCalledWith(`/books/${BOOK}/edit`); // straight into the editor, no step 7
     expect(assign).not.toHaveBeenCalled();
-
-    await click($("stub-confirm"));
-    expect(assign).toHaveBeenCalledWith(`/books/${BOOK}/edit`);
-    expect(mocks.push).not.toHaveBeenCalled();
-    expect(buildPosts()).toHaveLength(1);
+    expect($("stub-review")).toBeNull();
+    expect(storyPosts()).toHaveLength(1);
+    replace.mockRestore();
   });
 
-  it("a changed design is saved FIRST (updateBookSetupAction, shape + style only), then the build is asked for", async () => {
+  it("the start answer is handed to step 6 when the step-6 read doesn't know the job yet", async () => {
+    await mountDesign();
+    served["6"] = step6({ activeRunId: null, story: null });
+    await click($("stub-design-continue"));
+    await waitFor(() => expect($("stub-story-gen")).toBeTruthy());
+    expect($("stub-story-gen").getAttribute("data-handover")).toBe(RUN);
+  });
+
+  it("a changed design is saved FIRST (updateBookSetupAction, shape + style only), then the story is asked for", async () => {
     const order: string[] = [];
     mocks.updateBookSetupAction.mockImplementation(async () => {
       order.push("save");
       return { ok: true, setup: {}, relaidOut: true };
     });
-    fetchMock.mockImplementation(async (u: string) => {
-      if (u === "/api/ai/runs") {
-        order.push("build");
-        return new Response(JSON.stringify({ runId: RUN, mode: "live", state: "queued" }), { status: 201 });
-      }
-      return new Response(JSON.stringify(served[new URL(u, "http://x").searchParams.get("step") ?? ""]), { status: 200 });
+    serveStory(() => {
+      order.push("story");
+      return storyStarted();
     });
+    served["6"] = step6({ activeRunId: null });
     await mountDesign();
     await click($("stub-pick-landscape"));
     expect(previewAttr("data-format")).toBe("A5_LANDSCAPE");
     await click($("stub-design-continue"));
-    await waitFor(() => expect($("stub-sorting")).toBeTruthy());
+    await waitFor(() => expect($("stub-story-gen")).toBeTruthy());
     expect(mocks.updateBookSetupAction).toHaveBeenCalledTimes(1);
     expect(mocks.updateBookSetupAction).toHaveBeenCalledWith(BOOK, { format: "A5_LANDSCAPE", designStyle: "magazine" });
-    expect(order).toEqual(["save", "build"]);
+    expect(order).toEqual(["save", "story"]);
   });
 
   it("a recommendation is preselected only while the user hasn't chosen; a manual pick wins and survives a new recommendation", async () => {
     mocks.updateBookSetupAction.mockResolvedValue({ ok: true, setup: {}, relaidOut: true });
+    served["6"] = step6({ activeRunId: null });
     await mountDesign();
     expect(previewAttr("data-format")).toBe("A5_PORTRAIT");
     expect(previewAttr("data-style")).toBe("magazine");
@@ -603,16 +615,17 @@ describe("Task 5: Photos → Story → Design — the build starts on step-5 Con
     await waitFor(() => expect($("stub-design")).toBeTruthy());
     expect(JSON.parse($("stub-design").getAttribute("data-pick")!)).toEqual({ format: "A5_LANDSCAPE", designStyle: "classic" });
     await click($("stub-design-continue"));
-    await waitFor(() => expect($("stub-sorting")).toBeTruthy());
+    await waitFor(() => expect($("stub-story-gen")).toBeTruthy());
     expect(mocks.updateBookSetupAction).toHaveBeenCalledWith(BOOK, { format: "A5_LANDSCAPE", designStyle: "classic" });
   });
 
   it("an accepted recommendation (never touched) is what gets saved when it differs from the provisional design", async () => {
     mocks.updateBookSetupAction.mockResolvedValue({ ok: true, setup: {}, relaidOut: true });
+    served["6"] = step6({ activeRunId: null });
     await mountDesign();
     await click($("stub-recommend"));
     await click($("stub-design-continue"));
-    await waitFor(() => expect($("stub-sorting")).toBeTruthy());
+    await waitFor(() => expect($("stub-story-gen")).toBeTruthy());
     expect(mocks.updateBookSetupAction).toHaveBeenCalledWith(BOOK, { format: "A5_LANDSCAPE", designStyle: "editorial" });
   });
 
@@ -625,151 +638,132 @@ describe("Task 5: Photos → Story → Design — the build starts on step-5 Con
     expect(previewAttr("data-style")).toBe("scrapbook"); // the style wasn't picked → follows the recommendation
   });
 
-  it("a failed design save stays on step 5 with the error and asks for NO build; a retry goes on", async () => {
+  it("a failed design save stays on step 5 with the error and asks for NO story; a retry goes on", async () => {
     mocks.updateBookSetupAction.mockResolvedValueOnce({ ok: false, error: "failed" });
+    served["6"] = step6({ activeRunId: null });
     await mountDesign();
     await click($("stub-pick-landscape"));
     await click($("stub-design-continue"));
     await waitFor(() => expect($("stub-design").getAttribute("data-error")).toContain("couldn't save"));
     expect(shownStep()).toBe("5");
-    expect(buildPosts()).toEqual([]);
+    expect(storyPosts()).toEqual([]);
     expect($("stub-design").getAttribute("data-pending")).toBe("false");
     mocks.updateBookSetupAction.mockResolvedValueOnce({ ok: true, setup: {}, relaidOut: true });
     await click($("stub-design-continue"));
-    await waitFor(() => expect($("stub-sorting")).toBeTruthy());
-    expect(buildPosts()).toHaveLength(1);
+    await waitFor(() => expect($("stub-story-gen")).toBeTruthy());
+    expect(storyPosts()).toHaveLength(1);
   });
 
-  it("the setup locked meanwhile (a build started elsewhere) → the server gate picks the step; no build request", async () => {
+  it("the setup locked meanwhile (a build started elsewhere) → the server gate picks the step; no story request", async () => {
     mocks.updateBookSetupAction.mockResolvedValue({ ok: false, error: "locked", reason: "ai_started" });
     await mountDesign();
     await click($("stub-pick-landscape"));
     await click($("stub-design-continue"));
     await waitFor(() => expect(assign).toHaveBeenCalledWith(`/books/new?book=${BOOK}&step=5`));
-    expect(buildPosts()).toEqual([]);
+    expect(storyPosts()).toEqual([]);
   });
 
-  it("fewer photos than the automatic build wants → step 6 starts the build the plain way (no auto request, no hand-over)", async () => {
+  it("Task 8: few photos make a story too — ONE story request whatever the photo count; Back can't reopen Design", async () => {
     await mount(`/books/new?book=${BOOK}&step=3`, { initialStep: 3, mode: edit(), initialData: withPhotos({ readyCount: 3 }) as never });
     await click($("stub-continue-few"));
     await waitFor(() => expect($("stub-story")).toBeTruthy());
     await click($("stub-story-continue"));
     await waitFor(() => expect($("stub-design")).toBeTruthy());
-    served["6"] = step6({ activeRunId: null });
+    served["6"] = step6({ activeRunId: null, story: storyView() });
     await click($("stub-design-continue"));
-    await waitFor(() => expect($("stub-sorting")).toBeTruthy());
+    await waitFor(() => expect($("stub-story-gen")).toBeTruthy());
+    expect(storyPosts()).toHaveLength(1);
     expect(buildPosts()).toEqual([]);
-    expect(wizardFetches().at(-1)).toBe(`/api/books/${BOOK}/wizard?step=6`);
-    expect($("stub-sorting").getAttribute("data-run")).toBe("");
-    expect($("stub-sorting").getAttribute("data-handover")).toBe("no");
-    // Back / browser Back can't reopen the Design step while the run starts.
+    // Back / browser Back can't reopen the Design step while the story is made.
     await historyBack();
     expect(shownStep()).toBe("6");
     expect($("stub-design")).toBeNull();
   });
 
-  it("limit → stays on Design with the reason (nothing locked); Back still works", async () => {
-    fetchMock.mockImplementation(async (u: string) =>
-      u === "/api/ai/runs"
-        ? new Response(JSON.stringify({ error: "limit", limit: "daily_builds" }), { status: 429 })
-        : new Response(JSON.stringify(served[new URL(u, "http://x").searchParams.get("step") ?? ""]), { status: 200 }),
-    );
+  it("a refused start (no photos left) → stays on Design with the plain reason (nothing locked); Back still works", async () => {
+    serveStory(() => new Response(JSON.stringify({ error: "no_photos" }), { status: 409 }));
     await mountDesign();
     await click($("stub-design-continue"));
-    await waitFor(() => expect($("stub-design").getAttribute("data-build-error")).toContain("3 free AI builds"));
+    await waitFor(() => expect($("stub-design").getAttribute("data-build-error")).toContain("Add a few photos first"));
     expect(shownStep()).toBe("5");
     expect($("stub-design").getAttribute("data-pending")).toBe("false");
     await click($("stub-design-back"));
     await waitFor(() => expect($("stub-story")).toBeTruthy());
   });
 
-  it("a network error on the build request → the plain message on Design; Continue asks again", async () => {
+  it("a network error on the story request → the plain message on Design; Continue asks again (one request per tap)", async () => {
     let fail = true;
-    fetchMock.mockImplementation(async (u: string) => {
-      if (u === "/api/ai/runs") {
-        if (fail) throw new Error("offline");
-        return new Response(JSON.stringify({ runId: RUN, mode: "live", state: "queued" }), { status: 201 });
-      }
-      return new Response(JSON.stringify(served[new URL(u, "http://x").searchParams.get("step") ?? ""]), { status: 200 });
+    serveStory(() => {
+      if (fail) throw new Error("offline");
+      return storyStarted();
     });
+    served["6"] = step6({ activeRunId: null });
     await mountDesign();
     await click($("stub-design-continue"));
-    await waitFor(() => expect($("stub-design").getAttribute("data-build-error")).toBe(BUILD_START_FAILED));
+    await waitFor(() => expect($("stub-design").getAttribute("data-build-error")).toContain("We couldn't start your story"));
+    expect(storyPosts()).toHaveLength(1);
     fail = false;
     await click($("stub-design-continue"));
-    await waitFor(() => expect($("stub-sorting")).toBeTruthy());
-    expect(buildPosts()).toHaveLength(2);
+    await waitFor(() => expect($("stub-story-gen")).toBeTruthy());
+    expect(storyPosts()).toHaveLength(2);
   });
 
-  it("not_first (the first run already finished elsewhere) → step 7 by replace; user_edited → the editor", async () => {
-    fetchMock.mockImplementation(async (u: string) =>
-      u === "/api/ai/runs"
-        ? new Response(JSON.stringify({ error: "not_first" }), { status: 409 })
-        : new Response(JSON.stringify(served[new URL(u, "http://x").searchParams.get("step") ?? ""]), { status: 200 }),
-    );
+  it("already running (another tab / an earlier tap) → step 6 follows that job; user_edited → the editor", async () => {
+    serveStory(() => new Response(JSON.stringify({ error: "already_running", runId: RUN }), { status: 409 }));
+    served["6"] = step6({ activeRunId: null, story: storyView("writing") });
     await mountDesign();
-    const len = window.history.length;
     await click($("stub-design-continue"));
-    await waitFor(() => expect($("stub-review")).toBeTruthy());
-    expect(url()).toBe(`/books/new?book=${BOOK}&step=7`);
-    expect(window.history.length).toBe(len);
+    await waitFor(() => expect($("stub-story-gen")).toBeTruthy());
+    expect($("stub-story-gen").getAttribute("data-run")).toBe(RUN);
+    expect($("stub-story-gen").getAttribute("data-handover")).toBe("no");
 
     act(() => root.unmount());
     root = createRoot(container);
     fetchMock.mockImplementation(async (u: string) =>
-      u === "/api/ai/runs" ? new Response(JSON.stringify({ error: "user_edited" }), { status: 409 }) : new Response("{}", { status: 404 }),
+      u === "/api/ai/story-runs" ? new Response(JSON.stringify({ error: "user_edited" }), { status: 409 }) : new Response("{}", { status: 404 }),
     );
     await mountDesign();
     await click($("stub-design-continue"));
     await waitFor(() => expect(assign).toHaveBeenCalledWith(`/books/${BOOK}/edit`));
   });
-});
 
-describe("M20b: every first build goes through step 6 (AI off / rule runs included)", () => {
-  it("a rule run done inside the POST → step 6 with the hand-over (never the editor), then 7", async () => {
-    // The gate already says 7 (the run finished) — step 6 must still play it through.
-    served["6"] = step6({ activeRunId: null, resolved: 7, aiOn: false });
-    fetchMock.mockImplementation(async (u: string) =>
-      u === "/api/ai/runs"
-        ? new Response(JSON.stringify({ runId: RUN, mode: "rule", state: "done" }), { status: 201 })
-        : new Response(JSON.stringify(served[new URL(u, "http://x").searchParams.get("step") ?? ""]), { status: 200 }),
-    );
-    await mountDesign(withPhotos({ aiOn: false }));
-    await click($("stub-design-continue"));
-    await waitFor(() => expect($("stub-sorting")).toBeTruthy());
-    expect(shownStep()).toBe("6");
-    expect(url()).toBe(`/books/new?book=${BOOK}&step=6`);
-    expect($("stub-sorting").getAttribute("data-handover")).toBe("yes");
-    expect(assign).not.toHaveBeenCalled(); // no editor jump
-    expect($("stub-review")).toBeNull();
-    await click($("stub-done"));
-    await waitFor(() => expect($("stub-review")).toBeTruthy());
-    expect(url()).toBe(`/books/new?book=${BOOK}&step=7`);
-    expect(assign).not.toHaveBeenCalled();
-  });
-
-  it("answer still pending after the grace moment → step 6 at once with the pending answer, steps ≤ 5 locked", async () => {
-    fetchMock.mockImplementation(async (u: string) =>
-      u === "/api/ai/runs"
-        ? new Promise<Response>(() => {})
-        : new Response(JSON.stringify(served[new URL(u, "http://x").searchParams.get("step") ?? ""]), { status: 200 }),
-    );
+  it("the Continue button is busy while the request is out: a second tap sends nothing", async () => {
+    let answer: (r: Response) => void = () => {};
+    serveStory(() => new Promise<Response>((r) => (answer = r)));
+    served["6"] = step6({ activeRunId: null });
     await mountDesign();
     await click($("stub-design-continue"));
-    expect(shownStep()).toBe("5"); // a quick answer gets a moment to arrive first
     expect($("stub-design").getAttribute("data-pending")).toBe("true");
-    await settle(DESIGN_HANDOVER_GRACE_MS + 60);
-    await waitFor(() => expect($("stub-sorting")).toBeTruthy());
-    expect(url()).toBe(`/books/new?book=${BOOK}&step=6`);
-    expect($("stub-sorting").getAttribute("data-handover")).toBe("yes");
-    expect(wizardFetches().some((u) => u.includes("step=6") && u.includes("auto=1"))).toBe(true);
-    await historyBack();
-    expect(shownStep()).toBe("6"); // the Design step can't come back while the run starts
+    await click($("stub-design-continue"));
+    await click($("stub-design-continue"));
+    expect(storyPosts()).toHaveLength(1);
+    await act(async () => answer(storyStarted()));
+    await waitFor(() => expect($("stub-story-gen")).toBeTruthy());
+    expect(storyPosts()).toHaveLength(1);
+  });
+});
+
+describe("Task 8: every first draft goes through step 6 (AI off included)", () => {
+  it("AI off → the same story screen (a rule job), never the editor at once", async () => {
+    served["6"] = step6({ activeRunId: null, aiOn: false, story: { ...storyView(), mode: "rule" } });
+    serveStory(() => new Response(JSON.stringify({ runId: RUN, mode: "rule", view: { ...storyView(), mode: "rule" } }), { status: 201 }));
+    await mountDesign(withPhotos({ aiOn: false }));
+    await click($("stub-design-continue"));
+    await waitFor(() => expect($("stub-story-gen")).toBeTruthy());
+    expect(shownStep()).toBe("6");
     expect(assign).not.toHaveBeenCalled();
-    expect(buildPosts()).toHaveLength(1);
+    expect($("stub-review")).toBeNull();
   });
 
-  it("without a hand-over, step 6 data the gate moved on (finished run) still follows the gate → 7", async () => {
+  it("a book whose ALBUM build is still running (old flow, mid-deploy) keeps the sorting screen", async () => {
+    served["6"] = step6({ activeRunId: RUN, story: null });
+    await mount(`/books/new?book=${BOOK}&step=6`, { initialStep: 6, mode: edit(), initialData: served["6"] as never });
+    await waitFor(() => expect($("stub-sorting")).toBeTruthy());
+    expect($("stub-story-gen")).toBeNull();
+    expect(storyPosts()).toEqual([]);
+  });
+
+  it("without a hand-over, step 6 data the gate moved on (finished album run, old flow) still follows the gate → 7", async () => {
     served["6"] = step6({ activeRunId: null, resolved: 7 });
     await mount(`/books/new?book=${BOOK}&step=3`, { initialStep: 3, mode: edit(), initialData: withPhotos({ readyCount: 3 }) as never });
     await click($("stub-continue-few"));

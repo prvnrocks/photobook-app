@@ -50,6 +50,7 @@ import {
   isStoryRunState,
   parseStoryProgress,
   STORY_RUN_STATES,
+  storyRunViewOf,
   type OutcomeNote,
   type StoryRunOutcome,
   type StoryRunProgress,
@@ -343,18 +344,7 @@ export function storyOutcome(c: StoryCursor, mode: string): StoryRunOutcome {
 }
 
 function viewOf(run: Pick<RunForTick, "id" | "state" | "progress" | "ai_status" | "error_code" | "mode">): StoryRunView {
-  const state: StoryRunState = isStoryRunState(run.state) ? run.state : "failed";
-  const ai = run.ai_status;
-  const mode = run.mode === "live" || run.mode === "replay" || run.mode === "rule" ? run.mode : "rule";
-  return {
-    runId: run.id,
-    state,
-    progress: parseStoryProgress(run.progress, state),
-    done: state === "done" || state === "failed",
-    aiStatus: ai === "ok" || ai === "partial" || ai === "failed" ? ai : null,
-    errorCode: run.error_code ?? null,
-    mode,
-  };
+  return storyRunViewOf(run);
 }
 
 /** Public view of a storybook run row (status route, wizard data). */

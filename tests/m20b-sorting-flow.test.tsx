@@ -47,7 +47,7 @@ const { WIZARD_RULE_LABELS, wizardChecklist, wizardReplayChecklist, wizardPhaseO
   "@/lib/runs/build-checklist"
 );
 const { RULE_REPLAY_MS, RULE_REPLAY_MIN_ROW_MS, WIZARD_READY_COPY } = await import("@/components/review/BuildProgress");
-const { READY_MS, READY_MS_REDUCED, resolveHandover } = await import("@/components/books/wizard/steps/StepSorting");
+const { READY_MS, READY_MS_REDUCED, resolveHandover, StepSorting } = await import("@/components/books/wizard/steps/StepSorting");
 const { WizardDataSteps } = await import("@/components/books/wizard/steps/WizardDataSteps");
 const { handoverStart, requestAutoBuildSettled, NOT_READY_RETRY_MS } = await import("@/lib/upload/auto-build-client");
 type WizardStepDataMap = import("@/components/books/wizard/steps/WizardDataSteps").WizardStepDataMap;
@@ -163,6 +163,33 @@ function renderSteps(handover: Promise<AutoStartOutcome> | null, stepData: Wizar
   return { dispatch, handoverRef };
 }
 
+/**
+ * Task 8: the Design step now starts the storybook job, so WizardDataSteps no longer hands an album
+ * build over to step 6, and step 6 without an active ALBUM run is the storybook screen. StepSorting
+ * keeps its hand-over support for books whose album build is still running (mid-deploy); it is
+ * exercised here directly, wired the way WizardDataSteps wires it (onDone consumes the hand-over).
+ */
+function renderSorting(handover: Promise<AutoStartOutcome> | null, data: Step6 = STEP6_OFF) {
+  const dispatch = vi.fn();
+  const handoverRef = { current: handover };
+  act(() =>
+    root.render(
+      <StepSorting
+        data={data}
+        headlineId="wizard-headline"
+        handover={handoverRef.current}
+        onDone={() => {
+          handoverRef.current = null;
+          dispatch({ type: "buildDone" });
+        }}
+        onStopped={(reason) => dispatch({ type: "buildStopped", reason })}
+        onResumed={() => dispatch({ type: "buildResumed" })}
+      />,
+    ),
+  );
+  return { dispatch, handoverRef };
+}
+
 // --- pure helpers -----------------------------------------------------------------------------------
 
 describe("rule checklist wording + replay rows (pure)", () => {
@@ -241,7 +268,7 @@ describe("auto-start hand-over helpers (pure)", () => {
 
 describe("step 6, rule build done inside the POST (AI off)", () => {
   it("never skips to 7 on the gate; plays the rule rows through over the minimum, then ready → buildDone", async () => {
-    const { dispatch, handoverRef } = renderSteps(Promise.resolve(RULE_DONE));
+    const { dispatch, handoverRef } = renderSorting(Promise.resolve(RULE_DONE));
     await flush();
     const section = $("build-progress")!;
     expect(section).not.toBeNull();
@@ -275,7 +302,7 @@ describe("step 6, rule build done inside the POST (AI off)", () => {
 
   it("reduced motion: no replay — straight to the ready moment", async () => {
     reduceMotion = true;
-    const { dispatch } = renderSteps(Promise.resolve(RULE_DONE));
+    const { dispatch } = renderSorting(Promise.resolve(RULE_DONE));
     await flush();
     expect($("build-ready")).not.toBeNull();
     expect(rowStates()).toEqual(["done", "done", "done"]);
@@ -286,7 +313,7 @@ describe("step 6, rule build done inside the POST (AI off)", () => {
   it("pending answer: step 6 shows the sorting (rule wording) while it waits, then plays through", async () => {
     let answer: (o: AutoStartOutcome) => void = () => {};
     const pending = new Promise<AutoStartOutcome>((r) => (answer = r));
-    const { dispatch } = renderSteps(pending);
+    const { dispatch } = renderSorting(pending);
     await flush(50);
     expect($("build-progress")).not.toBeNull();
     expect($("build-progress")!.getAttribute("data-rules")).toBe("true");
@@ -304,7 +331,7 @@ describe("step 6, rule build done inside the POST (AI off)", () => {
   }, 10_000);
 
   it("a failed rule run → calm stop card without AI claims; buildStopped failed; rules failed tracked", async () => {
-    const { dispatch } = renderSteps(Promise.resolve({ kind: "started", runId: RUN, mode: "rule", state: "failed" }));
+    const { dispatch } = renderSorting(Promise.resolve({ kind: "started", runId: RUN, mode: "rule", state: "failed" }));
     await flush();
     const card = $("build-error")!;
     expect(card).not.toBeNull();
@@ -317,7 +344,7 @@ describe("step 6, rule build done inside the POST (AI off)", () => {
 
   it("a hand-over that made no run (error) → step 6 starts the build itself once (auto: false)", async () => {
     mocks.startRun.mockResolvedValue({ kind: "started", runId: RUN, mode: "rule", state: "done" });
-    const { dispatch } = renderSteps(Promise.resolve({ kind: "error" }));
+    const { dispatch } = renderSorting(Promise.resolve({ kind: "error" }));
     await flush();
     expect(mocks.startRun).toHaveBeenCalledTimes(1);
     expect(mocks.startRun).toHaveBeenCalledWith(BOOK, "build");
@@ -339,7 +366,7 @@ describe("step 6, rule build done inside the POST (AI off)", () => {
     mocks.fetchWizardStep.mockImplementation(async (_b: string, step: number) =>
       step === 6 ? { ok: true, data: STEP6_OFF } : { ok: true, data: STEP7 },
     );
-    const { dispatch } = renderSteps(Promise.resolve({ kind: "not_first" }));
+    const { dispatch } = renderSorting(Promise.resolve({ kind: "not_first" }));
     await flush(20);
     expect(mocks.startRun).not.toHaveBeenCalled();
     expect($("build-ready")).not.toBeNull();

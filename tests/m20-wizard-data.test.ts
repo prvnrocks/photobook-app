@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   getActiveRunForBook: vi.fn(),
   hasAnyRunForBook: vi.fn(),
   countLiveRebuilds: vi.fn(),
+  getLatestBookRun: vi.fn(),
   listUploadState: vi.fn(),
   listReviewPhotos: vi.fn(),
   touchWarnedDraft: vi.fn(),
@@ -33,6 +34,8 @@ vi.mock("@/lib/db/agent-runs", () => ({
   getActiveRunForBook: mocks.getActiveRunForBook,
   hasAnyRunForBook: mocks.hasAnyRunForBook,
   countLiveRebuilds: mocks.countLiveRebuilds,
+  getLatestBookRun: mocks.getLatestBookRun,
+  isStoryRunTrigger: (t: unknown) => t === "storybook",
 }));
 vi.mock("@/lib/db/photos", () => ({
   listUploadState: mocks.listUploadState,
@@ -126,6 +129,7 @@ beforeEach(() => {
   mocks.getActiveRunForBook.mockReset().mockResolvedValue(null);
   mocks.hasAnyRunForBook.mockReset().mockResolvedValue(false);
   mocks.countLiveRebuilds.mockReset().mockResolvedValue(1);
+  mocks.getLatestBookRun.mockReset().mockResolvedValue(null);
   mocks.listUploadState.mockReset().mockResolvedValue([]);
   mocks.listReviewPhotos.mockReset().mockImplementation(async (_b: string, ids?: readonly string[]) => {
     const all = [reviewRow(1), reviewRow(2), reviewRow(3, "dropped")];
@@ -174,6 +178,19 @@ describe("resolveWizardStep (G2 + G3)", () => {
     expect(g({ requested: 6, aiOn: false })).toBe(6);
     expect(g({ requested: 7, aiOn: false })).toBe(6);
     expect(g({ requested: 3, aiOn: false })).toBe(3);
+  });
+
+  it("Task 8 storybook job: active → 6 everywhere (resume); done → editor; failed / stopped → 6; editor rules still win", () => {
+    for (const requested of [1, 2, 3, 4, 5, 6, 7]) {
+      expect(g({ requested, hasRun: true, storyRun: { active: true, state: null } })).toBe(6);
+      expect(g({ requested, hasRun: true, storyRun: { active: false, state: "done" } })).toBe("editor");
+      expect(g({ requested, hasRun: true, storyRun: { active: false, state: "failed" } })).toBe(6);
+    }
+    // an edited album / a confirmed book never shows the wizard, whatever the job
+    expect(g({ requested: 6, hasRun: true, storyRun: { active: true, state: null }, docOrigin: { generator: "rule", userEdited: true } })).toBe("editor");
+    expect(g({ requested: 6, hasRun: true, storyRun: { active: true, state: null }, albumConfirmed: true })).toBe("editor");
+    // the newest job is an album build (old flow): unchanged (finished → 7)
+    expect(g({ requested: 6, hasRun: true, storyRun: null })).toBe(7);
   });
 
   it("active run → 6 for every requested step (resume; never a 2nd run)", () => {
@@ -381,7 +398,7 @@ describe("loadWizardStep — step 6 (build page parity)", () => {
     mocks.hasAnyRunForBook.mockResolvedValue(true);
     mocks.getMyBook.mockResolvedValue(book({ doc: ruleDraft() }));
     const d = await loadWizardStep(BOOK_ID, 6, { auto: true });
-    expect(Object.keys(d!).sort()).toEqual([...BASE_KEYS, "activeRunId", "readError", "trigger", "dailyCap", "auto", "fanUrls"].sort());
+    expect(Object.keys(d!).sort()).toEqual([...BASE_KEYS, "story", "activeRunId", "hasDoc", "readError", "trigger", "dailyCap", "auto", "fanUrls"].sort());
     expect(d).toMatchObject({ step: 6, activeRunId: RUN_ID, readError: false, trigger: "build", auto: true, resolved: 6 });
     expect((d as { fanUrls: string[] }).fanUrls).toHaveLength(6);
     // Only the draft's first photos are loaded + signed (FAN_PHOTOS = 6 at most).
@@ -405,7 +422,42 @@ describe("loadWizardStep — step 6 (build page parity)", () => {
     mocks.hasAnyRunForBook.mockResolvedValue(true);
     mocks.getMyBook.mockResolvedValue(book({ doc: ruleDraft() }));
     mocks.listReviewPhotos.mockRejectedValue(new Error("x"));
-    expect(await loadWizardStep(BOOK_ID, 6)).toMatchObject({ resolved: 7, fanUrls: [] });
+    expect(await loadWizardStep(BOOK_ID, 6)).toMatchObject({ resolved: 7, fanUrls: [], story: null });
+  });
+
+  // Task 8: the storybook job (trigger 'storybook') is the book's newest job
+  const storyRow = (state: string, error_code: string | null = null) => ({
+    id: RUN_ID,
+    book_id: BOOK_ID,
+    state,
+    ai_status: null,
+    progress: { v: 1, kind: "storybook", phase: state, stages: { writing: { status: state === "writing" ? "running" : "pending", done: 1, chapters: 3 } } },
+    error_code,
+    mode: "replay",
+    trigger: "storybook",
+    started_at: "2026-11-19T10:00:00.000Z",
+    finished_at: null,
+  });
+
+  it("Task 8: an active storybook job → resolved 6 with its view (real counts, the run id from the server)", async () => {
+    mocks.hasAnyRunForBook.mockResolvedValue(true);
+    mocks.getLatestBookRun.mockResolvedValue(storyRow("writing"));
+    const d = (await loadWizardStep(BOOK_ID, 6)) as { story: { runId: string; state: string; done: boolean; progress: { stages: { writing: { done: number } } } }; resolved: unknown; activeRunId: unknown };
+    expect(d).toMatchObject({ resolved: 6, activeRunId: null });
+    expect(d.story).toMatchObject({ runId: RUN_ID, state: "writing", done: false });
+    expect(d.story.progress.stages.writing.done).toBe(1);
+  });
+
+  it("Task 8: a finished storybook job → the editor (step 7 is only for the old album flow); stopped → 6 with its reason", async () => {
+    mocks.hasAnyRunForBook.mockResolvedValue(true);
+    mocks.getLatestBookRun.mockResolvedValue(storyRow("done"));
+    expect(await loadWizardStep(BOOK_ID, 6)).toMatchObject({ resolved: "editor" });
+    expect(await loadWizardStep(BOOK_ID, 7)).toMatchObject({ resolved: "editor" });
+    mocks.getLatestBookRun.mockResolvedValue(storyRow("failed", "cancelled"));
+    expect(await loadWizardStep(BOOK_ID, 6)).toMatchObject({ resolved: 6, story: { state: "failed", errorCode: "cancelled", done: true } });
+    // step 3 (a stale tab) follows the job too
+    mocks.getLatestBookRun.mockResolvedValue(storyRow("organizing"));
+    expect(await loadWizardStep(BOOK_ID, 3)).toMatchObject({ resolved: 6, firstRun: "active" });
   });
 });
 
