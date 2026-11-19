@@ -2,7 +2,7 @@
 
 // Mounts the real StepStoryGeneration inside the wizard chrome with a stubbed job API (dev-only).
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StepStoryGeneration } from "@/components/books/wizard/steps/StepStoryGeneration";
 import type { StoryRunApi } from "@/components/story/useStoryRun";
 import { WizardBand } from "@/components/wizard/WizardBand";
@@ -58,6 +58,8 @@ const never = <T,>() => new Promise<T>(() => {});
 
 export function DevStoryRunClient({ state }: { state: DevStoryRunState }) {
   const [opened, setOpened] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
   const data: WizardStep6Data = useMemo(
     () => ({
       step: 6,
@@ -92,7 +94,7 @@ export function DevStoryRunClient({ state }: { state: DevStoryRunState }) {
     [state],
   );
   return (
-    <div className="flex min-h-dvh flex-col bg-background" data-testid="dev-story-run">
+    <div className="flex min-h-dvh flex-col bg-background" data-testid="dev-story-run" data-hydrated={hydrated ? "true" : "false"}>
       <main className="flex w-full flex-1 flex-col">
         <div className="flex w-full min-w-0 flex-1 flex-col" data-testid="new-book-wizard" data-step={6}>
           <WizardBand step={6} title={TITLE} />

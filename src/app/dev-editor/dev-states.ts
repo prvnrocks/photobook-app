@@ -18,7 +18,7 @@ import {
 import { withDevPagesData } from "@/lib/editor/dev-pages-fixture";
 import { aiSummary, type AiSummary } from "@/lib/editor/ai-summary";
 import type { EditorShellData } from "@/lib/editor/types";
-import { composeStoryDoc } from "@/lib/storybook/compose";
+import { composeStoryDoc, mergeComposition, userOwnedElements } from "@/lib/storybook/compose";
 import { devStoryRenderPhotos, storyFixture } from "@/lib/storybook/compose/dev-fixture";
 import type { StoryRunView } from "@/lib/storybook/run/progress";
 
@@ -123,7 +123,10 @@ export type DevEditorFixtureOptions = {
 export function withDevStoryBook(data: EditorShellData, outcome: "partial" | "none" | null): EditorShellData {
   const design = { format: "A5_PORTRAIT" as const, designStyle: "classic" as const };
   const f = storyFixture({ photos: 24, lang: "en", design, lowRes: [5] });
-  const doc = composeStoryDoc({ storybook: f.storybook, photos: f.photos, design, lang: "en", occasion: "travel", bookTitle: null, maxPages: 20 }).doc;
+  const fresh = composeStoryDoc({ storybook: f.storybook, photos: f.photos, design, lang: "en", occasion: "travel", bookTitle: null, maxPages: 20 }).doc;
+  const owned = userOwnedElements(null, {});
+  // as stored by composeStorybookPages: with doc.meta.story (the Story tool keys on it)
+  const doc = owned.ok ? mergeComposition({ fresh, current: null, owned: owned.owned, design, storybookVersion: 1 }) : fresh;
   const urls = devStoryRenderPhotos(f.photos);
   const latest: StoryRunView | null = outcome
     ? {
