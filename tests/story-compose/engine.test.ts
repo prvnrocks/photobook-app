@@ -7,7 +7,7 @@ import { parseBookDoc, validateBookDoc } from "@/lib/book/schema";
 import type { BookDesign } from "@/lib/book/book-design";
 import type { BookDoc, BookPage, Layout } from "@/lib/book/types";
 import { getPageTemplate, templatesFor } from "@/lib/layouts/templates";
-import { storyTemplateId } from "@/lib/layouts/story";
+import { storyBaseId, storyTemplateId } from "@/lib/layouts/story";
 import {
   composeStoryDoc,
   mergeComposition,
@@ -46,7 +46,8 @@ const LOW: ComposePhoto = { id: fixturePhotoId(903), width: 800, height: 600 };
 const PANO: ComposePhoto = { id: fixturePhotoId(904), width: 6000, height: 1500 };
 const words = (n: number, w = "story") => Array.from({ length: n }, () => w).join(" ");
 const intent = (over: Partial<PageIntent> = {}): PageIntent => ({ family: "hero", design: { format: "A5_PORTRAIT", designStyle: "modern" }, lang: "en", ...over });
-const kindOf = (id: string) => id.replace(/^st-[a-z]+-[pl]-/, "");
+/** Template kind of a template id; a fitted variant counts as its base kind (layouts/story storyBaseId). */
+const kindOf = (id: string) => storyBaseId(id).replace(/^st-[a-z]+-[pl]-/, "");
 
 describe("selectPageTemplate", () => {
   it("orientation: a portrait photo with a paragraph gets the portrait story template, a landscape one a landscape template", () => {

@@ -10,6 +10,10 @@
 //     user owns in the current doc (`reserved`), are left out; a unit with nothing left is dropped
 //     (never an empty page). A storytelling page with more photos than a storytelling template
 //     holds (4–6) becomes a collage + a text page (when the page budget allows).
+//  1b. Contrasting sets (./contrast.ts): movable photos are re-dealt between the pages of a chapter
+//     so a page never pairs lookalikes (same similar group = never; close dHash / seconds apart /
+//     same scene + people + colour = avoided), nor do two consecutive pages repeat the same framing.
+//     Swaps keep page sizes; an unfixable same-group pair moves to a page with room or is set aside.
 //  2. Page budget: interior pages target MVP_PAGES (12–24), clamped by the book's max_pages
 //     (minus pages the user owns). Above 24, neighbouring photo pages of one chapter are merged
 //     (≤ 6 photos, ≤ 1 caption); below 12, photo pages with ≥ 2 photos are split while the
@@ -35,16 +39,18 @@ import type { BookDoc, BookPage, Caption, Chapter, Cover, PageText, PageTextRole
 import type { Occasion } from "@/lib/book/options";
 import { styleCaptionFont } from "@/lib/design/styles";
 import { getLayout } from "@/lib/layouts";
+import { storyBaseId } from "@/lib/layouts/story";
 import { isApprovedTemplate, layoutNarrativeShare, type TemplateFamily } from "@/lib/layouts/templates";
 import { STORY_BALANCE } from "@/lib/storybook/schemas";
 import type { NarrativeBlock, Storybook, StoryPage } from "@/lib/storybook/types";
 import { clipCodePoints, clipText } from "@/lib/text/clip";
+import { contrastPhotos } from "./contrast";
 import { photoShape, selectPageTemplate } from "./select";
 import { validatePageLayout } from "./validate";
 import type { ComposePhoto, ComposeText, ComposeWarning, PageEmphasis, PageIntentChoice, SelectResult } from "./types";
 
-/** Bumped when the composition rules change (doc.meta.generatorVersion of composed books). */
-export const COMPOSE_VERSION = 1;
+/** Bumped when the composition rules change (doc.meta.generatorVersion of composed books). 2: contrasting photo sets + fitted text variants. */
+export const COMPOSE_VERSION = 2;
 /** Interior pages of a storybook for the MVP (the cover never counts). */
 export const MVP_PAGES = { min: 12, max: 24 } as const;
 /** Most photos on one page (STORY_LIMITS.photosPerPage). */
@@ -96,6 +102,8 @@ type Unit = {
   primary: boolean;
   family: TemplateFamily;
   chapterId: string | null;
+  /** The storybook page's moment (scene): photos re-dealt away from it cost more (./contrast.ts). */
+  momentId: string | null;
   photos: ComposePhoto[];
   texts: ComposeText[];
   targetShare: number;
@@ -160,7 +168,7 @@ function buildUnits(sb: Storybook, input: ComposeInput, warn: (pageId: string, c
       .map((ph) => ({ ...ph, role: ph.role ?? (heroIds.has(ph.id) ? ("hero" as const) : p.photoIds.length > 1 ? ("collage" as const) : ("supporting" as const)) }));
     const texts = textsOf(p);
     const chapterId = p.chapterId ? docChapterId(p.chapterId) : null;
-    const base = { storyPageId: p.id, chapterId, targetShare: p.narrativeShare };
+    const base = { storyPageId: p.id, chapterId, momentId: p.momentId, targetShare: p.narrativeShare };
     const mains = texts.filter((t) => MAIN.includes(t.role));
     const quotes = texts.filter((t) => !MAIN.includes(t.role));
     if (photos.length === 0 && texts.length === 0) {
@@ -253,6 +261,35 @@ function fitBudget(units: Unit[], budget: number, target: number): void {
   }
 }
 
+/**
+ * Rule 1b: contrasting photo sets (./contrast.ts) — movable photos are re-dealt between the pages
+ * of a chapter so no page pairs lookalikes (and no two photos of one similar group ever share a
+ * page). Chapter-opening / closing photos and photos a text is grounded in stay put; page sizes,
+ * families and the budget stay as planned (a move between photo pages re-derives hero / collage).
+ */
+function contrastUnits(sb: Storybook, units: Unit[], warn: (pageId: string, code: ComposeWarning["code"]) => void): void {
+  const grounded = new Set(sb.pages.flatMap((p) => p.blocks.flatMap((b) => b.groundedIn)));
+  const before = units.map((u) => u.photos.map((p) => p.id).join(","));
+  const r = contrastPhotos(
+    units.map((u) => ({
+      id: u.id,
+      chapterId: u.chapterId,
+      momentId: u.momentId,
+      family: u.family,
+      photos: u.photos,
+      pinned: new Set(u.family === "chapter_opening" || u.family === "closing" ? u.photos.map((p) => p.id) : u.photos.filter((p) => grounded.has(p.id)).map((p) => p.id)),
+      capacity: isPhotoUnit(u) ? MAX_PHOTOS : u.family === "storytelling" ? STORY_MAX_PHOTOS : 0,
+    })),
+  );
+  if (r.swaps === 0 && r.moved.length === 0 && r.setAside.length === 0) return;
+  const aside = new Set(r.setAside);
+  units.forEach((u, i) => {
+    if (isPhotoUnit(u) && u.photos.length > 0) u.family = photoFamily(u.photos.length);
+    if (u.photos.map((p) => p.id).join(",") !== before[i]) warn(u.id, "lookalikes_separated");
+    if (before[i]!.split(",").some((id) => aside.has(id))) warn(u.id, "lookalike_set_aside");
+  });
+}
+
 function chapterOf(sb: Storybook, storyChapterId: string, lang: "en" | "ar"): Chapter {
   const c = sb.chapters.find((x) => x.id === storyChapterId);
   const moments = (c?.momentIds ?? []).map((id) => sb.moments.find((m) => m.id === id)).filter((m): m is NonNullable<typeof m> => !!m);
@@ -298,6 +335,7 @@ export function composeStoryDoc(input: ComposeInput): ComposeResult {
 
   const units = buildUnits(sb, input, warn, blocks);
   fitBudget(units, budget, sb.target.narrativeShare);
+  contrastUnits(sb, units, warn);
 
   const style: BookDoc["style"] = input.style
     ? { ...input.style, designStyle: design.designStyle }
@@ -456,7 +494,7 @@ export function composeStoryDoc(input: ComposeInput): ComposeResult {
       continue;
     }
     if (choice) {
-      if (preferred === r.templateId) ai.used++;
+      if (preferred === storyBaseId(r.templateId)) ai.used++;
       else {
         ai.replaced++;
         warn(u.id, "ai_choice_replaced");

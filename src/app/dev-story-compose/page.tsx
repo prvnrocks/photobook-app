@@ -3,9 +3,10 @@
 // production builds (incl. Vercel previews, NODE_ENV=production). No DB, no AI, no network:
 // fixture storybooks + inline SVG placeholder photos (src/lib/storybook/compose/dev-fixture.ts).
 //
-//   ?style=modern&format=portrait[&photos=24][&lang=ar][&lowres=5,9][&mode=edit|print]
+//   ?style=modern&format=portrait[&photos=24][&lang=ar][&lowres=5,9][&similar=1][&mode=edit|print]
 //       a fixture storybook composed deterministically: cover + every page, each in a
-//       <figure data-family data-page-id> (screenshots pick pages by family)
+//       <figure data-family data-page-id> (screenshots pick pages by family); similar=1 gives the
+//       photos lookalike signals in near-identical pairs (contrasting-sets check)
 //   ?sheet=modern-portrait[&lang=ar][&all=1]
 //       every new story template of that style + format with the longest AI texts (overflow probe)
 
@@ -38,7 +39,7 @@ export default async function DevStoryCompose({ searchParams }: { searchParams: 
   const count = Math.min(120, Math.max(1, Number(one(sp.photos) ?? 24) || 24));
   const lowRes = (one(sp.lowres) ?? "5").split(",").map(Number).filter((n) => Number.isInteger(n) && n > 0);
   const design = { format, designStyle: style };
-  const f = storyFixture({ photos: count, lang, design, lowRes });
+  const f = storyFixture({ photos: count, lang, design, lowRes, lookalikes: one(sp.similar) === "1" });
   const r = composeStoryDoc({ storybook: f.storybook, photos: f.photos, design, lang, occasion: "travel", bookTitle: null, maxPages: Number(one(sp.max) ?? 20) || 20 });
   return (
     <Book

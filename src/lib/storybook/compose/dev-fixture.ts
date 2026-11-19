@@ -29,22 +29,49 @@ export type StoryFixtureOptions = {
   maxPages?: number;
   /** Photos per moment (default 4). */
   perMoment?: number;
+  /**
+   * Lookalike signals (fix: contrasting photo sets): photos come in near-identical pairs, shot
+   * seconds apart — (1, 2) two close-ups of one thing, (3, 4) two takes of one pose, … — as a real
+   * phone burst does. Default off: the goldens' fixture photos carry no signals.
+   */
+  lookalikes?: boolean;
 };
 
 /** Mixed orientations: every 3rd photo portrait, every 7th square, the rest landscape 4:3. */
-export function fixturePhotos(count: number, lowRes: readonly number[] = []): ComposePhoto[] {
+export function fixturePhotos(count: number, lowRes: readonly number[] = [], lookalikes = false): ComposePhoto[] {
   return Array.from({ length: count }, (_, i) => {
     const n = i + 1;
     const small = lowRes.includes(n);
     const [w, h] = n % 7 === 0 ? [3000, 3000] : n % 3 === 0 ? [3000, 4000] : [4000, 3000];
-    return {
+    const photo: ComposePhoto = {
       id: fixturePhotoId(n),
       width: small ? Math.round(w / 5) : w,
       height: small ? Math.round(h / 5) : h,
       quality: 50 + ((n * 37) % 45),
       focus: n % 5 === 0 ? { x: 0.42, y: 0.38 } : null,
     };
+    return lookalikes ? { ...photo, ...lookalikeSignals(n) } : photo;
   });
+}
+
+const SIGNAL_COLOURS = ["#b0764a", "#5b7fa6", "#6f9a5b", "#c4a03c", "#8a5b9a", "#4f9a94", "#a65b5b", "#7a7a7a"] as const;
+const SIGNAL_SCENES = ["food", "portrait", "landscape", "detail", "group", "portrait"] as const;
+
+/** Photo n's lookalike signals: pair k = photos (2k−1, 2k): one scene, one colour, dHash 2–4 bits apart, 8 s apart. */
+function lookalikeSignals(n: number): Pick<ComposePhoto, "phash" | "takenAt" | "scene" | "people" | "color"> {
+  const pair = Math.floor((n - 1) / 2);
+  const second = (n - 1) % 2 === 1;
+  // a deterministic 64-bit hash per pair (LCG), the second shot differs in its low bits
+  let x = (pair * 2654435761 + 97) >>> 0;
+  let hex = "";
+  for (let k = 0; k < 8; k++) {
+    x = (Math.imul(x, 1103515245) + 12345) >>> 0;
+    hex += ((x >>> 16) & 0xff).toString(16).padStart(2, "0");
+  }
+  if (second) hex = hex.slice(0, 14) + (parseInt(hex.slice(14), 16) ^ 0x0b).toString(16).padStart(2, "0");
+  const scene = SIGNAL_SCENES[pair % SIGNAL_SCENES.length]!;
+  const t = Date.UTC(2026, 9, 12, 9, 0, 0) + pair * 7 * 60_000 + (second ? 8_000 : 0);
+  return { phash: hex, takenAt: new Date(t).toISOString(), scene, people: scene === "portrait" ? 1 : scene === "group" ? 4 : 0, color: SIGNAL_COLOURS[pair % SIGNAL_COLOURS.length]! };
 }
 
 const DATE_LABELS = { en: ["12 Oct 2026", "13 Oct 2026", "14 Oct 2026", "15 Oct 2026"], ar: ["١٢ أكتوبر ٢٠٢٦", "١٣ أكتوبر ٢٠٢٦", "١٤ أكتوبر ٢٠٢٦", "١٥ أكتوبر ٢٠٢٦"] } as const;
@@ -59,7 +86,7 @@ export function storyFixture(opts: StoryFixtureOptions): { storybook: Storybook;
   const lang = opts.lang ?? "en";
   const design = opts.design ?? { format: "A5_PORTRAIT", designStyle: "classic" };
   const per = opts.perMoment ?? 4;
-  const photos = fixturePhotos(opts.photos, opts.lowRes);
+  const photos = fixturePhotos(opts.photos, opts.lowRes, opts.lookalikes);
   const moments: { id: string; photoIds: string[] }[] = [];
   for (let i = 0; i * per < photos.length; i++) moments.push({ id: `m${i + 1}`, photoIds: photos.slice(i * per, (i + 1) * per).map((p) => p.id) });
   const chapterCount = Math.max(1, Math.min(6, Math.round(moments.length / 2)));
@@ -134,8 +161,11 @@ export function devStoryRenderPhotos(photos: readonly ComposePhoto[]): Record<st
       const h = p.height ?? 900;
       const fx = (p.focus?.x ?? 0.33) * w;
       const fy = (p.focus?.y ?? 0.4) * h;
-      const r = Math.round(Math.min(w, h) * 0.14);
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect width="${w}" height="${h}" fill="${PALETTE[i % PALETTE.length]}"/><rect y="${Math.round(h * 0.68)}" width="${w}" height="${Math.round(h * 0.32)}" fill="#00000022"/><circle cx="${Math.round(fx)}" cy="${Math.round(fy)}" r="${r}" fill="#FFFFFFCC"/></svg>`;
+      // photos with lookalike signals draw them: their colour, and a big disc for a close-up
+      const close = p.scene === "food" || p.scene === "detail";
+      const r = Math.round(Math.min(w, h) * (close ? 0.34 : p.scene === "landscape" || p.scene === "group" ? 0.08 : 0.14));
+      const fill = p.color ?? PALETTE[i % PALETTE.length];
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect width="${w}" height="${h}" fill="${fill}"/><rect y="${Math.round(h * 0.68)}" width="${w}" height="${Math.round(h * 0.32)}" fill="#00000022"/><circle cx="${Math.round(fx)}" cy="${Math.round(fy)}" r="${r}" fill="#FFFFFFCC"/></svg>`;
       return [p.id, { url: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`, width: p.width, height: p.height }];
     }),
   );

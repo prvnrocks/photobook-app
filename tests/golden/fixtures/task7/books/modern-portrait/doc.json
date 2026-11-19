@@ -58,7 +58,7 @@
     {
       "id": "sp-pg2",
       "chapterId": "ch-c1",
-      "layout": "st-m-p-tell-2c",
+      "layout": "st-m-p-tell-2c-v3",
       "slots": [
         {
           "photoId": "00000000-0000-4000-8000-000000000001",
@@ -92,7 +92,7 @@
     {
       "id": "sp-pg3",
       "chapterId": "ch-c1",
-      "layout": "st-m-p-tell-1a",
+      "layout": "st-m-p-tell-1b-v4",
       "slots": [
         {
           "photoId": "00000000-0000-4000-8000-000000000004",
@@ -118,7 +118,7 @@
     {
       "id": "sp-pg4",
       "chapterId": "ch-c1",
-      "layout": "st-m-p-tell-2c",
+      "layout": "st-m-p-tell-2c-v3",
       "slots": [
         {
           "photoId": "00000000-0000-4000-8000-000000000005",
@@ -207,7 +207,7 @@
     {
       "id": "sp-pg7",
       "chapterId": "ch-c2",
-      "layout": "st-m-p-tell-2c",
+      "layout": "st-m-p-tell-2c-v3",
       "slots": [
         {
           "photoId": "00000000-0000-4000-8000-000000000011",
@@ -262,7 +262,7 @@
     {
       "id": "sp-pg9",
       "chapterId": "ch-c2",
-      "layout": "st-m-p-tell-2c",
+      "layout": "st-m-p-tell-2c-v4",
       "slots": [
         {
           "photoId": "00000000-0000-4000-8000-000000000013",
@@ -354,7 +354,7 @@
     {
       "id": "sp-pg12",
       "chapterId": "ch-c3",
-      "layout": "st-m-p-tell-2b",
+      "layout": "st-m-p-tell-2b-v4",
       "slots": [
         {
           "photoId": "00000000-0000-4000-8000-000000000017",
@@ -409,7 +409,7 @@
     {
       "id": "sp-pg14",
       "chapterId": "ch-c3",
-      "layout": "st-m-p-tell-2c",
+      "layout": "st-m-p-tell-2c-v4",
       "slots": [
         {
           "photoId": "00000000-0000-4000-8000-000000000022",
@@ -500,7 +500,7 @@
   },
   "meta": {
     "generator": "ai",
-    "generatorVersion": 1,
+    "generatorVersion": 2,
     "runId": null,
     "userEdited": false
   }

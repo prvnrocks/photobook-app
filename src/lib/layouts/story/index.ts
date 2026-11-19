@@ -344,11 +344,11 @@ function textRegion(b: Box, photos: readonly Box[], W: number, H: number): Box {
   return [x0, y0, x1, y1];
 }
 
-function buildOne(style: DesignStyle, format: BookFormat, kind: StoryTextKind): Layout {
+function buildOne(style: DesignStyle, format: BookFormat, kind: StoryTextKind, planOverride?: Plan): Layout {
   const portrait = format === "A5_PORTRAIT";
   const W = portrait ? PW : LW;
   const H = portrait ? PH : LH;
-  const plan = (portrait ? PORTRAIT_PLANS : LANDSCAPE_PLANS)[kind];
+  const plan = planOverride ?? (portrait ? PORTRAIT_PLANS : LANDSCAPE_PLANS)[kind];
   if (plan.caption) return { ...buildPhotoFrom(style, format, plan), id: storyTemplateId(style, format, kind) };
   const d = DRESS[style];
   const n = plan.photos.length;
@@ -412,17 +412,124 @@ function buildOne(style: DesignStyle, format: BookFormat, kind: StoryTextKind): 
   };
 }
 
+// --- fitted variants of the storytelling templates -------------------------------------------------
+//
+// A tell-* box is sized for the LONGEST paragraph the AI writes (70 words at 10 pt), so a typical
+// 30–45 word paragraph left its lower third blank. Every tell-* kind whose paragraph sits directly
+// above or below its photos also gets FITTED VARIANTS: the same template with a shorter paragraph
+// box, the photos taking the height it gives up (gaps stay G, trim edges stay on the trim, the
+// accent bar follows the box top). The composer's fitter (compose/select.ts) picks the shortest
+// variant whose text still sets at the full body size with the 8 % margin, so the paragraph fills
+// its box; longer text (also a user edit) moves back to a taller variant, and the base template
+// (the longest AI text at 10 pt) is always the fallback — text never overflows because of a variant.
+//
+// Variants are registered layouts (render, print, validation) but NOT separate templates: the
+// registry (templates.ts) lists the base only, so the AI page-intent catalogue, the approved ids
+// and the "never the previous page's template" rule see one template per kind.
+// Side-by-side kinds (A5 landscape tell-1a / tell-1b: a paragraph column beside a full-height
+// photo) have no variants — no photo can take the height of a column.
+
+/** Paragraph box height of each variant as a share of the base box: v1 (tallest) … v6 (shortest); 10 % steps keep the leftover below a line or two. */
+export const STORY_VARIANT_STEPS = [0.9, 0.8, 0.7, 0.6, 0.5, 0.42] as const;
+/** A variant's paragraph box never gets shorter than this (≈ 2 lines at 11.5 pt + margin). */
+const VARIANT_MIN_BOX_MM = 14;
+/**
+ * The 65 / 35 balance at page level: a paragraph keeps at least this share of the page (its box +
+ * its own white space, LayoutText.area) — the same floor as the base tell-* templates. Variants
+ * below it are not generated, so a short paragraph never shrinks to a sliver beside huge photos.
+ */
+export const STORY_MIN_TEXT_SHARE = 0.2;
+
+const variantId = (base: string, k: number) => `${base}-v${k + 1}`;
+
+/**
+ * The plan of variant `share` of a tell-* plan, or null when the kind has none (no photo directly
+ * above / below the paragraph) or the box would get too short. Pure geometry in page mm.
+ */
+function variantPlan(plan: Plan, share: number, H: number): Plan | null {
+  if (plan.photos.length === 0 || plan.caption || plan.quote) return null;
+  const e = 1e-6;
+  const m = plan.main;
+  const boxH = m[3] - m[1];
+  const d = boxH * (1 - share);
+  if (boxH - d < VARIANT_MIN_BOX_MM - e) return null;
+  const xOver = (p: Box) => Math.min(p[2], m[2]) - Math.max(p[0], m[0]) > e;
+  const above = plan.photos.filter((p) => p[3] <= m[1] + e && xOver(p));
+  const below = plan.photos.filter((p) => p[1] >= m[3] - e && xOver(p));
+  if (above.length > 0 === below.length > 0) return null;
+  // Stretch the photo band on the paragraph's side by d, anchored at the band's far edge; a photo
+  // edge that sat one gap G past a stretched edge follows it (keeps gaps exact).
+  const down = above.length > 0;
+  const near = down ? Math.max(...above.map((p) => p[3])) : Math.min(...below.map((p) => p[1]));
+  const far = down ? Math.min(...plan.photos.filter((p) => p[3] <= near + e).map((p) => p[1])) : Math.max(...plan.photos.filter((p) => p[1] >= near - e).map((p) => p[3]));
+  const k = (Math.abs(near - far) + d) / Math.abs(near - far);
+  const inBand = (y: number) => (down ? y >= far - e && y <= near + e : y <= far + e && y >= near - e);
+  const map = (y: number) => (inBand(y) ? (down ? far + (y - far) * k : far - (far - y) * k) : y);
+  const edges = plan.photos.flatMap((p) => [p[1], p[3]]);
+  const photos = plan.photos.map((p): Box => {
+    let y0 = map(p[1]);
+    let y1 = map(p[3]);
+    // y0 one gap below a stretched bottom edge (down) / y1 one gap above a stretched top edge (up)
+    const prevEdge = down ? edges.find((y) => Math.abs(p[1] - (y + G)) < 1e-3 && inBand(y)) : undefined;
+    if (prevEdge !== undefined) y0 = map(prevEdge) + G;
+    const nextEdge = down ? undefined : edges.find((y) => Math.abs(p[3] - (y - G)) < 1e-3 && inBand(y));
+    if (nextEdge !== undefined) y1 = map(nextEdge) - G;
+    return [p[0], y0, p[2], Math.min(H, y1)];
+  });
+  const main: Box = down ? [m[0], m[1] + d, m[2], m[3]] : [m[0], m[1], m[2], m[3] - d];
+  return { ...plan, photos, main };
+}
+
+/** Variant ids of a base template id, tallest box first (empty when it has none). */
+const VARIANTS_OF = new Map<string, string[]>();
+/** Variant id → its base template id. */
+const BASE_OF = new Map<string, string>();
+
+function buildVariants(style: DesignStyle, format: BookFormat, kind: StoryTextKind): Layout[] {
+  if (!kind.startsWith("tell")) return [];
+  const portrait = format === "A5_PORTRAIT";
+  const plan = (portrait ? PORTRAIT_PLANS : LANDSCAPE_PLANS)[kind];
+  const base = storyTemplateId(style, format, kind);
+  const out: Layout[] = [];
+  STORY_VARIANT_STEPS.forEach((share, k) => {
+    const v = variantPlan(plan, share, portrait ? PH : LH);
+    if (!v) return;
+    const id = variantId(base, k);
+    const layout = { ...buildOne(style, format, kind, v), id };
+    const region = layout.texts?.find((t) => t.bind === "pageText" && (t.n ?? 0) === 0)?.area;
+    if (!region || (region.w * region.h) / 10000 < STORY_MIN_TEXT_SHARE - 1e-9) return;
+    out.push(layout);
+    BASE_OF.set(id, base);
+  });
+  if (out.length) VARIANTS_OF.set(base, out.map((l) => l.id));
+  return out;
+}
+
+/** The base template id of a fitted variant; any other id is its own base. */
+export function storyBaseId(id: string): string {
+  return BASE_OF.get(id) ?? id;
+}
+
+/** The fitted variants of a base template, tallest paragraph box first (shortest last). */
+export function storyVariantsOf(baseId: string): readonly string[] {
+  return VARIANTS_OF.get(baseId) ?? [];
+}
+
+export const isStoryVariantId = (id: string): boolean => BASE_OF.has(id);
+
 const STYLES: readonly DesignStyle[] = ["classic", "modern", "geometric", "scrapbook", "magazine", "editorial"];
 const FORMATS: readonly BookFormat[] = ["A5_PORTRAIT", "A5_LANDSCAPE"];
 
 /**
  * Every story template: style by style (catalogue order), portrait then landscape; per style ×
- * format the text templates, then its gap photo templates (STORY_PHOTO_GAPS, kind order).
+ * format the text templates, then its gap photo templates (STORY_PHOTO_GAPS, kind order), then the
+ * fitted variants of its tell-* templates (kind order, tallest box first).
  */
 export const STORY_LAYOUTS: readonly Layout[] = STYLES.flatMap((style) =>
   FORMATS.flatMap((format) => [
     ...STORY_TEMPLATE_KINDS.map((kind) => buildOne(style, format, kind)),
     ...STORY_PHOTO_KINDS.filter((k) => STORY_PHOTO_GAPS[`${style}/${format}`].includes(k)).map((kind) => buildPhoto(style, format, kind)),
+    ...STORY_TEMPLATE_KINDS.flatMap((kind) => buildVariants(style, format, kind)),
   ]),
 );
 

@@ -21,6 +21,15 @@
 // 200 +1 (below 150 +3), a hero photo not in the largest slot +1, a weak photo (quality < 40) in a
 // slot over half the page +1, distance to the planned narrative share ×3, emphasis (photo / text)
 // ×2, reuse within the last REPEAT_WINDOW pages +6 / distance, the AI's approved choice −3.
+//
+// Fitted variants (fix: blank space under story text): a storytelling template with variants
+// (layouts/story STORY_VARIANT_STEPS — the same page with a shorter paragraph box and taller
+// photos) is ONE candidate; its form is the base or the variant with the lowest crop cost +
+// BLANK_WEIGHT × the share of the paragraph box left empty, among the forms that pass every hard
+// rule — a variant only when the paragraph sets at the full body size (STORY_BODY_SIZE.maxMm)
+// with the 8 % margin, so longer text keeps a taller form and the base (the longest AI text at
+// 10 pt) is always the fallback. The variant never changes which template wins (the score uses the
+// base's narrative share; repeat / avoid / the AI's choice compare base ids).
 
 import type { BookDesign } from "@/lib/book/book-design";
 import { printSlotSizeMm } from "@/lib/book/bleed";
@@ -32,7 +41,8 @@ import type { Layout, PageTextRole } from "@/lib/book/types";
 import { roleFont, type TextRole } from "@/lib/design/styles";
 import { getLayout } from "@/lib/layouts";
 import { slotFit } from "@/lib/layouts/fit";
-import { MIN_DPI, TARGET_DPI, templatesFor, type PageTemplate, type TemplatePanel } from "@/lib/layouts/templates";
+import { storyBaseId } from "@/lib/layouts/story";
+import { getPageTemplate, MIN_DPI, TARGET_DPI, templatesFor, type PageTemplate, type TemplatePanel } from "@/lib/layouts/templates";
 import type { ComposePhoto, ComposeText, PageIntent, SelectResult, SelectWarning, SlotAssignment, TemplateContent, TextAssignment } from "./types";
 
 export const CROP_REJECT = 0.45;
@@ -47,6 +57,8 @@ export const REPEAT_WINDOW = 3;
 export const CAPTION_MAX_UNITS = 200;
 /** Fixed caption size on the page: CAPTION_FONT_SIZE_CQW 2.6 % of a 148 mm wide page (same mm on landscape). */
 export const CAPTION_SIZE_MM = 3.848;
+/** Cost of an EMPTY paragraph box (× the empty share of its height) when choosing a fitted variant. */
+export const BLANK_WEIGHT = 6;
 
 const MAIN: readonly PageTextRole[] = ["intro", "paragraph", "closing"];
 const r4 = (n: number) => Math.round(n * 10000) / 10000;
@@ -108,9 +120,10 @@ export function cropFor(p: Pick<ComposePhoto, "focus">): SlotAssignment["crop"] 
   return p.focus ? { x: r4(clamp01(p.focus.x)), y: r4(clamp01(p.focus.y)), zoom: 1 } : { x: 0.5, y: 0.5, zoom: 1 };
 }
 
-type SlotEval = { cost: number; reject: "crop" | "low_dpi" | null; warnings: SelectWarning[] };
+export type SlotEval = { cost: number; reject: "crop" | "low_dpi" | null; warnings: SelectWarning[] };
 
-function evalSlot(t: PageTemplate, layout: Layout, i: number, p: ComposePhoto, relax: boolean): SlotEval {
+/** The selector's verdict on photo `p` in slot `i` of template `t` (soft cost, hard refusal, warnings). */
+export function evalSlot(t: PageTemplate, layout: Layout, i: number, p: ComposePhoto, relax: boolean): SlotEval {
   const shape = photoShape(p);
   const warnings: SelectWarning[] = [];
   let cost = 0;
@@ -195,19 +208,35 @@ function assignPhotos(t: PageTemplate, layout: Layout, photos: readonly ComposeP
 }
 
 /** Does `text` fit `panel` of `t` (caption areas at the fixed caption size)? */
-export function textFits(t: Pick<PageTemplate, "style" | "format">, panel: Pick<TemplatePanel, "n" | "rect" | "font" | "size">, text: string, lang: "en" | "ar", slack = CAPACITY_SLACK): boolean {
+export function textFits(t: Pick<PageTemplate, "style" | "format">, panel: Pick<TemplatePanel, "n" | "rect" | "font" | "size">, text: string, lang: "en" | "ar", slack = CAPACITY_SLACK, atMax = false): boolean {
+  return textMetrics(t, panel, text, lang, slack, atMax).fits;
+}
+
+/** The renderer's fit of `text` in `panel` (atMax: at the panel's largest size only — fitted variants). */
+function textMetrics(t: Pick<PageTemplate, "style" | "format">, panel: Pick<TemplatePanel, "n" | "rect" | "font" | "size">, text: string, lang: "en" | "ar", slack = CAPACITY_SLACK, atMax = false) {
   const page = pageMm(t.format);
   const wMm = (panel.rect.w / 100) * page.w;
   const hMm = (panel.rect.h / 100) * page.h;
   const font: TextRole = panel.font;
   const f = roleFont(t.style, font, text, { captionLang: lang });
-  return panelTextMetrics(text, font, wMm, hMm, f, t.style, slack, panel.n === -1 ? CAPTION_SIZE_MM : undefined, panel.size).fits;
+  const range = panel.size && atMax ? { maxMm: panel.size.maxMm, minMm: panel.size.maxMm } : panel.size;
+  return panelTextMetrics(text, font, wMm, hMm, f, t.style, slack, panel.n === -1 ? CAPTION_SIZE_MM : undefined, range);
+}
+
+/** Share of the main (pageText 0) box height the page's main text leaves empty (0 = full / no text). */
+export function blankShare(t: Pick<PageTemplate, "style" | "format" | "panels">, texts: readonly Pick<ComposeText, "role" | "text">[], lang: "en" | "ar"): number {
+  const main = t.panels.find((p) => p.n === 0);
+  const x = texts.find((y) => MAIN.includes(y.role));
+  if (!main || !x) return 0;
+  const hMm = (main.rect.h / 100) * pageMm(t.format).h;
+  const m = textMetrics(t, main, x.text, lang, 1);
+  return Math.max(0, Math.min(1, 1 - m.neededMm / Math.max(1e-9, hMm)));
 }
 
 type TextPlan = { ok: true; texts: TextAssignment[] } | { ok: false; reason: "text_unplaced" | "text_overflow"; detail: string };
 
 /** Panels for every text of `content` on template `t` (see the header rules). */
-export function placeTexts(t: PageTemplate, content: TemplateContent, lang: "en" | "ar", slack = CAPACITY_SLACK): TextPlan {
+export function placeTexts(t: PageTemplate, content: TemplateContent, lang: "en" | "ar", slack = CAPACITY_SLACK, atMax = false): TextPlan {
   const mains = content.texts.filter((x) => MAIN.includes(x.role));
   const quotes = content.texts.filter((x) => !MAIN.includes(x.role));
   const main = t.panels.find((p) => p.n === 0);
@@ -227,7 +256,7 @@ export function placeTexts(t: PageTemplate, content: TemplateContent, lang: "en"
     placed.push([q, target]);
   } else if (quote) return { ok: false, reason: "text_unplaced", detail: "empty_quote_panel" };
   for (const [x, panel] of placed) {
-    if (!textFits(t, panel, x.text, lang, slack)) return { ok: false, reason: "text_overflow", detail: `panel_${panel.n < 0 ? "caption" : panel.n}` };
+    if (!textFits(t, panel, x.text, lang, slack, atMax && panel.n === 0)) return { ok: false, reason: "text_overflow", detail: `panel_${panel.n < 0 ? "caption" : panel.n}` };
     out.push({ key: x.key, panel: panel.n });
   }
   return { ok: true, texts: out };
@@ -249,15 +278,15 @@ export function selectPageTemplate(intent: PageIntent, photos: readonly ComposeP
   const sized = all.filter((t) => t.photoCount === photos.length);
   if (sized.length === 0) return { ok: false, reason: "photo_count", detail: String(photos.length), tried: all.length };
 
-  const avoid = new Set(intent.avoid ?? []);
-  const recent = intent.recent ?? [];
+  const avoid = new Set((intent.avoid ?? []).map(storyBaseId));
+  const recent = (intent.recent ?? []).map(storyBaseId);
   const rank = { repeat: 1, crop: 2, low_dpi: 3, text_overflow: 4, text_unplaced: 5 } as const;
   let worst: { reason: keyof typeof rank; detail: string } | null = null;
   const fail = (reason: keyof typeof rank, detail: string) => {
     if (!worst || rank[reason] > rank[worst.reason]) worst = { reason, detail };
   };
 
-  let best: { t: PageTemplate; score: number; a: Assignment; texts: TextAssignment[] } | null = null;
+  let best: { t: PageTemplate; form: PageTemplate; score: number; a: Assignment; texts: TextAssignment[] } | null = null;
   for (const t of sized) {
     const layout = getLayout(t.id);
     if (!layout) continue;
@@ -267,8 +296,9 @@ export function selectPageTemplate(intent: PageIntent, photos: readonly ComposeP
       continue;
     }
     const a = assignPhotos(t, layout, photos, !!intent.relax);
-    if (a.reject) {
-      fail(a.reject, t.id);
+    const fitted = fittedForm(t, photos, content, intent, a.reject ? null : { a, texts: text.texts });
+    if (!fitted) {
+      fail(a.reject ?? "crop", t.id);
       continue;
     }
     if (avoid.has(t.id)) {
@@ -276,13 +306,13 @@ export function selectPageTemplate(intent: PageIntent, photos: readonly ComposeP
       continue;
     }
     // the small framed hero only wins when the bigger heroes are refused (low resolution)
-    let score = a.cost + (t.fallback ? 2.5 : 0);
+    let score = fitted.a.cost + (t.fallback ? 2.5 : 0);
     if (intent.targetShare !== undefined) score += 3 * Math.abs(t.narrativeShare - intent.targetShare);
     if (intent.emphasis === "photo") score += 2 * t.narrativeShare;
     if (intent.emphasis === "text" && t.panels.length > 0) score += 2 * (1 - t.narrativeShare);
     for (let k = 1; k <= REPEAT_WINDOW; k++) if (recent[recent.length - k] === t.id) score += 6 / k;
     if (intent.preferredTemplateId === t.id) score -= 3;
-    if (!best || score < best.score - 1e-9) best = { t, score, a, texts: text.texts };
+    if (!best || score < best.score - 1e-9) best = { t, form: fitted.form, score, a: fitted.a, texts: fitted.texts };
   }
   if (!best) {
     const w = worst as { reason: keyof typeof rank; detail: string } | null;
@@ -292,5 +322,32 @@ export function selectPageTemplate(intent: PageIntent, photos: readonly ComposeP
   for (let k = 1; k <= REPEAT_WINDOW; k++) if (recent[recent.length - k] === best.t.id) warnings.add("repeat_recent");
   if (intent.preferredTemplateId && intent.preferredTemplateId !== best.t.id) warnings.add("preferred_ignored");
   const slots = best.a.order.map((pi) => ({ photoId: photos[pi]!.id, crop: cropFor(photos[pi]!) }));
-  return { ok: true, templateId: best.t.id, slots, texts: best.texts, score: r4(best.score), warnings: [...warnings] };
+  return { ok: true, templateId: best.form.id, slots, texts: best.texts, score: r4(best.score), warnings: [...warnings] };
+}
+
+type Form = { form: PageTemplate; a: Assignment; texts: TextAssignment[] };
+
+/**
+ * The form of base template `t` for this content: the base itself (`baseForm`, null when the base
+ * breaks a hard rule) or one of its fitted variants — the lowest crop cost + BLANK_WEIGHT × empty
+ * share of the paragraph box among the forms that pass every hard rule (a variant only with the
+ * paragraph at its full size). Ties keep the base, then the taller variant. Null = no form fits.
+ */
+function fittedForm(t: PageTemplate, photos: readonly ComposePhoto[], content: TemplateContent, intent: Pick<PageIntent, "lang" | "relax">, baseForm: Omit<Form, "form"> | null): Form | null {
+  if (t.variants.length === 0) return baseForm ? { form: t, ...baseForm } : null;
+  const { lang } = intent;
+  const formCost = (f: PageTemplate, a: Assignment) => a.cost + BLANK_WEIGHT * blankShare(f, content.texts, lang);
+  let best: (Form & { cost: number }) | null = baseForm ? { form: t, ...baseForm, cost: formCost(t, baseForm.a) } : null;
+  for (const id of t.variants) {
+    const v = getPageTemplate(id);
+    const layout = v && getLayout(id);
+    if (!v || !layout) continue;
+    const text = placeTexts(v, content, lang, CAPACITY_SLACK, true);
+    if (!text.ok) continue;
+    const a = assignPhotos(v, layout, photos, !!intent.relax);
+    if (a.reject) continue;
+    const cost = formCost(v, a);
+    if (!best || cost < best.cost - 1e-9) best = { form: v, a, texts: text.texts, cost };
+  }
+  return best ? { form: best.form, a: best.a, texts: best.texts } : null;
 }

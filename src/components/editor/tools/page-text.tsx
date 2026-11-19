@@ -5,7 +5,9 @@
 // description tool. A textarea (dir="auto"), a live word count against what the panel holds
 // (the composer's own fit check: overflow is flagged, never cut), one undo step per panel session
 // (coalesceKey). setPageText marks the text "user", so a recomposition never replaces it; an
-// emptied field removes the text.
+// emptied field removes the text. Each edit re-fits a storytelling page to its text
+// (refitStoryText: a taller / shorter form of the same template), so typing more never overflows a
+// short variant — "too long" only shows when even the roomiest form cannot hold the words.
 
 import { Type } from "lucide-react";
 import { useId, useState } from "react";
@@ -15,6 +17,7 @@ import type { PageText, PageTextRole } from "@/lib/book/types";
 import { captionInputLang } from "@/lib/editor/caption-tools";
 import { styleCaptionFont } from "@/lib/design/styles";
 import { getPageTemplate } from "@/lib/layouts/templates";
+import { refitStoryText } from "@/lib/storybook/compose/refit";
 import { textFits } from "@/lib/storybook/compose/select";
 import { cx } from "@/lib/cx";
 import type { EditorContextValue } from "../editor-context";
@@ -63,7 +66,7 @@ function PageTextPanel({ ctx }: EditorPanelProps) {
         rows={6}
         disabled={ctx.readOnly}
         placeholder="Your words…"
-        onChange={(e) => ctx.actions.edit((d) => setPageText(d, current.pageIdx, current.panel, e.target.value, role), { coalesceKey: `text:${page.id}:${current.panel}:${session}` })}
+        onChange={(e) => ctx.actions.edit((d) => refitStoryText(setPageText(d, current.pageIdx, current.panel, e.target.value, role), current.pageIdx, { lang, photos: ctx.photos.byId }), { coalesceKey: `text:${page.id}:${current.panel}:${session}` })}
         className={cx(TOOL_INPUT, "resize-none leading-snug")}
         style={{ fontFamily: bookFontFamily(styleCaptionFont(ctx.state.doc.style.designStyle, lang)) }}
         aria-describedby={`${id}-count`}

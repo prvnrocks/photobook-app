@@ -18,6 +18,7 @@ import type { BookDoc, BookPage, PageText } from "@/lib/book/types";
 import { getLayout } from "@/lib/layouts";
 import { getPageTemplate } from "@/lib/layouts/templates";
 import { clipText } from "@/lib/text/clip";
+import { refitStoryText, type RefitContext } from "./refit";
 import { selectPageTemplate } from "./select";
 import type { ComposePhoto, ComposeText } from "./types";
 import { validatePageLayout } from "./validate";
@@ -63,8 +64,15 @@ export function regeneratePageLayout(
 /**
  * Sets the text of page-text panel `panel` on page `pageIdx` to `text` (a rewrite), keeping the
  * text's id, role and blockRef. Throws EditOpError no_text_area when the panel holds no text.
+ * With `refit`, the page then takes the fitted form of its template that suits the new text
+ * (./refit.ts) in the same edit — a longer rewrite never overflows a short variant.
  */
-export function applyStoryText(doc: BookDoc, pageIdx: number, panel: number, text: string, source: "ai" | "user"): BookDoc {
+export function applyStoryText(doc: BookDoc, pageIdx: number, panel: number, text: string, source: "ai" | "user", refit?: RefitContext): BookDoc {
+  const next = applyText(doc, pageIdx, panel, text, source);
+  return refit && next !== doc ? refitStoryText(next, pageIdx, refit) : next;
+}
+
+function applyText(doc: BookDoc, pageIdx: number, panel: number, text: string, source: "ai" | "user"): BookDoc {
   const page = doc.pages[pageIdx];
   if (!page) throw new EditOpError("page_out_of_range");
   const at = (page.texts ?? []).findIndex((t) => t.panel === panel);

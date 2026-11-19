@@ -68,14 +68,14 @@ export function StoryActionsPanel({ ctx, close }: EditorPanelProps) {
     setBusy(false);
     if (out.kind === "error") return setMessage(out.message);
     if (out.proposal) return setProposal({ pageIdx: target.pageIdx, panel: target.panel, text: out.text, lang: out.lang });
-    actions.edit((d) => applyStoryText(d, target.pageIdx, target.panel, out.text, "ai"), { select: { kind: "text", pageIdx: target.pageIdx, panel: target.panel } });
+    actions.edit((d) => applyStoryText(d, target.pageIdx, target.panel, out.text, "ai", { lang: langOf(ctx), photos: ctx.photos.byId }), { select: { kind: "text", pageIdx: target.pageIdx, panel: target.panel } });
     showEditorToast({ message: "Text rewritten", action: { label: "Undo", run: actions.undo }, dismissOnEdit: true });
   }
 
   function acceptProposal() {
     if (!proposal || readOnly) return;
     const p = proposal;
-    actions.edit((d) => applyStoryText(d, p.pageIdx, p.panel, p.text, "user"), { select: { kind: "text", pageIdx: p.pageIdx, panel: p.panel } });
+    actions.edit((d) => applyStoryText(d, p.pageIdx, p.panel, p.text, "user", { lang: langOf(ctx), photos: ctx.photos.byId }), { select: { kind: "text", pageIdx: p.pageIdx, panel: p.panel } });
     setProposal(null);
     showEditorToast({ message: "New text in place", action: { label: "Undo", run: actions.undo }, dismissOnEdit: true });
   }

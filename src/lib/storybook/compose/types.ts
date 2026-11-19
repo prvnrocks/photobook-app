@@ -16,6 +16,19 @@ export type ComposePhoto = {
   role?: "hero" | "collage" | "supporting" | null;
   /** Visual centre of the photo (photo_quality raw.weightX / weightY, 0..1) — crop focus. */
   focus?: { x: number; y: number } | null;
+  // --- lookalike signals (./contrast.ts; all optional — a photo without them is never re-dealt) ---
+  /** 64-bit dHash, hex (photos.phash). */
+  phash?: string | null;
+  /** EXIF capture time, ISO (photos.taken_at when date_source is not "file"). */
+  takenAt?: string | null;
+  /** The Curator's scene (photos.ai.scene). */
+  scene?: "portrait" | "group" | "landscape" | "food" | "detail" | "document" | "screenshot" | "other" | null;
+  /** Clearly visible people (photos.ai.peopleCount). */
+  people?: number | null;
+  /** Dominant colour #rrggbb (photos.color). */
+  color?: string | null;
+  /** Duplicate / similar-shot group: two photos of one group never share a page. */
+  group?: string | null;
 };
 
 export const PAGE_EMPHASES = ["photo", "balanced", "text"] as const;
@@ -78,7 +91,7 @@ export type LayoutIssue<C extends string> = { code: C; slot?: number; panel?: nu
 export type PageLayoutReport = { ok: boolean; errors: LayoutIssue<LayoutErrorCode>[]; warnings: LayoutIssue<LayoutWarningCode>[] };
 
 /** Composition-level notes (report.warnings), besides the per-page layout codes. */
-export const COMPOSE_NOTES = ["text_unplaced", "text_split", "paragraph_moved", "photos_moved", "repeat_forced", "opener_without_photo", "page_dropped", "relaxed", "user_page_kept", "ai_choice_replaced"] as const;
+export const COMPOSE_NOTES = ["text_unplaced", "text_split", "paragraph_moved", "photos_moved", "repeat_forced", "opener_without_photo", "page_dropped", "relaxed", "user_page_kept", "ai_choice_replaced", "lookalikes_separated", "lookalike_set_aside"] as const;
 export type ComposeNote = (typeof COMPOSE_NOTES)[number];
 export type ComposeWarning = { pageId: string; code: ComposeNote | LayoutErrorCode | LayoutWarningCode | SelectWarning };
 

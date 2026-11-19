@@ -32,7 +32,7 @@ import type { BookFormat, DesignStyle, Layout, Orientation, PageTextRole, Rect }
 import { roleFont, type TextRole } from "@/lib/design/styles";
 import { getLayout, LAYOUTS, STORY_LAYOUTS } from "./index";
 import { layoutShowsDescription } from "./description";
-import { isStoryLayoutId, type StoryTemplateKind } from "./story";
+import { isStoryLayoutId, isStoryVariantId, storyBaseId, storyVariantsOf, type StoryTemplateKind } from "./story";
 
 export const TEMPLATE_FAMILIES = ["chapter_opening", "hero", "collage", "storytelling", "closing"] as const;
 export type TemplateFamily = (typeof TEMPLATE_FAMILIES)[number];
@@ -78,6 +78,14 @@ export interface PageTemplate {
   isNew: boolean;
   /** The small framed hero: the low-resolution fallback (chosen only when a bigger slot is refused). */
   fallback: boolean;
+  /**
+   * Fitted variants (./story): the base template id of a variant, else the template's own id.
+   * Variants resolve with getPageTemplate (render, validation, edit ops) but are not listed by
+   * templatesFor / approvedTemplateIds — the composer's fitter picks them (compose/select.ts).
+   */
+  baseId: string;
+  /** A base template's fitted variants, tallest paragraph box first (empty for variants / others). */
+  variants: readonly string[];
 }
 
 const MAIN_ROLES: readonly PageTextRole[] = ["intro", "paragraph", "closing"];
@@ -88,7 +96,7 @@ const round4 = (n: number) => Math.round(n * 10000) / 10000;
 const clippedArea = (r: Rect) => Math.max(0, Math.min(100, r.x + r.w) - Math.max(0, r.x)) * Math.max(0, Math.min(100, r.y + r.h) - Math.max(0, r.y));
 
 function storyKindOf(id: string): StoryTemplateKind | null {
-  const m = /^st-[a-z]+-[pl]-(.+)$/.exec(id);
+  const m = /^st-[a-z]+-[pl]-(.+)$/.exec(storyBaseId(id));
   return m ? (m[1] as StoryTemplateKind) : null;
 }
 
@@ -165,6 +173,8 @@ function buildTemplate(layout: Layout, family: TemplateFamily): PageTemplate {
     fullBleed,
     isNew: isStoryLayoutId(layout.id),
     fallback: storyKindOf(layout.id) === "hero-small",
+    baseId: storyBaseId(layout.id),
+    variants: storyVariantsOf(layout.id),
   };
 }
 
@@ -173,15 +183,16 @@ let registry: { all: PageTemplate[]; byId: Map<string, PageTemplate> } | null = 
 function build() {
   if (registry) return registry;
   const all: PageTemplate[] = [];
+  const variants: PageTemplate[] = [];
   for (const layout of [...LAYOUTS, ...STORY_LAYOUTS]) {
     const family = templateFamilyOf(layout);
-    if (family) all.push(buildTemplate(layout, family));
+    if (family) (isStoryVariantId(layout.id) ? variants : all).push(buildTemplate(layout, family));
   }
-  registry = { all, byId: new Map(all.map((t) => [t.id, t])) };
+  registry = { all, byId: new Map([...all, ...variants].map((t) => [t.id, t])) };
   return registry;
 }
 
-/** Every storybook template, catalogue order (existing layouts first, then the story layouts). */
+/** Every storybook template, catalogue order (existing layouts first, then the story layouts). Fitted variants are not listed. */
 export function pageTemplates(): readonly PageTemplate[] {
   return build().all;
 }
