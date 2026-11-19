@@ -1,0 +1,507 @@
+{
+  "version": 2,
+  "format": "A5_PORTRAIT",
+  "occasion": "travel",
+  "cover": {
+    "layout": "mg-p-cover",
+    "photoId": "00000000-0000-4000-8000-000000000001",
+    "title": "Ten days by the water",
+    "subtitle": ""
+  },
+  "chapters": [
+    {
+      "id": "ch-c1",
+      "title": "Arrival by the sea",
+      "dateLabel": "12 Oct 2026",
+      "place": "Abu Dhabi"
+    },
+    {
+      "id": "ch-c2",
+      "title": "Lanterns in the old town",
+      "dateLabel": "13 Oct 2026",
+      "place": "Abu Dhabi"
+    },
+    {
+      "id": "ch-c3",
+      "title": "A day in the dunes",
+      "dateLabel": "14 Oct 2026",
+      "place": null
+    }
+  ],
+  "pages": [
+    {
+      "id": "sp-pg1",
+      "chapterId": "ch-c1",
+      "layout": "st-mg-p-open-a",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000002",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null,
+      "texts": [
+        {
+          "id": "tx-b1",
+          "panel": 0,
+          "role": "intro",
+          "text": "The quiet lantern glows, the amber doorway waits. The pale window rests, the soft pathway gleams. The golden garden lingers, the gentle table glows. The bright curtain waits, the dusty shadow rests. The silver horizon gleams, the warm courtyard lingers.",
+          "source": "ai",
+          "blockRef": "b1"
+        }
+      ]
+    },
+    {
+      "id": "sp-pg2",
+      "chapterId": "ch-c1",
+      "layout": "st-mg-p-tell-2b",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000001",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        },
+        {
+          "photoId": "00000000-0000-4000-8000-000000000003",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null,
+      "texts": [
+        {
+          "id": "tx-b2",
+          "panel": 0,
+          "role": "paragraph",
+          "text": "The wide fountain rests, the distant archway gleams. The still hillside lingers, the blue shoreline glows. The green rooftop waits, the low meadow rests. The tall corner gleams, the clear bench lingers. The faded lamp glows.",
+          "source": "ai",
+          "blockRef": "b2"
+        }
+      ]
+    },
+    {
+      "id": "sp-pg3",
+      "chapterId": "ch-c1",
+      "layout": "st-mg-p-tell-1a",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000004",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null,
+      "texts": [
+        {
+          "id": "tx-b3",
+          "panel": 0,
+          "role": "paragraph",
+          "text": "The shaded terrace lingers, the sunlit harbour glows. The curved orchard waits, the plain bridge rests. The small tower gleams, the round market lingers. The smooth kitchen glows, the cool hallway waits. The rosy canopy rests.",
+          "source": "ai",
+          "blockRef": "b3"
+        }
+      ]
+    },
+    {
+      "id": "sp-pg4",
+      "chapterId": "ch-c1",
+      "layout": "st-mg-p-tell-2",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000005",
+          "crop": {
+            "x": 0.42,
+            "y": 0.38,
+            "zoom": 1
+          }
+        },
+        {
+          "photoId": "00000000-0000-4000-8000-000000000006",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null,
+      "texts": [
+        {
+          "id": "tx-b4",
+          "panel": 0,
+          "role": "paragraph",
+          "text": "The leafy river waits, the quiet doorway rests. The amber window gleams, the pale pathway lingers. The soft garden glows, the golden table waits. The gentle curtain rests, the bright shadow gleams. The dusty horizon lingers.",
+          "source": "ai",
+          "blockRef": "b4"
+        }
+      ]
+    },
+    {
+      "id": "sp-pg5",
+      "chapterId": "ch-c1",
+      "layout": "st-mg-p-grid-2",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000007",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        },
+        {
+          "photoId": "00000000-0000-4000-8000-000000000008",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": {
+        "text": "The narrow fountain gleams, the wide archway lingers. The distant hillside glows.",
+        "font": "Poppins",
+        "align": "center",
+        "source": "ai"
+      }
+    },
+    {
+      "id": "sp-pg6",
+      "chapterId": "ch-c2",
+      "layout": "st-mg-p-open-b",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000010",
+          "crop": {
+            "x": 0.42,
+            "y": 0.38,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null,
+      "texts": [
+        {
+          "id": "tx-b6",
+          "panel": 0,
+          "role": "intro",
+          "text": "The wooden terrace glows, the shaded harbour waits. The sunlit orchard rests, the curved bridge gleams. The plain tower lingers, the small market glows. The round kitchen waits, the smooth hallway rests. The cool canopy gleams, the rosy pebble lingers.",
+          "source": "ai",
+          "blockRef": "b6"
+        }
+      ]
+    },
+    {
+      "id": "sp-pg7",
+      "chapterId": "ch-c2",
+      "layout": "st-mg-p-tell-2b",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000009",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        },
+        {
+          "photoId": "00000000-0000-4000-8000-000000000011",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null,
+      "texts": [
+        {
+          "id": "tx-b7",
+          "panel": 0,
+          "role": "paragraph",
+          "text": "The glassy river rests, the leafy lantern gleams. The quiet window lingers, the amber pathway glows. The pale garden waits, the soft table rests. The golden curtain gleams, the gentle shadow lingers. The bright horizon glows.",
+          "source": "ai",
+          "blockRef": "b7"
+        }
+      ]
+    },
+    {
+      "id": "sp-pg8",
+      "chapterId": "ch-c2",
+      "layout": "st-mg-p-hero-cap",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000012",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": {
+        "text": "The open fountain lingers, the narrow archway glows. The wide hillside waits.",
+        "font": "Poppins",
+        "align": "center",
+        "source": "ai"
+      }
+    },
+    {
+      "id": "sp-pg9",
+      "chapterId": "ch-c2",
+      "layout": "st-mg-p-tell-2",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000013",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        },
+        {
+          "photoId": "00000000-0000-4000-8000-000000000014",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null,
+      "texts": [
+        {
+          "id": "tx-b9",
+          "panel": 0,
+          "role": "paragraph",
+          "text": "The painted terrace waits, the wooden harbour rests. The shaded orchard gleams, the sunlit bridge lingers. The curved tower glows, the plain market waits. The small kitchen rests, the round hallway gleams. The smooth canopy lingers.",
+          "source": "ai",
+          "blockRef": "b9"
+        }
+      ]
+    },
+    {
+      "id": "sp-pg10",
+      "chapterId": "ch-c2",
+      "layout": "mg-p-full",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000015",
+          "crop": {
+            "x": 0.42,
+            "y": 0.38,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    },
+    {
+      "id": "sp-pg10-b",
+      "chapterId": "ch-c2",
+      "layout": "st-mg-p-hero-small",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000016",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    },
+    {
+      "id": "sp-pg11",
+      "chapterId": "ch-c3",
+      "layout": "st-mg-p-open-c",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000018",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null,
+      "texts": [
+        {
+          "id": "tx-b10",
+          "panel": 0,
+          "role": "intro",
+          "text": "The mellow river gleams, the glassy lantern lingers. The leafy doorway glows, the quiet pathway waits. The amber garden rests, the pale table gleams. The soft curtain lingers, the golden shadow glows. The gentle horizon waits, the bright courtyard rests.",
+          "source": "ai",
+          "blockRef": "b10"
+        }
+      ]
+    },
+    {
+      "id": "sp-pg12",
+      "chapterId": "ch-c3",
+      "layout": "st-mg-p-tell-2",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000017",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        },
+        {
+          "photoId": "00000000-0000-4000-8000-000000000019",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null,
+      "texts": [
+        {
+          "id": "tx-b11",
+          "panel": 0,
+          "role": "paragraph",
+          "text": "The warm fountain glows, the open archway waits. The narrow hillside rests, the wide shoreline gleams. The distant rooftop lingers, the still meadow glows. The blue corner waits, the green bench rests. The low lamp gleams.",
+          "source": "ai",
+          "blockRef": "b11"
+        }
+      ]
+    },
+    {
+      "id": "sp-pg13",
+      "chapterId": "ch-c3",
+      "layout": "st-mg-p-hero-cap",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000020",
+          "crop": {
+            "x": 0.42,
+            "y": 0.38,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": {
+        "text": "The woven terrace rests, the painted harbour gleams. The wooden orchard lingers.",
+        "font": "Poppins",
+        "align": "center",
+        "source": "ai"
+      }
+    },
+    {
+      "id": "sp-pg14",
+      "chapterId": "ch-c3",
+      "layout": "st-mg-p-tell-2b",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000021",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        },
+        {
+          "photoId": "00000000-0000-4000-8000-000000000022",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null,
+      "texts": [
+        {
+          "id": "tx-b13",
+          "panel": 0,
+          "role": "paragraph",
+          "text": "The hazy river lingers, the mellow lantern glows. The glassy doorway waits, the leafy window rests. The quiet garden gleams, the amber table lingers. The pale curtain glows, the soft shadow waits. The golden horizon rests.",
+          "source": "ai",
+          "blockRef": "b13"
+        }
+      ]
+    },
+    {
+      "id": "sp-pg15",
+      "chapterId": "ch-c3",
+      "layout": "st-mg-p-hero-small",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000023",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    },
+    {
+      "id": "sp-pg15-b",
+      "chapterId": "ch-c3",
+      "layout": "mg-p-full",
+      "slots": [
+        {
+          "photoId": "00000000-0000-4000-8000-000000000024",
+          "crop": {
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1
+          }
+        }
+      ],
+      "caption": null
+    },
+    {
+      "id": "sp-pg16",
+      "chapterId": null,
+      "layout": "st-mg-p-close-0",
+      "slots": [],
+      "caption": null,
+      "texts": [
+        {
+          "id": "tx-b14",
+          "panel": 0,
+          "role": "closing",
+          "text": "The silver fountain waits, the warm archway rests. The open hillside gleams, the narrow shoreline lingers. The wide rooftop glows, the distant meadow waits. The still corner rests, the blue bench gleams. The green lamp lingers, the low ribbon glows.",
+          "source": "ai",
+          "blockRef": "b14"
+        }
+      ]
+    }
+  ],
+  "style": {
+    "background": {
+      "kind": "color",
+      "hex": "#FFFFFF"
+    },
+    "designStyle": "magazine",
+    "font": "Poppins"
+  },
+  "meta": {
+    "generator": "ai",
+    "generatorVersion": 1,
+    "runId": null,
+    "userEdited": false
+  }
+}
