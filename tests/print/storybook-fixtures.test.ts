@@ -37,6 +37,7 @@ import { clusterPhotosIntoMoments, type OrganizeDeps } from "@/lib/photos/organi
 import { validatePrintReadiness } from "@/lib/print/readiness";
 import { GENERIC_A5_DIGITAL } from "@/lib/print/specs";
 import type { Storybook } from "@/lib/storybook/types";
+import type { Json } from "@/lib/supabase/database.types";
 import { BOOK, USER, book as storyBook, photoRows, visionRows, world } from "../ai/story-fixtures";
 
 type Variant = "base" | "missing_meta" | "duplicates" | "low_res";
@@ -75,7 +76,7 @@ async function organise(rows: OrganizePhotoRow[], hashes: Map<string, string>) {
   return clusterPhotosIntoMoments(BOOK, deps);
 }
 
-function composeDeps(c: Case, storybook: Storybook, rows: OrganizePhotoRow[], mode: "live" | "off", current: unknown = {}): ComposeDeps {
+function composeDeps(c: Case, storybook: Storybook, rows: OrganizePhotoRow[], mode: "live" | "off", current: Json = {}): ComposeDeps {
   const transport: AgentTransport = {
     kind: "live",
     async parse<T>(req: AgentRequest<T>): Promise<AgentResponse<T>> {
@@ -252,7 +253,7 @@ describe("user edits survive export", () => {
     const panel = r.doc.pages[textPage]!.texts![0]!.panel;
     const edited = "We kept the shells in a jar on the windowsill.";
     const mine = setPageText(r.doc, textPage, panel, edited);
-    const again = await composeStorybookPages(BOOK, { dryRun: true }, composeDeps(c, r.storybook, r.rows, "off", serializeDoc(mine)));
+    const again = await composeStorybookPages(BOOK, { dryRun: true }, composeDeps(c, r.storybook, r.rows, "off", serializeDoc(mine) as unknown as Json));
     const texts = again.doc.pages.flatMap((p) => p.texts ?? []);
     expect(texts.find((t) => t.text === edited)?.source).toBe("user");
     expect(decode(printMarkup(again.doc, r.photos))).toContain(edited);

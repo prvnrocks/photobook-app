@@ -11,6 +11,9 @@ import type { NarrativeKind, Storybook } from "@/lib/storybook/types";
 import { aiProvenance } from "@/lib/storybook/versioning";
 import type { ComposePhoto } from "./types";
 
+/** Task 10: the user edits /dev-print?story=…&edits=1 applies (the PDF print check looks for them). */
+export const DEV_EDIT_TEXT = { title: "Edited title for the print check", page: "Edited by hand: one more swim before the lanterns came on." } as const;
+
 export const FIXTURE_BOOK_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 export const fixturePhotoId = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 

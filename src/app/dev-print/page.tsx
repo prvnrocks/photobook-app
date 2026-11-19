@@ -12,6 +12,8 @@
 // full-bleed pages, so a spread can straddle the real 20-sheet chunk boundary (lead=14 puts the
 // panorama on sheets 19 | 20); `?scale=N` (1–8, with printAssets=1) multiplies the photos' pixel
 // sizes, simulating high-res originals so the print plan reaches 300 dpi on spreads.
+// `?story=<style>` (Task 7) + Task 10: `&photos=10|20|40|60`, `&lowres=1`, `&edits=1` — the fixtures the
+// print check (tests/print-fixtures.live.test.ts) renders to PDF with the production page.pdf options.
 // `?m30=magazine|editorial` (+ `&format=landscape`, `&ar=1`, `&desc=0`) (M30 T14a): the small M30 book
 // of the dev editor (m30EditorDoc: description pages, a spread, an accent colourway) — with
 // `?sheets=0-N` it goes through <PrintDocument> exactly as /print/[bookId] would render it.
@@ -31,9 +33,8 @@ import {
 } from "@/lib/book/dev-preview";
 import { m30EditorDoc } from "@/lib/book/dev-m30";
 import { DESIGN_STYLES } from "@/lib/book/schema";
-import type { BookFormat, DesignStyle } from "@/lib/book/types";
-import { composeStoryDoc } from "@/lib/storybook/compose";
-import { devStoryRenderPhotos, storyFixture } from "@/lib/storybook/compose/dev-fixture";
+import type { DesignStyle } from "@/lib/book/types";
+import { devStoryPrintBook } from "@/lib/storybook/compose/dev-print-book";
 import { devSampleDoc, devSamplePhotos, parseDevSample } from "@/lib/book/dev-sample";
 import { pageMm, sheetMm, type SizeMm } from "@/lib/book/format";
 import type { BookDoc } from "@/lib/book/types";
@@ -97,7 +98,13 @@ export default async function DevPrintPreview({
   const story = typeof sp.story === "string" && (DESIGN_STYLES as readonly string[]).includes(sp.story) ? (sp.story as DesignStyle) : null;
   const captionLang = (m30 || story) && sp.ar !== "1" ? "en" : "ar";
   const format = m30 || story ? parseDevFormat(sp.format) : sample ? devSampleDoc(sample).format : parseDevFormat(sp.format);
-  const storyBook = story ? devStoryPrintBook(story, format, captionLang) : null;
+  const storyBook = story
+    ? devStoryPrintBook(story, format, captionLang, {
+        photos: intParam(sp.photos, 4, 120) ?? 24,
+        lowRes: sp.lowres === "1",
+        edits: sp.edits === "1",
+      })
+    : null;
   const bgKind = parseDevBackgrounds(sp.bg);
   const lead = sample ? intParam(sp.lead, 0, 60) : null;
   const base = storyBook
@@ -151,12 +158,4 @@ export default async function DevPrintPreview({
       </div>
     </main>
   );
-}
-
-/** Task 7: a composed fixture storybook (24 photos, one low-res) + its placeholder photos. */
-function devStoryPrintBook(style: DesignStyle, format: BookFormat, lang: "en" | "ar") {
-  const design = { format, designStyle: style };
-  const f = storyFixture({ photos: 24, lang, design, lowRes: [5] });
-  const doc = composeStoryDoc({ storybook: f.storybook, photos: f.photos, design, lang, occasion: "travel", bookTitle: null, maxPages: 20 }).doc;
-  return { doc, photos: devStoryRenderPhotos(f.photos) };
 }
