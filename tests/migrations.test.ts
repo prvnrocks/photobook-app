@@ -3156,9 +3156,9 @@ describe("migrations: story planner / narrative writer usage log (2600)", () => 
   const sql = m?.sql ?? "";
   const flat = sql.replace(/\s+/g, " ");
 
-  it("is the latest migration and purely additive", () => {
+  it("comes right before 2700 (latest until then) and is purely additive", () => {
     expect(m, `${name} missing`).toBeDefined();
-    expect(files[files.length - 1]).toBe(name);
+    expect(files.indexOf("20261122002700_story_compose_kind.sql")).toBe(files.indexOf(name) + 1);
     expect(sql).not.toMatch(/\bdrop\b/);
     expect(sql).not.toMatch(/disable\s+row\s+level\s+security/);
     expect(sql).not.toMatch(/security\s+definer/);
@@ -3180,8 +3180,9 @@ describe("migrations: story planner / narrative writer usage log (2600)", () => 
     // read from the source text: the module itself is server-only
     const src = readFileSync(join(process.cwd(), "src", "lib", "db", "story-ai-calls.ts"), "utf8");
     const list = (constName: string) => JSON.parse(new RegExp(`export const ${constName} = (\\[[^\\]]*\\]) as const;`).exec(src)![1]!) as string[];
-    const STORY_CALL_KINDS = list("STORY_CALL_KINDS");
-    const STORY_CALL_SCOPES = list("STORY_CALL_SCOPES");
+    // 2600 created the first four kinds / scopes; 2700 appended "compose" (its own suite below).
+    const STORY_CALL_KINDS = list("STORY_CALL_KINDS").filter((k) => k !== "compose");
+    const STORY_CALL_SCOPES = list("STORY_CALL_SCOPES").filter((k) => k !== "compose");
     expect(STORY_CALL_KINDS).toHaveLength(4);
     expect(flat).toContain(`check (kind in (${STORY_CALL_KINDS.map((k) => `'${k}'`).join(", ")}))`);
     expect(flat).toContain(`check (scope in (${STORY_CALL_SCOPES.map((k) => `'${k}'`).join(", ")}))`);
@@ -3200,12 +3201,56 @@ describe("migrations: story planner / narrative writer usage log (2600)", () => 
     expect(table.match(/\btext\b/g)).toHaveLength(8); // kind, scope, chapter_id, model, prompt_version, mode, status, error — all checked
   });
 
-  it("rls_check.sql covers 2600 and counts 185 checks; database.types.ts lists the table", () => {
+  it("rls_check.sql covers 2600 (185 checks then; 2700 → 186); database.types.ts lists the table", () => {
     const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
     expect(rls).toContain(name);
     expect(rls).toContain("RLS FAIL [story ai calls]");
-    expect(rls).toContain("RLS OK — all 185 checks passed");
     const types = readFileSync(join(process.cwd(), "src", "lib", "supabase", "database.types.ts"), "utf8");
     expect(types).toMatch(/story_ai_calls: \{\s*Row: \{[\s\S]*?storybook_version: number \| null/);
+  });
+});
+
+describe("migrations: story compose kind (2700, Task 7)", () => {
+  const name = "20261122002700_story_compose_kind.sql";
+  const m = migrations.find((x) => x.name === name);
+  const sql = m?.sql ?? "";
+  const flat = sql.replace(/\s+/g, " ");
+  const body = sql.replace(/--.*$/gm, "").replace(/\s+/g, " ").trim();
+
+  it("is the latest migration, comes right after 2600, migration-first header with a rollback note", () => {
+    expect(m, `${name} missing`).toBeDefined();
+    expect(files[files.length - 1]).toBe(name);
+    expect(files.indexOf(name)).toBe(files.indexOf("20261121002600_story_ai_calls.sql") + 1);
+    const raw = readFileSync(join(process.cwd(), "supabase", "migrations", name), "utf8");
+    expect(raw).toMatch(/Deploy order/);
+    expect(raw).toMatch(/Rollback/);
+  });
+
+  it("only widens the two checks of story_ai_calls, each dropped and re-added in ONE alter table statement", () => {
+    const statements = body.split(";").map((x) => x.trim()).filter(Boolean);
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toMatch(/^alter table public\.story_ai_calls /);
+    expect(sql).not.toMatch(/create\s+(table|policy|function|trigger)|grant|revoke|disable\s+row\s+level\s+security|security\s+definer/i);
+    expect(sql).not.toMatch(/\b(update|delete\s+from|insert\s+into)\s+(public|storage)\./);
+    expect(flat).toContain("drop constraint story_ai_calls_kind_check, add constraint story_ai_calls_kind_check check");
+    expect(flat).toContain("drop constraint story_ai_calls_scope_check, add constraint story_ai_calls_scope_check check");
+  });
+
+  it("the new lists equal the code's STORY_CALL_KINDS / STORY_CALL_SCOPES (2600 lists + compose)", () => {
+    const src = readFileSync(join(process.cwd(), "src", "lib", "db", "story-ai-calls.ts"), "utf8");
+    const list = (constName: string) => JSON.parse(new RegExp(`export const ${constName} = (\\[[^\\]]*\\]) as const;`).exec(src)![1]!) as string[];
+    const kinds = list("STORY_CALL_KINDS");
+    const scopes = list("STORY_CALL_SCOPES");
+    expect(kinds.at(-1)).toBe("compose");
+    expect(scopes.at(-1)).toBe("compose");
+    expect(flat).toContain(`check (kind in (${kinds.map((k) => `'${k}'`).join(", ")}))`);
+    expect(flat).toContain(`check (scope in (${scopes.map((k) => `'${k}'`).join(", ")}))`);
+  });
+
+  it("rls_check.sql covers 2700 and counts 186 checks", () => {
+    const rls = readFileSync(join(process.cwd(), "supabase", "tests", "rls_check.sql"), "utf8");
+    expect(rls).toContain(name);
+    expect(rls).toContain("RLS FAIL [story compose kind]");
+    expect(rls).toContain("RLS OK — all 186 checks passed");
   });
 });

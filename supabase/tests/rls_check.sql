@@ -73,7 +73,9 @@
 --      photo_duplicate_groups, photo_moments: owner reads own rows only, no
 --      client writes, value checks)
 --      and 20261121002600_story_ai_calls.sql (story_ai_calls: service role
---      only, kind / scope / error-code checks, no text columns).
+--      only, kind / scope / error-code checks, no text columns)
+--      and 20261122002700_story_compose_kind.sql (story_ai_calls kind and
+--      scope 'compose' accepted, unknown values still rejected).
 --   Not checkable in SQL: the bucket allowed_mime_types (image/heic rejected) is
 --   enforced by the Storage API, so only the bucket row is asserted here.
 --   2. Supabase Dashboard → SQL Editor → New query → paste this WHOLE file → Run.
@@ -82,7 +84,7 @@
 --
 -- WHAT SUCCESS LOOKS LIKE
 --   The editor shows an ERROR panel whose message starts with
---       RLS OK — all 185 checks passed
+--       RLS OK — all 186 checks passed
 --   That error is raised ON PURPOSE as the very last step: it is the one thing
 --   the SQL Editor always displays (it does not show RAISE NOTICE output, and it
 --   only shows the result of the last statement), and it guarantees rollback.
@@ -4328,6 +4330,50 @@ begin
   if exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'story_ai_calls') then
     raise exception 'RLS FAIL [story ai calls]: unexpected policy';
   end if;
+  checks := checks + 1;
+
+  -- ===========================================================================
+  -- 2700 story compose kind: story_ai_calls kind / scope 'compose' (Task 7)
+  -- ===========================================================================
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  set local role service_role;
+  insert into public.story_ai_calls (user_id, book_id, run_id, kind, scope, chapter_id, storybook_version, model, prompt_version,
+                                     mode, status, input_tokens, output_tokens, cost_usd, latency_ms)
+  values (uid_a, book_a, gen_random_uuid(), 'compose', 'compose', null, 3, 'claude-opus-5-5', 'story-compose-1', 'live', 'ok', 1900, 400, 0.0195, 6100),
+         (uid_a, book_a, gen_random_uuid(), 'compose', 'compose', null, 3, 'claude-opus-5-5', 'story-compose-1', 'replay', 'ok', 0, 0, 0, 40);
+  insert into public.story_ai_calls (user_id, book_id, run_id, kind, scope, model, prompt_version, mode, status, error)
+  values (uid_a, book_a, gen_random_uuid(), 'compose', 'compose', 'claude-opus-5-5', 'story-compose-1', 'live', 'error', 'refused');
+  begin
+    insert into public.story_ai_calls (user_id, book_id, run_id, kind, scope, model, prompt_version, mode, status)
+    values (uid_a, book_a, gen_random_uuid(), 'layout', 'compose', 'm', 'p', 'live', 'ok');
+    raise exception 'RLS FAIL [story compose kind]: unknown kind accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.story_ai_calls (user_id, book_id, run_id, kind, scope, model, prompt_version, mode, status)
+    values (uid_a, book_a, gen_random_uuid(), 'compose', 'pages', 'm', 'p', 'live', 'ok');
+    raise exception 'RLS FAIL [story compose kind]: unknown scope accepted';
+  exception when check_violation then null;
+  end;
+  -- the 2600 kinds still pass the widened check
+  insert into public.story_ai_calls (user_id, book_id, run_id, kind, scope, model, prompt_version, mode, status)
+  values (uid_a, book_a, gen_random_uuid(), 'rewrite', 'block', 'm', 'p', 'live', 'ok');
+  if (select count(*) from pg_constraint where conrelid = 'public.story_ai_calls'::regclass
+        and conname in ('story_ai_calls_kind_check', 'story_ai_calls_scope_check')) <> 2 then
+    raise exception 'RLS FAIL [story compose kind]: kind / scope check missing';
+  end if;
+  reset role;
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid_a, 'role', 'authenticated')::text, true);
+  begin
+    insert into public.story_ai_calls (user_id, book_id, run_id, kind, scope, model, prompt_version, mode, status)
+    values (uid_a, book_a, gen_random_uuid(), 'compose', 'compose', 'm', 'p', 'live', 'ok');
+    raise exception 'RLS FAIL [story compose kind]: owner can insert a compose row';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
   checks := checks + 1;
 
   -- ---------------------------------------------------------------------------

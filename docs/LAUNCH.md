@@ -206,8 +206,12 @@ Preview origin (e.g. the branch alias of a `staging` branch) that is also in the
       are refused (`usage_unavailable`; `planStory` returns the rule plan) while it is missing. Needs 2200 (story
       versions are stored in `storybook_versions`). Optional env: `AI_STORY_MODEL`, `AI_STORY_TIMEOUT_MS`,
       `AI_STORY_MAX_RETRIES` (see `.env.example`). Then run `rls_check.sql` → 185.
+- [ ] **Storybook page composer: push `20261122002700_story_compose_kind.sql` BEFORE any code calls
+      `composeStorybookPages()` with AI on** (additive: widens the `story_ai_calls` kind / scope checks with
+      `compose`; no new table or column). Live page-intent calls are refused while it is missing — the composer then
+      lays the book out deterministically. Needs 2600. Then run `rls_check.sql` → 186.
 - [ ] Supabase → SQL Editor → paste the whole of `supabase/tests/rls_check.sql` → Run. Expected: an error panel
-      starting with **`RLS OK — all 185 checks passed`** (184 before 2600, 181 before 2500, 180 before 2400, 179 before 2300, 177 before 2200, 176 before 2100, 175 before 2000, 173 before 1900) (raised on purpose; it rolls everything back). Anything
+      starting with **`RLS OK — all 186 checks passed`** (185 before 2700, 184 before 2600, 181 before 2500, 180 before 2400, 179 before 2300, 177 before 2200, 176 before 2100, 175 before 2000, 173 before 1900) (raised on purpose; it rolls everything back). Anything
       else (`RLS FAIL [...]`, permission denied) is a blocker.
 - [ ] Verify `private.auth_user_email` works (the warning emails depend on it; needs `postgres` to read
       `auth.users`):

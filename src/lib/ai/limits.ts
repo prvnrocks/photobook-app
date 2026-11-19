@@ -38,6 +38,8 @@ export const LIMITS = {
     maxStoryWrites: 2,
     maxStoryChapterRegens: 10,
     maxStoryBlockRewrites: 20,
+    /** Task 7: live page-intent calls of composeStorybookPages (one per composition); the deterministic composer is free. */
+    maxStoryComposes: 6,
   },
   paid: {
     maxUploadPhotos: 500,
@@ -54,6 +56,7 @@ export const LIMITS = {
     maxStoryWrites: 10,
     maxStoryChapterRegens: 50,
     maxStoryBlockRewrites: 200,
+    maxStoryComposes: 30,
   },
 } as const;
 

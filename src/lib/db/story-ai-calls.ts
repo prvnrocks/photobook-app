@@ -1,5 +1,5 @@
 import "server-only";
-// story_ai_calls (migration 2600): usage log of the Story Planner / Narrative Writer / block
+// story_ai_calls (migration 2600, kind / scope "compose" since 2700): usage log of the Story Planner / Narrative Writer / block
 // Rewriter (src/lib/ai/story). One row per model call: kind, scope, tokens, cost, latency, error
 // code. The table holds NO text — no prompt, answer, description or generated narrative.
 //
@@ -21,10 +21,11 @@ export class StoryAiCallsError extends Error {
 
 const missingTable = (code: string | undefined) => code === "42P01" || code === "PGRST205";
 
-export const STORY_CALL_KINDS = ["plan", "write", "repair", "rewrite"] as const;
+// Task 7 (migration 2700): + "compose" = the page-intent call of composeStorybookPages.
+export const STORY_CALL_KINDS = ["plan", "write", "repair", "rewrite", "compose"] as const;
 export type StoryCallKind = (typeof STORY_CALL_KINDS)[number];
-/** What the run the call belongs to produces: an outline, the whole book, one chapter, one block. */
-export const STORY_CALL_SCOPES = ["plan", "book", "chapter", "block"] as const;
+/** What the run the call belongs to produces: an outline, the whole book, one chapter, one block, a page composition (2700). */
+export const STORY_CALL_SCOPES = ["plan", "book", "chapter", "block", "compose"] as const;
 export type StoryCallScope = (typeof STORY_CALL_SCOPES)[number];
 
 export type StoryCallRecord = {
@@ -81,7 +82,7 @@ export async function recordStoryCall(rec: StoryCallRecord): Promise<void> {
 }
 
 /** LIVE runs of the book that produced at least one usable answer, per scope (the per-book limits). */
-export type StoryUsageCounts = { plans: number; writes: number; chapterRegens: number; rewrites: number };
+export type StoryUsageCounts = { plans: number; writes: number; chapterRegens: number; rewrites: number; /** Task 7 (optional for older callers / fixtures: absent = 0). */ composes?: number };
 
 export async function countStoryRuns(bookId: string, userId: string): Promise<StoryUsageCounts> {
   const { data, error } = await createAdminClient()
@@ -93,12 +94,12 @@ export async function countStoryRuns(bookId: string, userId: string): Promise<St
     .eq("status", "ok")
     .limit(10000);
   if (error) {
-    if (missingTable(error.code)) return { plans: 0, writes: 0, chapterRegens: 0, rewrites: 0 };
+    if (missingTable(error.code)) return { plans: 0, writes: 0, chapterRegens: 0, rewrites: 0, composes: 0 };
     throw new StoryAiCallsError("count story runs", error.code);
   }
-  const runs = { plan: new Set<string>(), book: new Set<string>(), chapter: new Set<string>(), block: new Set<string>() };
+  const runs = { plan: new Set<string>(), book: new Set<string>(), chapter: new Set<string>(), block: new Set<string>(), compose: new Set<string>() };
   for (const r of data) if (r.scope in runs) runs[r.scope as StoryCallScope].add(r.run_id);
-  return { plans: runs.plan.size, writes: runs.book.size, chapterRegens: runs.chapter.size, rewrites: runs.block.size };
+  return { plans: runs.plan.size, writes: runs.book.size, chapterRegens: runs.chapter.size, rewrites: runs.block.size, composes: runs.compose.size };
 }
 
 /** USD spent by live story calls today (all users) — part of the daily AI budget (D-059). */
