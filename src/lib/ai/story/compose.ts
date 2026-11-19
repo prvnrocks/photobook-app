@@ -33,7 +33,9 @@ import { OccasionSchema, parseBookDoc, validateBookDoc } from "@/lib/book/schema
 import type { BookDoc } from "@/lib/book/types";
 import { getMyBook, saveDocIfRev, type MyBook } from "@/lib/db/books";
 import { getTodayPhotoAnalysisSpendUsd } from "@/lib/db/photo-analyses";
-import { listPhotosForOrganize, listQuality, type OrganizePhotoRow, type StoredQuality } from "@/lib/db/photo-organize";
+import { listDuplicateGroups, listPhotosForOrganize, listQuality, type OrganizePhotoRow, type StoredQuality } from "@/lib/db/photo-organize";
+import type { DuplicateGroup } from "@/lib/photos/duplicates";
+import { composeSignalsOf } from "@/lib/storybook/compose/contrast";
 import { countStoryRuns, getTodayStorySpendUsd, recordStoryCall, storyUsageAvailable, type StoryCallRecord, type StoryUsageCounts } from "@/lib/db/story-ai-calls";
 import { getCurrentStorybook } from "@/lib/db/storybooks";
 import type { Json } from "@/lib/supabase/database.types";
@@ -97,6 +99,8 @@ export type ComposeDeps = {
   getCurrent?: typeof getCurrentStorybook;
   listPhotos?: typeof listPhotosForOrganize;
   listQuality?: typeof listQuality;
+  /** Duplicate groups (the composer keeps lookalike photos off one page). A failed read = no groups. */
+  listDuplicateGroups?: typeof listDuplicateGroups;
   save?: typeof saveDocIfRev;
   usageAvailable?: () => Promise<boolean>;
   usageCounts?: (bookId: string, userId: string) => Promise<StoryUsageCounts>;
@@ -146,8 +150,10 @@ function transportFor(mode: AiMode): AgentTransport | null {
 }
 
 /** The book's placeable photos for the composer: ready + kept, original size, quality focus. */
-export function composePhotosOf(rows: readonly OrganizePhotoRow[], quality: readonly StoredQuality[]): ComposePhoto[] {
+export function composePhotosOf(rows: readonly OrganizePhotoRow[], quality: readonly StoredQuality[], duplicateGroups: readonly Pick<DuplicateGroup, "key" | "photoIds">[] = []): ComposePhoto[] {
   const q = new Map(quality.map((x) => [x.photoId, x]));
+  const groupOf = new Map<string, string>();
+  for (const g of duplicateGroups) for (const id of g.photoIds) if (!groupOf.has(id)) groupOf.set(id, g.key);
   return rows
     .filter((r) => r.status === "kept")
     .map((r) => {
@@ -155,7 +161,9 @@ export function composePhotosOf(rows: readonly OrganizePhotoRow[], quality: read
       const fx = s?.raw?.weightX;
       const fy = s?.raw?.weightY;
       const focus = typeof fx === "number" && typeof fy === "number" && Number.isFinite(fx) && Number.isFinite(fy) ? { x: fx, y: fy } : null;
-      return { id: r.id, width: r.width, height: r.height, quality: s ? s.overall : null, focus };
+      // lookalike signals (phash, capture time, scene, people, colour, duplicate group) for the
+      // composer's "no lookalike photos on one page" step
+      return { id: r.id, width: r.width, height: r.height, quality: s ? s.overall : null, focus, ...composeSignalsOf(r, groupOf.get(r.id) ?? null) };
     });
 }
 
@@ -191,8 +199,14 @@ export async function composeStorybookPages(
 
   const storybook: Storybook | null = await (deps.getCurrent ?? getCurrentStorybook)(book.id, userId);
   if (!storybook) throw new ComposeError("no_story");
-  const [rows, quality] = await Promise.all([(deps.listPhotos ?? listPhotosForOrganize)(book.id, userId), (deps.listQuality ?? listQuality)(book.id, userId)]);
-  const photos = composePhotosOf(rows, quality);
+  const [rows, quality, groups] = await Promise.all([
+    (deps.listPhotos ?? listPhotosForOrganize)(book.id, userId),
+    (deps.listQuality ?? listQuality)(book.id, userId),
+    Promise.resolve()
+      .then(() => (deps.listDuplicateGroups ?? listDuplicateGroups)(book.id, userId))
+      .catch((): DuplicateGroup[] => []),
+  ]);
+  const photos = composePhotosOf(rows, quality, groups);
   const lang = book.caption_lang === "ar" ? "ar" : "en";
   const occasionParsed = OccasionSchema.safeParse(book.occasion);
   const occasion = occasionParsed.success ? occasionParsed.data : "other";

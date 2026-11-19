@@ -6,12 +6,12 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db/books", () => ({ getMyBook: vi.fn(async () => null), saveDocIfRev: vi.fn() }));
 vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: vi.fn(async () => null) }));
 vi.mock("@/lib/db/photo-analyses", () => ({ getTodayPhotoAnalysisSpendUsd: vi.fn(async () => 0), dubaiDayStart: () => "" }));
-vi.mock("@/lib/db/photo-organize", () => ({ listPhotosForOrganize: vi.fn(), listQuality: vi.fn() }));
+vi.mock("@/lib/db/photo-organize", () => ({ listPhotosForOrganize: vi.fn(), listQuality: vi.fn(), listDuplicateGroups: vi.fn(async () => []) }));
 vi.mock("@/lib/db/story-ai-calls", () => ({ countStoryRuns: vi.fn(), getTodayStorySpendUsd: vi.fn(async () => 0), recordStoryCall: vi.fn(), storyUsageAvailable: vi.fn(async () => false) }));
 vi.mock("@/lib/db/storybooks", () => ({ getCurrentStorybook: vi.fn() }));
 vi.mock("@/lib/ai/budget", () => ({ checkDailyAiBudget: vi.fn(async () => ({ allowed: true, reason: "no_budget" })) }));
 
-import { ComposeError, composeStorybookPages, type ComposeBook, type ComposeDeps } from "@/lib/ai/story/compose";
+import { ComposeError, composePhotosOf, composeStorybookPages, type ComposeBook, type ComposeDeps } from "@/lib/ai/story/compose";
 import { STORY_COMPOSE_SYSTEM_PROMPT, storyComposeReplaySynth } from "@/lib/ai/story/compose-intent";
 import type { AgentRequest, AgentResponse, AgentTransport } from "@/lib/ai/transport";
 import { LIMITS } from "@/lib/ai/limits";
@@ -198,5 +198,32 @@ describe("composeStorybookPages: saving and recomposition", () => {
     const r = await composeStorybookPages(FIXTURE_BOOK_ID, {}, world({ mode: "off", theBook: book({ doc: editedStored, doc_rev: 2 }) }).deps);
     expect(JSON.stringify(r.doc.pages[idx])).toBe(JSON.stringify(edited.pages[idx]));
     expect(r.doc.pages[idx]!.texts![0]!.source).toBe("user");
+  });
+});
+
+// v3 wiring (commit 309de34 follow-up): the production path hands the composer its lookalike signals.
+describe("composePhotosOf: real-path compose photos carry the lookalike signals", () => {
+  it("phash, EXIF capture time, scene / people (photos.ai), colour and the duplicate group are spread into each photo; file dates are left out", () => {
+    const base = rows[0]!;
+    const withSignals: OrganizePhotoRow[] = [
+      { ...base, id: rows[0]!.id, phash: "FFFF0000FFFF0000", taken_at: "2026-05-30T13:47:00.000Z", date_source: "exif", color: "#A08060", ai: { scene: "portrait", peopleCount: 2 } },
+      { ...base, id: rows[1]!.id, phash: "ffff0000ffff0001", taken_at: "2026-05-30T13:47:20.000Z", date_source: "file", color: null, ai: null },
+      { ...base, id: rows[2]!.id, status: "dropped" },
+    ];
+    const photos = composePhotosOf(withSignals, [], [{ key: "g1", photoIds: [rows[0]!.id, rows[1]!.id] }]);
+    expect(photos).toHaveLength(2);
+    expect(photos[0]).toMatchObject({ phash: "ffff0000ffff0000", takenAt: "2026-05-30T13:47:00.000Z", scene: "portrait", people: 2, color: "#a08060", group: "g1" });
+    expect(photos[1]).toMatchObject({ phash: "ffff0000ffff0001", takenAt: null, scene: null, people: null, color: null, group: "g1" });
+  });
+
+  it("composeStorybookPages reads the duplicate groups (a failed read composes without groups)", async () => {
+    const w = world({ mode: "off" });
+    const listDuplicateGroups = vi.fn(async () => [{ key: "g1", kind: "near" as const, photoIds: [rows[0]!.id, rows[1]!.id], preferredPhotoId: rows[0]!.id, preferredSource: "auto" as const }]);
+    await composeStorybookPages(FIXTURE_BOOK_ID, { dryRun: true }, { ...w.deps, listDuplicateGroups });
+    expect(listDuplicateGroups).toHaveBeenCalledWith(FIXTURE_BOOK_ID, USER);
+    const failing = vi.fn(async () => {
+      throw new Error("db down");
+    });
+    await expect(composeStorybookPages(FIXTURE_BOOK_ID, { dryRun: true }, { ...w.deps, listDuplicateGroups: failing })).resolves.toBeTruthy();
   });
 });
