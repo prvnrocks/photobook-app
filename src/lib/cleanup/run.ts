@@ -9,7 +9,7 @@ import "server-only";
 // Sweep order:
 //   warnings (T5 hook, no-op by default — runs first so draft deletion sees fresh claims)
 //   → expired free books → abandoned drafts → pending uploads → orphan objects (photos, exports)
-//   → old export rows → unlock attempts → stale AI runs.
+//   → old export rows → unlock attempts → rate-limit windows (Task 10) → stale AI runs.
 //
 // Logs: exactly one line per sweep, `[cleanup] <sweep> n=<count> ms=<ms>` plus count / code
 // fields. Never ids, paths, titles or emails.
@@ -22,6 +22,7 @@ import {
   OLD_EXPORT_ROW_DAYS,
   ORPHAN_OBJECT_DAYS,
   PENDING_UPLOAD_DAYS,
+  RATE_LIMIT_WINDOW_HOURS,
   STALE_AGENT_RUN_HOURS,
   UNLOCK_ATTEMPT_HOURS,
   type CleanupBucket,
@@ -31,6 +32,7 @@ import {
   deleteAbandonedDrafts,
   deleteExpiredBooks,
   deleteOldExportRows,
+  deleteOldRateLimitWindows,
   deleteOldUnlockAttempts,
   deletePendingUploads,
   listOrphanObjects,
@@ -48,6 +50,7 @@ export const SWEEPS = [
   "orphans_exports",
   "old_exports",
   "unlock_attempts",
+  "rate_limits",
   "stale_runs",
 ] as const;
 export type SweepName = (typeof SWEEPS)[number];
@@ -248,6 +251,11 @@ export async function runCleanup(options: RunCleanupOptions = {}): Promise<Clean
 
   await sweep("unlock_attempts", async (c) => {
     c.n = await deleteOldUnlockAttempts(UNLOCK_ATTEMPT_HOURS);
+  });
+
+  // Task 10: Task 9's rate limiter windows (counts only, hashed keys).
+  await sweep("rate_limits", async (c) => {
+    c.n = await deleteOldRateLimitWindows(RATE_LIMIT_WINDOW_HOURS);
   });
 
   await sweep("stale_runs", async (c) => {

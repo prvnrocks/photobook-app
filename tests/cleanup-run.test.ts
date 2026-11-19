@@ -27,7 +27,7 @@ const fake = vi.hoisted(() => {
     /** ms added to the clock per RPC call (simulates slow batches). */
     rpcCost: 0,
   };
-  const SCALAR = new Set(["cleanup_old_exports", "cleanup_unlock_attempts", "reap_stale_agent_runs", "release_warning"]);
+  const SCALAR = new Set(["cleanup_old_exports", "cleanup_unlock_attempts", "cleanup_rate_limits", "reap_stale_agent_runs", "release_warning"]);
 
   function builder(table: string, op: string) {
     const entry = { table, op, calls: [] as unknown[][] };
@@ -150,6 +150,7 @@ describe("runCleanup — order and arguments", () => {
       "rpc:cleanup_orphan_objects:exports",
       "rpc:cleanup_old_exports",
       "rpc:cleanup_unlock_attempts",
+      "rpc:cleanup_rate_limits",
       "rpc:reap_stale_agent_runs",
     ]);
     const args = Object.fromEntries(fake.state.rpcArgs.map((r) => [r.fn + (r.args.p_bucket ? `:${r.args.p_bucket}` : ""), r.args]));
@@ -159,6 +160,7 @@ describe("runCleanup — order and arguments", () => {
     expect(args["cleanup_orphan_objects:photos"]).toEqual({ p_bucket: "photos", p_days: 7, p_limit: 500 });
     expect(args.cleanup_old_exports).toEqual({ p_days: 30 });
     expect(args.cleanup_unlock_attempts).toEqual({ p_hours: 24 });
+    expect(args.cleanup_rate_limits).toEqual({ p_hours: 24 }); // Task 10
     expect(args.reap_stale_agent_runs).toEqual({ p_hours: 1 });
 
     expect(Object.keys(counts.sweeps)).toEqual([...SWEEPS]);
@@ -254,9 +256,11 @@ describe("runCleanup — failures", () => {
     };
     fake.state.objects.exports = { [`${U}/${B1}`]: [{ name: "c.pdf", id: "3" }] };
     fake.state.rpc.cleanup_unlock_attempts = [{ data: 9, error: null }];
+    fake.state.rpc.cleanup_rate_limits = [{ data: 4, error: null }];
     const counts = await runCleanup({ now: clock });
     expect(counts.sweeps.expired_books).toMatchObject({ n: 2, storageFailures: 2, storageRemoved: 1, failed: false });
     expect(counts.sweeps.unlock_attempts.n).toBe(9);
+    expect(counts.sweeps.rate_limits.n).toBe(4);
     expect(counts.ok).toBe(true);
     expect(logLines().find((l) => l.includes("expired_books"))).toBe("[cleanup] expired_books n=2 ms=0 storage_removed=1 storage_fail=2");
   });
@@ -434,4 +438,20 @@ describe("module boundaries", () => {
       expect(first?.trim()).toMatch(/^import ["']server-only["'];?$/);
     },
   );
+});
+
+describe("Task 10: rate-limit window sweep", () => {
+  it("a database without migration 2900 (function missing) counts 0 and does not fail the run", async () => {
+    fake.state.rpc.cleanup_rate_limits = [{ data: null, error: { code: "42883" } }];
+    const counts = await runCleanup({ now: clock });
+    expect(counts.sweeps.rate_limits).toMatchObject({ n: 0, failed: false });
+    expect(counts.ok).toBe(true);
+  });
+
+  it("any other error fails only that sweep (code logged, no ids)", async () => {
+    fake.state.rpc.cleanup_rate_limits = [{ data: null, error: { code: "XX000" } }];
+    const counts = await runCleanup({ now: clock });
+    expect(counts.sweeps.rate_limits.failed).toBe(true);
+    expect(counts.sweeps.stale_runs.failed).toBe(false);
+  });
 });

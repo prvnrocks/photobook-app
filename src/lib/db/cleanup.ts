@@ -161,6 +161,19 @@ export async function deleteOldUnlockAttempts(hours: number): Promise<number> {
   return num(data);
 }
 
+/**
+ * Task 10: deletes rate-limit windows that started more than `hours` ago (cleanup_rate_limits,
+ * migration 2900). A database without 2900 has nothing to clean → 0.
+ */
+export async function deleteOldRateLimitWindows(hours: number): Promise<number> {
+  const { data, error } = await createAdminClient().rpc("cleanup_rate_limits", { p_hours: hours });
+  if (error) {
+    if (error.code === "42883" || error.code === "PGRST202") return 0;
+    throw new CleanupQueryError("delete rate limit windows", error.code);
+  }
+  return num(data);
+}
+
 /** Marks unfinished AI runs idle for `hours` as failed ('stale') and settles their books. */
 export async function reapStaleAgentRuns(hours: number): Promise<number> {
   const { data, error } = await createAdminClient().rpc("reap_stale_agent_runs", { p_hours: hours });

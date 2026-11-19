@@ -29,6 +29,11 @@ export const ORPHAN_OBJECT_DAYS = 7;
 export const OLD_EXPORT_ROW_DAYS = 30;
 /** Password unlock attempts older than this are deleted (must cover the 24 h max rate-limit window). */
 export const UNLOCK_ATTEMPT_HOURS = 24;
+/**
+ * Task 10: rate-limit windows (Task 9, private.rate_limit_windows) older than this are deleted. The
+ * longest window is 10 minutes; active buckets also drop their own old windows on each hit.
+ */
+export const RATE_LIMIT_WINDOW_HOURS = 24;
 /** Unfinished AI runs with no activity (and no live lease) for this long are marked failed ('stale'). */
 export const STALE_AGENT_RUN_HOURS = 1;
 /** Free published book: "your link expires soon" email this many days before expires_at. */
