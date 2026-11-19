@@ -184,3 +184,8 @@ Things that went wrong or surprised us, so no agent repeats them. Format: `- (YY
 - (2026-11-18, AI) Synthetic e2e photos make the live Curator keep 1 of 12 — a live quality sample needs real photos.
 - (2026-11-19, Task 9) Before naming a new table, grep tests for name guards (an M3 test forbids the superseded `ai_usage` table) — the ledger became `ai_usage_ledger`.
 - (2026-11-19, Task 9) New server defaults that hit the DB (meters, cap checks) break unit tests that assert "no console output": give every service a dep for them and set it in the shared fixtures (story-fixtures overSpendCap / meterFor).
+- (2026-11-19, Task 10) A Next page.tsx may not export helper constants either (only default + route config) — put shared fixture constants in a lib module (DEV_EDIT_TEXT → dev-fixture.ts).
+- (2026-11-19, Task 10) Playwright configs outside the repo can't resolve @playwright/test — put the scratch config in the repo root (untracked) and delete it after the run.
+- (2026-11-19, Task 10) Styles with text-transform uppercase put CAPITALS in the PDF text layer — compare PDF text case-insensitively; and count rendered sheets by `data-print-sheet="true"` (the print CSS also contains the selector string).
+- (2026-11-19, Task 10) The storybook composer's fitter shrinks type to its minimum, so a 900-character text "fits" big panels — overflow tests must pick a panel where textFits is false.
+- (2026-11-19, Task 10) A zero-import .ts module can be shared with a .mjs script via Node ≥ 23.6 type stripping (`node --no-warnings`) — no jiti / tsx dependency needed.

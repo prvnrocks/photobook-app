@@ -351,3 +351,25 @@ Decision: New book form offers Modern (default for every occasion via DEFAULT_ST
 
 ## D-096 — Spending caps, rate limits, revocable links (2026-11-19, Task 9)
 - Decision: caps per book (preview $2 / full $15) and per user (day $20 / month $100), env `AI_CAP_*`, checked before every live call (photo analysis, story plan/write/rewrite/compose, album run start, ✨ rewrite) → the existing budget_exhausted outcomes; fail open if totals can't be read. Postgres fixed-window rate limiter (`rate_limit_hit`, hashed bucket keys, `RATE_LIMIT_SECRET` optional) on story start/tick, story rewrite, album runs, ✨ rewrite, finalize, checkout → 429 + Retry-After (tick 429 = lease wait); fails open. "Turn off and make a new link" clears published_doc + slug (new slug on next publish; free-link expiry kept).
+
+## D-097 — Print readiness: one digital spec today, provider specs only from real documents (2026-11-19, Task 10)
+- Decision: exports are checked against `generic-a5-digital` (numbers read from the renderer: 148×210 / 210×148 trim, 3 mm bleed, 4 mm safe, 300 dpi plan, 150 dpi warning, RGB, front cover only). UAE / India entries are placeholders with every number null and `providerVerified: false`; no spec is verified. Copy names what was checked ("Checks passed for digital A5 PDF"); "print-ready" / "certified" are not used anywhere in the UI.
+- Why: Task 10 forbids inventing a universal print standard or claiming certification without a real provider spec.
+- Alternatives rejected: generic "print-ready" numbers from common printers (invented); CMYK / PDF/X conversion now (no partner requirement to target).
+
+## D-098 — Readiness errors block the PDF; warnings never do (2026-11-19, Task 10)
+- Decision: blank page, missing photo, story text overflow (the composer's fitter), text in the safe margin, page count out of range → POST /pdf 422 `not_ready` with plain lines (no job, no cost). Low dpi, empty slot, cover title that may clip, tight text → warnings shown before export. After rendering, a PDF without exactly cover + pages or with a sheet that paints nothing fails (`page_count_mismatch` / `blank_page`).
+- Why: "prevent blank or clipped pages" while keeping D-037 (low resolution is the user's call). Overflow is only checked on storybook templates (the fitter is reliable there); classic layouts keep their tested limits.
+
+## D-099 — Print package = cover + interior PDFs cut from the ready export, on request (2026-11-19, Task 10)
+- Decision: `/api/books/[id]/pdf/package` splits the stored PDF of the current doc_rev (no re-render) into `{export}-cover.pdf` + `{export}-interior.pdf` in the private exports bucket; paid only (`canExportPdf`), rate-limited (`print_package` 10 / 10 min), 10-min signed URLs. No new row / column: the files are orphans by design and the daily orphan sweep removes them after 7 days; a newer export removes them with the older PDF; book deletion removes the folder.
+- Why: same render ⇒ identical to the combined PDF; no migration; files expire.
+- Alternatives rejected: always storing three files per export (2× storage for a phase-2 feature); a separate render pass for the cover (no visual difference without a provider cover wrap).
+
+## D-100 — Grants compose with the paid page limit (2026-11-19, Task 10; amends D-093)
+- Decision: a full grant gets `limits.maxPages` = 100 and `books.max_pages` is raised to 100 (service role; at grant time and, for older grants, by the storybook job before planning). PDF / watermark / permanent link stay `is_paid`-only. Revoking resets to 20 only when the book still fits (else the limit stays so the owner's next save doesn't fail).
+- Why: Task 9 known gap — a granted full storybook dropped pages beyond 20.
+
+## D-101 — Monitoring = number-only summary over existing tables + daily alert lines (2026-11-19, Task 10)
+- Decision: no new tables. `src/lib/monitoring/aggregate.ts` (pure, no imports; shared with the CLI via Node type stripping) summarises live `ai_usage_ledger` attempts, storybook `agent_runs` and `exports`; admin page + admin JSON route (404 for non-admins) + `scripts/monitoring-summary.mjs`; the cleanup cron logs `[monitor] daily …` and `[monitor] alert=<code> value=<n>` (thresholds in `ALERT_RULES`). Stage time = latency of the model calls that make each stage (no per-stage timestamps are stored).
+- Why: Task 10 asks for AI failure / time / cost monitoring without content; the ledger already has the numbers. Rejected: new log lines inside every AI step (many tests assert no console output; the ledger is the source of truth anyway).
