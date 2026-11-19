@@ -15,7 +15,7 @@ import type { EditorTool } from "./tools/types";
 export const ED_RAIL_WIDTH = "w-24";
 export const ED_RAIL_SURFACE = "border-l border-[#e5dccb] bg-[#f4ede0]";
 
-const GROUP_LABEL: Record<SelectionKind, string> = { none: "Page", slot: "Photo", caption: "Caption", description: "Text", cover: "Cover" };
+const GROUP_LABEL: Record<SelectionKind, string> = { none: "Page", slot: "Photo", caption: "Caption", description: "Text", text: "Text", cover: "Cover" };
 
 const ITEM =
   "relative flex min-h-16 w-full flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-center text-xs leading-tight font-semibold outline-none transition-[background-color,color] focus-visible:ring-2 focus-visible:ring-[#0e3b2e] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f4ede0] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none";

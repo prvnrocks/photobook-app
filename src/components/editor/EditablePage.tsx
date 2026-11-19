@@ -71,6 +71,7 @@ function sameSelection(a: EditorSelection, b: EditorSelection): boolean {
   if (a.kind === "slot" && b.kind === "slot") return a.pageIdx === b.pageIdx && a.slotIdx === b.slotIdx;
   if (a.kind === "caption" && b.kind === "caption") return a.pageIdx === b.pageIdx;
   if (a.kind === "description" && b.kind === "description") return a.pageIdx === b.pageIdx;
+  if (a.kind === "text" && b.kind === "text") return a.pageIdx === b.pageIdx && a.panel === b.panel;
   if (a.kind === "cover" && b.kind === "cover") return a.part === b.part;
   return false;
 }
@@ -245,6 +246,18 @@ export function EditablePage({ page, priority }: { page: EditorPosition; priorit
                   hintCqw={area.hintCqw}
                   selected={sameSelection(selection, { kind: "description", pageIdx: area.ownerIndex })}
                   onClick={toggle({ kind: "description", pageIdx: area.ownerIndex })}
+                />
+              )
+        }
+        renderPageText={
+          readOnly || page === "cover"
+            ? undefined
+            : (area) => (
+                <PageTextTarget
+                  empty={area.empty}
+                  hintCqw={area.hintCqw}
+                  selected={sameSelection(selection, { kind: "text", pageIdx: area.ownerIndex, panel: area.panel })}
+                  onClick={toggle({ kind: "text", pageIdx: area.ownerIndex, panel: area.panel })}
                 />
               )
         }
@@ -494,6 +507,38 @@ function DescriptionTarget({
           data-testid="description-placeholder"
         >
           {DESCRIPTION_PLACEHOLDER}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+/** Hint in an empty storybook text area (Task 7, exported for tests). */
+export const PAGE_TEXT_PLACEHOLDER = "Add your words here";
+
+/**
+ * Tap target over a storybook page text (Task 7) — the same look and behaviour as the chapter
+ * description target: a clear button over the rendered text, or a dashed outline + hint where the
+ * panel has no text yet. Only the editor draws it.
+ */
+function PageTextTarget({ empty, hintCqw, selected, onClick }: { empty: boolean; hintCqw: number; selected: boolean; onClick: (e: MouseEvent) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      aria-label={empty ? PAGE_TEXT_PLACEHOLDER : "Edit this text"}
+      className={cn(
+        "absolute inset-0 flex cursor-pointer items-center justify-center rounded-sm outline-none focus-visible:ring-4 focus-visible:ring-[#0e3b2e]/60",
+        selected ? DESCRIPTION_RING : empty ? "outline-1 outline-dashed outline-neutral-400 hover:bg-black/5" : "hover:bg-black/5",
+      )}
+      data-testid="page-text-target"
+      data-selected={selected ? "true" : undefined}
+      data-empty={empty ? "true" : undefined}
+    >
+      {empty ? (
+        <span className="max-w-full rounded-sm bg-white/85 px-[1.5cqw] py-[0.5cqw] text-center text-neutral-600 italic" style={{ fontSize: `${hintCqw}cqw`, lineHeight: 1.25 }}>
+          {PAGE_TEXT_PLACEHOLDER}
         </span>
       ) : null}
     </button>

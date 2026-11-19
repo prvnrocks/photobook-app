@@ -40,6 +40,7 @@ import { aiCaptionTool } from "./ai-caption";
 import { captionEditorTool, captionStyleTool } from "./caption-editor";
 import { aiDescriptionTool, chapterDescriptionTool } from "./chapter-description";
 import { chapterTitleTool } from "./chapter-title";
+import { pageTextTool } from "./page-text";
 import { coverTextTool } from "./cover-text";
 import { addPageTool } from "./add-page";
 import { pageMenuTool } from "./page-menu";
@@ -71,6 +72,7 @@ export const EDITOR_TOOLS: readonly EditorTool[] = [
   captionStyleTool,
   chapterDescriptionTool,
   aiDescriptionTool,
+  pageTextTool,
   chapterTitleTool,
   coverTextTool,
 ];

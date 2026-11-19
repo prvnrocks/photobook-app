@@ -127,6 +127,8 @@ export function selectionKey(selection: EditorContextValue["state"]["selection"]
       return `caption:${selection.pageIdx}`;
     case "description":
       return `description:${selection.pageIdx}`;
+    case "text":
+      return `text:${selection.pageIdx}:${selection.panel}`;
     case "cover":
       return `cover:${selection.part}`;
   }
@@ -315,7 +317,7 @@ export function EditorToolbar({ tools, sidebar = false }: { tools: EditorTool[];
  * scales down, and the text being edited stays visible. Exported for tests.
  */
 export function panelDocksOnMobile(selection: EditorContextValue["state"]["selection"]): boolean {
-  return selection?.kind === "caption" || selection?.kind === "description" || (selection?.kind === "cover" && selection.part === "text");
+  return selection?.kind === "caption" || selection?.kind === "description" || selection?.kind === "text" || (selection?.kind === "cover" && selection.part === "text");
 }
 
 /**

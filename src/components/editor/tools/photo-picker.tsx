@@ -2,7 +2,8 @@
 
 // Replace (M5 Task 9): photo picker for a page slot or the cover photo.
 // Tabs "In book / Not used / Left out by AI" (src/lib/editor/photo-picker.ts). Picking a photo
-// that is already on another page swaps the two slots (replacePhoto does it); the cover uses
+// that is already on another page swaps the two slots (replacePhoto does it; on a composed storybook
+// page a free photo goes through replaceSlotPhoto, which re-lays that one page out when needed); the cover uses
 // setCover. Placing an AI-dropped photo keeps it — the server marks it kept on save (D-037 4).
 // M11 T14: docked under the page on phones (dockOnMobile) so the spot being filled stays visible.
 // M22 T6a (D-074): emerald segmented tabs, photo tiles with an emerald ring + check badge for the
@@ -10,7 +11,8 @@
 
 import { Check, ImageIcon, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { replacePhoto, setCover } from "@/lib/book/edit-ops";
+import { setCover } from "@/lib/book/edit-ops";
+import { replaceSlotPhoto } from "@/lib/storybook/compose/editor-op";
 import { defaultPickerTab, groupPickerPhotos, PICKER_TABS, type PickerTab } from "@/lib/editor/photo-picker";
 import type { EditorShellPhoto } from "@/lib/editor/types";
 import { cx } from "@/lib/cx";
@@ -45,7 +47,8 @@ export function PhotoPickerPanel({ ctx, close }: EditorPanelProps) {
       ctx.actions.edit((d) => setCover(d, { photoId }), { select: { kind: "cover", part: "photo" } });
     } else {
       const { pageIdx, slotIdx } = target;
-      ctx.actions.edit((d) => replacePhoto(d, pageIdx, slotIdx, photoId), { select: { kind: "slot", pageIdx, slotIdx } });
+      // Task 7: on a composed storybook page the page re-lays itself out when the new photo no longer fits.
+      ctx.actions.edit((d) => replaceSlotPhoto(d, pageIdx, slotIdx, photoId, ctx.photos.byId, ctx.book.captionLang === "ar" ? "ar" : "en"), { select: { kind: "slot", pageIdx, slotIdx } });
     }
     // Desktop sidebar: the picker stays open until the user closes it (try another photo right away).
     if (!ctx.sidebar) close();

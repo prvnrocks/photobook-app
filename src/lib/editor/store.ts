@@ -29,10 +29,12 @@ export type EditorSelection =
   | { kind: "caption"; pageIdx: number }
   /** M30: the chapter description panel of a page (`pageIdx` = the page that owns it: a spread's left half). */
   | { kind: "description"; pageIdx: number }
+  /** Task 7: a storybook page text — the layout's "pageText" panel `panel` on page `pageIdx`. */
+  | { kind: "text"; pageIdx: number; panel: number }
   | { kind: "cover"; part: "photo" | "text" }
   | null;
 
-export type SelectionKind = "none" | "slot" | "caption" | "description" | "cover";
+export type SelectionKind = "none" | "slot" | "caption" | "description" | "text" | "cover";
 
 /** An edit: a pure function of the doc, normally a call into src/lib/book/edit-ops.ts. */
 export type EditOp = (doc: BookDoc) => BookDoc;
@@ -113,6 +115,10 @@ export function validSelection(doc: BookDoc, selection: EditorSelection): Editor
   if (!page) return null;
   if (selection.kind === "slot") {
     return selection.slotIdx >= 0 && selection.slotIdx < page.slots.length ? selection : null;
+  }
+  if (selection.kind === "text") {
+    // The layout must still have that pageText panel (a layout change can remove it).
+    return getLayout(page.layout)?.texts?.some((t) => t.bind === "pageText" && (t.n ?? 0) === selection.panel) ? selection : null;
   }
   if (selection.kind === "description") {
     // The layout must show the description and the page must belong to a chapter that still exists.
