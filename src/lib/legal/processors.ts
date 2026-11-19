@@ -26,8 +26,8 @@ export const PROCESSORS: readonly Processor[] = [
   },
   {
     name: "Anthropic (Claude)",
-    purpose: "AI analysis that builds your album and writes captions",
-    data: "Small 512 px thumbnails of your photos, their dates and place names, your book title, caption settings and names you've confirmed. Not your full-size originals or GPS coordinates.",
+    purpose: "AI analysis that builds your album and writes captions and story text",
+    data: "Small 512 px thumbnails of your photos (file metadata removed), their dates and place names, short AI descriptions of them, your book title, story answers, caption settings and names you've confirmed. Not your full-size originals or GPS coordinates.",
     location: "United States",
   },
   {

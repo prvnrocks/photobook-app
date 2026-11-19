@@ -24,6 +24,15 @@ const REQUIRED_KEYS = [
   "AI_STORY_MODEL",
   "AI_STORY_TIMEOUT_MS",
   "AI_STORY_MAX_RETRIES",
+  // Task 9: pricing override, spending caps, free preview, rate-limit hash key
+  "AI_PRICING_JSON",
+  "AI_CAP_BOOK_PREVIEW_USD",
+  "AI_CAP_BOOK_FULL_USD",
+  "AI_CAP_USER_DAY_USD",
+  "AI_CAP_USER_MONTH_USD",
+  "AI_PREVIEW_PAGES",
+  "AI_PREVIEW_MAX_RUNS",
+  "RATE_LIMIT_SECRET",
   "ADMIN_USER_IDS",
   "MAPBOX_TOKEN",
   "STRIPE_SECRET_KEY",
@@ -62,7 +71,7 @@ function parseEnv(text: string): Map<string, string> {
 describe(".env.example", () => {
   const env = parseEnv(readFileSync(join(process.cwd(), ".env.example"), "utf8"));
 
-  it("contains exactly the 32 expected keys", () => {
+  it("contains exactly the 40 expected keys", () => {
     expect([...env.keys()].sort()).toEqual([...REQUIRED_KEYS].sort());
   });
 

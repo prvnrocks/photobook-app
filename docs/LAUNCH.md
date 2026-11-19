@@ -130,13 +130,21 @@ Preview origin (e.g. the branch alias of a `staging` branch) that is also in the
 | `ANTHROPIC_API_KEY` | live key | optional (costs money) | optional | **yes** | Anthropic Console → API keys |
 | `AI_MODE` | empty (auto → live with key) or `live` | empty / `replay` | `replay` | no | — (`off` \| `replay` \| `live`) |
 | `AI_DAILY_BUDGET_USD` | **`10`** at launch | e.g. `2` | empty | no | — (USD per Asia/Dubai day; `0` = AI off) |
-| `AI_PHOTO_MODEL` | empty (= `claude-opus-5-5`) | empty | empty | no | — (`claude-opus-5-5` \| `claude-sonnet-5-5`; photo analysis only) |
+| `AI_PHOTO_MODEL` | empty (= `claude-sonnet-5-5`, Task 9) | empty | empty | no | — (`claude-opus-5-5` \| `claude-sonnet-5-5`; photo analysis only) |
 | `AI_PHOTO_CONCURRENCY` | empty (= 4) | empty | empty | no | — (1–8 parallel photo analyses) |
 | `AI_PHOTO_TIMEOUT_MS` | empty (= 30000) | empty | empty | no | — (5000–120000 ms per request) |
 | `AI_PHOTO_MAX_RETRIES` | empty (= 2) | empty | empty | no | — (0–4 retries of 429 / 5xx / timeouts) |
 | `AI_STORY_MODEL` | empty (= `claude-opus-5-5`) | empty | empty | no | — (`claude-opus-5-5` \| `claude-sonnet-5-5`; story planning / writing / block rewrites) |
 | `AI_STORY_TIMEOUT_MS` | empty (= 90000) | empty | empty | no | — (10000–180000 ms per plan / chapter request; a block rewrite is always 15000) |
 | `AI_STORY_MAX_RETRIES` | empty (= 2) | empty | empty | no | — (0–4 retries of 429 / 5xx / timeouts) |
+| `AI_PRICING_JSON` | empty (= defaults) | empty | empty | no | — (Task 9: model prices USD/MTok over `src/lib/ai/pricing.ts`; verify against Anthropic's pricing page) |
+| `AI_CAP_BOOK_PREVIEW_USD` | empty (= 2) | empty | empty | no | — (Task 9: AI spend cap of a book without a full entitlement) |
+| `AI_CAP_BOOK_FULL_USD` | empty (= 15) | empty | empty | no | — (Task 9: AI spend cap of a paid / granted book) |
+| `AI_CAP_USER_DAY_USD` | empty (= 20) | empty | empty | no | — (Task 9: per user per Asia/Dubai day) |
+| `AI_CAP_USER_MONTH_USD` | empty (= 100) | empty | empty | no | — (Task 9: per user per calendar month) |
+| `AI_PREVIEW_PAGES` | empty (= 5) | empty | empty | no | — (Task 9: free storybook preview pages, 4–6) |
+| `AI_PREVIEW_MAX_RUNS` | empty (= 3) | empty | empty | no | — (Task 9: live preview generations per book, 1–10) |
+| `RATE_LIMIT_SECRET` | random 32+ chars | random | empty | **yes** | — (Task 9: keys the rate limiter's user-id hashes; `openssl rand -hex 32`) |
 | `ADMIN_USER_IDS` | your uid (`:user`) | your uid | your uid | no (but not public) | Supabase → Authentication → Users. Gates `/admin/runs`, `/admin/ai-spend` and `scripts/comp-book.mjs` |
 | `MAPBOX_TOKEN` | prod token | same or dev token | dev token | **yes** | Mapbox → Account → Access tokens |
 | `STRIPE_SECRET_KEY` | `sk_live_…` / `rk_live_…` | `sk_test_…` | `sk_test_…` | **yes** | Stripe → Developers → API keys |

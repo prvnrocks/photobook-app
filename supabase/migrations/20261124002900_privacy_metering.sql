@@ -40,7 +40,8 @@
 --    window) — fixed-window counter for the AI-triggering routes and
 --    checkout (429 + Retry-After). Bucket keys are '<route>:<32 hex>' — the hex
 --    is a hash of the user id made in code, so the table holds no user id.
---    public.cleanup_rate_limits(p_hours) deletes old windows (daily cron).
+--    public.cleanup_rate_limits(p_hours) deletes old windows (for an operator /
+--    cron sweep; active buckets already drop their own old windows on each hit).
 --
 -- Access: every new object is SERVICE ROLE ONLY. ai_usage_ledger and
 -- book_entitlements have RLS on, no client grants and no policies (like
@@ -269,7 +270,7 @@ $$;
 revoke all on function public.rate_limit_hit(text, integer, integer) from public, anon, authenticated;
 grant execute on function public.rate_limit_hit(text, integer, integer) to service_role;
 
--- Deletes windows that started more than p_hours ago (daily cron). Returns the count.
+-- Deletes windows that started more than p_hours ago (operator / cron sweep). Returns the count.
 create or replace function public.cleanup_rate_limits(p_hours integer)
 returns integer
 language plpgsql

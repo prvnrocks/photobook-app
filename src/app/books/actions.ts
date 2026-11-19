@@ -29,6 +29,7 @@ import {
   type UpdateBookSetupResult,
 } from "@/lib/book/setup";
 import { deleteBookCompletely } from "@/lib/cleanup/delete-book";
+import { errorCodeOf } from "@/lib/http/json";
 import type { DeleteBookActionResult } from "@/lib/dashboard/delete-book";
 import { freshBookStep3Data } from "@/lib/books/wizard-bootstrap";
 import { wizardStepHref } from "@/lib/books/wizard-routes";
@@ -165,7 +166,7 @@ export async function createBookAction(
       designStyle: bookStyle,
     }));
   } catch (err) {
-    console.error("[books] create failed:", err instanceof Error ? err.message : "unknown");
+    console.error("[books] create failed:", errorCodeOf(err));
     return { ok: false, error: MSG_CREATE_FAILED };
   }
 
@@ -382,7 +383,7 @@ export async function updateBookSetupAction(
     }
     return { ok: false, error: "conflict" };
   } catch (err) {
-    console.error("[books] setup update failed:", err instanceof Error ? err.message : "unknown");
+    console.error("[books] setup update failed:", errorCodeOf(err));
     return { ok: false, error: "failed" };
   }
 }
@@ -407,7 +408,7 @@ export async function deletePhotoAction(
   try {
     ownerBookId = await deletePhoto(photoId);
   } catch (err) {
-    console.error("[books] delete photo failed:", err instanceof Error ? err.message : "unknown");
+    console.error("[books] delete photo failed:", errorCodeOf(err));
     return { ok: false, error: MSG_DELETE_FAILED };
   }
   if (ownerBookId !== null) {
@@ -415,7 +416,7 @@ export async function deletePhotoAction(
       const r = await stripPhotoFromBookDoc(ownerBookId, photoId);
       if (r === "conflict") console.error("[books] strip deleted photo from doc: conflict");
     } catch (err) {
-      console.error("[books] strip deleted photo from doc failed:", err instanceof Error ? err.message : "unknown");
+      console.error("[books] strip deleted photo from doc failed:", errorCodeOf(err));
     }
     revalidatePath(`/books/${ownerBookId}/edit`);
   }
@@ -435,7 +436,7 @@ export async function deleteUnfinishedAction(bookId: string): Promise<PhotoActio
   } catch (err) {
     console.error(
       "[books] delete unfinished failed:",
-      err instanceof Error ? err.message : "unknown",
+      errorCodeOf(err),
     );
     return { ok: false, error: MSG_DELETE_FAILED };
   }

@@ -98,9 +98,22 @@ function sections(): LegalSection[] {
             Under Anthropic&apos;s commercial terms, data sent through its API is not used to train its models. We do
             not use your photos to train any AI either.
           </p>
+          <p data-testid="privacy-ai-story">
+            For an AI storybook we also send the AI a short text description of each photo (written by the AI from the
+            thumbnail), the answers you give to the story questions, and the place names and dates of your photos, so it
+            can plan chapters and write the story text. The thumbnail we send is a reduced copy with its file metadata
+            (EXIF, including GPS) removed.
+          </p>
           <p>
             The AI&apos;s notes about a photo (for example a short description or a quality score) are stored with the
-            photo and deleted together with it. Captions the AI writes are drafts: you can change or remove every one.
+            photo and deleted together with it. Captions and story text the AI writes are drafts: you can change or
+            remove every one.
+          </p>
+          {/* LEGAL REVIEW + verify before launch: Anthropic's current API data-retention period (docs/PRIVACY-DATA.md). */}
+          <p data-testid="privacy-ai-retention">
+            Anthropic may keep what we send for a limited time to provide the service and to detect misuse, under its
+            own retention rules; we have not arranged zero data retention with it. Deleting a book in {APP_NAME} removes
+            it from our systems, but cannot recall a copy Anthropic already holds under those rules.
           </p>
           <p>
             <strong>Admin access for debugging:</strong> a small number of our team can open the technical log of an
@@ -139,7 +152,9 @@ function sections(): LegalSection[] {
         <>
           <p>
             Your books are private until you publish. When you publish, <strong>anyone with the link</strong> can view
-            the book, and they can forward the link. You can add a password, and you can unpublish at any time.
+            the book, and they can forward the link. You can add a password, and you can unpublish at any time. If a
+            link reached the wrong people, choose <strong>Turn off and make a new link</strong>: the old link stops
+            working for good, and publishing again gives the book a new one.
           </p>
           <p>
             Viewers see web copies of your photos without location data. The image links inside a shared book contain
@@ -164,8 +179,12 @@ function sections(): LegalSection[] {
           <p data-testid="privacy-delete-how">
             Delete a free book from its ⋯ menu on your dashboard. Books with a payment can&apos;t be deleted
             individually — delete your account in Settings (which removes all your books) or email us at{" "}
-            {mail}. Deleted photos and books are removed from our
-            storage; backups held by our providers roll over within their normal backup cycle.
+            {mail}. Deleting a book removes its photos (original, web copy and thumbnail), its AI notes and story
+            drafts, and its PDF downloads from our storage and database. Exceptions: database backups held by our
+            hosting provider keep deleted data until they age out within their normal backup cycle; providers that
+            already received data (such as Anthropic for AI processing, Stripe for payments, or our hosting logs) keep
+            it under their own retention rules; and we keep a number-only record of AI usage costs (no photos or
+            text) to prevent abuse.
           </p>
         </>
       ),

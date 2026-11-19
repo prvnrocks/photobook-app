@@ -7,6 +7,7 @@
 // through the callbacks. In the lazy steps chunk (not in the /books/new first load).
 
 import { Uploader } from "@/components/upload/Uploader";
+import { UploadPrivacyNote } from "@/components/upload/UploadPrivacyNote";
 import { WizardHeadline } from "@/components/wizard/WizardHeadline";
 import { wizardHeadline } from "@/lib/books/wizard-steps";
 import type { WizardStep3Data } from "@/lib/books/wizard-client";
@@ -35,6 +36,7 @@ export function StepPhotos({ data, headlineId, onBack, onPhotosPicked, onContinu
           {data.title}
         </span>
       </p>
+      <UploadPrivacyNote aiOn={data.aiOn} />
       <div className="mt-6 flex min-w-0 flex-col">
         <Uploader
           bookId={data.bookId}

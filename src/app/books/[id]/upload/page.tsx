@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/app/PageHeader";
 import { AppHeader } from "@/components/layout/AppHeader";
+import { UploadPrivacyNote } from "@/components/upload/UploadPrivacyNote";
 import { Uploader, type UploaderProps } from "@/components/upload/Uploader";
 import { resolveAiMode } from "@/lib/ai/client";
 import { limitsFor } from "@/lib/ai/limits";
@@ -89,6 +90,7 @@ export default async function UploadPage({ params }: { params: Promise<{ id: str
               : "Add more photos to your book."
           }
         />
+        <UploadPrivacyNote aiOn={uploaderProps.aiOn} />
         <Uploader {...uploaderProps} />
       </main>
     </>

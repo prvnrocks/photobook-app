@@ -80,7 +80,7 @@ export async function sendMagicLink(
     }
   } catch (err) {
     // Server misconfiguration (e.g. MISSING_APP_URL_ERROR) is logged, never shown.
-    if (err instanceof Error && err.message === MISSING_APP_URL_ERROR) console.error("[auth]", err.message);
+    if (err instanceof Error && err.message === MISSING_APP_URL_ERROR) console.error("[auth] missing_app_url");
     return { ok: false, error: MSG_SEND_FAILED, email };
   }
 
@@ -134,7 +134,7 @@ export async function signInWithGoogle(formData: FormData): Promise<void> {
     if (!error) url = data.url;
     else console.error("[auth] signInWithOAuth failed:", error.code ?? error.status);
   } catch (err) {
-    if (err instanceof Error && err.message === MISSING_APP_URL_ERROR) console.error("[auth]", err.message);
+    if (err instanceof Error && err.message === MISSING_APP_URL_ERROR) console.error("[auth] missing_app_url");
     url = null;
   }
 
