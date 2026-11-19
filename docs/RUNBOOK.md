@@ -142,7 +142,8 @@ treats it as protected).
 Each run logs one line per sweep:
 `[cleanup] <sweep> n=<count> ms=<ms> [storage_removed=N] [storage_fail=N] [partial=1|skipped=1] [error=<code>]`.
 The sweeps run in this order: `warnings, expired_books, abandoned_drafts, pending_uploads, orphans_photos,
-orphans_exports, old_exports, unlock_attempts, stale_runs`.
+orphans_exports, old_exports, unlock_attempts, rate_limits, stale_runs` (`rate_limits`, Task 10: Task 9's
+limiter windows older than 24 h). After the sweeps the route runs one monitoring pass (section 4.1).
 - `partial=1`: the 240 s budget ran out. The next day's run continues where it stopped.
 - `skipped=1`: the budget was used up before this sweep started.
 - `storage_fail=N`: object removal failed. The orphan sweep retries these after 7 days.
@@ -218,6 +219,32 @@ Per-book deletes and account deletes by users are not affected (they don't use t
 - `busy_instance`: another render is running on that instance. The client retries, so this is normal under load.
 - Stuck jobs: `select id, status, attempt, error_code, created_at from public.exports where book_id = ':book' order by created_at desc;`
   Rows stuck in `rendering` past their lease are re-claimed automatically (stale after 360 s).
+- Task 10 codes:
+  - `[pdf-export] not_ready errors=N warnings=N` (no job made): the print readiness check found blank pages,
+    missing photos or clipped text. The owner sees the lines ("Page 5 is empty …") and fixes the book. Not a bug.
+  - `failed … (page_count_mismatch)` / `(blank_page)`: the merged PDF did not have cover + one sheet per page,
+    or a sheet came out of Chromium with nothing painted. Retry once; if it repeats, render the export row's doc
+    snapshot locally (`/dev-print` + `scripts/pdf-inspect.mjs`) — it is a renderer bug, not user error.
+  - `[pdf-package] made pages=N` / `[pdf-package] failed (<code>)`: the print files (cover + interior PDFs) cut
+    from the ready PDF. `pdf_first` (409) = the saved book has no ready PDF yet.
+
+### 4.1 Monitoring (Task 10)
+- **Where**: `/admin/monitoring?days=7` (admins only, 404 otherwise), the same JSON at
+  `/api/admin/monitoring?days=7`, or from a terminal `node --no-warnings scripts/monitoring-summary.mjs --days 7`
+  (`--alerts` prints only alert lines and exits 2 when there is one). Numbers and codes only: AI attempt
+  failure / refusal / retry rates per operation (live `ai_usage_ledger` rows), storybook stage times per model
+  call and whole-run p50 / p95 (`agent_runs` trigger `storybook`), live AI cost per Dubai day by bucket
+  (preview / paid / other), export failure codes and request → ready p50 / p95.
+- **Daily alert lines** (cleanup cron, last 24 h): `[monitor] daily ai_attempts=… ai_fail_rate=… runs=… run_fail=…
+  exports=… export_fail=… alerts=N` (info) and one `[monitor] alert=<code> value=<n>` (error) per alert:
+  `ai_failure_rate_high` (> 10 % of ≥ 20 attempts), `ai_refusals`, `ai_unpriced_model` (a model without a price in
+  `AI_PRICING_JSON` / defaults), `story_run_failure_rate_high` (> 15 % of ≥ 20 finished runs, user stops excluded),
+  `export_failure_rate_high` (> 10 % of ≥ 20), `export_slow` (p95 > 200 s, near the 270 s render deadline),
+  `ai_cost_today_high` (> 80 % of `AI_DAILY_BUDGET_USD`). Thresholds: `ALERT_RULES` in
+  `src/lib/monitoring/aggregate.ts`. `[monitor] summary_failed (<code>)` = the reads failed (Postgres code).
+- **Vercel logs**: Project → Logs → filter `[monitor]` (or `[monitor] alert=`) for the alerts, `[pdf-export]` for
+  exports, `[story]` / `[story-compose]` / `[photo-intelligence]` / `[ai-usage]` for AI-side errors (codes only). Hobby keeps logs ~1 hour, Pro ~1 day: for real alerting add a Log
+  Drain (Pro) or run the script with `--alerts` from a scheduled job and notify on exit code 2.
 
 ## 5. Delete a user on request
 Users can do this themselves: Settings → Delete account (type DELETE). It deletes every book (paid ones too),

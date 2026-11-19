@@ -46,13 +46,15 @@ support for `effort` / server-side fallbacks could not be verified here.
 | --- | --- | --- |
 | Photo original, web copy (≤ 1600 px), thumbnail = AI copy (512 px, metadata-free) | Supabase Storage bucket `photos`, **private** (`public = false`), path `{user}/{book}/…` | owner via RLS-scoped policies (`storage.foldername(name)[1] = auth.uid()`), everyone else only via **short-lived signed URLs** made on the server: editor 1 h, review / cover thumbs / PDF downloads 10 min, ingest reads 60 s, public viewer (published books only) 6 h |
 | PDF exports | bucket `exports`, private, `{user}/{book}/{export}.pdf` | owner via signed URL (10 min) |
+| Print package (Task 10) — cover PDF + inside-pages PDF cut from a ready export | bucket `exports`, private, `{user}/{book}/{export}-cover.pdf` / `-interior.pdf` | owner via signed URL (10 min), paid books only; removed with the book, when a newer PDF supersedes the export, or by the orphan sweep 7 days after they were made |
 | Books, captions, story versions, story answers | Postgres (`books`, `storybooks`, `storybook_versions`) | owner (RLS) |
 | AI photo analyses (descriptions) | `photo_analyses` (service role only) | server only; deleted with the photo / book / account |
 | AI call logs | `agent_steps`, `story_ai_calls` (service role only; no prompts or narrative text) | server + admin trace page |
 | AI usage ledger (Task 9) | `ai_usage_ledger` — numbers only: operation, model, tokens, cost, priced flag, latency, status (ok / failed / refused / retried), attempt, cost bucket | service role only; **kept** when a book is deleted (book id set null) so spend caps can't be reset by deleting books |
 | Storybook job state | `agent_runs.cursor` (service role only) — the plan and, for a finished **preview**, its written chapters (so "Complete my book" reuses them) | scrubbed to `{}` when the book is deleted (trigger from migration 0700) |
 | Entitlement grants (Task 9) | `book_entitlements` (service role only) | operators only (`src/lib/entitlements/grant.ts`, ADMIN_USER_IDS) |
-| Rate-limit counters (Task 9) | `private.rate_limit_windows` — `'<route>:<hash of user id>'` + counts | service role only |
+| Rate-limit counters (Task 9) | `private.rate_limit_windows` — `'<route>:<hash of user id>'` + counts | service role only; windows older than 24 h deleted by the daily cron (Task 10) |
+| Monitoring (Task 10) | nothing new is stored: `/admin/monitoring`, `/api/admin/monitoring` and `scripts/monitoring-summary.mjs` read codes, counts, money and timestamps from `ai_usage_ledger`, `agent_runs`, `exports` | admins only (ADMIN_USER_IDS) / service role; daily `[monitor]` log lines carry codes and numbers only |
 
 Logging: no console call may log photos, descriptions, captions, story text, prompts, titles, e-mail
 addresses, GPS / EXIF, paths, URLs (incl. signed URLs), secrets or raw error messages — enforced by
@@ -66,7 +68,7 @@ addresses, GPS / EXIF, paths, URLs (incl. signed URLs), secrets or raw error mes
 | Delete a free book (dashboard) | the book row (`delete_book_guarded`) → cascades photos, `photo_analyses`, storybooks + versions, `story_ai_calls`, exports rows, organiser tables, grants; then storage prefixes `{user}/{book}/` in `photos` **and** `exports` (originals, web copies, AI copies, PDFs). Agent runs keep only numbers (cursor / progress / step outputs scrubbed by trigger). Storage failures are retried by the daily orphan sweep |
 | Delete the account (Settings) | every book as above, then the auth user (cascades the rest); ledger rows keep no user id |
 | Revoke a share link (Task 9) | "Turn off and make a new link": `published_doc` and `slug` cleared — the old `/b/<slug>` link never works again; the next publish creates a new slug; the free-link expiry does not reset |
-| Automatic | expired free books, abandoned drafts, pending uploads, orphan objects, old exports (daily cron, `src/lib/cleanup`) |
+| Automatic | expired free books, abandoned drafts, pending uploads, orphan objects (incl. print package files after 7 days), old exports, rate-limit windows (daily cron, `src/lib/cleanup`) |
 
 Paid / comped books can't be deleted one by one (payment records); the account deletion path covers them.
 

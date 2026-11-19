@@ -145,7 +145,7 @@ Preview origin (e.g. the branch alias of a `staging` branch) that is also in the
 | `AI_PREVIEW_PAGES` | empty (= 5) | empty | empty | no | — (Task 9: free storybook preview pages, 4–6) |
 | `AI_PREVIEW_MAX_RUNS` | empty (= 3) | empty | empty | no | — (Task 9: live preview generations per book, 1–10) |
 | `RATE_LIMIT_SECRET` | random 32+ chars | random | empty | **yes** | — (Task 9: keys the rate limiter's user-id hashes; `openssl rand -hex 32`) |
-| `ADMIN_USER_IDS` | your uid (`:user`) | your uid | your uid | no (but not public) | Supabase → Authentication → Users. Gates `/admin/runs`, `/admin/ai-spend` and `scripts/comp-book.mjs` |
+| `ADMIN_USER_IDS` | your uid (`:user`) | your uid | your uid | no (but not public) | Supabase → Authentication → Users. Gates `/admin/runs`, `/admin/ai-spend`, `/admin/monitoring` + `/api/admin/monitoring` (Task 10) and `scripts/comp-book.mjs` |
 | `MAPBOX_TOKEN` | prod token | same or dev token | dev token | **yes** | Mapbox → Account → Access tokens |
 | `STRIPE_SECRET_KEY` | `sk_live_…` / `rk_live_…` | `sk_test_…` | `sk_test_…` | **yes** | Stripe → Developers → API keys |
 | `STRIPE_WEBHOOK_SECRET` | live endpoint `whsec_…` | test endpoint `whsec_…` | from `stripe listen` | **yes** | Stripe → Developers → Webhooks → endpoint |
@@ -231,6 +231,10 @@ Preview origin (e.g. the branch alias of a `staging` branch) that is also in the
       keeps working but caps and the rate limiter fail open and no ledger rows are written. Needs 2800. Optional
       env: `AI_PRICING_JSON`, `AI_CAP_*`, `AI_PREVIEW_*` (see `docs/PRIVACY-DATA.md` and `.env.example`). Then run
       `rls_check.sql` → 190.
+- [ ] **Task 10 (export, print readiness, monitoring): NO migration.** It uses 2900's `cleanup_rate_limits`
+      (now swept by the daily cron), `ai_usage_ledger` (read by `/admin/monitoring`) and the existing `exports`
+      bucket (print package files `{user}/{book}/{export}-cover.pdf` / `-interior.pdf`, removed by the orphan
+      sweep after 7 days, with the book, or when a newer PDF supersedes the export). `rls_check.sql` stays → 190.
 - [ ] Supabase → SQL Editor → paste the whole of `supabase/tests/rls_check.sql` → Run. Expected: an error panel
       starting with **`RLS OK — all 190 checks passed`** (187 before 2900, 186 before 2800, 185 before 2700, 184 before 2600, 181 before 2500, 180 before 2400, 179 before 2300, 177 before 2200, 176 before 2100, 175 before 2000, 173 before 1900) (raised on purpose; it rolls everything back). Anything
       else (`RLS FAIL [...]`, permission denied) is a blocker.
@@ -363,13 +367,20 @@ Open phone checks carried from earlier milestones:
 - [ ] **M7** — real payment on a phone (6, Preview then live), "Payment cancelled" notice, success page.
 - [ ] **M8** — paid **40-page PDF** on production: time click → download, and read the
       `[pdf-export] timing` log line (compare to the README estimate; Performance CPU should beat it).
+- [ ] **Task 10** — paid storybook (portrait AND landscape): share page shows "Checks passed for digital A5 PDF"
+      (or the notes / things to fix) above Download PDF at 375 px; Download PDF → open it in iOS Files / Preview:
+      cover + every page, Arabic text, no clipped text; "Get print files" → cover PDF (1 page) + inside pages PDF;
+      a book with an emptied page answers "Page N is empty …" instead of making a PDF; `/admin/monitoring` loads
+      for an admin (404 for anyone else); after the next cron, Vercel logs show one `[monitor] daily …` line.
 - [ ] **M9** — paid end card ("The end", Replay, Share) on a phone (the white-screen bug); delete book sheet
       and delete account at 375 px; deletion chips; landing + `/privacy` + `/terms` at 375 px;
       `/admin/ai-spend` as admin with live data.
 
 Platform checks:
 - [ ] **Cron**: after the first 01:00 UTC run (or Vercel → Cron Jobs → Run), Vercel logs show one
-      `[cleanup] <sweep> n=…` line per sweep, no `error=`; manual curl without the bearer returns 401.
+      `[cleanup] <sweep> n=…` line per sweep (incl. `rate_limits`, Task 10), no `error=`, then one
+      `[monitor] daily …` line and a `[monitor] alert=<code> value=<n>` line per alert (see RUNBOOK
+      "Monitoring"); manual curl without the bearer returns 401.
 - [ ] **Sentry**: on `<prod>` open the browser console and run
       `setTimeout(() => { throw new Error("sentry launch test") })` → the event appears in Sentry (EU) with
       environment `production`, no IP, readable (source-mapped) stack.
