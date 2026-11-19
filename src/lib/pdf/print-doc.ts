@@ -71,7 +71,7 @@ function onHalf(rect: { x: number; w: number }, offset: number): boolean {
  * boundary (left = last sheet of chunk k, right = first sheet of chunk k + 1) gets its photos on
  * both chunks' print routes and in both chunks' prefetch schedules.
  */
-function pagePhotoIds(pages: readonly PhotoIdsPage[], index: number): (string | null)[] {
+export function pagePhotoIds(pages: readonly PhotoIdsPage[], index: number): (string | null)[] {
   const page = pages[index];
   const layout = page.layout ? getLayout(page.layout) : undefined;
   if (layout?.role !== "spread") return page.slots.map((s) => s.photoId);
